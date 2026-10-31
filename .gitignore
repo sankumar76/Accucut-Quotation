@@ -1,0 +1,6 @@
+# Append these lines to your repository's .gitignore
+.claude/runs/
+.claude/settings.local.json
+.claude/agent-memory-local/
+.env
+.env.*

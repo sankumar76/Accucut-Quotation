@@ -1,0 +1,5 @@
+# Keep Unix line endings for shell scripts so Claude Code's hooks run under
+# Git Bash on Windows (CRLF line endings break bash scripts).
+*.sh   text eol=lf
+# PowerShell scripts work with either; use Windows line endings.
+*.ps1  text eol=crlf
