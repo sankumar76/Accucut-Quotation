@@ -32,7 +32,7 @@ SPEC §2 allows `bytea` or a local volume for images under 200 KB. Images must s
 - Cost / effort: medium
 
 ## Decision
-We will store images in a separate `part_images` table with `bytes` as `bytea`, `sha256` and `mime`. Queries that do not need bytes never touch that table, so a tree read stays small. Rows are immutable. A replaced image creates a new row, so an older calculation record still shows the old one.
+We will store images in a separate `part_images` table with `bytes` as `bytea`, `sha256`, `mime`, `size_bytes`, and a sanitised `file_name` for display on SCR-05 (added at UX reconciliation). Queries that do not need bytes never touch that table, so a tree read stays small. Rows are immutable. A replaced image creates a new row, so an older calculation record still shows the old one.
 
 Validation is by content: a small signature check for PNG, JPEG, GIF and WebP in `src/lib/images`, with no dependency needed, and under 200 × 1024 bytes (A-06). SVG is not accepted. Images are served with the stored MIME, `nosniff`, and the same ownership check as the estimate, and are never decoded on the server.
 

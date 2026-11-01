@@ -44,6 +44,8 @@ Nodemailer must be **10.3.1 or later**. Older lines carry high-severity advisori
 
 In R1 the worker runs only a heartbeat, so FR-091's three-container install is true from the first hand-over.
 
+**Added at UX reconciliation.** Messages have HTML and plain-text bodies (`body_html`, `body_text`), full links built from `APP_ORIGIN`, and an inline logo by content ID, as SCR-22 shows. **One exception to the outbox:** the Settings test e-mail (SCR-15) is sent directly by `app` to the signed-in Admin's own address, because the screen reports success or failure at once. So `app` also receives the SMTP variables. The API accepts no recipient, so this cannot be used to send mail elsewhere.
+
 ## Consequences
 - Positive: exactly one e-mail per event, in plain SQL. Nothing new to back up.
 - Negative / trade-offs accepted: sends can lag by up to a minute, well inside the 5-minute target. If SMTP is down longer than the retry window, rows stay `failed` until someone acts, which is shown on Settings and logged.

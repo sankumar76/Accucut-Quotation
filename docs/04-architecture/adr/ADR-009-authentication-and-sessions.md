@@ -39,11 +39,19 @@ Whether Auth.js supports database sessions with the credentials provider could n
 - Cost / effort: medium
 
 ## Decision
-We will use **next-auth 4.24.15** with the credentials provider, narrowly, behind `src/server/auth/session.ts`. The session is an encrypted JWT in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie with a 12-hour lifetime (Proposed), holding only the user ID and `session_version`. `requireUser()` reads `users` on each request. Role and active flag always come from the database, and a mismatch in `session_version` ends the session. This gives server-side revocation without a sessions table, at the cost of one indexed read per request.
+We will use **next-auth 4.24.15** with the credentials provider, narrowly, behind `src/server/auth/session.ts`. The session is an encrypted JWT in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie that ends after 12 hours of inactivity (Proposed, rolling, as SCR-26 words it), holding only the user ID and `session_version`. `requireUser()` reads `users` on each request. Role and active flag always come from the database, and a mismatch in `session_version` ends the session. This gives server-side revocation without a sessions table, at the cost of one indexed read per request.
 
 Passwords use argon2id through `@node-rs/argon2`. Sign-in goes through `login_throttles`: 5 consecutive failures block the key for 15 minutes (NFR-003, Proposed). An unknown e-mail takes the same path with a dummy hash, so responses do not reveal which part was wrong.
 
 Step-up (FR-080) is a password field in the same request as the protected action, verified in the service before the write and throttled. There is no separate token to store or expire.
+
+**Added at UX reconciliation.**
+- A wrong step-up password returns 422 with `STEP_UP_FAILED`, not 401, so the client shows SCR-18's message rather than treating it as a lost session. Step-up has its own throttle key, so a slip in a dialog cannot lock an Admin out of signing in.
+- Sign-in returns a separate `locked` code for SCR-01's message, and an Admin password reset clears the block, as that message promises.
+- The return address after sign-in is accepted only as a same-origin relative path.
+- Admin hand-over has no step-up, following FR-080, NFR-004 and SCR-14. The architect recommends adding it (OQ-ARCH-08).
+- The password rule is at least 10 and at most 128 characters, not the e-mail, not a common password (Proposed, OQ-UX-05).
+- The Admin cannot change their own role or deactivate themselves; the server refuses both.
 
 `package.json` carries `"overrides": { "next-auth": { "nodemailer": "$nodemailer" } }`, verified to resolve to Nodemailer 10.3.1 with 0 high advisories. The e-mail provider is never loaded, so next-auth never calls it. `--legacy-peer-deps` is not used.
 

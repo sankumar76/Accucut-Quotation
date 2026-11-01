@@ -40,6 +40,8 @@ The export replicates the worksheet: columns A to BO, images in column C, curren
 ## Decision
 We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.ts`, whose only input is a plain `ExportModel`. The thread runs that function. Export reads one calculation record, `outputs` only, so a parent row holds its own values (D-12 (b3)). Cells hold full-precision numbers with two-decimal formats. Text is written as strings, never formulas. An empty cell stands for divide by zero. Row-2 cells are chosen in `product-cells.ts`, so Q-31 changes one file.
 
+**Added at UX reconciliation.** The file holds one calculation record, so after inputs change it stays consistent but falls behind the screen, and `export-summary` returns `stale` so SCR-10 can say so (UX-05). A never-calculated estimate exports inputs with empty outputs (A-05). The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by 0.01 (UX-02).
+
 **No hard limit on size.** Validation caps the worst case at about 100 MB (500 × 200 KB). Evidence below shows that this builds, so a limit would only add a failure mode. One large export runs at a time (over 100 nodes), and another gets 503 with `Retry-After`. The proxy read timeout is at least 120 s.
 
 **Evidence (2026-11-01).** Throwaway benchmark, invented data, in-memory ExcelJS 4.4.0 on an Intel i7-10510U with 8 GB, Node 24, 67 columns, one incompressible 199 KB image per row, excluding database reads. Runs shared one process, so memory figures are upper bounds.

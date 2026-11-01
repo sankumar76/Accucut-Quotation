@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 (G3 draft) |
+| Version | 0.2 (G3 draft; UX reconciliation complete, section 16) |
 | Owner | solution-architect |
 | Status | In Review (G3, human approval) |
 | Date | 2026-11-01 |
-| Inputs | PRD v0.4; SPEC v1.3 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`); UX spec v0.1 (reconciled in section 16); requirements catalogue v0.6; gate log G2 attempt 2; risk register; `docs/standards/` |
+| Inputs | PRD v0.5 (v0.1 of this document was written against v0.4); SPEC v1.3 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`); UX spec v0.1 and every page in `docs/03-ux/screens/` at commit 0178d15 (section 16); requirements catalogue v0.6; gate log G2 attempt 2; risk register; `docs/standards/` |
 | Companions | `docs/04-architecture/adr/ADR-001` to `ADR-014`; `docs/04-architecture/test-strategy.md` |
 | Scope | Every FR through Release 2 and every NFR (DL-004). Offline (FR-092) is not designed and not blocked (section 9.8) |
 
@@ -98,11 +98,12 @@ C4Container
   Rel(worker, db, "SQL through Prisma")
   Rel(migrate, db, "DDL, owner role")
   Rel(worker, smtp, "SMTP over TLS")
+  Rel(app, smtp, "Test e-mail only, SMTP over TLS")
 ```
 
 | Container | Responsibility | Technology | Communicates with | Scaling approach | Owner |
 |-----------|----------------|------------|-------------------|------------------|-------|
-| `app` | Server-rendered pages, `/api/v1`, auth, calculation, export | Next.js 16.4 (App Router, standalone output), Node 22 | `db` (TCP 5432) | Vertical. One instance is enough (section 7, NFR-011). A second instance would need no code change: there is no in-process state that matters except the export gate | Delivery team; Accucut IT runs it |
+| `app` | Server-rendered pages, `/api/v1`, auth, calculation, export | Next.js 16.4 (App Router, standalone output), Node 22 | `db` (TCP 5432); SMTP for the Settings test e-mail only (SCR-15 needs the result at once) | Vertical. One instance is enough (section 7, NFR-011). A second instance would need no code change: there is no in-process state that matters except the export gate | Delivery team; Accucut IT runs it |
 | `worker` | Scheduled jobs and the e-mail outbox (FR-081 to 084). In R1 only a heartbeat and job log | Node 22, node-cron 4 | `db`, SMTP | Single instance. Row claims use `FOR UPDATE SKIP LOCKED`, so a second one would be safe | Delivery team; Accucut IT runs it |
 | `db` | System of record, including images | PostgreSQL 17 | none | Vertical. Pool sizes: app 10, worker 3 | Accucut IT |
 | `migrate` | `prisma migrate deploy`, then exit; `app` and `worker` wait for it | Prisma CLI 7.10 | `db` with the owner role | Not applicable | Delivery team |
@@ -249,11 +250,14 @@ Worked at the baseline, using the FR-030 example (item quantity 2 with 0 on its 
 | `quantity-step.ts`, one branch | **Yes** |
 | Expected values in `tests/unit/rollup/quantity-cases.ts` | **Yes** |
 | SPEC §7.4 BL, BR-047, FR-030, GOAL-03 | Yes, by business-analyst and product-manager (G2 condition 1) |
-| Database schema, migrations, API, UI structure | No |
+| Explanatory wording on SCR-06, SCR-07 and SCR-10 ("How the total is built", "Not multiplied again by this row's own quantity", "How to reconcile") | **Yes.** These sentences state the rule, so they would be wrong. They live in one file, `src/components/features/estimate-review/rollup-copy.ts`, and ux-expert rewrites them. The SCR-10 reconciliation method itself would need redesign |
+| Database schema, migrations, API, screen structure | No |
 | Row outputs (M to BK) | No: `BB = BA * H` is not touched |
 | Previously approved estimates | No: they keep their stored results (FR-065). Any re-pricing is a decision for the delivery lead |
 
-Two tests hold this to one place: only `roll-up.ts` may import `quantity-step.ts`, and `H` may reach the roll-up only as a value handed to that function (`test-strategy.md` section 5.4).
+So the **calculation** changes in one place, which is what G2 condition 5 asks. The words on screen that explain the calculation are a second, separately owned change. Draft v0.1 and comment 10481 did not say so.
+
+Two tests hold the calculation to one place: only `roll-up.ts` may import `quantity-step.ts`, and `H` may reach the roll-up only as a value handed to that function (`test-strategy.md` section 5.4).
 
 **In the formula language.** BL cannot be written as `SUM(BG)`, because SPEC §8.2 defines `SUM` as a plain sum across all nodes. A new product-scope function is added, seeded as:
 
@@ -284,13 +288,28 @@ Pure code in `src/lib/estimate/state-machine.ts`; an exhaustive `switch` with `a
 
 ### 4.5 Field registry and configuration
 
-ADR-004. The registry is one validated JSON document per version, not rows. A change is `load latest → apply a pure edit → validate all formulas, references and cycles → insert a new version`. SPEC §8.1's `FieldDefinition` is the document's element type, with two additions: `engineerVisible` (true only for `input` fields and F; a schema rule refuses it on outputs and on I) and `rollupDisplay`. Formulas use stable references, `{{f:<fieldId>}}`, `{{rate:<rateId>}}`, `{{mat:<key>}}`, `{{fx:USD}}`. Rates use a stable ID rather than the name in SPEC's example, so a rate rename cannot break a formula.
+ADR-004. The registry is one validated JSON document per version, not rows. A change is `load latest → apply a pure edit → validate all formulas, references and cycles → insert a new version`. Formulas use stable references, `{{f:<fieldId>}}`, `{{rate:<rateId>}}`, `{{mat:<key>}}`, `{{fx:USD}}`. Rates use a stable ID rather than the name in SPEC's example, so a rate rename cannot break a formula.
+
+SPEC §8.1's `FieldDefinition` is the document's element type. The UX screens show it needs more than SPEC lists:
+
+| Added property | Why | Screen |
+|----------------|-----|--------|
+| `engineerVisible` | True only for `input` fields and for F. A schema rule refuses it everywhere else, including I, BH and BI | SCR-05, ADR-008 |
+| `rollupDisplay` | BG, BJ, BK show a Σ figure on a parent | SCR-06, 07, 10 |
+| `systemRole` | Marks fields the code depends on: `sl-no` (A), `quantity` (H), `unit-price` (BG), `total` (BL), `approved-price` (BO). These cannot be deleted, and A and BO have no editable formula. `ROLLUP` finds H through this role, so deleting H cannot break the roll-up | SCR-17, 20 |
+| `unit`, `hint`, `formOrder` | Unit tags and hints sit beside each input. `formOrder` is separate from column position because section 08 shows AP, AU, BM, then AJ (SPEC §7.1), which is not letter order. Enter follows it | SCR-05 |
+| `stageId`, `group` | Output placement in the six stages and their sub-headings | SCR-07, 17 |
+| `options`, `displayUnit` | List values for a new choice field; "kg", "$", "€" on values | SCR-07, 19 |
+
+Sections and stages get a `shortName` (the strip on SCR-05), a display mode (`cards` or `multi-select`, as section 07), and for stages `totalFieldIds`, because the total on a stage heading is sometimes one field (stage 3 is AY) and sometimes several (stage 5 adds BC to BF). Section range tags such as "E, F, J–L, N" are derived per role from the fields that role sees.
+
+A field's **references** include formulas, `hideWhenZero`, `visibleWhen` and stage totals. Field delete (SCR-20) checks all four. An input with `defaultValue` takes that value when its key is absent, so a new input with a default does not block Calculate on older drafts (A-15).
 
 The configuration seed comes from SPEC §7 and is committed. Header texts, widths and formats are structure read from the sample (ASSUMPTION-46). Cell values are not read and never copied.
 
 ### 4.6 Excel export
 
-ADR-012. `export-service` loads one calculation record and streams its images in batches of 50, builds an `ExportModel`, and hands it to `src/server/export/build-workbook.ts` in a `node:worker_threads` thread, so the event loop stays free for other users. Export reads `calculation_rows.outputs`, never `rollup` (D-12 (b3)). If an estimate has no calculation yet, input columns are filled and output columns stay empty (A-05).
+ADR-012. `export-service` loads one calculation record and streams its images in batches of 50, builds an `ExportModel`, and hands it to `src/server/export/build-workbook.ts` in a `node:worker_threads` thread, so the event loop stays free for other users. Export reads `calculation_rows.outputs`, never `rollup` (D-12 (b3)). If an estimate has no calculation yet, input columns are filled and output columns stay empty (A-05). If inputs changed after the last calculation, the file still holds that calculation, inputs included, so it is internally consistent but behind the screen; `export-summary` returns `stale` so SCR-10 can say so (UX-05). The date in the file name is the IST date of the download.
 
 The decision on row-2 cells lives in one file, `src/server/export/product-cells.ts`, so Q-31 changes one file. Cell values are full-precision numbers with a two-decimal number format, so Excel's own sums reconcile with the stored values. Text goes in as strings only, so nothing an Engineer types can become a live formula.
 
@@ -317,7 +336,9 @@ Assignment e-mail (FR-081) is one outbox row written in the task's own transacti
 
 **Idempotency keys.** `task-assigned:<taskId>:<assignmentRevision>`, `task-overdue:<taskId>:<deadlineAtUtc>`, `digest:<engineerId>:<istDate>`. A unique index enforces them, so re-running a job sends nothing twice. A changed deadline gets a new key, so a task that becomes overdue again is reported again (A-09).
 
-E-mails carry task details, path and deadline only. They never contain cost, rate or formula data, and the digest goes only to people who may see the task.
+E-mails carry task details, path and deadline only. They never contain cost, rate or formula data, and the digest goes only to people who may see the task. Each message has HTML and plain-text bodies (SCR-22). Links are full addresses built from `APP_ORIGIN`, so the worker needs that variable. The logo is attached inline by content ID, so no mail client fetches it from the portal. SCR-22 is a template reference, not a route.
+
+The Settings test e-mail (SCR-15) is the one exception to the outbox: `app` sends it directly to the signed-in Admin's own address, because the screen must report success or failure at once, and because no recipient is accepted from the client.
 
 ---
 
@@ -351,24 +372,24 @@ erDiagram
 | `login_throttles` | `key_hash`, `failures`, `blocked_until` | Internal | Holds unknown e-mails too, so they cannot be told apart (FR-001) |
 | `password_reset_tokens` | `token_hash`, `user_id`, `expires_at`, `used_at` | Confidential | R2. Hashed; single use (FR-003) |
 | `process_items` | `name` (unique), `unit`, `default_value` | Restricted | |
-| `customers` | `name`, `phone`, `email`, `address` | Confidential | |
+| `customers` | `name` (unique), `phone`, `email`, `address`, `deleted_at` | Confidential | Only the name is required (OQ-UX-04). Soft delete (A-13) |
 | `customer_rates` | `customer_id`, `process_item_id`, `value` | Restricted | Normalised, so sync is plain SQL (FR-014) |
-| `materials` | `material_in_drawing` (unique), `material_considered`, `price_per_kg`, `specific_gravity`, `scrap_rate`, `is_system` | Restricted | `is_system` marks "Not applicable" (A-03, Q-33) |
+| `materials` | `material_in_drawing` (unique), `material_considered`, `price_per_kg`, `specific_gravity`, `scrap_rate`, `is_system`, `deleted_at` | Restricted | `is_system` marks "Not applicable" (A-03, Q-33). Soft delete (A-13) |
 | `exchange_rates` | `currency`, `inr_value`, `updated_by`, `updated_at` | Restricted | |
 | `treatments` | `name`, `is_system` | Internal | |
 | `settings` | `alerts_enabled`, `sender_name`, `sender_address` | Internal | Single row. No credentials |
 | `config_versions` | `number` (unique), `snapshot` JSONB, `created_by`, `reason` | Restricted | Immutable. Holds formulas |
-| `config_checkpoints` | `name`, `config_version_id`, `created_by` | Restricted | |
+| `config_checkpoints` | `name`, `config_version_id`, `created_by` | Restricted | `created_by` is null for the seed checkpoint |
 | `task_sequences` | `year`, `last_value` | Internal | Issues `Q-<year>-<4 digits>`; year taken in IST (FR-041) |
-| `tasks` | `code`, `engineer_id`, `assigned_by`, `folder_path`, `deadline_at`, `title`, `notes`, `assignment_revision` | Internal | |
-| `estimates` | `task_id` (unique), `customer_id`, `status`, `inputs_revision`, `current_calculation_id` | Confidential | |
+| `tasks` | `code` (unique, the `Q-YYYY-NNNN` in page addresses), `engineer_id`, `assigned_by`, `folder_path`, `deadline_at`, `title` (120), `notes` (1,000), `assignment_revision` | Internal | Length limits Proposed by UX |
+| `estimates` | `task_id` (unique), `customer_id` (null until chosen), `status`, `inputs_revision`, `current_calculation_id` | Confidential | A customer change bumps `inputs_revision`, so it makes results stale |
 | `estimate_nodes` | `estimate_id`, `parent_id`, `sort_index`, `inputs` JSONB, `image_id`, `revision` | Confidential | Inputs only. Sl. No is derived, never stored here |
-| `part_images` | `sha256`, `mime`, `bytes` bytea, `size_bytes` | Confidential | Immutable; deduplicated per estimate |
+| `part_images` | `sha256`, `mime`, `bytes` bytea, `size_bytes`, `file_name` | Confidential | Immutable; deduplicated per estimate. `file_name` is display text on SCR-05, sanitised |
 | `calculations` | `estimate_id`, `config_version_id`, `inputs_revision`, `master_snapshot` JSONB, `product_values` JSONB, `item_totals` JSONB, `created_by` | Restricted | Immutable. FR-031 |
-| `calculation_rows` | `calculation_id`, `node_id`, `parent_id`, `sort_index`, `sl_no`, `inputs` JSONB, `image_id`, `outputs` JSONB, `rollup` JSONB | Restricted | Immutable. A full copy of the tree as calculated |
-| `approvals` | `estimate_id`, `calculation_id`, `approved_price`, `calculated_bl`, `approved_by`, `approved_at`, `unlocked_by`, `unlocked_at`, `unlock_reason` | Restricted | BO lives here. One row per approval cycle |
-| `audit_log` | `actor_id`, `event`, `object_type`, `object_id`, `before`, `after`, `request_id` | Restricted | Append-only. Admin read only |
-| `email_outbox` | `idempotency_key` (unique), `event`, `to`, `cc`, `subject`, `body`, `status`, `attempts`, `next_attempt_at`, `last_error` | Internal | Is also the e-mail log (DR-013) |
+| `calculation_rows` | `calculation_id`, `node_id`, `parent_id`, `sort_index`, `sl_no`, `inputs` JSONB, `image_id`, `outputs` JSONB, `rollup` JSONB | Restricted | Immutable. A full copy of the tree as calculated. `inputs` holds **resolved display text** for E, F and G, so renaming a material or treatment later cannot change an approved estimate |
+| `approvals` | `estimate_id`, `calculation_id`, `approved_price`, `calculated_bl`, `is_override`, `approved_by`, `approved_at`, `unlocked_by`, `unlocked_at`, `unlock_reason` | Restricted | BO lives here. One row per approval cycle. Override rule: A-12 |
+| `audit_log` | `actor_id`, `event`, `object_type`, `object_id`, `object_label`, `before`, `after`, `request_id` | Restricted | Append-only. Admin read only. `object_label` keeps the name at that time (SCR-16) |
+| `email_outbox` | `idempotency_key` (unique), `event`, `to`, `cc`, `subject`, `body_html`, `body_text`, `status`, `attempts`, `next_attempt_at`, `last_error` | Internal | Is also the e-mail log (DR-013) |
 | `job_runs` | `job`, `started_at`, `finished_at`, `result` | Internal | |
 
 **Why cost data sits in its own tables.** `estimate_nodes.inputs` holds only what a person typed: I is never written there. Everything Restricted about an estimate is in `calculations`, `calculation_rows` and `approvals`, which Engineer code paths are not able to import (ADR-008). Calculated data is therefore not filtered out of an Engineer's row; it is on a different table the Engineer's code cannot reach.
@@ -431,6 +452,12 @@ Prisma Migrate only. `prisma migrate dev` locally, `prisma migrate deploy` throu
 
 **Style.** JSON over HTTPS. Route Handlers under `/api/v1`. Server Components call services directly for first paint, through the same projections. **Server Actions are not used** (ADR-010), so every entry point appears in the manifest and can be tested. Roles: **A** Admin, **L** Lead, **E** Engineer; **E own** means only the Engineer's own task. Versioning: the path prefix `/api/v1`, for the portal's own client only; no external consumers in scope.
 
+**One route, one schema (added at reconciliation).** A route an Engineer can call has exactly one response schema, with no cost field, **whoever calls it**. Lead and Admin extras come from separate routes that an Engineer cannot call. So `GET /tree` and `GET /form` return the same shape to everyone, and the Σ figures, item totals and Material Rate (I) that SCR-06 needs come from `GET /costs` and `GET /nodes/{nodeId}/costs`. Draft v0.1 had `/tree` add figures for Lead and Admin by role. That is the kind of branch where a mistake leaks a value, so it is gone.
+
+**Page addresses.** `/queue` (bell target `/queue?tab=overdue`, with `assignedBy=me` for a Lead so the tab matches the bell count), `/estimates/<code>` where `<code>` is `Q-YYYY-NNNN`, `/estimates/<code>/costs/<slNo>`, `/estimates/<code>/export`. One address serves SCR-05 to an Engineer and SCR-06 to Lead and Admin, as separate component trees and loaders. API paths below use the UUID that the page has loaded.
+
+**Task codes are sequential, so they can be guessed.** For an Engineer, an estimate address that is missing and one that belongs to someone else give an identical response: the API returns 404 and the page shows SCR-26 "no access" (UX-22), so nobody can probe which task numbers exist.
+
 **Error model.** `application/problem+json` (RFC 9457), mapped in one place from `AppError` subclasses.
 
 ```json
@@ -439,15 +466,15 @@ Prisma Migrate only. `prisma migrate dev` locally, `prisma migrate deploy` throu
   "errors": [{ "nodeId": "…", "fieldId": "…", "message": "Enter a value." }] }
 ```
 
-Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **also returned to an Engineer for another Engineer's task** so existence does not leak; 409 revision conflict, stale calculation, wrong status; 413 too large; 415 wrong image type; 422 validation; 429 throttled; 503 export gate.
+Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **also returned to an Engineer for another Engineer's task** so existence does not leak; 409 revision conflict, stale calculation, wrong status; 413 too large; 415 wrong image type; 422 validation, **including a wrong step-up password (`STEP_UP_FAILED`)**, so the client shows SCR-18's message rather than treating it as a lost session; 429 throttled; 503 export gate.
 
 **Concurrency.** `estimate_nodes.revision` on every node write; a mismatch gives 409 and the client keeps the typed values. This covers a Lead and an Engineer on one estimate and autosave races.
 
 **Idempotency.** Nodes are created with `PUT` and a client-generated UUID, so a retry on a poor connection cannot duplicate a part. Calculate and Approve hold the estimate row lock and check status. Outbox keys are in section 4.7.
 
-**Pagination.** `?limit=` (default 50, maximum 200) with `?cursor=` on tasks, audit and history. Master lists return all rows, as they are small.
+**Pagination.** `?limit=` (default 50, maximum 200) with `?cursor=` on tasks, audit and history. Tasks also return a count per tab, and audit a total, because the screens show them. Master lists return all rows, as they are small.
 
-**Rate limits.** Sign-in, password change, step-up and reset request: 5 consecutive failures block the account key for 15 minutes (NFR-003, Proposed). Per IP, 30 failures in 15 minutes. Other routes are not limited: the users are authenticated and few.
+**Rate limits.** Sign-in, password change, step-up and reset request: 5 consecutive failures block the account key for 15 minutes (NFR-003, Proposed). Step-up has its own key, so a mistyped password in a dialog cannot lock an Admin out of signing in. An Admin password reset clears the block, as SCR-01's locked message promises. Per IP, 30 failures in 15 minutes. Other routes are not limited: the users are authenticated and few.
 
 **Caching.** Every authenticated response carries `Cache-Control: private, no-store`. No Next.js data caching, `use cache` or static rendering for any role-dependent route.
 
@@ -459,24 +486,25 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | Reset password | `POST /account/password/reset` | Token, new | 204 | 400 | Public | Single use | R2 |
 | Health | `GET /api/health` | none | `{status}` | 503 | Public; no detail | Yes | R1 |
 | Current user | `GET /me` | none | Name, e-mail, role, nav, overdue count | 401 | A L E | Yes | R1 |
-| Users | `GET, POST /users`; `PATCH /users/{id}` | User fields | User | 409, 422 | A | No | R1 |
-| Reset user password | `POST /users/{id}/password-reset` | New temporary password | 204 | 404 | A | No | R1 |
-| Hand over Admin | `POST /users/{id}/admin-handover` | Password | 204 | 403, 409 | A, step-up | No | R2 |
+| Users | `GET, POST /users`; `PATCH /users/{id}` | User fields, including role and active flag | User | 409 (second Admin, naming the current one; own role or active flag), 422 | A | No | R1 |
+| Reset user password | `POST /users/{id}/password-reset` | New password | 204; clears the sign-in block | 404, 422 | A | No | R1 |
+| Hand over Admin | `POST /users/{id}/admin-handover` | none (see OQ-ARCH-08) | 204; caller signed out | 403, 409 | A | No | R2 |
 | Process items | `GET, POST /process-items`; `PATCH, DELETE /process-items/{id}` | Name, unit, default | Item; or 409 with formula list | 409, 422 | A | No | R1 |
 | Default change | `POST /process-items/{id}/default-change` | New value | Updated count; customers that differ | 409 | A | No | R1 |
 | Default choices | `POST /process-items/{id}/default-change/choices` | Apply or keep per customer | Counts | 422 | A | Yes | R1+ |
-| Customers | `GET, POST /customers`; `PATCH, DELETE /customers/{id}` | Contact, rates | Customer with rates | 409, 422 | A | No | R1 |
+| Customers | `GET, POST /customers`; `PATCH, DELETE /customers/{id}` | Contact, rates | Customer with rates, count that differ | 409 (with the open estimates using it), 422 | A | No | R1 |
 | Reset customer | `POST /customers/{id}/reset-rates` | none | Customer | 404 | A | Yes | R1 |
-| Materials | `GET, POST /materials`; `PATCH, DELETE /materials/{id}` | Material fields | Material | 409, 422 | A | No | R1 |
-| Exchange rates | `GET /exchange-rates`; `PUT /exchange-rates/{currency}` | INR value | Rate, stamp | 422 | A | Yes | R1 |
+| Materials | `GET, POST /materials`; `PATCH, DELETE /materials/{id}` | Material fields | Material | 409 (with the open estimates using it), 422 | A | No | R1 |
+| Exchange rates | `GET, PUT /exchange-rates` | Both INR values | Rates, stamp | 422 | A | Yes | R1 |
 | Treatments | `GET, POST /treatments`; `PATCH, DELETE /treatments/{id}` | Name | Treatment | 409 | A | No | R1 |
-| Safe options | `GET /options/{customers\|materials\|treatments\|engineers}` | none | IDs and names; materials add `materialConsidered`. **No rate of any kind** | 401 | A L E (engineers: A L) | Yes | R1 |
-| Tasks | `GET /tasks?tab=&assignedBy=&engineer=&customer=&from=&to=&q=` | Filters | Page of tasks | 401 | A L; E own | Yes | R1 |
-| Create task | `POST /tasks` | Engineer, path, deadline, title, notes | Task and estimate | 422 | A L | No | R1 |
-| Task detail | `GET /tasks/{id}` | none | Task | 404 | A L; E own | Yes | R1 |
-| Change task | `PATCH /tasks/{id}` | Engineer or deadline | Task | 404, 422 | A L | No | R2 |
-| Estimate form | `GET /estimates/{id}/form` | none | Sections, input fields, letters, rules | 404 | A L; E own | Yes | R1 |
-| Tree | `GET /estimates/{id}/tree` | none | Nodes: ID, parent, Sl. No, label, completeness; **A L add Σ figures** | 404 | A L; E own | Yes | R1 |
+| Safe options | `GET /options/{customers\|materials\|treatments}` | none | IDs and names; materials add `materialConsidered`. **No rate of any kind** | 401 | A L E | Yes | R1 |
+| Assign context | `GET /options/assign-context` | none | Active Engineers; `alertsEnabled` (SCR-04's notice) | 403 | A L | Yes | R1 |
+| Tasks | `GET /tasks?tab=&assignedBy=&engineer=&customer=&from=&to=&q=` | Filters | Page of tasks; count per tab | 401 | A L; E own | Yes | R1 |
+| Create task | `POST /tasks` | Engineer, path, deadline, title, notes | Task, with code, and estimate | 422 | A L | No | R1 |
+| Task detail | `GET /tasks/{id}` | none | Task, including notes | 404 | A L; E own | Yes | R1 |
+| Change task | `PATCH /tasks/{id}` | Engineer or deadline | Task | 404, 409 (approved, A-14), 422 | A L | No | R2 |
+| Estimate form | `GET /estimates/{id}/form` | none | Sections, input fields, letters, units, hints, rules, last saved. **Same shape for every role** | 404 | A L; E own | Yes | R1 |
+| Tree | `GET /estimates/{id}/tree` | none | Nodes: ID, parent, Sl. No, label, completeness. **Same shape for every role; no figures** | 404 | A L; E own | Yes | R1 |
 | Set customer | `PUT /estimates/{id}/customer` | Customer | Estimate | 409, 422 | A L; E own, while editable | Yes | R1 |
 | Node | `GET, PUT, DELETE /estimates/{id}/nodes/{nodeId}` | Parent, order | Node inputs | 404, 409 | A L; E own, while editable | Yes | R1 |
 | Save inputs | `PATCH /estimates/{id}/nodes/{nodeId}/inputs` | `revision`, values by field ID | Node, revision | 409, 422 | A L; E own, while editable | Yes | R1 |
@@ -484,22 +512,23 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | Image | `PUT, DELETE /estimates/{id}/nodes/{nodeId}/image`; `GET /images/{id}` | Multipart file | Image reference; bytes | 413, 415 | A L; E own | Yes | R1 |
 | Calculate | `POST /estimates/{id}/calculate` | none | `{status, message}`, nothing else | 409, 422 | E own, DRAFT | Status guard | R1 |
 | Recalculate | `POST /estimates/{id}/recalculate` | none | Costs | 409, 422 | A L | Yes | R1 |
-| Costs | `GET /estimates/{id}/costs` | none | BL, BN, BO, item totals, stale flag | 404 | A L | Yes | R1 |
-| Cost details | `GET /estimates/{id}/nodes/{nodeId}/costs` | none | Stages, formulas, values, the pair of figures | 404 | A L | Yes | R1 |
+| Costs | `GET /estimates/{id}/costs` | none | Status of figures (none, current, stale), BL, BN, BO, item totals, Tool Cost total and count, Σ figures by node, calculated at, configuration number | 404 | A L | Yes | R1 |
+| Cost details | `GET /estimates/{id}/nodes/{nodeId}/costs` | none | Stages, formulas, operands at stored precision, values, the pair of figures, own row plus children's figures, I | 404 | A L | Yes | R1 |
 | Approve | `POST /estimates/{id}/approve` | `calculationId`, price | Approval | 409, 422 | A L | Status guard | R1 |
-| Unlock preview | `GET /estimates/{id}/unlock-preview` | none | Config and rate changes | 409 | A L | Yes | R1 |
+| Unlock preview | `GET /estimates/{id}/unlock-preview` | none | Configuration versions; counts of changed rates | 409 | A L | Yes | R1 |
 | Unlock | `POST /estimates/{id}/unlock` | Reason | Estimate | 409, 422 | A L | Status guard | R1 |
-| Export | `GET /estimates/{id}/export` | none | `.xlsx` | 404, 503 | A L | Yes | R1 |
-| Export summary | `GET /estimates/{id}/export-summary` | none | Rows, both figures, reconciliation | 404 | A L | Yes | R1 |
-| Configuration | `GET /config/fields`; `GET /config/versions/{id}` | none | Fields, formulas, letters | 403 | A L | Yes | R1 read; R2 UI |
-| Formula check | `POST /config/formula-check` | Text, sample node | Valid or message; preview | 422 | A | Yes | R2 |
-| Save formula | `PUT /config/fields/{id}/formula` | Text, password | New version | 401, 422 | A, step-up | No | R2 |
-| Insert preview | `POST /config/fields/preview` | Insert spec | Letter changes | 422 | A | Yes | R2 |
-| Insert field | `POST /config/fields` | Insert spec | New version | 422 | A | No | R2 |
-| Delete field | `DELETE /config/fields/{id}` | Password | New version; or 409 with formulas | 401, 409 | A, step-up | No | R2 |
+| Export | `GET /estimates/{id}/export` | none | `.xlsx`, attachment, `no-store` | 404, 503 | A L | Yes | R1 |
+| Export summary | `GET /estimates/{id}/export-summary` | none | File name, row and picture counts, rows with both figures, reconciliation, `stale` | 404 | A L | Yes | R1 |
+| Configuration | `GET /config/fields`; `GET /config/current` | none | Fields, formulas, letters; version, saved by and at, estimates in use | 403 | A L | Yes | R1 read; R2 UI |
+| Sample rows | `GET /config/sample-rows` | none | Rows of the latest calculated estimate, for preview (UX-11) | 403 | A | Yes | R2 |
+| Formula check | `POST /config/formula-check` | Text, sample row | Valid or message, fields used, fields fed; preview | 422 | A | Yes | R2 |
+| Save formula | `PUT /config/fields/{id}/formula` | Text, password | New version | 409 (system field), 422 | A, step-up | No | R2 |
+| Insert preview | `POST /config/fields/preview` | Insert spec, one or two fields | Letter changes, moved cells | 422 | A | Yes | R2 |
+| Insert field | `POST /config/fields` | Insert spec, one or two fields | One new version | 422 | A | No | R2 |
+| Delete field | `DELETE /config/fields/{id}` | Password | New version; or 409 with references | 409, 422 | A, step-up | No | R2 |
 | Checkpoints | `GET, POST /config/checkpoints` | Name | Checkpoint | 409 | A | No | R2 |
-| Revert | `POST /config/checkpoints/{id}/revert` | Password | New version | 401 | A, step-up | No | R2 |
-| Audit | `GET /audit?category=&who=&from=&to=` | Filters | Page of entries | 403 | A | Yes | R1; config R2 |
+| Revert | `POST /config/versions/{id}/revert` | Password | New version | 422 | A, step-up | No | R2 |
+| Audit | `GET /audit?category=&event=&who=&from=&to=` | Filters | Page of entries, total | 403 | A | Yes | R1; config R2 |
 | Settings | `GET, PUT /settings` | Alerts, sender | Settings | 422 | A | Yes | R2 |
 | Test e-mail | `POST /settings/test-email` | none | Result | 502 | A | No | R2 |
 
@@ -550,11 +579,13 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 
 ## 8. Security Architecture
 
-**Authentication (ADR-009).** next-auth 4 credentials provider; JWT session strategy, encrypted, in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie; lifetime 12 hours (Proposed). The token holds only the user ID and `session_version`. **Role and active flag are read from `users` on every request**, so deactivation, role change and password change take effect at the next request. Passwords use argon2id through `@node-rs/argon2`.
+**Authentication (ADR-009).** next-auth 4 credentials provider; JWT session strategy, encrypted, in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie; 12 hours of inactivity (Proposed), rolling, as SCR-26's "after a period of no activity" says. The token holds only the user ID and `session_version`. **Role and active flag are read from `users` on every request**, so deactivation, role change and password change take effect at the next request. Passwords use argon2id through `@node-rs/argon2`. Sign-in returns one error for a wrong e-mail, wrong password or deactivated account, and a separate `locked` code for SCR-01's locked message, which appears for unknown e-mails too. The address to return to after sign-in is accepted only as a same-origin relative path, so it cannot become an open redirect.
 
-**Password rule (answers OQ-UX-05, Proposed).** At least 10 characters, at most 128, no composition rule, paste allowed, refused if it equals the e-mail or is on a short common-passwords list. Argon2id parameters are set at scaffold to take about 250 ms on the host.
+**Password rule (answers OQ-UX-05, Proposed).** At least 10 characters, at most 128, no composition rule, paste allowed, refused if it equals the e-mail or is on a short common-passwords list. The same rule applies to a first password and a reset set by the Admin. Argon2id parameters are set at scaffold to take about 250 ms on the host. UX needs three more messages (UX-18).
 
-**First Admin.** `npm run bootstrap:admin` reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` from the environment once, and sets `must_change_password`. The command refuses to run if an Admin exists.
+**Admin guards.** The Admin cannot deactivate their own account or change their own role, as SCR-14 shows, so the portal cannot end up with no Admin. The server enforces this; a disabled button is not enough. Only the hand-over changes the Admin.
+
+**First Admin.** `npm run bootstrap:admin` reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` from the environment once, and sets `must_change_password`. The command refuses to run if an Admin exists. While the flag is set, every page redirects to SCR-23 (UX-17).
 
 **Authorisation.** Three layers, each sufficient alone:
 1. Pages and handlers: `requireRole` through `withRoute`.
@@ -565,15 +596,22 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 
 **CSRF.** On every non-GET request `withRoute` requires `Origin` to equal `APP_ORIGIN`, or `Sec-Fetch-Site: same-origin`, and a `SameSite=Lax` cookie is the second layer. Server Actions are off, so this wrapper is the single path. next-auth's own CSRF token protects sign-in.
 
-**Secrets.** Environment variables only: `DATABASE_URL` (runtime role), `MIGRATE_DATABASE_URL` (owner role, `migrate` only), `AUTH_SECRET`, `APP_ORIGIN`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_INITIAL_PASSWORD`. `src/lib/env.ts` validates them at start-up with zod. `.env` on the host has mode 600 and is never committed. No `NEXT_PUBLIC_` variable holds anything sensitive. Rotation: `AUTH_SECRET` rotation signs everyone out; SMTP and DB by the IT contact.
+**Secrets.** Environment variables only: `DATABASE_URL` (runtime role), `MIGRATE_DATABASE_URL` (owner role, `migrate` only), `AUTH_SECRET`, `APP_ORIGIN` (also used by the worker for e-mail links), `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` (`app` and `worker`), `ADMIN_EMAIL`, `ADMIN_INITIAL_PASSWORD`. `src/lib/env.ts` validates them at start-up with zod. `.env` on the host has mode 600 and is never committed. No `NEXT_PUBLIC_` variable holds anything sensitive. Rotation: `AUTH_SECRET` rotation signs everyone out; SMTP and DB by the IT contact.
 
 **Encryption.** In transit: TLS 1.2 or later at the proxy, SMTP over TLS, a private Docker network to the database. At rest: full-disk encryption on the host volume (A-01), encrypted backups. Column-level encryption is not used: the key would live on the same host, so it adds little against the threats in scope.
 
-**Input validation.** Zod at every boundary, shared by client and server. Formula text goes through the tokenizer and never reaches a dynamic execution path. Images: own signature check for PNG, JPEG, GIF and WebP, under 200 KB (A-06). The folder path is validated as a UNC or `file:` path, so a `javascript:` link is impossible. Customer text in the export file name is sanitised (answers OQ-UX-08): spaces become underscores, anything outside `A-Za-z0-9_-` is removed, at most 60 characters, fallback `Customer`.
+**Input validation.** Zod at every boundary, shared by client and server. Formula text goes through the tokenizer and never reaches a dynamic execution path. Images: own signature check for PNG, JPEG, GIF and WebP, under 200 KB (A-06). The folder path must be a UNC path (`\\server\share…`, SCR-04), and the `file:` link is generated from it on the server, so a `javascript:` link is impossible. A rate name cannot be a valid column letter, as letters move. The client strips Indian digit grouping before sending a price; the API accepts plain decimals only. Customer text in the export file name is sanitised (answers OQ-UX-08): spaces become underscores, anything outside `A-Za-z0-9_-` is removed, at most 60 characters, fallback `Customer`. SCR-10's example `Quotation_Brightwater_Controls_Q-2026-0318_2026-11-05.xlsx` follows this.
 
-**Security headers.** CSP with nonces (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`), HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy`. Pasted images are held as `blob:` previews, so `img-src` adds `blob:`.
+**Security headers.** CSP with nonces (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`), HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy`. Pasted images are held as `blob:` previews, so `img-src` adds `blob:`. Radix sets inline style attributes, so `style-src-attr` needs `'unsafe-inline'`. `default-src 'self'` covers the self-hosted fonts. The mock-up's inline `onsubmit` must not be copied.
 
-**Audit logging.** Events: approval, unlock, price override, master-data edit, user changes, Admin hand-over, task reassign, configuration change, revert. Fields: who, when, object, before, after, request ID. Password hashes and tokens are never in before or after values.
+**Indexing and sharing.**
+- Signed-in pages carry `noindex, nofollow`, and so do the redirects `proxy.ts` sends a signed-out visitor, as `X-Robots-Tag`, because a crawler never reaches the page itself.
+- `robots.txt` does not list private paths, as that would publish them.
+- A shared link to a signed-in page shows the sign-in page's tags to the crawler. Open Graph tags on signed-in pages are therefore harmless but do nothing, and no task code or customer name may enter any `<title>` or tag (FR-089).
+- The password-reset page is `noindex` and `Referrer-Policy: no-referrer`, because its address carries a single-use token (UX-12).
+- Sign-in indexing and any Open Graph image are decided in section 16.2.
+
+**Audit logging.** Events: approval, unlock, price override, master-data edit, user changes, Admin hand-over, task reassign, configuration change, revert. Fields: who, when, object, label, before, after, request ID. Password hashes and tokens are never in before or after values. Lead edits to inputs are not in this list, although OQ-UX-11 assumes they are (OQ-ARCH-07).
 
 **Supply chain.** `package-lock.json` committed; `npm ci` only; exact versions; Dependabot on; `npm audit --omit=dev --audit-level=high` in CI; licence allow-list in CI; base image pinned by digest; no install scripts beyond an explicit allow-list. **Never run `npm i prisma` unpinned: the `latest` tag currently points to `8.0.0-rc.29` (Evidence, npm, 2026-11-01).**
 
@@ -694,12 +732,13 @@ What would conflict: a local copy would place rates on a machine (BRQ-002, RISK-
 │   └── seed/
 │       ├── config/          SPEC §7 field registry. Structure only, committed
 │       └── placeholders/    Invented masters for dev, CI, staging. Never real data
-├── public/                  Logo, fonts
+├── public/                  Logo, unaltered
 ├── scripts/                 backup.sh, restore.sh, bootstrap-admin.ts, import-masters.ts
 ├── src/
 │   ├── app/                 Next.js routes only; thin
 │   │   ├── (public)/        sign-in, reset
-│   │   ├── (portal)/        tasks, estimates/[id], masters/*, config/*, users, settings, audit, about, account
+│   │   ├── (portal)/        queue, assign, estimates/[code], masters/*, config/*, users, settings, audit, about, account
+│   │   ├── fonts/           Self-hosted fonts and their licences, loaded with next/font/local
 │   │   └── api/             api/v1/**, api/auth/[...nextauth], api/health
 │   ├── components/
 │   │   ├── ui/              shadcn/ui, generated source
@@ -784,6 +823,7 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Scheduler | node-cron | 4.6.0 | Time-zone aware cron, no broker | ISC | ADR-011 |
 | Logging | pino | 10.4.0 | JSON logs, redaction | MIT | ADR-001 |
 | TLS proxy | Caddy | 2.x | Automatic certificates, one small config file | Apache-2.0 | ADR-002 |
+| Fonts | IBM Plex Sans, IBM Plex Mono, Tinos Bold | Files from `docs/03-ux/screens/fonts/`, plus a subset with ₹ (UX-13) | UX spec §7.1. Self-hosted with `next/font/local`; preload only Plex Sans 400 and 600 and Tinos 700, and let the rest load on demand, for NFR-009. The six files total about 120 KB | SIL OFL 1.1, licence files shipped beside the fonts | UX spec |
 | Tests | Vitest, Playwright, axe, Lighthouse CI | 5.0.5, 1.64.1, 4.14.0, 0.15.1 | Project standard; all dev only | MIT; Apache-2.0; MPL-2.0; Apache-2.0 | Test strategy |
 | Load test | k6 binary | Pinned at scaffold | Dev tool, not linked or shipped | AGPL-3.0 (tool use only) | Test strategy |
 | Mail in tests | Mailpit | Pinned at scaffold | Capturing mail server | MIT | Test strategy |
@@ -813,6 +853,8 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Not stated in the lockfile | `buffers` (through `exceljs`) | Check at scaffold |
 
 **Rejected on the way.** `file-type`: a signature check for four formats is a few lines and needs no dependency. `pg-boss`, BullMQ: see ADR-011. `@dnd-kit`, `react-arborist`: UX needs no drag (SCR-05), and the tree is custom per UX §7.5. `@tanstack/react-virtual`: added only if the 500-node test shows a need, as virtualising conflicts with `role="tree"` keyboard handling.
+
+**Sticky bars (implementation rule).** Offsets are measured, not fixed: a small client hook watches the top bar, the section strip and the action bar with `ResizeObserver` and sets `--sticky-top` and `--sticky-bottom`, which feed `scroll-padding`. Moving focus with Enter calls `scrollIntoView({ block: 'nearest' })`, which honours that padding. See section 16.2.
 
 ---
 
@@ -1014,52 +1056,202 @@ The IDs below are proposals. `master` owns the register and assigns `RISK-nnn` n
 | A-09 | A task whose deadline moves and passes again gets a new overdue e-mail | No | The key format |
 | A-10 | Q-31, ASSUMPTION-47: BL, BN, BO in row 2 only | No | `product-cells.ts` only (1 to 2 h, PRD estimate) |
 | A-11 | Q-34: no effect on this design. Flags keep either hand-over possible | No | None |
+| A-12 | A price is an override only if it differs from BL **rounded to 2 decimals**. SCR-08 pre-fills the rounded value, and BL holds more digits, so an exact comparison would log an override every time a Lead accepts the pre-filled price | No | One comparison |
+| A-13 | Customers and materials are soft-deleted, and deletion is refused while an open estimate uses them. Calculation records keep their own copies, so history is safe | No | `masters-service`; SCR-12 and SCR-13 have no delete yet (UX-16) |
+| A-14 | Reassign and deadline change are refused on an approved task. SCR-03 shows the action on Closed rows (UX-20) | No | One guard |
+| A-15 | An input with a default takes it when its key is absent, for older drafts after a field insert | No | One rule in `lib/estimate` |
+| A-16 | "Missing data" in the tree is client state from the blocked Calculate response, and is not stored. After a reload the node shows "In progress" | No | One column, if it must survive a reload |
 
 ### 15.2 Open questions
 
 | ID | Question | Owner | Needed by |
 |----|----------|-------|-----------|
-| Q-32 (a) | Own-words confirmation and the meaning of QTY per Assy. The request is not yet on AQP-13 as of this draft | Santhosh; business-analyst words it | G3 approval (DL-006) |
+| Q-32 (a) | Own-words confirmation and the meaning of QTY per Assy. Asked on AQP-13 (comment 10477); no reply when last read on 2026-11-01. Version 0.1 wrongly said it had not been posted | Santhosh | G3 approval (DL-006) |
 | Q-18 | Hosting details | Santhosh, Accucut IT | G3 |
 | Q-31, Q-33, Q-34 | See PRD section 12 | Santhosh | G3 |
 | OQ-ARCH-01 | Confirm A-05 and A-08 with the delivery lead (behaviour neither SPEC nor PRD states) | product-manager | G4 |
 | OQ-ARCH-02 | Who runs deployments, and where GitHub Container Registry images may be pulled from | Accucut IT | G4 |
 | OQ-ARCH-03 | Confirm Proposed values: session lifetime 12 h, password rule, backup rotation, VM size | Santhosh | G3 |
+| OQ-ARCH-04 | Part Model (C) is mandatory on Calculate, because SPEC §7.3 makes every visible input mandatory and SCR-05 counts it. An assembly with no picture has no equivalent of entering 0, so Calculate cannot pass, and UX defines no message for it. Is a picture required on every node? The registry's `mandatory` flag changes this in one place | Santhosh, through product-manager | G4 |
+| OQ-ARCH-05 | SCR-11 to 13 limit master rates to 2 decimals; storage allows 4. Do any real rates or exchange rates need more? Check when the defaults arrive at HOLD-01 | Santhosh | HOLD-01 |
+| OQ-ARCH-06 | Should a Lead be told when rates changed after the last calculation but before approval? Today SCR-06 says nothing, and approval uses the calculated figures. The data for a notice exists (same diff as unlock) | Santhosh, through product-manager | G4 |
+| OQ-ARCH-07 | OQ-UX-11 assumes Lead edits to inputs on a Submitted estimate are in the audit log. FR-011 does not list them and this design does not log them. Add the event, or correct the assumption | product-manager | G4 |
+| OQ-ARCH-08 | Should Admin hand-over ask for the password? FR-080 and NFR-004 name three actions, and SCR-14 has no password step, so the API follows them and draft v0.1's step-up is removed. It is the highest-privilege action in the portal, so the architect recommends adding it | product-manager | G4 |
+| OQ-ARCH-09 | FR-060 (Lead views formulas read-only) is R1, and SCR-17-lead is marked R2. In R1 a Lead reads formulas on SCR-07 only. Is that enough for FR-060 under scope B? SCR-17-lead can ship in R1, as its API is already R1 | product-manager | G4 |
 
 ---
 
 ## 16. Reconciliation with UX, PRD and Standards
 
-**UX spec v0.1: feasible on what was read.** Read: sections 0, 6.0, 7.4, 7.5 and 11; SCR-05 from its states onward; SCR-06 to SCR-11; SCR-16 to SCR-20. The other screens were checked by keyword search only, and the HTML screens were not opened. Nothing read needs a change in this design, and no conflict blocks G3.
+**Result.** Every screen from SCR-00 to SCR-26 is reconciled against this architecture. Nothing found needs a redesign, and no screen shows or needs a cost, rate or formula for an Engineer. The review did change the architecture in 20 places (16.5), and UX has 27 items to change (16.6), 20 of them before build. Six questions go to the delivery lead or product manager (OQ-ARCH-04 to 09). Whether any of this holds G3 is for `master` to decide.
 
-| UX item | Result |
-|---------|--------|
-| Condition 6 paired figures (SCR-06, 07, 10) | Supported directly: `outputs`, `rollup`, `item_totals`. The screen needs no arithmetic of its own |
-| Formula with values (SCR-07) | Server renders it from the AST and the snapshot |
-| Live check after a 300 ms pause (SCR-18) | Server call; `lib/formula` is server-only |
-| "Building the file" (SCR-10) | Normal download with a client spinner |
-| Reference such as `req-7f3a91` (SCR-06) | `requestId` in the error model |
-| Tree reorder by buttons, Alt+arrows (SCR-05) | `POST /tree/move`; no drag library |
-| Engineer and Lead at one address (SCR-06) | Page branches by role into separate component trees and loaders |
-| Unlock notices (SCR-09) | `GET /unlock-preview` |
-| OQ-UX-05, 06, 08 | Answered in section 8 and A-04 |
-| OQ-UX-12 | Status without price is allowed: a status is not a cost |
-| UD-5 and OQ-UX-01 | No design effect either way |
+**Correction.** Version 0.1 of this section and comment 10481 said "reconciled: feasible, no conflict blocks G3". That was stronger than the work behind it: part of the spec had been read, other screens had only a keyword search, and the HTML had not been opened. The full review below is what supports the result above.
 
-**Issues for other roles.**
+### 16.1 Method and limits
+
+- **Read in full:** `ux-spec.md` at commit 0178d15, and all 41 HTML pages in `docs/03-ux/screens/` (29 screen pages, 11 device frames, the index), plus `screens.js` and the sticky and responsive parts of `screens.css`.
+- **How the HTML was read:** SCR-01 as raw source. The others through reading copies that drop inline SVG icons, `class` and `style` attributes, and top bars and side menus identical to one already shown. Text, state wrappers, roles, form attributes and links stayed. A script confirmed no visible word was lost. The 11 device frames are iframes of the screen pages, so they hold no content of their own.
+- **Checked by script (Evidence, 2026-11-01):** head tags on 41 pages; forbidden text on 7 Engineer-reachable pages; the arithmetic in 16.3; glyphs in the 6 font files, with `fontkit`.
+- **Not done:** no browser was run, and no screen was seen rendered. The phone action-bar height in 16.2 is worked out from the CSS, not measured. Mock-ups show the design only: they cannot prove server behaviour, which is proved by the tests in `test-strategy.md`.
+- **Result words:** **Supported** = nothing to change. **Arch changed** = this review changed the architecture, and the screen is now supported. **UX-nn** = the screen must change (16.6).
+
+### 16.2 UX items raised for the architect
+
+| Item | Result | Position |
+|------|--------|----------|
+| **Password rule** (OQ-UX-05) | Answered, Proposed | At least 10, at most 128 characters, no composition rule, refused if equal to the e-mail or a common password. Delivery lead to confirm. Applies to SCR-02, 14 and 23. UX needs three more messages, and "Proposed rule, to be confirmed" comes off after confirmation (UX-18) |
+| **Self-hosted fonts** | **Problem found** | The approach is sound: `next/font/local`, SIL OFL 1.1, licences shipped, no external request, about 120 KB in all. But **none of the 6 files contains ₹ (U+20B9), Σ (U+03A3), → (U+2192) or ← (U+2190)** (Evidence, `fontkit`). ₹ is on every money figure, and Σ is the G2 condition 6 marker, so both fall back to a system font and the look varies by device. The mock-ups cannot show this on a machine whose system font has the glyph. A subset holding ₹ is needed; Σ and the arrows can be SVG icons (UX-13) |
+| **File-name handling** (OQ-UX-08) | Answered | Spaces become underscores; anything outside `A-Za-z0-9_-` is removed; at most 60 characters; `Customer` if nothing remains or no customer is chosen; date is the IST date of download. So "A&B Works" gives `AB_Works`. SCR-10's example already follows it |
+| **Sign-in indexing** (OQ-UX-03) | Supported either way; product decision | Either is one constant. Nothing blocks UX's assumption of "indexable, generic text", which FR-089 allows. The architect's preference is `noindex`: users have named accounts, so search adds nothing, and an indexed sign-in page invites password guessing. It remains the product manager's call. **SCR-02 is different:** it is marked `index, follow` but its address carries a single-use reset token, so it must be `noindex` whatever is decided here (UX-12) |
+| **Open Graph image** (OQ-UX-03) | Supported; recommend none for now | No page has `og:image` today (Evidence). One static image on the public pages is feasible and carries no cost risk, but it needs an absolute address from `APP_ORIGIN` (Q-18), and the logo is only 200 × 200 px (Q-16). Crawlers cannot reach signed-in pages, so a per-page image would do nothing. Revisit once Q-16 and Q-18 are answered. NFR-022 does not require an image |
+| **Sticky-bar offset** | **Problem found** | `screens.css` fixes `scroll-padding-top: 136px` and `scroll-padding-bottom: 96px`. The top value fits: top bar 64 plus the section strip. The bottom value fits a one-line bar (about 69 px). It does not fit phones, where `.actionbar .btn` flexes and wraps: SCR-06 has a status line and three buttons, about 180 px by calculation from the CSS, so a focused field could sit behind the bar, against WCAG 2.4.11 and UX section 8. Measured offsets replace the fixed values (section 11, UX-14). On a phone the keyboard also reduces the visible area, so this needs the real-phone check |
+
+Also answered: **OQ-UX-02** (reason for an override) is one optional column, no design effect. **OQ-UX-04** (customer fields): only the name is required in the schema. **OQ-UX-06** (approve when stale): no, A-04. **OQ-UX-07** (units): held in the registry. **OQ-UX-09** (test e-mail): own address only, and the API takes no recipient, which is the safer choice. **OQ-UX-12** (Engineer sees Approved): supported, as a status is not a cost. **OQ-UX-11**: see OQ-ARCH-07. **OQ-UX-01** and UD-5: no design effect either way.
+
+### 16.3 Focus checks
+
+**Server-side blocking of cost data for Engineers: supported.**
+
+| Check | Result |
+|-------|--------|
+| What an Engineer's screens need | SCR-01, 02, 03 (Engineer), 05, 23, 24, 26 and the bell. Every value is an input, a name, a status, a date or a path. None needs a Restricted value |
+| Text on those pages (Evidence) | Scan for rate names, Material Rate, exchange rates, BG, BL, BN, BO, Σ, "formula" and more: none. ₹ appears only as a unit tag on inputs the Engineer types (16 times on SCR-05), which FR-008 allows. "price" appears once, in the About sentence, as ordinary words |
+| Routes an Engineer can call | Only those listing E in section 6. All have one cost-free schema. `/tree` no longer varies by role (Arch changed) |
+| Pages an Engineer cannot open | SCR-04, 06 to 22, as SCR-25 sets out. Refused by `withRoute` and page checks, showing SCR-26 |
+| Export | `GET /export`, `GET /export-summary` and the page `/estimates/<code>/export` are A L only. An Engineer gets SCR-26 and no data. The file goes out as an attachment with `no-store`. Tested by the role matrix and canary scan |
+| Another Engineer's task | Identical response whether it exists or not, as task codes can be guessed (Arch changed, UX-22) |
+| Calculate | Returns status and the one sentence. A blocked Calculate returns field labels only |
+| Images | Same ownership check as the estimate |
+| Side menu | Built per role on the server, so an Engineer's page does not carry the Admin items |
+| Wording | SCR-05 says "You never see them" and "Rates differ by customer". No data leaks, but it breaks UX principle 2 (UX-24) |
+
+**Parent screen figure against export row: supported, with three items for UX.**
+
+| Check | Result |
+|-------|--------|
+| The two figures | SCR-06, 07 and 10 pair them with labels, as G2 condition 6 asks. `calculation_rows.rollup` feeds the screen, `outputs` feeds the file. Nothing reads `rollup` into a sum |
+| Mock-up data | SCR-10's rows follow D-12: 1.1 is 896.00 + 160.16 + 107.38 = 1,163.54; 1.4 is 309.19 + 400.78 = 709.97; item 1 is 0 + 1,163.54 + 1,253.12 + 1,935.09 + 709.97 = 5,061.72 |
+| Item total | `item_totals` supplies the quantity line and the SCR-06 table |
+| Rounding | **SCR-10 prints "2 × ₹ 5,061.72 = ₹ 10,123.45"; the shown figures give 10,123.44.** Totals use unrounded values, so this will happen in real use, and in the very place a Lead is told to reconcile (UX-02) |
+| Worked lines on SCR-07 | **The working is printed with 2-decimal operands, so it does not reproduce the result:** AK reads (2.83 × 58.00) − (0.43 × 22.00), which is 154.68, beside ₹ 154.54. Unrounded, 2.826 and 0.426 give 154.536. AV is off by 0.02. FR-058's purpose is letting a Lead check the arithmetic, so this needs fixing (UX-01) |
+| BJ and BK | FR-029 says a parent shows BG, BJ and BK as sums. Only BG is paired on screen (UX-06). The data exists |
+| A parent with many rows | The "sum written out" needs a limit, so the API returns own row plus children's figures (UX-25) |
+| If Q-32 (a) changes | The wording and the SCR-10 method state the rule, so they change too (section 4.3) |
+
+### 16.4 Every screen
+
+| Screen | Pages read | Route | Roles against SCR-25 | Data and actions | States | Result |
+|--------|------------|-------|----------------------|------------------|--------|--------|
+| SCR-00 Design system | SCR-00 | None: reference | Not applicable | Tokens become the Tailwind theme; shadcn map confirmed | Static | Supported; fonts UX-13 |
+| SCR-01 Sign in | SCR-01, -phone | `/sign-in` | Public | next-auth; return address same-origin only | 5 of 5 | Arch changed (`locked` code, throttle clear); sign-in indexing open |
+| SCR-02 Forgot, reset (R2) | SCR-02 | `/reset` | Public | Forgot and reset routes; same reply always | 5 of 5 | Supported; UX-12, UX-18 |
+| SCR-03 Queue, My tasks | SCR-03, -engineer, -phone, -tablet | `/queue` | Match | `GET /tasks`; `Not chosen yet` needs a null customer; bell matches tab | 7 of 7; Engineer page 6 of 6 | Arch changed (tab counts, `assignedBy` on bell); UX-20, UX-26 |
+| SCR-04 Assign, reassign | SCR-04, -phone | `/assign` | Match | `POST /tasks`, `PATCH`; UNC check; server re-checks deadline | 6 of 6 | Arch changed (assign context, UNC rule, limits); UX-15, UX-21 |
+| SCR-05 Workspace | SCR-05, -phone, -tablet | `/estimates/<code>` | Match | Form, tree, inputs, image, move, delete cascade, customer, Calculate | 11 of 11 | Arch changed (units, hints, form order, file name); UX-07, UX-13, UX-14, UX-15, UX-24; OQ-ARCH-04 |
+| SCR-06 Review | SCR-06, -phone, -tablet | `/estimates/<code>` | Match | `/costs`, node costs, Recalculate, approve, unlock links | 7 of 7, one state missing | Arch changed (one schema; figures and I from `/costs`); UX-02, UX-03, UX-04, UX-06, UX-07, UX-25, UX-26 |
+| SCR-07 Cost details | SCR-07, -phone | `/estimates/<code>/costs/<slNo>` | Match | Node costs; `hideWhenZero`; stage totals | 3 of 3 | Arch changed (stages, totals, operands); UX-01, UX-02, UX-06 |
+| SCR-08 Approve | SCR-08 | Dialog on SCR-06 | Match | `POST /approve`; override event | 4 of 4 | Arch changed (A-12, grouping stripped) |
+| SCR-09 Unlock | SCR-09 | Dialog on SCR-06 | Match | Preview and unlock | 4 of 4 | Supported |
+| SCR-10 Export | SCR-10 | `/estimates/<code>/export` | Match; Engineer refused | Export and summary | 5 of 5, two states missing | Arch changed (`stale`, date); UX-02, UX-05 |
+| SCR-11 Process master | SCR-11, -tablet | `/masters/process` | Match | Items, default change, choices, delete blocked | 8 of 8 | Supported; rate-name rule added; UX-26 |
+| SCR-12 Customers | SCR-12 | `/masters/customers` | Match | Customers, rates, reset | 8 of 8 | Arch changed (unique name); UX-16 |
+| SCR-13 Materials, lists | SCR-13 | `/masters/lists` | Match | Materials, exchange rates, treatments; locked rows | 4 of 4 | Arch changed (one exchange-rate save); UX-16, UX-23 |
+| SCR-14 Users | SCR-14 | `/users` | Match | Users, reset, deactivate, hand over | 8 of 8 | Arch changed (Admin guards, no step-up on hand-over); UX-21; OQ-ARCH-08 |
+| SCR-15 Settings (R2) | SCR-15 | `/settings` | Match | Settings; test e-mail to own address | 6 of 6 | Arch changed (`app` sends the test) |
+| SCR-16 Audit log | SCR-16 | `/audit` | Match | `GET /audit`; label kept at the time | 5 of 5 | Arch changed (`object_label`, total); UX-19; OQ-ARCH-07 |
+| SCR-17 Fields, formulas (R2) | SCR-17, -lead | `/config/fields` | Match; Lead view only | `GET /config/fields`; search on the client | 3 of 3 | Arch changed (`systemRole`); UX-08, UX-09, UX-26; OQ-ARCH-09 |
+| SCR-18 Formula editor (R2) | SCR-18 | `/config/fields/<id>/formula` | Match | Check, save, used by, feeds | 7 of 7 | Arch changed (step-up error, sample rows); UX-09, UX-11 |
+| SCR-19 Insert field (R2) | SCR-19 | `/config/fields/new` | Match | Preview, insert, one version for two fields | 5 of 5 | Arch changed; UX-10 |
+| SCR-20 Delete field (R2) | SCR-20 | Dialog on SCR-17 | Match | Delete with references | 3 of 3 | Arch changed (all reference kinds); UX-08 |
+| SCR-21 Checkpoints (R2) | SCR-21 | `/config/checkpoints` | Match | Save, list, revert, undo | 9 of 9 | Arch changed (revert by version: undo of a revert has no checkpoint, so v0.1 could not do it) |
+| SCR-22 E-mails (R2) | SCR-22 | None: template reference | Not a page | HTML and text, CID logo, full links | 4 of 4 | Arch changed (`body_html`, `body_text`) |
+| SCR-23 Account | SCR-23 | `/account` | Match | `POST /account/password` | 3 of 3 | Supported; UX-17, UX-18 |
+| SCR-24 About | SCR-24 | `/about` | Match | Static text | 1 of 1 | Supported; OQ-UX-10 |
+| SCR-25 Navigation | SCR-25, -phone | Shell of every page | Is the source of the matrix; agrees with SPEC §3 and section 6 | `GET /me`; R2 items follow flags | 1 of 1 | Supported |
+| SCR-26 System pages | SCR-26 | Framework error pages | Match | Request ID, never technical detail | 4 of 4 | Arch changed (rolling session, uniform response); UX-22 |
+
+"States" counts the states on the page that the design can produce. The index page was read too and lists these same pages.
+
+### 16.5 What this review changed in the architecture
+
+| # | Change | Why | Where |
+|---|--------|-----|-------|
+| 1 | An Engineer-callable route has one schema, for every caller | v0.1 varied `/tree` by role | Section 6, ADR-008 |
+| 2 | Identical response for a missing and another Engineer's estimate | Codes can be guessed | Section 6, ADR-008 |
+| 3 | Registry gains `systemRole`, `unit`, `hint`, `formOrder`, `stageId`, `group`, `options`, `displayUnit`, section `shortName`, stage `totalFieldIds` | SPEC §8.1 did not hold what the screens show | Section 4.5, ADR-004 |
+| 4 | Deleting H, BG, BL, BO or A is refused | Code depends on them, and SCR-17 offers it | Section 4.5, ADR-004 |
+| 5 | References include `hideWhenZero`, `visibleWhen`, stage totals | A delete could leave them dangling | Section 4.5, ADR-004 |
+| 6 | Snapshot holds resolved names for E, F, G | A rename would have changed an approved estimate, breaking FR-065 | Section 5.1, ADR-007 |
+| 7 | Override compares with rounded BL | Otherwise every accepted price logs a false override | A-12, ADR-007 |
+| 8 | Revert takes a version, not a checkpoint | Undo on SCR-21 had no route | Section 6 |
+| 9 | Wrong step-up password is 422, on its own throttle key | A 401 reads as a lost session; a slip must not lock out sign-in | Section 6, ADR-009 |
+| 10 | Admin cannot change own role or deactivate self, on the server | No-Admin state was possible by API | Section 8 |
+| 11 | Hand-over step-up removed | Follows FR-080 and SCR-14; OQ-ARCH-08 | Section 6, ADR-009 |
+| 12 | Throttle cleared by Admin reset; `locked` sign-in code | SCR-01's message promises it | Sections 6, 8 |
+| 13 | Session is rolling inactivity; return address same-origin | SCR-26 wording; open-redirect risk | Section 8, ADR-009 |
+| 14 | `app` can send the test e-mail | SCR-15 needs the result at once | Section 3, ADR-011 |
+| 15 | HTML and text bodies, CID logo, `APP_ORIGIN` in worker | SCR-22 | Sections 4.7, 5.1, ADR-011 |
+| 16 | Assign context exposes `alertsEnabled` to Leads | `GET /settings` is Admin only; SCR-04 needs the flag | Section 6 |
+| 17 | Schema: nullable `customer_id`, unique task code and customer name, soft delete, `file_name`, `object_label`, `is_override` | Screens need them | Section 5.1, ADR-013 |
+| 18 | Task tab counts, audit total, Tool Cost total and count, one exchange-rate save, sample rows | Screens need them | Section 6 |
+| 19 | Wording for the roll-up is in one file, and a change to (a) is stated to affect it | v0.1 and 10481 implied only one code branch changes | Section 4.3, ADR-006 |
+| 20 | Export says when it is stale; UNC-only path; `noindex` on redirects; fonts under `src/app/fonts`; measured sticky offsets; CSP notes | Screens and UX items | Sections 4.6, 8, 10, 11 |
+
+### 16.6 What UX must change
+
+ux-expert owns these. `docs/03-ux/` was not edited.
+
+**Before build.**
+
+| ID | Screen | Change | Why |
+|----|--------|--------|-----|
+| UX-01 | SCR-07 | Show worked lines with operands at a precision that reproduces the result (for example 4 decimals for derived values), or say they are rounded | The printed working gives 154.68 beside ₹ 154.54 (FR-058) |
+| UX-02 | SCR-06, 07, 10 | State that figures are rounded for display and totals use unrounded values | "2 × 5,061.72 = 10,123.45" and stage 5 are 0.01 out, where a Lead reconciles. Add to usability task 4 |
+| UX-03 | SCR-06 | Add Calculate or Recalculate to the Draft state | The notice says "Press Calculate", and the bar has no such button |
+| UX-04 | SCR-06 | Add a state for Draft after unlock | "The Engineer has not calculated" is false then, and SCR-09 says the figures stay |
+| UX-05 | SCR-10 | Add states for never calculated and for inputs changed | The file holds the last calculation, so it can differ from the screen |
+| UX-06 | SCR-06, 07 | Show a parent's BJ and BK sums too, or product-manager changes FR-029 | FR-029 names all three |
+| UX-07 | SCR-05, 06 | Hide tree actions, New item, Replace and Remove when read-only | They stay visible on Submitted and Approved. The server refuses them regardless |
+| UX-08 | SCR-17, 20 | Remove Delete from system fields, and Edit formula from A, BO, F and I | Offered today on all of them. The server refuses them regardless |
+| UX-09 | SCR-17, 18 | Show BL as `ROLLUP(BG)` with its explanation; add `ROLLUP` to the function line; warn if a formula stops using it | SCR-17 shows a sentence, not the formula |
+| UX-10 | SCR-19 | Add options, visibility rule, unit, hint, width and format; for outputs add stage and `hideWhenZero` | SPEC §8.3 and §10. "Choice from a list" has nowhere to enter the list |
+| UX-11 | SCR-18 | Say where sample rows come from, and add no-sample and too-many-attempts states | Proposed: the latest calculated estimate |
+| UX-12 | SCR-02 | Set `noindex, nofollow` | The address carries a reset token |
+| UX-13 | All | Add a font subset with ₹; check it has the glyph; use icons for Σ and the arrows, or add them | None of the 6 files has them |
+| UX-14 | All sticky | Replace fixed 136 and 96 px with measured offsets | Phone action bar is taller than 96 px |
+| UX-15 | SCR-05, 06 | Show the task's Notes | Typed on SCR-04, and shown nowhere afterwards (FR-032) |
+| UX-16 | SCR-12, 13 | Add delete and a blocked state for customers and materials, or product-manager removes it | SPEC §4 says delete at any time; the API has it (A-13) |
+| UX-17 | SCR-23 | Add a "you must change your password" state | Needed for the first Admin at least; recommended after any Admin-set password |
+| UX-18 | SCR-02, 14, 23 | Add messages for too long, same as e-mail, too common | Password rule |
+| UX-19 | SCR-16 | Add User change and Task change to the Event filter; show a revert as "Version 9 → Version 10 (from 7)" | FR-006 and FR-040 are logged; a revert makes a new version |
+| UX-20 | SCR-03 | Remove reassign from Closed rows | A-14 |
+
+**Should change.**
+
+| ID | Screen | Change | Why |
+|----|--------|--------|-----|
+| UX-21 | SCR-04, 14 | Hide the alerts notice in R1; "you can reassign open tasks" is true only from R2 | Under scope B the screens state things that are not yet so |
+| UX-22 | Spec §4, SCR-26 | For an Engineer, a missing estimate also shows "no access" | Spec §4 says "not found", which would reveal which codes exist |
+| UX-23 | SCR-13 and all | Correct the hint "Unit Production Price (USD), column BH" (BH is the rate; the price is BJ). Letters and cell names come from data | Hard-coded letters go stale after re-lettering (SPEC §17.4) |
+| UX-24 | SCR-05 | Reword "You never see them" and "Rates differ by customer" | UX principle 2 |
+| UX-25 | SCR-06, 07 | Set a limit for the "sum written out", for example own row and direct children | Long for large parents |
+| UX-26 | Several | SCR-06 section 02 tag omits I while showing it. SCR-17 labels BH and BI Auto where SPEC §7.4 has outputs. SCR-11's Unit list is shorter than the units in its table. SCR-03 Engineer no-match text names filters they lack, and "1 tasks". SCR-16's phone cards in the Configuration state show the wrong rows | Accuracy |
+| UX-27 | `screens.js`, SCR-20 | Lines 34, 41 and 44 split on `/s+/` where `/\s+/` is meant. SCR-20's state label "Blocked, formulas use it" holds a comma, which the review bar splits into a fourth state that does not exist | Mock-up only: `data-tab-for="closed"` splits on the letter s, so the Closed tab does not highlight |
+
+### 16.7 Issues for other roles
 
 | Owner | Issue |
 |-------|-------|
 | product-manager | FR-022 and SPEC §8.2 should list `ROLLUP(column)`: BL cannot be expressed by `SUM`. No effort or scope change. Log as text alignment |
 | product-manager | NFR-010 and SCR-10: 10 s applies to 50 nodes; 500 nodes measured at about 17 s on a laptop |
 | product-manager | NFR-018 against UX C-4 (2.1 or 2.2 AA): test gate stays 2.1 AA until decided |
-| business-analyst | Confirm A-05 and A-08 |
-| ux-expert | SCR-18: add a warning when a formula on a field that used `ROLLUP` stops using it, as replacing it with `SUM(BG)` would silently drop the item quantity (ADR-006). SCR-10: "Empty" should mean no parts, per A-05 |
+| product-manager | OQ-UX-03: decide sign-in indexing and any Open Graph image; add SCR-02 to FR-089's `noindex` list. OQ-ARCH-04, 06, 07, 08, 09. UX-06 and UX-16 |
+| business-analyst | Confirm A-05, A-08, A-13 and A-14. SPEC §8.1 lists fewer properties than section 4.5 |
 | master | `coding-standards.md` §10 "Money, rates and quantities use `Decimal(18,4)`" conflicts with FR-027 "full precision" for calculated values. This design keeps `Decimal(18,4)` for masters, and 34-digit decimal strings for results. Record the deviation or amend the standard |
 | master | `coding-standards.md` ends mid-sentence at "Cost, rate and formula fields must never be" (line 95). Complete it |
 | master | Append-only tables have `created_at` only, a deviation from "every table has `updated_at`" |
 | master | Definition of Done asks for reversible migrations; Prisma has no down migrations. Section 5.6 states what replaces them |
-| master | Proposed: RISK-010 closed; new risks in section 14 |
+| master | Proposed: RISK-010 closed; new risks in section 14. Decide whether UX-01 to UX-20 hold G3 |
 | developer | Fix `.gitignore` (TD-05); apply the `overrides` entry; pin `prisma` exactly |
 | orchestrator | HOLD-01 question: point to section 5.5, and offer the options there |
 
@@ -1070,3 +1262,4 @@ The IDs below are proposals. `master` owns the register and assigns `RISK-nnn` n
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-11-01 | First draft for G3 |
+| 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |

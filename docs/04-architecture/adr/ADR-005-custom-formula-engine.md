@@ -33,6 +33,8 @@ We will write the engine in `src/lib/formula/`, as pure, `server-only` code. Dec
 
 Functions: `SUM`, `MIN`, `MAX`, `ROUND`, `IF`, plus the new `ROLLUP(column)`, valid only in product scope (ADR-006).
 
+Names match longest-first against the rate list, so `Cutting-Rate-per-Sec` is one name and not a subtraction, and `Foam Cost` and `OH Profit %` work. A rate name cannot be a valid column letter, because letters move. Errors carry a character position for SCR-18. Each evaluation can return the operands it used at stored precision, so SCR-07 can print a working that reproduces its result (UX-01).
+
 ## Consequences
 - Positive: no dynamic execution path exists; errors are precise enough for SCR-18's messages.
 - Negative / trade-offs accepted: Excel works in 15-digit doubles, so a value can differ from Excel beyond the fifteenth digit. The acceptance test compares to 2 decimals (SPEC §14.2).

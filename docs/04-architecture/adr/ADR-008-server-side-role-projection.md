@@ -37,11 +37,11 @@ We will enforce confidentiality in five layers.
 
 1. **Data.** `estimate_nodes.inputs` holds typed values only. Column I and all outputs are never written there. Everything Restricted is in `calculations`, `calculation_rows`, `approvals` and masters.
 2. **Code boundary.** `src/server/views/engineer-*.ts` and Engineer pages may not import cost repositories, `lib/formula` or `lib/rollup`. ESLint fails the build on such an import. Engine modules start with `import 'server-only'`.
-3. **Allow-list output.** Engineer responses are built from named fields and parsed with `.strict()` zod schemas. `engineerVisible` is refused on outputs and on I. Masters reach Engineers only through `/options/*`, which return IDs and names, plus Material Considered.
+3. **Allow-list output.** Engineer responses are built from named fields and parsed with `.strict()` zod schemas. `engineerVisible` is refused on everything except inputs and F. Masters reach Engineers only through `/options/*`, which return IDs and names, plus Material Considered. **A route an Engineer can call has exactly one response schema, with no cost field, whoever calls it.** Lead and Admin figures come from routes an Engineer cannot call. The first version of the API let `/tree` add figures by role; the UX reconciliation removed that, as a role branch inside a shared route is exactly where a mistake leaks a value.
 4. **Transport.** Every authenticated response is `private, no-store`. No Next.js data caching on role-dependent routes. Engineer and Lead views at one address are separate component trees with separate loaders.
 5. **Proof.** On every build, a canary test seeds every Restricted value with a unique invented sentinel, runs the Engineer journeys, and scans every response (HTML, RSC payload, JSON, chunks) for those sentinels and for formula and rate text.
 
-Calculate returns the fixed message and status only. An Engineer asking for another Engineer's task gets 404.
+Calculate returns the fixed message and status only. Task codes are sequential and so can be guessed. An Engineer asking for another Engineer's task, or one that does not exist, gets an identical response: 404 from the API, and SCR-26 "no access" from the page (UX-22).
 
 ## Consequences
 - Positive: the leak path is closed at several independent points, and a new field is hidden by default.

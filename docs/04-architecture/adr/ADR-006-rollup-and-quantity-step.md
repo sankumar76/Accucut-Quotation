@@ -46,7 +46,11 @@ We will put the rule in `src/lib/rollup/`.
 - `calculation_rows.outputs` holds each row's own values. `calculation_rows.rollup` holds displayed figures. The types `RowOutputs` and `RolledUpFigures` are branded and not assignable to each other. Nothing reads `rollup` back into a sum. Export reads `outputs` only.
 - BL is seeded as `ROLLUP(BG)`. Columns with `rollupDisplay` (BG, BJ, BK) go through the same walk, so no letter is special-cased.
 
-A change to Q-32 (a) means changing the `'into-parent'` branch to `sum.times(quantity)` and the expected values in the test table. Schema, API, screens, row outputs and approved estimates do not change. Checked by hand against the FR-030 example: the baseline gives 14, and the changed branch gives 30, with the sub-part counted 24 times.
+A change to Q-32 (a) means changing the `'into-parent'` branch to `sum.times(quantity)` and the expected values in the test table. Schema, API, screen structure, row outputs and approved estimates do not change. Checked by hand against the FR-030 example: the baseline gives 14, and the changed branch gives 30, with the sub-part counted 24 times.
+
+**Corrected at UX reconciliation.** The first version of this ADR said screens do not change. Their structure does not, but their wording does: "How the total is built" (SCR-06), "Not multiplied again by this row's own quantity" (SCR-06, 07) and "How to reconcile" (SCR-10) state the rule. A change to (a) makes them wrong, and the SCR-10 method needs redesign. That wording lives in one file, `rollup-copy.ts`, owned by ux-expert. So the calculation changes in one place, as G2 condition 5 asks, and the explanation is a second, separate change.
+
+Displayed figures are not rounded before they are added. Totals use unrounded values, so printed figures can differ from their total by 0.01, and the screens must say so (UX-02).
 
 ## Consequences
 - Positive: condition 5 is met in code structure, not by convention, and the change has a known size.

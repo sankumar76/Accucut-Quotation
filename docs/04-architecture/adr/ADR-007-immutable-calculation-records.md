@@ -35,7 +35,9 @@ An approved estimate must keep the fields, formulas, rates, master values and re
 ## Decision
 Every Calculate and Recalculate inserts one `calculations` row (configuration version, `inputs_revision`, `master_snapshot`, product values, item totals) and one `calculation_rows` row per node (tree position, Sl. No, inputs, image reference, `outputs`, `rollup`), in one transaction under the estimate row lock. Triggers refuse `UPDATE` and `DELETE`, and the runtime role has no such grants. `master_snapshot` holds only the rates, materials and exchange rates used, with their names at that time.
 
-`approvals` references the calculation that was approved. Approved screens and exports read that record and never read live masters. Staleness is `estimates.inputs_revision <> calculations.inputs_revision`. Approval requires the caller's `calculationId` to be current, so a Lead cannot approve figures that changed under them.
+`approvals` references the calculation that was approved. Approved screens and exports read that record and never read live masters. Staleness is `estimates.inputs_revision <> calculations.inputs_revision`, and a customer change counts as a change of inputs. Approval requires the caller's `calculationId` to be current, so a Lead cannot approve figures that changed under them.
+
+**Added at UX reconciliation.** `calculation_rows.inputs` holds resolved display text for E, F and G, not IDs. Without this, renaming a material or treatment (SCR-13) would change an approved estimate's screen and export. A price is an override only if it differs from BL rounded to 2 decimals (A-12). SCR-08 pre-fills the rounded value while BL holds more digits, so an exact comparison would record a false override whenever a Lead accepts the pre-filled price. After an unlock the estimate stays linked to its last calculation, so SCR-06 can show those figures until a recalculation (UX-04).
 
 ## Consequences
 - Positive: the guarantee rests on a database rule, not on code never making a mistake. Unlock notices are a plain diff.

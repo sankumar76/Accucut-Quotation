@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 (G3 draft) |
+| Version | 0.2 (G3 draft; updated for the UX reconciliation) |
 | Owner | solution-architect |
 | Status | In Review (G3) |
 | Date | 2026-11-01 |
-| Inputs | PRD v0.4; SPEC v1.3 §14, §18.5; `architecture.md` v0.1; `coding-standards.md` |
+| Inputs | PRD v0.5; SPEC v1.3 §14, §18.5; `architecture.md` v0.2; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
 **Rule for all test data.** Every value here and in every fixture is invented. No cell value from the sample workbook is used, here or anywhere, and no real master data (NFR-006, ADR-014). Sample structure may be read for headers, widths and formats only.
@@ -171,8 +171,13 @@ Fast generated trees, in Vitest, with no extra library needed:
 
 **Negative control.** A test-only route returns one sentinel, and the scanner must report it. If the scanner cannot find a planted leak, the suite fails.
 
+**Typed values are allowed.** An Engineer sees what they typed, including Machining, Plating, Tool and Fasteners Cost (FR-008). So the canary estimate's inputs must be chosen so that no output equals a typed value: an estimate with only AP set would make AY equal AP and give a false alarm.
+
 **Also asserted.**
 - Calculate's Engineer response equals exactly `{status, message}`.
+- `GET /tree` and `GET /form` give the same keys to an Engineer and to a Lead (one route, one schema).
+- For an Engineer, a missing estimate and another Engineer's estimate give byte-identical responses, on the API and the page.
+- The export file, the export summary and the export page all refuse an Engineer, with no data in the body.
 - No `calculation_rows` import reachable from Engineer views (ESLint; a test confirms that the rule fires).
 - E-mail bodies contain no forbidden string.
 - `Cache-Control: no-store` on every authenticated response.
@@ -188,7 +193,11 @@ Fast generated trees, in Vitest, with no extra library needed:
 | Lock-out | NFR-003 | 5 failures, 6th blocked for 15 minutes with a controlled clock; unknown e-mail takes the same path |
 | Revocation | FR-004 | Deactivated user refused at the next request; role change effective at once |
 | One Admin | FR-005 | Service refusal and direct SQL refusal |
-| Step-up | NFR-004 | Three actions refused without the password, and with a wrong one |
+| Step-up | NFR-004 | Three actions refused without the password, and with a wrong one (422 `STEP_UP_FAILED`, not 401); a wrong step-up does not block sign-in |
+| Admin guards | FR-005 | The Admin cannot change their own role or deactivate themselves, by direct API call; an Admin reset clears a sign-in block |
+| Open redirect | NFR-001 | A sign-in return address to another origin is ignored |
+| System fields | FR-076 | Deleting A, H, BG, BL or BO is refused; deleting a field used only by `hideWhenZero`, `visibleWhen` or a stage total is refused |
+| Reset page | NFR-022 | The reset page and signed-out redirects carry `noindex`; the reset page sends `no-referrer` |
 | Uploads | NFR-005 | 199 × 1024 accepted; 201 × 1024, renamed text, polyglot refused |
 | Stored XSS | NFR-005 | Script payload in every text field renders as text |
 | Export text | Section 8 of `architecture.md` | A value starting `=` is a string cell, not a formula |
@@ -238,6 +247,19 @@ The pre-design benchmark (architecture section 4.6, ADR-005, ADR-012) only shows
 | NFR-030 | Timed walk-through on a clean VM by someone who did not write the README |
 
 **Regression for FR-047:** paste, drag and file choice; the phone camera path once on a real device.
+
+**Added at the UX reconciliation.**
+
+| Requirement | Test |
+|-------------|------|
+| FR-062, A-12 | With BL of 100.004, a price of 100.00 is not an override, and 100.01 is. The override entry is written once |
+| FR-065, ADR-007 | Approve, rename the material and treatment, delete an unused rate: screen and export values are unchanged |
+| FR-058, UX-01 | Taking the operands printed on SCR-07, the worked line reproduces the printed result |
+| FR-078 | Revert to a checkpoint, then revert to the version before it, which has no checkpoint |
+| FR-029, UX-06 | A parent's Σ BG, BJ and BK appear in the Lead data; the Engineer's data has none |
+| UX spec §4 | A Lead's bell count equals their Overdue tab |
+| NFR-018, UX-14 | At 360 px on SCR-05 and SCR-06, every field reached by Tab or Enter is fully visible above the action bar, also with the bar wrapped. Repeat on one real phone with the keyboard open |
+| NFR-020, UX-13 | Every money value renders ₹ from a project font: check the glyph in each shipped font file |
 
 ## 10. CI Pipeline Stages
 
@@ -294,10 +316,11 @@ Flaky test policy: quarantine with a ticket within a day; never delete to make a
 | 13 No horizontal scroll | Playwright |
 | 14 One Admin | Integration; direct SQL |
 
-**Acceptance test 2 and BL.** BL is checked against `H(item) x SUM(BG)` over the item's rows, per SPEC §14.2. `FR-056`'s fit ("BL equals the sum of the children") holds only at item quantity 1; the test uses that or times the item quantity, as G2 condition 3 notes.
+**Acceptance test 2 and BL.** BL is checked against `H(item) x SUM(BG)` over the item's rows, per SPEC §14.2. FR-056's fit, corrected in PRD v0.5, is tested at item quantity 1 and 2.
 
 ## 13. Change Log
 
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-11-01 | First draft for G3 |
+| 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
