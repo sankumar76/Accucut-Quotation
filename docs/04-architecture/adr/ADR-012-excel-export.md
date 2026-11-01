@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed |
+| Status | Proposed. Revised for v0.3 (D-16, D-20) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
-| Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31; ADR-007 |
+| Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31, Q-37; D-16, D-20; ADR-007 |
 
 ## Context
 The export replicates the worksheet: columns A to BO, images in column C, currency formats, centred cells, BL, BN and BO in row 2. ExcelJS is the stated library. RISK-010 asked for a limit or a strategy: 500 nodes with images up to 200 KB could exceed 100 MB. ExcelJS's streaming worksheet has no `addImage` (read in the 4.4.0 source, `lib/stream/xlsx/worksheet-writer.js`), so embedded images need the in-memory workbook and the design must plan for memory. ExcelJS's last stable release is 4.4.0 of October 2023.
@@ -38,9 +38,13 @@ The export replicates the worksheet: columns A to BO, images in column C, curren
 - Cost / effort: high
 
 ## Decision
-We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.ts`, whose only input is a plain `ExportModel`. The thread runs that function. Export reads one calculation record, `outputs` only, so a parent row holds its own values (D-12 (b3)). Cells hold full-precision numbers with two-decimal formats. Text is written as strings, never formulas. An empty cell stands for divide by zero. Row-2 cells are chosen in `product-cells.ts`, so Q-31 changes one file.
+We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.ts`, whose only input is a plain `ExportModel`. The thread runs that function. Export reads one calculation record, `outputs` only, so a parent row holds its own values (D-12 (b3)). Cells hold full-precision numbers with two-decimal formats. Text is written as strings, never formulas. An empty cell stands for divide by zero. Row-2 cells, the footer and the out-of-date markers are chosen in `product-cells.ts`, one file.
 
-**Added at UX reconciliation.** The file holds one calculation record, so after inputs change it stays consistent but falls behind the screen, and `export-summary` returns `stale` so SCR-10 can say so (UX-05). A never-calculated estimate exports inputs with empty outputs (A-05). The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by 0.01 (UX-02).
+**Added at UX reconciliation.** The file holds one calculation record, so after inputs change it stays consistent but falls behind the screen. A never-calculated estimate exports inputs with empty outputs (A-05). The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by 0.01 (UX-02).
+
+**Added for v0.3: one total, and the Tool Cost total (D-16).** BL, BN and BO appear once, in row 2, with no per-item totals, a known difference from the sample. The total Tool Cost cannot go in row 2, because BM2 is the first node's own entry. It goes in a footer row, one blank row below the last node: the value under column BM and the label to its left. Considered and rejected: a new column after BO, which changes the A to BO layout, and a second sheet, which is easily missed.
+
+**Added for v0.3: out-of-date figures (D-20, Q-37).** SPEC §6.5 allows download at any status, so the export is not refused outright. Following ASSUMPTION-55, while out of date the file keeps the last record's rows and leaves BL2, BN2, BO2 and the footer empty. Row costs would then leave the portal, so the export cannot go unnoticed: it needs a stated choice (`allowOutOfDate=true`, otherwise 409 `EXPORT_OUT_OF_DATE`), and the file carries an `_OUT-OF-DATE` file name, an `OUT OF DATE` sheet tab and a notice row. The state is read in the same transaction that builds the file. The alternatives were to refuse the download, against SPEC §6.5, or to leave the costs empty too, which departs from ASSUMPTION-55. Either is a small change in this file if Q-37 chooses it.
 
 **No hard limit on size.** Validation caps the worst case at about 100 MB (500 × 200 KB). Evidence below shows that this builds, so a limit would only add a failure mode. One large export runs at a time (over 100 nodes), and another gets 503 with `Retry-After`. The proxy read timeout is at least 120 s.
 
@@ -55,7 +59,8 @@ We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.t
 ## Consequences
 - Positive: NFR-010 is met with margin at 50 nodes on this evidence, and RISK-010 can be closed. The boundary makes a library swap possible (TD-01).
 - Negative / trade-offs accepted: a 500-node export takes about 17 s on similar hardware. `npm audit` lists 9 moderate transitive advisories, in `archiver`, `glob`, `minimatch` and `uuid`. The export passes neither user-controlled glob patterns nor buffers to `uuid`, so reachability is judged low. CI blocks at high, so these stay visible but do not fail the build.
-- Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears.
+- Negative / trade-offs accepted, added for v0.3: a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it. Adding the exported BG column equals BL only when the quantities above a row are 1.
+- Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears; Santhosh answers Q-37.
 
 ## Verification
-Read-back tests of the generated file (cells, widths, formats, image anchors); timing on staging; manual open in Excel desktop before each release (NFR-027).
+Read-back tests of the generated file (cells, widths, formats, image anchors, footer, each marker); timing on staging; manual open in Excel desktop before each release (NFR-027).

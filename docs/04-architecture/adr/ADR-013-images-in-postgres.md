@@ -38,8 +38,8 @@ Validation is by content: a small signature check for PNG, JPEG, GIF and WebP in
 
 ## Consequences
 - Positive: backup and restore stay single-step. No orphaned file can break an approved estimate.
-- Negative / trade-offs accepted: nightly dumps grow with images. Unreferenced rows are not pruned (TD-03).
-- Follow-up actions (with owners): the IT contact sizes off-host backup storage once volumes are known.
+- Negative / trade-offs accepted: weekly dumps grow with images, which do not compress, and each is kept 2 years (D-15), so off-host storage is about 105 x one dump. Unreferenced rows are not pruned (TD-03).
+- Follow-up actions (with owners): the IT person and the Admin size off-host backup storage once volumes are known (architecture section 9.5).
 
 ## Verification
 FR-047 fit tests at 199 × 1024 and 201 × 1024 bytes; renamed text file refused; restore rehearsal includes images.

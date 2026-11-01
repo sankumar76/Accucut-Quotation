@@ -67,6 +67,7 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | solution-architect | Architecture and test strategy v0.3: every-level roll-up (24 lids), weekly backup, OAuth mail design, password, cleared totals, override reason; adds 7.5 to 13 h (estimate); ARCH-R5 proposed; UX-28 to UX-37 listed | docs/04-architecture/ |
 | 2026-11-01 | product-manager | PRD and release plan v0.6: new quantity rule, scope A adopted, FR-098 to 103 added, weekly backup; central date Wed 2026-11-25 (estimate, unadopted); OQ-PM-07 raised | docs/02-product/ |
 | 2026-11-01 | orchestrator | Delivery lead instruction, in chat: "dont ask me for any approvals except for git merge. But I need to view the result after each iteration (and gate reviews if required)". Remaining human approval stops lifted, except code PR merges; results reported after each iteration and gate. HOLD-01 stays: it is a data input, not an approval. Master to log it | AQP-1 |
 | 2026-11-01 | master | G2 Product Definition: CONDITIONAL GO, attempt 2. G1 condition 2 met; Q-32 (a) own-words confirmation due G3 approval (DL-006); list-wording and relay standards (DL-007); repository decision recorded (DL-008); BLK-02 and RISK-005 closed; RISK-006 restated at 12, RISK-002 at 10; HOLD-02 released | docs/00-governance/ |

@@ -33,7 +33,7 @@ We will store the configuration only as immutable rows in `config_versions`, eac
 **Added at UX reconciliation (architecture sections 4.5 and 16).** The screens need more than SPEC §8.1 lists:
 - `engineerVisible`: true only for inputs and F; the schema refuses it elsewhere, including I, BH and BI.
 - `rollupDisplay`: BG, BJ, BK.
-- `systemRole`: `sl-no`, `quantity`, `unit-price`, `total`, `approved-price`. These fields cannot be deleted, and A and BO have no editable formula. `ROLLUP` finds H through this role, so the roll-up cannot lose its quantity.
+- `systemRole`: `sl-no`, `quantity`, `unit-price`, `total`, `approved-price`, and `tool-cost` (added for v0.3, D-16). These fields cannot be deleted, and A and BO have no editable formula. `ROLLUP` finds H through this role, so the roll-up cannot lose its quantity, and the export finds BM the same way for the total Tool Cost footer.
 - `unit`, `hint`, `formOrder`: form display. `formOrder` differs from column position, as section 08 shows AP, AU, BM, then AJ.
 - `stageId`, `group`, `options`, `displayUnit`: SCR-07 and SCR-19.
 - On sections and stages: `shortName`, display mode, and `totalFieldIds` for stage headings.
