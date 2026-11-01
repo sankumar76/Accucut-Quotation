@@ -61,6 +61,9 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | orchestrator | Run stopped; G2 held for G1 conditions 1 to 3 (AQP-1, AQP-12, AQP-13) | AQP-1 |
+| 2026-11-01 | product-manager | PRD and release plan v0.1 drafted; first-release proposal posted, not agreed | docs/02-product/ |
+| 2026-11-01 | business-analyst | G1 conditions 4 and 5 applied; UNC-a to UNC-h registered | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-11-01 | master | G1 Discovery: CONDITIONAL GO; RISK-001 to RISK-005 raised | docs/00-governance/gate-log.md, risk-register.md |
 | 2026-11-01 | business-analyst | Discovery Pass 2 complete; Q-29 to Q-33 raised (AQP-12, AQP-13) | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-10-31 | orchestrator | G1 approval requested on AQP-1; run stopped for delivery lead | AQP-1 |
