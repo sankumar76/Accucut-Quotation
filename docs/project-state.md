@@ -7,27 +7,28 @@
 
 | Field              | Value                    |
 |--------------------|--------------------------|
-| Project            | <<PROJECT NAME>>         |
-| Current phase      | G0 Intake                |
-| Last gate passed   | —                        |
-| Next gate          | G0 Intake                |
+| Project            | Accucut Quotation Portal |
+| Current phase      | G1 Discovery             |
+| Last gate passed   | G0 Intake                |
+| Next gate          | G1 Discovery (human approval) |
 | Current sprint     | —                        |
-| Overall health     | 🟢 Green / 🟡 Amber / 🔴 Red |
-| Last updated       | <<YYYY-MM-DD>> by <<agent/human>> |
+| Overall health     | 🟢 Green                 |
+| Last updated       | 2026-10-31 by orchestrator |
+| Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## Request (G0 Intake)
 
-- **Problem statement:** <<what problem, for whom, why now>>
-- **Sponsor:** <<name / role>>
-- **Desired outcome:** <<measurable result>>
-- **Known constraints:** <<budget, deadline, compliance, tech>>
-- **Inputs provided:** <<links / attached docs>>
+- **Problem statement:** Accucut Lasers prepares manufacturing cost estimates in an Excel worksheet (columns A to BO); Admin, Leads and Engineers need a role-based web portal that replicates it, hides costs from Engineers and controls approval.
+- **Sponsor:** Santhosh / MD
+- **Desired outcome:** Estimates are assigned, entered, calculated, approved and exported through the portal, with Excel output matching the worksheet layout (acceptance tests in spec section 14).
+- **Known constraints:** Stack per spec section 2 and CLAUDE.md; fully responsive; IST display with UTC storage. Budget and deadline not stated.
+- **Inputs provided:** ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md; Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx; AMADA-20261006.xlsx; Accucut Quotation Portal UI-UX.html; docs/03-ux/assets/
 
 ## Phase Progress
 
 | Gate | Status       | Date | Decision ref |
 |------|--------------|------|--------------|
-| G0 Intake               | ⏳ Pending | | |
+| G0 Intake               | ✅ GO | 2026-10-31 | docs/00-governance/gate-log.md § G0 – Intake — 2026-10-31 |
 | G1 Discovery            | ⏳ Pending | | |
 | G2 Product Definition   | ⏳ Pending | | |
 | G3 Solution Design      | ⏳ Pending | | |
@@ -53,3 +54,5 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-31 | master | G0 Intake: GO | docs/00-governance/gate-log.md |
+| 2026-10-31 | orchestrator | Preflight passed; Intake AQP-1 created; request recorded | docs/project-state.md |
