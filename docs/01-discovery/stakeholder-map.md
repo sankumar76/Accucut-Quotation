@@ -63,7 +63,7 @@ R = Responsible (does it), A = Accountable (decides), C = Consulted, I = Informe
 
 | Stakeholder | When | How | Purpose |
 |-------------|------|-----|---------|
-| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 hosting details, Q-34 scope behind the date (Q-32 closed 2026-11-01) | Approval and remaining answers |
+| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 hosting details, Q-34 scope behind the date, Q-32 (a) in their own words (Q-32 otherwise answered 2026-11-01) | Approval and remaining answers |
 | Santhosh | After G3 approval, before development | Orchestrator stops and asks for the master data defaults (Q-09, TR-009) | Defaults for the Admin to enter at first use |
 | Admin, one Lead, one Engineer | Before G2 | 30-minute call each (Q-28) | Confirm the as-is and to-be process; baseline (Q-24) |
 | Leads and Engineers | G3 | Review the HTML screens | Usability feedback |

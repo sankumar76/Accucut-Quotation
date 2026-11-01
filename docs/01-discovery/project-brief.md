@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.6 (Draft, G2 attempt 2: Q-32 closed and ASSUMPTION-48 retired; repository decision recorded; Q-34 and ASSUMPTION-50 due at G3 approval, DL-004) |
+| Version | 0.7 (Draft, G2 attempt 2, condition 2: Q-32 (a) shown as confirmation requested in their own words; Q-32 answered and ASSUMPTION-48 retired; repository decision recorded; Q-34 and ASSUMPTION-50 due at G3 approval, DL-004) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
-| Status | G1 conditions 1 to 3 answered on 2026-11-01, partly in their own words and partly by confirming the orchestrator's list wording (items (a), (b), (c), (f), (g) of AQP-1 comment 10441: DL-001); UNC-a to UNC-h resolved (see section 8). Closed 2026-11-01: Q-32 (AQP-13 comments 10462, 10464; SPEC §18 D-12). Open: Q-18 (hosting details, G3), Q-30, Q-31, Q-33, Q-34 (due G3 approval: DL-004). The master decides whether the conditions are met |
+| Status | G1 conditions 1 to 3 answered on 2026-11-01, partly in their own words and partly by confirming the orchestrator's list wording (items (a), (b), (c), (f), (g) of AQP-1 comment 10441: DL-001); UNC-a to UNC-h resolved (see section 8). Answered 2026-11-01: Q-32 (AQP-13 comments 10462, 10464; SPEC §18 D-12), with (a) accepted on list wording and their own-words confirmation requested (DL-006, due G3 approval). Open: Q-18 (hosting details, G3), Q-30, Q-31, Q-33, Q-34 (due G3 approval: DL-004). The master decides whether the conditions are met |
 | Intake issue | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## 1. Executive Summary
@@ -24,7 +24,7 @@ Baselines marked "not measured" are open until Q-24 and Q-28 are answered. No fi
 |----|-----------|--------|----------|--------|---------|
 | GOAL-01 | Move estimation from the worksheet to the portal | Share of new estimation tasks created and approved in the portal after cut-over | 0 % (all work is in Excel; DOCX §1) | 100 % of new tasks | Development-complete target 2026-11-13, a target and not a fixed date (Q-01, Q-29 answered); a realistic date is requested (AQP-12); go-live follows the customer's testing and the parallel run, date open (Q-25) |
 | GOAL-02 | Keep costs, rates and formulas hidden from Engineers | Cost, rate or formula values found in any Engineer page, API response or file in the automated test | Not applicable to a shared worksheet; no control exists (inferred) | 0 found, test run on every build | Before go-live (SPEC §14.1) |
-| GOAL-03 | Calculate exactly as the worksheet does | Share of the SPEC §7.4 outputs matching a hand-calculated worksheet to 2 decimals on the acceptance tree (nodes 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5). **Test oracle:** the worksheet, with the delivery lead's cost rule (BL = item quantity x the sum of BG over the item's rows, D-08). At item quantity 1 this equals the worksheet exactly (checked on the sample, SPEC §18.5). The roll-up details were closed on 2026-11-01 (Q-32, D-12): a parent's own cost counts (the children-only reading, 58.6 % lower on the sample, was rejected). The sample cannot test the quantity rules, so their oracle is a constructed example (SPEC §18.5) | Not applicable | 100 % | Before go-live (SPEC §14.2) |
+| GOAL-03 | Calculate exactly as the worksheet does | Share of the SPEC §7.4 outputs matching a hand-calculated worksheet to 2 decimals on the acceptance tree (nodes 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5). **Test oracle:** the worksheet, with the delivery lead's cost rule (BL = item quantity x the sum of BG over the item's rows, D-08). At item quantity 1 this equals the worksheet exactly (checked on the sample, SPEC §18.5). The roll-up details were answered on 2026-11-01 (Q-32, D-12; (a) own-words confirmation requested, DL-006): a parent's own cost counts (the children-only reading, 58.6 % lower on the sample, was rejected). The sample cannot test the quantity rules, so their oracle is a constructed example (SPEC §18.5) | Not applicable | 100 % | Before go-live (SPEC §14.2) |
 | GOAL-04 | Export in the worksheet layout | Share of the export checks passed (A to BO layout, original widths, centre/middle alignment, currency formats, embedded images, BL2 and BO2 filled) | Not applicable | 100 % | Before go-live (SPEC §14.12) |
 | GOAL-05 | Make late work visible and acted on | (a) Overdue e-mail sent within 5 minutes of a task becoming overdue when alerts are ON; (b) 11:00 AM IST digest sent every day when overdue tasks exist; (c) duplicates sent | Not measured; no tracking exists (inferred) | (a) 100 %, (b) 100 %, (c) 0 | Before go-live (SPEC §5.4, §14.11) |
 | GOAL-06 | Control approved prices and configuration | (a) Approved estimates with an Approved Quote Price, approver and time recorded; (b) configuration, master, approval, unlock and price-override events logged with who, when and before → after | Not measured | (a) 100 %, (b) 100 % | Before go-live (SPEC §12) |
@@ -50,7 +50,7 @@ Summary here; full detail in `stakeholder-map.md`.
 - Masters: Process, Customer (with synchronisation rules), Material, Exchange Rate, Treatment/Color, and Settings (UR-031, UR-032, UR-037).
 - Task assignment with network folder path and IST deadline; Open, Closed and Overdue queues; notification bell; e-mail alerts and a daily 11:00 AM IST digest (UR-004 to UR-011).
 - Estimate workspace: customer choice, product tree to any depth, guided form with column letters, image attachment, conditional fields, validation, save and autosave, Calculate (UR-012 to UR-024, UR-040). One estimate holds one complete product (D-04). The Engineer enters Tool Cost with all other inputs (confirmed), and enters 0 for anything a part does not need (UR-043; confirmed). The Engineer also chooses "Not applicable" in the Material and Treatment lists (confirmed; its values: Q-33).
-- Cost counting on the tree: the cost is the sum of the costs of all children multiplied by the item quantity (BR-046, BR-047; confirmed as corrected, AQP-9 comment 10442). The sample agrees at item quantity 1 (SPEC §18.5); roll-up details are closed (Q-32, D-12).
+- Cost counting on the tree: the cost is the sum of the costs of all children multiplied by the item quantity (BR-046, BR-047; confirmed as corrected, AQP-9 comment 10442). The sample agrees at item quantity 1 (SPEC §18.5); roll-up details are answered (Q-32, D-12); (a), the quantity of a part in between, awaits their own-words confirmation (DL-006).
 - Cost view with formulas for Lead and Admin; recalculate; approve and lock with Approved Quote Price; unlock (UR-025 to UR-029).
 - Excel export that replicates the worksheet layout (UR-030, BRQ-005).
 - Admin configuration of fields and formulas with re-lettering, configuration versions, checkpoints and change history (UR-033 to UR-036).
@@ -117,14 +117,14 @@ Resolved by the delivery lead (no longer assumptions to validate; 05 BN divisor,
 | Master data defaults (process rates, materials, exchange rates, customers, treatments, users) | Data | Santhosh | Delivery lead to provide when asked after G3 approval and before development starts (Q-09 answered); the Admin enters values at first use |
 | E-mail (SMTP) service and sender address | 3rd party | Accucut IT | Open (Q-18) |
 | Hosting, web address and internet access (offline use is the next release) | Internal / 3rd party | Accucut IT | Open (Q-18) |
-| Answers to Q-18 (hosting details, G3) and Q-34 (scope behind the date, G3 approval, DL-004); Q-32 is closed | Internal | Santhosh | Open |
+| Answers to Q-18 (hosting details, G3) and Q-34 (scope behind the date, G3 approval, DL-004); Q-32 (a) in their own words (G3 approval, DL-006) | Internal | Santhosh | Open |
 | Sharper logo original | Data | Santhosh | Open (Q-16, assumption kept) |
 | Engineers and Leads available for the process walk-through and parallel run | Internal | Santhosh | Open (Q-25, Q-28) |
 
 ## 10. Business Risks
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| The roll-up details of the cost rule were confirmed mostly against the assumption-list wording (AQP-13 comment 10462, not the delivery lead's own words) and differ from what they intend, giving wrong quotes | Low | High (wrong quotes) | Q-32 closed 2026-11-01 (D-12); a parent's own cost counts in their own words (AQP-13 10464); a constructed example with quantities above 1 at and below the item and two top-level items is in the test plan (SPEC §18.5), because the sample cannot test the quantity rules; the delivery lead can change any point later |
+| The roll-up details of the cost rule were confirmed mostly against the assumption-list wording (AQP-13 comment 10462, not the delivery lead's own words) and differ from what they intend, giving wrong quotes | Low | High (wrong quotes) | Q-32 answered 2026-11-01 (D-12), with (a) in their own words requested (DL-006, due G3 approval); a parent's own cost counts in their own words (AQP-13 10464); a constructed example with quantities above 1 at and below the item and two top-level items is in the test plan (SPEC §18.5), because the sample cannot test the quantity rules; the delivery lead can change any point later |
 | The export does not match the sample because the sample shows per-item totals and the answer is one total per estimate | Medium | Medium | Q-31 before G3 |
 | Cost leaks to an Engineer through an API, page or export | Low | High | Server-side filtering and automated test (BR-003, GOAL-02) |
 | Master or rate changes alter approved prices | Low (rule decided, D-07) | High | Record of master values at each calculation (DR-003) |
@@ -161,11 +161,11 @@ Blocking questions are in bold and each has its own Jira issue. The full text, t
 | Q-29 | What 2026-11-13 delivers | Santhosh | G2 | **Answered** (AQP-12 comment 10446): a target to complete development and hand over for testing and acceptance |
 | Q-30 | Cleaned sample copy; blank template | Santhosh | G3 | Open in part; repository decision recorded (AQP-1 comment 10465); cleaned copy and blank template still asked |
 | Q-31 | Sample shows totals per top-level item; answer is one total | Santhosh | G3 | New, open |
-| Q-32 | Roll-up details left after the corrected cost rule | Santhosh | (a), (b) G2; (c) to (e) G3 (DL-005) | **Closed 2026-11-01** (AQP-13 comments 10462, 10464); rule in SPEC §18 D-12 |
+| Q-32 | Roll-up details left after the corrected cost rule | Santhosh | (a), (b) G2; (c) to (e) G3 (DL-005) | **Answered 2026-11-01** (AQP-13 comments 10462, 10464); rule in SPEC §18 D-12. **(a): own-words confirmation requested (DL-006), due G3 approval** |
 | Q-33 | Values and handling of the "Not applicable" Material row | Santhosh | G3 | Open |
 | Q-34 | Which scope the realistic development completion date covers | Santhosh / product-manager | G3 approval (DL-004) | New, open |
 
-**Findings from comparing the SPEC, the Draft v5 document, the sample worksheet and the UI sample** (F-01 to F-21) are in `requirements-questions.md` section 3. Findings F-22 to F-25 were added in Pass 2. The most important: the sample has two top-level items each with its own total, while the answer is one total per estimate (F-01, F-22); the delivery lead's corrected cost rule agrees with the worksheet at item quantity 1 and its roll-up details are closed (F-23, SPEC §18.5, Q-32); the two hosting answers conflicted and are resolved for Release 1 (F-24); SPEC §17 already holds the 2026-10-31 decisions (F-20).
+**Findings from comparing the SPEC, the Draft v5 document, the sample worksheet and the UI sample** (F-01 to F-21) are in `requirements-questions.md` section 3. Findings F-22 to F-25 were added in Pass 2. The most important: the sample has two top-level items each with its own total, while the answer is one total per estimate (F-01, F-22); the delivery lead's corrected cost rule agrees with the worksheet at item quantity 1 and its roll-up details are answered, (a) awaiting their own-words confirmation (F-23, SPEC §18.5, Q-32); the two hosting answers conflicted and are resolved for Release 1 (F-24); SPEC §17 already holds the 2026-10-31 decisions (F-20).
 
 ## 13. Glossary
 | Term | Definition |
@@ -173,6 +173,7 @@ Blocking questions are in bold and each has its own Jira issue. The full text, t
 | Estimate / quotation | The cost calculation for one product, held as a tree of nodes. |
 | Product, item, part, sub-part | Levels of the tree; all share the same fields. |
 | Node (row) | One row of the worksheet; one node of the tree. |
+| QTY per Assy (H) | **Definition pending.** The column is named in SPEC §7.1, but what the number counts for a part under a part is not defined; their own words are requested (Q-32 (a), DL-006) and the definition is added after the reply. |
 | Sl. No (A) | Automatic number from the tree position: 1, 1.1, 1.1.1 … |
 | Column letter | Excel-style identifier (A, B … AA …) of a field, derived from its position. |
 | Input field | A field an Engineer, Lead or Admin types or selects. |
