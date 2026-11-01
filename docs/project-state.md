@@ -12,7 +12,7 @@
 | Last gate passed   | G0 Intake                |
 | Next gate          | G1 Discovery (human approval) |
 | Current sprint     | —                        |
-| Overall health     | 🟢 Green                 |
+| Overall health     | 🟡 Amber (BLK-01; awaiting G1 approval) |
 | Last updated       | 2026-10-31 by orchestrator |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
@@ -44,15 +44,19 @@
 
 | ID | Question | Raised by | Owner | Needed by | Status |
 |----|----------|-----------|-------|-----------|--------|
+| Q-01 to Q-28 | Full list with assumptions in docs/01-discovery/requirements-questions.md; blocking ones are Q-01 to Q-09 and Q-18 (AQP-2 to AQP-11) | business-analyst | Santhosh | G2 to G8, per question | Open |
 
 ## Blockers
 
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
+| BLK-01 | Draft PR for docs/AQP-1-inception cannot be created: GitHub MCP create_pull_request returns 403 "Resource not accessible by personal access token" (tried twice). Branch push works. | 2026-10-31 | Santhosh | Grant the token Pull requests: write on the repository, or open the PR by hand. |
 
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-10-31 | orchestrator | G1 approval requested on AQP-1; run stopped for delivery lead | AQP-1 |
+| 2026-10-31 | business-analyst | Discovery Pass 1 complete; 28 questions, 10 blocking (AQP-2 to AQP-11) | docs/01-discovery/ |
 | 2026-10-31 | master | G0 Intake: GO | docs/00-governance/gate-log.md |
 | 2026-10-31 | orchestrator | Preflight passed; Intake AQP-1 created; request recorded | docs/project-state.md |
