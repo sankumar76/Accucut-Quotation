@@ -2,18 +2,18 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 (Draft for G2; revised after the delivery lead replies to G1 conditions 1 to 3) |
+| Version | 0.2 (Draft for G2; Pass 3 answers applied: UNC-a to UNC-h resolved, Q-18 offline decided, Q-29 answered, Q-32 revised, Q-34 added) |
 | Owner | product-manager |
 | Date | 2026-11-01 |
-| Status | Draft. G2 cannot pass until G1 conditions 1 to 3 are met (`docs/00-governance/gate-log.md`, G1). The release split in section 6 is a **proposal, not agreed** |
-| Source brief | `docs/01-discovery/project-brief.md` v0.3 |
-| Companion | `docs/02-product/release-plan.md` (fit to 10 working days, calendar, cut order) |
+| Status | Draft. Whether G1 conditions 1 to 3 are met is the master's decision. The scope for the completion date (Q-34) and every release move marked PROPOSED in section 6.3 are **proposals, not agreed** |
+| Source brief | `docs/01-discovery/project-brief.md` v0.4; `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` v1.2 (SPEC); `docs/01-discovery/requirements-questions.md` v0.4 |
+| Companion | `docs/02-product/release-plan.md` (realistic completion date, fit analysis, calendar, cut order) |
 
 **How to read the labels in this document.**
-- **Confirmed** = in the delivery lead's own words on a Jira question issue (AQP-2 to AQP-10; AQP-11 for the offline request).
-- **UNC-a to UNC-h, Q-18, Q-29, Q-32** = labelled assumptions, not decisions (G1 condition 6). Each rests on AQP-1 comment 10415 or 10417 or is open. Section 9.1 states, for each, which FRs change if it is rejected.
-- **SPEC §7.4 stays in force** wherever UNC-d or Q-32 is unsettled.
-- **PROPOSED** = a number or rule the product manager sets because no source gives one; the owner named must confirm it.
+- **Confirmed** = in the delivery lead's own words on Jira (AQP-1 comments 10441 and 10443; AQP-2 to AQP-13). UNC-a to UNC-h are confirmed (UNC-d as corrected, UNC-h as a target) and are no longer labelled assumptions; section 9.1a records where each applies.
+- **Labelled assumption** = still open. Only these remain: ASSUMPTION-48 (Q-32, revised), ASSUMPTION-49 (Q-33), ASSUMPTION-47 (Q-31), ASSUMPTION-46 (Q-30), ASSUMPTION-50 (Q-34) and hosting details (Q-18). Section 9.1 states which FRs change if each is rejected.
+- **Kept assumptions** (Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28, UNC-g) are confirmed as the working rule; the delivery lead can change any later. They carry their ASSUMPTION ID in the Source column and no label.
+- **PROPOSED** = a number, rule or release move the product manager sets because no source gives one; the owner named must confirm it.
 - **Estimate** = product-manager judgement of relative size converted to hours. No velocity has been measured for this team on this stack.
 
 ## 1. Vision
@@ -31,7 +31,7 @@ For Accucut Lasers' Admin, Leads and Engineers, who today prepare manufacturing 
 | Accucut IT contact (not yet named) | Hosts, backs up and updates the system | A deployable, supportable system | At install and on incidents |
 | Accucut's customers | Receive quotes; not portal users | Accurate, timely quotes | Indirect |
 
-Frequencies are not evidenced (Q-24 keeps the stated volume assumptions; UNC-g).
+Frequencies are not evidenced (Q-24 keeps the stated volume assumptions, confirmed as the working rule).
 
 ## 3. Outcomes & Success Metrics
 
@@ -41,7 +41,7 @@ Goal IDs are from the brief (section 3). Baselines the brief marks "not measured
 |--------------|--------|------|----------|--------|--------------------|
 | GOAL-01 Move estimation to the portal | Share of new estimation tasks created and approved in the portal after cut-over | Lagging | 0 % (all work in Excel) | 100 % of new tasks | Count tasks created in the portal versus tasks reported by the Lead after cut-over; leading check: end-to-end test (assign, enter, calculate, approve, export) green on every build |
 | GOAL-02 Hide costs from Engineers | Cost, rate or formula values found in any Engineer page, API response or file | Leading | No control exists (inferred) | 0 found | Automated test over every Engineer-reachable route, run on every build (SPEC §14.1) |
-| GOAL-03 Calculate as the worksheet does | Share of SPEC §7.4 outputs matching a hand-calculated worksheet to 2 decimals on the acceptance tree | Leading | Not applicable | 100 % | Unit test per formula plus the tree 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5 (SPEC §14.2). Oracle is the SPEC §7.4 arithmetic until Q-32 is answered (ASSUMPTION-48 (d)) |
+| GOAL-03 Calculate as the worksheet does | Share of SPEC §7.4 outputs matching a hand-calculated worksheet to 2 decimals on the acceptance tree | Leading | Not applicable | 100 % | Unit test per formula plus the tree 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5 (SPEC §14.2). Oracle is SPEC §7.4 v1.2 (item quantity x sum of BG, D-08); the details Q-32 leaves open follow ASSUMPTION-48. At item quantity 1 the oracle equals the worksheet |
 | GOAL-04 Export in the worksheet layout | Share of export checks passed (A to BO, widths, centre/middle, currency formats, images, BL2 and BO2) | Leading | Not applicable | 100 % | Export checklist run on a generated file; opened in Excel desktop (SPEC §14.12) |
 | GOAL-05 Make late work visible | (a) Overdue e-mail within 5 minutes of becoming overdue; (b) 11:00 IST digest sent daily when overdue tasks exist; (c) duplicates | Leading | Not measured | (a) 100 %, (b) 100 %, (c) 0 | Job tests with a controlled clock and a capturing mail server; e-mail log counts. **Release 1 gives the in-portal part only (bell, Overdue tab); (a) to (c) arrive in Release 2** |
 | GOAL-06 Control prices and configuration | (a) Approved estimates carrying price, approver and time; (b) configuration, master, approval, unlock and price-override events logged with who, when, before → after | Leading | Not measured | (a) 100 %, (b) 100 % | Test per event type; database check of approved estimates. **Release 1 covers master, approval, unlock and price-override events; configuration events arrive in Release 2** |
@@ -51,17 +51,17 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 
 ## 4. Functional Requirements
 
-**Columns.** Pri = MoSCoW priority of the product (exactly one per FR; Must = the SPEC says MUST or it has a SPEC §14 test; Should = stated without MUST or a `[DEFAULT]`; Could = optional; Won't = excluded). Rel = proposed release: **R1** Release 1 core; **R1+** Release 1 stretch (pulled in only if the core is on track); **R1\*** in Release 1 only if the delivery lead confirms the assumption it rests on; **R2**, **R3** later; **-** not planned. Goal = brief goal served. Tags such as [UNC-b] mark a requirement written on a labelled assumption. Source IDs are from `docs/01-discovery/requirements-catalog.md`. Priority is independent of release: a Must in R2 is required before the product is complete, not before Release 1.
+**Columns.** Pri = MoSCoW priority of the product (exactly one per FR; Must = the SPEC says MUST or it has a SPEC §14 test; Should = stated without MUST or a `[DEFAULT]`; Could = optional; Won't = excluded). Rel = proposed release: **R1** Release 1 core; **R1+** Release 1 stretch (pulled in only if the core is on track); **R2**, **R3** later; **R-OFF** the "next release" in which offline use is implemented (confirmed, AQP-11 comment 10444; what offline means is open); **-** not planned. Under scope A in the release plan, R1, R1+ and R2 are built as one hand-over and the labels give build order only. Goal = brief goal served. Tags such as [Q-32] mark a requirement written on a still-open labelled assumption. Source IDs are from `docs/01-discovery/requirements-catalog.md`. Priority is independent of release: a Must in R2 is required before the product is complete, not before Release 1.
 
 ### 4.1 Access, accounts and confidentiality (EPIC-01)
 | ID | Requirement (user point of view) | Pri | Rel | Goal | Source | Fit criterion |
 |----|----------------------------------|-----|-----|------|--------|---------------|
 | FR-001 | As any user, I sign in with e-mail and password and sign out. | Must | R1 | GOAL-01 | UR-001, BR-001 | Valid credentials open my role's home page; a wrong password is refused without saying which part was wrong; sign-out ends the session. |
 | FR-002 | As any user, I change my own password. | Must | R1 | GOAL-02 | UR-001 | After the change the old password is refused and the new one accepted. |
-| FR-003 | As any user, I reset a forgotten password through an e-mailed single-use link. [UNC-g, ASSUMPTION-31] | Should | R2 | GOAL-02 | UR-001, ASSUMPTION-31 | The link works once; a second use is refused. Until R2 the Admin resets passwords (FR-004). |
-| FR-004 | As Admin, I create, edit and deactivate users, set their role and reset their passwords. [UNC-g, ASSUMPTION-30] | Must | R1 | GOAL-01 | UR-002, BR-001, TR-003 | User list shows name, e-mail, role, active flag; a deactivated user cannot sign in. |
+| FR-003 | As any user, I reset a forgotten password through an e-mailed single-use link. | Should | R2 | GOAL-02 | UR-001, ASSUMPTION-31 | The link works once; a second use is refused. Until R2 the Admin resets passwords (FR-004). |
+| FR-004 | As Admin, I create, edit and deactivate users, set their role and reset their passwords. | Must | R1 | GOAL-01 | UR-002, BR-001, TR-003 | User list shows name, e-mail, role, active flag; a deactivated user cannot sign in. |
 | FR-005 | As Admin, I am the only active Admin at any time. | Must | R1 | GOAL-06 | UR-003, BR-001, CONSTRAINT-04 | Creating or activating a second Admin is refused (SPEC §14.14). |
-| FR-006 | As Admin, I hand the role to another active user in one confirmed step. [UNC-g, ASSUMPTION-23, Q-23] | Should | R2 | GOAL-06 | ASSUMPTION-23 | After the step exactly one active Admin exists and the change is logged. |
+| FR-006 | As Admin, I hand the role to another active user in one confirmed step. | Should | R2 | GOAL-06 | ASSUMPTION-23 | After the step exactly one active Admin exists and the change is logged. |
 | FR-007 | As any user, I can reach only what my role allows; every route and API enforces SPEC §3 on the server. | Must | R1 | GOAL-02 | BR-004, SPEC §3, §12 | Role-matrix test calls each route and API as each role; 0 results differ from SPEC §3. |
 | FR-008 | As an Engineer, I never receive any calculated value, material rate (I), exchange rate, customer rate or formula in any page, API response or file; I see only the values I typed (including Machining, Plating and Tool Cost). | Must | R1 | GOAL-02 | BRQ-002, BR-003, UR-021, D-05 | Automated test (SPEC §14.1) over every Engineer-reachable route finds 0 such values, run on every build. |
 | FR-009 | As any user, I see a header (logo and name, notification bell, user menu with name, e-mail, change password, sign out) and navigation listing only the screens my role may open. | Must | R1 | GOAL-07 | SPEC §9, BR-004, BRQ-010 | Navigation per role matches the SPEC §9 table. |
@@ -77,7 +77,7 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 | FR-015 | As Admin, I manage the Material Master (Material in Drawing unique; Material Considered, price per kg, specific gravity, scrap rate). | Must | R1 | GOAL-03 | UR-031, BR-033, DR-008 | Duplicate Material in Drawing refused; choosing a material fills Material Considered; rates never reach an Engineer. |
 | FR-016 | As Admin, I maintain the Exchange Rate Master (1 USD and 1 EUR in INR) with last updated by and at. | Must | R1 | GOAL-03 | UR-031, DR-009 | Values drive BH and BI; update stamp shown. |
 | FR-017 | As Admin, I maintain the Treatment / Color list; "Other" is always available. | Must | R1 | GOAL-03 | UR-031, UR-020, DR-010 | CRUD; "Other" cannot be removed. |
-| FR-018 | As an Engineer, I can choose "Not applicable" in Material in Drawing and Treatment / Color for a part that needs none; the system creates both entries (Material rates all 0), and the Admin cannot delete or rename them. [UNC-b, Q-33, ASSUMPTION-49] | Should | R1\* | GOAL-01 | UR-043, BR-048, DR-008, DR-010 | Entries exist after install; a part using them adds 0 cost. Built only if UNC-b is confirmed. |
+| FR-018 | As an Engineer, I can choose "Not applicable" in Material in Drawing and Treatment / Color for a part that needs none (confirmed, AQP-1 10441 (b)); the system creates both entries (Material rates all 0), and the Admin cannot delete or rename them. [Q-33, ASSUMPTION-49 for the values and the lock] | Must | R1 | GOAL-01 | UR-043, BR-048, DR-008, DR-010, SPEC §7.3 | Entries exist after install; a part using them adds 0 cost; an assembly parent can be completed with no real material. |
 | FR-019 | As Admin, I turn e-mail alerts on or off, set the sender name and address, and send a test e-mail. | Must | R2 | GOAL-05 | UR-037, DR-014 | Setting changes behaviour of FR-081 to FR-084; test e-mail arrives. |
 
 ### 4.3 Field registry and calculation (EPIC-03)
@@ -85,30 +85,30 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 |----|-------------|-----|-----|------|--------|---------------|
 | FR-020 | As Admin, on first install the portal holds the field registry and sections defined in SPEC §7 (and the sample's header texts, widths and formats). | Must | R1 | GOAL-04 | TR-001, DR-011, SPEC §7 | Registry holds every SPEC §7 field in order, each with letter, section, type, width and format. |
 | FR-021 | As any user, I see Excel-style column letters derived from field position, never stored. | Must | R1 | GOAL-03 | BR-034, SPEC §8.1 | Unit tests: position 1 = A, 26 = Z, 27 = AA, 52 = AZ, 53 = BA, 67 = BO, and the inverse. |
-| FR-022 | As the business, calculations run in a formula engine that reads operands (letters, rate names, Material-\* fields, exchange-rate names, numbers), + − × ÷ and brackets, and SUM over all nodes, without `eval`. Also MIN, MAX, ROUND, IF. [UNC-g, ASSUMPTION-41] | Must | R1 | GOAL-03 | BR-036, CONSTRAINT-02 | Unit tests per operator and function; coverage of the formula module ≥ 95 %; code search finds 0 uses of `eval` or `new Function`. |
+| FR-022 | As the business, calculations run in a formula engine that reads operands (letters, rate names, Material-\* fields, exchange-rate names, numbers), + − × ÷ and brackets, and SUM over all nodes, without `eval`. Also MIN, MAX, ROUND, IF (ASSUMPTION-41). | Must | R1 | GOAL-03 | BR-036, CONSTRAINT-02 | Unit tests per operator and function; coverage of the formula module ≥ 95 %; code search finds 0 uses of `eval` or `new Function`. |
 | FR-023 | As the business, formulas evaluate in dependency order, and a configuration with an unknown name, a syntax error or a cycle is rejected with the cycle shown. | Must | R1 | GOAL-03 | BR-037, SPEC §8.2 | A test configuration with a cycle fails validation and names the cycle; the seed configuration passes. |
-| FR-024 | As Lead or Admin, every output in SPEC §7.4 is calculated per BR-015 to BR-022 from the customer's rates, material data and exchange rates. | Must | R1 | GOAL-03 | BRQ-004, BR-015 to BR-022, SPEC §14.2 | Every output matches a hand-calculated value to 2 decimals on known inputs, plus the end-to-end tree 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5. The oracle is SPEC §7.4 until Q-32 is answered. |
-| FR-025 | As Lead or Admin, I see the product-level values once per estimate: BL (Total Unit Production Price), BN and BO. In force (SPEC §7.4): BL = sum of BG over all nodes; BN = BL / BM (row-2 value), "—" when BM is 0; BO = Approved Quote Price. [UNC-a] | Must | R1 | GOAL-03 | BR-023, D-04, D-05 | BL, BN, BO each appear once; values match hand calculation. If UNC-a is confirmed the BN divisor becomes the total of all Tool Cost entries (same result when one Tool Cost entry exists, F-22). |
-| FR-026 | As a user, division by zero shows "—" on screen and an empty cell in the export and never stops a calculation. [UNC-g] | Must | R1 | GOAL-03 | BR-024 | A node with a zero divisor calculates; the other outputs are present. |
+| FR-024 | As Lead or Admin, every output in SPEC §7.4 is calculated per BR-015 to BR-022 from the customer's rates, material data and exchange rates. | Must | R1 | GOAL-03 | BRQ-004, BR-015 to BR-022, SPEC §14.2 | Every output matches a hand-calculated value to 2 decimals on known inputs, plus the end-to-end tree 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5. The oracle is SPEC §7.4 v1.2; open roll-up details follow ASSUMPTION-48 (Q-32). |
+| FR-025 | As Lead or Admin, I see the product-level values once per estimate: BL (Total Unit Production Price), BN and BO. In force (SPEC §7.4 v1.2): BL as in FR-030; BN = BL / total of all Tool Cost (BM) entries of the estimate, "—" when that total is 0 (confirmed, AQP-1 10441 (a)); BO = Approved Quote Price. | Must | R1 | GOAL-03 | BR-023, D-04, D-05 | BL, BN, BO each appear once; values match hand calculation; with two nodes carrying Tool Cost entries BN uses their sum; with a total of 0 BN shows "—". |
+| FR-026 | As a user, division by zero shows "—" on screen and an empty cell in the export and never stops a calculation. | Must | R1 | GOAL-03 | BR-024 | A node with a zero divisor calculates; the other outputs are present. |
 | FR-027 | As the business, calculations run on the server; results are stored at full precision, displayed to 2 decimals, and recomputed on Calculate and Recalculate; inputs accept up to 2 decimals. | Must | R1 | GOAL-03 | BR-025, NFR-022 (cat.) | A stored value differs from the displayed one only by rounding; Engineer responses contain no preview. |
-| FR-028 | As the business, a rate named with "%" is typed as a whole percentage (12 means 12 %) and used as 0.12. [UNC-g, ASSUMPTION-39] | Must | R1 | GOAL-03 | BR-021 | OH Profit % typed 12 gives BD = BB × 0.12. |
-| FR-029 | As Lead or Admin, a parent's cost is the sum of its children's costs, and the total counts every lowest-level cost once (confirmed, AQP-9). | Must | R1 | GOAL-03 | BR-046, D-08 | Part-1 with sub-part-1 and sub-part-2 shows the sum of the two; with parent inputs at 0, BL equals the SPEC sum of BG over all nodes. |
-| FR-030 | As Lead or Admin, a child's cost is multiplied by its parent's quantity, through every level; a parent's BG = its quantity × the sum of its children's BG; BL = the sum of the top-level nodes' BG. [UNC-d, Q-32, ASSUMPTION-48] | Must | R1\* | GOAL-03 | BR-047, ASSUMPTION-48 | Parent 2 × child 3 counts 6; item 2 × part 3 × sub-part 4 counts 24; worked examples in the test plan. **Not built unless confirmed; SPEC §7.4 stays in force.** |
+| FR-028 | As the business, a rate named with "%" is typed as a whole percentage (12 means 12 %) and used as 0.12 (ASSUMPTION-39). | Must | R1 | GOAL-03 | BR-021 | OH Profit % typed 12 gives BD = BB × 0.12. |
+| FR-029 | As Lead or Admin, the cost shown for an item or part is the sum of the costs (BG) of the children, grandchildren and deeper rows below it, and every lowest-level cost is counted once (confirmed as corrected: AQP-9 10442, AQP-13 10445; D-08). A node whose number inputs are all 0 adds no cost of its own (D-06). Whether a parent's own non-zero inputs also count is Q-32 (b): until answered, they count as in the worksheet [ASSUMPTION-48 (b)]. | Must | R1 | GOAL-03 | BR-046, D-06, D-08, ASSUMPTION-48 | Part-1 with sub-part-1 and sub-part-2 shows the sum of the two; with parent inputs at 0 the sum equals the sum of BG over all rows; a parent with non-zero inputs adds its own BG to its children's (assumption). |
+| FR-030 | As Lead or Admin, an item's cost is the item quantity times the sum in FR-029, and the estimate's BL is the sum over its top-level items (confirmed as corrected, D-08; BL2 = sum of BG over the item's rows, times the quantity of the main item). Each row keeps its own quantity inside its BG; no further multiplication at the levels between the item and a lowest-level part [Q-32 (a), (c), (d), (e); ASSUMPTION-48]. | Must | R1 | GOAL-03 | BR-023, BR-047, D-08, ASSUMPTION-48 | Item quantity 1: equals the worksheet total exactly. Item quantity 2 over part 1.4 (quantity 3, own cost 1 per unit) with sub-part 1.4.1 (quantity 4, cost 1 per unit): the sub-part counts 2 x 4 = 8 and part 1.4's own cost counts 2 x 3 = 6 (the assumption; a rule that multiplies at every level would count 24 and is withdrawn). Worked examples go in the test plan. |
 | FR-031 | As the business, each Calculate and Recalculate records the configuration version and every master value used (customer rates, material values, exchange rates). | Must | R1 | GOAL-06 | BRQ-008, BR-012, BR-039, DR-003, D-07 | After any master changes, a previously calculated estimate's stored values are unchanged (regression test). |
 
 ### 4.4 Task assignment and queues (EPIC-04)
 | ID | Requirement | Pri | Rel | Goal | Source | Fit criterion |
 |----|-------------|-----|-----|------|--------|---------------|
 | FR-032 | As Admin or Lead, I assign a task to an Engineer with a network folder path, a deadline (date and time, IST) and an optional title and notes; this creates an empty estimate. | Must | R1 | GOAL-01 | UR-004, BRQ-009, SPEC §5.1 | The task appears in the Engineer's Open queue; the estimate exists in DRAFT. |
-| FR-033 | As any user, I see the folder path as a link and a "Copy path" button with a tooltip. [UNC-g, Q-12] | Must | R1 | GOAL-01 | UR-005, ASSUMPTION-12 | Copy places the exact path on the clipboard; tooltip explains blocked links. |
+| FR-033 | As any user, I see the folder path as a link and a "Copy path" button with a tooltip. | Must | R1 | GOAL-01 | UR-005, ASSUMPTION-12 (Q-12) | Copy places the exact path on the clipboard; tooltip explains blocked links. |
 | FR-034 | As any user, I see Open, Closed and Overdue tabs sorted by deadline ascending; an overdue task also stays in Open; an Engineer sees only own tasks, the Admin all, a Lead all. | Must | R1 | GOAL-05 | UR-006, BR-002, BR-045 | Tab membership and order correct on seeded tasks; an Engineer cannot open another's task. |
-| FR-035 | As a Lead, the queue opens filtered to "Assigned by me" and I can change it. [UNC-g, ASSUMPTION-32] | Should | R1+ | GOAL-05 | UR-007 | Default filter applied on opening. |
+| FR-035 | As a Lead, the queue opens filtered to "Assigned by me" and I can change it. | Should | R1+ | GOAL-05 | UR-007 | Default filter applied on opening. |
 | FR-036 | As any user, I see overdue rows marked by colour, icon and the text "Overdue by X". | Must | R1 | GOAL-05 | UR-008, SPEC §11 | All three cues present on every overdue row. |
 | FR-037 | As any user, I see a bell with the count of my relevant overdue tasks (Engineer own; Lead assigned by me; Admin all) that opens the Overdue tab; it stays visible on mobile. | Must | R1 | GOAL-05 | UR-009 | Counts correct per role; click opens Overdue. |
-| FR-038 | As the business, a task closes when its estimate is approved and returns to Open when unlocked. [UNC-g, ASSUMPTION-34] | Must | R1 | GOAL-05 | BR-045 | Approve moves the task to Closed; unlock returns it to Open. |
+| FR-038 | As the business, a task closes when its estimate is approved and returns to Open when unlocked. | Must | R1 | GOAL-05 | BR-045 | Approve moves the task to Closed; unlock returns it to Open. |
 | FR-039 | As Admin or Lead, I search and filter tasks by Engineer, customer and date. | Should | R1+ | GOAL-05 | UR-010 | Filters narrow the list. |
-| FR-040 | As Admin or Lead, I reassign a task or change its deadline, logged; cancel is not provided. [UNC-g, ASSUMPTION-20, Q-20] | Should | R2 | GOAL-05 | ASSUMPTION-20 | Change logged with who, when, old → new. |
-| FR-041 | As any user, I refer to a task or estimate by an ID in the form Q-<year>-<4-digit running number>. [UNC-g, ASSUMPTION-22, Q-22] | Should | R1 | GOAL-04 | ASSUMPTION-22, SPEC §10 | IDs are unique and appear on screens and in the export file name. |
+| FR-040 | As Admin or Lead, I reassign a task or change its deadline, logged; cancel is not provided. | Should | R2 | GOAL-05 | ASSUMPTION-20 | Change logged with who, when, old → new. |
+| FR-041 | As any user, I refer to a task or estimate by an ID in the form Q-<year>-<4-digit running number>. | Should | R1 | GOAL-04 | ASSUMPTION-22, SPEC §10 | IDs are unique and appear on screens and in the export file name. |
 
 ### 4.5 Estimate workspace (EPIC-05)
 | ID | Requirement | Pri | Rel | Goal | Source | Fit criterion |
@@ -120,12 +120,12 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 | FR-046 | As an Engineer, I press Enter to move to the next field. | Must | R1 | GOAL-01 | UR-040, DEC-06 | Enter moves focus in field order. |
 | FR-047 | As an Engineer, I add a part picture (C) by paste, drag and drop or file choice (camera or gallery on a phone), preview it, and replace or remove it. | Must | R1 | GOAL-04 | UR-017, BR-014, CONSTRAINT-08 | A 199 KB PNG is accepted; a 201 KB file and a text file renamed .png are refused with a clear message. |
 | FR-048 | As an Engineer, Fasteners Qty (T) and Cost (U) show only when Fasteners (S) is not "None" or blank; otherwise they are hidden, not required, and stored as 0; S defaults to "None". | Must | R1 | GOAL-03 | UR-018, BR-008 | SPEC §14.4. |
-| FR-049 | As an Engineer, I choose Surface Treatments in one multi-select (selected = 1, not selected = 0) and may select none. [UNC-g, ASSUMPTION-38] | Must | R1 | GOAL-03 | UR-019 | Eight flags Z to AG set correctly. |
+| FR-049 | As an Engineer, I choose Surface Treatments in one multi-select (selected = 1, not selected = 0) and may select none (ASSUMPTION-38). | Must | R1 | GOAL-03 | UR-019 | Eight flags Z to AG set correctly. |
 | FR-050 | As an Engineer, I choose a Treatment / Color or "Other" and type free text. | Must | R1 | GOAL-04 | UR-020 | "Other" reveals a text box; the text is stored and exported. |
 | FR-051 | As an Engineer, auto-filled fields (F) are read-only and shaded, and Material Rate (I) is absent from my screen and responses. | Must | R1 | GOAL-02 | UR-021 | F shown read-only; I never present (covered by FR-008). |
-| FR-052 | As an Engineer, number inputs accept up to 2 decimals, no negatives, and show the decimal keyboard on phones. [UNC-g, ASSUMPTION-37] | Must | R1 | GOAL-03 | BR-009, NFR-012 (cat.) | A negative or 3-decimal entry is refused with a message. |
+| FR-052 | As an Engineer, number inputs accept up to 2 decimals, no negatives, and show the decimal keyboard on phones (ASSUMPTION-37). | Must | R1 | GOAL-03 | BR-009, NFR-012 (cat.) | A negative or 3-decimal entry is refused with a message. |
 | FR-053 | As an Engineer, I save at any time including incomplete data, and I am warned before leaving with unsaved changes. | Must | R1 | GOAL-01 | UR-022 | A draft saves with blanks; the warning appears. |
-| FR-054 | As an Engineer, my draft saves automatically every 30 seconds. [UNC-g, ASSUMPTION-42] | Should | R1+ | GOAL-01 | UR-022 | Edit, wait 30 s, reload: the edit is present. |
+| FR-054 | As an Engineer, my draft saves automatically every 30 seconds (ASSUMPTION-42). | Should | R1+ | GOAL-01 | UR-022 | Edit, wait 30 s, reload: the edit is present. |
 | FR-055 | As an Engineer, I press Calculate and, if any visible input of any node is blank (Remarks included, Q-13), I am told which nodes and fields, the nodes are flagged in the tree, and nothing is submitted; on success the status becomes SUBMITTED and I see only "Cost will be calculated based on the input fields and sent for review/approval." | Must | R1 | GOAL-02 | UR-023, BR-006, BR-007, SPEC §14.4 | Blank input blocks submit with errors; success shows the single message and no cost. |
 | FR-056 | As an Engineer, I enter 0 in a number field a part (including a parent assembly) does not need; Calculate accepts it and the part adds no cost (confirmed, AQP-7). | Must | R1 | GOAL-01 | UR-043, BR-048, D-06 | A tree whose parent has 0 in every number field passes Calculate; BL equals the sum of the children. |
 | FR-057 | As an Engineer, I see how many inputs are complete for the current part and which tree nodes have missing data (icon as well as colour). | Should | R1+ | GOAL-01 | UR-024 | Count and icon correct on seeded data. |
@@ -138,8 +138,8 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 | FR-060 | As a Lead, I view formulas read-only. | Must | R1 | GOAL-06 | UR-038 | No edit controls shown to a Lead. |
 | FR-061 | As Lead or Admin, I recalculate whenever inputs changed after a calculation. | Must | R1 | GOAL-03 | UR-027 | Recalculate is offered after a change and updates the stored results. |
 | FR-062 | As Lead or Admin, I approve and lock by entering an Approved Quote Price, pre-filled with BL and editable; inputs become read-only; approver and time are recorded; an override is logged. | Must | R1 | GOAL-06 | UR-028, BR-011, BRQ-001, BRQ-003 | Inputs read-only after approval; override entry exists. |
-| FR-063 | As Lead or Admin, I unlock an approved estimate with a reason; I see a notice if the configuration changed since approval; recalculating afterwards uses the current master values and the notice also says if rates changed. [UNC-c, ASSUMPTION-35] | Must | R1 | GOAL-06 | UR-029, BR-012 | Unlock logged with reason; notices shown. The master-value rule is a working assumption (SPEC §8.4 is silent). |
-| FR-064 | As the business, the status runs DRAFT → SUBMITTED → APPROVED → unlock → DRAFT; the Engineer's inputs are read-only once SUBMITTED; there is no return-to-Engineer action. [UNC-g, ASSUMPTION-19, Q-19] | Must | R1 | GOAL-06 | BR-006, ASSUMPTION-19 | Engineer edit refused after SUBMITTED; Lead and Admin can edit and recalculate. |
+| FR-063 | As Lead or Admin, I unlock an approved estimate with a reason; I see a notice if the configuration changed since approval; recalculating afterwards uses the current master values and the notice also says if rates changed (confirmed, AQP-1 10441 (c); ASSUMPTION-35 for the reason entry). | Must | R1 | GOAL-06 | UR-029, BR-012 | Unlock logged with reason; notices shown; recalculation after unlock uses the current master values. |
+| FR-064 | As the business, the status runs DRAFT → SUBMITTED → APPROVED → unlock → DRAFT; the Engineer's inputs are read-only once SUBMITTED; there is no return-to-Engineer action. | Must | R1 | GOAL-06 | BR-006, ASSUMPTION-19 | Engineer edit refused after SUBMITTED; Lead and Admin can edit and recalculate. |
 | FR-065 | As the business, an approved estimate keeps the fields, formulas, rates, master values and results it was approved with, whatever changes later (confirmed, AQP-8). | Must | R1 | GOAL-06 | BRQ-008, D-07, SPEC §8.4 | After approval, change a process rate, a material price and an exchange rate: the approved estimate's screen and export are identical. |
 
 ### 4.7 Excel export (EPIC-07)
@@ -148,9 +148,9 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 | FR-066 | As Lead or Admin, I download an .xlsx that replicates the worksheet: header row 1, columns A to BO in order, same widths, all cells centred horizontally and vertically, ₹ / $ / € formats. | Must | R1 | GOAL-04 | UR-030, BRQ-005, SPEC §10 | SPEC §14.12 checklist passes. |
 | FR-067 | As Lead or Admin, the export has one row per tree node in depth-first order, Sl. No as text, and the part image embedded in column C scaled to fit. | Must | R1 | GOAL-04 | SPEC §10 | Order 1, 1.1, 1.1.1, 1.1.2, 1.2 …; "1.10" keeps its zero; image visible. |
 | FR-068 | As Lead or Admin, every column is exported, including cost lines hidden on screen (as 0) and hidden Fasteners fields (0); a divide-by-zero cell is empty. | Must | R1 | GOAL-04 | SPEC §10, BR-024, BR-026 | Cell-by-cell check on a seeded estimate. |
-| FR-069 | As Lead or Admin, BL2, BN2 and BO2 are populated once, in row 2; no per-item totals and no separate Tool Cost total column. [UNC-a, Q-31, ASSUMPTION-47] | Must | R1 | GOAL-04 | BR-023, SPEC §10 | BL2 and BO2 populated (SPEC §14.12). If the delivery lead asks for per-item totals as in the sample, this FR changes. |
-| FR-070 | As the business, Lead and Admin can download at any status; Engineers cannot. [UNC-g, ASSUMPTION-36] | Must | R1 | GOAL-02 | UR-030, ASSUMPTION-36 | An Engineer request for the export is refused. |
-| FR-071 | As Lead or Admin, the file is named Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx. [UNC-g, ASSUMPTION-44] | Should | R1 | GOAL-04 | ASSUMPTION-44 | File name matches the pattern. |
+| FR-069 | As Lead or Admin, BL2, BN2 and BO2 are populated once, in row 2; no per-item totals and no separate Tool Cost total column. [Q-31, ASSUMPTION-47: the sample shows totals per top-level item; open] | Must | R1 | GOAL-04 | BR-023, SPEC §10 | BL2, BN2 and BO2 populated (SPEC §14.12). If the delivery lead asks for per-item totals as in the sample, this FR changes. |
+| FR-070 | As the business, Lead and Admin can download at any status; Engineers cannot. | Must | R1 | GOAL-02 | UR-030, ASSUMPTION-36 | An Engineer request for the export is refused. |
+| FR-071 | As Lead or Admin, the file is named Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx. | Should | R1 | GOAL-04 | ASSUMPTION-44 | File name matches the pattern. |
 
 ### 4.8 Admin configuration of fields and formulas (EPIC-08)
 | ID | Requirement | Pri | Rel | Goal | Source | Fit criterion |
@@ -180,18 +180,18 @@ Business outcome measures such as estimate turnaround cannot be set until the ba
 | FR-086 | As any user, I see the "Red Leads" brand: real logo unaltered on a white top bar, "ACCUCUT LASERS" in logo red in a bold serif, graphite side menu, red main buttons and markers, one design system; errors use an icon, a thick border and text. | Must | R1 | GOAL-07 | BRQ-011, DEC-02, NFR-016 to NFR-018, NFR-021 (cat.) | Design-system review passes (NFR-020, NFR-021). |
 | FR-087 | As a future user, the estimate screen leaves room to show a drawing beside the form without a redesign (no drawing function now). | Must | R1 | GOAL-07 | BRQ-012, DEC-04, NFR-019 (cat.) | UX review confirms a reserved region at 1024 px and wider. |
 | FR-088 | As any user, I see clear loading, empty and error states and a confirmation after each save. | Should | R1+ | GOAL-07 | NFR-014 (cat.) | Each screen shows the three states. |
-| FR-089 | As the business, every page has a title, meta description and Open Graph title and description with generic wording; pages behind sign-in are marked "do not index". [UNC-g, Q-17] | Must | R1 | GOAL-07 | NFR-020 (cat.), SPEC §17.6 | Tag check passes on every route (NFR-022). |
-| FR-090 | As any user, I can choose light or dark mode. [UNC-g, ASSUMPTION-43] | Could | R3 | GOAL-07 | NFR-015 (cat.) | Both modes meet NFR-018. |
+| FR-089 | As the business, every page has a title, meta description and Open Graph title and description with generic wording; pages behind sign-in are marked "do not index". | Must | R1 | GOAL-07 | NFR-020 (cat.), SPEC §17.6 | Tag check passes on every route (NFR-022). |
+| FR-090 | As any user, I can choose light or dark mode. | Could | R3 | GOAL-07 | NFR-015 (cat.) | Both modes meet NFR-018. |
 | FR-091 | As Accucut IT, I install the system with Docker Compose (app, worker, database), an `.env.example`, and a README with daily-backup guidance and restore steps. | Must | R1 | GOAL-01 | TR-008, SPEC §2, §12 | Following the README on a clean machine yields a running system; a restore is rehearsed once (NFR-013). |
 
 ### 4.11 Excluded or later (Won't in Release 1)
 | ID | Requirement | Pri | Rel | Goal | Source | Fit criterion |
 |----|-------------|-----|-----|------|--------|---------------|
-| FR-092 | Offline use: the portal runs locally without internet. [UNC-e, Q-18] Conflict: requested in AQP-11 (his words), deferred in comment 10415. | Won't | - | - | BRQ-014 | No offline function in Release 1. Decision needed at G2. |
+| FR-092 | Offline use: the portal can be used without internet, "like running a website locally" (AQP-11 comment 10405). Implemented in the next release (confirmed, AQP-11 comment 10444; AQP-1 10441 (e)). What offline means (a full local copy or an entry form that sends later), hosting and the effect on cost confidentiality (BRQ-002) are open and are settled when that release is planned (Q-18). Not estimated. | Won't (this release) | R-OFF | GOAL-01 | BRQ-014 | No offline function in Release 1; room for it is not reserved beyond what the architect judges free. |
 | FR-093 | Show a drawing beside the form and read data from drawings. | Won't | - | - | UR-042, DEC-04 | Absent; room reserved by FR-087. |
 | FR-094 | "Copy from part" and "Apply to selected" actions (rejected). | Won't | - | - | UR-041, DEC-03 | Absent. |
-| FR-095 | "Not needed for this part" switch; the Engineer enters 0 (FR-056). Formal closure of Q-15. [UNC-f] | Won't | - | - | DEC-05, SPEC §15 item 7 | Absent. |
-| FR-096 | Import of past Excel estimates. [UNC-g, ASSUMPTION-25, TR-006] | Won't | - | - | TR-006 | Absent. |
+| FR-095 | "Not needed for this part" switch; the Engineer enters 0 (FR-056). Q-15 closed (confirmed, AQP-1 10441 (f)). | Won't | - | - | DEC-05, SPEC §15 item 7 | Absent. |
+| FR-096 | Import of past Excel estimates (ASSUMPTION-25). | Won't | - | - | TR-006 | Absent. |
 | FR-097 | UI-sample extras not in the SPEC (finding F-16), ranked by the product manager: (1) "Awaiting review" count for Leads; (2) per-Engineer open-task counts on the assign screen; (3) global search; (4) "Closed this month" tile. | Could | R3 | GOAL-05 | F-16, SPEC §17.1 | Ranking only; no commitment. |
 
 Transition work with no software requirement (TR-002 to TR-005, TR-007, BRQ-013) is carried in section 9.3 and in the release plan.
@@ -212,7 +212,7 @@ Transition work with no software requirement (TR-002 to TR-005, TR-007, BRQ-013)
 | NFR-008 | Performance (calculation) | An estimate of 500 nodes recalculates in under 2 seconds (cat. NFR-005) | p95 < 2 s over 20 runs | Timed test on a 500-node fixture; the machine specification is recorded in the result |
 | NFR-009 | Performance (pages) | Pages become interactive within 2 seconds on a mid-range phone on 4G (cat. NFR-006, Should) | ≤ 2 s on the five key screens (queue, workspace, cost view, masters, assign) | Lighthouse mobile profile; device definition set in the test strategy |
 | NFR-010 | Performance (server) | PROPOSED: page-data and save requests respond within 500 ms at 25 concurrent users, excluding 500-node calculation and export. PROPOSED: Excel export of a 50-node estimate with 50 images within 10 s | p95 ≤ 500 ms; p95 ≤ 10 s (owner Santhosh; architect to confirm feasibility) | Load test in the staging environment |
-| NFR-011 | Capacity | Supports fewer than 50 users and 500 nodes per estimate (ASSUMPTION-24, UNC-g). Growth is not stated; PROPOSED headroom 2 × users without change | 50 named users, 25 concurrent; 500 nodes | Load test at the stated numbers |
+| NFR-011 | Capacity | Supports fewer than 50 users and 500 nodes per estimate (ASSUMPTION-24, kept). Growth is not stated; PROPOSED headroom 2 × users without change | 50 named users, 25 concurrent; 500 nodes | Load test at the stated numbers |
 | NFR-012 | Availability | PROPOSED: 99.0 % per month (about 7 h 18 min downtime). Hosting is undecided (Q-18) | 99.0 % monthly (owner Santhosh and the IT contact) | External uptime check every 5 minutes (tool chosen at G3) |
 | NFR-013 | Backup and recovery | Daily database backup guidance and restore steps in the README (cat. NFR-007, TR-008). PROPOSED: recovery point ≤ 24 h; restore time ≤ 4 h | RPO ≤ 24 h; RTO ≤ 4 h; 1 restore rehearsal before go-live | Rehearsal log |
 | NFR-014 | Reliability (e-mail, Release 2) | Alerts only when ON; overdue e-mail within 5 minutes; digest at 11:00 IST; no duplicates; failures retried and logged. PROPOSED: up to 3 retries | 100 % sent, 0 duplicates | Controlled-clock job tests with a capturing mail server |
@@ -229,52 +229,68 @@ Transition work with no software requirement (TR-002 to TR-005, TR-007, BRQ-013)
 | NFR-025 | Maintainability | TypeScript strict; lint and type-check clean; coverage ≥ 80 % on changed code and package, ≥ 95 % on the formula module; functions ≤ 40 lines, files ≤ 400 lines (`docs/standards/coding-standards.md`) | 0 errors; thresholds as stated | CI on every pull request |
 | NFR-026 | Data integrity | Approved estimates are unaffected by later master or configuration changes (confirmed, AQP-8); calculations are server-side only | 0 differing values in the regression test | Regression test: approve, change masters, compare screen and export |
 | NFR-027 | Export fidelity | Export matches the worksheet layout | 100 % of the SPEC §14.12 checklist; file opens in Excel desktop without a repair prompt | Checklist plus manual open in Excel |
-| NFR-028 | Privacy and compliance | Personal data limited to user name and e-mail and customer business contact details; no deletion or retention rule in Release 1 until Q-26 is answered (ASSUMPTION-26, UNC-g); legal adviser to confirm DPDP Act 2023 applicability (not verified) | 0 real personal data in tests (NFR-006) | Repository scan; Q-26 answer |
+| NFR-028 | Privacy and compliance | Personal data limited to user name and e-mail and customer business contact details; no deletion or retention rule in Release 1 until Q-26 is answered (ASSUMPTION-26, kept); legal adviser to confirm DPDP Act 2023 applicability (not verified) | 0 real personal data in tests (NFR-006) | Repository scan; Q-26 answer |
 | NFR-029 | Localisation (language) | English only | 1 language | Inspection |
 | NFR-030 | Deployability | Single `docker compose up` after copying `.env.example`; every environment variable listed. PROPOSED: a clean machine reaches a working sign-in page within 30 minutes by the README | ≤ 30 min | Timed walk-through by someone who did not write the README |
 
 ## 6. Scope
 
-**Proposal, not agreed.** "MVP" here means Release 1. Contents and reasoning are in `docs/02-product/release-plan.md`. The delivery lead answers Q-29 (AQP-12).
+**Proposal, not agreed.** "MVP" here means the R1 core. Q-29 is answered (AQP-12 10446): 2026-11-13 is a target to finish development and hand the version to the customer for testing, acceptance and change requests. The remaining decision is Q-34, which scope the realistic completion date covers. Contents, dates and reasoning are in `docs/02-product/release-plan.md`.
 
-| Release | Must | Should | Could | Won't (this release) |
-|---------|------|--------|-------|----------------------|
-| **Release 1 (MVP, proposal): assign, enter, calculate, approve, export** | FR-001, 002, 004, 005, 007 to 013, 015 to 017, 020 to 029, 031 to 034, 036 to 038, 042 to 053, 055, 056, 058 to 070, 085 to 087, 089, 091 (63 FRs) | Core: FR-041, 071. Stretch (R1+): FR-014 (a Must pulled in only if time allows), 035, 039, 054, 057, 088 | none | FR-003, 006, 019, 040, 072 to 084 (Release 2); FR-090, 097 (Release 3); FR-092 to 096 (not planned) |
-| Release 1 conditional (R1\*) | FR-030 (Must): only if UNC-d is confirmed | FR-018: only if UNC-b is confirmed | - | - |
-| Release 2: Admin control and alerts | FR-019, 072 to 084 (14 FRs) | FR-003, 006, 040 | - | - |
+| Build stage | Must | Should | Could | Won't (this release) |
+|-------------|------|--------|-------|----------------------|
+| **R1 core: assign, enter, calculate, approve, export** | FR-001, 002, 004, 005, 007 to 013, 015 to 018, 020 to 029, 030, 031 to 034, 036 to 038, 042 to 053, 055, 056, 058 to 070, 085 to 087, 089, 091 (65 FRs) | FR-041, 071 | none | none |
+| R1+ stretch (built after the core) | FR-014 | FR-035, 039, 054, 057, 088 | none | none |
+| R2: Admin control and alerts | FR-019, 072 to 084 (14 FRs) | FR-003, 006, 040 | none | none |
+| R3: later | none | none | FR-090, 097 | none |
+| R-OFF: the next release (confirmed) | none | none | none | FR-092 offline use (definition open, not estimated) |
+| Not planned | none | none | none | FR-093 to 096 |
 
-| Release 3: later | - | - | FR-090, 097 | Offline use, drawings only if the delivery lead schedules them |
+**Two scopes for the completion date (Q-34).** Scope A = R1 core + R1+ + R2 (the whole SPEC except offline, dark mode and the UI-sample extras). Scope B = R1 core only (the first-release proposal of AQP-12 comment 10433, now with FR-030 and FR-018). The product manager's proposed answer is scope A, with the end of the R1 core kept as an interim hand-over point; the reasoning and both dates are in the release plan, section 2. Nothing is moved until the delivery lead answers.
 
-NFRs apply to the release that delivers the behaviour they measure; NFR-004 and NFR-014 apply from Release 2.
+NFRs apply to the build stage that delivers the behaviour they measure; NFR-004 and NFR-014 apply from R2.
 
 ### 6.1 Justification of each Must group in Release 1 ("what happens if we don't build it?")
 
 | Group | If not built |
 |-------|--------------|
 | Sign-in, users, one Admin, role enforcement (FR-001 to 011) | No one can use the system safely; Engineers could reach costs (GOAL-02 fails) |
-| Masters (FR-012, 013, 015 to 017) | Nothing can be calculated: rates, materials, exchange rates and customers feed every formula |
-| Registry, engine, calculation, records (FR-020 to 029, 031) | No quote; GOAL-03 cannot be tested |
+| Masters (FR-012, 013, 015 to 018) | Nothing can be calculated: rates, materials, exchange rates and customers feed every formula; without FR-018 an assembly parent cannot be completed with a real material (finding F-08) |
+| Registry, engine, calculation, records (FR-020 to 031) | No quote; GOAL-03 cannot be tested; without FR-030 the total does not follow the confirmed cost rule (D-08) |
 | Tasks and queues (FR-032 to 034, 036 to 038) | No assignment and no bell: late work stays invisible (GOAL-05) |
 | Workspace (FR-042 to 053, 055, 056) | Engineers cannot enter data |
 | Cost review and approval (FR-058 to 065) | No approved price: GOAL-01 and GOAL-06 fail |
 | Export (FR-066 to 070) | The delivery lead stated the export is needed (AQP-4); GOAL-04 fails |
 | Responsive, brand, tags, deployment (FR-085 to 087, 089, 091) | Not usable on the shop floor; not installable; SPEC MUST items unmet |
 
-Release 2 Musts are deferred, not dropped. If FR-072 to 080 are not built in Release 1, the Admin cannot change the worksheet without a developer (BRQ-006 unmet until Release 2) and a developer changes the seed configuration in the meantime. If FR-081 to 084 are not built, late work is visible only in the portal.
+R2 Musts are deferred under scope B and built last under scope A; they are not dropped. If FR-072 to 080 are not built, the Admin cannot change the worksheet without a developer (BRQ-006 unmet) and a developer changes the seed configuration in the meantime. If FR-081 to 084 are not built, late work is visible only in the portal.
 
 ### 6.2 Counts (checked by script against section 4)
 
-| Release | Must | Should | Could | Won't | Total |
-|---------|------|--------|-------|-------|-------|
-| R1 core | 63 | 2 | 0 | 0 | 65 |
+| Build stage | Must | Should | Could | Won't | Total |
+|-------------|------|--------|-------|-------|-------|
+| R1 core | 65 | 2 | 0 | 0 | 67 |
 | R1+ stretch | 1 | 5 | 0 | 0 | 6 |
-| R1\* conditional | 1 | 1 | 0 | 0 | 2 |
 | R2 | 14 | 3 | 0 | 0 | 17 |
 | R3 | 0 | 0 | 2 | 0 | 2 |
-| Not planned | 0 | 0 | 0 | 5 | 5 |
-| **Total** | 79 | 11 | 2 | 5 | 97 |
+| R-OFF (next release) | 0 | 0 | 0 | 1 | 1 |
+| Not planned | 0 | 0 | 0 | 4 | 4 |
+| **Total** | 80 | 10 | 2 | 5 | 97 |
 
-**The "Must at most about 60 % of MVP effort" rule is not met by this proposal.** The Release 1 core is estimated at 43 to 62 hours against about 47 to 59 development hours available (release plan, section 3), so Musts take about 99 % of the development capacity at the midpoint (73 to 132 % across the ranges). The core cannot be made smaller without losing a step of the primary outcome (assign, enter, calculate, approve, export). This is a deviation for `master` and the delivery lead to weigh, not a hidden one; the release plan shows the cut order if the estimate proves optimistic.
+**The "Must at most about 60 % of MVP effort" rule is still not met, now measured on effort share, not on a fixed 80 h window.** The date is a target and not a blocker (AQP-12 10446), so the capacity comparison used in v0.1 (Musts about 99 % of 47 to 59 h) is withdrawn. On effort, the R1 core (scope B) is estimated at 46 to 67 h, of which only FR-041 and FR-071 (about 1 to 2 h, estimate) are Should, so Musts are about 96 to 98 % of the effort. Scope A is estimated at 71.5 to 103 h with about 7.5 to 12 h of Should (FR-041, 071, 035, 039, 054, 057, 088, 003, 006, 040), so Musts are about 88 to 90 %. The rule cannot be met without removing SPEC MUST items (Must = the SPEC says MUST or it has a SPEC §14 test), and the cut ladder in the release plan only moves Musts to a later stage. The deviation is for `master` and the delivery lead to weigh, not a hidden one. What protects delivery confidence in its place: the completion date is a range with stated assumptions, it is re-issued at the first completed epic, and the build order puts the R1 core first so that an earlier hand-over stays possible.
+
+### 6.3 Changes since v0.1 (PROPOSED, not agreed; to be recorded by `master` in the decision log)
+
+| # | Change | From | To | Why |
+|---|--------|------|----|-----|
+| 1 | FR-030 (quantity roll-up) | R1\*, built only if UNC-d confirmed | R1 core, Must | UNC-d confirmed as corrected; the rule is SPEC §7.4 v1.2. Adds 2.5 to 4 h to EPIC-03 (estimate; v0.1 said 2 to 3 h for the older per-level rule) |
+| 2 | FR-018 ("Not applicable") | R1\*, Should | R1 core, Must | UNC-b confirmed; without it an assembly parent cannot be completed (F-08). Adds 0.5 to 1 h. Q-33 values stay an assumption |
+| 3 | FR-025, FR-029, FR-030, FR-024 text | SPEC §7.4 v1.0 rule (BL = sum of BG over all nodes; BN divisor = row-2 BM) | SPEC §7.4 v1.2 (BL = item quantity x sum of BG, summed over top-level items; BN divisor = total of all BM) | Confirmed answers D-05, D-08; open details carried by ASSUMPTION-48 |
+| 4 | FR-092 offline | Won't, "not planned" | Won't this release, R-OFF (the next release) | Confirmed AQP-11 10444; not estimated |
+| 5 | Scope for the completion date | Not stated | Scope A proposed (Q-34), scope B dated as the alternative | Release plan section 2 |
+| 6 | Section 9.1 rejection paths | Listed for UNC-a to UNC-h | Removed; resolved items are listed in 9.1a | Confirmed items are no longer assumptions |
+
+Open ordering question OQ-PM-06: under scope B the delivery lead's "next release" for offline (AQP-11 10444) and the proposed R2 (Admin screens and alerts) both come after the first hand-over. Under scope A there is no conflict, because R2 is built before the hand-over.
 
 ## 7. Epics (outline — detailed by product-owner)
 
@@ -283,16 +299,17 @@ Size: S ≤ 4 h, M 4 to 8 h, L 8 to 12 h, XL over 12 h (estimate; development, t
 | Epic | Goal / user value | FRs | Release | Rough size (estimate) | Dependencies |
 |------|-------------------|-----|---------|-----------------------|--------------|
 | EPIC-01 Foundation, access and confidentiality | People sign in and only reach what their role allows; Engineers never see cost | FR-001, 002, 004, 005, 007 to 011 (FR-003, 006 in Release 2) | R1 | M, 4 to 6 h | None |
-| EPIC-02 Masters and settings | The Admin holds the rates and lists that drive every calculation | FR-012, 013, 015, 016, 017 core; FR-014, 018 stretch or conditional; FR-019 in EPIC-09 | R1 | M, 4 to 6 h core; +2.5 to 4 h stretch | EPIC-01 |
-| EPIC-03 Field registry and calculation engine | The portal calculates as the worksheet does | FR-020 to 029, 031; FR-030 conditional | R1 | L, 7 to 10 h; FR-030 adds 2 to 3 h | EPIC-01 |
+| EPIC-02 Masters and settings | The Admin holds the rates and lists that drive every calculation | FR-012, 013, 015 to 018 core; FR-014 stretch; FR-019 in EPIC-09 | R1 | M, 4.5 to 7 h core (incl. FR-018, 0.5 to 1 h); +2 to 3 h stretch (FR-014) | EPIC-01 |
+| EPIC-03 Field registry and calculation engine | The portal calculates as the worksheet does | FR-020 to 031 | R1 | L, 9.5 to 14 h (incl. FR-030, 2.5 to 4 h) | EPIC-01; roll-up design by the architect (Q-32) |
 | EPIC-04 Task assignment and queues | Work is assigned, tracked and late work is visible | FR-032 to 034, 036 to 038, 041 core; FR-035, 039 stretch; FR-040 R2 | R1 | S to M, 3 to 5 h core; +1.5 to 2.5 h stretch | EPIC-01 |
 | EPIC-05 Estimate workspace | Engineers enter a product tree quickly with no cost shown | FR-042 to 053, 055, 056 core; FR-054, 057 stretch | R1 | XL, 10 to 14 h core; +1.5 to 2.5 h stretch | EPIC-02, 03, 04 |
 | EPIC-06 Cost review and approval | Leads check the arithmetic, set the price and lock it | FR-058 to 065 | R1 | M, 5 to 7 h | EPIC-03, 05 |
 | EPIC-07 Excel export | The estimate leaves in the worksheet's layout | FR-066 to 071 | R1 | M, 5 to 7 h | EPIC-05, 06 |
 | EPIC-10 Experience, brand and delivery | Usable on every screen, branded, installable, tested | FR-085 to 087, 089, 091 core; FR-088 stretch; FR-090 R3 | R1 | M, 5 to 7 h core; +1 to 1.5 h stretch | Runs alongside all epics |
-| EPIC-08 Admin configuration | The Admin changes fields and formulas without a developer | FR-072 to 080 | R2 | XL, 12 to 16 h | EPIC-03; Release 1 live |
-| EPIC-09 E-mail alerts and scheduled jobs | Late work reaches people by e-mail | FR-003, 019, 081 to 084; FR-006, 040 with EPIC-01 and 04 | R2 | M, 6 to 8 h (+1.5 to 2.5 h for FR-006, 040) | EPIC-04; SMTP details (Q-18) |
-| EPIC-11 Later | Dark mode, UI-sample extras; offline and drawings only if scheduled | FR-090, 097 (FR-092, 093 excluded) | R3 | Not estimated | Release 2 live |
+| EPIC-08 Admin configuration | The Admin changes fields and formulas without a developer | FR-072 to 080 | R2 | XL, 12 to 16 h | EPIC-03 |
+| EPIC-09 E-mail alerts and scheduled jobs | Late work reaches people by e-mail | FR-003, 019, 081 to 084; FR-006, 040 with EPIC-01 and 04 | R2 | M, 6 to 8 h (+1.5 to 2.5 h for FR-006, 040) | EPIC-04; SMTP details (Q-18) to test against a real server; a capturing mail server is used until then |
+| EPIC-11 Later | Dark mode, UI-sample extras; drawings only if scheduled | FR-090, 097 (FR-093 excluded) | R3 | Not estimated | R2 done |
+| EPIC-12 Offline use (new, outline only) | Use the portal without internet (confirmed for the next release, AQP-11 10444) | FR-092 | R-OFF | Not estimated: what offline means is open | Hosting design (Q-18, G3); cost confidentiality (BRQ-002); roll-up and calculation stable |
 
 ## 8. Prioritisation Rationale
 
@@ -301,8 +318,8 @@ RICE needs reach, impact and confidence data that do not exist here (all three r
 | Epic | Value (1 to 5) | Effort, midpoint (h) | Value / effort | Order set by |
 |------|----------------|----------------------|----------------|--------------|
 | EPIC-01 | 5 | 5 | 1.00 | Prerequisite for all |
-| EPIC-02 | 4 | 5 | 0.80 | Needed before calculation can be tried |
-| EPIC-03 | 5 | 8.5 | 0.59 | Needed before workspace and approval |
+| EPIC-02 | 4 | 5.75 | 0.70 | Needed before calculation can be tried |
+| EPIC-03 | 5 | 11.75 | 0.43 | Needed before workspace and approval |
 | EPIC-04 | 4 | 4 | 1.00 | Creates the estimate the workspace opens |
 | EPIC-05 | 5 | 12 | 0.42 | Largest; the primary user flow |
 | EPIC-06 | 5 | 6 | 0.83 | Delivers the approved price |
@@ -311,43 +328,55 @@ RICE needs reach, impact and confidence data that do not exist here (all three r
 | EPIC-09 | 3 | 7 | 0.43 | Needs SMTP details that do not exist yet; the bell covers late work in the portal |
 | EPIC-08 | 3 | 14 | 0.21 | Seeded configuration covers today's worksheet; changes are infrequent (estimate) |
 
-Release 2 order: EPIC-09 before EPIC-08 on value/effort, but EPIC-08 closes a SPEC MUST (BRQ-006); the delivery lead may reverse the order. The scores are judgement and are open to challenge.
+R2 order: EPIC-09 before EPIC-08 on value/effort, but EPIC-08 closes a SPEC MUST (BRQ-006) and is the largest and riskiest block, so building it first gives more time to recalibrate; the delivery lead may reverse the order. The scores are judgement and are open to challenge.
 
 ## 9. Assumptions, Constraints, Dependencies
 
-### 9.1 Labelled assumptions: what changes if each is rejected (G1 condition 6)
+### 9.1 Labelled assumptions still open: what changes if each is rejected (G1 condition 6)
 
-None of these is a decision. The status rule of SPEC §18 applies: the SPEC text stays in force until the delivery lead confirms in his own words.
+None of these is a decision. The SPEC §18 status rule applies: an open detail is not guessed; the labelled assumption applies until the delivery lead answers.
 
-| ID | Assumption carried | FRs written on it | If rejected | If confirmed |
-|----|--------------------|-------------------|-------------|--------------|
-| UNC-a | BN = BL / total of all Tool Cost entries (Q-05) | FR-025, FR-069 (written on the SPEC rule; the proposal is noted) | No FR text changes, but **the SPEC rule is not complete**: the Engineer enters Tool Cost on every part (confirmed), so "the row-2 value" is the first node's entry and is likely 0 for an assembly, giving "—" always. A replacement rule is needed (issue for the business analyst) | FR-025 divisor changes; FR-069 unchanged in position |
-| UNC-b | "Not applicable" in the Material and Treatment lists (Q-06, Q-33) | FR-018 (R1\*); notes in FR-056 | FR-018 withdrawn. Engineers complete E and G on a parent with a real list value; with all dimensions 0 the material cost is 0 (analysis from BR-015 and BR-016, to be verified by test). Finding F-08 stays open | FR-018 built; Q-33 values settle |
-| UNC-c | After unlock, recalculation uses current master values with a notice (Q-07) | FR-063 | FR-063 follows the replacement rule he gives (for example keep original values); FR-031 and FR-065 unchanged | FR-063 as written |
-| UNC-d | A child's cost is multiplied by its parent's quantity (Q-08) | FR-030 (R1\*); oracle wording in FR-024 and in the GOAL-03 metric | FR-030 withdrawn; SPEC §7.4 and the worksheet stay the oracle; Q-32 (a), (b), (d) fall away, (c) remains in part; FR-029 and the totals unchanged when parent inputs are 0 | FR-030 built (+2 to 3 h); FR-024 oracle, the parallel run, the test plan and FR-067 parent rows compare against a worksheet calculated the same way; BRQ-004 wording changes |
-| UNC-e / Q-18 | Release 1 is internet-hosted; offline use is a later release | FR-092 (Won't); NFR-012, NFR-019, NFR-030; FR-091 | Offline enters Release 1: new epic, architecture and data-storage changes, and a local copy would hold rates (conflicts with BRQ-002). **Release 1 cannot then fit 10 working days** | FR-092 stays Won't; hosting details settle at G3 |
-| UNC-f | Q-15 closed: no "Not needed" switch | FR-095 (Won't), FR-056 | Switch returns as a Could in EPIC-05; FR-056 stays valid | No change |
-| UNC-g | Keep the stated assumptions for Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 | FR-003, 004, 006, 022, 026, 028, 033, 035, 038, 040, 041, 049, 052, 054, 063 (reason), 064, 070, 071, 089, 090, 096 | Only the FR for the rejected item changes, one by one; Q-10 export details change FR-066 to 069; Q-11 changes the BC formula in FR-024; Q-13 changes FR-055 | No change |
-| UNC-h | End date 2026-11-13, Monday to Friday week | None | The release plan's capacity (10 days × 8 h = 80 h) rescales; no FR changes | Plan stands |
-| Q-29 / ASSUMPTION-45 | The date is the Release 1 delivery date (option a); go-live, training and parallel run follow | None (release split only) | Option (b), production go-live by the date, adds master-data entry, user creation, training and the parallel run (TR-003 to TR-005) to the window and shrinks Release 1 further; option (c) matches the proposal | Proposal stands |
-| Q-32 | (a) multiplication through every level; (b) a parent's displayed cost includes its own quantity; (c) non-zero cost inputs on a parent are stored but not counted; (d) the new rule applies and the parallel run compares the same way | FR-030, FR-029, FR-024 oracle, FR-067 | Each item settles one detail of FR-030; if UNC-d is rejected see UNC-d. (c) matters even then: under SPEC §7.4 a non-zero value on a parent is counted | As written |
+| ID | Assumption carried | FRs written on it | If rejected or changed | If confirmed |
+|----|--------------------|-------------------|------------------------|--------------|
+| ASSUMPTION-48 / Q-32 (revised) | (a) the item quantity multiplies once, at the top item, and each row keeps its own quantity inside BG; (b) a parent's own BG counts, as in the worksheet; (c) the item quantity multiplies the sum once, with no special handling of the item's own row; (d) the estimate's BL is the sum over its top-level items; (e) the range is column BG, rows of the item | FR-024 (oracle), FR-025 (BL), FR-029, FR-030, FR-067 (parent rows) | (a) multiplication at every level: the FR-030 worked example changes (24 instead of 8) and the roll-up design changes; (b) a parent's own cost not counted: a total about 59 % lower on the sample, FR-029 changes and the oracle no longer equals the worksheet; (c) item row counted without the multiplier: small FR-030 change; (d) one top-level item only: FR-030 simplifies; (e) another range: FR-030 and the oracle change. Each is 0 to about 2 h (estimate) and a test-plan change; none changes the epic structure | FR-029 and FR-030 as written, with the assumption label removed |
+| ASSUMPTION-49 / Q-33 | "Not applicable" is system-created in the Material Master with price, specific gravity and scrap rate all 0, and in the Treatment / Color list; the Admin cannot delete or rename either | FR-018 | Other values or an editable entry: FR-018 text and the seed data change; a non-zero value would put a cost on a part that has none | FR-018 as written |
+| ASSUMPTION-47 / Q-31 | BL, BN and BO appear in row 2 of the export only; no per-item totals; no Tool Cost total column | FR-067, FR-069 | Per-item totals as in the sample: FR-069 and the export checklist (SPEC §14.12) change; about 1 to 2 h (estimate) | FR-069 as written |
+| ASSUMPTION-46 / Q-30 | The original sample is not committed; export widths, headers and formats are read from the original on the delivery lead's machine | FR-020, FR-066 to 069 | A cleaned copy is supplied: export checks become repeatable in the repository; no FR change | No change |
+| ASSUMPTION-50 / Q-34 | The product manager states dates for both scopes and the delivery lead chooses | none (scope only) | He chooses scope B: R2 moves after the first hand-over (OQ-PM-06); he chooses scope A: no move | Chosen scope stands |
+| ASSUMPTION-18 (hosting part) / Q-18 | Internet-hosted (confirmed); address, e-mail service and sender, backups and who updates are still assumed (Docker Compose, SMTP supplied later) | FR-091, FR-019, FR-081 to 084; NFR-012, NFR-013, NFR-030 | Different hosting or e-mail service: deployment and mail settings change; tests with a capturing mail server are unaffected | Settles at G3 |
+
+### 9.1a Resolved by the delivery lead's own words (2026-11-01): where each applies
+
+No rejection path is kept for these. If he later changes one, the change goes through the change log (section 13) and the decision log.
+
+| ID | Resolution | Applied in |
+|----|------------|-----------|
+| UNC-a | Confirmed: BN = BL / total of all Tool Cost entries; "—" when that total is 0 (AQP-1 10441 (a)) | FR-025, FR-069 |
+| UNC-b | Confirmed: "Not applicable" in the Material and Treatment lists (10441 (b)); values are Q-33 | FR-018, FR-056 |
+| UNC-c | Confirmed: recalculation after unlock uses current values with a notice (10441 (c)) | FR-063 |
+| UNC-d | Confirmed as corrected: cost = sum of the costs of all children x item quantity; per-level "2 x 3 = 6" withdrawn (AQP-9 10442, AQP-13 10445, AQP-1 10443) | FR-024, FR-029, FR-030; open details in ASSUMPTION-48 |
+| UNC-e | Confirmed: Release 1 internet-hosted; offline in the next release (10441 (e); AQP-11 10444) | FR-092, section 6 |
+| UNC-f | Confirmed: Q-15 closed; no "Not needed" switch (10441 (f)) | FR-095, FR-056 |
+| UNC-g | Confirmed: kept assumptions for Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 (10441 (g)). If he changes one, only its FR changes: Q-10 export details FR-066 to 069; Q-11 the BC formula in FR-024; Q-13 FR-055 | FR-003, 004, 006, 022, 026, 028, 033, 035, 038, 040, 041, 049, 052, 054, 064, 070, 071, 089, 090, 096 |
+| UNC-h | Confirmed as a target, not a fixed constraint (10441 (h); AQP-12 10446) | Release plan |
+| Q-29 | Answered: the date is the target to complete development and hand over for testing, acceptance and change requests; a realistic date is requested (AQP-12 10446). Production go-live, training and the parallel run follow and are not in the dates | Release plan |
 
 ### 9.2 Constraints
 - Stack (CONSTRAINT-01, 02, 03): `CLAUDE.md` §1 and SPEC §2; no `eval`; IST display, UTC storage.
 - Exactly one active Admin (CONSTRAINT-04). Logo 200 × 200 px until replaced (CONSTRAINT-05). Part images under 200 KB (CONSTRAINT-08).
 - Governance (CONSTRAINT-06): human approval at G1, G3, G8; code pull requests merged by a human; stop for master data defaults after G3 approval and before development (TR-009, held in `docs/project-state.md` HOLD-01).
-- Budget: no limit (confirmed, AQP-2). Start 2026-11-02 and 10 working days at 8 hours a day (confirmed). End date 2026-11-13 unconfirmed (UNC-h). The 10-day length is not assumed to pause at human gates (OQ-PM-01).
+- Budget: no limit (confirmed, AQP-2). Start 2026-11-02 and 10 working days at 8 hours a day (confirmed, AQP-2); the end date 2026-11-13 is a target, not a fixed constraint (confirmed, AQP-1 10441 (h); AQP-12 10446). The realistic completion date is in the release plan; human waits at G2, G3, the master data stop, code pull request merges and G8 are inside its elapsed time (OQ-PM-01).
 
 ### 9.3 Dependencies and transition work
 | Dependency | Needed for | Owner | Status |
 |------------|-----------|-------|--------|
-| Delivery lead's reply to G1 conditions 1 to 3 | G2, then UX and architecture | Santhosh | Open |
+| Delivery lead's answer to Q-34 (scope for the date) and the master's decision on G1 conditions 1 to 3 | G2, then UX and architecture | Santhosh, master | Open |
 | Master data defaults (TR-002, TR-009) | Meaningful tests and go-live | Santhosh | Stop after G3 approval; invented placeholders until then (NFR-006) |
 | Cleaned sample worksheet at `docs/reference/sample-estimate.xlsx` (TR-007, Q-30) | FR-020, FR-066 to 069 | Santhosh | Open; structure read from the original on his machine |
-| E-mail (SMTP) service and sender (Q-18) | FR-003, 019, 081 to 084 (Release 2) | Accucut IT | Open |
+| E-mail (SMTP) service and sender (Q-18) | FR-003, 019, 081 to 084 (R2; a real server is needed to test them end to end, a capturing mail server before that) | Accucut IT | Open |
 | Hosting, web address, backups, IT contact (Q-18) | FR-091, NFR-012, NFR-013 | Accucut IT | Open; details due G3 |
 | Docs pull request (BLK-01, 403) | G4 merge, then story branches | Santhosh | Open |
-| First users (TR-003); training (TR-005); parallel run of real past estimates (TR-004, BRQ-013) | Go-live (Q-29 option b) | Santhosh / Accucut | Not in Release 1 under the proposal |
+| Customer testing and acceptance, change requests (AQP-12 10446); first users (TR-003); training (TR-005); parallel run of real past estimates (TR-004, BRQ-013) | After the development completion date | Santhosh / Accucut | Follow the hand-over; not in the dates |
 | Sharper logo (Q-16) | Brand | Santhosh | Assumption kept (UNC-g) |
 
 ## 10. Risks
@@ -356,13 +385,14 @@ P and I are Low, Medium or High. Register IDs are `docs/00-governance/risk-regis
 
 | Risk | P | I | Mitigation | Owner |
 |------|---|---|------------|-------|
-| RISK-003: the full SPEC does not fit 10 working days; the minimum end-to-end slice alone is estimated at 8.0 to 11.9 days | High | High | Release 1 core with a cut order and two checkpoints (release plan); Q-29 | Santhosh |
-| RISK-002: the quantity rule (UNC-d) differs from the worksheet when a parent's quantity is above 1 | Medium | High | Q-32 before G2; FR-030 built only on confirmation; SPEC §7.4 stays in force | Santhosh |
-| RISK-001: assistant-drafted answers posted unedited | Medium | High | G1 condition 1 reply in his own words | Santhosh |
-| RISK-004: offline use kept in Release 1 | Medium | High | Decision at G2 | Santhosh |
-| RISK-005 / BLK-01: docs PR cannot be created | Medium | Medium | Fix token or open PR by hand | Santhosh |
-| Proposed: effort estimates are not calibrated; no velocity exists | High | High | Recalibrate on the first completed epic (day 5 checkpoint, release plan) | product-manager, scrum-master |
-| Proposed: one pull request per story needs a human merge each; merge latency adds elapsed time inside six development days | High | Medium | Product-owner and scrum-master size stories to limit PR count; delivery lead sets merge windows (process decision for `master`) | master, Santhosh |
+| RISK-003 (restated): the 2026-11-13 target is missed. Estimate: scope B ends Mon 2026-11-23 (range Mon 11-16 to Tue 12-01), scope A ends Fri 2026-11-27 (range Thu 11-19 to Wed 12-09). The delivery lead has said the date is not a blocker (AQP-12 10446), so the impact falls from High to Medium: the risk is now a wrong forecast, not a missed deadline | High (the target is missed in every case modelled) | Medium | Dates are a range with stated assumptions; re-issued at the first completed epic and at each checkpoint; interim hand-over at the end of the R1 core stays possible | Santhosh, product-manager |
+| RISK-002: the open roll-up details (Q-32 (a) to (e)) differ from the worksheet or from his intent when a quantity above 1 or a parent with inputs of its own is involved | Medium | High | Q-32 answered before G3 (roll-up design); ASSUMPTION-48 follows the worksheet and equals it at item quantity 1; worked examples in the test plan | Santhosh |
+| RISK-001: assistant-drafted answers posted unedited | Low (reduced) | High | G1 condition 1 reply received in his own words (AQP-1 10441, 10443); the master confirms the condition is met | master |
+| RISK-004: offline use kept in Release 1 | Low (reduced) | High | Decided: offline is the next release (AQP-11 10444). Residual risk: what offline means is open and may conflict with cost confidentiality (BRQ-002) | Santhosh |
+| RISK-005 / BLK-01: docs PR cannot be created | Medium | Medium | Fix token or open PR by hand; story branches cannot start before the docs PR merges (the dates assume it is merged during the master data stop) | Santhosh |
+| Proposed: effort estimates are not calibrated; no velocity exists. The dates rest on 46 to 67 h (scope B) and 71.5 to 103 h (scope A) of relative-size estimates | High | High | Recalibrate on the first completed epic; the release plan gives the formula to re-issue the date | product-manager, scrum-master |
+| Proposed: human waits (G2/Q-34 reply, G3 review, master data defaults, G8) and one human merge per story are modelled at 0.5 to 1.5 working days per wait and 0.25 to 1 day per dependency stage; the delivery lead is the only human | High | Medium | Release plan section 3 shows the effect of each; faster answers move the date earlier by the stated amounts | Santhosh |
+| Proposed: holidays are unknown (OQ-PM-02); each lost weekday moves every later date by one weekday | Medium | Medium | Dates assume none; the release plan gives the shift for 3 lost weekdays | Santhosh |
 | Proposed: Excel export size. 500 nodes with images up to 200 KB each could exceed 100 MB | Low | Medium | Architect sets a limit or an export strategy; NFR-010 is set on 50 nodes | solution-architect |
 | Proposed: unverified working calendar; any holiday in 2 to 13 November reduces the 10 days | Medium | Medium | OQ-PM-02 | Santhosh |
 | Proposed: parent non-zero cost inputs are counted under SPEC §7.4 (double count) and not counted under ASSUMPTION-48 | Medium | High | Q-32 (c) | Santhosh |
@@ -380,7 +410,7 @@ Every brief goal reaches at least one FR; every FR in section 4 carries a goal a
 | GOAL-05 Late work visible | BRQ-009; UR-006 to UR-011, UR-037 | FR-019, 034 to 040, 081 to 084, 097 | EPIC-04, 09, 02, 11 |
 | GOAL-06 Control prices and configuration | BRQ-003, BRQ-006, BRQ-007, BRQ-008; UR-003, UR-028, UR-029, UR-033 to UR-036, UR-038 | FR-005, 006, 011, 031, 060, 062 to 065, 072 to 080 | EPIC-01, 03, 06, 08 |
 | GOAL-07 All screens, consistent design | BRQ-010, BRQ-011, BRQ-012; UR-039 | FR-009, 010, 085 to 090 | EPIC-01, 10, 11 |
-| Not planned | BRQ-014; UR-041, UR-042 | FR-092 to 096 | none |
+| Next release / not planned | BRQ-014; UR-041, UR-042 | FR-092 (R-OFF, EPIC-12); FR-093 to 096 (not planned) | EPIC-12; none |
 
 Business rules map to FRs through the Source column of section 4 (BR-001 to BR-048 each appear at least once).
 
@@ -388,20 +418,21 @@ Business rules map to FRs through the Source column of section 4 (BR-001 to BR-0
 
 | ID | Question | Owner | Needed by |
 |----|----------|-------|-----------|
-| G1 condition 1 (a) to (h) | Delivery lead confirms or corrects UNC-a to UNC-h in his own words | Santhosh | G2 |
-| Q-29 (AQP-12) | What 2026-11-13 delivers; whether the full SPEC fits (see release plan) | Santhosh | G2 |
-| Q-32 (AQP-13) | Quantity roll-up details (a) to (d), or accept ASSUMPTION-48 | Santhosh | G2 |
-| Q-18 (AQP-11) | Offline use in Release 1 (G2); hosting details (G3) | Santhosh | G2 / G3 |
-| OQ-PM-01 | Does the 10-day clock keep running while a human gate waits (G3 review, master-data stop, code PR merges)? Plan assumes yes | Santhosh | G2 |
-| OQ-PM-02 | Any Accucut or public holiday between 2026-11-02 and 2026-11-13? (not verified) | Santhosh | G2 |
+| Q-34 (new) | Which scope the realistic completion date covers: scope A (R1 + R1+ + R2) or scope B (R1 core). Proposed answer: scope A, with the end of the R1 core as an interim hand-over point (release plan section 2) | Santhosh | G2 |
+| Q-32 (revised, AQP-13) | (a) quantity of intermediate parts; (b) a parent's own cost; (c) item quantity applied to the item's own row; (d) several top-level items; (e) the cell reading. Carried by ASSUMPTION-48 | Santhosh | G3 (before the roll-up design) |
+| Q-18 (AQP-11) | Hosting details: web address, e-mail service and sender, backups, who updates; whether the site is open beyond the sign-in page. Offline is decided (next release); its meaning is settled when that release is planned | Santhosh, Accucut IT | G3 |
+| Q-30, Q-31, Q-33 | Cleaned sample copy; export totals per item or row 2 only; values and lock of the "Not applicable" entries | Santhosh | G3 |
+| OQ-PM-01 | Does the delivery lead's availability follow a working-day pattern (the dates assume he answers each human point within 0.5 to 1.5 working days)? | Santhosh | G2 |
+| OQ-PM-02 | Any Accucut or public holiday, and any days he is unavailable, between 2026-11-02 and 2026-12-09? (not verified) | Santhosh | G2 |
 | OQ-PM-03 | Availability target and support hours; PROPOSED 99.0 % monthly (NFR-012) | Santhosh, IT contact | G3 |
 | OQ-PM-04 | Supported browsers and versions; PROPOSED set in NFR-019 | Santhosh | G3 |
 | OQ-PM-05 | Largest realistic estimate with images, for the export limit (NFR-010) | Santhosh; solution-architect | G3 |
-| Q-31, Q-33, Q-30 | Export totals, "Not applicable" row, cleaned sample | Santhosh | G3 |
-| Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 | Kept as UNC-g | Santhosh | G2 to G8 |
+| OQ-PM-06 | Under scope B only: does "the next release" for offline (AQP-11 10444) come before or after the Admin screens and alerts (R2)? | Santhosh | G2 |
+| Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 | Kept assumptions, confirmed (10441 (g)); he can change any later | Santhosh | G2 to G8 |
 
 ## 13. Change Log
 
 | Version | Date | Change | Reason | Decision ref |
 |---------|------|--------|--------|--------------|
 | 0.1 | 2026-11-01 | First draft: FR-001 to 097, NFR-001 to 030, epics, assumptions register, release proposal | G2 input; G1 condition 6 | `docs/00-governance/gate-log.md` G1 |
+| 0.2 | 2026-11-01 | Pass 3 applied. Unconfirmed labels and the section 9.1 rejection paths removed for UNC-a to UNC-h; cost roll-up FRs (FR-024, 025, 029, 030) aligned with SPEC v1.2 and revised ASSUMPTION-48; FR-092 set to R-OFF; completion date and two scopes added (Q-34); fit analysis and Must share restated; risks and open questions refreshed. Release moves are PROPOSED (section 6.3): FR-030 and FR-018 to the R1 core, FR-018 to Must | Delivery lead's own-words replies (AQP-1 10441, 10443; AQP-9 10442; AQP-13 10445; AQP-11 10444; AQP-12 10446); hand-off AQP-1 10448 | Proposal: to be recorded by `master` once the delivery lead answers Q-34 |
