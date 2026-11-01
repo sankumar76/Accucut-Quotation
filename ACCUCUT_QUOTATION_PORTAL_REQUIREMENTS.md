@@ -3,7 +3,7 @@
 **Client:** Accucut Lasers Pvt Ltd
 **Source:** Requirement Understanding Document, Draft v5
 **Audience:** Claude Code (implementation agent) and the development team
-**Spec version:** 1.1 (1.0 plus the delivery lead's answers in §18, added in Discovery Pass 2, 2026-11-01). Status rule: an answer marked UNCONFIRMED in §18 does not replace any SPEC text until the delivery lead confirms it (see the status rule at the top of §18).
+**Spec version:** 1.2 (1.0 plus the delivery lead's answers in §18: added in Discovery Pass 2, 2026-11-01, and confirmed, corrected or qualified in his own words in Pass 3, 2026-11-01). Items he has confirmed replace the SPEC text they were holding back; the details still open are listed in §18.2.
 
 > **How to use this document (for Claude Code):** Build the application described below as a production-ready, fully responsive web application (mobile, tablet, laptop/desktop). Treat every **MUST** as a hard requirement and every acceptance criterion as a test to pass. Items marked **[DEFAULT]** are implementation decisions taken on the client's behalf; follow them unless the repository's `CLAUDE.md` or the client says otherwise. Items in **§15 Open Items** are unresolved; implement the stated interim behaviour and keep it easy to change.
 
@@ -39,7 +39,7 @@ The portal is a **faithful replica of the Excel worksheet**: every field is iden
 | Scheduled jobs | A job runner inside the app (e.g. node-cron in a separate worker process) or OS cron hitting a protected endpoint |
 | File storage | Part-model images stored in the database (bytea) or local volume; max 200 KB each |
 | Testing | Vitest (unit), Playwright (E2E, incl. mobile/tablet viewports) |
-| Deployment | Docker Compose (app, worker, Postgres); `.env.example` provided. Release 1 is assumed internet-hosted; offline use is assumed for a later release (§18 D-10, UNC-e, unconfirmed; the offline decision is needed at G2 because it sets Release 1 scope, hosting details at G3) |
+| Deployment | Docker Compose (app, worker, Postgres); `.env.example` provided. Release 1 is hosted on the internet; offline use is for the next release (§18 D-10, confirmed: AQP-11 comment 10444 and AQP-1 comment 10441 (e)). Hosting details (web address, e-mail service, backups, who updates) are still open (Q-18, G3) |
 
 Time zone: **all deadlines, schedules and timestamps are displayed and scheduled in IST (Asia/Kolkata)**; store timestamps in UTC.
 
@@ -91,13 +91,13 @@ Synchronisation rules (MUST):
 ### 4.3 Material Master
 Each row: **Material in Drawing** (unique, shown in drop-down) → **Material-Considered** (mapping), **Material-Price-per-kg**, **Material-Specific-Gravity**, **Material-Scrap-Rate**.
 
-> **Pass 2 note (§18 D-06), UNCONFIRMED (UNC-b):** a "Not applicable" Material Master option for parts that need no material is a proposed amendment. It is not part of this section until the delivery lead confirms it. If confirmed, the values of its rate fields are an open question (Q-33).
+> **Pass 3 (§18 D-06, confirmed, AQP-1 comment 10441 (b)):** the Material Master includes a **"Not applicable"** option for parts, including parent assemblies, that need no material. The values of its rate fields and whether the Admin may edit or delete it are open (Q-33; interim ASSUMPTION-49: all rate values 0, system-created, cannot be deleted or renamed).
 
 ### 4.4 Exchange Rate Master
 **1 USD → INR**, **1 EUR → INR**.
 
 ### 4.5 Treatment / Color List
-List of options for column G. The estimate form also offers **"Other"** with a free-text entry. **Proposed, UNCONFIRMED (§18 D-06, UNC-b):** adding **"Not applicable"** to this list; the list as described here stands until the delivery lead confirms.
+List of options for column G. The estimate form also offers **"Other"** with a free-text entry. **Pass 3 (§18 D-06, confirmed, AQP-1 comment 10441 (b)):** the list also contains **"Not applicable"** for parts that need no treatment. Whether the Admin may delete it is open (Q-33).
 
 ### 4.6 Settings
 - **Email alerts ON/OFF** (global).
@@ -148,7 +148,7 @@ Emails MUST be idempotent (no duplicates when the job reruns) and logged (sent/f
 
 Example (from the sample sheet): Item 1 has parts 1.1–1.5; part 1.1 has sub-parts 1.1.1 and 1.1.2.
 
-> **Pass 2 note (§18 D-04, D-08):** one estimate holds exactly one complete product (confirmed, D-04). The delivery lead also said (AQP-9) that only children's costs are counted and a parent's cost is the sum of its children's costs. **UNCONFIRMED (UNC-d):** that a child's cost is multiplied by its parent's quantity. This note does not replace "each node's costs are calculated individually" above. Details: §18 D-08 and open question Q-32.
+> **Pass 3 note (§18 D-04, D-08):** one estimate holds exactly one complete product (confirmed, D-04). The cost of a parent is built from its descendants: the sum of the costs of all children (grandchildren and deeper included), multiplied by the item quantity (§7.4 BL; §18 D-08, AQP-9 comment 10442 and AQP-13 comment 10445). Each node's own costs (BG) are still calculated individually, as in the worksheet. Details still open: Q-32. Check against the sample: §18.5.
 
 ### 6.2 Customer selection
 Before any data entry, the Engineer **MUST** choose the **customer** from a drop-down of all customers. That customer's rates drive every formula for the estimate. Changing the customer later requires confirmation and triggers recalculation.
@@ -186,9 +186,9 @@ Each section is a card with a header (number, name, column range). Every field s
 | | | B | Part No. | text | |
 | | | C | Part Model | image | Paste (Ctrl+V), drag-and-drop, or file picker; PNG/JPG/GIF/WebP; **< 200 KB** (reject larger with a clear message); preview + replace/remove |
 | | | D | Description | text | |
-| | | G | Treatment / Color | select + other | Options from Treatment/Color List; "Other" reveals free text. Proposed, UNCONFIRMED (§18 D-06, UNC-b): "Not applicable" in the list |
+| | | G | Treatment / Color | select + other | Options from Treatment/Color List; "Other" reveals free text. The list includes "Not applicable" (§18 D-06, confirmed, AQP-1 comment 10441 (b); values: Q-33) |
 | | | H | QTY per Assy | number(2dp) | |
-| 02 | Material and Dimensions | E | Material in Drawing | select | From Material Master. Proposed, UNCONFIRMED (§18 D-06, UNC-b): "Not applicable" in the list |
+| 02 | Material and Dimensions | E | Material in Drawing | select | From Material Master. The list includes "Not applicable" (§18 D-06, confirmed, AQP-1 comment 10441 (b); values: Q-33) |
 | | | F | Material Considered | auto | Material-Considered for E |
 | | | I | Material Rate / Kg | auto | Material-Price-per-kg for E; **hidden from Engineer** |
 | | | J | Length | number(2dp) | |
@@ -227,7 +227,7 @@ Each section is a card with a header (number, name, column range). Every field s
 - Conditionally hidden fields (T, U when S = "None"/blank) are not required and take the value **0**.
 - Numbers: ≥ 0 **[DEFAULT]**, max 2 decimal places.
 - Surface Treatment: selecting none is valid (all eight = 0) **[DEFAULT]**.
-- **Pass 2 (§18 D-06):** where a part does not need a number field, including a parent (assembly) node, the user enters **0** (confirmed, AQP-7), so the mandatory rule above still applies to every node and the calculations are not affected. **Proposed, UNCONFIRMED (UNC-b):** choosing **"Not applicable"** in Material in Drawing (E) and Treatment / Color (G) for the same purpose. Until the delivery lead confirms it, E and G need a real list value on every node and the assembly-row problem (finding F-08) stays open.
+- **Pass 3 (§18 D-06, confirmed):** where a part does not need a number field, including a parent (assembly) node, the user enters **0** (AQP-7), so the mandatory rule above still applies to every node and the calculations are not affected. For Material in Drawing (E) and Treatment / Color (G) the user chooses **"Not applicable"** (AQP-1 comment 10441 (b)), which closes the assembly-row problem (finding F-08).
 
 ### 7.4 Calculated fields (Admin/Lead only), grouped into six stages
 Formulas refer to columns **in the same row (node)** unless stated. Rate names come from the **selected customer's** rates; `Material-*` values come from the Material Master row for column E.
@@ -264,11 +264,11 @@ Formulas refer to columns **in the same row (node)** unless stated. Rate names c
 | | BI | Exchange Rate EUR | Exchange Rate Master (1 EUR → INR) |
 | | BJ | Unit Production Price (USD) | `BG / BH` |
 | | BK | Unit Production Price (EUR) | `BG / BI` |
-| | BL | Total Unit Production Price (INR) | `SUM(BG)` over **all nodes** of the estimate; **product-level value, shown in row 2 only** — **§18 D-08 (AQP-9):** the delivery lead says only children's costs are counted. With 0 entered on parent inputs (D-06) this equals the sum above; how a non-zero parent cost is treated is open (Q-32 (c)). This row is not replaced. |
-| | BN | Total Unit Production Price (INR) / Tool Cost (INR) | `BL / BM`; calculated whenever both BL and BM have values (row 2 in the standard layout); show "—" when BM = 0 — **proposed amendment, UNCONFIRMED (§18 D-05, UNC-a):** the divisor is the total of all Tool Cost (BM) entries of the estimate, and "—" shows when that total is 0. This row stays in force until the delivery lead confirms. |
+| | BL | Total Unit Production Price (INR) | Product-level value, **shown in row 2 only**. For each top-level item: `H(item) * SUM(BG)` over the item's own row and all its descendant rows (children, grandchildren and deeper). The estimate's BL is the sum over its top-level items (ASSUMPTION-48 (d)). Each BG keeps its own row's quantity (`BB = BA * H`). **§18 D-08, confirmed as corrected (AQP-9 comment 10442, AQP-13 comment 10445); checked against the sample in §18.5.** With quantity 1 on the top-level item this equals the earlier `SUM(BG)` over all nodes. Open details (Q-32): whether the quantity of a part between the item and a lowest-level part also multiplies; whether a parent with non-zero inputs of its own counts its own BG (the worksheet counts it); the item quantity applied again to the item's own row. |
+| | BN | Total Unit Production Price (INR) / Tool Cost (INR) | `BL / SUM(BM)`, where `SUM(BM)` is the total of the Tool Cost entries of all nodes of the estimate; calculated when that total is above 0; shows "—" when it is 0; **shown in row 2** (§18 D-05, confirmed, AQP-1 comment 10441 (a)). Where BN appears in the export compared with the sample: Q-31. |
 | | BO | Approved Quote Price | Entered by Admin/Lead at approval (calculated BL or an override); **product-level, row 2 only** |
 
-> **Pass 2 status (§18), nothing in the table above is replaced:** (1) BN = BL / total of all BM entries (D-05) is a proposed amendment, UNCONFIRMED (UNC-a); the BN row above stands. (2) Only children's costs are counted and a parent's cost is the sum of its children's costs (D-08, AQP-9): this agrees with the BL row above when parent inputs are 0, and Q-32 (c) asks about non-zero parent values. (3) A child's cost multiplied by its parent's quantity (D-08) is UNCONFIRMED (UNC-d). The BB row (`BA * H`, own-row quantity only) and the BL row stay in force until Q-32 is answered; the effect on the worksheet comparison in §14.2 is open (Q-32).
+> **Pass 3 status (§18):** (1) BN = BL / total of all BM entries (D-05) is confirmed and replaces the earlier row-2 BM divisor. (2) The children-only wording and the quantity rule are confirmed as corrected by the delivery lead (D-08, AQP-9 comment 10442, AQP-13 comment 10445): the BL row above replaces `SUM(BG)` over all nodes; the BB row (`BA * H`, own-row quantity) is unchanged. (3) The earlier per-level reading "a child's cost multiplied by its parent's quantity, 2 x 3 = 6" (comment 10415) is withdrawn as written; whether intermediate quantities also multiply is Q-32 (a). Worked check: §18.5.
 
 **Percent rates:** a rate named `… %` is entered as a percentage (e.g. `12` = 12%) and evaluated as a fraction (0.12) **[DEFAULT]**.
 
@@ -314,7 +314,7 @@ This is the core of the system. Design it carefully.
 - Each estimate records the **ConfigVersion** it was last calculated with.
 - **Approved estimates are pinned to their ConfigVersion** and are never affected by later changes. They keep the fields, formulas and values they were approved with, and their export uses that version's layout.
 - **New and unlocked estimates** use the **latest** ConfigVersion when (re)calculated. When an estimate is unlocked, show a notice if the configuration changed since approval.
-- **Pass 2 (§18 D-07, confirmed, AQP-8):** the same protection covers **master values** (customer rates, material price, specific gravity and scrap rate, exchange rates): an approved estimate is not affected by any later change. Each Calculate or Recalculate therefore keeps a record of the master values it used. **Proposed, UNCONFIRMED (UNC-c):** recalculating after an unlock uses the **current** rates and shows a notice if they changed since approval. Until confirmed, only the configuration notice in the line above applies.
+- **Pass 3 (§18 D-07, confirmed):** the same protection covers **master values** (customer rates, material price, specific gravity and scrap rate, exchange rates): an approved estimate is not affected by any later change (AQP-8). Each Calculate or Recalculate keeps a record of the master values it used. Recalculating after an unlock uses the **current** rates and shows a notice if the configuration or any rate has changed since approval (AQP-1 comment 10441 (c)).
 - New input fields follow existing rules: mandatory and visible to Engineers. New outputs are hidden from Engineers.
 
 ---
@@ -345,7 +345,7 @@ Global header: logo/name "Accucut Quotation Portal", notification bell (§5.3), 
 - Rows: row 1 = headers; from row 2, one row per tree node in **depth-first order** (1, 1.1, 1.1.1, 1.1.2, 1.2, …, 2, …). Column A contains the Sl. No text.
 - Column C embeds the part-model image, scaled to fit the cell.
 - **Every column is exported**, including outputs hidden on screen because they are zero (exported as 0) and hidden Fasteners Qty/Cost (0).
-- Product-level values: **BL2** = Total Unit Production Price, **BO2** = Approved Quote Price, BN2 = BL/BM (standard layout) — **proposed amendment, UNCONFIRMED (§18 D-05, UNC-a):** BN2 = BL2 / total of all BM entries; the standard layout stands until confirmed. Whether the sample's per-item totals must also appear is open (Q-31).
+- Product-level values: **BL2** = Total Unit Production Price (§7.4 BL), **BO2** = Approved Quote Price, **BN2 = BL2 / total of all BM entries** (§18 D-05, confirmed, AQP-1 comment 10441 (a)). Whether the sample's per-item totals must also appear is open (Q-31).
 - **Pass 2 (§18 D-03):** the sample worksheet is `AMADA-20261006.xlsx`. Placing a cleaned copy at `docs/reference/sample-estimate.xlsx` is still open (Q-30). If columns are inserted or deleted, these cells move with their columns.
 - Inserted or deleted fields are reflected in the export in **Excel letter sequence**; new columns use their configured width and format.
 - File name: `Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx` **[DEFAULT]**.
@@ -406,7 +406,7 @@ General UX:
 ## 14. Acceptance Criteria (minimum)
 
 1. An Engineer cannot obtain any cost, rate or formula value through any page, API response or export (automated test).
-2. With a known set of inputs and rates, every output in §7.4 matches a hand-calculated worksheet to 2 decimals (unit tests per formula, plus one end-to-end tree with 1, 1.1, 1.1.1, 1.1.2, 1.2–1.5).
+2. With a known set of inputs and rates, every output in §7.4 matches a hand-calculated worksheet to 2 decimals (unit tests per formula, plus one end-to-end tree with 1, 1.1, 1.1.1, 1.1.2, 1.2–1.5). **Pass 3:** BL is checked as `H(item) * SUM(BG)` over the item's rows (§7.4, §18.5), which equals the worksheet's BL when the item quantity is 1; Q-32 lists the roll-up details still open.
 3. Sl. No renumbers correctly after add, reorder and delete at any depth.
 4. Clicking Calculate with any visible input blank shows errors and does not submit; with Fasteners = "None", T and U are hidden, not required, and stored/exported as 0.
 5. Unselected Surface Treatment outputs are hidden in the cost view but present (0) in the export.
@@ -427,12 +427,12 @@ General UX:
 | # | Item | Interim behaviour |
 |---|---|---|
 | 1 | **Rejection (BC)** formula not defined | Seeded formula `0`; the Admin can set it later through the formula editor (e.g. `BB * Rejection %` after adding a `Rejection %` rate). |
-| 2 | **Parent vs. child cost:** BL sums BG of *all* nodes, so a parent node's own cost and its children's costs are both included | Implement as specified (sum of all nodes). Confirm with the client that a parent node carries only its own (e.g. assembly) cost. **Pass 2 update (§18 D-08, AQP-9):** the delivery lead answered the other way round: only children's costs are counted and a parent's cost is the sum of its children. The interim behaviour above stays until Q-32 is answered; with 0 entered on parent inputs the totals agree. **UNCONFIRMED (UNC-d):** a child's cost multiplied by its parent's quantity. Details still open: Q-32. |
+| 2 | **Parent vs. child cost:** BL sums BG of *all* nodes, so a parent node's own cost and its children's costs are both included | **Pass 3 (§18 D-08):** answered by the delivery lead: the cost is the sum of the costs of all children multiplied by the item quantity (§7.4 BL). The sample worksheet agrees at quantity 1 (§18.5). Still open: Q-32 (quantity of intermediate parts; a parent with non-zero inputs of its own; the item's own row; several top-level items). |
 | 3 | **Sample worksheet** not yet provided | Use placeholder widths/formats; replace them once `docs/reference/sample-estimate.xlsx` is supplied. **Pass 2 update (§18 D-03):** the sample is `AMADA-20261006.xlsx`; the cleaned copy for the repository is open (Q-30). |
 | 4 | **Network folder links** may be blocked by browsers | `file:///` link + "Copy path" button (§5.1). |
 | 5 | **Remarks (AJ)** is mandatory under the "all inputs mandatory" rule | Mandatory as specified; can be switched off per field in configuration. |
 | 6 | **Plating flag (AD)** is not used in any formula; Plating Cost (AU) is entered manually | Implement as specified. |
-| 7 | **"Not needed for this part" switch** (proposed): one click on a section sets its fields to 0 and collapses it, to speed up entry; zeros still export | Client has not decided; do not build until confirmed. **Pass 2 update (§18 D-06):** the delivery lead's "enter 0" answer (AQP-7, confirmed) makes the switch unnecessary. The formal closure of this item is UNCONFIRMED (UNC-f). The interim behaviour is unchanged: do not build. |
+| 7 | **"Not needed for this part" switch** (proposed): one click on a section sets its fields to 0 and collapses it, to speed up entry; zeros still export | **Closed (§18 D-06, AQP-1 comment 10441 (f)):** not built. The Engineer enters 0 (AQP-7) and chooses "Not applicable" in the Material and Treatment lists. |
 | 8 | **Logo source file:** the supplied logo is only 200 × 200 px and may look soft on large screens | Use `docs/03-ux/assets/accucut-logo.jpg`; replace it when a sharper original (SVG, AI or large PNG) is supplied. |
 
 ---
@@ -488,56 +488,74 @@ Reading data from drawings is deferred. Drawings are not standard and vary by cu
 
 ---
 
-## 18. Delivery Lead Answers (Discovery Pass 2, added 2026-11-01; status rule added 2026-11-01)
+## 18. Delivery Lead Answers (Discovery Pass 2, added 2026-11-01; updated in Pass 3, 2026-11-01)
 
-The delivery lead (Santhosh - MD) answered the discovery questions on Jira on 2026-10-31. The full question text, the assumption used and the source comment for each answer are in `docs/01-discovery/requirements-questions.md`.
+The delivery lead (Santhosh - MD) answered the discovery questions on Jira on 2026-10-31 and, on 2026-11-01, confirmed, corrected or qualified the items that had rested on assistant-drafted wording (AQP-1 comments 10415 and 10417). The full question text, the assumption used and the source comment for each answer are in `docs/01-discovery/requirements-questions.md`.
 
-**Status rule (one rule for the whole document).** Every answer below has one of two statuses.
+**Status rule (one rule for the whole document).** Every answer below has one of these statuses.
 
-- **Confirmed:** the delivery lead's own words on the question's Jira issue support it. It is recorded as his decision. Where it changes SPEC text, the note in that section says so.
-- **UNCONFIRMED (UNC-a to UNC-h):** it rests only on AQP-1 comment 10415 (2026-10-31, 23:39) or comment 10417 (23:53), whose wording is not his and which he has not yet confirmed (origin findings: `requirements-questions.md` section 4). An unconfirmed item is a **proposed amendment. It does not replace any SPEC text.** The SPEC text in sections 1 to 17 stays in force, and the proposal is carried as a labelled assumption until the delivery lead confirms or rejects it in his own words.
+- **Confirmed:** his own words on Jira support it; the comment ID is shown. It is his decision. Where it changes SPEC text, the note in that section says so.
+- **Confirmed as corrected / qualified:** he confirmed it only after correcting or qualifying it. The corrected or qualified text applies, not the earlier wording.
+- **Open detail:** a confirmed answer that leaves a detail unclear, or that conflicts with the sample worksheet, is not guessed. A new or revised question (Q-nn) records it, and the labelled assumption named there applies until he answers.
 
-Where a confirmed answer conflicts with the SPEC or the sample worksheet, or leaves a detail unclear, the SPEC text is also kept and a new question (Q-29 to Q-33) records it. This rule governs every "Pass 2" note in sections 2 to 15. The earlier statement that these answers "override earlier sections" no longer applies to unconfirmed items.
+**History.** In Pass 2 (before he replied), content that rested only on AQP-1 comment 10415 (2026-10-31, 23:39) or 10417 (23:53) was marked UNCONFIRMED (UNC-a to UNC-h) and did not replace SPEC text, because that wording was an assistant draft, not his. In Pass 3 he replied in his own words: AQP-1 comment 10441 (items (a) to (h) confirmed), AQP-1 comment 10443 (a correction to (d)), AQP-9 comment 10442 and AQP-13 comment 10445 (the corrected cost rule, same text), AQP-11 comment 10444 (offline use in the next release) and AQP-12 comment 10446 (what the date means). The labels UNC-a to UNC-h stay as identifiers; none is unconfirmed now. The register is in `requirements-questions.md` section 4.
 
 ### 18.1 Decisions
 
 | ID | Decision | Status | Question and source | Sections affected |
 |----|----------|--------|---------------------|-------------------|
-| D-01 | Budget: no limit. Start 2026-11-02. Target: 10 working days at 8 hours a day. | Confirmed in part: start date and 10 working days are his own words. **The end date 2026-11-13 (Monday to Friday) is UNCONFIRMED (UNC-h).** | Q-01; AQP-2, AQP-1 (10417) | none in the SPEC; release plan (Q-29) |
+| D-01 | Budget: no limit. Start 2026-11-02. Target: 10 working days at 8 hours a day, Monday to Friday, ending 2026-11-13. The date is for completing development and handing that version to his customer for testing, acceptance and new change requests, after which the next steps are decided. | Confirmed as a **target, not a fixed constraint** (UNC-h). Start date and 10 working days: AQP-2. Monday-to-Friday week ending 2026-11-13: AQP-1 comment 10441 (h). Qualified by AQP-12 comment 10446: he asks for a realistic development completion date and says the date is not a blocker. | Q-01, Q-29; AQP-2, AQP-1 (10441), AQP-12 (10446) | none in the SPEC; release plan |
 | D-02 | The sponsor is one person: "Santhosh - MD". | Confirmed | Q-02; AQP-3 | none |
 | D-03 | `AMADA-20261006.xlsx` is the sample worksheet and contains only a couple of items. Engineers enter inputs; Admin and Leads view all cost calculations; export to Excel is needed. | Confirmed | Q-03; AQP-4 | §10, §15 item 3 |
 | D-04 | One estimate holds one complete product, which may have multiple items, parts, sub-parts and sub-sub-parts, and so on. | Confirmed | Q-04; AQP-5 | §6.1 |
-| D-05 | Tool Cost (BM) is an input entered by the Engineer with all other inputs. **Proposed (UNC-a): BN = BL / total of all Tool Cost entries.** | Confirmed in part: the Engineer entry is his own words (AQP-6). **The BN divisor is UNCONFIRMED (UNC-a);** the SPEC row for BN stands. | Q-05; AQP-6, AQP-1 (10415) | §7.1 (08), §7.4 BN, §10 |
-| D-06 | Where a part is not required the Engineer enters 0, so calculations are not affected. **Proposed (UNC-b): "Not applicable" added to the Material (E) and Treatment (G) lists. Proposed (UNC-f): the "Not needed for this part" switch is formally closed.** | Confirmed in part: "enter 0" is his own words (AQP-7). **UNC-b and UNC-f are UNCONFIRMED;** no list option is added and §15 item 7 stays "do not build". | Q-06, Q-15; AQP-7, AQP-1 (10415) | §4.3, §4.5, §7.1, §7.3, §15 item 7 |
-| D-07 | Approved estimates are not affected by any change (configuration, rates, masters). **Proposed (UNC-c): recalculating after an unlock uses current rates and shows a notice if they changed.** | Confirmed in part: the protection of approved estimates is his own words (AQP-8). **The recalculation rule is UNCONFIRMED (UNC-c).** | Q-07; AQP-8, AQP-1 (10415) | §8.4 |
-| D-08 | Only children's costs are counted; a parent's cost is the sum of its children (his example: part-1 with sub-part-1 and sub-part-2). **Proposed (UNC-d): a child's cost is multiplied by its parent's quantity (2 x 3 = 6).** | Confirmed in part: the children-only wording is his own words (AQP-9); it equals the SPEC total when parent inputs are 0, and how it changes BL and BB is open (Q-32). **The quantity multiplication is UNCONFIRMED (UNC-d);** the SPEC rows for BB and BL stand. | Q-08; AQP-9, AQP-1 (10415) | §6.1, §7.4, §15 item 2 |
+| D-05 | Tool Cost (BM) is an input entered by the Engineer with all other inputs. BN = BL / total of all Tool Cost entries (UNC-a). | Confirmed: AQP-6; AQP-1 comment 10441 (a). Where BN appears in the export compared with the sample is open (Q-31). | Q-05; AQP-6, AQP-1 (10441) | §7.1 (08), §7.4 BN, §10 |
+| D-06 | Where a part is not required the Engineer enters 0, so calculations are not affected. "Not applicable" is a choice in the Material (E) and Treatment (G) lists (UNC-b). The "Not needed for this part" switch is not built; Q-15 is closed (UNC-f). | Confirmed: AQP-7; AQP-1 comment 10441 (b) and (f). Open detail: the rate values and handling of the "Not applicable" Material row (Q-33). | Q-06, Q-15; AQP-7, AQP-1 (10441) | §4.3, §4.5, §7.1, §7.3, §15 item 7 |
+| D-07 | Approved estimates are not affected by any change (configuration, rates, masters). Recalculating after an unlock uses the current rates and shows a notice if they changed (UNC-c). | Confirmed: AQP-8; AQP-1 comment 10441 (c) | Q-07; AQP-8, AQP-1 (10441) | §8.4 |
+| D-08 | The cost is the sum of the costs of all children (grandchildren and deeper included) multiplied by the item quantity. His example from the sample: item 1 (row 2) has children and grandchildren in rows 3 to 11; the cost BL2 is the sum of the cells "BG2 to BL11", and the result is multiplied by the quantity of the main (parent) item (UNC-d). | **Confirmed as corrected.** AQP-1 comment 10441 (d) was confirmed only as corrected in AQP-1 comment 10443 (see AQP-9); the corrected text is AQP-9 comment 10442 and AQP-13 comment 10445. The earlier "child cost x parent quantity, 2 x 3 = 6" (comment 10415) is withdrawn as written. Open details: the cell range reading, quantity of intermediate parts, parents with their own inputs, several top-level items (Q-32; worked check §18.5). | Q-08, Q-32; AQP-9 (10403, 10442), AQP-13 (10445), AQP-1 (10441, 10443) | §6.1, §7.4 BL, §14.2, §15 item 2 |
 | D-09 | Master data values are entered when the app is first used, and the delivery lead will also provide defaults. After the UX is reviewed and finalised (G3 approval) and before development starts, work stops and the delivery lead is asked for the master data defaults. | Confirmed (AQP-10) | Q-09; AQP-10, AQP-1 | none in the SPEC; delivery process |
-| D-10 | **Proposed (UNC-e):** Release 1 is hosted on the internet; offline use moves to a later release. AQP-11 (2026-10-31, 23:24) asks for internet hosting **and** offline use like a website run locally; the later AQP-1 comment (10415) says Release 1 is internet-hosted only. | **UNCONFIRMED, conflict.** The offline decision is needed at **G2** (it sets Release 1 scope); hosting details (address, e-mail service, backups) stay at G3. | Q-18; AQP-11, AQP-1 (10415) | §2 Deployment |
-| D-11 | Keep the stated assumptions for Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28. | **UNCONFIRMED (UNC-g).** The assumptions are carried as labelled assumptions. | AQP-1 (10415) | none |
+| D-10 | Release 1 is hosted on the internet. Offline use ("like running a website locally") comes in the next release (UNC-e). | Confirmed: AQP-1 comment 10441 (e); AQP-11 comment 10444 ("we shall implement the offline release in next release"). This closes the conflict with AQP-11 comment 10405 for Release 1. Hosting details are still open (Q-18, G3). | Q-18; AQP-11, AQP-1 (10441) | §2 Deployment |
+| D-11 | The stated assumptions stay for Q-10 to Q-14, Q-16, Q-17 and Q-19 to Q-28 (UNC-g). | Confirmed: AQP-1 comment 10441 (g). They remain labelled assumptions; he can change any of them later. | AQP-1 (10441) | none |
 
-### 18.2 New open questions raised by the answers
+### 18.2 Questions raised by the answers: status after Pass 3
 
-| ID | Subject | Blocking |
-|----|---------|----------|
-| Q-29 | What the 2026-11-13 date delivers, and whether the full SPEC fits 10 working days | Yes |
-| Q-30 | Cleaned copy of the sample for the repository; blank company template | No |
-| Q-31 | The sample shows totals per top-level item; the answers give one total per estimate | No |
-| Q-32 | Quantity and roll-up details of D-08, and the difference from the worksheet's arithmetic | Yes |
-| Q-33 | Rate values and handling of the "Not applicable" Material row | No |
+| ID | Subject | Blocking | Status |
+|----|---------|----------|--------|
+| Q-29 | What the 2026-11-13 date delivers | Was yes | **Answered** (AQP-12 comment 10446, D-01). He asks for a realistic development completion date; the product manager supplies it. |
+| Q-30 | Cleaned copy of the sample for the repository; blank company template | No | Open |
+| Q-31 | The sample shows totals per top-level item; the answers give one total per estimate | No | Open |
+| Q-32 | Roll-up details left after the corrected cost rule (D-08) | Yes by definition (decides price correctness); recommended due **G3**, not G2 (master decides) | **Open, revised in Pass 3** |
+| Q-33 | Rate values and handling of the "Not applicable" Material row | No | Open |
+| Q-34 | Which scope the realistic development completion date covers | No | **New** |
 
 ### 18.3 Release 1 scope note
 
-Offline use ("running locally when there is no internet") is **not** part of Release 1 under the D-10 proposal (UNC-e, unconfirmed). The delivery lead's decision on offline use is needed at G2, because Release 1 scope cannot be fixed without it; hosting details follow at G3. If he confirms offline use for Release 1, the architecture, data-storage and synchronisation scope change and §2 must be reopened.
+Offline use ("running locally when there is no internet") is **not** part of Release 1. It is planned for the next release (D-10, confirmed). What "offline" means (a full copy running on a local PC, or an entry form that works without a connection and sends later) is settled when that release is planned. If offline use were brought into Release 1, the architecture, data-storage and synchronisation scope would change and §2 would be reopened.
 
-### 18.4 Unconfirmed items: SPEC text in force
+### 18.4 Items formerly unconfirmed (UNC-a to UNC-h): resolution and SPEC text now in force
 
-| ID | Proposed amendment | SPEC text that stays in force | Place |
-|----|--------------------|-------------------------------|-------|
-| UNC-a | BN divisor = total of all Tool Cost entries (D-05) | BN = BL / BM, row 2 | §7.4, §10 |
-| UNC-b | "Not applicable" in the Material and Treatment lists (D-06) | Lists without that option; every node needs a real value | §4.3, §4.5, §7.1, §7.3 |
-| UNC-c | Recalculation after unlock uses current rates, with a notice (D-07) | Latest configuration; notice on configuration changes only | §8.4 |
-| UNC-d | Child cost multiplied by parent quantity (D-08) | BB = BA x own H; BL = sum of BG over all nodes | §6.1, §7.4, §15 item 2 |
-| UNC-e | Release 1 internet-hosted, offline later (D-10) | Docker Compose deployment; hosting not stated | §2 |
-| UNC-f | "Not needed for this part" switch formally closed (D-06) | §15 item 7: do not build until confirmed | §15 item 7 |
-| UNC-g | Keep the stated assumptions for the questions in D-11 | The SPEC `[DEFAULT]` items and the interim behaviours | none |
-| UNC-h | End date 2026-11-13 (D-01) | No end date in the SPEC | release plan |
+| ID | Resolution | SPEC text now in force | Place |
+|----|------------|------------------------|-------|
+| UNC-a | Confirmed (comment 10441 (a)) | BN = BL / total of all Tool Cost entries; "—" when the total is 0 | §7.4 BN, §10 |
+| UNC-b | Confirmed (comment 10441 (b)) | "Not applicable" is in the Material and Treatment lists; its values: Q-33 | §4.3, §4.5, §7.1, §7.3 |
+| UNC-c | Confirmed (comment 10441 (c)) | Recalculation after unlock uses current rates, with a notice | §8.4 |
+| UNC-d | Confirmed as corrected (comments 10443, 10442, 10445) | BL = item quantity x sum of BG over the item's rows (§7.4); per-level 2 x 3 = 6 withdrawn; details Q-32 | §6.1, §7.4, §14.2, §15 item 2 |
+| UNC-e | Confirmed (comment 10441 (e); AQP-11 comment 10444) | Release 1 internet-hosted; offline in the next release | §2 |
+| UNC-f | Confirmed (comment 10441 (f)) | Q-15 closed; the switch is not built | §15 item 7 |
+| UNC-g | Confirmed (comment 10441 (g)) | The stated assumptions stand | none |
+| UNC-h | Confirmed as a target (comment 10441 (h)), qualified (comment 10446) | No SPEC text; the date is a target for completing development and handing over for testing and acceptance, not a fixed constraint | release plan |
+
+### 18.5 Parent cost rule checked against the sample worksheet (G1 condition 2)
+
+Method: the business analyst opened `AMADA-20261006.xlsx` (first worksheet, formulas and stored results) and re-added the cells. In line with ASSUMPTION-46 and NFR-023, no cell value is written in this repository; results are given as agreement or ratios.
+
+1. **Which cells.** The worksheet formula in BL2 is `SUM(BG2:BG11)`. Re-adding BG2 to BG11 gives the stored BL2 exactly. Reading "BG2 to BL11" as a rectangle (columns BG to BL, rows 2 to 11) would also add the exchange-rate columns BH and BI, the USD and EUR price columns BJ and BK, and BL itself (a circular reference); that sum is about 16 % higher than the stored BL2. So "BL" in his sentence reads as a loose reference, and the range supported by the worksheet is **BG2:BG11** (column BG only). This reading is the analyst's, checked against the worksheet; Q-32 (e) asks him to confirm it.
+2. **Levels.** Rows 2 to 11 hold item 1, its children (1.1 to 1.5) and its grandchildren (1.1.1, 1.1.2, 1.4.1, 1.5.1). The worksheet adds the BG of every one of those rows, grandchildren included. This agrees with his sentence ("sum of costs of all children ... children, grand-children rows from 2 to 11").
+3. **Parents with inputs of their own.** Item 1 and part 1.1 carry zero inputs, so counting their BG changes nothing. Parts 1.4 and 1.5 are parents (each has one child) and carry non-zero inputs of their own; the worksheet counts their own BG as well as their child's. If a parent counted only its children (AQP-9 comment 10403, taken literally), BL2 would equal the sum of the six lowest-level rows only, about 59 % lower than the stored BL2; the two parents' own BG make up the whole difference. His corrected sentence and the worksheet agree (all rows 2 to 11 are summed); the literal "a parent has no cost of its own" does not. This is not settled: Q-32 (b).
+4. **Quantity.** Qty / Assy (H) is 1 on every row of the sample. The sample therefore cannot show whether the multiplication happens once at the top item or at every level; every quantity rule gives the same result on it. The worksheet itself multiplies each row by its own H only (`BB = BA * H`) and has no item-level multiplier, so "x item quantity" is a new step that changes nothing at quantity 1. Q-32 (a), (c).
+5. **Other top-level items.** Item 2 (row 13) has its own BL, equal to its own BG, and its own Tool Cost. How the estimate's total combines top-level items is Q-32 (d) and Q-31.
+
+**Rule the worksheet supports:** for an item, BL = H(item) x the sum of BG over the item's own row and every descendant row, where each BG already carries its own row's quantity. At item quantity 1 this reproduces the stored BL2 exactly.
+
+**Rule in force until Q-32 is answered (ASSUMPTION-48):** the rule above; a parent's own BG counts (as in the worksheet); the item quantity multiplies once, at the top; the estimate's BL is the sum over its top-level items.
+
+**Conflicts kept open, not guessed:** (i) "a parent has no cost of its own" against the worksheet's treatment of parents 1.4 and 1.5; (ii) whether a quantity above 1 on a part between the item and a lowest-level part also multiplies; (iii) whether the item's own row is multiplied twice by the item quantity. None of these changes the result on the sample, so the sample cannot settle them.
