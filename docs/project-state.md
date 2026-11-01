@@ -57,7 +57,7 @@
 
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
-| BLK-01 | Draft PR for docs/AQP-1-inception cannot be created: GitHub MCP create_pull_request returns 403 "Resource not accessible by personal access token" (tried twice on 2026-10-31, again on 2026-11-01). Branch push works. On 2026-11-01 the GitHub MCP server also failed to connect (HTTP 401, token rejected). Needed before the G4 merge. | 2026-10-31 | Santhosh | Grant the MCP token Pull requests: write on the repository, or open the PR by hand. |
+| BLK-01 | CLEARED 2026-11-01: draft PR #1 created with the new token. History: draft PR for docs/AQP-1-inception could not be created: GitHub MCP create_pull_request returns 403 "Resource not accessible by personal access token" (tried twice on 2026-10-31, again on 2026-11-01). Branch push works. On 2026-11-01 the GitHub MCP server also failed to connect (HTTP 401, token rejected). Needed before the G4 merge. | 2026-10-31 | Santhosh | Grant the MCP token Pull requests: write on the repository, or open the PR by hand. |
 | BLK-02 | RISK-006: the sample workbook and draft requirements document are on the default branch of a repository readable without sign-in, against Q-03, Q-30 and ASSUMPTION-46. Agents do not change repository visibility or history. | 2026-11-01 | Santhosh Decided 2026-11-01: repository stays public, content not real (AQP-1, relayed verbatim). Pushing resumed. Master to close at G2 attempt 2. |
 | HOLD-02 | G2 NO-GO attempt 1: ux-expert and solution-architect do not start until G2 attempt 2 returns GO or CONDITIONAL GO, or the delivery lead logs an override. | 2026-11-01 | Santhosh; orchestrator Remediation 2 to 5 done. Q-32 answers on AQP-13 (comment 10462 and the relayed reply to 10463): next run applies them, then master re-gates G2. Business-analyst to change the Q-34 and ASSUMPTION-50 due date to G3 approval (DL-004) on the next pass. |
 | HOLD-01 | TR-009 stop: after G3 approval and before development, stop and ask Santhosh for master data defaults (AQP-10). Not in CLAUDE.md, so kept here. | 2026-11-01 | orchestrator | Stop the run at that point. |
@@ -66,6 +66,9 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | product-manager | PRD and release plan v0.4: Q-32 rule applied, central dates re-issued (unadopted) | docs/02-product/ |
+| 2026-11-01 | business-analyst | Q-32 closed, ASSUMPTION-48 retired; repository decision recorded as D-13 | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
+| 2026-11-01 | orchestrator | Run resumed; GitHub MCP connected; draft PR #1 created; repository labels set up | PR #1 |
 | 2026-11-01 | orchestrator | Delivery lead decisions recorded: repository stays public; Q-32 (b1), (b2) clarified; held commits pushed | AQP-1, AQP-13 |
 | 2026-11-01 | orchestrator | Run stopped for Q-32 (a), (b) and the RISK-006 decision; commits held locally, pushing paused | AQP-1, AQP-13 |
 | 2026-11-01 | product-manager | G2 remediation 4 and 5: PRD and release plan v0.3 | docs/02-product/ |
