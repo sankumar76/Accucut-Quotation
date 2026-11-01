@@ -295,6 +295,7 @@ This is the core of the system. Design it carefully.
 | Edit formula | Admin edits in a formula editor with autocomplete, live validation and a preview against a sample node. **Saving requires password re-entry** (step-up authentication). |
 | Insert input field | Admin chooses **position** ("insert after column __") and **group** (existing section such as Surface Treatment, a new section, or none), plus label, data type, options, default and visibility rule. |
 | Insert output field | Admin chooses position, label, formula, stage and optional `hideWhenZero`. A new output is included in a total only when the Admin edits that total's formula. |
+| Insert input with cost column | In one guided step, the Admin adds an input and its linked cost output, choosing each column's position and giving the formula. A preview shows the letter changes before saving. Later columns shift right and other formulas keep working, as under "Automatic re-lettering". |
 | Delete field | The portal lists every formula that references the field; deletion is **blocked until those references are removed**. Requires password re-entry. |
 | Automatic re-lettering | Inserting at a position gives the new field that letter; all later fields shift **+1**. Deleting shifts later fields **−1**. All formulas display the new letters automatically. *Example:* inserting after AX makes the new field AY; Total Process Cost moves AY→AZ, and every formula that showed AY now shows AZ. |
 | Fixed cells move | Product-level cells move with their columns (e.g. inserting before BL moves the total from BL2 to BM2; deleting a column before BL moves it to BK2). |
@@ -357,7 +358,7 @@ Target viewports: **mobile 360–767 px, tablet 768–1023 px, laptop/desktop �
 | Action buttons | Sticky bottom action bar (Save / Calculate / …) | Sticky footer | Toolbar |
 
 General UX:
-- Modern, clean look: neutral background, one brand accent (navy **#1F3864**), clear typography. Light and dark mode **[DEFAULT]**.
+- Modern, professional look following **§17 UI Direction**. Light and dark mode **[DEFAULT]**.
 - Touch targets ≥ 44 px. No horizontal page scrolling at any breakpoint.
 - Image input: on mobile, the file picker allows the camera/gallery; paste and drag-drop also work on desktop.
 - Numeric fields use `inputmode="decimal"`.
@@ -422,6 +423,8 @@ General UX:
 | 4 | **Network folder links** may be blocked by browsers | `file:///` link + "Copy path" button (§5.1). |
 | 5 | **Remarks (AJ)** is mandatory under the "all inputs mandatory" rule | Mandatory as specified; can be switched off per field in configuration. |
 | 6 | **Plating flag (AD)** is not used in any formula; Plating Cost (AU) is entered manually | Implement as specified. |
+| 7 | **"Not needed for this part" switch** (proposed): one click on a section sets its fields to 0 and collapses it, to speed up entry; zeros still export | Client has not decided; do not build until confirmed. |
+| 8 | **Logo source file:** the supplied logo is only 200 × 200 px and may look soft on large screens | Use `docs/03-ux/assets/accucut-logo.jpg`; replace it when a sharper original (SVG, AI or large PNG) is supplied. |
 
 ---
 
@@ -433,3 +436,43 @@ General UX:
 - **ConfigVersion:** immutable snapshot of the field/formula configuration.
 - **Checkpoint:** a named ConfigVersion the Admin can revert to.
 - **Approved Quote Price:** final price set by Lead/Admin at approval (formerly "Final-Final Estimate").
+
+---
+
+## 17. UI Direction (client decisions, 2026-10-31)
+
+These decisions override earlier sections and the sample where they differ.
+
+### 17.1 Baseline
+`Accucut Quotation Portal UI-UX.html` is a high-level sample. Keep its structure, including its type scale, spacing scale, button set and field grids, and make it more advanced, easier to use and flexible enough to take more features later. Replace its colours as below.
+
+### 17.2 Brand
+| Element | Decision |
+|---|---|
+| Logo | Use the real logo file (`docs/03-ux/assets/accucut-logo.jpg`) exactly; never redraw it. Its black lettering needs a light background, so the top bar is white. |
+| Company name | "ACCUCUT LASERS" in the logo red, in a bold serif matching the company board (`docs/03-ux/assets/accucut-company-board.png`). Tinos Bold is the closest match found so far. |
+| Colour direction | **"Red Leads":** logo red (about **#DE3030**) for main buttons and active markers; dark graphite side menu (about #17181C); white and light grey surfaces. Replaces navy #1F3864 and the sample's blue. |
+| Errors | Red is used widely, so errors must never rely on colour: use an icon, a thick border and a written message. Use a separate, darker error red (about #B3261E). |
+
+All text and control colours must still meet the WCAG contrast requirements in §11.
+
+### 17.3 Design system
+- One font size each for main headings, subheadings, body text and small labels.
+- One spacing scale for all padding and margins, so sections feel balanced and even.
+- One button style set, used everywhere, and one colour palette.
+- Every section should feel professionally designed by the same hand.
+
+### 17.4 Data entry
+- Engineers use the **guided form**: one part at a time, section by section, with the parts tree beside it. A spreadsheet-style grid is not used.
+- Every field shows its Excel column letter, and every section shows its column range. Letters update automatically when columns change.
+- Parts in the tree that have missing data are flagged with an icon as well as colour.
+- Keyboard entry must be fast: Enter moves to the next field.
+- **Excluded:** "Copy from part" and "Apply to selected". Two parts very rarely share the same data.
+
+### 17.5 Next release (not in this version)
+Reading data from drawings is deferred. Drawings are not standard and vary by customer, and no drawing file is provided to the portal in this version. The estimate screen must leave room to show a drawing beside the form later, without a redesign.
+
+### 17.6 SEO and social sharing
+- Every page has a proper title and meta description.
+- Pages have an Open Graph title and description, so a shared link looks good on social media.
+- These tags must never contain cost, rate or customer data.

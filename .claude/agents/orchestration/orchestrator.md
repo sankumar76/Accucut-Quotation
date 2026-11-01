@@ -88,11 +88,15 @@ open questions, blockers, and append one Activity Log row.
 
 ### Phase A — Inception (G0 → G4)
 1. `master` → G0 (is the intake complete?). If gaps, ask the user for them.
-2. `business-analyst` → project brief + requirements catalogue → `master` G1.
+2. `business-analyst` (Pass 1) → project brief + requirements catalogue + requirements questions.
+   **Human stop:** post the G1 approval request and stop. On resume, send the delivery lead's
+   answers to `business-analyst` (Pass 2) to update the requirements document, then `master` G1.
 3. `product-manager` → PRD + release plan → `master` G2.
-4. **In parallel:** `ux-expert` (UX spec) and `solution-architect` (architecture draft).
-   Then send the UX spec back to `solution-architect` to reconcile the architecture with it.
-   → `master` G3.
+4. **In parallel:** `ux-expert` (UX spec + HTML screens) and `solution-architect` (architecture
+   draft). Then send the UX spec back to `solution-architect` to reconcile the architecture with
+   it. **Human stop:** post the G3 approval request linking `docs/03-ux/screens/index.html` and
+   stop. On `CHANGES:`, return to `ux-expert`, reconcile if needed and stop again. Only after
+   `APPROVED`: `master` G3. No backlog or development work starts before that.
 5. `product-owner` → epics + cross-artefact consistency check.
 6. `scrum-master` → sprint-01 plan + Ready stories → `product-owner` validates DoR →
    `master` G4.

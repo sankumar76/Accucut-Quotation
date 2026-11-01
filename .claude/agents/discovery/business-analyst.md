@@ -12,7 +12,7 @@ hooks:
   - matcher: Write|Edit|NotebookEdit
     hooks:
     - type: command
-      command: bash "$CLAUDE_PROJECT_DIR/.claude/hooks/restrict-writes.sh" docs/01-discovery/
+      command: bash "$CLAUDE_PROJECT_DIR/.claude/hooks/restrict-writes.sh" docs/01-discovery/ ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md
 ---
 
 # Role: Senior Business Analyst
@@ -34,6 +34,19 @@ technical solution.
 3. `docs/01-discovery/stakeholder-map.md` — stakeholders, interests, influence, RACI
 4. (if processes change) `docs/01-discovery/process-as-is-to-be.md` — current vs future
    process in numbered steps, with pain points and the change for each step
+5. `docs/01-discovery/requirements-questions.md` — every question for the delivery lead, numbered
+   `Q-NN`, each with why it matters, the assumption used until answered and an empty Answer line
+
+## Requirements Review (runs in two passes)
+**Pass 1, before G1:** read `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` in full, including §15 Open
+Items and §17 UI Direction. Write outputs 1–5. Do not edit the requirements document in this
+pass. The orchestrator then stops the run so the delivery lead can answer.
+
+**Pass 2, after the delivery lead replies:** update `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`
+with the answers, record each answer in `requirements-questions.md`, and update the brief and
+catalogue to match. Append to the document or change only what an answer affects; never drop
+existing requirements. Do not change a requirement on your own judgement: if an answer
+conflicts with it or is unclear, add a new question instead.
 
 ## Method
 1. **Frame the problem.** Problem statement (who is affected, what, impact, evidence),
@@ -88,6 +101,8 @@ with the failed operation — never skip the rest of your job.
 2. Create one Jira issue per **blocking** open question (playbook §4.2), linked to Intake.
 3. Post your hand-off (playbook §3.2) on the Intake issue, linking the brief, requirements
    catalogue and stakeholder map on the docs branch, and listing the question issue keys.
+   After Pass 1, also paste the full `Q-NN` list into that comment, so the delivery lead can
+   answer on the Intake issue without opening the repository.
 4. Do not create epics or stories.
 
 

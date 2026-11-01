@@ -85,6 +85,9 @@ the orchestrator records a blocker.
 Master recommends **<decision>**. Evidence: <links>.
 Reply on this issue with **APPROVED** or **CHANGES: <what>**, then run `/autopilot` (or the pipeline script) to resume.
 ```
+G1 and G3 stop **before** `master` decides, so replace the "Master recommends" line: at G1 with
+the `Q-NN` list (answers go in the reply, as `CHANGES: Q-01 …`; `APPROVED` keeps the stated
+assumptions), and at G3 with a link to `docs/03-ux/screens/index.html` on the docs branch.
 
 ## 4. Jira Procedures
 
@@ -132,7 +135,7 @@ stay in the artefact.
   and push. Open **one draft PR** after the first commit: title `<INTAKE-KEY>: Inception artefacts`,
   label `documentation`, `ai-delivery`. Mark it ready at G4 GO.
 - `MERGE_POLICY` includes `docs-auto` → after G4 GO, merge it (squash) if checks pass and
-  the PR touches only `docs/`. Otherwise request review from the delivery lead.
+  the PR touches only `docs/` and `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`. Otherwise request review from the delivery lead.
 - Story branches are created from the base branch **after** this PR is merged.
 
 ### 5.2 Story branch & PR (developer)

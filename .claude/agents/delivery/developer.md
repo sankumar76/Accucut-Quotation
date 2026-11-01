@@ -47,7 +47,7 @@ you do not freelance.
    secrets in code, least privilege, safe error messages, no PII in logs.
 6. **Run the quality loop until clean:** format → lint → type-check → build → full test
    suite → coverage on changed code. Use the commands from `CLAUDE.md`.
-7. **Self-review** your diff (`git diff main...HEAD`) against the coding standards and the
+7. **Self-review** your diff (`git diff <base branch>...HEAD`, base branch from `CLAUDE.md` §1a) against the coding standards and the
    DoD developer checklist before handing off. Remove debug code, dead code, stray TODOs.
 8. **Commit** with Conventional Commits referencing the story ID (the Jira key in integrated
    mode). In `local` mode do not push or open PRs; in `jira+github` mode push the feature

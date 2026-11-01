@@ -23,10 +23,14 @@ let product-owner / scrum-master create the Jira epics, stories and sub-tasks.
    missing and cannot be reasonably assumed. Fill in the Project Profile in `CLAUDE.md` if blank
    and the user provides the information.
 2. `master` → **G0**.
-3. `business-analyst` → brief + requirements catalogue + stakeholder map → `master` **G1**.
+3. `business-analyst` (Pass 1) → brief + requirements catalogue + stakeholder map + requirements
+   questions → stop for the delivery lead. After their reply, `business-analyst` (Pass 2) updates
+   the requirements document → `master` **G1**.
 4. `product-manager` → PRD + release plan → `master` **G2**.
-5. In parallel: `ux-expert` → UX spec; `solution-architect` → architecture, ADRs, test strategy.
-   Then `solution-architect` reconciles with the UX spec → `master` **G3**.
+5. In parallel: `ux-expert` → UX spec + HTML screens; `solution-architect` → architecture, ADRs,
+   test strategy. Then `solution-architect` reconciles with the UX spec → stop for the delivery
+   lead to review `docs/03-ux/screens/index.html`, repeating on `CHANGES:`. After `APPROVED` →
+   `master` **G3**.
 6. `product-owner` → epics + consistency report + ordered backlog.
 7. `scrum-master` → sprint-01 plan + stories → `product-owner` DoR validation →
    `scrum-master` marks validated stories Ready → `master` **G4**.
