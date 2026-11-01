@@ -67,6 +67,8 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | product-manager | PRD and release plan v0.6: new quantity rule, scope A adopted, FR-098 to 103 added, weekly backup; central date Wed 2026-11-25 (estimate, unadopted); OQ-PM-07 raised | docs/02-product/ |
+| 2026-11-01 | orchestrator | Delivery lead instruction, in chat: "dont ask me for any approvals except for git merge. But I need to view the result after each iteration (and gate reviews if required)". Remaining human approval stops lifted, except code PR merges; results reported after each iteration and gate. HOLD-01 stays: it is a data input, not an approval. Master to log it | AQP-1 |
 | 2026-11-01 | master | G2 Product Definition: CONDITIONAL GO, attempt 2. G1 condition 2 met; Q-32 (a) own-words confirmation due G3 approval (DL-006); list-wording and relay standards (DL-007); repository decision recorded (DL-008); BLK-02 and RISK-005 closed; RISK-006 restated at 12, RISK-002 at 10; HOLD-02 released | docs/00-governance/ |
 | 2026-11-01 | business-analyst | G3 answers applied, SPEC v1.4; D-12 revised (every level's quantity applies); ASSUMPTION-51, 52; Q-35, 36, 37 raised; run interrupted by a Claude Code exit and resumed | ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md, docs/01-discovery/ |
 | 2026-11-01 | orchestrator | Delivery lead replied APPROVED (AQP-1 10491). Answers to be applied before master G3 | AQP-1 |
