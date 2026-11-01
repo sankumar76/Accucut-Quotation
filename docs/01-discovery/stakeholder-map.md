@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.2 (Discovery Pass 2) |
+| Version | 0.3 (Discovery Pass 2, G1 conditions 4 and 5 applied) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
 
@@ -12,10 +12,10 @@ No interviews have taken place. Goals, pains and measures below are **derived fr
 
 | Stakeholder / persona | Role in the project | Goals | Pains (inferred unless cited) | Influence | Interest | How they measure success |
 |-----------------------|---------------------|-------|-------------------------------|-----------|----------|--------------------------|
-| **Santhosh - MD** (one person; Q-02 answered on AQP-3) | Business sponsor; delivery lead; final approver at every gate (`CLAUDE.md` §1) | A portal that replaces the worksheet, protects pricing, looks professional and carries the Accucut brand | Budget: no limit; target 10 working days ending 2026-11-13 (Q-01 answered), with the fit of the full SPEC open (Q-29); several design decisions still open | High | High | Acceptance tests in SPEC §14 pass; brand and UI direction (SPEC §17) delivered |
+| **Santhosh - MD** (one person; Q-02 answered on AQP-3) | Business sponsor; delivery lead; final approver at every gate (`CLAUDE.md` §1) | A portal that replaces the worksheet, protects pricing, looks professional and carries the Accucut brand | Budget: no limit; target 10 working days from 2026-11-02 (confirmed; the end date 2026-11-13 is UNCONFIRMED, UNC-h), with the fit of the full SPEC open (Q-29); several design decisions still open | High | High | Acceptance tests in SPEC §14 pass; brand and UI direction (SPEC §17) delivered |
 | **Admin** (exactly one; person not named in the inputs) | Owns users, masters, settings, fields and formulas; also can assign, review and approve | Change prices, fields and formulas without a developer and without breaking old estimates (SPEC §1.6, §8) | One person is a single point of failure (Q-23); formula mistakes are costly | High | High | Can insert a field, edit a formula and revert a checkpoint safely (SPEC §14.6 to §14.9) |
-| **Leads** (many) | Assign tasks, track queues, review costs, approve and lock, unlock | See overdue work early; review costs and formulas quickly; set the Approved Quote Price with confidence | Cannot tell today who is late (inferred); parent and child cost rule decided (Q-08), details open (Q-32) | Medium | High | Overdue tasks visible; estimates reach them calculated; approval takes a few steps |
-| **Engineers** (many) | Enter part data for assigned tasks; never see costs | Clear task list, fast guided entry, little re-typing, knowing exactly what is missing (SPEC §6, §17.4) | Large part trees and many mandatory fields (eased: enter 0 or "Not applicable", Q-06); network-folder links blocked by browsers (SPEC §15.4) | Low | High | Complete a tree and Calculate without errors; keyboard-friendly entry |
+| **Leads** (many) | Assign tasks, track queues, review costs, approve and lock, unlock | See overdue work early; review costs and formulas quickly; set the Approved Quote Price with confidence | Cannot tell today who is late (inferred); parent and child cost: children-only wording confirmed (Q-08), quantity multiplication UNCONFIRMED (UNC-d), details open (Q-32) | Medium | High | Overdue tasks visible; estimates reach them calculated; approval takes a few steps |
+| **Engineers** (many) | Enter part data for assigned tasks; never see costs | Clear task list, fast guided entry, little re-typing, knowing exactly what is missing (SPEC §6, §17.4) | Large part trees and many mandatory fields (eased: enter 0, Q-06; "Not applicable" is proposed and UNCONFIRMED, UNC-b); network-folder links blocked by browsers (SPEC §15.4) | Low | High | Complete a tree and Calculate without errors; keyboard-friendly entry |
 | **Accucut's customers** (external, not users) | Receive the quoted price; their rates drive the estimate | Accurate, timely quotes at agreed rates | Rate overrides must be respected (SPEC §4.2) | Low | Medium | Quote matches their agreed rates (not measured by the project) |
 | **Accucut IT contact** (to be named, Q-18) | Hosts the system, backups, e-mail service, network access | A supportable system with clear backup and update steps | Unknown | Medium | Medium | System runs, backups restore, e-mail delivers |
 | **Accucut legal / data-protection adviser** (to be confirmed, Q-26) | Confirms personal-data duties and retention | Compliance with data-protection law | Unknown | Low | Low | Retention and access rules approved |
