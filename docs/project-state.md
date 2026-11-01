@@ -67,6 +67,9 @@
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
 | 2026-11-01 | master | G2 Product Definition: CONDITIONAL GO, attempt 2. G1 condition 2 met; Q-32 (a) own-words confirmation due G3 approval (DL-006); list-wording and relay standards (DL-007); repository decision recorded (DL-008); BLK-02 and RISK-005 closed; RISK-006 restated at 12, RISK-002 at 10; HOLD-02 released | docs/00-governance/ |
+| 2026-11-01 | orchestrator | G3 approval requested on AQP-1; run stopped. For the next pass: product-manager and business-analyst to align ROLLUP (FR-022, SPEC 8.2), NFR-018 to WCAG 2.2 AA, SCR-16 audit log, and the brand, header, dark mode and "Not needed" switch wording flagged in ux-spec section 0.2 | AQP-1 |
+| 2026-11-01 | ux-expert | UX spec v0.2 and screens: UX-01 to UX-27 applied, re-checked at 360, 768 and 1280 px | docs/03-ux/ |
+| 2026-11-01 | solution-architect | Architecture v0.2, ADR-001 to 014, test strategy v0.2; all 27 screens reconciled | docs/04-architecture/ |
 | 2026-11-01 | product-manager | PRD and release plan v0.4: Q-32 rule applied, central dates re-issued (unadopted) | docs/02-product/ |
 | 2026-11-01 | business-analyst | Q-32 closed, ASSUMPTION-48 retired; repository decision recorded as D-13 | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-11-01 | orchestrator | Run resumed; GitHub MCP connected; draft PR #1 created; repository labels set up | PR #1 |

@@ -31,17 +31,17 @@
     });
     /* Fields that show as empty and invalid in a given state (data-error-in="error"). */
     doc.querySelectorAll('[data-error-in]').forEach(function (el) {
-      var on = el.getAttribute('data-error-in').split(/s+/).indexOf(name) !== -1;
+      var on = el.getAttribute('data-error-in').split(/\s+/).indexOf(name) !== -1;
       if (el.__orig === undefined) el.__orig = el.tagName === 'SELECT' ? el.selectedIndex : el.value;
       if (el.tagName === 'SELECT') el.selectedIndex = on ? 0 : el.__orig; else el.value = on ? '' : el.__orig;
       el.classList.toggle('is-error', on);
       if (on) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
     });
     doc.querySelectorAll('fieldset[data-lock]').forEach(function (fs) {
-      fs.disabled = fs.getAttribute('data-lock').split(/s+/).indexOf(name) !== -1;
+      fs.disabled = fs.getAttribute('data-lock').split(/\s+/).indexOf(name) !== -1;
     });
     doc.querySelectorAll('[data-tab-for]').forEach(function (t) {
-      var on = t.getAttribute('data-tab-for').split(/s+/).indexOf(name) !== -1;
+      var on = t.getAttribute('data-tab-for').split(/\s+/).indexOf(name) !== -1;
       t.setAttribute('aria-selected', on ? 'true' : 'false'); t.classList.toggle('is-active', on);
     });
     doc.querySelectorAll('.rb-states button').forEach(function (b) {
@@ -224,9 +224,30 @@
     });
   }
 
+  /* Measured sticky offsets (WCAG 2.4.11): the top and bottom space that a focused field must stay clear of
+     is read from the real bars, not fixed, because the phone action bar wraps and is taller than a desktop one. */
+  function initSticky() {
+    function measure() {
+      var top = 0, bottom = 0;
+      var tb = doc.querySelector('.topbar'); if (tb && getComputedStyle(tb).position === 'sticky') top += tb.getBoundingClientRect().height;
+      var st = doc.querySelector('.stepper'); if (st && st.offsetParent !== null) top += st.getBoundingClientRect().height;
+      var ab = doc.querySelector('.actionbar'); if (ab && ab.offsetParent !== null) bottom += ab.getBoundingClientRect().height;
+      root.style.setProperty('--sticky-top', Math.ceil(top + 8) + 'px');
+      root.style.setProperty('--sticky-bottom', Math.ceil(bottom + 8) + 'px');
+    }
+    measure();
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(measure);
+      ['.topbar', '.stepper', '.actionbar'].forEach(function (s) { var e = doc.querySelector(s); if (e) ro.observe(e); });
+    }
+    window.addEventListener('resize', measure);
+    window.addEventListener('hashchange', function () { setTimeout(measure, 0); });
+    doc.addEventListener('keydown', function (e) { if (e.key === 'Tab') setTimeout(function () { var a = doc.activeElement; if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' }); }, 0); });
+  }
+
   function init() {
     if (params().embed) root.classList.add('is-embed');
-    initStates(); initToggles(); initTabs(); initEnterNext(); initCopy(); initPassword(); initResize(); initMulti(); initStages(); initOther();
+    initStates(); initToggles(); initTabs(); initEnterNext(); initCopy(); initPassword(); initResize(); initMulti(); initStages(); initOther(); initSticky();
     window.addEventListener('hashchange', function () {
       if (params().embed) root.classList.add('is-embed');
       applyState(params().state || states[0].key);

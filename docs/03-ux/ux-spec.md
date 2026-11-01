@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 (G3 draft) |
+| Version | 0.2 (G3 draft, reconciled with the architecture; changes since 0.1 are in section 0.4 and the change log) |
 | Owner | ux-expert |
 | Status | In Review (G3, human approval) |
-| Inputs | PRD v0.4; SPEC v1.3 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`, §7, §9, §11, §17, §18 D-12); project brief v0.6; stakeholder map; gate log G2 attempt 2 (conditions 5, 6, 9); the client's `Accucut Quotation Portal UI-UX.html` (15 screens, unpacked and read); `docs/03-ux/assets/` (logo, company board) |
-| Review pages | [`screens/index.html`](screens/index.html): 27 screens on 29 pages (the Engineer and Lead variants are separate pages), 11 phone and tablet frames, 115 direct state links. Open by double-click; no server, build or sign-in |
+| Inputs | PRD v0.4; SPEC v1.3 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`, §7, §9, §11, §17, §18 D-12); project brief v0.6; stakeholder map; gate log G2 attempt 2 (conditions 5, 6, 9); `docs/04-architecture/architecture.md` v0.2 section 16 (items UX-01 to UX-27) and section 15.2; the client's `Accucut Quotation Portal UI-UX.html` (15 screens, unpacked and read); `docs/03-ux/assets/` (logo, company board) |
+| Review pages | [`screens/index.html`](screens/index.html): 27 screens on 29 pages (the Engineer and Lead variants are separate pages), 11 phone and tablet frames, 134 direct state links. Open by double-click; no server, build or sign-in |
 | Scope | Every user-facing FR through Release 2 (scope A and scope B are both covered, as DL-004 requires). Not designed, by decision: see section 0.3 |
 
 How to read this: the HTML screens are the visual reference; this file is the rule book for them. Where the two differ, this file wins and the screen is a defect. The screens are review mock-ups; developers rebuild them with shadcn/ui and Tailwind using the tokens in section 7. All data on the screens is invented.
@@ -50,6 +50,44 @@ The delivery lead gave these directly. They are not assistant proposals. SPEC §
 | UI-sample extras ("Awaiting review", "Closed this month", global search, per-Engineer workload counts, "Visible to Engineer" column, Tool Cost beside the total) | Out of scope now (FR-097, R3). The Tool Cost *input* and BN are in; a per-row "Visible to Engineer" column is not (the **Kind** column says the same thing: Input, Auto or Output) | FR-097 |
 | Import of past estimates | FR-096 | |
 | Installation (Docker, README) | Not a screen. FR-091 is a documentation and deployment deliverable | FR-091 |
+
+### 0.4 Reconciliation with the architecture (architecture.md v0.2, section 16.6)
+
+The solution-architect reviewed all 41 pages and listed 27 items for UX (UX-01 to UX-27). All 27 are applied in the screens and this spec. None was dropped. Where the architect left a choice, the choice made is stated; where a decision belongs to the delivery lead or the product-manager, it is in section 11.
+
+| Item | Screen | Result |
+|------|--------|--------|
+| UX-01 | SCR-07 | **Done.** Working lines show calculated operands to 4 decimals (inputs and rates as typed), so repeating the arithmetic gives the printed result. A note says so. The generator throws if any line fails to reproduce its result within 0.005; it passed for AK, AV, BA, BB, BD, BE, BF, BG, BJ and BK |
+| UX-02 | SCR-06, 07, 10 | **Done.** One sentence on each ("Figures are shown to 2 decimals. Totals add the unrounded values and round once, so adding the shown figures by hand can differ by 0.01"). SCR-10 and SCR-06 also name the actual case ("Item 1: 2 × 5,061.72 as shown gives 10,123.44, but the portal multiplies the unrounded sum 5,061.7242 and shows 10,123.45"); SCR-07 stage 5 explains 43.78 against 43.79. Usability task 4 now includes it (section 10) |
+| UX-03 | SCR-06 | **Done.** Draft state has a primary **Calculate** button; Approve is disabled with its reason |
+| UX-04 | SCR-06 | **Done.** New state "Draft after unlock": notice with who, when and why; figures shown are the approval's; **Recalculate** is primary; Approve disabled until it is run; BO shows "Not set yet" and that the earlier price is in the audit log |
+| UX-05 | SCR-10 | **Done.** New states "Not calculated" (file holds inputs, cost columns empty, link to calculate) and "Inputs changed" (file holds the figures of 10:42 IST, link to recalculate). Download stays available in both (A-05) |
+| UX-06 | SCR-06, 07 | **Done.** A parent's screen box also shows the sums of BJ (USD) and BK (EUR); its Excel-row box shows its own BJ and BK. FR-029 is met as written; no change asked of the product-manager |
+| UX-07 | SCR-05, 06 | **Done.** When the form is read-only (Submitted, Approved) the part actions, "New item", Replace, Remove, "choose a file" and the paste hint are not shown. The server refuses them regardless |
+| UX-08 | SCR-17, 20 | **Done.** System fields A, H, BG, BL, BO show a "System" lock tag and no delete; Edit formula is not offered on A, F, I and BO |
+| UX-09 | SCR-17, 18 | **Done.** BL is listed as `ROLLUP(BG)` with its explanation; SCR-18 names `ROLLUP(column)` in its function line, has a state for editing BL and a warning state when a formula stops using ROLLUP. Text-alignment issue for FR-022 and SPEC §8.2 is the architect's and the product-manager's |
+| UX-10 | SCR-19 | **Done.** Input: unit, hint, Excel width and format, choices (for a list), and a visibility rule. Cost column: stage, hide-when-zero, width and format |
+| UX-11 | SCR-18 | **Done.** "Sample rows come from the latest calculated estimate"; states for no sample row and for too many wrong passwords ("Too many wrong passwords. Try again in 15 minutes. Your formula is kept.") |
+| UX-12 | SCR-02 | **Done.** `noindex, nofollow` (its address carries a token) |
+| UX-13 | All | **Done, verified.** `fontkit` confirmed that none of the six shipped files had ₹, Σ, → or ←. Five Plex files from the open-licence Latin-extended subsets are added (about 76 KB, loaded only when a ₹ is on the page); Σ and the arrows are inline SVG icons with a text alternative. A browser check shows ₹ drawn by IBM Plex on SCR-05, 06, 10 and 16, and no Σ, → or ← remains in visible text |
+| UX-14 | All sticky | **Done, verified.** `screens.js` measures the top bar, section strip and action bar with `ResizeObserver` and sets `--sticky-top` and `--sticky-bottom`; `scroll-padding` and the tree panel height use them. Measured: phone action bar 181 px, offset 189 px (fixed 96 px would have hidden fields). Keyboard run, tabbing every field on SCR-05 and SCR-06 at 360, 768 and 1280 px: 0 of about 290 focus stops under a bar. A real phone with its keyboard open is still needed (section 10) |
+| UX-15 | SCR-05, 06 | **Done.** "Notes from Kiran Bose: …" shown under the task folder |
+| UX-16 | SCR-12, 13 | **Done, needs confirmation.** Delete and a "cannot be deleted yet" state (names the open estimates) for customers and materials; delete confirmation says estimates already calculated keep their figures. Whether delete should exist is the product-manager's (SPEC §4 and FR-013 are silent for customers; OQ-UX-14) |
+| UX-17 | SCR-23 | **Done.** State "Set a new password" (the portal redirects every page here; the side menu is not offered). Whether it also applies after any Admin-set or reset password is a decision (OQ-UX-15); the design works either way |
+| UX-18 | SCR-02, 14, 23 | **Done.** Messages: "Use 128 characters or fewer.", "The password cannot be the same as your e-mail address." (Admin screens: "…the user's e-mail address."), "That password is too common. Choose a different one." Shown as states on SCR-23, SCR-14 and SCR-02; the first two are stated for all three screens in the table in section 6.0. "Proposed rule, to be confirmed" stays until the delivery lead confirms (OQ-UX-05) |
+| UX-19 | SCR-16 | **Done.** Event filter gains "User change" and "Task change (Release 2)"; the revert row reads "Version 8 → Version 9 (from version 7)". Version numbers in SCR-09, 16, 17, 21 now tell one story |
+| UX-20 | SCR-03 | **Done.** Closed rows show "Closed", no reassign |
+| UX-21 | SCR-04, 14 | **Done.** The alerts notice carries a "Release 2" tag and is built only when e-mail alerts exist; the deactivate dialog no longer says tasks can be reassigned (that sentence is added from Release 2). Under scope A these are build order only |
+| UX-22 | §4, SCR-26 | **Done.** For an Engineer a missing estimate and another Engineer's estimate give the same "no access" page |
+| UX-23 | SCR-13, all | **Done.** The exchange-rate hints now say the rate (BH or BI) feeds the price (BJ or BK). Rule added to 6.0: letters and cell names in copy are filled from the field registry, never typed |
+| UX-24 | SCR-05 | **Done.** "Choose the customer this estimate is for. Changing it later asks you to confirm." The no-customer notice and the change dialog no longer mention rates. A scan of every Engineer-reachable page and state finds no "rate", "price" or "formula" |
+| UX-25 | SCR-06, 07 | **Done.** The written-out sum is the row's own figure plus the figure of each direct child, at most 4, then "+ n more rows below (see the Excel export for each)". The sum still adds up exactly: item 1 is 0.00 + 1,163.54 + 1,253.12 + 1,935.09 + 709.97 = 5,061.72 |
+| UX-26 | Several | **Done.** SCR-06 section 02 tag reads "E, F, I, J–L, N" for Lead and Admin; SCR-17 lists BH and BI as Outputs; SCR-11's Unit list holds every unit used; SCR-03 Engineer "No match" text no longer names filters an Engineer lacks and "1 task is overdue" is singular; SCR-16 phone cards follow the filter |
+| UX-27 | `screens.js`, SCR-20 | **Done.** Three `split(/s+/)` calls are `split(/\s+/)` (the Closed tab highlights; multi-state locks work); the SCR-20 label "Blocked by formulas" has no comma |
+
+**Found by this re-check, not on the architect's list (fixed):** SCR-08 said an override of ₹ 10,300.00 was "₹ 302.91 lower"; the calculated total is ₹ 10,302.91, so it is ₹ 2.91 (now computed from the data). SCR-10 had no Download button in the Approved state. The parts-tree panel ran under the action bar. The About sentence said "approves the price"; it now says "reviews and approves the estimate", so Engineer pages hold no cost vocabulary at all.
+
+**Disagreements.** None. Two items carry a choice the architect left open, and both are logged in section 11: UX-17 (should "must change password" follow every Admin-set password, OQ-UX-15) and UX-16 (should delete exist, OQ-UX-14).
 
 ---
 
@@ -192,7 +230,7 @@ Reference: SCR-00 Design system
 **Entry points and deep links.**
 - A task or estimate has the ID `Q-YYYY-NNNN` (FR-041); the address is `/estimates/<ID>`. The same address opens SCR-05 for an Engineer and SCR-06 for a Lead or Admin; the server decides.
 - `/queue?tab=overdue` is the bell's target. Filters live in the address so a filtered queue can be bookmarked.
-- A deep link to a page the role may not open shows SCR-26 "no access"; to a missing page, "not found". An Engineer opening another Engineer's task sees "no access".
+- A deep link to a page the role may not open shows SCR-26 "no access"; to a missing page, "not found". **For an Engineer, an estimate address that is missing and one that belongs to another Engineer give the same "no access" page**, because task codes are sequential and could otherwise be probed (UX-22).
 - Sign-in remembers the requested address and returns there.
 
 **Role matrix:** shown as a table on SCR-25 and enforced by the server (FR-007).
@@ -262,7 +300,11 @@ Release: R1 core unless noted. "Files" are in `docs/03-ux/screens/`.
 
 **Money and numbers.** INR as "₹ 1,23,456.78" (Indian grouping), USD "$", EUR "€"; two decimals; right-aligned in tables; "—" for a divide by zero (the export cell is empty). Times are IST, written "06 Nov 2026, 17:00 IST".
 
-**Column letters.** Shown as a dark tag (inputs) or a grey tag (outputs and auto fields) with a visually hidden "Excel column".
+**Column letters.** Shown as a dark tag (inputs) or a grey tag (outputs and auto fields) with a visually hidden "Excel column". **Letters and cell names in copy are never typed into screens.** Anything that names a column or a cell (AL, AY, BH, BL2, BN2, BO2 and so on) is filled from the field registry, so it stays right after an insert or delete re-letters the worksheet (UX-23, SPEC §17.4). The mock-ups show the seed letters.
+
+**Rounded figures.** Money is shown to 2 decimals. Totals add the unrounded values and round once, so adding the shown figures by hand can differ by 0.01. Wherever a Lead is told to reconcile (SCR-06, 07, 10) that sentence is on the screen, and where the difference actually occurs the screen says so with the numbers (UX-02). Working lines on SCR-07 show calculated operands to 4 decimals.
+
+**Password messages (SCR-02, 14, 23).** The rule is the architect's proposal (10 to 128 characters, no composition rule, not the e-mail address, not a common password), awaiting the delivery lead. Messages, shown under the new-password field: "The new password must be at least 10 characters." · "Use 128 characters or fewer." · "The password cannot be the same as your e-mail address." (on Admin screens "…the user's e-mail address.") · "That password is too common. Choose a different one." · on SCR-23 also "The two new passwords do not match." and "Your current password is not correct." The hint reads "At least 10 and at most 128 characters. Proposed rule, to be confirmed."
 
 ---
 
@@ -328,9 +370,9 @@ Request (e-mail, "Send reset link") → "Check your e-mail. If that address is r
 **Components.** Tabs, Table (Card list on phones), Input, Select, Badge, Button, Tooltip (folder path), Alert.
 **Content.** Tabs "Open", "Closed", "Overdue" with counts. Sort note "Sorted by deadline, earliest first. Overdue tasks stay in Open as well." Customer shows "Not chosen yet" until the Engineer picks one (the assigner does not choose it). Overdue marker: clock icon, "Overdue by 1 d 18 h", amber left bar, tinted row; the three cues appear together (FR-036).
 **States.** Default per tab · Loading skeleton · Empty (Lead "No open tasks. Assign a task to an Engineer and it appears here." + Assign task; Engineer "Nothing assigned to you right now. When a Lead assigns you a task it appears here, with its folder and deadline.") · No match · Error · Overdue tab adds a summary notice. Permission denied: an Engineer sees only own tasks; another's task address gives SCR-26.
-**Differences by role.** Engineer: no Engineer or Customer column or filters, no Assign button, no row edit; "Assigned by" shown. Lead: opens with the filter chip "Assigned by me" (removable, FR-035, R1+). Admin: no default filter.
+**Differences by role.** Engineer: no Engineer or Customer column or filters, no Assign button, no row edit; "Assigned by" shown; the "No match" state says "No tasks match your search. Try a different task ID or part of the title." (it does not name filters an Engineer does not have). **Closed rows** show the word "Closed" instead of the reassign action (an approved task cannot be reassigned, A-14; UX-20). Lead: opens with the filter chip "Assigned by me" (removable, FR-035, R1+). Admin: no default filter.
 **Filters (R1+, FR-039).** Search by task ID or title; Engineer; Customer; deadline from and to. Filters are in the address.
-**Interactions.** Row action "Reassign or change deadline" (R2) opens SCR-04 in edit mode. "Copy path" copies and announces "Path copied to the clipboard." The bell and the "Overdue" tab are the same destination.
+**Interactions.** Row action "Reassign or change deadline" (R2, open tasks only) opens SCR-04 in edit mode. Counts are worded in the singular where they are 1 ("1 task is overdue"). "Copy path" copies and announces "Path copied to the clipboard." The bell and the "Overdue" tab are the same destination.
 **Responsive.** 360: one card per task (ID, status, title, due, overdue line, person, Copy path, Open); tabs share the row width. 768: table keeping Task, Engineer, Deadline, Status (Customer, Folder and Assigned by hide). 1280: full table.
 **Accessibility.** Tabs use `role=tablist/tab/tabpanel`, arrow keys move between tabs; rows are not clickable as a whole (the ID is the link) so keyboard and screen readers see one link per row; overdue is also in text; count badges have text.
 
@@ -360,8 +402,9 @@ Assign task
 | Title | text, up to 120 | No | length (proposed) | "Keep the title under 120 characters." |
 | Notes | textarea, up to 1,000 | No | length (proposed) | "Keep the notes under 1,000 characters." |
 
-**States.** Default · Validation errors (summary with links) · Submitting ("Assigning") · Success ("Task Q-2026-0324 assigned to Arjun Rao." + links) · Alerts OFF notice ("E-mail alerts are OFF. Arjun Rao will not be e-mailed about this task. It still appears in their queue.") · Edit mode (R2): only Engineer and deadline are editable, folder, title and notes show "Locked", notice "Changes are logged. The log records your name, the time, and the old and new values." Permission denied: Engineers get SCR-26.
+**States.** Default · Validation errors (summary with links) · Submitting ("Assigning") · Success ("Task Q-2026-0324 assigned to Arjun Rao." + links) · Alerts OFF notice, tagged "Release 2" ("E-mail alerts are OFF. Arjun Rao will not be e-mailed about this task. It still appears in their queue."; built only when e-mail alerts exist, UX-21) · Edit mode (R2): only Engineer and deadline are editable, folder, title and notes show "Locked", notice "Changes are logged. The log records your name, the time, and the old and new values." Permission denied: Engineers get SCR-26.
 **Interactions.** The folder path is shown as a link plus **Copy path** everywhere it appears; the tooltip text is "Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer." Validation on submit; the date-time is checked again on the server.
+**Notes and title** are shown afterwards on SCR-05 and SCR-06 ("Notes from Kiran Bose: …", UX-15), so what is typed here reaches the Engineer.
 **Responsive.** The side card moves below the form on phones. **Accessibility.** Date and time have visible labels and the "IST" addon is read with the field; the tooltip is also visible text, not hover-only.
 
 ### SCR-05 Estimate workspace (Engineer)
@@ -391,7 +434,7 @@ Assign task
 - The section strip is a sticky row of 8 jump links with a check, a triangle (missing), or nothing.
 - Each section header has a free area to the right of the range tag (reserved, UD-5).
 - Cards per row follow the width: 1 column on phones, 2 on tablets, up to 3 on desktop (SPEC §7.2). At 1280 px with the tree, three columns fit; at 1024 px, two.
-**Content and microcopy.** Intro line "Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals." Customer hint "Choose this first"; helper "The customer's rates are used in every calculation for this estimate. You never see them. Changing the customer later asks you to confirm." Hints under fields as in the screen (Fasteners: "Type "None" if the part has no fasteners."; costs: "Enter 0 if there is none."; Remarks: "Write "None" if there is nothing to add. Enter moves to the next field; Shift+Enter starts a new line.").
+**Content and microcopy.** Intro line "Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals." Customer hint "Choose this first"; helper "Choose the customer this estimate is for. Changing it later asks you to confirm." (the screen never mentions rates, so it does not hint that any exist, UX-24). Under the task folder: **"Notes from Kiran Bose: …"** (the notes typed when the task was assigned, UX-15). Hints under fields as in the screen (Fasteners: "Type "None" if the part has no fasteners."; costs: "Enter 0 if there is none."; Remarks: "Write "None" if there is nothing to add. Enter moves to the next field; Shift+Enter starts a new line.").
 **Fields (inputs only; none of these is a cost the Engineer can see computed).**
 
 | Field (letter) | Type | Required | Validation | Error message |
@@ -420,13 +463,13 @@ Material Rate / Kg (I), the Engineer's view of costs, any preview, any total: **
 | Saved | Notice "Draft saved at 10:42 IST."; auto-save line updates |
 | Calculate blocked | Summary `alert`: "Nothing was submitted. 3 parts have missing inputs." with each part and its fields as links; triangle icons in the tree; sections and fields with errors turn error red with icon and text; a field with a wrong format shows the format message |
 | Picture too large | Inline message in section 01 (see table) |
-| No customer | Notice "Choose the customer to start."; the form is disabled until chosen |
-| Change customer | AlertDialog: "Change the customer? … Nothing you typed is lost. The new customer's rates apply the next time the estimate is calculated." Buttons "Keep Brightwater Controls", "Change customer" |
+| No customer | Notice "Choose the customer to start. The form opens as soon as you pick one."; the form is disabled until chosen |
+| Change customer | AlertDialog: "Change the customer? … Nothing you typed is lost. The new customer applies the next time the estimate is calculated." Buttons "Keep Brightwater Controls", "Change customer" |
 | Unsaved changes | AlertDialog "Leave without saving?" with "Leave without saving" and "Save draft and leave" |
 | Delete part | AlertDialog names the count: "This also deletes its 2 sub-parts … Delete 3 parts" |
 | Loading | Skeleton cards |
-| Submitted | Notice with the single message "Cost will be calculated based on the input fields and sent for review/approval."; badge Submitted; inputs read-only; action bar shows a disabled "Submitted"; no number anywhere |
-| Approved | "Approved and locked." read-only; **no price shown** |
+| Submitted | Notice with the single message "Cost will be calculated based on the input fields and sent for review/approval."; badge Submitted; inputs read-only; action bar shows a disabled "Submitted"; **part actions (sub-part, part beside, move, delete), "New item", Replace, Remove, "choose a file" and the paste hint are not shown**, because they would refuse (UX-07); no number anywhere |
+| Approved | "Approved and locked." read-only, with the same actions removed; **no price shown** |
 | Permission denied | Another Engineer's task: SCR-26 |
 
 **Interactions.**
@@ -437,7 +480,7 @@ Material Rate / Kg (I), the Engineer's view of costs, any preview, any total: **
 - Calculate checks every node, not only this part.
 - Copying data between parts is **not offered** (UD-3).
 **Responsive.** 360: one column of cards; "Parts tree" button (shows the current node) opens the tree as a left drawer (`Sheet`) with a scrim; the sticky action bar stays; the stepper scrolls inside its own strip; Part Model offers camera or gallery. 768: tree is a collapsible left panel (240 px, "Parts tree" button toggles); 2 columns. 1024: tree persistent; 2 columns. 1280: 3 columns; the reserved region adds a track on the right.
-**Accessibility.** Tree is `role="tree"` with `treeitem`, `aria-level`, `aria-selected`; arrow keys move, Enter opens; each node's missing-data state is text for screen readers. Every input has a visible label and its letter ("Excel column J" read first by screen readers). Section cards are labelled regions. Errors use icon, thick border and text. The sticky stepper and action bar do not hide a focused field (scroll padding, WCAG 2.4.11). The progress bar has a text equivalent. Dialogs follow 6.0. Part Model is operable without a mouse (choose a file button).
+**Accessibility.** Tree is `role="tree"` with `treeitem`, `aria-level`, `aria-selected`; arrow keys move, Enter opens; each node's missing-data state is text for screen readers. Every input has a visible label and its letter ("Excel column J" read first by screen readers). Section cards are labelled regions. Errors use icon, thick border and text. The sticky stepper and action bar do not hide a focused field (scroll padding, WCAG 2.4.11). The progress bar has a text equivalent. Dialogs follow 6.0. Part Model is operable without a mouse (choose a file button). **Open dependency:** Part Model (C) counts as a visible input, so Calculate would refuse an assembly with no picture and there is no value like 0 to enter; no message is defined until OQ-UX-13 is answered.
 
 ### SCR-06 Estimate review (Lead, Admin)
 **Wireframe.**
@@ -460,7 +503,7 @@ Calculated 05 Nov 10:42 IST · config v9     [Download .xlsx][Recalculate][Appro
 **Components.** Card (stat), Badge, Tree, Details (how the total is built), Alert, Button, plus SCR-05's form.
 **G2 condition 6 (parent figure against export row).** Everywhere a parent's figure appears on screen it is **labelled and paired**:
 1. In the tree, a parent's figure is prefixed with the Σ tag and read as "Sum including parts below"; a legend line says "Σ = this row plus everything below it, as shown on screen. The Excel file holds each row's own value only."
-2. In the node header, a parent shows two boxes side by side: **"Screen figure: this row and everything below"** (dark left bar, Σ tag, with the sum written out: ₹ 309.19 (row 1.4) + ₹ 400.78 (row 1.4.1)) and **"Excel row 1.4: this row only"** (green left bar, download icon). A top-level item adds the quantity line: "Item quantity 2 then counts this 2 times: ₹ 10,123.45 in the estimate total."
+2. In the node header, a parent shows two boxes side by side: **"Screen figure: this row and everything below"** (dark left bar, Σ tag, with the sum written out as the row's own figure plus the figure of each **direct child**, at most 4, then "+ n more rows below (see the Excel export for each)" (UX-25); for item 1 that is ₹ 0.00 (row 1) + ₹ 1,163.54 (row 1.1 and below) + ₹ 1,253.12 + ₹ 1,935.09 + ₹ 709.97 = ₹ 5,061.72. Under the sum: "In US dollars $ … , in euros € …: the sums of BJ and BK for the same rows" (FR-029, UX-06) and **"Excel row 1.4: this row only"** (green left bar, download icon) with its own BG, BJ and BK. One sentence under the pair states the rounding rule (6.0, UX-02). A top-level item adds the quantity line: "Item quantity 2 then counts this 2 times: ₹ 10,123.45 in the estimate total."
 3. A part with nothing below shows one box: "On screen and in the Excel row" (the two figures are the same).
 4. SCR-07 repeats the pair above the stages; SCR-10 shows both figures side by side for every row.
 The pairing never relies on colour: each box has its own words and icon.
@@ -471,82 +514,84 @@ The pairing never relies on colour: each box has its own words and icon.
 |-------|-----------|
 | Default (Submitted) | Tiles, tree, node; primary button "Approve and lock" |
 | Inputs changed | Notice "Inputs changed after the last calculation. The totals below are from 10:42 IST and no longer match the inputs. Recalculate before you approve."; primary button becomes **Recalculate**; Approve is disabled and says why (OQ-UX-06) |
-| Not calculated | Info "The Engineer has not calculated this estimate yet…"; tiles show "Not calculated"; Approve disabled |
+| Not calculated | Info "The Engineer has not calculated this estimate yet. You can enter or correct inputs. Press Calculate to see costs."; tiles show "Not calculated"; the primary button is **Calculate** (a Lead may calculate, A-08); Approve disabled with its reason (UX-03) |
+| Draft after unlock | Notice "Unlocked on 05 Nov 2026, 12:05 IST by Kiran Bose. Reason: … The figures below are still the ones from the approval. Recalculate to bring them up to date: that uses the current rates and configuration. The task is back in Priya Nair's Open queue."; badge Draft; the tiles keep the approved figures and BO reads "Not set yet" with "Cleared by the unlock. The earlier price … is in the audit log."; primary **Recalculate**; Approve disabled until then (UX-04) |
 | No Tool Cost | BN shows "—" |
 | Approved | Notice with approver and time; inputs read-only; BO tile shows the price; **Unlock** replaces Approve; "Locked. Values stay as approved even if rates change later." |
 | Loading | Tile skeletons while recalculating |
 | Error | "We could not calculate this estimate. Nothing was changed. Try again; … give the Admin this reference: req-7f3a91." |
 | Permission denied | Engineers reach SCR-05 at this address, never this screen |
 
-**Interactions.** Recalculate runs on the server (up to 2 s for 500 nodes, NFR-008) and refreshes totals; "View cost details" opens SCR-07; Download opens SCR-10; the bar line "Calculated … configuration version 9" records FR-031.
+**Notes** from the task are shown above the status notices (UX-15). "How the total is built" ends with the rounding sentence and, where it happens, the actual case (UX-02). **Interactions.** Recalculate runs on the server (up to 2 s for 500 nodes, NFR-008) and refreshes totals; "View cost details" opens SCR-07; Download opens SCR-10; the bar line "Calculated … configuration version 9" records FR-031.
 **Responsive.** 360: tiles stack; tree is a drawer; the pair of boxes stacks; the action bar wraps with full-width buttons. 768: tree collapsible. 1280: as the wireframe.
 **Accessibility.** Tiles are a labelled group; each total is text in an `h`-free structure with its tag; Σ has a text equivalent; stale and approved notices are `role="status"`; the disabled Approve has `aria-describedby` with the reason.
 
 ### SCR-07 Cost details
 **Purpose.** FR-058, 059, 026: all calculated fields for one row in six stages, each with its formula next to the value.
 **Layout.** Row header and the pair of figures (see SCR-06), then six `details` panels: **1 Weights and areas** (M, O, AH, AI) · **2 Material cost** (I shown as reference, AK) · **3 Process costs** (Cutting AL; Bending AM; Welding, drilling, tapping AN, AO; Surface treatment AQ to AX; entered directly AP, AU; AY Total) · **4 Sub total** (AZ, BA, BB) · **5 Rejection, overheads and logistics** (BC, BD, BE, BF) · **6 Pricing** (BG highlighted dark, BH, BI, BJ, BK).
-Each line: column tag, name, formula in letters (mono), the same formula with values (muted mono), value right-aligned.
+Each line: column tag, name, formula in letters (mono), the same formula with values (muted mono), value right-aligned. **The working uses the operands that were really used:** inputs and rates as typed, calculated values to 4 decimals (for example AK = (2.8260 × 58.00) − (0.4260 × 22.00) = 154.54), so a Lead who repeats the arithmetic gets the printed figure (FR-058, UX-01). A sentence under the stages says so and states the rounding rule; stage 5 explains when its total differs from its lines by 0.01 ("The three lines above add to 43.78 as shown, and the stage total is 43.79. The portal adds the unrounded values, then rounds once.").
 **Rules.** Unselected treatment lines (AQ to AX; the seven that depend on a flag) are **hidden**, with a line "6 treatment lines are hidden because they are not selected for this part. They are still calculated and exported as 0." Divide by zero shows "—". Percent rates are shown as typed (11%).
 **States.** Default · Loading · Error. **Responsive.** Desktop: beside the inputs as a side panel at 1280 and wider, a full column below that. Tablet: accordion, all open. Phone: accordion, only stage 1 open, formulas wrap. **Accessibility.** `details/summary` are keyboard operable and announce expanded or collapsed; formulas are text not images; the total of each stage is in the summary.
 
 ### SCR-08 Approve and lock (dialog)
-Fields: **Approved Quote Price (BO)**, ₹, pre-filled with BL, editable. Validation "Enter a price in rupees, 0 or more, with up to 2 decimals." States: Default (info "If you change the price, the difference is recorded as an override.") · Price changed (warn "This price is ₹ 302.91 lower than the calculated total. A different price is recorded as an override with your name, the time, the calculated total and the price you set.") · Invalid · Saving ("Approving"). Buttons "Cancel", "Approve and lock". After success: inputs read-only, task to Closed, audit entry (approval and, if different, override). No reason field (OQ-UX-02). Dialog is `dialog`, focus to the price field.
+Fields: **Approved Quote Price (BO)**, ₹, pre-filled with BL, editable. Validation "Enter a price in rupees, 0 or more, with up to 2 decimals." States: Default (info "If you change the price, the difference is recorded as an override.") · Price changed (warn "This price is ₹ 2.91 lower than the calculated total (₹ 10,302.91 against ₹ 10,300.00). A different price is recorded as an override with your name, the time, the calculated total and the price you set.") · Invalid · Saving ("Approving"). Buttons "Cancel", "Approve and lock". After success: inputs read-only, task to Closed, audit entry (approval and, if different, override). No reason field (OQ-UX-02). Dialog is `dialog`, focus to the price field.
 
 ### SCR-09 Unlock (dialog)
-Field: **Reason for unlocking** (required textarea): "Enter a reason. It is kept in the audit log." Notices: configuration changed (versions 7 → 9) and rates changed (counts), or "Nothing has changed … since approval." Text states that recalculating after unlock uses current values. Buttons "Keep it locked", "Unlock". States: Default · Changed · Reason missing · Saving. Effect: estimate to Draft; task reopens in the Engineer's Open queue.
+Field: **Reason for unlocking** (required textarea): "Enter a reason. It is kept in the audit log." Notices: configuration changed (versions 7 → 9) and rates changed (counts; OQ-ARCH-06 asks whether a Lead should be told the same before approval), or "Nothing has changed … since approval." Text states that recalculating after unlock uses current values. Buttons "Keep it locked", "Unlock". States: Default · Changed · Reason missing · Saving. Effect: estimate to Draft; task reopens in the Engineer's Open queue.
 
 ### SCR-10 Excel export
 **Layout.** File card (file name, row count, A to BO, **Download .xlsx**), then a full-width table **"Screen figures against the file"**: Sl. No, Part, Qty (H), **In the file: BG, this row only**, **On screen: this row and below** (Σ on parents), then a reconciliation box that writes out each item (quantity × sum of BG) and BL2 = the screen total, and a checklist of what the file holds, plus BL2, BN2, BO2.
-**Content.** File name `Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx` (OQ-UX-08). Lead and Admin at any status; Engineers get SCR-26.
-**States.** Default · Building ("Building the file. 10 parts, 1 picture. This usually takes a few seconds.", button disabled) · Error with reference · Empty ("Nothing to export yet") · Approved (BO2 shows the price). **Responsive.** The table scrolls inside its box; on phones the checklist stacks. **Accessibility.** The table has a caption and a visually hidden "Sum including parts below" on parent figures; progress is a polite live message. Per-item totals as in the sample are not shown (Q-31).
+**Content.** File name `Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx`: spaces in the customer name become underscores, other characters outside A-Z, a-z, 0-9, underscore and hyphen are removed, at most 60 characters, "Customer" if nothing is left, and the date is the IST date of download (the architect's answer to OQ-UX-08, proposed). Lead and Admin at any status; Engineers get SCR-26. The reconciliation box ends with the rounding sentence and the real case: "Item 1: 2 × 5,061.72 as shown gives 10,123.44, but the portal multiplies the unrounded sum (5,061.7242) and shows 10,123.45" (UX-02).
+**States.** Default · Building ("Building the file. 10 parts, 1 picture. This usually takes a few seconds.", button disabled) · Error with reference · Empty ("Nothing to export yet": no parts) · Approved (BO2 shows the price) · **Not calculated** ("This estimate has not been calculated yet. The file will hold the inputs, and the cost columns will be empty." with a link to calculate; the comparison is replaced by "There are no figures to compare yet") · **Inputs changed** ("The file holds the figures from 05 Nov 2026, 10:42 IST, not the current inputs." with a link to recalculate; the table is labelled "As calculated at 10:42 IST"). Download stays available in both, because FR-070 says any status (A-05; UX-05). **Responsive.** The table scrolls inside its box; on phones the checklist stacks. **Accessibility.** The table has a caption and a visually hidden "Sum including parts below" on parent figures; progress is a polite live message. Per-item totals as in the sample are not shown (Q-31).
 
 ### SCR-11 Process master
-Table: Rate name · Unit · Default value · Used in (letters) · Customers with own value · actions. Add rate dialog fields: **Rate name** (unique; "Enter a name." / "A rate with this name already exists."), **Unit**, **Default value** (number, 0 or more, 2 decimals: "Enter a number, 0 or more, with up to 2 decimals."); hint "Names ending in % are typed as whole percentages: 12 means 12%." States: Default · Saved · Add · **Customers differ** (R1+: "17 customers had 0.47 and now have 0.52. 3 customers have a different value." per-customer Apply or Keep radios, "Keep all 3", "Apply to all 3", "Save choices") · **Delete blocked** ("Cutting-Rate-per-Sec cannot be deleted while a formula uses it" with the formula list and a link) · Loading · No match · Error. Phone: cards. Units are inferred (OQ-UX-07).
+Table: Rate name · Unit · Default value · Used in (letters) · Customers with own value · actions. Add rate dialog fields: **Rate name** (unique; "Enter a name." / "A rate with this name already exists."), **Unit**, **Default value** (number, 0 or more, 2 decimals: "Enter a number, 0 or more, with up to 2 decimals."); hint "Names ending in % are typed as whole percentages: 12 means 12%." States: Default · Saved · Add · **Customers differ** (R1+: "17 customers had 0.47 and now have 0.52. 3 customers have a different value." per-customer Apply or Keep radios, "Keep all 3", "Apply to all 3", "Save choices") · **Delete blocked** ("Cutting-Rate-per-Sec cannot be deleted while a formula uses it" with the formula list and a link) · Loading · No match · Error. Phone: cards. The Unit list holds every unit used in the table (second, stroke, hole, kg, sq ft, sq in, %). Units are inferred from the formulas and held in the registry (OQ-UX-07).
 
 ### SCR-12 Customer master
-List (name, phone, e-mail, rates that differ) → edit page: Details (name required and unique: "Enter the customer name." / "A customer with this name already exists."; phone, e-mail, address optional, e-mail format "Enter an e-mail address like name@company.com.") and a rates table (default, this customer, "Differs from default" tag). **Reset to defaults** opens an AlertDialog naming the rates that will be replaced. New customer starts with all defaults. States: List · Edit · New · Reset dialog · Loading · Empty · No match · Error. Percent rates use whole numbers.
+List (name, phone, e-mail, rates that differ) → edit page: Details (name required and unique: "Enter the customer name." / "A customer with this name already exists."; phone, e-mail, address optional, e-mail format "Enter an e-mail address like name@company.com.") and a rates table (default, this customer, "Differs from default" tag). **Reset to defaults** opens an AlertDialog naming the rates that will be replaced. New customer starts with all defaults. **Delete** (UX-16): a trash button on each row opens an AlertDialog ("Marlow Agro Systems no longer appears in this list or in the customer choice on new estimates. Estimates that are already calculated keep their figures. You cannot undo this here."; buttons "Keep customer", "Delete customer"). While an open estimate uses the customer: "Brightwater Controls cannot be deleted yet" naming the estimate with a link, and "Approve it, or move it to another customer, and then delete this one." Deletion is soft (A-13). Whether delete should exist is OQ-UX-14. States: List · Edit · New · Reset dialog · Delete · Delete blocked · Loading · Empty · No match · Error. Percent rates use whole numbers.
 
 ### SCR-13 Materials, exchange rates, treatment list
-Tabs. **Materials:** Material in Drawing (unique), Material Considered, Price per kg, Specific gravity, Scrap rate per kg; **"Not applicable"** row is system-created, locked (lock icon and the word "Locked"; tooltip text also visible), all rates 0 (Q-33). Duplicate: "A material with this name already exists. Names must be unique." **Exchange rates:** 1 USD in ₹, 1 EUR in ₹, "Last updated by Meera Iyer, 02 Nov 2026, 15:10 IST." **Treatment / Color:** rename, delete, add; "Not applicable" and "Other" are locked ("Always offered; the Engineer types the text"). Rates are never sent to Engineers.
+Tabs. **Materials:** Material in Drawing (unique), Material Considered, Price per kg, Specific gravity, Scrap rate per kg; **"Not applicable"** row is system-created, locked (lock icon and the word "Locked"; tooltip text also visible), all rates 0 (Q-33). Duplicate: "A material with this name already exists. Names must be unique." **Exchange rates:** 1 USD in ₹, 1 EUR in ₹, saved together, "Last updated by Meera Iyer, 02 Nov 2026, 15:10 IST." Hints: "Converts prices to US dollars. The rate (BH) feeds Unit Production Price (USD), BJ." and the same for euros (BI, BK); the letters come from the registry (UX-23). **Treatment / Color:** rename, delete, add; "Not applicable" and "Other" are locked ("Always offered; the Engineer types the text"). Rates are never sent to Engineers. **Delete** on materials (UX-16): AlertDialog "This material no longer appears in the Material in Drawing list. Estimates that are already calculated keep their figures."; blocked while an open estimate uses it ("MS sheet, cold rolled cannot be deleted yet" with the estimate named). The "Not applicable" and "Other" rows have no delete. States: Default · Duplicate name · Delete · Delete blocked · Loading · Error.
 
 ### SCR-14 Users
-Table (name, e-mail, role, status, actions: edit, reset password, deactivate). Add user: name, e-mail, role, first password (min 10, proposed). A second Admin: "There is already an active Admin. Only one Admin can be active." with the Admin named in the page notice. Own row cannot be deactivated (disabled with an accessible name that says why). Reset password dialog; deactivate AlertDialog ("can no longer sign in. Their tasks and estimates stay as they are"). **Hand over Admin role** (R2) in one step with a user choice and a warning that the caller becomes a Lead and is signed out. States: Default · Add · Second Admin refused · Reset · Deactivate · Hand over · Loading · Error.
+Table (name, e-mail, role, status, actions: edit, reset password, deactivate). Add user: name, e-mail, role, first password (10 to 128 characters, proposed; the person must change it at their first sign-in, SCR-23). Password messages: see 6.0; states "Password too common" (add user) and "Password same as e-mail" (reset). A second Admin: "There is already an active Admin. Only one Admin can be active." with the Admin named in the page notice. Own row cannot be deactivated (disabled with an accessible name that says why). Reset password dialog; deactivate AlertDialog ("Arjun Rao can no longer sign in. Their tasks and estimates stay as they are. You can activate them again later."; from Release 2 it adds "You can reassign their open tasks.", UX-21). **Hand over Admin role** (R2) in one step with a user choice and a warning that the caller becomes a Lead and is signed out. States: Default · Add · Second Admin refused · Password too common · Reset · Password same as e-mail · Deactivate · Hand over · Loading · Error. The hand-over has no password step in this design (FR-080 names three actions); the architect recommends adding one (OQ-ARCH-08), and the dialog can take it with no layout change.
 
 ### SCR-15 Settings (R2)
 Switch **E-mail alerts: ON** (role `switch`, state written in words), sender name, sender e-mail, **Send test e-mail** (to the Admin's own address, OQ-UX-09). Mail server credentials are not here ("set on the server by Accucut IT"). States: ON · OFF · Test sent · Test failed ("The mail server did not answer…") · Save failed · Loading.
 
 ### SCR-16 Audit log and change history
-Filters: Who, Event, From, To. Columns: When (IST), Who, Event, Object, Before → after. No edit or delete control anywhere. Events: Approval, Unlock, Price override, Master data edit (R1); Formula edit, Field insert or delete, Checkpoint revert (R2, FR-079). States: All · Configuration · Empty ("No entries match") · Loading · Error. Phone: cards.
+Filters: Who, Event, From, To. Columns: When (IST), Who, Event, Object, Before → after (the arrow is an icon with the text "to"). No edit or delete control anywhere. Event filter: Approval, Unlock, Price override, Master data edit, **User change** (R1); **Task change** (R2, FR-040); Configuration change: Formula edit, Field insert or delete, Checkpoint revert (R2, FR-079). A revert reads "Version 8 → Version 9 (from version 7)": the version it made and the version it copied (UX-19). Lead edits to inputs are not logged (OQ-ARCH-07). States: All · Configuration · Empty ("No entries match") · Loading · Error. Phone: cards that follow the chosen filter.
 
 ### SCR-17 Fields and formulas (R2)
-Table in column order: Column · Field · Section or stage · **Kind** (Input, Auto, Output) · Formula · actions (Admin: edit formula, insert after, delete). **Lead view:** same table with no actions and a banner "View only. Formulas are shown so you can check the arithmetic." The side menu marks it "View only". States: Default · Loading · Error. Search by letter, name or formula; filter by kind. Phone: cards of key rows with search.
+Table in column order: Column · Field · Section or stage · **Kind** (Input, Auto, Output; BH and BI are Outputs as in SPEC §7.4) · Formula · actions (Admin: edit formula, insert after, delete). **System fields** (A, H, BG, BL, BO) show a lock tag "System" and no delete; **Edit formula** is not offered on A, F, I and BO, which have no formula to edit (UX-08). BL is listed as `ROLLUP(BG)` with one sentence: "For each item: its quantity times the sum of BG over the item and its rows. The estimate total is the sum over items." (UX-09). **Lead view:** same table with no actions and a banner "View only. Formulas are shown so you can check the arithmetic." The side menu marks it "View only". States: Default · Loading · Error. Search by letter, name or formula; filter by kind. Phone: cards of key rows with search.
 
 ### SCR-18 Formula editor (R2)
-Monospace editor, suggestion list (letters with field names, rate names), live check (300 ms pause) in a polite live region, preview against a chosen sample row, "Used by" list. Messages: valid "The formula is valid. It uses P (Cutting Time) and the rate Cutting-Rate-per-Sec. Column AL feeds AY." · unknown `"Cuting-Rate-per-Sec" is not a column letter, rate name or function. Check the spelling, or add the rate in the Process master first.` · syntax "The formula ends too soon. A number or name is missing after "+" (position 29)." · loop "This formula would make AL depend on itself. The loop is AL → AY → AL. Remove one of these references." Save is disabled until valid; saving opens the password step: "Confirm with your password"; wrong: "That password is not correct. Try again." Success: "Formula saved as configuration version 10."
+Monospace editor, suggestion list (letters with field names, rate names), live check (300 ms pause) in a polite live region, preview against a chosen sample row ("Sample rows come from the latest calculated estimate, Q-2026-0318. The preview changes nothing."; with none: "There is no calculated estimate to try this on yet. The check above still works."), "Used by" list. The function line names `ROLLUP(column)`, valid for whole-estimate fields only. Messages: valid "The formula is valid. It uses P (Cutting Time) and the rate Cutting-Rate-per-Sec. Column AL feeds AY." · unknown `"Cuting-Rate-per-Sec" is not a column letter, rate name or function. Check the spelling, or add the rate in the Process master first.` · syntax "The formula ends too soon. A number or name is missing after "+" (position 29)." · loop "This formula would make AL depend on itself. The loop is AL → AY → AL. Remove one of these references." Save is disabled until valid; saving opens the password step: "Confirm with your password"; wrong: "That password is not correct. Try again." Too many wrong passwords: "Too many wrong passwords. Try again in 15 minutes. Your formula is kept." (the same pattern applies to the password steps on SCR-20 and SCR-21). Success: "Formula saved as configuration version 10." **Editing BL:** the formula shows `ROLLUP(BG)` and "ROLLUP(BG) adds column BG over each item and its rows, times the item quantity, and adds the items together. BN and BO read from it."; if the Admin replaces it so ROLLUP is no longer used, a warning (not an error, saving stays possible) says "This formula no longer uses ROLLUP. The estimate total would stop following the cost rule … New and unlocked estimates would be priced differently. You can still save it; approved estimates are not affected." (UX-09; the cost rule is D-12).
 
 ### SCR-19 Insert field (R2)
-Three steps: 1 type (Input, Output, Input and its cost column); 2 details (label, type, default, **insert after column**, group; for the cost column: label, position, formula); 3 preview of letter changes ("AY → BA" and so on, including the product cells BL2 → BN2, BO2 → BQ2) and **Insert 2 fields**. Notices: new inputs are mandatory and visible to Engineers; new outputs are hidden from them and join a total only when that total's formula is edited; approved estimates keep their layout. Errors: "Enter a label."; unknown name in the formula as SCR-18. No password step (FR-080 lists only save, delete and revert).
+Three steps: 1 type (Input, Output, Input and its cost column); 2 details (**input:** label, type of value, default, **insert after column**, group, unit shown beside the input, hint, Excel column width, Excel number format, choices one per line for "Choice from a list", and a visibility rule "Always" or "Only when another field has a value"; **cost column:** label, position, formula, stage in cost details, "hide the line when this input is 0" (hide-when-zero), width and format; UX-10); 3 preview of letter changes ("AY → BA" and so on, including the product cells BL2 → BN2, BO2 → BQ2) and **Insert 2 fields**. Notices: new inputs are mandatory and visible to Engineers; new outputs are hidden from them and join a total only when that total's formula is edited; approved estimates keep their layout. Errors: "Enter a label."; unknown name in the formula as SCR-18. No password step (FR-080 lists only save, delete and revert).
 
 ### SCR-20 Delete field (R2)
-Dialog over the list. **Blocked:** "Cannot delete AL Cutting Cost yet. 1 formula uses this field." with the referencing formulas and an Edit link. **Confirm:** "No formula uses this field. Deleting it moves every later field one letter to the left." + password; "Delete field" (danger). Wrong password: message in the dialog.
+Dialog over the list. **Blocked** (state label "Blocked by formulas"): "Cannot delete AL Cutting Cost yet. 1 formula uses this field." with the referencing formulas and an Edit link. **Confirm:** "No formula uses this field. Deleting it moves every later field one letter to the left." + password; "Delete field" (danger). Wrong password: message in the dialog.
 
 ### SCR-21 Checkpoints and versions (R2)
-Current version card (version number, saved by and at, what uses it), **Save as a checkpoint** (name required: "Enter a name for this checkpoint."), checkpoint table (name, version, saved, by, **Revert**). Revert dialog: what happens (new version, estimate data untouched, approved estimates keep theirs, can be undone), password. After revert a success notice offers **Revert to the version from before** (undo). States: Default · Saved · Name missing · Revert · Wrong password · Reverted · Empty · Loading · Error.
+Current version card (version number, saved by and at, what uses it), **Save as a checkpoint** (name required: "Enter a name for this checkpoint."), checkpoint table (name, version, saved, by, **Revert**). Revert dialog: what happens (new version, estimate data untouched, approved estimates keep theirs, can be undone), password. After revert a success notice offers **Revert to the version from before** (undo). States: Default · Saved · Name missing · Revert · Wrong password · Reverted · Empty · Loading · Error. In the mock-up the history is one story: checkpoint "Before AY insert" is version 7 (01 Nov 17:00), a formula edit made version 8, the revert on 02 Nov 11:30 made version 9, which is the current configuration; a revert now would make version 10.
 
 ### SCR-22 E-mail alert previews (R2)
 Three plain, branded messages: **Task assigned** (To Engineer, Cc assigner; task, folder, deadline IST, "Open the task"), **Task overdue** (same recipients; "This task is now overdue. It was due on …"), **Daily digest** at 11:00 IST (To Engineer with overdue tasks, Cc the Leads who assigned them; table of tasks and "Overdue by"). Alerts OFF: nothing is sent. No cost, rate or customer price in any message. Each e-mail also has a plain-text version with the same lines; links are full addresses.
 
 ### SCR-23 Account
-Profile (name, e-mail, role: read-only) and Change password: Current, New (min 10, proposed), Repeat. Errors: "Your current password is not correct." / "The new password must be at least 10 characters." / "The two new passwords do not match." Success: "Your password has been changed. Use the new one the next time you sign in."
+Profile (name, e-mail, role: read-only) and Change password: Current, New (10 to 128 characters, proposed), Repeat. Errors: "Your current password is not correct." / "The new password must be at least 10 characters." / "Use 128 characters or fewer." / "The password cannot be the same as your e-mail address." / "That password is too common. Choose a different one." / "The two new passwords do not match." Success: "Your password has been changed. Use the new one the next time you sign in."
+**"Set a new password" state (UX-17).** Shown to the first Admin (the bootstrap command sets `must_change_password`) and to anyone whose password the Admin set or reset, if OQ-UX-15 is answered yes. Heading "Set a new password"; notice "Choose a new password to continue. The password you were given is only for your first sign-in. Until you change it, every page opens this one. After that you go straight to your work."; no profile card and no side menu. States: Default · Errors · Too long · Same as e-mail · Too common · Must change password · Success.
 
 ### SCR-24 About
-Logo, "ACCUCUT LASERS · Quotation Portal", one description sentence (OQ-UX-10), **"Version No: 1.0"**, **"© Accucut Lasers Pvt Ltd. All rights reserved."** exactly (FR-010).
+Logo, "ACCUCUT LASERS · Quotation Portal", one description sentence (OQ-UX-10; worded without any cost word so Engineer pages hold none: "…the portal does the calculation, and a Lead or Admin reviews and approves the estimate."), **"Version No: 1.0"**, **"© Accucut Lasers Pvt Ltd. All rights reserved."** exactly (FR-010).
 
 ### SCR-25 Navigation and account menu
 Table of what each role sees (section 4 as a matrix); how the menu behaves at each size; the open account menu. Phone frame shows the drawer.
 
 ### SCR-26 System pages
-No access (403), not found (404), server error (reference `req-…`, never technical detail), session ended. Each has one clear action.
+No access (403), not found (404), server error (reference `req-…`, never technical detail), session ended. Each has one clear action. For an Engineer, an estimate address that is missing and one that belongs to someone else both show **No access**, with identical content and timing, so sequential task codes cannot be probed (UX-22). "Not found" is for other kinds of address and other roles.
 
 ---
 
@@ -562,7 +607,9 @@ Source of truth: `docs/03-ux/screens/screens.css` (`:root`). The names follow th
 | Body | 14 / 22 | 400 | Text, inputs, buttons |
 | Label | 12 / 16 | 500 or 600 | Field labels, hints, tags, table heads, column letters (mono) |
 
-Fonts: IBM Plex Sans, IBM Plex Mono, and Tinos Bold for the company name, **self-hosted** from `screens/fonts/` (open licence, copies of the licences included). This answers analyst finding F-19 (the sample loaded fonts from an external service). Fallbacks: system UI sans, Times New Roman (Tinos is metric-compatible with it).
+Fonts: IBM Plex Sans, IBM Plex Mono, and Tinos Bold for the company name, **self-hosted** from `screens/fonts/` (SIL OFL 1.1, copies of the licences included). This answers analyst finding F-19 (the sample loaded fonts from an external service). Fallbacks: system UI sans, Times New Roman (Tinos is metric-compatible with it).
+
+**Glyph coverage (UX-13, checked with `fontkit` on the files, and in the browser).** The first set of six Latin files held none of ₹ (U+20B9), Σ (U+03A3), → (U+2192) or ← (U+2190), so those fell back to whatever the device had. Now: **₹** comes from five added files, the open-licence Latin-extended subsets of Plex Sans 400, 500, 600 and Plex Mono 400, 500 (about 76 KB), declared with `unicode-range` so a page without a ₹ does not load them; the production build keeps the same subset (architecture §11). **Σ and the arrows are inline SVG icons** with a text alternative (visually hidden "Sum including parts below", "to"), so they look the same everywhere and need no font. € $ × − — · © are in the base files. Tinos Bold carries only the ASCII name.
 
 ### 7.2 Spacing, shape, controls
 4-point scale: 4, 8, 12, 16, 24, 32, 48. Radius 4, 8, 12. **One control height: 44 px** (above WCAG 2.5.8's 24 px and PRD NFR-017's 44 px). One button: 44 px, 16 px side padding, 14 / 600; four variants (primary red, secondary outline, ghost, danger) and an icon-only square. Row-level icon buttons in dense tables are 36 px.
@@ -599,7 +646,7 @@ Listed on SCR-00 section 10: Button, Input, Label, Select, Checkbox, Switch, Tab
 |------|------|
 | Structure | `lang="en-IN"`; one `h1` per page; landmarks (banner, navigation, main); a skip link first; page `title` unique per screen |
 | Keyboard | Everything works without a mouse. Tab order follows reading order. Tabs and the tree use arrow keys; Escape closes drawers and dialogs; Enter moves to the next field on the guided form. No keyboard trap |
-| Focus | Visible 3 px graphite ring with 2 px offset (white ring on the dark menu), contrast 17.7:1. Focus is never hidden by a sticky bar (scroll padding). Dialogs: focus in, trapped, returned. After a route change focus goes to the `h1`; after Calculate blocked, to the error summary |
+| Focus | Visible 3 px graphite ring with 2 px offset (white ring on the dark menu), contrast 17.7:1. Focus is never hidden by a sticky bar: the top bar, section strip and action bar are **measured** (not fixed) and feed `scroll-padding` and the height of the sticky tree panel. On a phone the action bar wraps to about 181 px, so the offset is about 189 px, not the 96 px a one-line bar needs (UX-14). Dialogs: focus in, trapped, returned. After a route change focus goes to the `h1`; after Calculate blocked, to the error summary |
 | Labels and names | Every control has a visible label; icon-only buttons have an accessible name; column letters are read as "Excel column J" |
 | Errors | Identified in text with an icon and a thick border, linked from a summary, `aria-invalid` and `aria-describedby`; instructions say how to fix; typed values are kept |
 | Colour | Text 4.5:1, large text and UI 3:1 (section 7.3). Nothing is conveyed by colour alone: overdue, status, missing data and errors each have an icon and words |
@@ -629,7 +676,7 @@ Every user-facing FR (all 97) is mapped; entries marked "none" say why.
 | FR-003 | SCR-02, SCR-01 (link) | UJ-01, 14 |
 | FR-004 | SCR-14 | UJ-11 |
 | FR-005 | SCR-14 (second Admin refused) | UJ-11 |
-| FR-006 | SCR-14 (Hand over, R2) | UJ-11 |
+| FR-006 | SCR-14 (Hand over, R2), SCR-16 (User change) | UJ-11 |
 | FR-007 | SCR-26, SCR-25 | UJ-01 |
 | FR-008 | SCR-05, SCR-03-engineer, SCR-23, SCR-24, SCR-22 (no cost anywhere in Engineer screens) | UJ-04, 05 |
 | FR-009 | SCR-25, top bar of every screen | UJ-01 |
@@ -652,10 +699,10 @@ Every user-facing FR (all 97) is mapped; entries marked "none" say why.
 | FR-026 | SCR-07, SCR-06 ("—") | UJ-06 |
 | FR-027 | SCR-06 (Recalculate, 2 decimals), SCR-05 (no preview) | UJ-05, 07 |
 | FR-028 | SCR-11, SCR-12 (whole percentages) | UJ-10 |
-| FR-029 | SCR-06, SCR-07, SCR-10 (parent figure labelled against export row) | UJ-06, 09 |
+| FR-029 | SCR-06, SCR-07, SCR-10 (parent figure labelled against export row, with the BG, BJ and BK sums) | UJ-06, 09 |
 | FR-030 | SCR-06 ("How the total is built"), SCR-10 (reconciliation) | UJ-06, 09 |
 | FR-031 | SCR-06 (calculated at, configuration version), SCR-09 | UJ-07, 08 |
-| FR-032 | SCR-04 | UJ-02 |
+| FR-032 | SCR-04; task notes shown on SCR-05 and SCR-06 | UJ-02 |
 | FR-033 | SCR-03, SCR-04, SCR-05, SCR-06 (link and Copy path) | UJ-02, 03 |
 | FR-034 | SCR-03 | UJ-03 |
 | FR-035 | SCR-03 (Lead chip, R1+) | UJ-03 |
@@ -663,7 +710,7 @@ Every user-facing FR (all 97) is mapped; entries marked "none" say why.
 | FR-037 | top bar (every screen), SCR-03 Overdue tab | UJ-13 |
 | FR-038 | SCR-03 (Closed), SCR-08, SCR-09 | UJ-06, 08 |
 | FR-039 | SCR-03 (filters, R1+) | UJ-02 |
-| FR-040 | SCR-04 (edit), SCR-03 (row action) | UJ-02 |
+| FR-040 | SCR-04 (edit), SCR-03 (row action on open tasks), SCR-16 (Task change) | UJ-02 |
 | FR-041 | SCR-03, SCR-05, SCR-06, SCR-10 (IDs, file name) | UJ-02, 09 |
 | FR-042 | SCR-05 (customer first, change confirmation) | UJ-04 |
 | FR-043 | SCR-05 (tree actions) | UJ-04 |
@@ -712,7 +759,7 @@ Every user-facing FR (all 97) is mapped; entries marked "none" say why.
 | FR-086 | SCR-00 and every screen | all |
 | FR-087 | SCR-05 (reserved region, toggle) | UJ-04 |
 | FR-088 | state patterns in 6.0, SCR-00 section 09, every data screen | all |
-| FR-089 | `<head>` of every page; section 8 | all |
+| FR-089 | `<head>` of every page; section 8; SCR-02 is `noindex` because its address carries a token | all |
 | FR-090 | none: dark mode is R3 and out of scope (C-5); tokens named to allow it | |
 | FR-091 | none: installation is documentation, not a screen | |
 | FR-092 | none: offline is the next release (Q-18) | |
@@ -737,12 +784,14 @@ Every user-facing FR (all 97) is mapped; entries marked "none" say why.
 | R-7 | Units beside inputs (mm, kg, sec) are right | They are inferred (OQ-UX-07) | Ask two Engineers to read the screen aloud |
 | R-8 | Approve being disabled when stale is clearer than allowing it | OQ-UX-06 | Task 4 |
 | R-9 | Admin understands the letter preview before inserting a field (R2) | Costly mistake | Task 6 |
+| R-10 | On a phone with the keyboard open, the 189 px sticky offset still leaves the focused field visible | Measured in a desktop browser at 360 px only (UX-14); the keyboard takes more of the screen | Task 5 on one real phone, tabbing and typing through section 08 |
+| R-11 | A Lead or Admin understands the warning when a formula stops using ROLLUP (R2) | It changes how every new estimate is priced | Task 6, second part: edit BL to SUM(BG) and say what changes |
 
 **Suggested tasks (5 Engineers, 3 Leads, the Admin; think aloud).**
 1. Engineer: enter a part with 25 inputs from a printed sheet. Success: complete without help; median under 4 minutes for a typical part (to be calibrated against Excel).
 2. Engineer: a part that needs no welding, no bending and no fasteners. Success: enters 0, or "None", with no questions.
 3. Engineer: press Calculate with two parts incomplete; fix them. Success: finds both parts and fields in under 30 seconds.
-4. Lead: open an estimate, explain why part 1.4 shows ₹ 709.97 on screen but ₹ 309.19 in the file; approve at a different price. Success: explains it correctly; finds the override notice.
+4. Lead: open an estimate, explain why part 1.4 shows ₹ 709.97 on screen but ₹ 309.19 in the file; explain why item 1 counts ₹ 10,123.45 although 2 × 5,061.72 as shown is 10,123.44 (rounding, UX-02); approve at a different price. Success: explains both correctly; finds the override notice.
 5. Engineer on a phone: open the task, copy the path, open the tree, change part. Success: no horizontal scrolling, finds the tree drawer.
 6. Admin (R2): insert a field and say which letters change; then try to delete a used field. Success: reads the preview; understands why deletion is blocked.
 
@@ -752,49 +801,83 @@ Targets: task success at least 90 percent without help; no critical errors on ta
 
 ## 11. Open questions
 
-| ID | Question | Owner | Needed by | Assumption used meanwhile |
-|----|----------|-------|-----------|---------------------------|
-| OQ-UX-01 | Do they want a **"Not needed for this part" switch** per section that fills zeros? (They call it undecided; the PRD records it closed.) | Santhosh | G3 approval | Not designed; Engineers enter 0; a free slot is kept in each section header |
-| OQ-UX-02 | Should a price that differs from BL require a **reason**? | Santhosh | G3 | No reason field; the difference is logged |
-| OQ-UX-03 | Should the sign-in page be indexable, and should shared links carry an **image** (the logo)? | product-manager | G3 | Sign-in indexable with generic text; no image tag |
-| OQ-UX-04 | Which customer fields are required? | Santhosh | G4 | Name only; phone, e-mail, address optional |
-| OQ-UX-05 | **Password rule** (length, other rules)? | Santhosh, solution-architect | G3 | At least 10 characters |
-| OQ-UX-06 | May a Lead approve while totals are stale or before the first calculation? | Santhosh | G3 | No: Approve is disabled and says why |
-| OQ-UX-07 | **Units** beside inputs (mm, kg, sec, nos, holes, ₹, ₹ per piece) and on rates are inferred from formulas | Admin | G4 | As shown |
-| OQ-UX-08 | How are spaces and symbols in the customer name written in the **file name**? | solution-architect | G4 | Spaces become underscores |
-| OQ-UX-09 | Should the **test e-mail** go to the Admin's own address or a typed one? | Santhosh | R2 | Own address |
-| OQ-UX-10 | Wording of the **About** description | Santhosh | G3 | One generic sentence |
-| OQ-UX-11 | After a **Lead edits** an Engineer's inputs on a Submitted estimate, is the Engineer told? | Santhosh | G4 | Not told; the audit log is the record |
-| OQ-UX-12 | Should **Engineers** see a task's status "Approved" (and Closed) without a price? | Santhosh | G3 | Yes, status only |
+Status words: **Open** = waiting for the owner. **Answered, proposed** = the architect proposed a value (architecture §16.2) and the delivery lead must confirm it. **Closed** = nothing left to decide.
+
+| ID | Question | Owner | Needed by | Status and assumption used meanwhile |
+|----|----------|-------|-----------|--------------------------------------|
+| OQ-UX-01 | Do they want a **"Not needed for this part" switch** per section that fills zeros? (They call it undecided; the PRD records it closed.) | Santhosh | G3 approval | Open. Not designed; Engineers enter 0; a free slot is kept in each section header. No effect on architecture either way |
+| OQ-UX-02 | Should a price that differs from BL need a **reason**? | Santhosh | G3 | Open. No reason field; the difference is logged (the schema can take one optional column) |
+| OQ-UX-03 | Should the sign-in page be indexable, and should shared links carry an **image** (the logo)? | product-manager | G3 | Open. Assumed indexable, no image. The architect prefers `noindex` on sign-in and no image until Q-16 and Q-18 are answered. SCR-02 is already `noindex` |
+| OQ-UX-04 | Which customer fields are required? | Santhosh | G4 | Answered, proposed: name only (the schema requires only the name) |
+| OQ-UX-05 | **Password rule**? | Santhosh | G3 | Answered, proposed: 10 to 128 characters, no composition rule, not the e-mail address, not a common password (with OQ-ARCH-03 session length 12 h) |
+| OQ-UX-06 | May a Lead approve while totals are stale or before the first calculation? | Santhosh | G3 | Answered, proposed (A-04): no; Approve is disabled and says why |
+| OQ-UX-07 | **Units** beside inputs and on rates are inferred from the formulas | Admin | HOLD-01 | Held in the registry; the Admin confirms with the master data |
+| OQ-UX-08 | File name: spaces and symbols | solution-architect | G4 | Closed (proposed): spaces to underscores, other symbols removed, 60 characters, IST date |
+| OQ-UX-09 | Test e-mail recipient | Santhosh | R2 | Closed (proposed): the signed-in Admin's own address only |
+| OQ-UX-10 | Wording of the **About** description | Santhosh | G3 | Open. Reworded to avoid any cost word: "…the portal does the calculation, and a Lead or Admin reviews and approves the estimate." |
+| OQ-UX-11 | Is the Engineer told when a Lead edits their inputs? And are Lead edits logged? | product-manager | G4 | See OQ-ARCH-07: this design does not log them. Not told |
+| OQ-UX-12 | Should **Engineers** see a task's status "Approved" (and Closed) without a price? | Santhosh | G3 | Answered, proposed: yes, status only (a status is not a cost) |
+| OQ-UX-13 | Is a **Part Model picture** required on every part (Calculate refuses a blank), including assemblies? There is no "enter 0" for a picture. (OQ-ARCH-04) | Santhosh, via product-manager | G4 | Open. As built: required, and no message is defined; the registry flag changes this in one place |
+| OQ-UX-14 | Should **customers and materials** be deletable (SCR-12, 13)? (UX-16) | product-manager | G4 | Open. Designed as soft delete, refused while an open estimate uses it |
+| OQ-UX-15 | Should "**Set a new password**" also follow every password the Admin sets or resets? (UX-17; the architect recommends yes) | Santhosh | G4 | Open. The state exists; it applies to the first Admin in any case |
+| OQ-UX-16 | Should a Lead be told when **rates changed after the last calculation but before approval**? (OQ-ARCH-06) | Santhosh, via product-manager | G4 | Open. Not told; approval uses the calculated figures |
+| OQ-UX-17 | Should **Admin hand-over** ask for the password? (OQ-ARCH-08; FR-080 names only three actions; the architect recommends adding it) | product-manager | G4 | Open. No password step; the dialog can take one with no layout change |
+| OQ-UX-18 | May a Lead read formulas in Release 1 on SCR-17, not only on SCR-07? (OQ-ARCH-09) | product-manager | G4 | Open. SCR-17 (Lead) is marked R2 |
+| OQ-ARCH-01 | Confirm A-05 (a never-calculated estimate exports inputs with empty costs) and A-08 (a Lead's Recalculate on a Draft sets Submitted); both shown on SCR-10 and SCR-06 | product-manager | G4 | Open, as shown |
 | Q-16 | Sharper logo | Santhosh | open | Current 200 × 200 file |
-| Q-31 | Per-item totals in the export | Santhosh | G3 | Row 2 only |
-| Q-33 | Values and lock of "Not applicable" | Santhosh | G3 | All 0, locked |
-| Q-18 | Hosting details; offline meaning | Santhosh | G3 | Internet-hosted |
+| Q-18 | Hosting details; offline meaning | Santhosh, Accucut IT | G3 | Open. Internet-hosted assumed |
+| Q-31 | Per-item totals in the export | Santhosh | G3 | Open. BL2, BN2, BO2 in row 2 only |
+| Q-32 (a) | Own-words confirmation, and what **QTY per Assy** means (the rule behind every total on SCR-06, 07, 10) | Santhosh | G3 approval (DL-006) | Open. D-12 stays the working rule; wording on SCR-06 and SCR-10 states it, so it changes if (a) changes |
+| Q-33 | Values and lock of "Not applicable" | Santhosh | G3 | Open. All 0, locked |
+| Q-34 | Scope for the completion date | Santhosh | G3 approval (DL-004) | Open. This design covers both scopes |
+
+### 11.1 Questions the delivery lead must answer at G3
+
+These are the ones the screens depend on or the master has made due at G3 approval. Everything else in the table can wait for G4.
+
+1. **Q-32 (a):** the quantity rule in their own words, and what "QTY per Assy" means. G3 cannot pass without it (DL-006).
+2. **Q-34:** which scope the completion date covers (DL-004).
+3. **Q-18:** hosting details (address, e-mail service and sender, backups, who updates).
+4. **Q-31:** the export holds BL2, BN2 and BO2 once in row 2, or also a total per item.
+5. **Q-33:** the "Not applicable" material and treatment entries: all rates 0, locked.
+6. **OQ-UX-01:** the "Not needed for this part" switch: yes or no.
+7. **OQ-UX-02:** should a price that differs from the calculated total need a reason.
+8. **OQ-UX-05, OQ-ARCH-03:** confirm the password rule (10 to 128 characters, no composition rule, not the e-mail address, not a common password) and the 12-hour session.
+9. **OQ-UX-06:** confirm that Approve is refused while totals are stale or never calculated.
+10. **OQ-UX-10:** confirm the About sentence.
+11. **OQ-UX-12:** confirm that Engineers see the status "Approved" with no price.
+12. **OQ-UX-03:** sign-in page indexable or not (the product-manager decides; they may want to say).
 
 ---
 
+
 ## 12. Verification of the review screens
 
-Run on 2026-11-01 with Chrome (headless, Playwright) against the files in the working tree: all 41 HTML pages (29 screen pages, 11 device frames and the index).
+Run on 2026-11-01 with Chrome (headless, Playwright, axe-core) against the files in the working tree: all 41 HTML pages (29 screen pages, 11 device frames and the index). The run was repeated after the architecture reconciliation (version 0.2); results below are from that repeat unless marked.
 
 | Check | Method | Result |
 |-------|--------|--------|
 | Opens by double-click, no server, no external request | Pages loaded from file addresses; fonts are self-hosted in `screens/fonts/` | Pass |
-| No horizontal page scroll at **360 x 800, 768 x 1024 and 1280 x 800** | Every screen and **every state link** (115) at all three widths; device frames at 1280 | Pass after two fixes (below). Tables scroll only inside their own container |
+| No horizontal page scroll at **360 × 800, 768 × 1024 and 1280 × 800** | Every screen page, every state link (134), all three widths; device frames at 1280 | Pass. Tables scroll only inside their own container |
 | Script errors | Page and console errors captured on every load | None |
-| WCAG 2.0, 2.1 and 2.2 A and AA rules (axe-core) | Full run at 1280 on every state of every screen; then a re-run on the first three states of every page after the fixes | The full run found three classes of defect, all fixed: the accessible names of the brand link, account menu and multi-select did not contain their visible text; contrast of the greyed backdrop behind dialogs; a scrollable table without keyboard focus. Re-run: **0 violations on 93 page-states**. axe cannot judge focus order, meaning of text or screen-reader speech, so the manual rules in section 8 still apply |
-| Engineer screens show no cost, rate, formula or preview | Text search of SCR-03 (Engineer), SCR-05 (all widths), SCR-23, SCR-24, SCR-26 for amounts, BG, BL, BN, BO, the sigma tag, "Material Rate" and "formula", outside the review notes | None found. The only rupee signs are unit tags on the Machining, Plating and Tool Cost inputs, which are the Engineer's own entries |
-| Meta tags | Script over all pages: title 60 characters or fewer, description 160 or fewer, og:title, og:description and robots present | Pass on all 41 |
+| WCAG 2.0, 2.1 and 2.2 A and AA rules (axe-core) | Run at 1280 on every state of every screen page, then re-run at all three widths and every state on the 7 pages changed afterwards (SCR-06, 07, 08, 18, 23, 24, index; 105 loads) | The full run found one defect after the reconciliation (contrast of the new working line on the dark BG row), fixed. Re-run: **0 violations**. axe cannot judge focus order, meaning of text or speech, so the manual rules in section 8 still apply |
+| **Glyphs (UX-13)** | `fontkit` on the 6 original files and the 5 added files; Chrome's platform-font report on the first rupee sign on SCR-05, 06, 10, 16; search of visible text for Σ, → and ← | Originals lacked ₹, Σ, → and ←. Now ₹ is drawn by IBM Plex (the added files are requested), and no Σ, → or ← remains in visible text |
+| **Sticky offsets (UX-14)** | Tab through every field of SCR-05 and SCR-06 (default, stale, approved) at 360, 768 and 1280 px; test whether the focused element lies under the top bar, section strip or action bar | Measured action bar 181 px on a phone (offset 189 px); about 290 focus stops, **0 obscured**. One failure found and fixed on the way: the sticky tree panel ran under the action bar. Not tested: a real phone with its keyboard open (R-10) |
+| **Figures agree across screens** | Script reads every number with 2 to 4 decimals on SCR-03, 05 to 10 and 16 and checks it against the data model; checks the identities below | Every figure comes from the model. Identities hold: 1.4 + 1.4.1 = 709.97; 1.1 + children = 1,163.54; item 1 = own row + the four direct-child figures = 5,061.72; BL = 2 × 5,061.72 + 3 × 59.82 (unrounded) = 10,302.91; BN = BL ÷ total Tool Cost 4,900.00 = 2.10; each working line on SCR-07 reproduces its result (the generator throws otherwise). One error found and fixed: SCR-08 said "₹ 302.91 lower" for ₹ 10,300.00 against ₹ 10,302.91 (now ₹ 2.91, computed) |
+| **Engineer screens show no cost, rate, formula, price or Σ** | Visible text of SCR-01, 02, 03 (Engineer), 05, 23, 24, 26 in every state (41 page states), outside the review notes: amounts, BG, BL, BN, BO, BJ, BK, "Material Rate", "exchange rate", "formula", "rate", "unit production", "screen figure", "Excel row", "price" | None. The only rupee signs are unit tags on the Machining, Plating and Tool Cost inputs, which are the Engineer's own entries. (The About sentence said "approves the price" before; reworded) |
+| Meta tags | Script over all pages: title 60 characters or fewer, description 160 or fewer, og:title, og:description, robots | Pass on all 41; SCR-02 is `noindex, nofollow` |
 | Contrast of every token pair | WCAG formula on the hex values (section 7.3) | Pass; the narrowest margin is white on the brand red at 4.59:1 |
-| Looked at by eye | Desktop, tablet and phone for SCR-03, 04, 05, 06, 07 and 10 | Fixed: workspace grid, hamburger showing on desktop, brand name colliding with the bell at 360 px, tabs cut off at 360 px, export table clipped, a default-state field shown as an error |
+| Looked at by eye | Desktop, tablet and phone for SCR-03, 04, 05, 06, 07, 10 | Fixed along the way: workspace grid, hamburger showing on desktop, brand name colliding with the bell at 360 px, tabs cut off at 360 px, export table clipped, a default-state field shown as an error |
 
-Defects found and fixed during verification: (1) visually hidden labels inside scrolling tables escaped their container and caused 112 px (SCR-13 at 768) and 25 px (SCR-21 at 360) of page scroll; (2) a long file name forced 385 px of scroll on SCR-10 at 360.
+Defects found and fixed during verification (both rounds): hidden labels inside scrolling tables escaped their container (112 px of scroll on SCR-13 at 768, 25 px on SCR-21 at 360); a long file name forced 385 px of scroll on SCR-10 at 360; the empty tree-scrim div took the first grid cell; account-menu, brand-link and multi-select names did not contain their visible text; backdrop contrast; a scrollable table without keyboard focus; the Closed tab never highlighted (UX-27); SCR-08's wrong difference; the tree panel under the action bar.
 
-Known limits of the mock-ups. They do not validate or save anything. Enter-to-next-field, the multi-select, "Other" reveal, copy path, the drawers, the resizable tree and the state switcher work; most other buttons only link between screens. Hidden state variants on one page repeat element IDs, which a real build does not. No real screen reader, real phone or Windows high-contrast mode was used; section 10 calls for one real phone check.
+Known limits of the mock-ups. They do not validate or save anything. Enter-to-next-field, the multi-select, "Other" reveal, copy path, the drawers, the resizable tree, the measured sticky offsets and the state switcher work; most other buttons only link between screens. Hidden state variants on one page repeat element IDs, which a real build does not. No real screen reader, real phone or Windows high-contrast mode was used; section 10 calls for one real phone check.
 
+---
 
 ## 13. Change log
 
 | Version | Date | Change |
 |---------|------|--------|
 | 0.1 | 2026-11-01 | First G3 draft: 27 screens on 29 pages, 11 device frames, delivery lead UI decisions recorded, G2 condition 6 and condition 5 applied |
+| 0.2 | 2026-11-01 | Reconciled with architecture.md v0.2 section 16: all 27 items UX-01 to UX-27 applied (table in section 0.4; no item dropped). New states: SCR-06 Draft with Calculate and Draft after unlock; SCR-10 Not calculated and Inputs changed; delete and blocked on SCR-12 and 13; password messages on SCR-02, 14 and 23; Set a new password on SCR-23; BL and ROLLUP warning, no sample row and too many attempts on SCR-18; User change and Task change on SCR-16. Worked lines on SCR-07 reproduce their results; rounding stated on SCR-06, 07, 10; parent figure box carries BJ and BK sums and a limited written-out sum. Fonts: rupee subset added, Σ and arrows are SVG icons. Sticky offsets measured. Corrected: SCR-08 override difference, SCR-10 Download in the Approved state, tree panel under the action bar, About wording. Open questions OQ-UX-13 to 18 added; section 11.1 lists the questions for G3. 134 state links |
