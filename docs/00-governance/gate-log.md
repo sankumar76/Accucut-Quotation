@@ -144,3 +144,104 @@ G1 conditions 4 to 6 are done (AQP-1 10427, 10448, 10451), with one correction c
 **Risks registered:** RISK-001 to RISK-005 restated; RISK-006 to RISK-010 new. Proposed risks merged, not registered: parent non-zero inputs (into RISK-002), unverified calendar (into RISK-009).
 **Rationale:** The PRD and release plan pass all four mandatory G2 checks, and the document is sound work; what fails is a precondition this gate set at G1. The rule on which quoted prices rest still has two open points that change a price, one by 58.6 % on his own sample, and the revised version has not been put to him where he answers. Two precise questions cost no time against the release plan, while passing on an assumption that overrides his own sentence would repeat the failure G1 was set to stop.
 
+---
+
+## G2 – Product Definition — 2026-11-01 (attempt 2)
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2
+- **Artefacts evaluated:** at commit 8c8ca2a (equals `origin/docs/AQP-1-inception`): `docs/02-product/prd.md` v0.4, `docs/02-product/release-plan.md` v0.4, `docs/01-discovery/requirements-questions.md` v0.6 (Q-03, Q-30, Q-32), `docs/01-discovery/requirements-catalog.md` v0.6 (BRQ-004, BR-046, BR-047, ASSUMPTION-46, D-13), `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` v1.3 §6.1, §7.1, §7.4, §14 item 2, §16, §18 (D-12, D-13), §18.5. Jira: AQP-13 description, change history and all six comments; AQP-9 10403, 10442; AQP-1 latest 20 of 39 comments, including 10465, 10468, 10470, 10471; AQP-4 10398; AQP-10 10404; AQP-12 all three comments. GitHub: PR #1 through the GitHub MCP server; repository visibility through `gh`; anonymous HTTP check. Local session log, read only, for the origin of 10462, 10464 and 10465. The sample workbook was not opened at this attempt.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | G1 condition 1 met | ✱ | ✅ | Unchanged from attempt 1 (DL-001) |
+| 2 | G1 condition 2 met | ✱ | ✅ | **Met.** (b) in their own words: AQP-13 10464, relay verified. (a), (c), (d), (e) answered or accepted: 10462 read against ASSUMPTION-48. See rulings. Own-words depth on (a) is check 12 |
+| 3 | G1 condition 3 met | ✱ | ✅ | Unchanged from attempt 1 (AQP-12 10446) |
+| 4 | Every FR traces to a brief goal | ✱ | ✅ | Scripted, PRD §4: 97 FRs, no gap or duplicate; 93 carry a GOAL; FR-093 to 096 are Won't exclusions |
+| 5 | NFRs quantified | ✱ | ✅ | PRD §5: 30 of 30. 10 still carry PROPOSED values; quantified is the test here |
+| 6 | MVP scope explicit with MoSCoW | ✱ | ✅ | Scripted: Must 80, Should 10, Could 2, Won't 5; R1 67, R1+ 6, R2 17, R3 2, R-OFF 1, none 4. Equals PRD §6.2 |
+| 7 | Success metrics defined | ✱ | ✅ | PRD §3. GOAL-03 now has one stated oracle (SPEC §7.4 BL, D-12) |
+| 8 | Epics outlined | | ✅ | PRD §7: 12 epics |
+| 9 | Release plan present | | ✅ | All six v0.4 cases recomputed and match (B 10.05, 14.56, 20.12; A 13.49, 18.91, 25.62); the v0.3 dates also reproduce with the removed wait added back. No effort or scope moved. Every date stays an unadopted estimate |
+| 10 | No contradiction with the brief | | ⚠️ | Brief agrees. Three defects: FR-056 fit says BL equals the sum of the children, true only at item quantity 1; `requirements-questions.md` Q-32 "No point is left ambiguous in a way that changes the rule" conflicts with its own row (a); OQ-PM-01 and 02 are still marked needed by G2 and are unanswered |
+| 11 | Traceability sample | | ✅ | GOAL-03 → FR-030 → BR-047 → SPEC §7.4 BL, §14 item 2 → constructed example. FR-030 example recomputed: 2 x (3 + 4) = 14; part shows 7; two-item case 2 + 3 = 5. SPEC §18.5 algebra recomputed: 4 cI + 6 cP + 8 cS. No stories yet |
+| 12 | Q-32 (a) stated in their own words | | ⚠️ | Accepted on list wording only; question sentence reads the other way; a factor of 3 in the example; no later test can catch it. See ruling |
+| 13 | Q-34 (scope for the date) | | ⚠️ | Open, due G3 approval (DL-004). The dates they were last given are superseded: AQP-12 10450 still shows v0.2 |
+| 14 | "Must at most about 60 %" | | ⚠️ | Not met; recorded deviation stands (DL-002) |
+| 15 | Attempt 1 remediation 1 to 5 | | ✅ | See below |
+
+**Ruling on Q-32 (a): accepted, and a one-line confirmation in their own words is needed.**
+
+Evidence that "(a) Yes, that is correct" accepts the list bullet "Multiply once, at the top item":
+1. Shape. Comment 10462 has eight bullets, matching the eight of the ASSUMPTION-48 list, including its unlabelled closing bullet ("Okay") and its single bullet for (e1) and (e2) ("(e1) and (e2) Yes."). The questions section has no closing bullet and keeps (e1) and (e2) apart.
+2. The (b3) reply repeats a sentence that exists only in the list.
+3. "Yes" cannot answer the either/or questions (e1) and (e2), so the reply was not written against the questions.
+4. New: at 11:30:37Z in the session they called it "my answers/acceotance in AQP-13". Acceptance is what 10460 offered for the list.
+5. New: the worksheet's formulas (`BB = BA * H`, `BL = SUM(BG)`) equal multiply-once at item quantity 1 for any intermediate quantity, and multiply-at-every-level does not. This is formula structure, not a sample value, and it fits BRQ-004.
+6. Their main rule names one multiplier, "the main (parent) item". Attempt 1 ruled that this does not address intermediate quantities, so it is consistent but not decisive.
+
+Evidence against treating it as settled:
+1. The question sentence ("Does the quantity of a part in between also multiply the parts under it?") reads the opposite way, and "Yes" is its natural answer.
+2. Comment 10463 and the chat message of 11:32:04Z gave labels only. Neither said "multiply once" or 8 rather than 24. So "no objection in 10464" carries little weight, and this ruling does not rest on it.
+3. The same batch needed correcting at (b1), so it was not a careful statement on every bullet.
+4. New: column H is named "QTY per Assy" (SPEC §7.1) and no artefact defines it; the glossary is silent. If it means per parent assembly, the sub-part in the example physically occurs 24 times and the rule counts 8. If Engineers type the total per item, the rule is right. Nobody has asked, and every quantity in the sample is 1.
+5. New: no later test catches an error. The FR-030 example and the parallel run ("a worksheet calculated the same way") both encode the rule, so a wrong rule passes them. Only the delivery lead can catch it.
+
+Why it does not hold G2. G1 barred a pass "on assumptions alone"; this is a reply on a question put to them in its current form, which answers both reasons of attempt 1 for not waiving. Condition 2 asks for an answer or explicit acceptance, and the weight of evidence shows acceptance, so check 2 is ✅ and the depth of that answer is check 12. Nothing irreversible happens before G3 approval: UX does not depend on it, architecture can isolate one multiplier, and no code starts before G3 approval and HOLD-01. G3 is already a human stop, so the due point adds no stop. A hold would cost one wait W (0.5 to 1.5 working days) with no less risk than asking now.
+
+A stricter reading was considered: attempt 1 remediation 1 said "in his own words", which would make check 2 ❌ and this a NO-GO. Rejected, because "Yes, that is correct" is their own acceptance of a stated line, and the shortfall is the depth of a confirmation already given, not the absence of one. This is a judgement call and **they may override it**. The rule in D-12 stays the working baseline; G3 cannot pass until condition 1 below is met (DL-006).
+
+**Ruling on list wording (DL-007).** A list-wording reply stands where the question and the list give the same result, or independent evidence decides the point, or no price depends on it.
+
+| Point | Result | Why |
+|-------|--------|-----|
+| (a) | Needs own words | Question and list diverge; evidence does not settle what H means; a factor of 3 |
+| (b2) consequence | Stands | Follows from their own words in 10464 |
+| (b3) | Stands | Display only; the issue states it does not change the item's total. Their sentence covers the total; the display part rests on the list |
+| (c) | Stands | Same result both ways: "Yes" to applying the quantity twice and "no special handling" are the same arithmetic. Narrow under D-06 |
+| (d) | Stands | Question and bullet state the same rule |
+| (e1) | Stands | No effect on the sample; equals the worksheet's range |
+| (e2) | Stands | Worksheet formula and the exact re-add of attempt 1; the other reading is circular |
+| Closing "Okay" | Stands | Follows from the rule |
+
+Attempt 1 remediation 8 is therefore met early. G3 no longer waits on (c), (d) or (e).
+
+**Ruling on the relay (DL-007).** Comments 10464 and 10465 were not typed in Jira, and that does not reduce their weight. The session log holds both as one message typed by the person at 11:37:49Z, with typing slips ("documnet", "doesnt", "enow"). The orchestrator posted them 12 and 15 seconds later; the quoted words match, and the interpretation of "the latest wording" is outside the quote and labelled. This is the first occurrence of those words in any log for this project, so no assistant draft precedes them. A session message is better evidence than a comment under the one shared Jira account. Comment 10462 likewise has no earlier draft; it first appears as a tool result, two minutes after it was posted. Limit: logs are evidence, not approval, and a draft made elsewhere would not show. "The latest wording" as 10442 is the orchestrator's reading; accepted because 10463 named the two comments and "parent's own cost counts" settles the substance. (b) is settled.
+
+**G1 condition 2: met.** (b) in their own words; (c), (d), (e) on list wording under the test above; (a) accepted, with confirmation due as condition 1.
+
+**Attempt 1 remediation**
+| # | State | Evidence |
+|---|-------|----------|
+| 1 | Closed for (b); (a) carried as condition 1 | 10462, 10464 |
+| 2 | Closed | AQP-13 change history 2026-11-01T02:23:06-0500, before the answers; 10460 asked for them |
+| 3 | Closed | `requirements-questions.md` Q-32 Correction; SPEC §18.5 History; "a parent has no cost of its own" marked as 10415 wording |
+| 4 | Closed | FR-024, 025, 029, 030, GOAL-03 carry D-12; PRD §10 stale and duplicate rows gone; §9.1 separates effort from price. Removing the effort contingency is early, see condition 3 |
+| 5 | Closed | PRD label key; SPEC §18 status rule; ASSUMPTION-46 in PRD §9.1 and the catalogue |
+| 6 | Closed | Decided, AQP-1 10465 (DL-008) |
+| 7 | Open, due G3 approval | Q-34. Carried as condition 7 |
+| 8 | Closed early | See list-wording ruling |
+| 9 | Open, due G3 | First half stands; "keep the roll-up design open" is replaced by condition 5 |
+
+**Repository (DL-008).** Recorded as their decision and not reopened. BLK-02 is closed: the question was answered, so nothing is blocked. RISK-006 is restated, not closed: a decision is not a verification, and it rests on "no real data", which does not cover the master data defaults they will supply (AQP-10 10404). Current state checked: public, anonymous HTTP 200, the two input files still tracked. A credential pattern scan of tracked text files at HEAD found nothing.
+
+**Proposed risk changes.** RISK-005 and BLK-01: closed. PR #1 exists, is draft and mergeable, and its 12 files are all under `docs/` or the SPEC, so it qualifies for docs-auto at G4. RISK-002 reduced to 10, not to the Low proposed: that waits for condition 1. RISK-003 dates accepted as re-issued, score unchanged. The product manager's offer to keep the removed wait as slack is not taken up: the model is a stated estimate and the dates stay unadopted.
+
+**May ux-expert and solution-architect start?** **Yes, both, now and in parallel.** HOLD-02 is released; no human approval is needed, as G2 is not in `HUMAN_APPROVAL_POINTS`. They work to D-12 as the baseline, cover every FR through R2 whichever way Q-34 goes, and apply conditions 5 and 6. Development does not start: G3 approval, condition 1 and HOLD-01 all come first.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | Santhosh; business-analyst words the question, orchestrator posts it now | AQP-13 | State Q-32 (a) in their own words: the count for the example, and what an Engineer types in QTY per Assy for a part under a part. The request must call for a number or a sentence, not yes or no, must not offer a reading to accept, and must carry no pre-written reply text. A reply relayed from a session counts if labelled and verbatim. Silence does not close it. If the reply differs from D-12, business-analyst and product-manager change BR-047, SPEC §7.4 BL, FR-030 and GOAL-03 | **G3 approval; G3 cannot pass without it** |
+| 2 | business-analyst | `requirements-questions.md` Q-32; SPEC §18 D-12, §18.2; catalogue line for Q-32; AQP-13 description | Show (a) as accepted on list wording with own-words confirmation requested (DL-006). Replace "No point is left ambiguous". Define QTY per Assy once answered. Remove the stale "not pushed while RISK-006 is open" note | G3 |
+| 3 | product-manager | `prd.md` §4, §9.1, §10, §12; `release-plan.md` §9 | Restore the effect of a change to (a) on FRs and effort until condition 1 is met; FR-056 fit: at item quantity 1, or times item quantity; re-date or ask OQ-PM-01 and 02; align the RISK-002 and RISK-006 rows with the register | G3 |
+| 4 | product-manager | AQP-12 | Post the v0.4 dates and say 10450 is superseded, before Q-34 is asked | Before the Q-34 request |
+| 5 | solution-architect | `architecture.md`, `test-strategy.md` | Put the quantity step in one named place so that (a) can change without a redesign. Keep the stored row BG apart from the rolled-up figure shown for a parent, so a parent is not counted twice. Carry the FR-030 constructed example into the test strategy. Real master data must not enter the repository: state where it is loaded from | G3 |
+| 6 | ux-expert | `ux-spec.md`, `screens/` | A parent's screen figure (own row plus everything below) differs from its export row (own values): label it so a Lead can reconcile them | G3 |
+| 7 | Santhosh | Q-34 on AQP-12 | Choose the scope for the date; product-manager then updates the plan and `master` logs it (DL-004) | G3 approval |
+| 8 | orchestrator | HOLD-01 stop | At the TR-009 stop, state that the repository is public and ask where the defaults may be held | HOLD-01 |
+
+**Risks registered:** RISK-001, 002, 003, 006, 008 restated; RISK-005 closed. No new ID: the undefined QTY per Assy and the test blind spot are merged into RISK-002.
+**Rationale:** All mandatory checks pass on evidence and the warnings are non-mandatory, so the checklist gives CONDITIONAL GO. The G1 bar is respected: nothing here passes on an assumption alone. (a) is the one point where the question and the list part ways, it carries a factor of 3, and no test can catch an error in it, so it gets one line in their own words, and that line can be asked now at no cost to the plan.
+

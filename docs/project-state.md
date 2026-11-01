@@ -8,11 +8,11 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | G2 Product Definition    |
-| Last gate passed   | G1 Discovery (CONDITIONAL GO) |
-| Next gate          | G2 Product Definition    |
+| Current phase      | G3 Solution Design       |
+| Last gate passed   | G2 Product Definition (CONDITIONAL GO, attempt 2) |
+| Next gate          | G3 Solution Design (human approval) |
 | Current sprint     | —                        |
-| Overall health     | 🔴 Red (RISK-006 needs the delivery lead's decision now; G2 NO-GO on Q-32 (a), (b); BLK-01) |
+| Overall health     | 🟡 Amber (G2 CONDITIONAL GO; Q-32 (a) own-words confirmation and Q-34 due by G3 approval; RISK-002, 003, 006, 007, 008 open, none red) |
 | Last updated       | 2026-11-01 by master |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
@@ -30,7 +30,7 @@
 |------|--------------|------|--------------|
 | G0 Intake               | ✅ GO | 2026-10-31 | docs/00-governance/gate-log.md § G0 – Intake — 2026-10-31 |
 | G1 Discovery            | ⚠️ CONDITIONAL GO | 2026-11-01 | docs/00-governance/gate-log.md § G1 – Discovery — 2026-11-01 |
-| G2 Product Definition   | ❌ NO-GO (attempt 1) | 2026-11-01 | docs/00-governance/gate-log.md § G2 – Product Definition — 2026-11-01 |
+| G2 Product Definition   | ⚠️ CONDITIONAL GO (attempt 2; attempt 1 NO-GO) | 2026-11-01 | docs/00-governance/gate-log.md § G2 – Product Definition — 2026-11-01 (attempt 2) |
 | G3 Solution Design      | ⏳ Pending | | |
 | G4 Backlog Ready        | ⏳ Pending | | |
 | G8 Release Readiness    | ⏳ Pending | | |
@@ -48,24 +48,25 @@
 | Q-18 | Offline decided: next release (AQP-11 comment 10444). Hosting details remain | business-analyst | Santhosh | G3 | Open in part |
 | Q-29 | Answered on AQP-12 comment 10446: 2026-11-13 is a target for customer hand-over, not a blocker | business-analyst | Santhosh | G2 | Answered |
 | Q-34 | Which scope the realistic date covers: A (whole SPEC except offline, dark mode and UI-sample extras) or B (R1 core only) | business-analyst | Santhosh | G3 approval (DL-004) | Open; does not hold G2 |
-| Q-32 | Parent cost rule answered on AQP-13 in part. (a), (b) hold G2; (c), (d), (e) due G3 (DL-005). The revised question is on AQP-13 | business-analyst | Santhosh | (a), (b): G2 attempt 2; (c) to (e): G3 | Open in part |
+| Q-32 | Parent cost rule answered (AQP-13 10462, 10464; D-12). (b) settled in their own words; (c), (d), (e) stand on list wording (DL-007). (a) accepted on list wording; own-words confirmation requested, including what QTY per Assy means (DL-006) | business-analyst | Santhosh | (a): G3 approval, G3 cannot pass without it | Open for (a) only |
 | G1 condition 1 | Items (a) to (h) confirmed, (d) as corrected (AQP-1 comments 10441, 10443) | master | Santhosh | G2 | Met in substance (DL-001) |
-| G1 condition 2 | Q-32 answered in part; no assumption accepted | master | Santhosh | G2 attempt 2 | Not met |
+| G1 condition 2 | Q-32 answered or accepted; (b) in their own words (gate log, G2 attempt 2) | master | Santhosh | G2 attempt 2 | Met |
 | G1 condition 3 | Q-29 answered (AQP-12 comment 10446) | master | Santhosh | G2 | Met |
 
 ## Blockers
 
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
-| BLK-01 | CLEARED 2026-11-01: draft PR #1 created with the new token. History: draft PR for docs/AQP-1-inception could not be created: GitHub MCP create_pull_request returns 403 "Resource not accessible by personal access token" (tried twice on 2026-10-31, again on 2026-11-01). Branch push works. On 2026-11-01 the GitHub MCP server also failed to connect (HTTP 401, token rejected). Needed before the G4 merge. | 2026-10-31 | Santhosh | Grant the MCP token Pull requests: write on the repository, or open the PR by hand. |
-| BLK-02 | RISK-006: the sample workbook and draft requirements document are on the default branch of a repository readable without sign-in, against Q-03, Q-30 and ASSUMPTION-46. Agents do not change repository visibility or history. | 2026-11-01 | Santhosh Decided 2026-11-01: repository stays public, content not real (AQP-1, relayed verbatim). Pushing resumed. Master to close at G2 attempt 2. |
-| HOLD-02 | G2 NO-GO attempt 1: ux-expert and solution-architect do not start until G2 attempt 2 returns GO or CONDITIONAL GO, or the delivery lead logs an override. | 2026-11-01 | Santhosh; orchestrator Remediation 2 to 5 done. Q-32 answers on AQP-13 (comment 10462 and the relayed reply to 10463): next run applies them, then master re-gates G2. Business-analyst to change the Q-34 and ASSUMPTION-50 due date to G3 approval (DL-004) on the next pass. |
-| HOLD-01 | TR-009 stop: after G3 approval and before development, stop and ask Santhosh for master data defaults (AQP-10). Not in CLAUDE.md, so kept here. | 2026-11-01 | orchestrator | Stop the run at that point. |
+| BLK-01 | CLEARED 2026-11-01: draft PR #1 created with the new token; verified at G2 attempt 2; RISK-005 closed. History: GitHub MCP create_pull_request returned 403, later HTTP 401 | 2026-10-31 | Santhosh | None |
+| BLK-02 | CLOSED 2026-11-01 at G2 attempt 2: the delivery lead decided the repository stays public (AQP-1 10465; DL-008). That the content is not real is their statement, not verified; RISK-006 stays open, restated | 2026-11-01 | Santhosh | None |
+| HOLD-02 | RELEASED 2026-11-01: G2 attempt 2 returned CONDITIONAL GO. ux-expert and solution-architect may start now, in parallel | 2026-11-01 | Santhosh; orchestrator | Start both, with conditions 5 and 6 of the gate record |
+| HOLD-01 | TR-009 stop: after G3 approval and before development, stop and ask Santhosh for master data defaults (AQP-10). Not in CLAUDE.md, so kept here. State then that the repository is public and ask where the defaults may be held (DL-008) | 2026-11-01 | orchestrator | Stop the run at that point. |
 
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | master | G2 Product Definition: CONDITIONAL GO, attempt 2. G1 condition 2 met; Q-32 (a) own-words confirmation due G3 approval (DL-006); list-wording and relay standards (DL-007); repository decision recorded (DL-008); BLK-02 and RISK-005 closed; RISK-006 restated at 12, RISK-002 at 10; HOLD-02 released | docs/00-governance/ |
 | 2026-11-01 | product-manager | PRD and release plan v0.4: Q-32 rule applied, central dates re-issued (unadopted) | docs/02-product/ |
 | 2026-11-01 | business-analyst | Q-32 closed, ASSUMPTION-48 retired; repository decision recorded as D-13 | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-11-01 | orchestrator | Run resumed; GitHub MCP connected; draft PR #1 created; repository labels set up | PR #1 |
