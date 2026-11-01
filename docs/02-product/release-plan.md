@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.2 (Draft for G2; Pass 3 answers applied; realistic completion date added) |
+| Version | 0.3 (Draft for G2 attempt 2; G2 remediation 4 and 5 applied: Q-32 effort versus price, Q-32 split per DL-005, scope and dates unadopted per DL-004, RISK-006 sample-file statement; no date changed) |
 | Owner | product-manager |
 | Date | 2026-11-01 |
-| Status | **Proposal. Not agreed.** Proposed answer to Q-34 and the realistic date requested on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10446) |
-| Companion | `docs/02-product/prd.md` v0.2 (FR, NFR, assumption register, epics, release moves in section 6.3) |
+| Status | **Proposal. Not agreed.** Proposed answer to Q-34 and the realistic date requested on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10446). **The scope is Santhosh's choice (ASSUMPTION-50; Q-34 due G3 approval, DL-004); both dates are unadopted estimates** |
+| Companion | `docs/02-product/prd.md` v0.3 (FR, NFR, assumption register, epics, release moves in section 6.3) |
 
 ## 1. What is fixed, what is labelled
 
@@ -17,9 +17,10 @@
 | End date 2026-11-13 (Friday) | Confirmed **as a target, not a fixed constraint**. The delivery lead asks for a realistic date and says the date is not a blocker | AQP-1 10441 (h); AQP-12 10446 |
 | What the date is for | Answered (Q-29): to complete development and hand that version to his customer for testing, acceptance and new change requests; the next steps are decided afterwards. It is not production go-live | AQP-12 10446 |
 | Offline use | Decided: the next release, not Release 1. What it means and the hosting details are open (Q-18, due G3). **Not estimated** | AQP-11 10444; AQP-1 10441 (e) |
-| Cost rule | Confirmed as corrected (D-08). Open details: Q-32 (a) to (e), carried by ASSUMPTION-48 | AQP-9 10442; AQP-13 10445 |
-| "Not applicable" in the Material and Treatment lists | Confirmed; values are Q-33 (ASSUMPTION-49) | AQP-1 10441 (b) |
-| Scope behind the realistic date | **Open, Q-34**; proposed answer in section 2 | none yet |
+| Cost rule | Main rule confirmed in his own words as corrected (D-08). **Open: Q-32 (a) to (e), carried by ASSUMPTION-48, the analyst's reading, not accepted by him.** (a), (b) hold G2; (c), (d), (e) are due G3 (DL-005). The 10415 per-level rule is withdrawn "as written"; whether a part's quantity multiplies the parts under it is Q-32 (a). Interim readings (b3) and (e1) are named in PRD FR-029 and FR-030. No Q-32 answer is applied in this plan | AQP-9 10442; AQP-13 10445 |
+| "Not applicable" in the Material and Treatment lists | Confirmed on list wording (DL-001); values are Q-33 (ASSUMPTION-49) | AQP-1 10441 (b) |
+| Scope behind the realistic date | **Open, Q-34. His choice (ASSUMPTION-50); due G3 approval; does not hold G2 (DL-004).** The proposed answer in section 2 is input only; the master did not choose. Until he answers: no FR moves, both dates are unadopted, UX and architecture cover every FR through R2, the build starts with the R1 core | none yet |
+| Sample workbook | Tracked on `origin/master` since c7576f0 in a repository readable without sign-in (RISK-006). Earlier wording that it was not committed was wrong. What to do with the repository and the files is his decision; agents do not change visibility or history | gate log G2 |
 | Holidays and his availability between 2026-11-02 and 2026-12-09 | Not known, not verified (OQ-PM-02) | none |
 
 Every hour, day and date below is an **estimate** by the product manager. **There is no team velocity behind it**: no story has been built by this team on this stack, and the method (relative size converted to hours, then to working days at 8 hours a day) is judgement, not measurement. Dates are re-issued after the first completed epic (section 6).
@@ -52,7 +53,7 @@ The range is "everything goes well" to "everything goes slowly" taken together: 
 4. What scope B gives that A does not: a hand-over about 4 working days earlier at the centre (Mon 23 Nov against Fri 27 Nov), and a smaller estimate with less uncertainty. Scope A keeps the choice open: the build order puts the R1 core first, so he can still choose to hand over the core at checkpoint C (section 6), at the cost of a customer test cycle running while the build continues.
 5. Risks of scope A: the larger estimate has no velocity behind it; EPIC-08 (12 to 16 h) is the largest and least certain block; alerts can only be tested against a capturing mail server until Accucut IT names an SMTP service (Q-18).
 
-He decides; nothing is moved until he answers Q-34.
+He decides; nothing is moved until he answers Q-34. The proposal is input to his choice, and neither date is adopted (DL-004).
 
 ## 3. How the dates were built
 
@@ -82,7 +83,7 @@ Effort is converted to working days at 8 hours a day (the unit the delivery lead
 
 | Input (estimate) | Low | Central | High | Why |
 |------------------|-----|---------|------|-----|
-| Human wait W at each of four points: Q-34 reply (for G2), G3 review, master data defaults (TR-009 stop), G8 sign-off, in working days | 0.5 | 1 | 1.5 | He is the only human; his replies on 2026-10-31 and 2026-11-01 came within hours (Jira comment times), which is thin evidence, so the central value is one working day |
+| Human wait W at each of four points: reply on Q-32 (a), (b) for G2 (DL-005; before DL-004 this point was the Q-34 reply, which now falls inside the G3 review wait), G3 review, master data defaults (TR-009 stop), G8 sign-off, in working days | 0.5 | 1 | 1.5 | He is the only human; his replies on 2026-10-31 and 2026-11-01 came within hours (Jira comment times), which is thin evidence, so the central value is one working day |
 | G2 close and PRD finalised, days | 0.3 | 0.5 | 0.75 | 2 to 3 h of work (v0.1) |
 | UX and architecture in parallel, days | 0.75 | 0.9 | 1.0 | 6 to 8 h; the longer of the two sets the time (v0.1) |
 | G3 fixes after his review, days | 0.25 | 0.5 | 0.75 | Estimate |
@@ -125,7 +126,7 @@ Central-case milestones (scope A, the same order serves scope B up to the R1 cor
 | Each merge stage waits 1 day | Wed 2026-11-25 | Wed 2026-12-02 |
 | Effort at the low end, waits central | Fri 2026-11-20 | Wed 2026-11-25 |
 | Effort at the high end, waits central | Tue 2026-11-24 | Tue 2026-12-01 |
-| Open Q-32 details answered differently (0 to 2 h, PRD section 9.1) | at most 1 working day later | at most 1 working day later |
+| Open Q-32 details answered differently (0 to 2 h of build effort, PRD section 9.1; this is effort, not price) | at most 1 working day later | at most 1 working day later |
 
 ### 3.5 Holidays (OQ-PM-02)
 
@@ -207,7 +208,8 @@ Steps 1 to 3 save 4 to 7 h (about 0.5 to 0.9 working day). Not cut candidates: c
 
 | Point | Type | Effect on the plan |
 |-------|------|--------------------|
-| Q-34 answer and the master's G2 decision | Delivery lead, then `master` (not a human gate: `HUMAN_APPROVAL_POINTS` = G1, G3, G8) | UX and architecture start after G2 |
+| Q-32 (a), (b) answer (or explicit acceptance of ASSUMPTION-48) and the master's G2 attempt 2 | Delivery lead, then `master` (not a human gate: `HUMAN_APPROVAL_POINTS` = G1, G3, G8) | UX and architecture start after G2 attempt 2 returns GO or CONDITIONAL GO. This is the one wait W for G2 already in the central case, so an answer on 2026-11-02 costs nothing against the dates |
+| Q-34 answer (scope) | Delivery lead, at G3 approval (DL-004) | No wait added: the G3 approval stop already exists. Does not hold G2 |
 | G3 | **Human** | One wait W |
 | Master data stop (TR-009, HOLD-01) | **Human**, process stop outside `CLAUDE.md` | One wait W, overlapped with backlog and G4 |
 | G4 | `master` | Needs the docs PR (BLK-01) |
@@ -219,11 +221,12 @@ Steps 1 to 3 save 4 to 7 h (about 0.5 to 0.9 working day). Not cut candidates: c
 
 | Stage | Dependency | Owner | Status |
 |-------|-----------|-------|--------|
-| R1 core | Answer to Q-34 and G2 decision | Santhosh, master | Open |
+| R1 core | Answer to Q-32 (a), (b) and G2 decision | Santhosh, master | Open |
+| R1 core | Answer to Q-34 (scope for the date; DL-004) | Santhosh | Open; due G3 approval; does not hold G2 |
 | R1 core | Master data defaults (TR-009) | Santhosh | Stop after G3 |
-| R1 core | Roll-up details Q-32 (a) to (e) before the roll-up design | Santhosh | Open; assumption in force |
+| R1 core | Roll-up details Q-32: (a), (b) before G2; (c), (d), (e) before G3 and the roll-up design (DL-005) | Santhosh | Open; ASSUMPTION-48 in force as the analyst's reading, not accepted by him |
 | R1 core | Hosting details, web address, IT contact (Q-18) | Santhosh, IT | Open, due G3 |
-| R1 core | Cleaned sample worksheet or reading rights on the original (Q-30); export totals (Q-31) | Santhosh | Open |
+| R1 core | Cleaned sample worksheet (Q-30); export totals (Q-31); decision on the repository and the two tracked files (RISK-006) | Santhosh | Open. The original sample is already tracked on `origin/master` since c7576f0 in a public repository; structure only is read from it |
 | R1 core | Docs PR (BLK-01) | Santhosh | Open |
 | R2 | SMTP service and sender | Accucut IT | Open; alerts tested against a capturing mail server until then |
 | After the date | Customer testing, acceptance, change requests; go-live, training, parallel run (TR-003 to TR-005) | Santhosh, Accucut | Not in the dates |
@@ -233,8 +236,8 @@ Steps 1 to 3 save 4 to 7 h (about 0.5 to 0.9 working day). Not cut candidates: c
 
 | Item | If answered as assumed | If answered differently |
 |------|------------------------|-------------------------|
-| Q-34 scope | Scope A dates | Scope B dates; OQ-PM-06 arises |
-| Q-32 (a) to (e) | ASSUMPTION-48 stands | 0 to about 2 h; at most one working day |
+| Q-34 scope (his choice, due G3 approval) | Scope A dates (neither date is adopted until he chooses) | Scope B dates; OQ-PM-06 arises |
+| Q-32 (a) to (e) | ASSUMPTION-48 stands (the analyst's reading, not accepted by him) | **Build effort** 0 to about 2 h and at most one working day. **This is effort, not price.** The price effect is separate and can be large: a factor of 3 in the FR-030 example under (a), 58.6 % lower on the sample under (b1) children only, about 16 % higher under (e2) (PRD section 9.1). That is why (a) and (b) hold G2 and no answer is assumed in the plan |
 | Q-33 values | ASSUMPTION-49 stands | Seed data and FR-018 change; under 1 h |
 | Q-31 per-item totals | Row 2 only | 1 to 2 h; FR-069 changes |
 | Q-18 hosting details | Docker Compose, SMTP later | Deployment and mail settings change; effect on hours not estimated |
@@ -246,3 +249,4 @@ Steps 1 to 3 save 4 to 7 h (about 0.5 to 0.9 working day). Not cut candidates: c
 |---------|------|--------|--------|
 | 0.1 | 2026-11-01 | First proposal | G2 input; Q-29 |
 | 0.2 | 2026-11-01 | UNC items resolved and labels removed; realistic completion date added for two scopes with a proposed answer to Q-34; elapsed-time model with human and merge waits; fit analysis and Must share restated; FR-030 and FR-018 into the core (PROPOSED); offline set to the next release | AQP-1 10441, 10443; AQP-9 10442; AQP-13 10445; AQP-11 10444; AQP-12 10446 |
+| 0.3 | 2026-11-01 | Q-32 shown as open with (a), (b) due G2 and (c), (d), (e) due G3, no answer applied; the "0 to 2 h" stated as build effort, not price, with the price ratios; Q-34 shown as his choice due G3 approval, both dates unadopted (DL-004, ASSUMPTION-50); the G2 human wait relabelled from the Q-34 reply to the Q-32 (a), (b) reply (same wait, **no date changed**); sample-file statement added (tracked on `origin/master` since c7576f0, RISK-006); "not applicable" labelled "confirmed on list wording" (DL-001) | G2 attempt 1 NO-GO, remediation 4 and 5; DL-001, DL-004, DL-005 |

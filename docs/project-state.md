@@ -48,7 +48,7 @@
 | Q-18 | Offline decided: next release (AQP-11 comment 10444). Hosting details remain | business-analyst | Santhosh | G3 | Open in part |
 | Q-29 | Answered on AQP-12 comment 10446: 2026-11-13 is a target for customer hand-over, not a blocker | business-analyst | Santhosh | G2 | Answered |
 | Q-34 | Which scope the realistic date covers: A (whole SPEC except offline, dark mode and UI-sample extras) or B (R1 core only) | business-analyst | Santhosh | G3 approval (DL-004) | Open; does not hold G2 |
-| Q-32 | Parent cost rule answered on AQP-13 in part. (a), (b) hold G2; (c), (d), (e) due G3 (DL-005). The revised question is not yet on AQP-13 | business-analyst | Santhosh | (a), (b): G2 attempt 2; (c) to (e): G3 | Open in part |
+| Q-32 | Parent cost rule answered on AQP-13 in part. (a), (b) hold G2; (c), (d), (e) due G3 (DL-005). The revised question is on AQP-13 | business-analyst | Santhosh | (a), (b): G2 attempt 2; (c) to (e): G3 | Open in part |
 | G1 condition 1 | Items (a) to (h) confirmed, (d) as corrected (AQP-1 comments 10441, 10443) | master | Santhosh | G2 | Met in substance (DL-001) |
 | G1 condition 2 | Q-32 answered in part; no assumption accepted | master | Santhosh | G2 attempt 2 | Not met |
 | G1 condition 3 | Q-29 answered (AQP-12 comment 10446) | master | Santhosh | G2 | Met |
@@ -58,14 +58,17 @@
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
 | BLK-01 | Draft PR for docs/AQP-1-inception cannot be created: GitHub MCP create_pull_request returns 403 "Resource not accessible by personal access token" (tried twice on 2026-10-31, again on 2026-11-01). Branch push works. On 2026-11-01 the GitHub MCP server also failed to connect (HTTP 401, token rejected). Needed before the G4 merge. | 2026-10-31 | Santhosh | Grant the MCP token Pull requests: write on the repository, or open the PR by hand. |
-| BLK-02 | RISK-006: the sample workbook and draft requirements document are on the default branch of a repository readable without sign-in, against Q-03, Q-30 and ASSUMPTION-46. Agents do not change repository visibility or history. | 2026-11-01 | Santhosh | His decision now; G3 at the latest. |
-| HOLD-02 | G2 NO-GO attempt 1: ux-expert and solution-architect do not start until G2 attempt 2 returns GO or CONDITIONAL GO, or the delivery lead logs an override. | 2026-11-01 | Santhosh; orchestrator | Revised Q-32 on AQP-13, then his answer to (a) and (b); remediation 3 to 5; re-gate. |
+| BLK-02 | RISK-006: the sample workbook and draft requirements document are on the default branch of a repository readable without sign-in, against Q-03, Q-30 and ASSUMPTION-46. Agents do not change repository visibility or history. | 2026-11-01 | Santhosh Their decision now, G3 at the latest (requested on AQP-1 comment 10455). No pushes until they reply. |
+| HOLD-02 | G2 NO-GO attempt 1: ux-expert and solution-architect do not start until G2 attempt 2 returns GO or CONDITIONAL GO, or the delivery lead logs an override. | 2026-11-01 | Santhosh; orchestrator Remediation 2 to 5 done. Their answer to Q-32 (a) and (b), then re-gate. Business-analyst to change the Q-34 and ASSUMPTION-50 due date to G3 approval (DL-004) on the next pass. |
 | HOLD-01 | TR-009 stop: after G3 approval and before development, stop and ask Santhosh for master data defaults (AQP-10). Not in CLAUDE.md, so kept here. | 2026-11-01 | orchestrator | Stop the run at that point. |
 
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | orchestrator | Run stopped for Q-32 (a), (b) and the RISK-006 decision; four commits held locally, pushing paused | AQP-1, AQP-13 |
+| 2026-11-01 | product-manager | G2 remediation 4 and 5: PRD and release plan v0.3 | docs/02-product/ |
+| 2026-11-01 | business-analyst | G2 remediation 2, 3 and 5: AQP-13 rewritten, discovery files corrected | AQP-13, docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-11-01 | master | G2 Product Definition: NO-GO, attempt 1 (G1 condition 2 not met; conditions 1 and 3 met); RISK-001 to 005 restated, RISK-006 to 010 added; DL-001 to DL-005 | docs/00-governance/ |
 | 2026-11-01 | product-manager | PRD and release plan v0.2; realistic date estimated, scope A proposed (Q-34), not agreed | docs/02-product/ |
 | 2026-11-01 | business-analyst | Pass 3: delivery lead confirmations applied, parent cost rule checked against the sample; Q-34 raised | docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
