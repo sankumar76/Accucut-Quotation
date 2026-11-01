@@ -45,10 +45,11 @@
 | ID | Question | Raised by | Owner | Needed by | Status |
 |----|----------|-----------|-------|-----------|--------|
 | Q-01 to Q-33 | Full list with assumptions in docs/01-discovery/requirements-questions.md | business-analyst | Santhosh | G2 to G8, per question | See file |
-| Q-18 | Offline decided: next release (AQP-11 comment 10444). Hosting details remain | business-analyst | Santhosh | G3 | Open in part |
+| Q-18 | Offline decided: next release (AQP-11 comment 10444). Hosting answered in chat 2026-11-01 (see AQP-1): e-mail service Microsoft Outlook, weekly backup kept 2 years by Admin, updates by their IT person. Web address and sender address not decided | business-analyst | Santhosh | G3 | Open in part |
 | Q-29 | Answered on AQP-12 comment 10446: 2026-11-13 is a target for customer hand-over, not a blocker | business-analyst | Santhosh | G2 | Answered |
-| Q-34 | Which scope the realistic date covers: A (whole SPEC except offline, dark mode and UI-sample extras) or B (R1 core only) | business-analyst | Santhosh | G3 approval (DL-004) | Open; does not hold G2 |
-| Q-32 | Parent cost rule answered (AQP-13 10462, 10464; D-12). (b) settled in their own words; (c), (d), (e) stand on list wording (DL-007). (a) accepted on list wording; own-words confirmation requested, including what QTY per Assy means (DL-006) | business-analyst | Santhosh | (a): G3 approval, G3 cannot pass without it | Open for (a) only |
+| Q-34 | Which scope the realistic date covers: A (whole SPEC except offline, dark mode and UI-sample extras) or B (R1 core only) | business-analyst | Santhosh | G3 approval (DL-004) | Answered: scope A (AQP-12 comment 10488) |
+| G3 answers | Q-31, Q-33, OQ-UX-01, 02, 05, 06, 10, 12 and OQ-ARCH-03 answered in chat 2026-11-01; relayed on AQP-1. To apply on resume, including changes to the password rule and to stale totals | business-analyst, product-manager, ux-expert, solution-architect | orchestrator | G3 | Answered, not yet applied |
+| Q-32 | Parent cost rule answered (AQP-13 10462, 10464; D-12). (b) settled in their own words; (c), (d), (e) stand on list wording (DL-007). (a) now answered in their own words: QTY per Assy definition on AQP-13 10487; nested example gives 24 lids (2 x 3 x 4), relayed on AQP-1. This reverses the working rule in D-12 (8): every level's quantity applies. D-12, BL, tests and screen wording to be revised; (c) to be re-examined | business-analyst | Santhosh | G3 approval | Answered; rule change not yet applied |
 | G1 condition 1 | Items (a) to (h) confirmed, (d) as corrected (AQP-1 comments 10441, 10443) | master | Santhosh | G2 | Met in substance (DL-001) |
 | G1 condition 2 | Q-32 answered or accepted; (b) in their own words (gate log, G2 attempt 2) | master | Santhosh | G2 attempt 2 | Met |
 | G1 condition 3 | Q-29 answered (AQP-12 comment 10446) | master | Santhosh | G2 | Met |
@@ -67,6 +68,9 @@
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
 | 2026-11-01 | master | G2 Product Definition: CONDITIONAL GO, attempt 2. G1 condition 2 met; Q-32 (a) own-words confirmation due G3 approval (DL-006); list-wording and relay standards (DL-007); repository decision recorded (DL-008); BLK-02 and RISK-005 closed; RISK-006 restated at 12, RISK-002 at 10; HOLD-02 released | docs/00-governance/ |
+| 2026-11-01 | business-analyst | G3 answers applied, SPEC v1.4; D-12 revised (every level's quantity applies); ASSUMPTION-51, 52; Q-35, 36, 37 raised; run interrupted by a Claude Code exit and resumed | ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md, docs/01-discovery/ |
+| 2026-11-01 | orchestrator | Delivery lead replied APPROVED (AQP-1 10491). Answers to be applied before master G3 | AQP-1 |
+| 2026-11-01 | orchestrator | Delivery lead's answers to the G3 questions collected in chat and relayed on AQP-1; Q-32 (a) reverses the quantity rule (24, not 8). Still awaiting APPROVED or CHANGES | AQP-1 |
 | 2026-11-01 | orchestrator | G3 approval requested on AQP-1; run stopped. For the next pass: product-manager and business-analyst to align ROLLUP (FR-022, SPEC 8.2), NFR-018 to WCAG 2.2 AA, SCR-16 audit log, and the brand, header, dark mode and "Not needed" switch wording flagged in ux-spec section 0.2 | AQP-1 |
 | 2026-11-01 | ux-expert | UX spec v0.2 and screens: UX-01 to UX-27 applied, re-checked at 360, 768 and 1280 px | docs/03-ux/ |
 | 2026-11-01 | solution-architect | Architecture v0.2, ADR-001 to 014, test strategy v0.2; all 27 screens reconciled | docs/04-architecture/ |
