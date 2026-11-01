@@ -2,9 +2,9 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.1 (Discovery Pass 1) |
+| Version | 0.2 (Discovery Pass 2) |
 | Author | business-analyst |
-| Date | 2026-10-31 |
+| Date | 2026-11-01 (Pass 1: 2026-10-31) |
 
 **Status of the as-is:** The inputs describe the worksheet and the target process but not how work is done today. The as-is steps below are **inferred** (ASSUMPTION-28) from the Draft v5 document and the worksheet structure and must be confirmed in the walk-through requested in Q-28. No pain-point figure is given because none was supplied (Q-24).
 
@@ -26,12 +26,12 @@
 | T1 | Assign a task: choose Engineer, enter the network folder path and an IST deadline; an e-mail goes to the Engineer (Cc assigner) when alerts are ON | Admin or Lead | Assignment is recorded, dated and visible in queues | UR-004, BR-041 |
 | T2 | Open the task from the Engineer's queue; open the folder via the link or copy the path | Engineer | Work arrives in a queue sorted by deadline | UR-005, UR-006 |
 | T3 | Choose the customer first | Engineer | Customer rates are selected, not typed | UR-012 |
-| T4 | Build the product tree and fill the guided form, section by section, each field showing its Excel letter | Engineer | Guided form replaces the grid; costs are never shown | UR-013 to UR-021, UR-040 |
+| T4 | Build the product tree (one product per estimate) and fill the guided form, section by section, each field showing its Excel letter; enter Tool Cost with the other inputs; enter 0 or choose "Not applicable" for anything a part, including a parent assembly, does not need | Engineer | Guided form replaces the grid; costs are never shown; no "Not needed" switch | UR-013 to UR-021, UR-040, UR-043, BR-048 |
 | T5 | Save at any time; autosave | Engineer | Work is never lost | UR-022 |
 | T6 | Calculate: the portal checks every field, flags gaps, then calculates and submits for review; the Engineer sees only the standard message | Engineer | Cost is calculated on the server from masters, not typed in formulas | UR-023, BR-007, BR-015 to BR-023 |
-| T7 | Review the cost details with formulas; edit inputs or recalculate if needed | Lead or Admin | Formulas visible and the same for everyone | UR-025 to UR-027, UR-038 |
+| T7 | Review the cost details with formulas; a parent shows the sum of its children and each child is multiplied by its parent's quantity; edit inputs or recalculate if needed | Lead or Admin | Formulas visible and the same for everyone; parent and child rule (details open, Q-32) | UR-025 to UR-027, UR-038, BR-046, BR-047 |
 | T8 | Approve and lock: enter the Approved Quote Price (calculated or override); inputs become read-only; the task closes | Lead or Admin | Locked, logged price | UR-028, BR-011, BR-045 |
-| T9 | Unlock when re-estimation is needed (with a reason); the task reopens | Lead or Admin | Controlled change path | UR-029 |
+| T9 | Unlock when re-estimation is needed (with a reason); the task reopens; recalculation uses current rates and shows a notice if they changed; approved estimates are never affected by later changes | Lead or Admin | Controlled change path | UR-029, BR-012 |
 | T10 | Download the Excel export in the worksheet layout | Lead or Admin | Same layout, generated from the system | UR-030, BRQ-005 |
 | T11 | If the deadline passes: the task is marked overdue, the bell count goes up, an e-mail goes at once and again each day at 11:00 AM IST | System | Late work is visible and chased | UR-008, UR-009, BR-042, BR-043 |
 | T12 | Admin maintains masters, users, settings, fields and formulas, with checkpoints and a change history | Admin | Changes need no developer and are logged | UR-031 to UR-037 |
@@ -48,4 +48,4 @@
 | Output | The worksheet itself | Excel export replicating the worksheet |
 
 ## 4. Open points affecting the process
-Q-04 (one or several totals), Q-05 (who enters Tool Cost), Q-06 (assembly parents), Q-19 (edits after Calculate and return path), Q-20 (task changes), Q-25 (cut-over), Q-28 (confirm the as-is).
+Answered in Pass 2: Q-04 (one product per estimate), Q-05 (Engineer enters Tool Cost), Q-06 (enter 0 or "Not applicable"), Q-07 and Q-08 (see T7, T9). Still open: Q-31 (where totals appear in the export), Q-32 (quantity roll-up details), Q-18 (hosting; offline use unresolved), Q-29 (what the 2026-11-13 date covers, including the parallel run). Assumptions kept: Q-19 (edits after Calculate and return path), Q-20 (task changes), Q-25 (cut-over), Q-28 (the as-is stays inferred).

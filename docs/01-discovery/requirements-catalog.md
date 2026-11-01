@@ -1,7 +1,7 @@
 # Requirements Catalogue — Accucut Quotation Portal
 
-> Owner: business-analyst. Version 0.1 (Discovery Pass 1), 2026-10-31. Every requirement is unambiguous, testable, necessary, traceable and solution-agnostic. Priority uses MoSCoW.
-> **Source key:** `SPEC §n` = `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` v1.0; `DOCX §n` = `Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx`; `XLSX` = `AMADA-20261006.xlsx` (structure only); `UI` = `Accucut Quotation Portal UI-UX.html`; `DEC-nn` = delivery-lead decision (section "Decided input"); `STD` = standing website standards from the delivery lead.
+> Owner: business-analyst. Version 0.2 (Discovery Pass 2), 2026-11-01. Every requirement is unambiguous, testable, necessary, traceable and solution-agnostic. Priority uses MoSCoW.
+> **Source key:** `SPEC §n` = `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` v1.0; `DOCX §n` = `Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx`; `XLSX` = `AMADA-20261006.xlsx` (structure only); `UI` = `Accucut Quotation Portal UI-UX.html`; `DEC-nn` = delivery-lead decision (section "Decided input"); `STD` = standing website standards from the delivery lead; `D-nn` = delivery lead answer recorded in SPEC §18 (Discovery Pass 2).
 > **Priority rule used:** Must = the SPEC says MUST or the item has a SPEC §14 acceptance criterion; Should = the SPEC states it without MUST and without a §14 test, or it is a `[DEFAULT]`; Could = optional; Won't = excluded for this release.
 > **Solution-agnostic note:** Items that name technology are marked `CONSTRAINT` and come from SPEC §2 or `CLAUDE.md`.
 > **Letters:** column letters (A to BO) in rules refer to the initial configuration of the field registry (SPEC §7, §8); the portal derives letters from field position.
@@ -16,8 +16,26 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | DEC-02 | **"Red Leads" brand:** white top bar with the real AccuCut logo image (never redrawn); company name "ACCUCUT LASERS" in logo red (about #DE3030) in a bold serif like the company board; dark graphite side menu (about #17181C); red main buttons and active markers; white and light-grey surfaces; separate darker error red (about #B3261E). Replaces the sample's blue and the navy #1F3864. | SPEC §17.2 | NFR-017, NFR-018 |
 | DEC-03 | **"Copy from part" and "Apply to selected" are rejected** (parts very rarely share data). | SPEC §17.4 | UR-041; scope list in the brief |
 | DEC-04 | **Drawing input is deferred** to the next release; the estimate screen must leave room to show a drawing beside the form later without a redesign. | SPEC §17.5 | NFR-019, UR-042; Future list in the brief |
-| DEC-05 | **"Not needed for this part" switch (zero-fill per section) is still undecided.** Not built until confirmed. | SPEC §15 item 7 | Q-15; ASSUMPTION-15; BR-007 note |
+| DEC-05 | **"Not needed for this part" switch: resolved, not needed.** The Engineer enters 0 (or "Not applicable") instead (Q-06, Q-15 closed 2026-10-31). | SPEC §15 item 7, §18 D-06 | UR-043; BR-048; ASSUMPTION-15 retired |
 | DEC-06 | Keyboard entry must be fast: Enter moves to the next field. Parts with missing data are flagged by icon as well as colour. | SPEC §17.4 | UR-024, UR-040 |
+
+### Answers applied in Pass 2 (SPEC §18)
+
+Answers given on Jira on 2026-10-31. Full text, sources and the status of every question are in `requirements-questions.md`.
+
+| ID | Answer | Question | Requirements derived or changed |
+|----|--------|----------|---------------------------------|
+| D-01 | Budget: no limit. Start 2026-11-02; 10 working days x 8 h; ends 2026-11-13 (Monday to Friday). | Q-01 | CONSTRAINT-07; ASSUMPTION-45 (Q-29) |
+| D-02 | Sponsor is one person: Santhosh - MD. | Q-02 | Brief, stakeholder map |
+| D-03 | AMADA-20261006.xlsx is the sample; Engineers enter inputs; Admin and Leads view all costs; Excel export needed. | Q-03 | BRQ-005; TR-007; Q-30 |
+| D-04 | One estimate = one complete product (items, parts, sub-parts, and so on). | Q-04 | BR-023; DR-003; Q-31 |
+| D-05 | Tool Cost (BM) is an Engineer input; BN = BL / total of all Tool Cost entries. | Q-05 | BR-003; BR-023 |
+| D-06 | Engineer enters 0 if a part is not required; "Not applicable" added to the Material and Treatment lists; no "Not needed" switch. | Q-06, Q-15 | UR-043; BR-007; BR-048; DR-008; DR-010; DEC-05 |
+| D-07 | Approved estimates unaffected by any change; recalculation after unlock uses current rates and shows a notice if they changed. | Q-07 | BRQ-008; BR-012; UR-029; DR-003 |
+| D-08 | Only children's costs counted; parent = sum of children, no cost of its own; child cost x parent quantity (2 x 3 = 6). | Q-08 | BR-023; BR-046; BR-047; Q-32 |
+| D-09 | Master data entered at first use; defaults from the delivery lead; ask after G3 approval, before development. | Q-09 | TR-002; TR-009 |
+| D-10 | ASSUMPTION, unconfirmed (conflict): Release 1 internet-hosted; offline later. | Q-18 | ASSUMPTION-18; BRQ-014 |
+| D-11 | Keep the stated assumptions for all other questions. | Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 | none |
 
 ---
 
@@ -32,12 +50,13 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | BRQ-005 | The portal must produce an Excel file whose layout (header row, columns A to BO, widths, alignment, currency formats, images) replicates the client's worksheet. | Downstream users and customers keep working with the format they know. | SPEC §1.5, §10; DOCX §7 | Must | GOAL-04 |
 | BRQ-006 | The Admin must be able to change the worksheet (add or remove fields, change formulas) without software changes, with Excel-style automatic re-lettering. | Pricing rules change over time; the company must not depend on a developer for each change. | SPEC §1.6, §8; DOCX §6.3 | Must | GOAL-06 |
 | BRQ-007 | Changes to fields, formulas, masters, approvals, unlocks and Approved Quote Price overrides must be traceable to a person and time, with old and new values. | Accountability for pricing decisions. | SPEC §8.3, §12 | Must | GOAL-06 |
-| BRQ-008 | An approved estimate must keep the fields, formulas and values it was approved with, even after later configuration changes. Whether master-value changes also leave it unchanged is open (Q-07). | Approved prices must not change silently. | SPEC §8.4; DOCX §6.3 | Must | GOAL-06 |
+| BRQ-008 | An approved estimate must keep the fields, formulas, rates, master values and results it was approved with, even after later configuration, rate or master-value changes (answered, D-07). | Approved prices must not change silently. | SPEC §8.4; DOCX §6.3; D-07 | Must | GOAL-06 |
 | BRQ-009 | Estimation work must be assigned with a requirement-folder reference and a deadline, tracked in queues, and escalated when overdue. | Work gets done on time and managers see late work. | SPEC §5; DOCX §4 | Must | GOAL-05 |
 | BRQ-010 | The portal must be usable on mobile, tablet and desktop screens. | People work on the shop floor and in the office. | SPEC §11; STD | Must | GOAL-07 |
 | BRQ-011 | The portal must look modern and professional and carry the Accucut brand consistently. | Credibility with staff and the company's identity. | SPEC §17; STD; DEC-02 | Must | GOAL-07 |
 | BRQ-012 | The portal's design must allow later features (for example reading data from drawings) without redesign. | The delivery lead wants a base that can take more features. | SPEC §17.1, §17.5; DEC-04 | Should | GOAL-07 |
 | BRQ-013 | The company must be able to move from the spreadsheet to the portal with checked, matching results. | A safe switch-over protects live quotations. | SPEC §14.2; Q-25 | Should | GOAL-01 |
+| BRQ-014 | The portal can be used without an internet connection, running locally like a website on the user's own computer. **Unresolved conflict (Q-18):** requested in AQP-11; the later AQP-1 comment moves it to a later release. | Work may continue when there is no internet access. | AQP-11; AQP-1 (2026-10-31); D-10 | Won't (Release 1, assumed; confirm at G3) | — |
 
 ## Stakeholder / User Requirements (UR)
 
@@ -84,7 +103,7 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | UR-026 | Lead or Admin | not see cost lines for unselected Surface Treatments (AQ↔Z, AR↔AA, AS↔AB, AT↔AC, AV↔AE, AW↔AF, AX↔AG) | the view stays short | SPEC §7.4; DOCX §6.2 | Must | SPEC §14.5; hidden lines still exported as 0 |
 | UR-027 | Lead or Admin | recalculate whenever inputs change after a calculation | costs stay current | SPEC §6.3 | Must | Recalculate available when inputs changed |
 | UR-028 | Lead or Admin | approve and lock an estimate by entering an Approved Quote Price (pre-filled with the calculated total, editable) | the final price is recorded and inputs freeze | SPEC §6.3; DOCX §5 | Must | Inputs read-only after approval; override logged |
-| UR-029 | Lead or Admin | unlock an approved estimate for re-estimation, giving a reason, and see a notice if the configuration changed since approval | I can reopen work with full information | SPEC §6.3, §8.4 | Must | Unlock logged with reason; notice shown |
+| UR-029 | Lead or Admin | unlock an approved estimate for re-estimation, giving a reason; recalculation then uses the current rates and I see a notice if the configuration or the rates changed since approval | I can reopen work with full information | SPEC §6.3, §8.4; D-07 | Must | Unlock logged with reason; notice shown for configuration and for rate changes |
 | UR-030 | Lead or Admin | download the Excel export at any status | I can share or archive the estimate | SPEC §6.5 | Must | Engineers cannot download (ASSUMPTION-36) |
 
 ### Masters and configuration (Admin)
@@ -106,6 +125,7 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | UR-040 | Engineer | move to the next field with the Enter key and see only one part's form at a time with the tree beside it | entry is fast | SPEC §17.4; DEC-01, DEC-06 | Must | Enter moves focus to the next field |
 | UR-041 | Engineer | not have "Copy from part" or "Apply to selected" actions | the form stays simple (parts rarely share data) | SPEC §17.4; DEC-03 | Won't | Actions absent |
 | UR-042 | Engineer | (future) see a drawing beside the form | I can enter from the drawing without switching windows | SPEC §17.5; DEC-04 | Won't (this release) | Layout has room; no drawing function |
+| UR-043 | Engineer | enter 0 in a number field, and choose "Not applicable" in Material in Drawing and Treatment / Color, for a part (including a parent assembly) that does not need it | the mandatory-field rule is met and the calculations are not affected | SPEC §18 D-06 (Q-06) | Must | Calculate accepts 0 and "Not applicable" on every node; the part adds no cost |
 
 ## Business Rules (BR)
 
@@ -114,7 +134,7 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 |----|-------------------------------------------|------|--------|------------|
 | BR-001 | Roles are Admin (exactly one active), Lead (many), Engineer (many). Each user has Name, Email ID (login), password, role and an active flag. | authorisation | SPEC §3 | none |
 | BR-002 | Engineers see only their own tasks and queue; Admin sees all; Lead sees all with default filter "Assigned by me". | authorisation | SPEC §5.2 | none |
-| BR-003 | Cost or output values, material rates (I), exchange rates, customer rates and formulas are removed on the server for Engineers; an Engineer's responses and pages must contain none of them, and an automated test must assert this. | authorisation | SPEC §3, §14.1 | Engineer may enter Machining Cost (AP), Plating Cost (AU) and Tool Cost (BM) as inputs (see Q-05) |
+| BR-003 | Cost or output values, material rates (I), exchange rates, customer rates and formulas are removed on the server for Engineers; an Engineer's responses and pages must contain none of them, and an automated test must assert this. | authorisation | SPEC §3, §14.1 | Engineer enters Machining Cost (AP), Plating Cost (AU) and Tool Cost (BM) as inputs (Q-05 answered, D-05) and sees only the values typed, never BL, BN or any calculated value |
 | BR-004 | Only Admin manages masters, settings, users, formulas, fields and checkpoints; Lead may view formulas read-only; both Admin and Lead may assign tasks, enter and edit inputs, view costs, approve, lock, unlock, set the Approved Quote Price and download. | authorisation | SPEC §3 | none |
 | BR-005 | Formula edit, field deletion and checkpoint revert each require the Admin to re-enter their password. | authorisation | SPEC §8.3; DOCX §6.3 | none |
 
@@ -122,12 +142,12 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | ID | Rule | Type | Source | Exceptions |
 |----|------|------|--------|------------|
 | BR-006 | Status lifecycle: DRAFT → (Engineer Calculate) → SUBMITTED → (Lead/Admin Approve & Lock) → APPROVED → (Lead/Admin Unlock) → editable again. | policy | SPEC §6.3 | Return path and unlock target open (Q-19) |
-| BR-007 | Calculate requires every visible input of every node to be filled; on failure it shows errors and flags the nodes and fields; it does not submit. | validation | SPEC §7.3, §14.4 | Hidden T and U are not required and take 0; Surface Treatment may be empty; assembly parents open (Q-06) |
+| BR-007 | Calculate requires every visible input of every node to be filled; on failure it shows errors and flags the nodes and fields; it does not submit. | validation | SPEC §7.3, §14.4 | Hidden T and U are not required and take 0; Surface Treatment may be empty; a part or parent that needs nothing gets 0 and "Not applicable" (BR-048, Q-06 answered) |
 | BR-008 | When Fasteners (S) is "None" or blank, T and U are hidden and stored and exported as 0. S defaults to "None". | validation | SPEC §7.1, §14.4 | none |
 | BR-009 | Numeric inputs accept up to 2 decimal places and are not negative. | validation | SPEC §2, §7.3 (`[DEFAULT]` ≥ 0) | none |
 | BR-010 | A customer must be chosen before data entry; changing it needs confirmation and triggers recalculation. | validation | SPEC §6.2 | none |
 | BR-011 | The Approved Quote Price is pre-filled with the calculated Total Unit Production Price (BL) and may be overridden by Lead/Admin; every override is logged. | policy | SPEC §6.3, §12 | none |
-| BR-012 | Approved estimates are read-only and pinned to the configuration version they were approved with; they keep their fields, formulas and values. New and unlocked estimates use the latest configuration version when (re)calculated; unlock shows a notice if the configuration changed. Master-value behaviour is open (Q-07). | policy | SPEC §8.4 | Q-07 |
+| BR-012 | Approved estimates are read-only and pinned to the configuration version they were approved with; they keep their fields, formulas and values. New and unlocked estimates use the latest configuration version when (re)calculated; unlock shows a notice if the configuration changed. Master values are covered too (D-07): an approved estimate keeps the master values it was approved with; recalculation after unlock uses the current values and shows a notice if rates changed. | policy | SPEC §8.4; D-07 | none |
 | BR-013 | Sl. No (A) is derived from tree position and renumbers after add, reorder or delete. | calculation | SPEC §6.1 | none |
 | BR-014 | An image is accepted only if PNG, JPG, GIF or WebP by content (not by file extension) and smaller than 200 KB. | validation | SPEC §7.1, §12 | none |
 
@@ -142,7 +162,7 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | BR-020 | Stage 4: AZ = T × U; BA = AK + AY + AZ; BB = BA × H. | calculation | SPEC §7.4 | none |
 | BR-021 | Stage 5: BC (Rejection) = 0 until defined (Q-11); BD = BB × OH Profit %; BE = BB × Inspection & Packing %; BF = BB × Transport %. A rate named "… %" is typed as a percentage (12 means 12%) and used as a fraction (0.12). | calculation | SPEC §7.4, §15.1 | Q-11 |
 | BR-022 | Stage 6: BG = BB + BC + BD + BE + BF; BH = 1 USD in INR; BI = 1 EUR in INR; BJ = BG / BH; BK = BG / BI. | calculation | SPEC §7.4 | none |
-| BR-023 | BL = sum of BG over all nodes of the estimate, shown once (row 2); BN = BL / BM whenever both have values, shown as "—" when BM = 0; BO = Approved Quote Price, once (row 2). Scope of "once" open (Q-04, Q-05, Q-08). | calculation | SPEC §7.4; DOCX §6.2 | Q-04, Q-05, Q-08 |
+| BR-023 | BL = total cost of the estimate, counting each part once under BR-046 and BR-047 (the SPEC said: sum of BG over all nodes), shown once (row 2); BN = BL / total of all Tool Cost (BM) entries of the estimate whenever that total is above 0, shown as "—" when it is 0; BO = Approved Quote Price, once (row 2). One estimate = one product = one BL, BN and BO (Q-04 answered). | calculation | SPEC §7.4 (amended); §18 D-04, D-05, D-08; DOCX §6.2 | Placement in the export versus the sample: Q-31. Roll-up details: Q-32 |
 | BR-024 | Division by zero shows "—" on screen and an empty cell in the export; it never stops a calculation. | validation | SPEC §7.4 (`[DEFAULT]`) | none |
 | BR-025 | Calculated values are stored at full precision and displayed to 2 decimals; calculations run on the server; stored results are recomputed on Calculate and Recalculate. | calculation | SPEC §2, §12 | none |
 | BR-026 | Cost lines that depend on an unselected Surface Treatment flag are hidden in the cost view only; they are still calculated and exported (as 0). | policy | SPEC §7.4, §14.5 | none |
@@ -178,20 +198,28 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | BR-044 | E-mails are never sent twice for the same event and every send or failure is logged; failed sends are retried. | policy | SPEC §5.4, §12 | none |
 | BR-045 | A task is Closed when its estimate is approved and returns to Open if the estimate is unlocked; an Open task past its deadline is Overdue and also stays in Open. All times are in IST. | policy | SPEC §5.2 (`[DEFAULT]`); DOCX §4 | none |
 
+### Cost counting and zero entry (added in Pass 2)
+
+| ID | Rule | Type | Source | Exceptions |
+|----|------|------|--------|------------|
+| BR-046 | A parent node (one with children) has no cost of its own. Its cost is the sum of its children's costs. Only the cost of children is counted, so no cost is counted twice in BL. | calculation | SPEC §18 D-08 (Q-08); replaces ASSUMPTION-08 | Treatment of non-zero cost inputs on a parent: Q-32 (c); ASSUMPTION-48 |
+| BR-047 | A child's cost is multiplied by its parent's quantity (example: parent quantity 2 x child quantity 3 = 6 of the child). | calculation | SPEC §18 D-08 (Q-08) | Pass-through over several levels, and whether a parent's displayed cost includes its own quantity: Q-32 (a), (b); ASSUMPTION-48. Differs from the worksheet when a parent's quantity is above 1: Q-32 (d) |
+| BR-048 | Where a part does not need a field, the Engineer enters 0 in the number field and chooses "Not applicable" in Material in Drawing and Treatment / Color. This applies to every node, including parents. A zero entry must not change any calculation. | validation | SPEC §18 D-06 (Q-06, Q-15) | Values of the "Not applicable" Material row: Q-33; ASSUMPTION-49 |
+
 ## Data Requirements (DR)
 
 | ID | Entity / data | Key attributes | Owner | Sensitivity | Retention | Source of truth |
 |----|---------------|----------------|-------|-------------|-----------|-----------------|
 | DR-001 | User | Name, Email ID, role, active flag, password (stored only as a one-way hash) | Admin | Confidential (personal data) | Q-26 | Portal |
 | DR-002 | Task | Engineer, assigning user, network folder path, deadline, optional title/notes, status, estimate link | Lead/Admin | Internal | Q-26 | Portal |
-| DR-003 | Estimate | Customer, status, configuration version used, per-calculation snapshot of master values (ASSUMPTION-07), Approved Quote Price, approver, timestamps | Lead/Admin | Restricted (commercial prices) | Q-26 | Portal |
+| DR-003 | Estimate | Customer, status, configuration version used, per-calculation record of the master values used (confirmed, D-07), Approved Quote Price, approver, timestamps | Lead/Admin | Restricted (commercial prices) | Q-26 | Portal |
 | DR-004 | Estimate node | Tree position, Sl. No, all input field values, calculated values (not visible to Engineers) | Engineer, Lead/Admin | Restricted for calculated values; Confidential for inputs | Q-26 | Portal |
 | DR-005 | Part image | One image per node, PNG/JPG/GIF/WebP, below 200 KB | Engineer | Confidential (may show customer part) | Q-26 | Portal |
-| DR-006 | Process Master | Named rates, with unit and default value | Admin | Restricted | Q-26 | Portal; initial values from the client (Q-09) |
-| DR-007 | Customer | Name, Phone, Email, Address, one value per Process Master item | Admin | Confidential (business contact data) | Q-26 | Portal; initial list from the client (Q-09) |
-| DR-008 | Material Master | Material in Drawing (unique), Material-Considered, price per kg, specific gravity, scrap rate | Admin | Restricted | Q-26 | Portal; initial list from the client (Q-09) |
+| DR-006 | Process Master | Named rates, with unit and default value | Admin | Restricted | Q-26 | Portal; entered by the Admin at first use; defaults from the delivery lead (Q-09) |
+| DR-007 | Customer | Name, Phone, Email, Address, one value per Process Master item | Admin | Confidential (business contact data) | Q-26 | Portal; entered by the Admin at first use; defaults from the delivery lead (Q-09) |
+| DR-008 | Material Master | Material in Drawing (unique), Material-Considered, price per kg, specific gravity, scrap rate; includes a "Not applicable" row (Q-33) | Admin | Restricted | Q-26 | Portal; entered by the Admin at first use; defaults from the delivery lead (Q-09) |
 | DR-009 | Exchange rates | 1 USD in INR, 1 EUR in INR, last updated by/at | Admin | Restricted | Q-26 | Portal |
-| DR-010 | Treatment/Color list | Option names (plus fixed "Other") | Admin | Internal | Q-26 | Portal |
+| DR-010 | Treatment/Color list | Option names (plus fixed "Other" and "Not applicable") | Admin | Internal | Q-26 | Portal |
 | DR-011 | Field registry and configuration versions | Field definitions (kind, type, section, position, formula, hide rule, visibility rule, default, mandatory, row/product scope, Excel width and format), sections, versions, checkpoints | Admin | Restricted (formulas) | Versions of approved estimates: for as long as those estimates | Portal; initial values from SPEC §7 and the sample (Q-03) |
 | DR-012 | Audit log | Who, when, object, before → after for configuration changes, approvals, unlocks, price overrides, master edits | System | Confidential | Q-26 | Portal |
 | DR-013 | E-mail log | Event, recipients, time, result (sent/failed), retry count | System | Internal | Q-26 | Portal |
@@ -202,13 +230,14 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | ID | Requirement | Owner | Priority |
 |----|-------------|-------|----------|
 | TR-001 | Load the initial field registry and sections from SPEC §7 and the sample worksheet on first installation. | Delivery team | Must |
-| TR-002 | Load the client's starting master data (Process Master values, materials, exchange rates, customers, Treatment/Color list) before user acceptance testing (Q-09). | Santhosh / Accucut | Must |
+| TR-002 | The Admin enters master data (Process Master values, materials, exchange rates, customers, Treatment/Color list) when the app is first used; the delivery lead provides the defaults (Q-09 answered, D-09). Until the defaults arrive, development and tests use invented placeholder values only. | Santhosh / Admin | Must |
 | TR-003 | Create the first users (one Admin, Leads, Engineers) before go-live. | Santhosh / Admin | Must |
 | TR-004 | Before go-live, run a set of real past estimates through the portal and the worksheet and compare every output to 2 decimals (parallel run); the number of estimates is open (Q-25). | Accucut estimating lead / QA | Should |
 | TR-005 | Train Admin, Leads and Engineers on their role's screens; the Engineer session must make clear that costs are not shown by design. Who trains is open (Q-25). | Delivery team | Should |
 | TR-006 | Past Excel estimates are not imported in this release unless Q-25 says otherwise. | Santhosh | Won't (assumed) |
-| TR-007 | Obtain a cleaned copy of the sample worksheet at `docs/reference/sample-estimate.xlsx` and, if available, a sharper logo original (Q-03, Q-16). | Santhosh | Must |
+| TR-007 | Obtain a cleaned copy of the sample worksheet at `docs/reference/sample-estimate.xlsx` and, if available, a sharper logo original (Q-30, Q-16). The sample is AMADA-20261006.xlsx (Q-03 answered). | Santhosh | Must |
 | TR-008 | Document daily database backup guidance and restore steps in the README for the Accucut IT contact. | Delivery team | Must |
+| TR-009 | After G3 approval and before development starts, the delivery process stops and asks the delivery lead for the master data defaults (Q-09 answered, D-09). | Orchestrator / Santhosh | Must |
 
 ## Non-functional Requirements (NFR)
 
@@ -248,31 +277,31 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | CONSTRAINT-04 | Exactly one active Admin. | SPEC §3 |
 | CONSTRAINT-05 | The supplied logo is 200 × 200 px (JPG) until a sharper original arrives. | SPEC §15.8 |
 | CONSTRAINT-06 | Human approval at G1, G3 and G8; code pull requests wait for a human to merge. | CLAUDE.md §1a |
-| CONSTRAINT-07 | Budget and target date are not stated (Q-01). | Intake |
+| CONSTRAINT-07 | Budget: no limit. Start 2026-11-02; target 10 working days at 8 hours a day, ending 2026-11-13 (Monday to Friday). What the date delivers and whether the full SPEC fits: Q-29. | Q-01 answered (AQP-2, AQP-1) |
 | CONSTRAINT-08 | Part images are limited to 200 KB each. | SPEC §7.1 |
 
 ## Assumptions
 
 | ID | Assumption | Impact if false | Owner |
 |----|------------|-----------------|-------|
-| ASSUMPTION-01 | No fixed budget or date (Q-01) | Release plan must be re-cut | Santhosh |
-| ASSUMPTION-02 | "Santhosh / MD" is one person (Q-02) | Sign-off route changes | Santhosh |
-| ASSUMPTION-03 | AMADA-20261006.xlsx is the sample worksheet, used for structure only (Q-03) | Export fidelity may be wrong | Santhosh |
-| ASSUMPTION-04 | One product and one total per estimate (Q-04) | Data model, approval and export change | Santhosh |
-| ASSUMPTION-05 | Engineer enters Tool Cost (BM) on every part (Q-05) | Engineer form and visibility rule change | Santhosh |
-| ASSUMPTION-06 | Every node needs every field, including assembly parents (Q-06) | Calculate blocked for assemblies | Santhosh |
-| ASSUMPTION-07 | Estimates store a snapshot of master values at each calculation (Q-07) | Approved prices could change silently | Santhosh |
-| ASSUMPTION-08 | BL sums all nodes; a parent carries only its own cost (Q-08) | Prices double counted or understated | Santhosh |
-| ASSUMPTION-09 | The client supplies starting master data before UAT (Q-09) | Testing and go-live delayed | Santhosh |
+| ASSUMPTION-01 | **Replaced by answer (D-01):** budget no limit; start 2026-11-02; 10 working days x 8 h; end 2026-11-13. What the date delivers: ASSUMPTION-45 (Q-29) | Release plan must be re-cut | Santhosh |
+| ASSUMPTION-02 | **Confirmed (D-02):** "Santhosh - MD" is one person (Q-02) | Sign-off route changes | Santhosh |
+| ASSUMPTION-03 | **Confirmed (D-03):** AMADA-20261006.xlsx is the sample worksheet, used for structure only; cleaned copy still open (Q-30) | Export fidelity may be wrong | Santhosh |
+| ASSUMPTION-04 | **Confirmed (D-04):** one product and one total per estimate (Q-04); sample difference: Q-31 | Data model, approval and export change | Santhosh |
+| ASSUMPTION-05 | **Confirmed (D-05):** Engineer enters Tool Cost (BM) on every part (Q-05); BN divisor is now the total of all BM entries | Engineer form and visibility rule change | Santhosh |
+| ASSUMPTION-06 | **Replaced by answer (D-06):** every node still needs every field; where a part needs nothing the Engineer enters 0 and chooses "Not applicable" (Q-06) | Calculate blocked for assemblies | Santhosh |
+| ASSUMPTION-07 | **Confirmed (D-07):** estimates keep the master values used at each calculation; recalculation after unlock uses current values with a notice (Q-07) | Approved prices could change silently | Santhosh |
+| ASSUMPTION-08 | **Replaced by answer (D-08):** only children's costs are counted; a parent has no cost of its own; a child's cost is multiplied by its parent's quantity (Q-08). Details: ASSUMPTION-48 | Prices double counted or understated | Santhosh |
+| ASSUMPTION-09 | **Replaced by answer (D-09):** the Admin enters master data at first use; the delivery lead provides defaults when asked after G3 approval and before development (Q-09) | Testing and go-live delayed | Santhosh |
 | ASSUMPTION-10 | Export details as stated in Q-10 | Export differs from the sample | Santhosh |
 | ASSUMPTION-11 | BC = 0 until defined (Q-11) | Prices under-quoted | Santhosh |
 | ASSUMPTION-12 | `file:///` link plus Copy path (Q-12); current versions of Chrome, Edge, Firefox and Safari | Task start slowed; unsupported browser | Santhosh |
 | ASSUMPTION-13 | Remarks stays mandatory (Q-13) | Filler text | Santhosh |
 | ASSUMPTION-14 | AD is informational; AU is typed (Q-14) | Hidden-line rule incomplete | Santhosh |
-| ASSUMPTION-15 | "Not needed" switch not built (Q-15) | Slower entry | Santhosh |
+| ASSUMPTION-15 | **Retired (D-06):** the "Not needed" switch is not needed; 0 is entered instead (Q-15 closed) | Slower entry | Santhosh |
 | ASSUMPTION-16 | Current logo file is used (Q-16) | Blurry brand | Santhosh |
 | ASSUMPTION-17 | Meta and Open Graph tags on every page, generic wording, authenticated pages "do not index" (Q-17) | Rework of tags or leakage | Santhosh |
-| ASSUMPTION-18 | Docker Compose on a server reachable from the office network or VPN; not public (Q-18) | Security and delivery design change | Santhosh |
+| ASSUMPTION-18 | **UNCONFIRMED, conflict (Q-18, D-10):** Release 1 is internet-hosted; offline use ("running locally") is a later release. AQP-11 asked for both; the later AQP-1 comment says internet only. Docker Compose per SPEC §2. Replaces "office network or VPN, not public". Confirm at G3 | Security and delivery design change; offline scope added | Santhosh |
 | ASSUMPTION-19 | Engineer read-only after SUBMITTED; no return action; unlock returns to DRAFT (Q-19) | Status model changes | Santhosh |
 | ASSUMPTION-20 | Reassign and deadline change allowed and logged; cancel not provided (Q-20) | Task handling gaps | Santhosh |
 | ASSUMPTION-21 | All `[DEFAULT]` items stand (Q-21) | Several policies change | Santhosh |
@@ -299,6 +328,13 @@ Decisions made while reviewing the UI sample. SPEC §17 and §15 already hold th
 | ASSUMPTION-42 | Drafts autosave every 30 seconds (SPEC §11) | Different interval | Santhosh |
 | ASSUMPTION-43 | Light and dark mode offered (SPEC §11) | Scope change | Santhosh |
 | ASSUMPTION-44 | Export file name `Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>.xlsx` (SPEC §10) | Different name | Santhosh |
+| ASSUMPTION-45 | The 2026-11-13 date is the Release 1 delivery date; go-live, training and the parallel run follow; the product manager proposes a first release at G2 if the SPEC does not fit (Q-29) | Release plan wrong | Santhosh |
+| ASSUMPTION-46 | The original sample is not committed; structure only; no cell data in any artefact (Q-30) | Customer data exposed, or export fidelity wrong | Santhosh |
+| ASSUMPTION-47 | BL, BN and BO appear in row 2 only in the export; no per-item totals (Q-31) | Export differs from the sample | Santhosh |
+| ASSUMPTION-48 | Quantities pass through every level; a leaf's BG is as in the SPEC; a parent's BG = its quantity x the sum of its children's BG; BL = sum of BG of the top-level nodes; non-zero cost inputs on a parent are stored but not counted; the parallel run compares with a worksheet calculated the same way (Q-32) | Wrong prices | Santhosh |
+| ASSUMPTION-49 | System-created "Not applicable" rows in the Material Master (all rates 0) and the Treatment / Color list; the Admin cannot delete or rename them (Q-33) | Cost on a part that has none, or Engineers blocked | Santhosh |
+
+Status of the other assumptions: ASSUMPTION-10 to 14, 16, 17, 19 to 44 were kept by the delivery lead (AQP-1, D-11).
 
 ## Open Questions
 
@@ -306,34 +342,39 @@ Full text, assumptions and answer lines are in `requirements-questions.md`. Bloc
 
 | ID | Question | Affects | Owner | Needed by | Status |
 |----|----------|---------|-------|-----------|--------|
-| **Q-01** | Budget and target date | CONSTRAINT-07, release plan | Santhosh | G2 | Open (AQP-2) |
-| **Q-02** | One person or two | sign-off | Santhosh | G2 | Open (AQP-3) |
-| **Q-03** | Is AMADA-20261006.xlsx the sample | BRQ-005, TR-007 | Santhosh | G3 | Open (AQP-4) |
-| **Q-04** | One total per estimate or per top-level item | BR-023, DR-003 | Santhosh | G2 | Open (AQP-5) |
-| **Q-05** | Tool Cost (BM) entry | BR-003, BR-023 | Santhosh | G2 | Open (AQP-6) |
-| **Q-06** | Assembly parents and mandatory inputs | BR-007, UR-023 | Santhosh | G2 | Open (AQP-7) |
-| **Q-07** | Master changes after approval | BR-012, DR-003 | Santhosh | G2 | Open (AQP-8) |
-| **Q-08** | Parent vs child cost | BR-023 | Santhosh | G2 | Open (AQP-9) |
-| **Q-09** | Starting master data | TR-002, DR-006 to DR-010 | Santhosh | G4 | Open (AQP-10) |
-| Q-10 | Export presentation details | BRQ-005 | Santhosh | G3 | Open |
-| Q-11 | Rejection (BC) | BR-021 | Santhosh | G4 | Open |
-| Q-12 | Network-folder links, browsers | UR-005 | Santhosh | G3 | Open |
-| Q-13 | Remarks mandatory | BR-007 | Santhosh | G3 | Open |
-| Q-14 | Plating flag unused | BR-018 | Santhosh | G3 | Open |
-| Q-15 | "Not needed" switch | DEC-05, BR-007 | Santhosh | G3 | Open |
-| Q-16 | Sharper logo | CONSTRAINT-05 | Santhosh | G8 | Open |
-| Q-17 | SEO and Open Graph on a login-only portal | NFR-020 | Santhosh | G3 | Open |
-| **Q-18** | Hosting and access | NFR, architecture | Santhosh | G3 | Open (AQP-11) |
-| Q-19 | Engineer edits after Calculate; return path | BR-006 | Santhosh | G2 | Open |
-| Q-20 | Task reassign, deadline change, cancel | UR-004 | Santhosh | G2 | Open |
-| Q-21 | Confirm `[DEFAULT]` items | ASSUMPTION-30 to 44 | Santhosh | G2 | Open |
-| Q-22 | ID format | UR-004, export | Santhosh | G3 | Open |
-| Q-23 | Admin succession | CONSTRAINT-04 | Santhosh | G3 | Open |
-| Q-24 | Volumes, users, turnaround baseline | GOAL-01, NFR-005 | Santhosh | G2 | Open |
-| Q-25 | Past estimates, cut-over, parallel run | TR-004 to TR-006 | Santhosh | G4 | Open |
-| Q-26 | Retention and personal data | DR retention | Santhosh | G3 | Open |
-| Q-27 | Overdue colour; mobile navigation | NFR-011, NFR-017 | Santhosh | G3 | Open |
-| Q-28 | Walk-through of today's process | process-as-is-to-be | Santhosh | G2 | Open |
+| Q-01 | Budget and target date | CONSTRAINT-07, release plan | Santhosh | G2 | Answered (AQP-2); see Q-29 |
+| Q-02 | One person or two | sign-off | Santhosh | G2 | Answered: one person (AQP-3) |
+| Q-03 | Is AMADA-20261006.xlsx the sample | BRQ-005, TR-007 | Santhosh | G3 | Answered in part (AQP-4); remainder Q-30 |
+| Q-04 | One total per estimate or per top-level item | BR-023, DR-003 | Santhosh | G2 | Answered: one product (AQP-5); see Q-31 |
+| Q-05 | Tool Cost (BM) entry | BR-003, BR-023 | Santhosh | G2 | Answered: Engineer enters; BN divisor changed (AQP-6) |
+| Q-06 | Assembly parents and mandatory inputs | BR-007, UR-043, BR-048 | Santhosh | G2 | Answered: enter 0, "Not applicable" (AQP-7); see Q-33 |
+| Q-07 | Master changes after approval | BR-012, DR-003 | Santhosh | G2 | Answered (AQP-8) |
+| Q-08 | Parent vs child cost | BR-023, BR-046, BR-047 | Santhosh | G2 | Answered (AQP-9); see Q-32 |
+| Q-09 | Starting master data | TR-002, TR-009, DR-006 to DR-010 | Santhosh | After G3 approval, before development | Answered (AQP-10) |
+| Q-10 | Export presentation details | BRQ-005 | Santhosh | G3 | Assumption kept |
+| Q-11 | Rejection (BC) | BR-021 | Santhosh | G4 | Assumption kept |
+| Q-12 | Network-folder links, browsers | UR-005 | Santhosh | G3 | Assumption kept |
+| Q-13 | Remarks mandatory | BR-007 | Santhosh | G3 | Assumption kept |
+| Q-14 | Plating flag unused | BR-018 | Santhosh | G3 | Assumption kept |
+| Q-15 | "Not needed" switch | DEC-05, BR-007 | Santhosh | G3 | Closed: not needed |
+| Q-16 | Sharper logo | CONSTRAINT-05 | Santhosh | G8 | Assumption kept |
+| Q-17 | SEO and Open Graph on a login-only portal | NFR-020 | Santhosh | G3 | Assumption kept |
+| **Q-18** | Hosting and access (internet-hosted vs offline conflict) | BRQ-014, NFR, architecture | Santhosh | G3 | **Open** (AQP-11); ASSUMPTION-18 unconfirmed |
+| Q-19 | Engineer edits after Calculate; return path | BR-006 | Santhosh | G2 | Assumption kept |
+| Q-20 | Task reassign, deadline change, cancel | UR-004 | Santhosh | G2 | Assumption kept |
+| Q-21 | Confirm `[DEFAULT]` items | ASSUMPTION-30 to 44 | Santhosh | G2 | Assumption kept |
+| Q-22 | ID format | UR-004, export | Santhosh | G3 | Assumption kept |
+| Q-23 | Admin succession | CONSTRAINT-04 | Santhosh | G3 | Assumption kept |
+| Q-24 | Volumes, users, turnaround baseline | GOAL-01, NFR-005 | Santhosh | G2 | Assumption kept |
+| Q-25 | Past estimates, cut-over, parallel run | TR-004 to TR-006 | Santhosh | G4 | Assumption kept |
+| Q-26 | Retention and personal data | DR retention | Santhosh | G3 | Assumption kept |
+| Q-27 | Overdue colour; mobile navigation | NFR-011, NFR-017 | Santhosh | G3 | Assumption kept |
+| Q-28 | Walk-through of today's process | process-as-is-to-be | Santhosh | G2 | Assumption kept |
+| **Q-29** | What 2026-11-13 delivers; does the full SPEC fit | CONSTRAINT-07, release plan | Santhosh | G2 | **New, open** (AQP-12) |
+| Q-30 | Cleaned sample copy; blank template | BRQ-005, TR-007 | Santhosh | G3 | New, open |
+| Q-31 | Per-item totals in the sample vs one total | BR-023, BRQ-005 | Santhosh | G3 | New, open |
+| **Q-32** | Quantity roll-up details; worksheet difference | BR-023, BR-046, BR-047, BRQ-004 | Santhosh | G2 | **New, open** (AQP-13) |
+| Q-33 | "Not applicable" Material row values | BR-048, DR-008 | Santhosh | G3 | New, open |
 
 ## Traceability summary
 
@@ -356,3 +397,4 @@ Full text, assumptions and answer lines are in `requirements-questions.md`. Bloc
 | §15 Open items | Q-08, Q-03, Q-11, Q-12, Q-13, Q-14, Q-15, Q-16 |
 | §16 Glossary | Brief section 13 |
 | §17 UI direction | DEC-01 to DEC-06, NFR-016 to NFR-021, UR-040 to UR-042 |
+| §18 Delivery lead answers (Pass 2) | D-01 to D-11: CONSTRAINT-07, BRQ-008, BRQ-014, UR-029, UR-043, BR-003, BR-007, BR-012, BR-023, BR-046 to BR-048, DR-003, DR-008, DR-010, TR-002, TR-007, TR-009, ASSUMPTION-01 to 09, 15, 18, 45 to 49 |
