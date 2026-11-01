@@ -66,7 +66,7 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
-| 2026-11-01 | orchestrator | Run stopped for Q-32 (a), (b) and the RISK-006 decision; four commits held locally, pushing paused | AQP-1, AQP-13 |
+| 2026-11-01 | orchestrator | Run stopped for Q-32 (a), (b) and the RISK-006 decision; commits held locally, pushing paused | AQP-1, AQP-13 |
 | 2026-11-01 | product-manager | G2 remediation 4 and 5: PRD and release plan v0.3 | docs/02-product/ |
 | 2026-11-01 | business-analyst | G2 remediation 2, 3 and 5: AQP-13 rewritten, discovery files corrected | AQP-13, docs/01-discovery/, ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md |
 | 2026-11-01 | master | G2 Product Definition: NO-GO, attempt 1 (G1 condition 2 not met; conditions 1 and 3 met); RISK-001 to 005 restated, RISK-006 to 010 added; DL-001 to DL-005 | docs/00-governance/ |
