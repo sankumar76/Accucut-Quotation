@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.11 (Draft; architecture v0.10 applied, 2026-11-02. The architect corrected an addition error: his rows for AQP-1 10546 to 10554 sum to +3.75 to +6 h, not +6.5, so the 0.5 h I "dropped" in v0.10 was never a piece of work, and no row is missing. His corrected ends, with every saving read the same way, are applied: scope A is **88 to 131.75 h, central 109.875 h** (v0.10: 87.75 to 132 h; the centre is unchanged). The password step-up ships in R1 with FR-107 and FR-108, with no change to the total. **No date moves:** central Thu 2026-11-26, range Thu 2026-11-19 to Fri 2026-12-04; the working-day figures are 13.75 / 18.18 / 24.22. All of this is an estimate and none of it is adopted by the delivery lead) |
+| Version | 0.12 (Draft; G4 attempt 1 remediation 4 and the answers of 2026-11-02 applied. **The merge model is recalibrated** from the story graph: 89 candidate stories (18 in Jira), a chain of 21 stories in a line, and sprint 1's own chain of 8 to 9 stories, which means 7 merge waits against the 2 stage waits modelled before. The ways of working that change the date are set out in 3.3 for the delivery lead to choose. **Effort:** +0.5 to +0.75 h in EPIC-10 for the guided `clear-copies.sh`: scope A is **88.5 to 132.5 h, central 110.5 h**. **Dates (the way of working as it is today, one PR per story merged by the delivery lead within half a day):** central **Thu 2026-11-26** (unchanged), range **Thu 2026-11-19 to Fri 2026-12-11**; the high end moves a week because the model now charges every merge wait. The date depends on how fast each PR is merged: 0.25 day gives Tue 2026-11-24, 1 day gives Wed 2026-12-09. All of this is an estimate and none of it is adopted by the delivery lead) |
 | Owner | product-manager |
 | Date | 2026-11-02 |
-| Status | **Estimates. Not adopted.** The scope is decided (scope A). Their reply says "prefer" and does not mention dates, so no date in this plan is theirs. These dates supersede the v0.10, v0.9, v0.8, v0.7 and v0.6 dates and the v0.4 dates posted on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10478) |
-| Companion | `docs/02-product/prd.md` v0.11 (FR, NFR, readings, epics, release moves in section 6.3, decisions in sections 12.2 and 13.4 to 13.6) |
+| Status | **Estimates. Not adopted.** The scope is decided (scope A). Their reply says "prefer" and does not mention dates, so no date in this plan is theirs. These dates supersede the v0.11 to v0.6 dates and the v0.4 dates posted on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10478) |
+| Companion | `docs/02-product/prd.md` v0.12 (FR, NFR, readings, epics, release moves in section 6.3, decisions in sections 12.2 and 13.4 to 13.7) |
 
 ## 1. What is fixed, what is labelled
 
@@ -19,6 +19,7 @@
 | Scope behind the date | **Decided: scope A**, in their own words: "I prefer the scope A for the intial release." (spelling as written). Scope A = R1 core + R1+ stretch + R2 (EPIC-01 to EPIC-10), built as one hand-over; offline use, dark mode and the UI-sample extras are outside it. They did not mention dates | AQP-12 10488 (D-14) |
 | Work already done | G2 attempt 2 CONDITIONAL GO, UX spec v0.4 and screens, architecture v0.8, the inception backlog (epics and the consistency report) and the master's G3 decision (CONDITIONAL GO, 16 conditions) all exist; the delivery lead approved G3 (AQP-1 10491) | Gate log; project state |
 | Human approval stops | Lifted by their instruction "dont ask me for any approvals except for git merge. But I need to view the result after each iteration (and gate reviews if required)" (AQP-1 10495; DL-010). **G8 does not wait for a separate sign-off**; a NO-GO still stops the run; code pull request merges and deployment stay human | DL-010 |
+| How code is merged | Each code PR is merged by the delivery lead (`MERGE_POLICY` docs-auto, code-human). **How fast they merge, and in what way, now decides the date more than the effort does** (3.3). They choose the way; this plan uses today's rule | CLAUDE.md §1a; G4 attempt 1, remediation 4 |
 | Master data (HOLD-01) | **Met.** The Admin holds and loads the values and types them in at first use; no values were given; development uses invented placeholders. **No wait is modelled for it** | AQP-10 10512 (D-23) |
 | Holidays and days away | **None between 2026-11-02 and 2026-12-09**, in their word. No allowance is modelled; OQ-PM-02 is closed | AQP-1 10555 (D-35) |
 | Offline use | Decided: the next release, not Release 1. What it means and the remaining hosting details are open (Q-18). **Not estimated** | AQP-11 10444; AQP-1 10441 (e) |
@@ -43,30 +44,31 @@ Every hour, day and date below is an **estimate** by the product manager. **Ther
 
 | | **Scope A (adopted)**: whole SPEC except offline, dark mode and the UI-sample extras |
 |---|---|
-| Contents | R1 core + R1+ stretch + R2: EPIC-01 to EPIC-10, 101 FRs (78 + 6 + 17; v0.8: 98, with FR-106 to FR-108 added and FR-105 moved into the core). Excludes dark mode (FR-090), the UI-sample extras (FR-097) and offline use (FR-092), which are not estimated; if the delivery lead wants any of them inside the date they say so and the product manager estimates them |
-| Development effort (estimate) | 88 to 131.75 h, central 109.875 h (v0.10: 87.75 to 132 h, the same centre; v0.9: 87 to 130.75 h). **Not in:** the forced password change after an Admin-set password (OQ-UX-15) and the password step on an Admin hand-over (OQ-UX-17), under 0.75 h together (estimate), which moves no date; a refused SMTP sign-in (about 4 h, architect). See the sensitivity rows in 3.4 |
-| **Central date** | **Thursday 2026-11-26** (v0.9: the same) |
-| **Range** | **Thursday 2026-11-19 to Friday 2026-12-04** (v0.9: the same) |
-| Working days from 2026-11-02 | central 19 (range 14 to 25); unrounded 13.75 / 18.18 / 24.22 |
+| Contents | R1 core + R1+ stretch + R2: EPIC-01 to EPIC-10, 101 FRs (78 + 6 + 17). Excludes dark mode (FR-090), the UI-sample extras (FR-097) and offline use (FR-092), which are not estimated; if the delivery lead wants any of them inside the date they say so and the product manager estimates them |
+| Development effort (estimate) | 88.5 to 132.5 h, central 110.5 h (v0.11: 88 to 131.75 h, central 109.875 h). **Not in:** the forced password change after an Admin-set password (OQ-UX-15) and the password step on an Admin hand-over (OQ-UX-17), under 0.75 h together (estimate); a refused SMTP sign-in (about 4 h, architect). See the sensitivity rows in 3.4 |
+| **Central date** | **Thursday 2026-11-26** (v0.11: the same) |
+| **Range** | **Thursday 2026-11-19 to Friday 2026-12-11** (v0.11: to Friday 2026-12-04) |
+| Working days from 2026-11-02 | central 19 (range 14 to 30); unrounded 13.24 / 18.31 / 29.63 |
+| Assumes | The way of working of today: one PR per story, and the delivery lead merges each within 0.25 / 0.5 / 1 working day (low / central / high). Other ways are in 3.3 |
 | Misses the 2026-11-13 target? | Yes in every case modelled (3.6) |
 | SPEC §14 criteria met at hand-over | all except any that touch offline |
 
-The range is "everything goes well" to "everything goes slowly" taken together: low = low effort estimate, shortest waits; high = high effort estimate, longest waits. A date near the central value is the most likely single outcome of this model, and the model is itself uncertain (no velocity). **The central value 18.18 working days sits 0.18 day, about 1.5 h of work, over the boundary to day 18:** 1.5 h less effort makes it Wed 2026-11-25, and about 6.5 h more reaches Fri 2026-11-27. So treat Wed 2026-11-25 and Thu 2026-11-26 as close neighbours. The high value 24.22 sits 0.78 day (6.25 h) under its next boundary. The R1 core is complete on about **Wednesday 2026-11-18** (central), an interim point at which they can still choose to hand over the core (section 6).
+The range is "everything goes well" to "everything goes slowly" taken together: low = low effort estimate and a quarter-day merge; high = high effort estimate and a full-day merge. A date near the central value is the most likely single outcome of this model, and the model is itself uncertain (no velocity). **The central date is steady, but it hides a steep dependence: at a half-day merge the waits cost about 2.6 working days; at three-quarters of a day, Wed 2026-12-02; at a full day, Wed 2026-12-09.** The high end moves from Fri 2026-12-04 to Fri 2026-12-11 for that reason, and not because the effort grew. Part of the central date is luck of arrangement: while a story waits to be merged, the agents pick up an independent story, and the model finds enough of them at the centre (3.2). The first sprint is where that fails: its stories are almost one chain. The R1 core alone, handed over at checkpoint C, would end about Wed 2026-11-25, only a day earlier (section 6).
 
-### 2.3 How the dates moved since v0.10
+### 2.3 How the dates moved since v0.11
 
 | Step | Working days (low / central / high) |
 |------|--------------------------------------|
-| v0.10, scope A 87.75 to 132 h, central 109.875 h | 13.72 / 18.18 / 24.25 (Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04) |
-| The architect's corrected ends: low 88 h (+0.25 h), high 131.75 h (-0.25 h), centre unchanged | +0.03 / 0 / -0.03 |
-| The step-up in R1 with FR-107 and FR-108: no change to the total | 0 |
-| **v0.11** | **13.75 / 18.18 / 24.22 (Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04)** |
+| v0.11, 88 / 109.875 / 131.75 h, five stage waits | 13.75 / 18.18 / 24.22 (Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04) |
+| +0.5 to +0.75 h for `clear-copies.sh` (central +0.625 h): 88.5 / 110.5 / 132.5 h, same model | +0.06 / +0.08 / +0.09 = 13.81 / 18.26 / 24.31 |
+| Replace the five stage waits (1.25 / 2.5 / 5 days) with the waits found by running the 89 stories through their dependencies (0.67 / 2.55 / 10.31 days) | -0.57 / +0.05 / +5.32 |
+| **v0.12** | **13.24 / 18.31 / 29.63 (Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-11)** |
 
-**No date moves.** The v0.10 ends took the file saving of EPIC-07 as 0.5 h in the low case and 0.25 h in the high case, which is the opposite of how every other saving in the plan is taken (removing work sized 0.25 to 0.5 lowers the low estimate by 0.25 and the high by 0.5). The architect asked for the same reading throughout, and it is applied here. Nothing else changed: the G3 rework term, the backlog term, the merge waits and the close-out keep their values. The v0.6 credit for steps completed on 2026-11-01 (2.90 days) is unchanged; if the delivery lead would rather not count it, the central date is Tue 2026-12-01 (3.4).
+The central waits barely change (2.5 days before, 2.55 now), but not for the reason the old model gave: the old model charged one wait at each of five stage boundaries, and the new one charges a wait at every merge that something depends on, then lets independent stories fill part of it. At a quarter-day merge almost all of it is filled (0.67 days); at a full day almost none is (10.31 days). Nothing else changed: the G3 rework term, the backlog term and the close-out keep their values. The v0.6 credit for steps completed on 2026-11-01 (2.90 days) is unchanged; if the delivery lead would rather not count it, the central date is Tue 2026-12-01 (3.4).
 
 ### 2.4 Risks of scope A
 
-The estimate has no velocity behind it; EPIC-08 (11.75 to 15.75 h) and now EPIC-06 (11.1 to 15.9 h, with cancel approval and remove price) are the largest and least certain blocks; the architect's hours are the architect's estimate, not a measurement, and his stated total for the answers of 10546 to 10554 was 0.25 h above the sum of his own rows at each end, which is now dropped (3.1); the scaffold, CI gates, secret scan and design tokens were never itemised (3.1); the Engineer now types the whole-order counts and nothing on the screen flags a wrong one (ARCH-R6), which no hour estimate covers; alerts can only be tested against a capturing mail server until the Outlook account is named (Q-18), and the OAuth sign-in to Outlook is designed and unproven (RISK-014); the disk size is unnamed (OQ-ARCH-03), no restore has been tried and only the Admin's rehearsal will show that the Admin can do it from the README alone; both block go-live, not the date.
+The estimate has no velocity behind it; EPIC-08 (11.75 to 15.75 h) and now EPIC-06 (11.1 to 15.9 h, with cancel approval and remove price) are the largest and least certain blocks; the architect's hours are the architect's estimate, not a measurement, and his stated total for the answers of 10546 to 10554 was 0.25 h above the sum of his own rows at each end, which is now dropped (3.1); the scaffold, CI gates, secret scan and design tokens were never itemised (3.1); the merge model is new and rests on an equal split of each epic's hours over its stories (3.2); the Engineer now types the whole-order counts and nothing on the screen flags a wrong one (ARCH-R6), which no hour estimate covers; alerts can only be tested against a capturing mail server until the Outlook account is named (Q-18), and the OAuth sign-in to Outlook is designed and unproven (RISK-014); the disk size is unnamed (OQ-ARCH-03), no restore has been tried and only the Admin's rehearsal will show that the Admin can do it from the README alone; both block go-live, not the date.
 
 ## 3. How the dates were built
 
@@ -83,91 +85,104 @@ Effort per epic includes development, the three reviews and QA for each story, a
 | EPIC-05 Estimate workspace | R1 core | 11.75 to 17.125 | 14.4375 | -0.25 to -0.625: the parent and item figures go; one clearing rule; Warn re-sized; picture optional |
 | EPIC-06 Cost review and approval | R1 core | 11.125 to 15.875 | 13.5 | +3.375 to +4.375: rate notice +1 to 1.5; cancel approval and remove price +2.75 to 4, with the password step-up they use, which ships here and is reused by the four R2 actions (no change to the total); latest approved price +0.25; less the sums and the item table |
 | EPIC-07 Excel export | R1 core | 5.625 to 7.875 | 6.75 | -1.375 to -2.375: no out-of-date file, markers or dialog; no file until current; fewer figures to show. The file saving is read as every other saving is: -0.25 low, -0.5 high |
-| EPIC-10 Experience, brand, delivery (incl. the CI gates, secret and repository scan and design tokens, which no estimate itemised; the guided restore command, its README for the Admin and tests of its failure paths, 1 to 1.5) | R1 core | 7.5 to 11.75 | 9.625 | +1 to +1.5: the Admin's restore (architecture 16.14), on top of the free-space check (0 to 0.25) |
-| **R1 core** | | **59.75 to 91** | **75.375** | v0.10: 59.5 to 91.25 (75.375); the centre is unchanged |
+| EPIC-10 Experience, brand, delivery (incl. the CI gates, secret and repository scan and design tokens, which no estimate itemised; the guided restore command, its README and tests, 1 to 1.5; the guided `clear-copies.sh`, 0.5 to 0.75) | R1 core | 8 to 12.5 | 10.25 | +0.5 to +0.75: `clear-copies.sh` (architecture v0.11, 9.5), on top of the restore command and the free-space check |
+| **R1 core** | | **60.25 to 91.75** | **76** | v0.11: 59.75 to 91 (75.375); +0.5 low, +0.75 high |
 | R1+ stretch: FR-014 (2 to 3), 035, 039, 054, 057, 088 | R1+ | 6 to 9.5 | 7.75 | 0 |
 | EPIC-08 Admin configuration | R2 | 11.75 to 15.75 | 13.75 | -0.25: no ROLLUP warning on the formula check. Its password re-entry (FR-080) reuses the step-up built in EPIC-06; any shift between the two epics is inside their ranges |
 | EPIC-09 Alerts and jobs, plus FR-003, 006, 040 | R2 | 10.5 to 15.5 | 13 | 0 |
 | Checked against the architect's rows | | 0 | 0 | **Closed.** The +6.5 the architect first published for 10546 to 10554 was an addition error: his rows sum to +3.75 to +6 (additions of 4 to 6.5, less the file saving of 0.25 to 0.5). No row is missing and nothing is held. The v0.9 "held" 0 to 0.5 h and the v0.10 "dropped" 0.25 h at each end are both gone |
-| **Scope A total** | | **88 to 131.75** | **109.875** | v0.10: 87.75 to 132 (109.875); +0.25 low, -0.25 high. v0.9: 87 to 130.75 (108.875) |
+| **Scope A total** | | **88.5 to 132.5** | **110.5** | v0.11: 88 to 131.75 (109.875); +0.5 low, +0.75 high |
 
 **Where the scaffold, CI, tokens and shell effort sits (CR-11).** Unchanged from v0.8: no hours moved between epics. The scaffold and the application shell were sized in EPIC-01 as SPEC step 1; the CI gates, the secret and repository scan and the design tokens sit in EPIC-10. Neither was ever itemised, so no separate figure exists. Stories 10.01 (scaffold, CI, scan) and 10.02 (tokens, shell) come before every EPIC-01 story, which changes the order and not the totals. Checkpoint A reads EPIC-01 with 10.01 and 10.02 and is the first place a shortfall shows. The architect confirmed the placement and says the hours are not shown to be enough.
 
 **FR-105 moves earlier (CR-14).** Its line is built in the R1 core (EPIC-02) with the Settings page frame, whose hours stay in EPIC-09's row; the alert switch, sender and test e-mail follow in R2. The total does not change. The reason is that backups start at the first deployment and, until the line ships, the Admin has no quick sign that they ran.
 
-**The Admin's restore (architecture 16.14).** The Admin holds the key, has server access and runs the restore with one guided command (`restore.sh`), from a README, on a limited account that Accucut IT grants (A-35, proposed). The +1 to +1.5 h is the command, its README and tests of its failure paths, all in EPIC-10. No restore has been tried: only the Admin's rehearsal, run from the README alone, shows that the Admin can do it, and that rehearsal is a human step before go-live (3.3). The Admin's time on it is not in the hours.
+**The Admin's restore (architecture 16.14).** The Admin holds the key, has server access and runs the restore with one guided command (`restore.sh`), from a README, on a limited account that Accucut IT grants (A-35, proposed). The +1 to +1.5 h is the command, its README and tests of its failure paths, all in EPIC-10. The Admin also clears old copies with one guided command, `clear-copies.sh` (+0.5 to +0.75 h, EPIC-10): it keeps the newest 4 copies, because on a 40 GB disk the 2 years of retention are "as the disk allows", with a ceiling at about 5 to 6 GB of data where only 4 copies fit (PRD NFR-013). No restore has been tried: only the Admin's rehearsal, run from the README alone, shows that the Admin can do it, and that rehearsal is a human step before go-live (3.3). The Admin's time on it is not in the hours.
 
 Not in the hours: dark mode and the UI-sample extras (outside scope A), offline use, the two small PRD 12.2 decisions on passwords (OQ-UX-15 and 17, under 0.75 h together, estimate), and a refused SMTP sign-in (about 4 h for another transport, architect).
 
 ### 3.2 Elapsed-time model
 
-Effort is converted to working days at 8 hours a day (the unit the delivery lead used). Each human point is a number of working days during which agents on that thread wait. Weekends are not worked; no holiday is assumed, because they said none (3.5).
+**What changed (G4 attempt 1, remediation 4).** The v0.6 to v0.11 model charged five waits, one at each dependency stage, and counted no pull requests. The backlog now exists: **89 candidate stories** (18 in Jira, 71 still candidates), 41 links in sprint 1, and a **longest chain of 21 stories in a line** from the scaffold to the last export story. Sprint 1 alone has a chain of 9 stories (10.01, 10.02, 01.01, 01.02, 01.04, 01.07, 02.01, 02.03, 02.04; the master counts 8 to 02.03), which is **7 to 8 merge waits against the 2 stage waits** the old model gave the same span, 1.75 to 7 working days at 0.25 to 1 per wait against 0.5 to 2. A story branches from the merged base (playbook 5.2), so it cannot start until the story it depends on is merged.
+
+**The method.** A small simulation, run for this plan (a throwaway script, not kept in the repository), takes: the 89 stories with their "Depends on" columns in the epic files, plus the 21 links the sprint plan records as confirmed in Jira; one development stream (parallel work is not assumed); each story's effort as its epic's central hours (R1+ hours added to their epics) divided equally over the epic's stories; the stories in backlog order. When a story is done its pull request is raised, and it is merged M later; the next story starts as soon as the lowest-ranked story whose prerequisites are all merged is free, and when none is, the agents wait. A story's effort already includes its three reviews and QA. The elapsed time is the G3 rework and backlog time, plus the simulated development time (effort plus waiting plus the last merge), plus the close-out.
 
 | Input (estimate) | Low | Central | High | Why |
 |------------------|-----|---------|------|-----|
-| G3 conditions rework pass, in working days | 0.5 | 0.75 | 1.25 | The business-analyst, product-manager, ux-expert and solution-architect rework in parallel after the master's G3 decision and the longest sets the time. The values stay as in v0.6 |
-| Backlog, G4 and docs PR, days | 0.5 | 0.6 | 0.75 | 4 to 6 h (v0.1). **The master data wait W is dropped** (HOLD-01 met, D-23; DL-025): this term is no longer `max(W, backlog)` |
-| Merge wait M per dependency stage, days | 0.25 | 0.5 | 1.0 | See 3.3 |
-| Close-out before the G8 decision: release notes, G8 pack, README check, the master's evaluation, days | 0.5 | 0.6 | 0.75 | 4 to 6 h (v0.1) |
-| Dependency stages that gate on a merge | 5 | 5 | 5 | EPIC-01 (with enablers 10.01 and 10.02); then EPIC-02, 03, 04; then EPIC-05; then EPIC-06, 07 (EPIC-10 alongside); then R1+ and R2 as one more stage |
+| G3 conditions rework pass, in working days | 0.5 | 0.75 | 1.25 | The values stay as in v0.6 |
+| Backlog, G4 and docs PR, days | 0.5 | 0.6 | 0.75 | 4 to 6 h (v0.1) |
+| **Merge wait M after each pull request, working days** | 0.25 | 0.5 | 1.0 | The delivery lead's turnaround on each PR. It was a per-stage figure before; it is now per PR, and it is the input that moves the date most (3.4) |
+| Close-out before the G8 decision, days | 0.5 | 0.6 | 0.75 | 4 to 6 h (v0.1) |
+| Stages that gate on a merge | not used | not used | not used | Replaced by the story graph |
 
-Elapsed working days = G3 rework + backlog + effort / 8 + stages x M + close-out. The result is rounded up to a whole working day, counting 2026-11-02 as day 1.
+| Case | Effort | M | Idle waiting (days) | Elapsed working days | Completion |
+|------|--------|---|---------------------|----------------------|------------|
+| Low | 88.5 h | 0.25 | 0.42 | 13.24 | Thu 2026-11-19 |
+| **Central** | 110.5 h | 0.5 | 2.05 | 18.31 | **Thu 2026-11-26** |
+| High | 132.5 h | 1.0 | 9.31 | 29.63 | Fri 2026-12-11 |
+| v0.11 for comparison | 88 / 109.875 / 131.75 h | stage waits 0.25 / 0.5 / 1 | n/a | 13.75 / 18.18 / 24.22 | Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04 |
 
-| Case | Effort | Elapsed working days | Completion |
-|------|--------|----------------------|------------|
-| Low | 88 h | 13.75 | Thu 2026-11-19 |
-| **Central** | 109.875 h | 18.18 | **Thu 2026-11-26** |
-| High | 131.75 h | 24.22 | Fri 2026-12-04 |
-| v0.10 for comparison | 87.75 / 109.875 / 132 h | 13.72 / 18.18 / 24.25 | Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04 |
+**Checks and limits.** With M = 0 the simulation gives exactly the effort plus the fixed terms (15.76 working days at the centre), so the waits are the only thing it adds. Weighting the 18 sprint-1 stories by their story points instead of an equal split moves the central by +0.3 day (18.59, the same date). The 71 candidate stories' dependencies come from the epic files and have not been validated by the product-owner; the equal split understates large stories (10.01 is 8 points and gets about an hour), which would lengthen the chain and shorten the idle time; and the simulation is lumpy, so differences below about 0.3 day are noise. There is no velocity behind any of it.
 
-Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-development ends Tue 2026-11-03; EPIC-01 with enablers 10.01 and 10.02 complete and merged Wed 2026-11-04; EPIC-05 complete about Thu 2026-11-12; **R1 core complete Wed 2026-11-18** (merged the same day); stretch complete Thu 2026-11-19; R2 complete Wed 2026-11-25 (merged the same day); **the master's G8 decision Thu 2026-11-26**. The working-day numbers behind them: 1.35, 2.3 / 2.8, 8.0, 12.3 / 12.8, 13.7, 17.1 / 17.6 and 18.2.
+**Where the central waits fall.** Over the whole backlog the idle waiting is 2.05 days, because from the second sprint on many stories are independent and fill the waits. In **sprint 1 they do not**: the 18 stories need 2.4 working days of effort and 5.85 days elapsed (2.95 idle) at a half-day merge. At a full day the first sprint alone is near 10 days.
 
-### 3.3 What the human waits are assumed to be
+Central-case story milestones (merged, today's way): the 12 committed stories of sprint 1 Mon 2026-11-09 (5.4 working days); all 18 Wed 2026-11-11; Calculate (05.09) Tue 2026-11-17; Approve and lock (06.06) Fri 2026-11-20; the export download (07.04) Tue 2026-11-24; every story Wed 2026-11-25; **the master's G8 decision Thu 2026-11-26**. These follow backlog order and the stories that fill a wait, so epics do not finish one after another.
 
-- **G3 (human):** over. The delivery lead approved G3 on 2026-11-01 (AQP-1 10491; DL-009) and the master decided it. The approval stops were lifted afterwards (DL-010). If the delivery lead or the master asks them to look again at the changed screens, that is one more wait of a day (3.4).
-- **HOLD-01 master data stop:** met (AQP-10 10512, D-23). No wait. The questions asked with it are answered, bar the backup key holder and the disk size, which block go-live and not the date.
-- **Docs PR:** draft PR #1 (`docs/AQP-1-inception`) exists. The orchestrator merges it after G4 GO (`MERGE_POLICY` docs-auto), so story branches start when it is merged.
-- **Code PR merges (`MERGE_POLICY` = docs-auto, code-human; one human merge per story):** the story count is not known yet. The model does not count PRs. It assumes the delivery lead merges ready PRs at least once a working day, that agents work on independent stories while a merge waits, and that only a dependent stage waits: M per stage (0.25, 0.5, 1.0 working days) for 5 stages, which adds 1.25 to 5 days. A wait longer than a working day on a stage boundary is the main way the high case arises.
-- **G8:** no wait (DL-010). The master evaluates the whole checklist inside the close-out time; a NO-GO stops the run.
-- **The Admin's restore rehearsal (NFR-013):** a human step **before go-live**, after the hand-over and outside the dates. The Admin runs the restore from the README alone, on staging, timed, with the IT person on hand and not helping unless it stops. It needs Accucut IT to grant the Admin's account first (A-35). The Admin's and IT's time is not estimated. If the delivery lead wants it done before the hand-over, it is one more wait of about a day (3.4).
-- **Customer testing, acceptance and the usability test:** after the date, not in it. They need Accucut staff, whose time this plan cannot assume.
-- **Clock:** the clock does not stop at any human point; every wait above is inside the dates.
+### 3.3 What the human waits are assumed to be, and the ways of working to choose from
 
-### 3.4 Sensitivity (central effort, other inputs central)
+- **G3 and HOLD-01:** over (AQP-1 10491; D-23). **G8:** no wait (DL-010); a NO-GO stops the run. **Holidays:** none to 2026-12-09 (D-35).
+- **Customer testing, acceptance, the usability test and the Admin's restore rehearsal:** after the date, not in it. They need Accucut staff, whose time this plan cannot assume.
+- **Code pull request merges (`MERGE_POLICY` = docs-auto, code-human):** every code PR is merged by the delivery lead, and a dependent story starts only after its prerequisite is merged. The model charges M for each, and agents work on an independent story meanwhile. **This is the one wait that is both long and theirs to change.**
+
+**The ways of working.** The dates below use the same effort and the same simulation; only the way of merging changes. The choice is the delivery lead's, because it changes what they see and when. None is adopted, and the dates stay estimates.
+
+| Way | How it works | Central (low to high) | What it needs or costs |
+|-----|--------------|-----------------------|------------------------|
+| **1. One PR per story, merged by you after each (today)** | The rule as it stands. A dependent story waits for the merge | **Thu 2026-11-26** (Thu 2026-11-19 to Fri 2026-12-11). Sprint 1: 5.85 days for 2.4 days of work | You merge each PR within about half a day. At 0.75 day the central is Wed 2026-12-02, at 1 day Wed 2026-12-09, at 0.25 day Tue 2026-11-24 |
+| **2. Fixed merge times** | You merge everything ready at set times, twice a day | Tue 2026-11-24 (Thu 2026-11-19 to Fri 2026-11-27). Once a day is worse: Wed 2026-12-02 | You are available at two set times each working day. A daily time makes every dependent story cost a day |
+| **3. Stacked branches** | A dependent story branches from the unmerged story before it; the merges still happen in order | Tue 2026-11-24 with no rework; Wed 2026-11-25 with 10 % more effort; Fri 2026-11-27 with 20 % (at 10 %: Thu 2026-11-19 to Tue 2026-12-01). Sprint 1: 2.9 days | Playbook 5.2 (branch from the merged base) changes. If a review changes a story, the stories stacked on it are redone; the share is unknown, so 10 % and 20 % are stated cases, not forecasts. PRs stay one per story |
+| **4. Bundled PRs** | One PR holds a few consecutive stories | Three stories per PR: Thu 2026-11-26 (Thu 2026-11-19 to Wed 2026-12-09). Five: Tue 2026-11-24 | CLAUDE.md §7.3 and the commit rule (one Jira key per PR) change; a bigger diff to read; one fault holds the others. The gain is small at three |
+| **5. The orchestrator merges after G7 GO** (`MERGE_POLICY` all-auto) | No human wait for code merges; deployment and G8 stay yours | Mon 2026-11-23 (Wed 2026-11-18 to Fri 2026-11-27). Sprint 1: 2.4 days | You give up seeing each PR before it lands on master (you still see the result after each iteration). A bad merge is undone by a new PR. This is a change to `MERGE_POLICY` in CLAUDE.md §1a, which only you change |
+
+Ways can be combined (for example 3 with 2). **What the team needs from the delivery lead:** which way, and the turnaround they will keep (M) if it is way 1 or 2. Until they say, this plan uses way 1 at half a day.
+
+### 3.4 Sensitivity (central effort, way 1, other inputs central)
 
 | Change | Scope A date |
 |--------|--------------|
-| Central case (18.18 working days) | Thu 2026-11-26 |
-| Effort 1.5 h or more lower | Wed 2026-11-25 |
-| Effort 1 h higher (for example the two password decisions, 0.75 h) | Thu 2026-11-26 (about 6.5 h more than the central effort are needed to move it) |
-| Cut cancel approval and remove price (FR-107, FR-108), -2.75 to -4 h | Wed 2026-11-25 |
-| Merges do not wait (M = 0) | Mon 2026-11-23 |
-| Each merge stage waits 1 day | Mon 2026-11-30 |
-| Effort at the low end, waits central | Mon 2026-11-23 |
-| Effort at the high end, waits central | Mon 2026-11-30 |
-| G3 rework pass at its low value (0.5 day) | Wed 2026-11-25 |
-| G3 rework pass at its high value (1.25 days) | Thu 2026-11-26 |
-| The delivery lead is asked to review the changed screens again, a G8 sign-off is asked for after all, or the Admin's restore rehearsal is done before the hand-over (one wait of about 1 day, estimate) | Fri 2026-11-27 |
+| Central case (18.31 working days) | Thu 2026-11-26 |
+| Merge wait M = 0.25 day | Tue 2026-11-24 |
+| Merge wait M = 0.75 day | Wed 2026-12-02 |
+| Merge wait M = 1 day | Wed 2026-12-09 |
+| Merge wait M = 1.5 days | Wed 2026-12-23 |
+| Effort at the low end (88.5 h), M central | Tue 2026-11-24 |
+| Effort at the high end (132.5 h), M central | Fri 2026-11-27 |
+| G3 rework and backlog at their low values (1.0 day together) | Wed 2026-11-25 |
+| G3 rework and backlog at their high values (2.0 days together) | Thu 2026-11-26 |
+| The delivery lead is asked to review the changed screens again, a G8 sign-off is asked for after all, or one weekday is lost to a closure announced later (about 1 day) | Fri 2026-11-27 |
+| Three weekdays lost to a closure announced later | Tue 2026-12-01 |
+| Cut cancel approval and remove price (FR-107, FR-108), -2.75 to -4 h | Thu 2026-11-26 to Wed 2026-11-25 |
 | A refused SMTP sign-in needs another transport (+4 h, architect) | Thu 2026-11-26 |
-| One weekday is lost to a closure announced later | Fri 2026-11-27 |
 | No credit for the work done on 2026-11-01 (v0.5 treatment: 2.90 days added back) | Tue 2026-12-01 |
+
+The simulation is lumpy: a small change in effort can move the date a little the other way, so read differences under about 0.3 working day as noise. The row to watch is M.
 
 ### 3.5 Holidays
 
-The delivery lead said there are no holidays or days away between 2026-11-02 and 2026-12-09 ("none", AQP-1 10555; OQ-PM-02 closed), so none is modelled and the high date (Fri 2026-12-04) is inside the range they covered. If a closure is announced later, each lost weekday moves every later date by one weekday; three lost weekdays make the central date Tue 2026-12-01 and the high date Wed 2026-12-09.
+The delivery lead said there are no holidays or days away between 2026-11-02 and 2026-12-09 ("none", AQP-1 10555; OQ-PM-02 closed), so none is modelled. The high date (Fri 2026-12-11) is now two days past what they covered; if a closure falls after 2026-12-09, each lost weekday moves the later dates by one weekday.
 
 ### 3.6 Can 2026-11-13 be reached?
 
-Not with scope A in any case modelled. Even the low-effort case (88 h) with no merge wait and no backlog wait takes 12.0 working days and ends Tue 2026-11-17; the model's own low case ends Thu 2026-11-19. For information only, because scope B was not chosen: the R1 core alone, handed over at checkpoint C, would end about Thu 2026-11-19 at the centre (13.37 working days: 75.375 h) and reaches Fri 2026-11-13 only if every input is at its low value (9.97 working days: 59.75 h, a 0.5-day rework, a 0.5-day backlog, merges of 0.25 day over 4 stages, a close-out of 0.5 day), which leaves a quarter of an hour of margin. I do not consider that combination realistic.
+Not with scope A in any way of working modelled. The quickest case, way 5 at the low effort (88.5 h), ends Wed 2026-11-18 (12.56 working days). For information only, because scope B was not chosen: the core epics alone, with way 1 at the centre, end about Wed 2026-11-25 (17.25 working days), a day before the full scope, because in the full scope the R2 stories fill the merge waits. I do not consider 2026-11-13 reachable.
 
 ## 4. Fit analysis against the target (estimate)
 
-The target is 80 hours (10 days x 8 h). The date is a target and not a blocker, so the analysis states how far scope A is from it and what the fit rule says. **The low end of the effort, 88 h, is above the 80 h itself.**
+The target is 80 hours (10 days x 8 h). The date is a target and not a blocker, so the analysis states how far scope A is from it and what the fit rule says. **The low end of the effort, 88.5 h, is above the 80 h itself.**
 
 | Scope | Effort | Elapsed working days (low / central / high) | Against the 10-day target |
 |-------|--------|---------------------------------------------|----------------------------|
-| A (adopted): R1 core + R1+ + R2 | 88 to 131.75 h | 13.75 / 18.18 / 24.22 | Misses by 4 to 15 working days; central 9 days over |
-| v0.10 for comparison (same scope) | 87.75 to 132 h | 13.72 / 18.18 / 24.25 | Misses by 4 to 15 working days; central 9 days over |
+| A (adopted): R1 core + R1+ + R2, way 1 | 88.5 to 132.5 h | 13.24 / 18.31 / 29.63 | Misses by 4 to 20 working days; central 9 days over |
+| v0.11 for comparison (same scope, stage waits) | 88 to 131.75 h | 13.75 / 18.18 / 24.22 | Misses by 4 to 15 working days; central 9 days over |
 
 **The "Must at most about 60 % of MVP effort" rule is not met.** Scope A: Musts are about 90 to 91 % of the effort (about 7.75 to 12.5 h of Should across FR-003, 006, 035, 039, 040, 041, 054, 057, 071, 088, 103; FR-105 to FR-108 are Musts by the delivery lead's decision). The R1 core alone is about 97 % Must or a little more. The split of hours between Must and Should is a rough estimate. The rule cannot be met without removing SPEC MUST items or decisions of the delivery lead; the cut ladder in 6.1 moves Musts to a later stage but does not lower the Must share of what is built. What stands in for the rule: the date is a range with its assumptions stated, the build order puts the core first, and checkpoints re-issue the date. This is a recorded deviation (DL-002) for the master and the delivery lead to weigh.
 
@@ -198,13 +213,13 @@ The first three rows are one hand-over (scope A). Release moves since v0.1 are i
 
 ## 6. Checkpoints and cut ladder
 
-Checkpoints re-issue the date from actuals. Method: actual hours for the finished epics divided by their estimate gives a ratio; remaining effort x ratio / 8 + remaining stages x M gives the new date. This is the first time any velocity exists. After DL-010, with HOLD-01 met and no holidays, the only human waits left in the model are code merges.
+Checkpoints re-issue the date from actuals. Method: actual hours for the finished stories divided by their estimate gives a ratio; the story simulation (3.2) is re-run on the remaining stories with the ratio and the merge wait actually seen. This is the first time any velocity exists.
 
-| Checkpoint | When (central) | Question | Decision |
-|------------|----------------|----------|----------|
-| A | EPIC-01 with enablers 10.01 and 10.02 complete (about Wed 2026-11-04 after its merge) | Ratio of actual to estimated hours, with the scaffold, CI and token share visible for the first time | Re-issue the date |
-| B | EPIC-05 complete (about Thu 2026-11-12) | Is the core on track; does BL match the constructed examples (PRD FR-030: 30, 840, 1000, 5) and does Warn pass its tests (FR-104)? | Re-issue; decide whether to build the stretch |
-| C | R1 core complete (about Wed 2026-11-18) | Hand over the core now, or continue to R2 (scope A)? Handing over the core would end about Thu 2026-11-19 at the centre (3.6). **An interim hand-over of the core must include FR-105, which is in the core, or the Admin has nothing to check** | Their decision, logged by `master` |
+| Checkpoint | When (central, way 1) | Question | Decision |
+|------------|-----------------------|----------|----------|
+| A | Sprint 1's 12 committed stories merged (about Mon 2026-11-09) | Ratio of actual to estimated hours, with the scaffold, CI and token share visible for the first time; **the merge wait actually seen** | Re-issue the date; confirm or change the way of working (3.3) |
+| B | Calculate (05.09) merged (about Tue 2026-11-17) | Is the core on track; does BL match the constructed examples (PRD FR-030: 30, 840, 1000, 5) and does Warn pass its tests (FR-104)? | Re-issue; decide whether to build the stretch |
+| C | Approve and lock (06.06) merged (about Fri 2026-11-20) | Hand over the core now, or continue to R2 (scope A)? Handing over the core alone would end about Wed 2026-11-25 at the centre (3.6), only a day earlier. **An interim hand-over of the core must include FR-105, which is in the core, or the Admin has no quick sign that backups ran** | Their decision, logged by `master` |
 
 ### 6.1 Cut ladder (only if they want an earlier hand-over; each is a scope decision for them)
 
@@ -220,8 +235,10 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 
 ### 6.2 Process effects the estimate does not capture
 
-- Parallel work is not assumed. After EPIC-01, EPIC-02, 03 and 04 are independent, and EPIC-06 and 07 are independent after EPIC-05; parallel developers would shorten elapsed time, not effort, and human merges would still serialise.
-- Story count and size are not known until the backlog exists (G4); the merge model should be recalibrated then. The Warn work crosses four epics, so it needs its own story or clear splits (the backlog decides).
+- **Parallel work is not assumed.** The simulation uses one development stream. Parallel developers would shorten elapsed time, not effort, and merges would still serialise on the delivery lead unless the way of working changes (3.3).
+- **The merge model is recalibrated, not validated.** It rests on 89 stories of which 71 are candidates; their dependencies are the epic files' columns, and the equal split of hours over a story's epic is a stated proxy. The model is re-run when the scrum-master writes each sprint, and at checkpoint A with the real merge wait. G4 remediation 4 is met by the recalibration and by the choice put in 3.3.
+- **Sprint 1 is where waits cannot be hidden.** The first sprint's 18 stories are 2.4 days of work behind a chain of 9; at a half-day merge it takes 5.85 days. The sprint plan should say which way of working it assumes.
+- The Warn work crosses four epics, so it needs its own story or clear splits (the backlog decides).
 - The docs PR exists as draft PR #1; story branches start after it is merged at G4.
 
 ## 7. Human gates, stops and who waits for whom
@@ -234,7 +251,7 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | Master data stop (HOLD-01, TR-009) | **Met** (AQP-10 10512, D-23) | No wait in the model |
 | G4 | `master` | Draft PR #1 exists; the orchestrator merges it after G4 GO (docs-auto) |
 | Each story G5 to G7 | Agents | Three reviews and QA per story |
-| Each code PR merge | **Human** (`MERGE_POLICY`) | Modelled as M per dependency stage |
+| Each code PR merge | **Human** (`MERGE_POLICY`) | The largest single input to the date: M after every PR (3.2). The delivery lead chooses the way of working (3.3) |
 | G8 | `master` decides; **no separate sign-off wait** (DL-010); a NO-GO stops the run; deployment stays human | No wait. The master's G8 decision day is the completion date |
 
 ## 8. Dependencies by stage
@@ -244,12 +261,13 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | R1 core | Quantity rule, Q-35 to Q-41, picture, rate notice, backups | Santhosh | **Answered** (D-21 to D-35). The master records the reversal of DL-011 and DL-024 and checks G4 |
 | R1 core | Enablers: stories 10.01 (scaffold, CI, scan) and 10.02 (tokens, shell) before any EPIC-01 story | product-owner; solution-architect | Ruled in the backlog (CR-11), placement confirmed; hours in 3.1 |
 | R1 core | Master data (TR-009) | the Admin | **Met** (D-23). Invented placeholders until the Admin types the real values at first use |
-| R1 core | Hosting details: web address, IT person's name, which Outlook account (Q-18) | Santhosh, their IT person | Open; before the first deployment |
+| R1 core | Hosting details: web address, sender address and the IT person's name (the account is the company Microsoft 365 account, AQP-11) (Q-18) | Santhosh, their IT person | Open; before the first deployment |
 | R1 core | VM disk size (OQ-ARCH-03): 40 GB is too small for about 105 full copies on the same server | Accucut IT | Open; before go-live |
 | R1 core | Server access for the Admin: their own limited account (key-only SSH, `sudo` for the restore script only, not in the `docker` group) as the architect proposes (A-35), or full access as they asked | Accucut IT | Open; before the rehearsal. The backup key is held by the Admin (OQ-ARCH-12 closed) |
 | R1 core | Cleaned sample worksheet (Q-30, not blocking) | Santhosh | Open. The repository stays public by their decision (D-13); structure only is read from it |
+| R1 core | The way of working for code merges and the merge turnaround (3.3) | Santhosh | Open; before sprint 1 starts (G4 remediation 4). Until then way 1 at half a day |
 | R1 core | Docs PR | orchestrator | Draft PR #1 exists; merged after G4 GO (docs-auto) |
-| R2 | Sender address and Outlook account; whether it allows SMTP; one real send on the real mailbox before alerts go live | Santhosh, their IT person; solution-architect; developer | Open; alerts tested against a capturing mail server until then |
+| R2 | Sender address (the account is the company Microsoft 365 account, AQP-11); whether it allows SMTP; one real send on the real mailbox before alerts go live | Santhosh, their IT person; solution-architect; developer | Open; alerts tested against a capturing mail server until then |
 | After the date | Customer testing, acceptance, change requests; the usability test (2 Engineers, 2 Leads, 1 Admin, no names; the qa-engineer writes the plan); go-live, training, parallel run (TR-003 to TR-005) | Santhosh, Accucut; qa-engineer | Not in the dates |
 | Before go-live | The Admin's restore rehearsal: the Admin runs `restore.sh` from the README alone on staging, timed, with the IT person on hand (NFR-013) | the Admin; Accucut IT | Not in the dates; the time of both is not estimated |
 | R-OFF | Meaning of offline, hosting design | Santhosh | Open; settled when the release is planned |
@@ -266,6 +284,7 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | OQ-ARCH-03 disk size | A larger VM; no effect on hours | A smaller disk is kept: backups fill it in about 6 months at an invented rate and stop the database (ARCH-R7) |
 | Q-18 hosting details | Docker Compose; Outlook; weekly backup on the same server | Deployment and mail settings change; effect on hours not estimated |
 | ASSUMPTION-56 (symbols, session start) | Any non-alphanumeric character; 12 hours from sign-in | Under 1 h (estimate) |
+| The merge turnaround M | Half a day, as assumed | From half a day to three quarters adds about 4.3 working days, and to a full day about 9.4 (0.75 day: Wed 2026-12-02; 1 day: Wed 2026-12-09) |
 | A refused SMTP sign-in | The OAuth mode works | About 4 h more (architect), 3.4 |
 | The Engineer types a wrong count (ARCH-R6) | Not an effort item: a risk to prices, controlled by the hint, Warn and the Lead's review | Not estimated |
 
@@ -284,3 +303,4 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | 0.9 | 2026-11-02 | The delivery lead's answers of 2026-11-02 (AQP-26 10530 to 10537; AQP-1 10542 to 10557; AQP-15 10543; SPEC v1.10; architecture v0.8 sections 16.12 and 16.13). **Effort:** 87 to 130.75 h, central 108.875 h (v0.8: 87.5 to 131.5 h): the whole-order rule and parent change -3.25 to -5.25, Warn re-sized to 3.5 to 5.25, clearing every figure -0.75 to -1.5, and six additions +3.75 to +6.5 (rate notice, cancel approval and remove price, Last backup line, same-server backups, picture optional, no file until current), with the architect's 0.5 h high-end surplus held outside any epic. Epics re-split; R1 core 58.75 to 89.5 h. **Model:** the master data wait W is dropped (HOLD-01 met, D-23; DL-025) and no holiday is assumed (D-35); the term is now the backlog and G4 time. **Dates re-issued, not adopted:** central Thu 2026-11-26 (18.06 days, unchanged date), range Thu 2026-11-19 to Fri 2026-12-04 (unchanged), the central value 0.06 day over a boundary. Sensitivity, milestones, checkpoints, 3.5, 3.6 and the fit table recomputed; the Q-38 row and the 1 h rows removed (answered); a cut ladder step 4 added for FR-107 and FR-108. FR-105 firm and moved into the R1 core (CR-14); the usability test has its participants (2 Engineers, 2 Leads, 1 Admin, no names). Supersedes the v0.8 dates | AQP-26; AQP-1 10542 to 10557; AQP-15 10543; SPEC v1.10; architecture v0.8; PRD v0.9 |
 | 0.10 | 2026-11-02 | Architecture v0.9 section 16.14 and AQP-1 10559, 10560. **Effort:** the Admin's guided restore command, its README and tests, **+1 to +1.5 h in EPIC-10**; the architect's 0.5 h high-end surplus of 10546 to 10554 is **dropped** against his rows (they sum to +3.5 to +6.25 h against his +3.75 to +6.5), and the file saving of EPIC-07 is taken as a range; scope A is 87.75 to 132 h, central 109.875 h (R1 core 59.5 to 91.25 h). **Dates:** the working-day figures are 13.72 / 18.18 / 24.25 and **no date moves** (Thu 2026-11-19, Thu 2026-11-26, Fri 2026-12-04); the central value sits 0.18 day over a boundary (v0.9: 0.06). Sensitivity, milestones (R2 complete Wed 2026-11-25), 3.6 and the fit table recomputed. **New human step:** the Admin's restore rehearsal before go-live, outside the dates (3.3, 7, 8). Section 1 and 9: the Admin holds the key, has server access and runs the restore. Supersedes the v0.9 working-day figures, not its dates | AQP-1 10559, 10560; architecture v0.9; PRD v0.10 |
 | 0.11 | 2026-11-02 | Architecture v0.10. **Effort:** the architect corrected an addition error: his rows for AQP-1 10546 to 10554 sum to +3.75 to +6 h, not +6.5, so the v0.9 "held" 0.5 h and the v0.10 "dropped" 0.25 h at each end were never work. His corrected ends, with every saving read the same way, are applied: scope A is 88 to 131.75 h (v0.10: 87.75 to 132), central 109.875 h unchanged; R1 core 59.75 to 91 h; EPIC-07 back to 5.625 to 7.875 h. **The password step-up ships in R1 with FR-107 and FR-108**, with no change to the total; EPIC-08 reuses it. **Dates:** working-day figures 13.75 / 18.18 / 24.22; **no date moves** (Thu 2026-11-19, Thu 2026-11-26, Fri 2026-12-04). Only the figures that moved are restated: 2.2, 2.3, 3.1, 3.2, 3.6 and 4. Supersedes the v0.10 ends, not its dates | Architecture v0.10 (corrected total, section 16.14); PRD v0.11 |
+| 0.12 | 2026-11-02 | G4 attempt 1 remediation 4 and the answers of 2026-11-02. **Merge model recalibrated (3.2, 3.3, 6.2):** the five stage waits are replaced by a simulation of the 89 stories through their dependencies, with one development stream; sprint 1's chain of 8 to 9 stories gives 7 merge waits against the 2 stage waits modelled, and the whole backlog has a chain of 21. M is now per pull request. **Ways of working set out in 3.3** (one PR per story as today; fixed merge times; stacked branches; bundled PRs; the orchestrator merging after G7 GO) for the delivery lead to choose, with dates for each; none adopted. **Effort:** +0.5 to +0.75 h (EPIC-10, `clear-copies.sh`), scope A 88.5 to 132.5 h, central 110.5 h. **Dates, way 1:** central Thu 2026-11-26 (unchanged), range Thu 2026-11-19 to Fri 2026-12-11 (high end moved from Fri 2026-12-04). Checkpoints re-stated by story; sensitivity rewritten with M as the main row; the Admin's retention is "up to 2 years, as the disk allows" (PRD NFR-013); the picture limit is under 204,800 bytes and the mail account is the company Microsoft 365 account. Supersedes the v0.11 dates | G4 attempt 1 (gate log), remediations 4 and 9; DL-038; RISK-008; AQP-1 10610; architecture v0.11; PRD v0.12 |
