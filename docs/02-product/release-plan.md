@@ -42,7 +42,7 @@ The v0.6 definition ("the day on which the delivery lead gives the G8 sign-off")
 | | **Scope A (adopted)**: whole SPEC except offline, dark mode and the UI-sample extras |
 |---|---|
 | Contents | R1 core + R1+ stretch + R2: EPIC-01 to EPIC-10, 96 FRs (73 + 6 + 17). Excludes dark mode (FR-090), the UI-sample extras (FR-097) and offline use (FR-092), which are not estimated; if the delivery lead wants any of them inside the date they say so and the product manager estimates them |
-| Development effort (estimate) | 83.75 to 125.75 h, central 104.75 h (v0.6: 76.25 to 112.75 h, central 94.5 h). The architect's 7.5 to 13 h is in; **not in**: the rule for a QTY per Assy of 0 (about 1 h), the G4 product decisions of PRD section 12.2 (under 0.75 h together) and a refused SMTP sign-in (about 4 h). See the sensitivity rows in 3.4 |
+| Development effort (estimate) | 83.75 to 125.75 h, central 104.75 h (v0.6: 76.25 to 112.75 h, central 94.5 h). The architect's 7.5 to 13 h is in; **not in**: the rule for a QTY per Assy of 0 (about 1 h for a block; a warning costs more and has no figure), the G4 product decisions of PRD section 12.2 (under 0.75 h together) and a refused SMTP sign-in (about 4 h). See the sensitivity rows in 3.4 |
 | **Central date** | **Wednesday 2026-11-25** (v0.6: Wednesday 2026-11-25, unchanged; the two changes cancel) |
 | **Range** | **Thursday 2026-11-19 to Friday 2026-12-04** (v0.6: Wednesday 2026-11-18 to Friday 2026-12-04) |
 | Working days from 2026-11-02 | central 18 (range 14 to 25); unrounded 13.22 / 17.94 / 24.22 |
@@ -88,7 +88,7 @@ Effort per epic includes development, the three reviews and QA for each story, a
 | EPIC-09 Alerts and jobs, plus FR-003, 006, 040 | R2 | 10.5 to 15.5 | 13 | +3 to 5: the sign-in to Outlook without a stored password, the token function, tests against a stand-in server and one real send (v0.6 said "not estimated") |
 | **Scope A total** | | **83.75 to 125.75** | **104.75** | v0.6: 76.25 to 112.75 (94.5); +7.5 low, +13 high |
 
-Not in the hours: dark mode and the UI-sample extras (outside scope A), offline use, ROLLUP naming and the other text alignments (no effort), and the change from a nightly to a weekly backup (a documentation change, not a build item). Also not in the hours, and each shown as a sensitivity row in 3.4: the rule for a QTY per Assy of 0 on a part with parts below it, about 1 h whichever rule is chosen and the fallback block too (architecture section 16.8); the G4 product decisions of PRD section 12.2, namely the forced password change after an Admin-set password and the password step on an Admin hand-over, each under 0.5 h (estimate), and a notice of changed rates before approval, 0.5 to 1 h (estimate), only if the delivery lead asks for it; and a refused SMTP sign-in, about 4 h for another transport (architect).
+Not in the hours: dark mode and the UI-sample extras (outside scope A), offline use, ROLLUP naming and the other text alignments (no effort), and the change from a nightly to a weekly backup (a documentation change, not a build item). Also not in the hours, and each shown as a sensitivity row in 3.4: the rule for a QTY per Assy of 0 on a part with parts below it, about 1 h for a block and for the fallback, more for a warning with no figure from the architect, nothing if the written rules stay (architecture sections 4.3 and 16.8); the G4 product decisions of PRD section 12.2, namely the forced password change after an Admin-set password and the password step on an Admin hand-over, each under 0.5 h (estimate), and a notice of changed rates before approval, 0.5 to 1 h (estimate), only if the delivery lead asks for it; and a refused SMTP sign-in, about 4 h for another transport (architect).
 
 ### 3.2 Elapsed-time model
 
@@ -138,11 +138,11 @@ Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; the 
 | G3 rework pass at its high value (1.25 days) | Thu 2026-11-26 |
 | The delivery lead is asked to review the changed screens again (one more wait W of 1 day) | Thu 2026-11-26 |
 | **A G8 sign-off wait is asked for after all (the v0.6 final wait W of 1 day)** | Thu 2026-11-26 |
-| **The rule for a QTY per Assy of 0 is built (+1 h, OQ-ARCH-10 / OQ-PM-07; any of the options, and the fallback block)** | Thu 2026-11-26 |
+| **A block for a QTY per Assy of 0 is built (+1 h, OQ-ARCH-10 / OQ-PM-07; the fallback is this block; a warning costs more, no figure)** | Thu 2026-11-26 |
 | A refused SMTP sign-in needs another transport (+4 h, architect) | Thu 2026-11-26 |
 | No credit for the work done on 2026-11-01 (v0.5 treatment: 2.90 days added back) | Mon 2026-11-30 |
 
-The 1 h row is the likeliest of these to happen: a block, a warning and the fallback all cost about 1 h, so only the answer "leave it as the rules stand today" avoids it. It is not in the headline because the working total is the architect's 83.75 to 125.75 h (DL-014); it moves the central date by one working day only because the central value sits so close to the boundary, and the high date does not move (24.34 days, still day 25).
+The 1 h row is the likeliest of these to happen: a block and the fallback cost about 1 h and a warning costs more, so only the answer "leave it as the rules stand today" avoids it. It is not in the headline because the working total is the architect's 83.75 to 125.75 h (DL-014); it moves the central date by one working day only because the central value sits so close to the boundary, and the high date does not move (24.34 days, still day 25).
 
 ### 3.5 Holidays (OQ-PM-02)
 
@@ -249,7 +249,7 @@ Steps 1 to 3 save 4 to 7 h (about 0.5 to 0.9 working day). Not cut candidates: c
 | Item | If answered as assumed | If answered differently |
 |------|------------------------|-------------------------|
 | Q-35 item's own row and display of a part (due G4) | The working assumptions stand. Effort and dates are as in sections 2 to 6 | Before the roll-up story is written: the story text changes, no build effort. After it is built: rework of that story, **0 to about 1 h** (estimate), not in the effort figures and not in either date. **Price effect, separate from effort:** where the item's own row holds values and the item quantity is above 1, which includes every single-piece product (DL-012); none at quantity 1 or with 0 on that row |
-| OQ-ARCH-10 / OQ-PM-07 QTY per Assy of 0 on a part with parts below it | The delivery lead chooses a block or a warning, or the fallback block applies: about 1 h (estimate, architect), **not in the headline figures**, shown in 3.4 (Thu 2026-11-26 at the centre) | Another rule, or leaving the written rules as they are: 0 h; a minimum other than 0 for QTY per Assy: under 0.5 h more |
+| OQ-ARCH-10 / OQ-PM-07 QTY per Assy of 0 on a part with parts below it | The delivery lead chooses a block or a warning, or the fallback block applies: a block about 1 h (estimate, architect), a warning more (not designed, no figure), **neither in the headline figures**, the block shown in 3.4 (Thu 2026-11-26 at the centre) | Another rule, or leaving the written rules as they are: 0 h; a minimum other than 0 for QTY per Assy: under 0.5 h more |
 | Q-36, Q-37 (display only) | Working ASSUMPTION-54 and 55 stand | Display and export changes, under 1 h each (estimate); no price effect through approval |
 | OQ-UX-13 (a picture on every part) | Required, as the SPEC's rule for visible inputs says; no extra hours | A picture optional for some parts: one setting in the field list, under 0.5 h (estimate) |
 | OQ-UX-16 (a notice of changed rates before approval) | Not told, as built; no extra hours | A non-blocking notice: 0.5 to 1 h (estimate), not in the figures; a block until recalculated: not estimated |
