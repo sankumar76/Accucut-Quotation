@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCR-01 phone frame · Accucut Quotation Portal</title>
+<meta name="description" content="Review frame showing a screen of the Accucut Quotation Portal at phone size.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Accucut Quotation Portal">
+<meta property="og:title" content="SCR-01 phone frame · Accucut Quotation Portal">
+<meta property="og:description" content="Review frame showing a screen of the Accucut Quotation Portal at phone size.">
+<link rel="icon" href="../assets/accucut-logo.jpg">
+<link rel="stylesheet" href="screens.css">
+</head>
+<body class="device-page">
+<div class="review-bar" role="region" aria-label="Review information, not part of the product"><a href="index.html"><svg class="ic " width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> All screens</a><span class="rb-id">SCR-01</span><strong>Sign in on a phone</strong><span>Frame: 360 by 720 px &middot; the real screen, so this is the layout the stylesheet produces at that width</span><span style="margin-left:auto">Review mock-up &middot; fictional data</span></div>
+<main class="device-wrap" id="main">
+ <div class="row" role="group" aria-label="Screen state" style="justify-content:center">
+  <button class="rb-toggle" type="button" data-hash="state=default" aria-pressed="true" style="min-height:36px">Default</button><button class="rb-toggle" type="button" data-hash="state=error" aria-pressed="false" style="min-height:36px">Wrong password</button><button class="rb-toggle" type="button" data-hash="state=locked" aria-pressed="false" style="min-height:36px">Locked out</button>
+  <a class="rb-toggle" href="SCR-01.html" style="text-decoration:none;display:inline-flex;align-items:center;min-height:36px">Open full size <svg class="ic " width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a>
+ </div>
+ <div class="device phone"><iframe id="frame" title="Sign in on a phone" src="SCR-01.html#embed=1&amp;state=default"></iframe></div>
+</main>
+<script>
+(function () {
+  var frame = document.getElementById('frame');
+  var base = "SCR-01.html";
+  document.querySelectorAll('[data-hash]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-hash]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      var h = b.getAttribute('data-hash');
+      /* A fresh load keeps drawers and states predictable; a hash-only change would not reset a drawer. */
+      frame.src = base + '?r=' + Date.now() + '#embed=1&' + h;
+    });
+  });
+})();
+</script>
+</body>
+</html>
