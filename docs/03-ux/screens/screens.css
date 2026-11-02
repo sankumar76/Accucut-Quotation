@@ -527,3 +527,16 @@ fieldset.form-lock:disabled .section-card { opacity: .96; }
 html[data-state="mustchange"] .app-side, html[data-state="mustchange"] .btn.nav-toggle { display: none; }
 html[data-state="mustchange"] .app { grid-template-columns: minmax(0, 1fr); }
 .stage-row.is-final .subst { color: var(--nav-ink); }
+
+/* Cleared total (D-20): part figures are marked out of date, or show a dash before the first calculation */
+.tree-fig .fig-none { display: none; }
+html[data-state="draft"] .tree-fig .fig-val { display: none; }
+html[data-state="draft"] .tree-fig .fig-none { display: inline; }
+.tree-fig .fig-old { display: none; }
+html[data-state="cleared"] .tree-fig .fig-old, html[data-state="unlockedcleared"] .tree-fig .fig-old { display: inline; }
+html[data-state="cleared"] .tree-fig .fig-val, html[data-state="unlockedcleared"] .tree-fig .fig-val { font-style: italic; color: var(--ink-3); }
+.tree-stale { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--accent-ink); font-weight: 500; }
+.ov-reason { display: block; margin-top: var(--s-2); color: var(--ink); }
+.tree-fig .fig-clr { display: none; }
+html[data-state="cleared"] .tree-fig.is-par .fig-val, html[data-state="unlockedcleared"] .tree-fig.is-par .fig-val { display: none; }
+html[data-state="cleared"] .tree-fig .fig-clr, html[data-state="unlockedcleared"] .tree-fig .fig-clr { display: inline; font-style: italic; color: var(--ink-3); }

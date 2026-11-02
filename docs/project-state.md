@@ -67,6 +67,7 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-01 | ux-expert | UX spec v0.3 and screens: 9 answer items and UX-28 to UX-35, UX-37 applied; UX-36 held for OQ-ARCH-10; 41 pages and 146 states checked at 360, 768 and 1280 px, axe 0 violations; OQ-UX-19 raised | docs/03-ux/ |
 | 2026-11-01 | solution-architect | Architecture and test strategy v0.3: every-level roll-up (24 lids), weekly backup, OAuth mail design, password, cleared totals, override reason; adds 7.5 to 13 h (estimate); ARCH-R5 proposed; UX-28 to UX-37 listed | docs/04-architecture/ |
 | 2026-11-01 | product-manager | PRD and release plan v0.6: new quantity rule, scope A adopted, FR-098 to 103 added, weekly backup; central date Wed 2026-11-25 (estimate, unadopted); OQ-PM-07 raised | docs/02-product/ |
 | 2026-11-01 | orchestrator | Delivery lead instruction, in chat: "dont ask me for any approvals except for git merge. But I need to view the result after each iteration (and gate reviews if required)". Remaining human approval stops lifted, except code PR merges; results reported after each iteration and gate. HOLD-01 stays: it is a data input, not an approval. Master to log it | AQP-1 |
