@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.8 (Draft, G3 answers applied, 2026-11-01: every level's quantity applies (24 lids); scope A; hosting details in part; one export total with the total Tool Cost; "Not applicable" handling; password, session, stale totals and screen decisions; Q-35 to Q-37 raised; ASSUMPTION-50 retired) |
+| Version | 0.9 (Draft, G3 conditions 3 and 10, 2026-11-01: Q-35 (a) restated: the claim that the case is rare is removed and the single-piece item is stated, classed blocking at G4 for the roll-up story and raised as Jira issue AQP-14; WCAG 2.2 AA and light-only first release follow SPEC 1.5; catalogue NFR numbers written "cat. NFR-nnn"). Version 0.8 (Draft, G3 answers applied, 2026-11-01: every level's quantity applies (24 lids); scope A; hosting details in part; one export total with the total Tool Cost; "Not applicable" handling; password, session, stale totals and screen decisions; Q-35 to Q-37 raised; ASSUMPTION-50 retired) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
 | Status | G3 approved by the delivery lead (AQP-1 comment 10491). Answered 2026-11-01: Q-32 (a) in their own words (definition AQP-13 comment 10487; count of 24 lids relayed in AQP-1 comment 10490), Q-34 scope A (AQP-12 comment 10488, their own words), and, relayed verbatim from the chat in AQP-1 comment 10490 (DL-007 (2); the session-log check is the master's), Q-18 in part, Q-31, Q-33 and the UX questions. Open: Q-18 (web address, sender address, what "Admin looks after them" means), Q-30, Q-35, Q-36, Q-37. The master decides whether the conditions are met |
@@ -54,7 +54,7 @@ Summary here; full detail in `stakeholder-map.md`.
 - Cost view with formulas for Lead and Admin; recalculate; approve and lock with Approved Quote Price; unlock (UR-025 to UR-029).
 - Excel export that replicates the worksheet layout (UR-030, BRQ-005). One total only, with the total Tool Cost shown; the export knowingly differs from the sample on this point (D-16).
 - Admin configuration of fields and formulas with re-lettering, configuration versions, checkpoints and change history (UR-033 to UR-036).
-- Audit trail, server-side access control, and the design, brand, responsive, accessibility and SEO/Open Graph standards (NFR-001 to NFR-023).
+- Audit trail, server-side access control, and the design, brand, responsive, accessibility and SEO/Open Graph standards (cat. NFR-001 to cat. NFR-023).
 - About page, version 1.0.
 
 **Out of scope** (explicitly excluded)
@@ -73,7 +73,7 @@ Summary here; full detail in `stakeholder-map.md`.
 - A sharper logo original replaces the current file (Q-16).
 - Offline use in the next release (confirmed; BRQ-014, Q-18).
 - UI-sample ideas not in the SPEC (review-queue counts, global search, workload counts) for the product manager to rank (finding F-16).
-- Dark mode is outside scope A (D-14; NFR-015).
+- Dark mode is outside scope A (D-14; cat. NFR-015, which is not the PRD's NFR-015).
 
 ## 6. Key Requirements Summary
 Full list in `requirements-catalog.md`.
@@ -106,7 +106,7 @@ The ones that most change the result are below.
 | ASSUMPTION-48 | **Retired 2026-11-01 (Q-32; SPEC §18 D-12), revised the same day.** Rule now in force: every level's quantity applies; BL multiplies each BG by the H of every row above it; a parent's own cost counts (their own words, AQP-13 10464) and nothing typed on a parent is ignored, refused or warned about; the estimate's BL is the sum over its top-level items. Equals the sample's stored total when every quantity is 1 (SPEC §18.5). The version 1.3 reading (multiply once, at the top) is withdrawn | Wrong prices if a reading differs from their intent | Santhosh |
 | ASSUMPTION-49 | **Retired (D-17, Q-33 answered):** "Not applicable" entries have values 0, are system-created, cannot be edited or deleted, are shown nowhere in the portal and skip the material cost only. Display for Lead and Admin: ASSUMPTION-54 | Cost on a part that has none | Santhosh |
 | ASSUMPTION-50 | **Retired (D-14, Q-34 answered):** scope A. The dates are the product manager's | Wrong scope behind the date | Santhosh |
-| ASSUMPTION-51 | The item's own row counts with its own H once, not a second time through the item quantity (Q-35 (a)). Can change a quoted price only where that row has values and the item quantity is above 1 | Item's own row under- or over-counted in that case | Santhosh |
+| ASSUMPTION-51 | The item's own row counts with its own H once, not a second time through the item quantity (Q-35 (a)). It changes a quoted price wherever a top-level item has a non-zero cost on its own row and the item quantity is above 1, which includes any item with no rows below it, such as a product made of a single piece. Working assumption only; Q-35 (a) asks for a number (Jira AQP-14) and silence does not close it | Item's own row under- or over-counted, including every single-piece product | Santhosh |
 | ASSUMPTION-52 | A part below the top shows the same rule applied from that part downward (Q-35 (b)). No effect on BL or the price | Lead or Admin misreads a part's figure | Santhosh |
 | ASSUMPTION-53 | "Admin looks after the backups" is a responsibility of the person in the Admin role, outside the portal, with README steps; no backup screen in Release 1 (Q-18) | A portal feature is wanted | Santhosh |
 | ASSUMPTION-54 | "Not applicable" is offered to anyone who enters inputs, shows as the part's value where inputs are shown and in the export, and appears in no master list or Admin page (Q-36) | Lead cannot edit such a part | Santhosh |
@@ -131,7 +131,7 @@ Resolved by the delivery lead (no longer assumptions to validate; 05 BN divisor,
 ## 10. Business Risks
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| The quantity rule changed on 2026-11-01 (24 lids, not 8) after the version 1.3 rule had been accepted on list wording, and two points under the new rule (the item's own row, what a part below the top shows) are not settled by any answer | Medium | High (wrong quotes where the item's own row has values and the item quantity is above 1) | Their own definition (AQP-13 10487) and count (AQP-1 10490) now decide the rule; Q-35 asks the two open points; a constructed example with quantities above 1 at every level and two top-level items is in the test plan (SPEC §18.5), because the sample cannot test the quantity rules |
+| The quantity rule changed on 2026-11-01 (24 lids, not 8) after the version 1.3 rule had been accepted on list wording, and two points under the new rule (the item's own row, what a part below the top shows) are not settled by any answer | Medium | High (wrong quotes wherever a top-level item has a cost on its own row and a quantity above 1, which includes every single-piece product) | Their own definition (AQP-13 10487) and count (AQP-1 10490) now decide the rule; Q-35 asks the two open points; a constructed example with quantities above 1 at every level and two top-level items is in the test plan (SPEC §18.5), because the sample cannot test the quantity rules |
 | The export does not match the sample because it has one total only and shows the total Tool Cost | Certain (decided, D-16) | Low | Accepted by the delivery lead; acceptance test 12 and BRQ-005 carry the exception |
 | Cost leaks to an Engineer through an API, page or export | Low | High | Server-side filtering and automated test (BR-003, GOAL-02) |
 | Master or rate changes alter approved prices | Low (rule decided, D-07) | High | Record of master values at each calculation (DR-003) |
@@ -139,22 +139,22 @@ Resolved by the delivery lead (no longer assumptions to validate; 05 BN divisor,
 | Export does not match the sample in Excel (headers, formats, subtotal row) | Medium | Medium | Q-03, Q-10; compare file to sample |
 | Single Admin is absent or leaves | Medium | Medium | Hand-over step (Q-23) |
 | Engineers cannot Calculate on assembly parents | Low (answered: enter 0, "Not applicable") | Low | UR-043; Q-33 answered; display for Lead and Admin: Q-36 |
-| Brand red and status colours are confused; red on white barely meets contrast | Medium | Medium | Q-27; contrast checks (NFR-018) |
+| Brand red and status colours are confused; red on white barely meets contrast | Medium | Medium | Q-27; contrast checks (cat. NFR-018) |
 | Browsers block network-folder links | High | Low | Copy-path button (SPEC §5.1) |
 | Development is not complete by the target date 2026-11-13 (the full SPEC may not fit 10 working days with three human gates and the master data stop) | High | Medium (they treat the date as a target and not a blocker, AQP-12) | The product manager supplies a realistic completion date (Q-29 answered; scope: Q-34). The analyst makes no effort estimate |
-| Internet hosting exposes the sign-in page; network-folder paths cannot be opened from outside the office; offline use is deferred to the next release | Medium | Medium | Q-18: hosting details at G3; server-side security (NFR-001, NFR-002); Copy path button (Q-12) |
+| Internet hosting exposes the sign-in page; network-folder paths cannot be opened from outside the office; offline use is deferred to the next release | Medium | Medium | Q-18: hosting details at G3; server-side security (cat. NFR-001, cat. NFR-002); Copy path button (Q-12) |
 | A weekly backup can lose up to a week of work, and the architecture assumed a nightly backup | Medium | High if the database is lost | The delivery lead chose weekly (AQP-1 comment 10490) after the orchestrator warned them; the solution architect reconciles the design; the master logs the risk |
 | A downloaded export taken while the total is cleared carries out-of-date row figures | Medium | Medium | Q-37; approval is blocked while stale, so no approved price is affected |
-| The sample worksheet is in a public repository and turns out to hold real customer or price data | Not assessed by the analyst. The delivery lead decided to keep the repository public (AQP-1 comment 10465) and states the workbook has no real data and the formulas are not self-explanatory; their statement, not verified | High only if the statement is wrong | No sample cell values are copied into documents (NFR-023, ASSUMPTION-46); structure only; the delivery lead can change the rule or the visibility at any time; the register entry RISK-006 is the master's (Q-03, Q-30) |
+| The sample worksheet is in a public repository and turns out to hold real customer or price data | Not assessed by the analyst. The delivery lead decided to keep the repository public (AQP-1 comment 10465) and states the workbook has no real data and the formulas are not self-explanatory; their statement, not verified | High only if the statement is wrong | No sample cell values are copied into documents (cat. NFR-023, ASSUMPTION-46); structure only; the delivery lead can change the rule or the visibility at any time; the register entry RISK-006 is the master's (Q-03, Q-30) |
 
 ## 11. Compliance & Regulatory Considerations
 Assessed from general knowledge; no web research was done, so none of this has been verified against current law. The company's legal adviser should confirm (Q-26).
 - **Personal data:** the portal holds user names and e-mails and customer contact details (name, phone, e-mail, address). India's Digital Personal Data Protection Act, 2023 and the IT Act 2000 rules may apply. Measures already in the SPEC: role-based access, password hashing, audit log. Retention period and policy are open (Q-26).
 - **GDPR:** EUR pricing suggests EU customers, but only business contact data is held; considered unlikely to apply. Confirm in Q-26.
-- **Internet exposure (new in Pass 2):** if Release 1 is hosted on the internet (ASSUMPTION-18, confirmed in part: D-10), the sign-in page is reachable by anyone and login protection, encrypted connections and "do not index" settings matter more. No new law was identified; the security requirements (NFR-001, NFR-002, NFR-020) apply.
+- **Internet exposure (new in Pass 2):** if Release 1 is hosted on the internet (ASSUMPTION-18, confirmed in part: D-10), the sign-in page is reachable by anyone and login protection, encrypted connections and "do not index" settings matter more. No new law was identified; the security requirements (cat. NFR-001, cat. NFR-002, cat. NFR-020) apply.
 - **Commercial confidentiality:** rates, prices and formulas are commercially sensitive; this is treated as a business requirement (BRQ-002), not a regulation.
-- **Customer data in test material:** the delivery lead states that the sample worksheet has no real data (AQP-1 comment 10465; their statement, not verified by the analyst). The rule stays: sample cell values must not be copied into artefacts, Jira, GitHub, tests or fixtures (NFR-023) unless the delivery lead changes it.
-- **Accessibility:** WCAG 2.1 AA is an SPEC requirement, not a legal finding.
+- **Customer data in test material:** the delivery lead states that the sample worksheet has no real data (AQP-1 comment 10465; their statement, not verified by the analyst). The rule stays: sample cell values must not be copied into artefacts, Jira, GitHub, tests or fixtures (cat. NFR-023) unless the delivery lead changes it.
+- **Accessibility:** WCAG 2.2 AA is a SPEC requirement (raised from 2.1 AA at SPEC 1.5, DL-016; the delivery lead may revert it), not a legal finding.
 - **Tax (GST) and e-invoicing:** not in any input; no requirement identified.
 - No sector regulation (for example PCI-DSS, HIPAA, SOX) was identified from the inputs.
 
@@ -173,9 +173,9 @@ Blocking questions are in bold and each has its own Jira issue. The full text, t
 | Q-32 | Roll-up details left after the corrected cost rule | Santhosh | (a), (b) G2; (c) to (e) G3 (DL-005) | **Answered; (a) revised 2026-11-01 in their own words** (AQP-13 10487; AQP-1 10490): every level's quantity applies. (b3), (c): Q-35 |
 | Q-33 | Values and handling of the "Not applicable" Material row | Santhosh | G3 | **Answered 2026-11-01** (D-17); display for Lead and Admin: Q-36 |
 | Q-34 | Which scope the realistic development completion date covers | Santhosh / product-manager | G3 approval (DL-004) | **Answered 2026-11-01**: scope A (AQP-12 10488, their own words) |
-| Q-35 | The item's own row; what a part below the top shows | Santhosh | G4 | New, open (can change a quoted price only where the item's own row has values and the item quantity is above 1) |
+| Q-35 | The item's own row; what a part below the top shows | Santhosh | G4, before the roll-up story reaches Ready | New, open. (a) is blocking at G4 for the roll-up story ([AQP-14](https://sankumar76.atlassian.net/browse/AQP-14)): it changes a quoted price wherever a top-level item has a non-zero cost on its own row and a quantity above 1, including any item with no rows below it. (b) is display only |
 | Q-36 | Where "Not applicable" is shown to Lead and Admin | Santhosh | G4 | New, open (no price effect) |
-| Q-37 | What a cleared total means for per-part costs, the export and a price approved before an unlock | Santhosh | G4 | New, open (no effect on an approved price) |
+| Q-37 | What a cleared total means for the figures that show it, each row's cost, the export and a price approved before an unlock | Santhosh | G4 | New, open (no effect on an approved price) |
 
 **Findings from comparing the SPEC, the Draft v5 document, the sample worksheet and the UI sample** (F-01 to F-21) are in `requirements-questions.md` section 3. Findings F-22 to F-25 were added in Pass 2. The most important: the sample has two top-level items each with its own total, while the answer is one total per estimate (F-01, F-22); the delivery lead's corrected cost rule agrees with the worksheet when every quantity is 1, and on 2026-11-01 their definition of QTY per Assy and count of 24 lids made every level's quantity apply (F-23, SPEC §18.5, Q-32; two points left: Q-35); the two hosting answers conflicted and are resolved for Release 1 (F-24); SPEC §17 already holds the 2026-10-31 decisions (F-20).
 

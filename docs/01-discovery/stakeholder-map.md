@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.5 (G3 answers applied, 2026-11-01) |
+| Version | 0.6 (G3 conditions 3 and 10, 2026-11-01: Q-35 (a) is blocking at G4 for the roll-up story, Jira AQP-14; no other change) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
 
@@ -63,7 +63,7 @@ R = Responsible (does it), A = Accountable (decides), C = Consulted, I = Informe
 
 | Stakeholder | When | How | Purpose |
 |-------------|------|-----|---------|
-| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 to Q-37 (G4); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
+| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 to Q-37 (G4; Q-35 (a) is a number on an invented example, Jira AQP-14, and holds the roll-up story); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
 | Santhosh | After G3 approval, before development | Orchestrator stops and asks for the master data defaults (Q-09, TR-009) | Defaults for the Admin to enter at first use |
 | Admin, one Lead, one Engineer | Before G2 | 30-minute call each (Q-28) | Confirm the as-is and to-be process; baseline (Q-24) |
 | Leads and Engineers | G3 | Review the HTML screens | Usability feedback |

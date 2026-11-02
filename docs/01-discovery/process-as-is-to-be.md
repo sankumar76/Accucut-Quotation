@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.5 (G3 answers applied, 2026-11-01) |
+| Version | 0.6 (G3 conditions 3 and 10, 2026-11-01: Q-35 (a) is blocking at G4 for the roll-up story, Jira AQP-14; no other change) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
 
