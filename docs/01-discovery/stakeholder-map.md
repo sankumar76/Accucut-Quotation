@@ -19,7 +19,7 @@ No interviews have taken place. Goals, pains and measures below are **derived fr
 | **Accucut's customers** (external, not users) | Receive the quoted price; their rates drive the estimate | Accurate, timely quotes at agreed rates | Rate overrides must be respected (SPEC §4.2) | Low | Medium | Quote matches their agreed rates (not measured by the project) |
 | **Accucut IT contact** (to be named, Q-18; installs updates, D-15) | Hosts the system, backups, e-mail service, network access | A supportable system with clear backup and update steps | Unknown | Medium | Medium | System runs, backups restore, e-mail delivers |
 | **Accucut legal / data-protection adviser** (to be confirmed, Q-26) | Confirms personal-data duties and retention | Compliance with data-protection law | Unknown | Low | Low | Retention and access rules approved |
-| **Delivery team** (AI agents; human delivery lead) | Builds and verifies | Clear, testable requirements | Questions still open: Q-18 (web address, sender address), Q-35 (b), Q-36, Q-37, Q-38 (G4) | Medium | High | Gates passed first time |
+| **Delivery team** (AI agents; human delivery lead) | Builds and verifies | Clear, testable requirements | Questions still open: Q-18 (web address, sender address), Q-35 (b), Q-36, Q-37, Q-38, Q-40 (G4), Q-39 (before the roll-up story passes G7) | Medium | High | Gates passed first time |
 
 ### Personas (role-based, from SPEC §3)
 - **The Engineer** works on a task from a network folder of requirement documents, chooses the customer, builds the part tree, and fills the guided form on a laptop or tablet, sometimes on a phone. Success: never blocked by a rule that does not apply to the part.
@@ -63,7 +63,7 @@ R = Responsible (does it), A = Accountable (decides), C = Consulted, I = Informe
 
 | Stakeholder | When | How | Purpose |
 |-------------|------|-----|---------|
-| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 (b), Q-36, Q-37, Q-38 (G4); answered 2026-11-01 and relayed: Q-35 (a) (AQP-14), OQ-ARCH-10 in part (AQP-15), the master data holder (AQP-10); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
+| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 (b), Q-36, Q-37, Q-38, Q-40 (G4), Q-39 (an item with its own cost and a part below it; AQP-26); answered 2026-11-01 and relayed: Q-35 (a) (AQP-14), OQ-ARCH-10 in part (AQP-15), the master data holder (AQP-10); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
 | Santhosh | After G3 approval, before development | Orchestrator stopped and asked about the master data (Q-09, TR-009); answered 2026-11-01 (AQP-10 comment 10512, D-23): the Admin holds the values and types them in at first use; no values were asked for or given | None further for first use |
 | Admin, one Lead, one Engineer | Before G2 | 30-minute call each (Q-28) | Confirm the as-is and to-be process; baseline (Q-24) |
 | Leads and Engineers | G3 | Review the HTML screens | Usability feedback |
