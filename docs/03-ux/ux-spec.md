@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.5 (architecture v0.8 and SPEC v1.10: the whole-order rule with a parent showing only its own row; Warn for a row that costs 0; every calculated figure cleared on any input change; no Excel file until a calculation is current; the approved price kept until a new approval or the Admin removes it; Cancel approval and Remove price for the Admin; the rate-change notice; the optional Part Model; the Last backup line. Changes since 0.4 are in section 0.8 and the change log) |
+| Version | 0.6 (small fixes CR-22, CR-26 and CR-29 on top of 0.5: FR-106 to FR-108 in sections 5 and 9, SCR-15 staged R1 core for the Last backup line, stale rows cleared; architecture v0.8 and SPEC v1.10: the whole-order rule with a parent showing only its own row; Warn for a row that costs 0; every calculated figure cleared on any input change; no Excel file until a calculation is current; the approved price kept until a new approval or the Admin removes it; Cancel approval and Remove price for the Admin; the rate-change notice; the optional Part Model; the Last backup line. Changes since 0.4 are in section 0.8 and the change log) |
 | Owner | ux-expert |
 | Status | In Review (G3, human approval) |
-| Inputs | PRD v0.8 (FR-001 to FR-105; it still carries the earlier roll-up, the Warn text of v0.5 and no FR for the rate notice or for Cancel approval); SPEC v1.10 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`, §6.3, §7.1 H, §7.4, §9, §10, §11, §17, §18 D-12, D-14 to D-22 and D-24, §18.5); `docs/04-architecture/architecture.md` v0.8 sections 4.8, 4.10, 16.8 to 16.13 (UX-28 to UX-65); `docs/05-backlog/consistency-report.md` (CR-06 to CR-08, CR-10); decision log DL-018 to DL-026; AQP-26 (the quantity rule, settled: the Engineer types the count for the whole order on every row and BL is the sum of every row's BG); AQP-15 comments 10511 and 10527 (Warn; Q-38 "Yes"; held, see section 0.7); AQP-1 comments 10490 (their answers, relayed), 10491 (APPROVED) and 10493; `docs/04-architecture/architecture.md` v0.3 section 16.8 (UX-28 to UX-37); gate log; project brief v0.6; stakeholder map; gate log G2 attempt 2 (conditions 5, 6, 9); `docs/04-architecture/architecture.md` v0.2 section 16 (items UX-01 to UX-27) and section 15.2; the client's `Accucut Quotation Portal UI-UX.html` (15 screens, unpacked and read); `docs/03-ux/assets/` (logo, company board) |
+| Inputs | PRD v0.10 (FR-001 to FR-108; it numbers the rate notice, Cancel approval and Remove price); SPEC v1.12 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`, §6.3, §7.1 H, §7.4, §9, §10, §11, §17, §18 D-12, D-14 to D-22 and D-24, §18.5); `docs/04-architecture/architecture.md` v0.9 sections 4.8, 4.10, 16.8 to 16.14 (UX-28 to UX-65); `docs/05-backlog/consistency-report.md` (CR-06 to CR-08, CR-10, CR-22, CR-26, CR-29); decision log DL-018 to DL-026; AQP-26 (the quantity rule, settled: the Engineer types the count for the whole order on every row and BL is the sum of every row's BG); AQP-15 comments 10511 and 10527 (Warn; Q-38 "Yes"; held, see section 0.7); AQP-1 comments 10490 (their answers, relayed), 10491 (APPROVED) and 10493; `docs/04-architecture/architecture.md` v0.3 section 16.8 (UX-28 to UX-37); gate log; project brief v0.6; stakeholder map; gate log G2 attempt 2 (conditions 5, 6, 9); `docs/04-architecture/architecture.md` v0.2 section 16 (items UX-01 to UX-27) and section 15.2; the client's `Accucut Quotation Portal UI-UX.html` (15 screens, unpacked and read); `docs/03-ux/assets/` (logo, company board) |
 | Review pages | [`screens/index.html`](screens/index.html): 27 screens on 29 pages (the Engineer and Lead variants are separate pages), 11 phone and tablet frames, 164 direct state links. Open by double-click; no server, build or sign-in. They are produced by [`generator/`](generator/README.md) |
 | Scope | Every user-facing FR through Release 2 (scope A and scope B are both covered, as DL-004 requires). Not designed, by decision: see section 0.3 |
 
@@ -186,7 +186,7 @@ None remain. Q-35 (b), Q-36, Q-37, Q-38 and Q-41 are settled (section 0.8), and 
 
 **Defect found and fixed in this pass.** The "Building the file" message on SCR-10 printed the text `${NODES.length}` instead of the row count in version 0.4. It is computed now. The state switcher also ignored an element that had both `data-show` and `data-hide`; it now shows such an element only when the first matches and the second does not.
 
-**Issues for other roles.** PRD v0.8 has no FR for the rate notice, Cancel approval or Remove price (section 9 lists them without a number), and it still carries FR-104 as written for v0.5 and the earlier roll-up. The SPEC and the PRD should say a parent shows only its own row.
+**Issues for other roles.** PRD v0.8 had no FR for the rate notice, Cancel approval or Remove price; PRD v0.10 numbers them FR-106 to FR-108 and section 9 follows (version 0.6).
 
 ---
 
@@ -313,7 +313,7 @@ Signed in (side menu; items per role)
     Checkpoints ................... SCR-21 (Admin)
   ADMINISTRATION (Admin)
     Users ......................... SCR-14
-    Settings (e-mail alerts) ...... SCR-15 (R2)  · E-mail previews SCR-22
+    Settings (Last backup R1 core; e-mail alerts R2) ...... SCR-15  · E-mail previews SCR-22
     Audit log ..................... SCR-16
   HELP
     About ......................... SCR-24
@@ -338,7 +338,7 @@ Reference: SCR-00 Design system
 
 ## 5. Screen inventory
 
-Release: R1 core unless noted. "Files" are in `docs/03-ux/screens/`.
+Release: R1 core unless noted. SCR-15 is R1 core for the Settings frame and the Last backup line (FR-105, CR-26) and R2 for the e-mail alert controls (FR-019). "Files" are in `docs/03-ux/screens/`.
 
 | Screen | Name | Purpose | Persona | Journeys | FRs | Files |
 |--------|------|---------|---------|----------|-----|-------|
@@ -348,17 +348,17 @@ Release: R1 core unless noted. "Files" are in `docs/03-ux/screens/`.
 | SCR-03 | Task queue / My tasks | Open, Closed, Overdue; filters | Lead, Admin; Engineer | UJ-02, 03, 13 | 033 to 039, 041 | SCR-03, -engineer, -phone, -tablet |
 | SCR-04 | Assign task; reassign (R2) | Create a task with folder and deadline | Lead, Admin | UJ-02 | 032, 033, 040 | SCR-04, -phone |
 | SCR-05 | Estimate workspace, Engineer | Guided form with tree | Engineer | UJ-04, 05 | 042 to 057, 087, 102, 104 | SCR-05, -phone, -tablet |
-| SCR-06 | Estimate review | Totals, tree with figures, inputs, actions; cleared-total states | Lead, Admin | UJ-06, 07, 08 | 058 to 065, 070, 100, 101, 104 | SCR-06, -phone, -tablet |
+| SCR-06 | Estimate review | Totals, tree with figures, inputs, actions; cleared-total states | Lead, Admin | UJ-06, 07, 08 | 058 to 065, 070, 100, 101, 104, 106 to 108 | SCR-06, -phone, -tablet |
 | SCR-07 | Cost details | Six stages with formulas for one row | Lead, Admin | UJ-06 | 058, 059, 060, 026, 100 | SCR-07, -phone |
-| SCR-08 | Approve and lock (dialog) | Set Approved Quote Price, lock | Lead, Admin | UJ-06 | 062, 101, 103, 104 | SCR-08 |
+| SCR-08 | Approve and lock (dialog) | Set Approved Quote Price, lock | Lead, Admin | UJ-06 | 062, 101, 103, 104, 106 | SCR-08 |
 | SCR-09 | Unlock (dialog) | Unlock with reason and notices | Lead, Admin | UJ-08 | 063 | SCR-09 |
-| SCR-10 | Excel export | Download; screen figures against the file | Lead, Admin | UJ-09 | 066 to 071, 100, 104 | SCR-10 |
+| SCR-10 | Excel export | Download; screen figures against the file | Lead, Admin | UJ-09 | 066 to 071, 100, 104, 107 | SCR-10 |
 | SCR-11 | Process master | Rates; change prompt | Admin | UJ-10 | 012, 014 | SCR-11, -tablet |
 | SCR-12 | Customer master | Customers and rates; reset | Admin | UJ-10 | 013 | SCR-12 |
 | SCR-13 | Materials, exchange rates, treatment list | Master lists | Admin | UJ-10 | 015 to 018 | SCR-13 |
 | SCR-14 | Users | Users, roles, passwords, Admin hand-over (R2) | Admin | UJ-11 | 004 to 006, 098 | SCR-14 |
-| SCR-15 | Settings (R2) | E-mail alerts ON or OFF, sender, test | Admin | UJ-13 | 019, 105 | SCR-15 |
-| SCR-16 | Audit log and change history | Permanent record | Admin | UJ-12 | 011, 079, 104 | SCR-16 |
+| SCR-15 | Settings: Last backup line (R1 core), e-mail alerts (R2) | Last good backup, Backup late, Disk nearly full (FR-105); e-mail alerts ON or OFF, sender, test (FR-019) | Admin | UJ-13 | 019, 105 | SCR-15 |
+| SCR-16 | Audit log and change history | Permanent record | Admin | UJ-12 | 011, 079, 104, 107, 108 | SCR-16 |
 | SCR-17 | Fields and formulas (R2) | Column list; Lead view only | Admin; Lead | UJ-12 | 072, 060 | SCR-17, -lead |
 | SCR-18 | Formula editor (R2) | Edit with live check and preview | Admin | UJ-12 | 073, 022, 023, 080 | SCR-18 |
 | SCR-19 | Insert field (R2) | Guided insert with letter preview | Admin | UJ-12 | 074, 075 | SCR-19 |
@@ -668,7 +668,7 @@ Tabs. **Materials:** Material in Drawing (unique), Material Considered, Price pe
 ### SCR-14 Users
 Table (name, e-mail, role, status, actions: edit, reset password, deactivate). Add user: name, e-mail, role, first password (the rule in 6.0: 10 to 128 characters, a number and a symbol; the person must change it at their first sign-in, SCR-23). Password messages: see 6.0; states "Password too common" and "Needs number and symbol" (add user), "Password same as e-mail" and "Reset: needs number and symbol" (reset). A second Admin: "There is already an active Admin. Only one Admin can be active." with the Admin named in the page notice. Own row cannot be deactivated (disabled with an accessible name that says why). Reset password dialog; deactivate AlertDialog ("Arjun Rao can no longer sign in. Their tasks and estimates stay as they are. You can activate them again later."; from Release 2 it adds "You can reassign their open tasks.", UX-21). **Hand over Admin role** (R2) in one step with a user choice and a warning that the caller becomes a Lead and is signed out. States: Default · Add · Second Admin refused · Password too common · Needs number and symbol · Reset · Password same as e-mail · Reset: needs number and symbol · Deactivate · Hand over · Hand over: wrong password · Loading · Error. The hand-over asks for the Admin's password again (FR-006, NFR-004; PM decision on OQ-UX-17): a field "Your password" with the hint "We ask for your password again because this is the biggest change in the portal." and, when wrong, "That password is not correct. Try again." (state "Hand over: wrong password"). A password the Admin sets or resets is temporary: that user is taken to "Set a new password" (SCR-23) at the next sign-in and reaches no other page until done (FR-004).
 
-### SCR-15 Settings (R2)
+### SCR-15 Settings (Last backup line R1 core, e-mail alerts R2)
 Switch **E-mail alerts: ON** (role `switch`, state written in words), sender name, sender e-mail, **Send test e-mail** (to the Admin's own address, OQ-UX-09). Mail server credentials are not here ("set on the server by Accucut IT"). A read-only **Last good backup** line ("Sunday 01 Nov 2026, 02:00 IST. Finished without errors."; FR-105, answered Yes, AQP-1 10549; UX-63) and a **Server disk** line. It is firm, not proposed: it shows the last good weekly backup, "Backup late" after 8 days without one (the architect's threshold) and "Disk nearly full" below 20 % free. It starts, restores and changes nothing, and only the Admin can open this screen. The page adds "Backups are kept on the same server." States: ON · OFF · Test sent · Test failed ("The mail server did not answer…") · **Sender not allowed** ("The mail server did not accept this sender address for this mailbox. Change the sender e-mail address to one the mailbox is allowed to send from, or ask Accucut IT."; the sender stays editable) · **Backup late** ("No backup has finished for 8 days. Ask Accucut IT to check the weekly backup.") · **Disk nearly full** ("Disk nearly full. Less than 20 % of the server disk is free. Backups are kept on the same server, so ask Accucut IT to free space or add disk.") · Save failed · Loading.
 
 ### SCR-16 Audit log and change history
@@ -779,7 +779,7 @@ Verification is in section 12.
 
 ## 9. FR → screen coverage
 
-Every user-facing FR (all 105) is mapped; entries marked "none" say why. FR-098 to FR-105 were missing from versions 0.2 and 0.3 and are added in version 0.4 (G3 condition 12).
+Every user-facing FR (all 108) is mapped; entries marked "none" say why. FR-098 to FR-105 were missing from versions 0.2 and 0.3 and are added in version 0.4 (G3 condition 12). FR-106 to FR-108, which PRD v0.10 numbers, are added in version 0.6 (CR-22).
 
 | FR | Screens | Journeys |
 |----|---------|----------|
@@ -811,7 +811,7 @@ Every user-facing FR (all 105) is mapped; entries marked "none" say why. FR-098 
 | FR-026 | SCR-07, SCR-06 ("—") | UJ-06 |
 | FR-027 | SCR-06 (Recalculate, 2 decimals), SCR-05 (no preview) | UJ-05, 07 |
 | FR-028 | SCR-11, SCR-12 (whole percentages) | UJ-10 |
-| FR-029 | SCR-06, SCR-07, SCR-10 (parent figure labelled against export row, with the BG, BJ and BK sums) | UJ-06, 09 |
+| FR-029 | SCR-06, SCR-07, SCR-10 (every row has one box with its own BG, BJ and BK; a parent shows only its own row, no sum of the rows below, AQP-26) | UJ-06, 09 |
 | FR-030 | SCR-06 ("How the total is built"), SCR-10 (reconciliation) | UJ-06, 09 |
 | FR-031 | SCR-06 (calculated at, configuration version), SCR-09 | UJ-07, 08 |
 | FR-032 | SCR-04; task notes shown on SCR-05 and SCR-06 | UJ-02 |
@@ -882,14 +882,15 @@ Every user-facing FR (all 105) is mapped; entries marked "none" say why. FR-098 
 | FR-097 | none: sample extras are out of scope | |
 | FR-098 | SCR-02, SCR-14, SCR-23 (rule text and the failing-part messages, section 6.0) | UJ-11, 14 |
 | FR-099 | SCR-26 (Session ended: "Sessions last 12 hours from the time you sign in") | UJ-01 |
-| FR-100 | SCR-06, SCR-07, SCR-10 (Total cleared, Unlocked and changed; an item with nothing below it, UX-38; the sum of BG, AQP-26) | UJ-07, 09 |
+| FR-100 | SCR-06, SCR-07, SCR-10 (Total cleared and Unlocked and changed: every calculated value on every row clears; SCR-10 has no file or table while cleared; BL is the sum of every row's BG, AQP-26) | UJ-07, 09 |
 | FR-101 | SCR-06 (Approve and lock off, with the reason), SCR-08 (Estimate changed while open) | UJ-06, 07 |
 | FR-102 | SCR-03 (Engineer), SCR-05 (status badge, Submitted, Approved): a status and never a price | UJ-03, 05 |
 | FR-103 | SCR-08 (optional reason), SCR-06 (BO tile), SCR-10 (shown there, written into no cell), SCR-16 | UJ-06, 09 |
 | FR-104 | SCR-05 (Quantity warning, Warning with a new list), SCR-06 (dialog; notice and mark), SCR-08 (one line), SCR-10 (notice; no warning in the file), SCR-16 (entry) | UJ-05, 06, 07 |
-| (rate notice: no FR number yet) | SCR-06 (Rates changed), SCR-08 (one line) | UJ-06 |
-| (Cancel approval and Remove price, Admin only: no FR number yet) | SCR-06 (Approved (Admin), both dialogs, Approval cancelled, Price removed), SCR-16 (two events) | UJ-08 |
-| FR-105 | SCR-15 (Last good backup, Backup late, Disk nearly full). Firm: answered Yes | UJ-13 |
+| FR-105 | SCR-15 (Last good backup, Backup late, Disk nearly full). Firm: answered Yes. R1 core, with the Settings frame (CR-26) | UJ-13 |
+| FR-106 | SCR-06 (Rates changed: counts only, a link to Recalculate), SCR-08 (one line; approval is not blocked) | UJ-06 |
+| FR-107 | SCR-06 (Approved (Admin), Cancel approval dialog, Approval cancelled (Admin and Lead): the price stays, labelled "Approval cancelled", and leaves the file), SCR-10 (BO2 empty), SCR-16 (Approval cancelled) | UJ-08 |
+| FR-108 | SCR-06 (Remove price dialog, Price removed), SCR-16 (Price removed) | UJ-08 |
 
 ---
 
@@ -950,9 +951,9 @@ Status words: **Open** = waiting for the owner. **Answered, proposed** = the arc
 | OQ-UX-17 | Should Admin hand-over ask for the password? (OQ-ARCH-08) | product-manager | G4 | **Closed, PM decision** (FR-006, NFR-004): yes. Built: the SCR-14 hand-over has a password field and a wrong-password state |
 | OQ-UX-18 | May a Lead read formulas in Release 1 on SCR-17, not only on SCR-07? (OQ-ARCH-09) | product-manager | G4 | **Closed, PM decision:** yes, on SCR-07 in Release 1 (FR-060); the full column list for a Lead (SCR-17) arrives with Release 2 |
 | OQ-UX-19 (new) | Should the optional override reason also be written into the Excel file? (SPEC §10 lists no such cell) | product-manager | G4 | **Closed, PM decision** (FR-103): the reason is written into no cell. Built |
-| OQ-ARCH-01 | Confirm A-05 (a never-calculated estimate exports inputs with empty costs) and A-08 (a Lead's Recalculate on a Draft sets Submitted); both shown on SCR-10 and SCR-06 | product-manager | G4 | Open, as shown |
+| OQ-ARCH-01 | Confirm A-05 (a never-calculated estimate exports inputs with empty costs) and A-08 (a Lead's Recalculate on a Draft sets Submitted); both shown on SCR-10 and SCR-06 | product-manager | G4 | **Closed:** A-05 is replaced by A-32 (no Excel file until a calculation is current, Q-37 (b); SCR-10 Not calculated and Total cleared); A-08 is confirmed (FR-064; SCR-06 Draft states) |
 | OQ-ARCH-10 | QTY per Assy of 0 on a parent removes everything under it from the total: refuse, warn or leave? (UX-36) | Santhosh, via product-manager | G4, before the roll-up story | **Answered: "Warn"** (AQP-15 10511) and Q-38 "Yes" (10527); reworded for one rule, Q-41: the row costs 0. Built as UX-36 and UX-44 to UX-50 (section 0.8) |
-| OQ-ARCH-12 | Backup duties and whether Settings may show "Last backup" (UX-35) | Santhosh | Before the first deployment | **Closed for the screens:** FR-105 is firm ("Yes", AQP-1 10549). Open for the delivery lead: who holds the backup key and who restores |
+| OQ-ARCH-12 | Backup duties and whether Settings may show "Last backup" (UX-35) | Santhosh | Before the first deployment | **Closed:** FR-105 is firm ("Yes", AQP-1 10549), and the Admin holds the backup key, has server access and runs the restore (architecture 16.14; AQP-1 10559 and 10560) |
 | Q-16 | Sharper logo | Santhosh | open | Current 200 × 200 file |
 | Q-18 | Hosting details | Santhosh, Accucut IT | Before the first deployment | Answered in part (Outlook; weekly backup kept 2 years, the Admin looks after them; updates by their IT person). Open: web address, sender address, which Outlook account, what "Admin looks after them" means |
 | Q-31 | Per-item totals in the export; total Tool Cost | Santhosh | G3 | **Closed, their words: "One total only"; "yes he Total Tool cost should be shown"** (AQP-1 10490, D-16). BL2, BN2 and BO2 once in row 2; the total Tool Cost in the Tool Cost column two rows below the last part, label in the cell to its left (this design, matching architecture 4.6) |
@@ -970,9 +971,8 @@ Status words: **Open** = waiting for the owner. **Answered, proposed** = the arc
 
 The G3 questions were answered. These are the ones still open that touch the screens. None needs a working assumption on a screen any more. What holds G4 is the master's decision (DL-026).
 
-1. **OQ-ARCH-12:** who holds the backup key, and who restores (architecture 16.13).
-2. **Q-18:** who looks after the backups, the web address, the sender address and the Outlook account.
-3. **PRD and SPEC alignment (other roles):** the earlier roll-up text, FR-104 as written for v0.5, and no FR for the rate notice or for Cancel approval and Remove price. The screens follow architecture v0.8 until they are aligned.
+1. **Q-18:** who looks after the backups, the web address, the sender address and the Outlook account.
+2. **PRD and SPEC alignment (other roles):** the screens follow architecture v0.9. Where a PRD or SPEC sentence still describes the earlier roll-up or an out-of-date file, the screens win until it is aligned.
 
 ---
 
@@ -1011,3 +1011,4 @@ Known limits of the mock-ups. They do not validate or save anything. Enter-to-ne
 | 0.3 | 2026-11-01 | Requirements v1.4 and the delivery lead's G3 answers (AQP-1 10490, 10491, 10493) and architecture v0.3 section 16.8 (UX-28 to UX-37, UX-36 not applied). **Quantity rule:** every level's quantity applies; rule text, tree and node figures, "How the total is built", SCR-10 "How BL2 is made", SCR-17 and 18 wording; Base frame (1.1) now has quantity 2, so BL is 12,629.99, BN 2.58. **Total cleared** replaces "Inputs changed" on SCR-06 and SCR-10; new states Unlocked and changed, Confirm out-of-date download. **Optional reason** on SCR-08, shown on SCR-06, 10 and 16. **Password** number and symbol on SCR-02, 14, 23; "proposed" removed. **Export:** one total; Total Tool Cost row below the parts, label in the cell to its left; out-of-date markers. **"Not applicable"** removed from SCR-13; Q-36 working assumption on SCR-06 and 07. **"Not needed" switch** closed and its reserved-slot note removed. **About** note corrected. SCR-15 Last backup and sender states, SCR-26 12-hour wording, SCR-13 specific gravity above 0. OQ-UX-01, 02, 05, 06, 10, 12 closed; OQ-UX-19 added; section 11.1 rewritten. Q-35, 36, 37 are labelled working assumptions (section 0.6). 146 state links |
 | 0.4 | 2026-11-02 | G3 conditions 12 and 13; **the whole-order quantity rule (AQP-26)** on SCR-05, 06, 07, 10, 17 and 18 and in sections 0.5 to 0.7, 5, 6, 9 to 11 (BL, BN, BO, item totals and the override difference are unchanged; row BG values and parent figures changed; "Rows above multiply by" and ROLLUP are gone; BL is `SUM(BG)`); architecture v0.5 items UX-38 to UX-43, consistency items CR-06 to CR-08 and CR-10, PRD v0.8, SPEC v1.8. New states: SCR-07 Total cleared; SCR-08 Estimate changed while open; SCR-14 Hand over: wrong password. SCR-01 is noindex. SCR-17 lists BM as a System field and Scrap Weight with its guard. SCR-15 labels the backup line Proposed (FR-105). Section 9 gains FR-098 to FR-105 (105 FRs) and FR-060 is mapped to SCR-07. Section 11 follows PRD v0.7 and v0.8. The generator is filed in `generator/`. **Held:** UX-36 and UX-44 to UX-51 (Warn) until the product manager confirms its scope. |
 | 0.5 | 2026-11-02 | Architecture v0.8 (sections 16.12 and 16.13) and SPEC v1.10. **Rules:** a parent shows only its own row (one box per row, the count beside it); a 0 makes the row cost 0 (Warn, Q-41); every calculated value clears on any input change; no Excel file until a calculation is current (no out-of-date file, name, tab, notice row or dialog); the approved price stays until a new approval or the Admin removes it; "Not applicable" shows to everyone on a part. **New or changed states:** SCR-05 Quantity warning and Warning with a new list, Part Model optional; SCR-06 Rates changed, Quantity warning (Recalculate), Warning on this calculation, Approved (Lead and Admin), Cancel approval, Approval cancelled (Admin and Lead), Remove price, Price removed; SCR-07 Total cleared reads "Cleared. Press Recalculate"; SCR-08 Quantity warning, Rates changed, After an unlock; SCR-10 After an unlock, Not calculated and Total cleared without a file card or table, Quantity warning; SCR-15 Disk nearly full and the firm Last good backup; SCR-16 Approval cancelled, Price removed and Quantity warning entries. UX-36, UX-44 to UX-50, UX-52 to UX-65 applied; UX-51 withdrawn; UX-38 and UX-39 overtaken. No sample figure changed. Fixed: the SCR-10 "Building the file" message printed `${NODES.length}`; the state switcher now handles an element with both `data-show` and `data-hide`. |
+| 0.6 | 2026-11-02 | Small fixes from the consistency report. **CR-22:** FR-106 (rate notice), FR-107 (Cancel approval) and FR-108 (Remove price) are in sections 5 and 9 and in the review bars of SCR-06, 08, 10 and 16; the intro says 108 FRs. **CR-26:** SCR-15 is R1 core for the Settings frame and the Last backup line (FR-105) and R2 for the e-mail alert controls, in the page, the inventory, the information architecture and the index (the row moves to Masters and administration). **CR-29:** FR-029 and FR-100 rows no longer mention a parent figure, "an item with nothing below it" or the old Unlocked wording; OQ-ARCH-01 and OQ-ARCH-12 and section 11.1 are closed or updated (A-05 replaced by A-32; the Admin holds the backup key and runs the restore). No sample figure changed. |
