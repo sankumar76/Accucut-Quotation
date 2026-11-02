@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.6 (Q-38 "Yes", AQP-15 comment 10527; master's actions, AQP-1 comment 10523, DL-024; CE-1 and CE-2 marked unconfirmed while Q-39 is unresolved) |
+| Version | 0.7 (the quantity rule settled on AQP-26, a parent showing only its own row, Q-35 (b), Warn kept, Q-41, and Q-37; section 5 rewritten) |
 | Owner | solution-architect |
-| Status | Accepted at G3 as CONDITIONAL GO. Version 0.4 answers condition 14. Version 0.5 replaces CE-9. Version 0.6 extends CE-9 to every 0 and corrects CE-2, which v0.5 overstated as confirmed. Only CE-12 variants A, B and D carry their number. The roll-up rule is frozen as written while Q-39 is unresolved. For `master` to check at G4 |
+| Status | Accepted at G3 as CONDITIONAL GO. Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted, for `master` to record and check at G4 |
 | Date | 2026-11-02 |
-| Inputs | SPEC v1.8 §14, §18.5; PRD v0.8; `architecture.md` v0.6; DL-012, DL-021, DL-022, DL-024; AQP-14 comment 10510; AQP-15 comments 10511, 10527; AQP-26 comments 10530, 10531, 10533 (Q-39); `coding-standards.md` |
+| Inputs | SPEC v1.9 §14, §18.5; PRD v0.8; `architecture.md` v0.7; DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
 **Rule for all test data.** Every value here and in every fixture is invented. No cell value from the sample workbook is used, here or anywhere, and no real master data (NFR-006, ADR-014). Sample structure may be read for headers, widths and formats only.
@@ -25,7 +25,7 @@
 
 | Level | Purpose | Owner | Tooling | Location | Runs |
 |-------|---------|-------|---------|----------|------|
-| Unit | Formula engine, roll-up, tree, state machine, validation, time, columns | developer | Vitest 5 | `tests/unit/` | Every PR |
+| Unit | Formula engine, tree, state machine, validation, time, columns | developer | Vitest 5 | `tests/unit/` | Every PR |
 | Integration | Services and routes against Postgres; migrations, triggers, grants | developer | Vitest, Postgres service | `tests/integration/` | Every PR |
 | Contract | Route output schemas, strict keys | developer | zod, Vitest | `tests/integration/contract/` | Every PR |
 | Security | Role matrix, canary scan, CSRF, cookies, uploads | developer, qa-engineer | Vitest, Playwright | `tests/security/` | Every PR |
@@ -41,8 +41,9 @@
 | Area | Impact | Likelihood | Depth |
 |------|--------|-----------|-------|
 | Cost confidentiality (NFR-002) | Critical | Medium | Layers plus canary scan on every build |
-| Roll-up and quantity (FR-029, 030) | Critical | Medium | Constructed examples, property tests, single-place tests, own-H-once test; no pending case at G7 (section 5.6) |
-| Quantity warning (OQ-ARCH-10, RISK-013) | High | Medium | CE-9 at every level; no cost in the warning on any route; a stale acknowledgement never passes (section 5.2) |
+| Quantity rule and BL (FR-029, 030) | Critical | Low | Constructed examples with their numbers, property tests, a test that holds H to BB; a parallel run against the worksheet; no pending case at G7 (section 5.6) |
+| Count typed on each row (ARCH-R6) | Critical | Medium | **Cannot be tested:** a wrong count is a valid estimate. CE-2 variant C pins that the count is taken as typed. The hint on the field and H beside each row are checked in E2E |
+| Quantity warning (OQ-ARCH-10, Q-41, RISK-013) | High | Medium | CE-9 at every level; no cost in the warning on any route beyond the 0 typed; a stale acknowledgement never passes (section 5.2) |
 | Cleared totals (D-20) | Critical | Medium | Every read through `figure-state`; approval and export refusal; autosave does not clear |
 | Row formulas (FR-024) | Critical | Low | One test per formula; end-to-end tree |
 | Approved immutability (NFR-026) | High | Low | Regression test, DB refusal tests |
@@ -68,7 +69,7 @@
 | `seedConfig` | SPEC §7 registry; the same module production seeds from | All |
 | `placeholderMasters` | Invented rates, materials and exchange rates; each number follows the fixed pattern `n.37` | Dev, CI |
 | `canaryMasters` | Every Restricted value set to a unique sentinel (section 6) | Security |
-| `quantityCases` | The constructed examples (section 5) | Roll-up |
+| `quantityCases` | The constructed examples (section 5) | BL |
 | `hiddenEntries` | The two "Not applicable" rows from the migration, fixed IDs | Section 9, added for SPEC v1.4 |
 | `acceptanceTree` | Nodes 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5 with invented inputs and hand-calculated outputs in a table reviewed before the test runs | SPEC §14.2 |
 | `tree500` | Generated 500 nodes, depth up to 6 | Performance |
@@ -78,163 +79,145 @@ Builders in `tests/support/` construct data; tests never depend on each other's 
 
 ---
 
-## 5. Roll-up and the Quantity Step (G2 condition 5)
+## 5. The Quantity Rule and BL (G2 condition 5)
 
 ### 5.1 Oracle
 
-SPEC §7.4 BL, §18 D-08 and D-12 as revised in v1.4, §18.5. Expected values are worked by hand here, before any code exists, and were re-run through a throwaway script on 2026-11-01 (architecture section 4.3). The sample has quantity 1 on every row and cannot test quantities, so these constructed cases are the test.
+SPEC v1.9 §7.1 H, §7.4 BL and §18.5, from the rule settled on AQP-26 (comments 10535, 10537). Expected values are worked by hand here, before any code exists, and were re-run through a throwaway script on 2026-11-02. All numbers are invented.
 
-**The rule.** `T(row) = BG(row) + H(row) x sum of T(child)`, and BL is the sum of T over the top-level items.
+**The rule.** H is the count for the whole order, typed on every row. A row's cost is that count times the cost of one piece, `BB = BA x H`. **BL = `SUM(BG)` over all rows, with no multiplying down the tree.** A parent shows only its own row's figures (AQP-1 comment 10542).
 
-**What this does not prove.** These cases encode D-12. Q-32 (a) is in the delivery lead's own words: their definition of QTY per Assy (AQP-13 comment 10487) and their count of 24 lids (AQP-1 comment 10490). Q-35 (a) is settled at 1000 for what was asked, a top-level item with nothing below it, at quantity 5 and 200 a piece (AQP-14 comment 10510; D-21; DL-024). **Only CE-12 variants A, B and D carry that number.** Four limits stay. **Q-39 is unresolved, and the rule is frozen as written.** Its rupee answer, 660, does not fit the rule, which gives 840 (AQP-26 comment 10530). Their count of 12 brackets for 4 frames with 3 each does fit it (10533), as do their 24 lids, and the rupee total is still being confirmed. So CE-1 and CE-2 are unconfirmed. Their working on Q-35 (a) reads 500 x 2 where the example has 5 and 200: it is unexplained, and the ruling rests on the number alone (DL-024). ASSUMPTION-52 is still a working assumption (Q-35 (b)). A parallel run against a worksheet calculated the same way would pass on a wrong rule too (RISK-002).
+**What this proves now.** The rule is the worksheet's, `SUM(BG2:BG11)` (SPEC §18.5), so a parallel run against the worksheet is a real test of BL at any quantity, which it was not under the old rule. Three cases carry the delivery lead's own numbers: the typed 2, 6, 24 (CE-1), 840 (CE-2) and 1000 (CE-12 variant D).
 
-### 5.2 Constructed cases (`tests/unit/rollup/quantity-cases.ts`)
+**What this does not prove.** A test cannot show that the count typed was the right count (ARCH-R6): 3 typed for 12 gives 660, and that is a valid estimate as far as the code can tell.
 
-"Per-piece cost" is a row's cost before its own quantity. So stored BG = per-piece cost x H.
+### 5.2 Constructed cases (`tests/unit/quantity/quantity-cases.ts`)
 
-**CE-1: the nested example (SPEC §18.5). Unconfirmed while Q-39 is unresolved (section 5.6); values unchanged.** 2 frames, 3 pipes per frame, 4 lids per pipe.
+"Per-piece cost" is a row's cost before its own quantity. So stored BG = per-piece cost x H typed. Every H below is the count for the whole order. Every row's figure on screen is the figure in the file.
 
-| Row | H | Per-piece cost | Stored BG, export | T(row), screen | Multiplier above | Pieces |
-|-----|---|----------------|-------------------|----------------|------------------|--------|
-| Item I, frames | 2 | 0 | 0 | 30 | 1 | 2 |
-| Part P, pipes | 3 | 1 | 3 | 15 | 2 | 6 |
-| Sub-part S, lids | 4 | 1 | 4 | 4 | 6 | **24** |
+**CE-1: the frames example, typed 2, 6, 24 (AQP-26 comment 10537).** 2 frames, 3 pipes on each frame, 4 lids on each pipe.
 
-**Expected:** BL = **30**. S counts 24 times, P counts 6 times. With cost on S alone, BL = **24**, the delivery lead's count. BL also equals the sum of BG x multiplier above: 0 x 1 + 3 x 2 + 4 x 6.
+| Row | H typed | Per-piece cost | BG, screen and export |
+|-----|---------|----------------|-----------------------|
+| Item I, frames | 2 | 0 | 0 |
+| Part P, pipes | 6 | 1 | 6 |
+| Sub-part S, lids | 24 | 1 | 24 |
+
+**Expected:** BL = **30**, and the BG column adds up to it. With cost on S alone, BL = **24**.
 
 Each wrong answer below names a specific defect, so the failure message tells the developer which.
 
 | Wrong BL | Means |
 |----------|-------|
-| 14 | The withdrawn version 1.3 rule: the quantity multiplied once, at the top item (S counted 8 times) |
-| 7 | No quantity applied in the roll-up |
-| 15 | The item's quantity not applied |
-| 49 | Displayed figures were summed: parents counted twice |
-| 114 | A row's own H applied twice: `H x (BG + sum of T)` at every row |
+| 300 | The withdrawn rule: typed counts multiplied down the tree again |
+| 612 | A row's own H applied twice |
+| 2 | H not applied at all |
 
-**CE-2: an item row with its own values and parts below it. Unconfirmed: rests on ASSUMPTION-57 while Q-39 is unresolved (DL-024; SPEC §14.2).** Q-35 (a) did not test this shape. The expected value stays 316, and the roll-up story cannot pass G7 until Q-39 is resolved (section 5.6). cI = 5, cP = 7, cS = 11. Item 2, part 3, sub-part 4. Stored BG 10, 21, 44; T(S) = 44; T(P) = 21 + 3 x 44 = 153.
+**CE-2: an item with its own cost and a part below it. Their own sums (AQP-26 comment 10535).** Item 4 at 150, its part 12 at 20. Stored BG 600, 240. **BL = 840.**
 
-| Reading | Working | BL |
-|---------|---------|----|
-| **ASSUMPTION-57, the expected value for now:** own row counts its H once | 10 + 2 x 153 = 2 cI + 6 cP + 24 cS | **316** |
-| The other reading: the item quantity also applies to its own row | 2 x (10 + 153) = 4 cI + 6 cP + 24 cS | 326 |
+| Variant | Tree | BL | Why it is here |
+|---------|------|----|----------------|
+| A | As above | **840** | Their number |
+| B | Item 2 at 5, part 6 at 7, sub-part 24 at 11 | 10 + 42 + 264 = **316** | Three levels, each row with its own cost |
+| C | As A, with 3 typed on the part | **660** | A valid estimate. It pins that the portal takes the count as typed, and that no check can catch it (ARCH-R6) |
 
-While Q-39 is unresolved, 326 is a reading and not a named defect, although 660 agrees with the item's own row counting once. The gap looks small only because this item row is small next to what is below it (DL-012). CE-12 shows the effect of the same question on a row with nothing below it, which is settled.
+A BL of 1560 for variant A means typed counts were multiplied down the tree.
 
-**CE-3: two top-level items (D-12 (d)).** Item A quantity 2 and item B quantity 3, each with 0 on its row and one child of quantity 1 and per-piece cost 1. **BL = 2 + 3 = 5.** A single multiplier over the whole sum would give 4 or 6.
+**CE-3: two top-level items (D-12).** Item A quantity 2 and item B quantity 3, each with 0 on its row and one child typed 2 and 3, per-piece cost 1. **BL = 2 + 3 = 5.** No per-item figure exists in any response.
 
-**CE-4: a parent's own cost counts (D-12 (b1), (b2)).** Item quantity 1. Parent P quantity 1, per-piece cost 10. Child S quantity 1, per-piece cost 5. **BL = 15.** Displayed P = 15, export row P = 10, export row S = 5. A children-only reading gives 5. No warning is raised for the non-zero parent. With P at quantity 2: BG(P) = 20, T(P) = 20 + 2 x 5 = **30**, BL = 30.
+**CE-4: a parent's own cost counts, and it shows only its own (D-12; AQP-1 comment 10542).** Item quantity 1. Parent P quantity 1, per-piece cost 10. Child S quantity 1, per-piece cost 5. **BL = 15.** P shows 10 on screen and in the file, and S shows 5. A children-only reading gives 5. With P at quantity 2 and S still 1: BG(P) = 20, **BL = 25**: the parent's count does not reach its child. With S typed 2 as well, **BL = 30.**
 
-**CE-5: all quantities 1.** BL equals a plain `SUM(BG)` over the rows, for a random tree. This is the worksheet's result at quantity 1 (SPEC §18.5).
+**CE-5: all quantities 1.** BL equals the sum of the per-piece costs, for a random tree. This is the worksheet's result at quantity 1 (SPEC §18.5).
 
-**CE-6: a deep chain.** Item quantity 2, per-piece cost 0. Below it A quantity 3, B quantity 5, C quantity 7, one under the other, each with per-piece cost 1. Stored BG 3, 5, 7. T(C) = 7, T(B) = 40, T(A) = 123. **BL = 2 x 123 = 246** (6 + 30 + 210 pieces). The withdrawn rule gave 30.
+**CE-6: a deep chain.** Item 2, per-piece cost 0. Below it A 6, B 30, C 210, one under the other, each with per-piece cost 1. Stored BG 6, 30, 210. **BL = 246.**
 
-**CE-7: BN (FR-025, D-12 (e2)).** The CE-1 tree. Tool Cost 2 on P and 3 on S, typed entries. Total Tool Cost = **5**, not multiplied by any quantity even though S counts 24 times. **BN = 30 / 5 = 6.** With no Tool Cost, BN is `null`, shown as "—", with an empty export cell, and the total Tool Cost shows 0.
+**CE-7: BN (FR-025, D-12).** The CE-1 tree. Tool Cost 2 on P and 3 on S, typed entries. Total Tool Cost = **5**, with no quantity applied. **BN = 30 / 5 = 6.** With no Tool Cost, BN is `null`, shown as "—", with an empty export cell, and the total Tool Cost shows 0.
 
-**CE-8: divide by zero (A-07).** Exchange rate USD 0: BJ is "—" on the row and on any parent, BG and BL are unaffected, no error. A formula that makes a row's BG `null` gives a BL of "—", never a lower number.
+**CE-8: divide by zero (A-07).** Exchange rate USD 0: BJ is "—" on each row, BG and BL are unaffected, no error. A formula that makes a row's BG `null` gives a BL of "—", never a lower number.
 
-**CE-9: a QTY per Assy of 0, the Warn design (OQ-ARCH-10, OQ-PM-07, Q-38; "Warn", AQP-15 comment 10511; "Yes", AQP-15 comment 10527; architecture section 4.3).** Warn covers every 0 in QTY per Assy, with parts below the row or without. The DL-013 block never took effect (DL-023), and nothing here refuses a 0 for good. Item 2, part 0 with per-piece cost 1, sub-part 4 with per-piece cost 1. BG 0, 0, 4; T(S) = 4; T(P) = 0. All numbers are invented. Asserted from the first commit, never pending. The part's own cost goes too: stored BG holds its own H, so the warning says the part and everything under it count as 0.
+**CE-9: a QTY per Assy of 0 (OQ-ARCH-10, Q-38, Q-41; "Keep warning", AQP-15 comment 10543; architecture section 4.3).** **A 0 affects only its own row, and every 0 warns,** wherever the row sits in the tree. Asserted from the first commit, never pending.
 
-| Variant | Tree | BL | Warnings, with code |
-|---------|------|----|---------------------|
-| A | As above | **0** (30 with the part at H 3, which is CE-1) | 1.1 `QTY_ZERO_ABOVE_PARTS` |
-| B | A plus a second part under the item: H 1, cost 1 | **2**: the other part still counts | 1.1 `QTY_ZERO_ABOVE_PARTS` |
-| C | Item 2; part H 0; below it H 0; below that H 4 | **0** | 1.1 and 1.1.1, both `QTY_ZERO_ABOVE_PARTS`: every zero is listed, so fixing one does not raise a new surprise |
-| D | Top-level item H 0, cost 3, one child H 4, cost 1 | **0** | 1 `QTY_ZERO_ABOVE_PARTS`: a top-level item's own 0 warns (A-27) |
-| E | Item 2; part H 0, cost 1, nothing below it; part H 1, cost 1 | **2** | 1.1 `QTY_ZERO_NO_PARTS_BELOW` |
-| F | Top-level item H 0, cost 5, nothing below it, a single-piece product | **0** | 1 `QTY_ZERO_NO_PARTS_BELOW`: the same (A-27) |
-| G | Item 2; part H 0, cost 1; below it H 0, cost 1, nothing below that | **0** | 1.1 `QTY_ZERO_ABOVE_PARTS` and 1.1.1 `QTY_ZERO_NO_PARTS_BELOW` |
+| Variant | Tree | BL | Warnings, code `QTY_ZERO` |
+|---------|------|----|---------------------------|
+| A | Item 2, cost 0; part H 0, cost 1; sub-part 24, cost 1 | **24**: the sub-part still counts. The withdrawn rule gave 0 | 1.1 |
+| B | A plus a second part under the item: H 6, cost 1 | **30** | 1.1 |
+| C | Item 2; part H 0; below it H 0; below that H 24, each cost 1 | **24** | 1.1 and 1.1.1 |
+| D | Top-level item H 0, cost 3, one child H 4, cost 1 | **4**: the item's own cost goes, and the child stays | 1: a top-level item's own 0 warns |
+| E | Item 2, cost 0; part H 0, cost 1, nothing below it; part H 2, cost 1 | **2** | 1.1 |
+| F | Top-level item H 0, cost 5, nothing below it, a single-piece product | **0** | 1 |
+| G | Item 2, cost 0; part H 0, cost 1; below it H 0, cost 1, nothing below that | **0** | 1.1 and 1.1.1 |
 
 | Level | Assertion |
 |-------|-----------|
-| Unit, `rollUp` | The BL column. The pure function is unchanged, and this pins the arithmetic |
-| Unit, `quantityWarnings` | The Warnings column, row and code. `0.00` is the same as 0, and 0.01 gives no warning. It is found through `systemRole: 'quantity'`, so a re-lettered H still warns. The function takes the tree and inputs only: a `@ts-expect-error` test shows a `RowOutputs` cannot be passed to it |
+| Unit, `SUM` through the evaluator | The BL column |
+| Unit, `quantityWarnings` | The Warnings column. `0.00` is the same as 0, and 0.01 gives no warning. H is found through `systemRole: 'quantity'`, so a re-lettered H still warns. Moving a row with H = 0 leaves its warning as it was. The function takes rows and inputs only: a `@ts-expect-error` test shows a `RowOutputs` cannot be passed to it |
 | Integration, no acknowledgement | `POST /calculate` as an Engineer and `POST /recalculate` as a Lead each give 409 `CALCULATE_ACK_REQUIRED`, with `inputsRevision` and one warning per row. No `calculations` row, no audit row, status and `inputs_revision` unchanged |
 | Integration, acknowledged | The same request with `acknowledge.inputsRevision` succeeds. The Engineer's body is exactly `{status, message}`. The `calculations` row holds `warnings` with the code, node, Sl. No and label, and `created_by` is the person who pressed. One `calculation.warning_acknowledged` audit row, in the same transaction, naming the rows and holding no figure |
 | Integration, stale | Acknowledge, but change any input first: 409 again with the new revision and the current list, and nothing written. Includes two concurrent requests, an input save and an acknowledged Calculate: the Calculate never succeeds on a list older than the save |
 | Integration, nothing to warn | An `acknowledge` with no warning due is ignored: the calculation goes through with `warnings` empty and no audit row. A body that is not the stated shape, such as `{"acknowledge": true}`, is 400 |
 | Integration, order | A blank input with an H of 0 gives 422 `CALCULATE_BLOCKED`, not the 409, so nobody acknowledges and is then refused |
-| Integration, tree | A move that puts parts under a row with H = 0 changes its code at the next press, and moving them out changes it back. Either move bumps `inputs_revision`, so an earlier acknowledgement does not pass. Changing the 0 removes the warning |
 | Integration, each press | A Lead's Recalculate of an estimate the Engineer acknowledged is asked again. The Engineer's calculation keeps the Engineer's name, and the Lead's new one has the Lead's |
 | Integration, Lead data | `/costs` and `/export-summary` give the warnings, with who and when, while `current`, none while `out-of-date` or `none`. Approve succeeds at `current` with warnings on the calculation: Warn never stops approval |
 | Security | Section 6, the warning path |
-| E2E, 3 widths | SCR-05: "Go back" leaves the estimate Draft and "Calculate anyway" gives Submitted with the one message. SCR-06: the same dialog, then the notice. SCR-10: the notice. Each runs once with each wording (variants A and E). Keyboard only, and focus starts on the safe choice |
+| E2E, 3 widths | SCR-05: the dialog says the row will cost 0. "Go back" leaves the estimate Draft and "Calculate anyway" gives Submitted with the one message. SCR-06: the same dialog, then the notice and the row mark. SCR-10: the notice. Keyboard only, and focus starts on the safe choice |
 
-**CE-10: a fractional quantity.** Item 2 with cost 0, part 0.5 with cost 2, sub-part 1.25 with cost 4. BG 0, 1, 5; T(P) = 3.5; **BL = 7.**
+**CE-10: a fractional quantity.** Item 2 with cost 0, part 0.5 with cost 2, sub-part 1.25 with cost 4. BG 0, 1, 5. **BL = 6.**
 
-**CE-11: changing the tree (section 4.8).** From CE-1, reordering siblings leaves BL at 30. Moving S directly under the item gives 2 x (3 + 4) = **14**, so a move changes the price. Each change clears the totals until Recalculate.
+**CE-11: changing the tree (architecture section 4.8).** From CE-1, reordering siblings leaves BL at 30. **Moving S directly under the item also leaves BL at 30**: a move no longer changes the price. It changes Sl. No in the record, so each change still clears the totals until Recalculate (A-29).
 
-**CE-12: a childless top-level item at quantity above 1, a single-piece product (DL-012). Confirmed by Q-35 (a): their number is 1000 for quantity 5 at 200 a piece (AQP-14 comment 10510). Asserted at the values below.** One top-level item, no rows below it, H = 3, per-piece cost 5. Stored BG 15. All invented.
+**CE-12: a childless top-level item, a single-piece product (DL-012).** Their number is 1000 for quantity 5 at 200 a piece (AQP-14 comment 10510).
 
-| Variant | Tree | **The rule, their number (D-21)** | Wrong: the item quantity applied to its own row a second time |
-|---------|------|-----------------------------------------|---------------------------------------------------------------|
-| A | The item alone | T(item) = 15, **BL = 15**, 3 pieces | 3 x 15 = 45, 9 pieces |
-| B | The same item at H = 1, stored BG 5 | **BL = 5** | 5: the two agree, which is why a sample with quantity 1 on every row cannot catch this |
-| C | Item X: H 2, cost 0, one child of H 1 and cost 1. Item Y: as variant A | 2 + 15 = **17** | 2 + 45 = 47, so only the row with its own cost moves |
-| **D** | **Their own example:** the item alone, H = 5, per-piece cost 200, invented for the question | **BL = 1000**, their number | 5000 |
+| Variant | Tree | BL | Wrong: the item quantity applied to its own row a second time |
+|---------|------|----|---------------------------------------------------------------|
+| A | The item alone: H 3, per-piece cost 5, stored BG 15 | **15** | 45 |
+| B | The same item at H 1, stored BG 5 | **5** | 5: the two agree, which is why a sample with quantity 1 on every row cannot catch this |
+| C | Item X: H 2, cost 0, one child typed 2, cost 1. Item Y: as variant A | 2 + 15 = **17** | 47 |
+| **D** | **Their own example:** the item alone, H 5, per-piece cost 200 | **1000** | 5000 |
 
-Each variant also checks:
-
-- the stored row BG is the same in the export either way (15 in variant A), so row BG is never where the difference shows;
-- BL with no parent and no child does not divide by zero or give an empty sum;
-- at `current`, `/costs` gives the row's own BG, H and multiplier above, which SCR-06's one box and "How the total is built" use.
-
-Variant A's cleared state is in section 9.
+Each variant also checks that BL with no parent and no child does not divide by zero or give an empty sum. Variant A's cleared state is in section 9.
 
 ### 5.3 Through the real evaluator
 
 Each case above runs twice:
-1. **Unit:** `rollUp` directly, with stated BG.
+1. **Unit:** `SUM` through the evaluator, with stated BG.
 2. **Integration:** a real estimate through `calculation-service` with the seed configuration. Machining Cost (AP) carries the per-piece cost, all other inputs are 0, all percent rates 0. Then AY = AP, BA = AP, BB = AP x H, BG = BB, so a per-piece cost travels through every stage, and the result is read from `calculations` and `calculation_rows`.
 
-Also on the integration path: the export of CE-1 shows row BG of 0, 3, 4 and BL2 = 30, and the Lead's screen data shows 30, 15, 4 with multipliers 1, 2, 6.
+Also on the integration path: the export of CE-1 shows row BG of 0, 6, 24 and BL2 = 30, and the Lead's screen data shows the same three figures.
 
-### 5.4 Holding the step to one place
+### 5.4 Holding the rule in place
 
 | Test | Assertion |
 |------|-----------|
-| `quantity-step-single-importer` | Only `src/lib/rollup/roll-up.ts` imports `quantity-step.ts` |
-| `quantity-step-unit` | Direct table test: a sum, `null`, and quantities of 0, 1 and a fraction. 100 % branch coverage |
-| `own-quantity-once` | A row's own BG is never inside the value passed to the step for that row. Spy on the step in CE-1: S's BG reaches a step only with H(P), never with H(S). This is the test for the 114 defect |
-| `no-rollup-of-rollup` | `RolledUpFigures` does not type-check as a `RowOutputs` input (a `@ts-expect-error` test) |
-| `export-reads-outputs` | Export model built from a record whose `rollup` holds a marker value contains no marker |
-| `no-recursion` | A chain of 500 nodes rolls up without a stack error |
-| `quantity-cases-complete` | Section 5.6: every CE case has a numeric expected value, and no roll-up test is skipped or pending |
+| `quantity-in-one-formula` | In the seed configuration, H appears as an operand only in BB (SPEC §7.4), so a new use in a seed formula fails the test |
+| `bl-is-sum-bg` | Seed BL is `SUM` over the field with `systemRole: 'unit-price'`, and it re-letters with it |
+| `no-rolled-up-figure` | `/costs`, `/nodes/{id}/costs` and `/export-summary` strict schemas hold no sum over rows other than BL, BN and the total Tool Cost. A parent's figures equal its own row in the file (CE-4) |
+| `quantity-cases-complete` | Section 5.6: every CE case has a numeric expected value, and no quantity test is skipped or pending |
 
-`rule-change-rehearsal` from v0.2 is retired. It proved one branch could carry the change, which turned out true only for an item row of 0 (architecture section 4.3). `own-quantity-once` and the properties in section 5.5 stand as written while the rule is frozen. They change only if the delivery lead's rupee total moves the rule (section 5.6).
+Retired with the code they tested: `own-quantity-once`, `quantity-step-single-importer`, `quantity-step-unit`, `no-rollup-of-rollup`, `export-reads-outputs`, `no-recursion` and the closed-form oracle.
 
 ### 5.5 Properties
 
-Fast generated trees, in Vitest, with no extra library needed. Compare at 2 decimals: decimal.js rounds at 34 digits, so the two forms can differ far below a paisa (Evidence: worst relative difference 8.7e-33 over 300 trees).
+Fast generated trees, in Vitest, with no extra library needed. Compare at 2 decimals.
 
-- BL = the sum over all rows of BG x the product of H over the rows above it. This closed form is the test oracle: it is O(n x depth), and is not used in the product.
-- BL = the sum over all rows of BG x the row's stored multiplier above.
-- T(row) = BG(row) + H(row) x the sum of the children's T.
-- With every H = 1, BL = a plain `SUM(BG)`.
-- Reordering siblings leaves BL unchanged. Moving a node to another parent changes BL unless the multipliers above happen to match, so moves are not a property of invariance.
+- BL = the sum over all rows of BG, which is the seed formula checked against a plain loop.
+- Reordering siblings or moving a node to another parent leaves BL unchanged.
+- Setting one row's H to 0 lowers BL by that row's own BG, and by nothing else.
 
-The generator must make top-level items with their own cost, with no children and at H above 1, or these properties never reach the Q-35 (a) case. The first two properties and the third at a top-level row hold for a row with nothing below it by their Q-35 (a) number. For a row with parts below it they hold under the frozen rule, unconfirmed while Q-39 is unresolved.
+The generator must make top-level items with their own cost, with no children and with children, and H of 0, above 1 and fractional.
 
 ### 5.6 No pending quantity case at G7 (G3 condition 14, DL-012)
 
-**The rule.** The roll-up story cannot pass G7 with CE-2 or CE-12 pending, or with Q-39 unresolved (DL-024). A test cannot show that a rule is right, so the delivery lead's number has to reach the build. CE-12 variants A, B and D carry their Q-35 (a) number. CE-1 and CE-2 stay asserted at their values, marked unconfirmed, until they confirm a rupee total for that shape. Nothing here changes the roll-up rule, which is frozen as written.
+**The rule.** The roll-up story, now the BL story, cannot pass G7 with any CE case pending. A test cannot show that a rule is right, so the delivery lead's numbers have to reach the build.
 
 | # | Control | Owner | When | Stops it how |
 |---|---------|-------|------|--------------|
-| 1 | **Met for CE-12 only.** Q-35 (a) answered with a number: 1000 (AQP-14 comment 10510), recorded as D-21. It settles a top-level item with nothing below it (DL-024) | Santhosh; business-analyst | Before the story reaches Ready | Done |
-| 1a | **Open.** Q-39 resolved with a rupee total (AQP-26). Answered 660 (10530), and their count of 12 brackets (10533) points the other way, so it is not closed. Silence does not close it, and there is no fallback (DL-024). `master` says whether it holds Ready | Santhosh; business-analyst records it | Before the story passes G7 | Control 5 |
-| 2 | The story's acceptance criteria cite CE-1 and CE-2 **as unconfirmed**, at 30 and 316, CE-9 as the Warn design with variants A to G, and CE-12 at 15, 5, 17 and 1000, with variant C marked as below | product-owner, scrum-master | G4 | Definition of Ready check |
-| 3 | The cases are written asserted from the first commit. **No `it.todo` is used**. CE-1 and CE-2 carry `basis: 'unconfirmed'` on their entries in `quantityCases` (`basis: 'Q-39'` once resolved). The build stays green on them, so an unresolved question cannot pass as a skipped test or a red build | developer | G5 | Review; control 4 |
-| 4 | `quantity-cases-complete` fails if any CE case from 1 to 12 is missing or has no numeric expected value, or if a roll-up test file uses `.todo`, `.skip`, `.skipIf`, `.fails` or `.only`. It covers `tests/unit/rollup/**` and the integration roll-up tests | developer | Every PR, CI stage 6, which blocks merge | The build fails. Negative control (principle 5): the scanner is run on a planted string holding `it.todo` and must report it |
-| 5 | The G7 report lists CE-1 to CE-12 and the roll-up properties by result, and CE-1 and CE-2 by their `basis`. Pending, skipped or "not applicable" on any of them is an unverified AC, and so is either with `basis: 'unconfirmed'` | qa-engineer | G7 | G7 needs every AC verified, so `master` returns NO-GO |
+| 1 | **Met.** The rule is settled with numbers: 840, 1000 and 2, 6, 24 (AQP-26 comments 10535, 10537; AQP-14 comment 10510), in SPEC v1.9. `master` records it | `master`; business-analyst | Before the story reaches Ready | The story stays out of Ready until the record and SPEC say the same |
+| 2 | The story's acceptance criteria cite CE-1 at 30, CE-2 at 840, 316 and 660, CE-9 with variants A to G, and CE-12 at 15, 5, 17 and 1000 | product-owner, scrum-master | G4 | Definition of Ready check |
+| 3 | The cases are written asserted from the first commit. **No `it.todo` is used** | developer | G5 | Review; control 4 |
+| 4 | `quantity-cases-complete` fails if any CE case from 1 to 12 is missing or has no numeric expected value, or if a quantity test file uses `.todo`, `.skip`, `.skipIf`, `.fails` or `.only`. It covers `tests/unit/quantity/**` and the integration quantity tests | developer | Every PR, CI stage 6, which blocks merge | The build fails. Negative control (principle 5): the scanner is run on a planted string holding `it.todo` and must report it |
+| 5 | The G7 report lists CE-1 to CE-12 and the properties by result. Pending, skipped or "not applicable" on any of them is an unverified AC | qa-engineer | G7 | G7 needs every AC verified, so `master` returns NO-GO |
 
-**Where the expected values come from.** From their number and nothing else, and the developer does not choose. Their 1000 for quantity 5 at 200 a piece fits the rule in section 5.1 and not the other reading (5000), so **CE-12** takes the values marked as the rule, and variant D carries their own example into the build. **CE-1** keeps 30 and **CE-2** keeps 316, both unconfirmed, and neither is their rupee number. When they confirm a rupee total, the Q-39 example is added as a CE-2 variant with their number. If it follows their count, the `basis` of CE-1 and CE-2 changes and the values stand. If it does not, the team does not pick a rule here: the case goes back to `master` and the delivery lead (architecture section 4.3).
-
-**Cases that hang on the same answer.** Q-39 asks what a row's quantity reaches, so it touches more than CE-1 and CE-2: CE-3, CE-4 with P at 2, CE-6, CE-7, CE-10, CE-11 and CE-12 variant C each have a quantity other than 1 on a row with rows below it. They are not relabelled, and their values are unchanged. Their counts, 24 lids and 12 brackets, are their own numbers; the rupee figures built on them are not. `master` is asked to say what the answer closes (architecture section 16.11).
-
-**These figures are not for the question.** Q-39 asks for one number and sets out no reading to accept (DL-024). Neither 840, CE-2's table nor these notes go into AQP-26.
-
----
+**Where the expected values come from.** From their numbers and the rule they settle, and the developer does not choose. The history of how the rule was reached, including 660 and "Lids = 12", is on AQP-26. CE-2 variant C keeps 660 only as a mistyped count.
 
 ## 6. Cost Confidentiality (NFR-002, SPEC §14.1)
 
@@ -258,7 +241,7 @@ The generator must make top-level items with their own cost, with no children an
 - No `calculation_rows` import reachable from Engineer views (ESLint; a test confirms that the rule fires).
 - E-mail bodies contain no forbidden string.
 - The Engineer's data carries no figure state and no `override_reason`, and `GET /options/*` for an Engineer holds no rate for the "Not applicable" entries.
-- **The warning path (CE-9).** The journeys include an estimate with an H of 0 on a part with parts below it, so the 409 body and the dialog are scanned. The 409 has one strict schema, with the same keys for Engineer, Lead and Admin. The same estimate, calculated under two different sets of `canaryMasters`, gives the same 409 body except `requestId`, which shows the warning depends on nothing Restricted. After an acknowledged Calculate, no Engineer response holds `warnings`, and no `engineer-*.ts` view reads `calculations.warnings` (the ESLint rule on cost repositories holds).
+- **The warning path (CE-9).** The journeys include an estimate with an H of 0, so the 409 body and the dialog are scanned. "That row will cost 0" is expected and is not a leak: the 0 is the typed value. The 409 has one strict schema, with the same keys for Engineer, Lead and Admin. The same estimate, calculated under two different sets of `canaryMasters`, gives the same 409 body except `requestId`, which shows the warning depends on nothing Restricted. After an acknowledged Calculate, no Engineer response holds `warnings`, and no `engineer-*.ts` view reads `calculations.warnings` (the ESLint rule on cost repositories holds).
 - `Cache-Control: no-store` on every authenticated response.
 
 ## 7. Authorisation and Security Tests
@@ -339,7 +322,7 @@ The pre-design benchmark (architecture section 4.6, ADR-005, ADR-012) only shows
 | FR-065, ADR-007 | Approve, rename the material and treatment, delete an unused rate: screen and export values are unchanged |
 | FR-058, UX-01 | Taking the operands printed on SCR-07, the worked line reproduces the printed result |
 | FR-078 | Revert to a checkpoint, then revert to the version before it, which has no checkpoint |
-| FR-029, UX-06 | A parent's Σ BG, BJ and BK appear in the Lead data; the Engineer's data has none |
+| FR-029, Q-35 (b) | A parent's BG, BJ and BK in the Lead data are its own row's, equal to its row in the file. No Σ figure or item total exists in any response. The Engineer's data has none of these |
 | UX spec §4 | A Lead's bell count equals their Overdue tab |
 | NFR-018, UX-14 | At 360 px on SCR-05 and SCR-06, every field reached by Tab or Enter is fully visible above the action bar, also with the bar wrapped. Repeat on one real phone with the keyboard open |
 | NFR-020, UX-13 | Every money value renders ₹ from a project font: check the glyph in each shipped font file |
@@ -348,26 +331,27 @@ The pre-design benchmark (architecture section 4.6, ADR-005, ADR-012) only shows
 
 | Requirement | Test |
 |-------------|------|
-| FR-100, cleared totals | For each kind of input change (a number, Remarks, customer, image, add, delete, move, reorder): `/costs` returns no BL, BN, item totals, Tool Cost total or Σ figures, and a row's own values stay, flagged. Recalculate restores them |
+| FR-100, cleared figures | For each kind of input change (a number, Remarks, customer, image, add, delete, move, reorder): `/costs` returns no BL, BN or Tool Cost total and no calculated value on any row, and `/nodes/{id}/costs` returns the state alone. Inputs, H included, stay. Recalculate restores them |
 | FR-100, no false clear | Autosave and a repeated PATCH with the same values, including `1.50` against `1.5`, do not bump `inputs_revision`. Change and change back stays cleared |
 | FR-100, record kept | After clearing, the `calculations` row is unchanged, and the approved calculation is untouched by an unlock |
 | FR-101, approval | Approve is refused with `NOT_CALCULATED` and `TOTALS_OUT_OF_DATE` by direct API call, not only from the screen. Two concurrent requests, an input save and an approve: the approve never succeeds on figures older than the save |
-| FR-063, FR-100, unlock | Unlock with no input change keeps figures `current`, shows no current price, and needs a Recalculate before approval |
-| FR-069, FR-070, Q-37, export | While `out-of-date`: `GET /export` without `allowOutOfDate` is 409. With it, read-back shows BL2, BN2, BO2 and the footer empty, the `_OUT-OF-DATE` file name, the `OUT OF DATE` tab and the notice row. While `current`, none of those appear. A change between `export-summary` and `export` still gives the 409 |
+| FR-063, FR-100, unlock | Unlock with no input change keeps figures `current`, shows the earlier price labelled as approved earlier, and needs a Recalculate before approval |
+| FR-069, FR-070, Q-37, export | While `out-of-date`: `GET /export` is 409 `EXPORT_OUT_OF_DATE`, and `allowOutOfDate=true` changes nothing. While `current`, the file downloads. A change between `export-summary` and `export` still gives the 409. A never-calculated estimate exports its inputs (A-32) |
 | FR-069, D-16, export | Read-back: BL2, BN2, BO2 once, no per-item totals, and the footer value equals the sum of the node rows in BM. BM2 still holds the first node's own value. Inserting a field before BM moves the footer with the column |
 | FR-103, reason | Reason is stored and audited on an override, absent without one, dropped when the price is not an override, and refused over 500 characters. Script text renders as text |
 | FR-018, hidden | `GET /materials`, `GET /treatments`, search and Admin pages hold no such entry; "Other" stays on the Admin's list. `GET /options/*` returns it. `PATCH` and `DELETE` on the fixed ID return 404, the same as a random ID. Creating that name in any letter case gives 422 `NAME_RESERVED`. The rows exist after `prisma migrate deploy` on an empty database, with no seed |
 | FR-018, scrap | With "Not applicable" and N above 0: O = 0, M = 0, AK = 0, and AO, AQ and AS still calculate from N, so labour counts. On SCR-07's data, F and I are blank with no material operands. The export shows the words in E and blank F and I |
 | A-21, no change elsewhere | For generated rows with a real material, O equals `M - N` exactly, including N above M, and every other output matches its formula in SPEC §7.4 |
-| FR-022, formula language | `ROLLUP` is valid only in product-scope fields. `IF` accepts the six comparisons in its condition, and a comparison anywhere else is a validation error |
+| FR-022, formula language | `ROLLUP` is not a function, so a formula using it is a validation error. `IF` accepts the six comparisons in its condition, and a comparison anywhere else is a validation error |
 
 **Added at the UX v0.3 reconciliation (architecture section 16.9).**
 
 | Requirement | Test |
 |-------------|------|
-| FR-100, A-18, single-piece product | CE-12 variant A, after an input change: `/costs` and `/nodes/{id}/costs` hold no BG, BJ or BK for that row, and BL is withheld, so the old total appears in no response. A part below an item keeps its own figures, flagged. Variant C: both items' totals are withheld. Recalculate restores them. The out-of-date file keeps the row, with its markers |
-| FR-029, FR-100, Lead data | At `current` and `out-of-date`, `/costs` gives H and own BG, BJ and BK by node, except the row above. `/export-summary` gives H, BG and BM by row at both; the screen figure, multiplier and total Tool Cost only at `current`. At `none`, neither gives a row figure |
-| FR-069, footer position | With 10 nodes in rows 2 to 11, row 12 is empty and row 13 holds the value in the Tool Cost column and the label in the cell to its left, in every state, value empty while `none` or `out-of-date`. Repeat with 1 node: the footer is row 4. With no Tool Cost, a `current` file shows 0 and BN2 is empty. While `out-of-date` the notice is in column A of row 14. Inserting a field before BM moves the value and label together |
+| FR-100, Q-37 (a), single-piece product | CE-12 variant A, after an input change: `/costs` and `/nodes/{id}/costs` hold no calculated value, so the old total appears in no response. Variant C the same, on every row |
+| FR-062, Q-37 (c), approved price | After an unlock, and after a later input change, `/costs` still gives the latest approved price. A new approval replaces it, and the earlier row stays on record. BO2 in a `current` file holds the latest approved price |
+| FR-029, FR-100, Lead data | Only at `current`, `/costs` gives H and own BG, BJ and BK by node, and `/export-summary` gives H, BG and BM by row with the total Tool Cost. At `none` and `out-of-date`, neither gives a row figure |
+| FR-069, footer position | With 10 nodes in rows 2 to 11, row 12 is empty and row 13 holds the value in the Tool Cost column and the label in the cell to its left, in every file, value empty while `none`. Repeat with 1 node: the footer is row 4. With no Tool Cost, a `current` file shows 0 and BN2 is empty. Inserting a field before BM moves the value and label together |
 | FR-103, reason | The reason appears in no cell of the exported file, in `/costs` and `/export-summary` for Lead and Admin, and in no Engineer response |
 | FR-015, UX-37 | `POST` and `PATCH /materials` refuse Specific Gravity of 0 or below with 422. The hidden row stays at 0 |
 | FR-063, FR-100 | `/costs` gives the unlock's who, when and reason, in Draft after unlock and in Unlocked and changed |
@@ -404,7 +388,7 @@ Flaky test policy: quarantine with a ticket within a day; never delete to make a
 | Changed code in a PR | ≥ 80 % | Coding standards |
 | Whole package | ≥ 80 % | Coding standards |
 | `src/lib/formula/**` | ≥ 95 % | FR-022, NFR-025 |
-| `src/lib/rollup/**` | ≥ 95 %; `quantity-step.ts` 100 % of branches | This strategy, condition 5 |
+| BL and quantity warnings (`src/lib/estimate/validation`, the seed configuration) | ≥ 95 % | This strategy |
 | `src/lib/estimate/figure-state.ts`, `src/lib/auth/password-rule.ts` | 100 % of branches | FR-098, 100, 101 |
 | Route manifest | 100 % of routes in the role matrix | NFR-001 |
 | Engineer-reachable routes | 100 % in the canary scan | NFR-002 |
@@ -429,7 +413,7 @@ Flaky test policy: quarantine with a ticket within a day; never delete to make a
 | 13 No horizontal scroll | Playwright |
 | 14 One Admin | Integration; direct SQL |
 
-**Acceptance test 2 and BL.** BL is checked with the rule in SPEC §7.4 (each BG times the H of every row above it), per SPEC §14.2, which equals `SUM(BG)` when every quantity is 1. An item's own row with values and an item quantity above 1 is asserted through CE-12 from their Q-35 (a) number, and through CE-2, unconfirmed. The roll-up story cannot pass G7 with either pending, or with Q-39 unresolved (section 5.6). FR-056's fit is tested with the item quantity at 1 and 2, on a tree whose parent has H above 0 (CE-9 covers H = 0).
+**Acceptance test 2 and BL.** BL is checked as `SUM(BG)` over all rows, the worksheet's formula, at any quantity (SPEC §14.2). An item's own row with values is asserted through CE-2 and CE-12, and the BL story cannot pass G7 with any case pending (section 5.6). FR-056's fit is tested with the item quantity at 1 and 2 (CE-9 covers H = 0).
 
 ## 13. Change Log
 
@@ -438,6 +422,7 @@ Flaky test policy: quarantine with a ticket within a day; never delete to make a
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
 | 0.3 | 2026-11-01 | SPEC v1.4 and PRD v0.6. Section 5 rewritten for every level's quantity: CE-1 is now 30 (24 lids), CE-6 246, CE-7 BN 6; CE-2 pending Q-35; CE-9 to CE-11 added; own-quantity-once test; property tests compare at 2 decimals; rule-change rehearsal retired. Added tests for cleared totals, the export markers and footer, optional reason, hidden entries, Scrap Weight, password rule, session, backup retention and watch, mail sign-in modes. Accessibility gate moves to WCAG 2.2 AA with PRD v0.6 |
+| 0.7 | 2026-11-02 | The quantity rule (AQP-26), Q-35 (b) and Q-41. Section 5 rewritten: H is typed for the whole order, BL is `SUM(BG)`, and a parent shows only its own row. CE-1 typed 2, 6, 24 gives 30. CE-2 is their 840, with 316 on three levels and 660 as a mistyped count. CE-9: a 0 affects only its own row and every 0 warns, with one code. CE-11: a move leaves BL alone. CE-12 keeps 15, 5, 17 and 1000. The other cases are retyped as whole-order counts. The quantity-step tests, `own-quantity-once`, `no-rollup-of-rollup`, `export-reads-outputs`, `no-recursion` and the closed-form oracle are retired; `quantity-in-one-formula`, `bl-is-sum-bg` and `no-rolled-up-figure` are new. Section 5.6: the Q-39 controls go. Section 9 follows: no Σ figure or item total; for Q-37, every calculated value clears, the download is refused while cleared, and the approved price stays. Values re-run through a throwaway script on 2026-11-02 |
 | 0.6 | 2026-11-02 | Q-38 "Yes" (AQP-15 comment 10527): CE-9 covers every 0, variants E and F now warn with `QTY_ZERO_NO_PARTS_BELOW`, variant G added, the open point removed. A top-level item's own 0 warns (A-27). **Correction to v0.5 (DL-024):** CE-2 no longer says "Confirmed by Q-35 (a)", and only CE-12 variants A, B and D carry their number. ASSUMPTION-51 is retired (D-21), so no case cites it. **Q-39 unresolved (660, then a count of 12 brackets; rupee total being confirmed):** the rule is frozen, and CE-1 and CE-2 are marked unconfirmed with 30 and 316 kept. Section 5.6: control 1 met for CE-12 only, control 1a for Q-39, a `basis` on CE-1 and CE-2, G7 refuses them while unconfirmed, and a list of the cases that hang on the same answer. Section 10 names STORY-10.01 (CR-11). Values re-run through a throwaway script on 2026-11-02 |
 | 0.5 | 2026-11-01 | The delivery lead's answers. CE-9 rewritten for Warn (AQP-15 comment 10511), with six tree variants and levels for the acknowledgement, a stale acknowledgement, what is recorded and what the Lead sees; the DL-013 block is gone. Warning path added to the canary scan (section 6). Variants E and F pin a part with nothing below it, which stays unanswered. Q-35 (a) answered 1000 (AQP-14 comment 10510): ASSUMPTION-51 confirmed, CE-2 asserted at 316, CE-12 at 15, 5 and 17, with new variant D carrying their example at 1000. The other reading is now a named wrong answer. Section 5.6 control 1 met. Values re-run through a throwaway script on 2026-11-01 |
 | 0.4 | 2026-11-01 | G3 condition 14. CE-12 added: a childless top-level item at quantity above 1. CE-9 rewritten for DL-013: never pending, block as fallback. CE-2 no longer `it.todo`; new section 5.6 and test `quantity-cases-complete` stop it, or CE-12, staying pending at G7. Tests added from the UX v0.3 reconciliation: single-piece product while cleared, Lead data by state, footer and notice row by number, reason in no cell, Specific Gravity on the server, sender refusal. PRD v0.7: temporary password, four step-up actions, sign-in `noindex`. BM added to the system fields |

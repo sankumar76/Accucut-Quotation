@@ -25,20 +25,20 @@ SPEC §2 and §8.2 require a custom tokenizer, parser and evaluator with no `eva
 
 ### Option B — A general-purpose expression library (for example mathjs, hot-formula-parser)
 - Pros: less parser code
-- Cons: wide feature surface to sandbox, and floats by default in some; custom names, internal form and `ROLLUP` would still need work; SPEC asks for a custom engine
+- Cons: wide feature surface to sandbox, and floats by default in some; custom names and internal form would still need work; SPEC asks for a custom engine
 - Cost / effort: similar, with more risk
 
 ## Decision
-We will write the engine in `src/lib/formula/`, as pure, `server-only` code. Decimal is configured once in `lib/decimal.ts`: precision 34, half-up rounding, which matches Excel's rounding of a displayed value. The value type is `Decimal | null`; `null` means divide by zero and spreads through operators, `SUM` and `ROLLUP` (A-07). Rate names ending in ` %` are divided by 100 in the resolver, in one place (FR-028). Evaluation order comes from a topological sort, row-scope fields first and then product-scope fields. A row-scope formula that refers to a product-scope field is refused.
+We will write the engine in `src/lib/formula/`, as pure, `server-only` code. Decimal is configured once in `lib/decimal.ts`: precision 34, half-up rounding, which matches Excel's rounding of a displayed value. The value type is `Decimal | null`; `null` means divide by zero and spreads through operators and `SUM` (A-07). Rate names ending in ` %` are divided by 100 in the resolver, in one place (FR-028). Evaluation order comes from a topological sort, row-scope fields first and then product-scope fields. A row-scope formula that refers to a product-scope field is refused.
 
-Functions: `SUM`, `MIN`, `MAX`, `ROUND`, `IF`, plus the new `ROLLUP(column)`, valid only in product scope (ADR-006).
+Functions: `SUM`, `MIN`, `MAX`, `ROUND`, `IF`. `ROLLUP` was added at G3 and removed for architecture v0.7: BL is `SUM(BG)` (ADR-006).
 
 Names match longest-first against the rate list, so `Cutting-Rate-per-Sec` is one name and not a subtraction, and `Foam Cost` and `OH Profit %` work. A rate name cannot be a valid column letter, because letters move. Errors carry a character position for SCR-18. Each evaluation can return the operands it used at stored precision, so SCR-07 can print a working that reproduces its result (UX-01).
 
 ## Consequences
 - Positive: no dynamic execution path exists; errors are precise enough for SCR-18's messages.
 - Negative / trade-offs accepted: Excel works in 15-digit doubles, so a value can differ from Excel beyond the fifteenth digit. The acceptance test compares to 2 decimals (SPEC §14.2).
-- Follow-up actions (with owners): product-manager adds `ROLLUP` to FR-022 and SPEC §8.2 as text alignment.
+- Follow-up actions (with owners): product-manager removes `ROLLUP` from FR-022.
 
 **Feasibility (Evidence, 2026-11-01).** Tree-walking over decimal.js at precision 34, shaped like the seed (45 outputs of 3 operators each), took p95 136 to 153 ms for 500 nodes over 20 runs on an Intel i7-10510U with Node 24. It leaves over 1.8 s of the NFR-008 budget for database work. The real parser and I/O are not included, and the target host differs.
 

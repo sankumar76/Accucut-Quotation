@@ -34,7 +34,7 @@ PostgreSQL and Prisma are fixed by the stack. The open question is how to store 
 - Cost / effort: high and unsafe
 
 ## Decision
-We will use normalised tables for everything with a fixed shape (users, masters, tasks, approvals) and JSONB for configurable per-node values: `estimate_nodes.inputs`, and `calculation_rows.inputs`, `outputs` and `rollup`. Values are decimal strings at 34 significant digits. Zod schemas check documents at the repository boundary. Master values stay `Decimal(18,4)`.
+We will use normalised tables for everything with a fixed shape (users, masters, tasks, approvals) and JSONB for configurable per-node values: `estimate_nodes.inputs`, and `calculation_rows.inputs` and `outputs`. Values are decimal strings at 34 significant digits. Zod schemas check documents at the repository boundary. Master values stay `Decimal(18,4)`.
 
 Prisma 7 needs the `prisma-client` generator, a required `output` path, `prisma.config.ts` and `@prisma/adapter-pg`. Partial indexes, triggers and grants are hand-written SQL in migrations. `prisma` must be pinned exactly, because its npm `latest` tag points at a release candidate (Evidence, npm, 2026-11-01).
 

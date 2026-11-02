@@ -2,16 +2,29 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.6 (Q-38, Q-40, master's actions in AQP-1 comment 10523, and Q-39 recorded as unresolved; the changes are listed under "What changed in v0.6") |
+| Version | 0.7 (the quantity rule settled on AQP-26, a parent showing only its own row, Q-35 (b), Warn kept, Q-41, and Q-36 and Q-37; the changes are listed under "What changed in v0.7") |
 | Owner | solution-architect |
-| Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.4 answers condition 14. Version 0.5 designs Warn. Version 0.6 extends it to every 0, corrects what v0.5 said about ASSUMPTION-51 (DL-024), and records that Q-39 is unresolved, with the roll-up rule frozen as written. For `master` to check at G4 |
+| Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted, for `master` to record and check at G4 |
 | Date | 2026-11-02 |
-| Inputs | SPEC v1.8 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527; AQP-26 comments 10530, 10531, 10533 (Q-39); requirements questions v1.2. PRD v0.8; release plan v0.8; UX spec v0.3 (section 16.9); consistency report (CR-11). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
+| Inputs | SPEC v1.9 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10545; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.8; release plan v0.8; UX spec v0.3 (section 16.9); consistency report (CR-11). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
 | Companions | `docs/04-architecture/adr/ADR-001` to `ADR-014`; `docs/04-architecture/test-strategy.md` |
 | Scope | Scope A (D-14): every FR through Release 2 and every NFR. Offline (FR-092) is not designed and not blocked (section 9.8) |
 
-**How to read the labels.** **Evidence** = measured or read on 2026-11-01, with the source named. **A-nn** = an architecture assumption, listed in section 15 with what changes if it is wrong. **Proposed** = a value set here for an owner to confirm. Rule text comes from SPEC §7.4 and §18 D-12 as revised in v1.4. Q-32 (a) is now in the delivery lead's own words: their definition of QTY per Assy (AQP-13 comment 10487) and their count of 24 lids (AQP-1 comment 10490, relayed). DL-006 is met (DL-011).
+**How to read the labels.** **Evidence** = measured or read on 2026-11-01, with the source named. **A-nn** = an architecture assumption, listed in section 15 with what changes if it is wrong. **Proposed** = a value set here for an owner to confirm. The quantity rule comes from the delivery lead's answers on AQP-26 (comments 10535, 10537) and AQP-14 (comment 10510), as SPEC v1.9 records them. Other rule text comes from SPEC §7.4 and §18.
 
+**What changed in v0.7 (the quantity rule, Q-35 (b), Q-41, Q-36, Q-37).** This replaces the rule in versions 0.3 to 0.6. Where those tables and sections 16.1 to 16.11 describe `T(row)`, a multiplier, `applyQuantityStep`, `ROLLUP`, a Σ figure, an item total, or Q-39, Q-35 (b) or Warn's scope as open, this version overrides them.
+
+| # | Change | Result | Where |
+|---|--------|--------|-------|
+| 1 | **The rule** | H is the count for the whole order, typed on every row (2, 6, 24). BL is `SUM(BG)` over all rows, with no multiplying down the tree. 4 and 12 typed at 150 and 20 give 840; 5 at 200 gives 1000 | Section 4.3, ADR-006 |
+| 2 | **What a parent shows** | Only its own row's figures (Q-35 (b)). Every row has one box, and the screen and the file agree | Section 4.3 |
+| 3 | **Removed** | `src/lib/rollup/`, `applyQuantityStep`, `T(row)`, the multiplier, `ROLLUP`, the item total, `calculation_rows.rollup`, `calculations.item_totals`, `rollupDisplay` | Sections 4.3, 5.1, 6 |
+| 4 | **Cleared figures (Q-37)** | Every calculated value clears on any input change, row costs included. The approved price stays until a new approval replaces it. A move no longer changes BL, and still clears (A-29). A-18 and A-28 close | Section 4.8 |
+| 4a | **Excel download (Q-37)** | Refused while figures are cleared. The out-of-date file, its markers, `allowOutOfDate` and the dialog are removed | Section 4.6 |
+| 4b | **"Not applicable" (Q-36)** | Offered to Lead and Admin too, and the words show to everyone, in the field and the export. The zero values stay hidden. A-17 is now their answer, with no design change | Section 4.9 |
+| 5 | **Warn** | A 0 affects only its own row, and they kept the warning (Q-41). One rule for every 0, one code, one wording: "That row will cost 0". A-27 closes | Section 4.3 |
+| 6 | **New risk, ARCH-R6** | The Engineer now does the multiplying, so a mistyped count is a wrong price with nothing to flag it | Section 4.3, section 14 |
+| 7 | **Effort** | **-4.25 to -7.25 h, central -5.75 h**, against release plan v0.8 (estimate), with Warn at 3.5 to 5.25 h inside it. No rework, as nothing is built | Section 16.12 |
 **What changed in v0.6 (Q-38, Q-40, master's actions).**
 
 | # | Change | Result | Where |
@@ -60,9 +73,9 @@ No new ADR: each change applies a decision that an existing ADR already owns, so
 
 | Requirement of condition 5 | Where it is met |
 |----------------------------|-----------------|
-| One named quantity step, so a change to Q-32 (a) touches one place | `applyQuantityStep` in `src/lib/rollup/quantity-step.ts` (section 4.3, ADR-006). The rule did change. It touched the step and one line of the walk in `roll-up.ts`, not the single branch v0.2 claimed (section 4.3) |
-| Stored row BG kept apart from the figure displayed for a parent | `calculation_rows.outputs` against `calculation_rows.rollup`, with separate TypeScript types (section 4.3, section 5.1) |
-| Constructed example from SPEC §18.5 in the test strategy | `test-strategy.md` section 5, revised to the every-level rule |
+| One named quantity step, so a change to Q-32 (a) touches one place | **Overtaken in form, met in purpose.** No quantity applies to a sum any more. A quantity applies in one place, `BB = BA * H`, and a test holds it there (section 4.3, ADR-006) |
+| Stored row BG kept apart from the figure displayed for a parent | **Overtaken.** A parent shows only its own row, so there is no second figure to keep apart (Q-35 (b), section 4.3) |
+| Constructed example from SPEC §18.5 in the test strategy | `test-strategy.md` section 5, rewritten for the whole-order rule |
 | Real master data stays out of the repository; state where it is loaded from | Section 5.5, ADR-014 |
 
 ---
@@ -74,13 +87,13 @@ No new ADR: each change applies a decision that an existing ADR already owns, so
 | Rank | Attribute | Why | Main NFRs |
 |------|-----------|-----|-----------|
 | 1 | Confidentiality of cost data | The product exists to keep rates and costs from Engineers. A leak cannot be recalled | NFR-001, 002, 006 |
-| 2 | Correctness of prices | A wrong price is quoted to a customer. Q-39 is unresolved and can still change a price (section 4.3), and Warn leaves a 0 that can lower a price, in front of the Lead | GOAL-03, NFR-026 |
+| 2 | Correctness of prices | A wrong price is quoted to a customer. The rule is settled, and the risk has moved to the count typed on each row (ARCH-R6) | GOAL-03, NFR-026 |
 | 3 | Immutability of approved work | Approved estimates must not move when anything changes (AQP-8) | NFR-026, NFR-007 |
 | 4 | Changeability of the worksheet | The Admin changes fields and formulas without a developer (R2) | FR-072 to 080 |
 | 5 | Operability by a small IT team | One host, one IT contact, no platform team | NFR-013, 030 |
 | 6 | Performance at small scale | Under 50 users, 25 concurrent, 500 nodes | NFR-008 to 011 |
 
-**Key functional drivers.** Server-side role projection (FR-007, 008); formula engine with no `eval` (FR-022, 023); roll-up rule D-12 (FR-029, 030); per-calculation master record (FR-031, 065); Excel export in the worksheet layout (FR-066 to 069); field insert and delete with re-lettering (FR-074, 075); immutable configuration versions (FR-077).
+**Key functional drivers.** Server-side role projection (FR-007, 008); formula engine with no `eval` (FR-022, 023); BL as a plain sum of BG (FR-029, 030); per-calculation master record (FR-031, 065); Excel export in the worksheet layout (FR-066 to 069); field insert and delete with re-lettering (FR-074, 075); immutable configuration versions (FR-077).
 
 **Constraints.** Stack in `CLAUDE.md` §1 and SPEC §2. No `eval` (CONSTRAINT-02). Times stored in UTC and shown in IST (CONSTRAINT-03). Exactly one active Admin (CONSTRAINT-04). Images under 200 KB (CONSTRAINT-08). The repository stays public (D-13, DL-008). Secrets through environment variables only.
 
@@ -181,7 +194,6 @@ flowchart TB
   repos["Repositories: src/server/repositories<br/>(only Prisma importers)"]
   subgraph pure["Pure libraries: src/lib (no I/O)"]
     formula["formula/<br/>tokenizer, parser, graph, evaluator"]
-    rollup["rollup/<br/>roll-up.ts, quantity-step.ts"]
     fields["fields/, columns.ts,<br/>time.ts, decimal.ts"]
     domain["estimate/<br/>state machine, tree, validation"]
   end
@@ -205,7 +217,6 @@ Dependencies point inward. `src/lib` imports nothing from `src/server`, `src/app
 | Session helper | `src/server/auth/session.ts` | `requireUser()`, `requireRole()`; reads `users` on every request, so role and active flag are never taken from the token | FR-001, 004, 007 |
 | Engineer views | `src/server/views/engineer-*.ts` | Allow-list projections into strict output schemas. Importing `calculation-repository` from these files fails the build | FR-008, 051, NFR-002 |
 | Formula engine | `src/lib/formula/**` | Tokenizer, parser, dependency graph, evaluator, internal and display forms | FR-022, 023, 028 |
-| Roll-up | `src/lib/rollup/**` | T(row) for every row, item totals, the estimate total; **owns the quantity step** | FR-029, 030 |
 | Figure state | `src/lib/estimate/figure-state.ts` | Pure: says `none`, `current` or `out-of-date` for an estimate. Every read of a figure goes through it (section 4.8) | FR-061, 070, 100, 101 |
 | Password rule | `src/lib/auth/password-rule.ts` | The one zod rule for every place a password is set, on client and server (section 8) | FR-098, NFR-003 |
 | Calculation service | `src/server/services/calculation-service.ts` | Orchestrates one calculation in one transaction | FR-024 to 031, 055, 061 |
@@ -225,7 +236,6 @@ sequenceDiagram
   participant C as calculation-service
   participant DB as PostgreSQL
   participant F as lib/formula
-  participant L as lib/rollup
   U->>R: POST /estimates/{id}/calculate
   R->>C: calculate(user, estimateId)
   C->>DB: BEGIN; lock estimate row
@@ -234,8 +244,6 @@ sequenceDiagram
   C->>DB: Read nodes, customer rates, used materials, exchange rates
   C->>F: Evaluate row-scope fields for each node (compiled plan)
   F-->>C: Row values (each row's own M to BK)
-  C->>L: rollUp(tree, row values)
-  L-->>C: T(row), multiplier above each row, item totals, BL
   C->>F: Evaluate product-scope fields (BL, BN)
   C->>DB: INSERT calculations, calculation_rows; set status; COMMIT
   C-->>R: Lead or Admin: results. Engineer: status and the one message
@@ -243,141 +251,83 @@ sequenceDiagram
 
 The compiled plan (ordered list of parsed formulas) is cached in process by `config_versions.id`. A version is immutable, so the cache has nothing to invalidate.
 
-### 4.3 Roll-up and the one quantity step (G2 condition 5)
+### 4.3 The quantity rule: BL as a plain sum (G2 condition 5)
 
-**Rule in force.** SPEC §7.4 BL and §18 D-12, as revised in v1.4. QTY per Assy (H) is how many identical pieces of a part sit in one of its parent (AQP-13 comment 10487, their own words). Every level's quantity applies: 2 frames, 3 pipes per frame and 4 lids per pipe count 24 lids (AQP-1 comment 10490, relayed). The version 1.3 rule, multiply once at the top item, is withdrawn.
+**Rule in force (AQP-26 comments 10535, 10537; SPEC v1.9 §7.1 H, §7.4 BL; `master` records it).** QTY per Assy (H) is the count for the whole order, typed on every row. For 2 frames, 3 pipes on each frame and 4 lids on each pipe, the Engineer types **2, 6, 24**. A row's cost is that count times the cost of one piece, which the worksheet formula already gives (`BB = BA x H`). **BL is the sum of BG over all rows, with no multiplying down the tree.** The rule as one sentence is the team's; the typing and the numbers are theirs.
 
-**Checked against SPEC §7.4 and D-12.** The rule is `T(row) = BG(row) + H(row) x sum of T(child)`, and BL is the sum of T over the top-level items.
+| Their answer | What it shows |
+|--------------|---------------|
+| "sorry my bad, yes, this has 24 lids. Engineer should typ 24" (AQP-26 comment 10537) | 2, 6, 24 are typed. The portal does not multiply them |
+| "So the user will enter 4 frames and 12 brackets": 600 + 240 (AQP-26 comment 10535) | 150 x 4 + 20 x 12 = **840**. They gave the two parts, and the sum is ours |
+| 1000 for quantity 5 at 200 a piece (AQP-14 comment 10510) | 200 x 5 = **1000** |
+| Worksheet BL2 is `SUM(BG2:BG11)` (SPEC §18.5) | The same formula. The portal now agrees with the worksheet at any quantity, not only at 1 |
+| 660 (AQP-26 comment 10530) | Read as 3 typed for the whole order, which the rule also gives. Their frame answer corrects the count to 12. That reading is the team's, and they have not said it in those words |
+| "Q-35(b) - no, not required" (AQP-1 comment 10542) | A parent shows only its own row's figures, with no sum of the rows below it |
+
+**Withdrawn:** `T(row)` in every form, `applyQuantityStep`, `quantity-step.ts`, the multiplier above each row, `ROLLUP`, the item total, `calculation_rows.rollup`, `calculations.item_totals`, the `rollupDisplay` flag and the whole of `src/lib/rollup/`. The design needs no roll-up of any kind.
 
 | Question | Answer |
 |----------|--------|
-| Same as the closed form in SPEC §7.4 (each BG times the H of every row above it)? | Yes. Expanding the recursion, a descendant's BG meets the H of each row above it once. Evidence: the two forms agree on 300 random trees of 200 nodes (see "Large trees" below) |
-| Is a row's own H applied twice? | **No.** H(row) reaches that row's own cost once, inside the row's BG (`BB = BA x H`). In the roll-up, H(row) multiplies **only the children's totals**. BG(row) is added outside that multiplication, so it never meets its own H again. It meets only the H of the rows above it |
-| Does a leaf need a special case? | No. With no children the sum is 0, so T(leaf) = BG(leaf) |
-| Item's own row (D-12 (c)) | A row like any other: its H counts once. **Settled for a top-level item with nothing below it:** Q-35 (a) answered 1000 at quantity 5 and 200 a piece (AQP-14 comment 10510; D-21; DL-024). Such a row carries all the cost of that product (DL-012). **A row with its own cost and parts below it is unresolved:** Q-39 was answered 660, which does not fit this rule (see "Q-39 is unresolved" below) |
-| Several top-level items (D-12 (d)) | Added up. No further multiplier: T(item) already holds H(item) |
-| Column (D-12 (e2)) | BG only. Tool Cost (BM) entries are totalled as typed, with no quantity. SPEC §7.4 BN divides BL by that plain total |
+| Where does a quantity apply? | **In one place: `BB = BA * H`**, a row's own seed formula. H is an operand in no other seed formula (SPEC §7.4) |
+| Is a row's own H applied twice? | No. BG carries it once, and nothing multiplies BG again |
+| Where is BL worked out? | In the formula engine, as a product-scope field: `SUM(BG)` over the rows' outputs |
+| Item's own row (D-12 (c)) | A row like any other, inside the sum |
+| Several top-level items (D-12 (d)) | Inside the sum. No step of their own |
+| Column (D-12 (e2)) | BG only. Tool Cost (BM) entries are totalled as typed. BN divides BL by that plain total |
+| Does a move change BL? | **No.** A row's count is typed, and its parent has no effect on it. A move still changes Sl. No (section 4.8) |
 
-**The nested example, by the code path.** Item I has H 2, part P has H 3, sub-part S has H 4. Cost of one piece: 0, 1, 1.
+**The frames example, by the code path.** Cost of one piece: 0, 1, 1.
 
-| Row | H | One piece | Own BG (export) | T(row) (screen) | Pieces in the product | Adds to BL |
-|-----|---|-----------|-----------------|-----------------|-----------------------|------------|
-| S, lids | 4 | 1 | 4 | 4 | 2 x 3 x 4 = **24** | 24 |
-| P, pipes | 3 | 1 | 3 | 3 + 3 x 4 = 15 | 2 x 3 = 6 | 6 |
-| I, frames | 2 | 0 | 0 | 0 + 2 x 15 = 30 | 2 | 0 |
+| Row | H typed | One piece | BG, on screen and in the file |
+|-----|---------|-----------|-------------------------------|
+| I, frames | 2 | 0 | 0 |
+| P, pipes | 6 | 1 | 6 |
+| S, lids | 24 | 1 | 24 |
 
-BL = **30**. **24 lids are counted**, confirmed by running the code path with cost on the lid alone, which gives BL = 24 (Evidence, this section).
+BL = 0 + 6 + 24 = **30**, and the BG column adds up to it. With cost on the lid alone BL = 24.
 
-**Figures, kept apart.**
+**What a parent shows on screen: its own row and nothing else (Q-35 (b)).** The screen and the file now hold the same figure for every row, so G2 condition 6's pair of labelled boxes has nothing left to tell apart: every row has one box, and the tree shows each row's own BG. There is no Σ tag, no item table and no per-item figure anywhere, which also matches D-16's one total in the file. SCR-07 shows a row's own stages. BJ and BK are each row's own, as in the file.
 
-| Figure | Meaning | Stored in | TypeScript type | Used by |
-|--------|---------|-----------|-----------------|---------|
-| Row figure | One row's own BG, BJ, BK, with its own H inside it (`BB = BA * H`) | `calculation_rows.outputs` | `RowOutputs` | Export rows; the only input to the roll-up |
-| Displayed figure | T(row): the rule applied from that row downward (ASSUMPTION-52, Q-35 (b)) | `calculation_rows.rollup` | `RolledUpFigures` | Screen only (Σ figures on SCR-06, SCR-07, SCR-10) |
-| Multiplier above | The product of H over all rows above this one | `calculation_rows.rollup` | `RolledUpFigures` | Reconciliation on SCR-10: BL = sum of BG x multiplier above. It holds quantities, not costs, and is still served only on Lead and Admin routes |
-| Item total | T(item). No separate step any more: it is the displayed figure of a top-level row | `calculations.item_totals` | `ItemTotal` | The item table on SCR-06 |
-| BL | Sum of the item totals | `calculations.product_values` | `ProductValues` | Row 2 of the export, tiles on SCR-06 |
+| Item | Changed by this rule? |
+|------|-----------------------|
+| `src/lib/rollup/`, `quantity-step.ts`, `ROLLUP`, the multiplier, the item total, `rollupDisplay` | **Removed** |
+| Seed BL | **`SUM(BG)`** |
+| `calculation_rows.rollup`, `calculations.item_totals` | **Removed.** No migration exists yet, so nothing moves |
+| `/costs`, `/nodes/{id}/costs`, `/export-summary` | **Simpler:** a row's own figures, with no Σ, item total, multiplier or screen figure |
+| Wording on SCR-06, 07, 10, 17, 18 | **Yes:** UX-53 to UX-56 |
+| Row outputs (M to BK), the export layout, `figure-state` | The formulas and the layout do not change. `figure-state` has less to withhold (section 4.8) |
+| Approved estimates, built code | None exist, so there is no rework |
 
-The `Row` and `RolledUp` types are branded, so passing a displayed figure where a row figure is expected does not compile. The roll-up reads `outputs` and writes `rollup`; nothing reads `rollup` back into a sum. This is what stops a parent being counted twice.
+**The Engineer now does the multiplying (new, ARCH-R6, GitHub #11).** The portal used to multiply down the tree and now takes each count as typed, so a wrong count is a wrong price and nothing can flag it. It is a real risk: on these questions the delivery lead's own first answers were 3 for 12 brackets and 12 for 24 lids, and each would have underpriced the order. 4 and 3 typed at 150 and 20 give 660, not 840. A change to the number of items in the order also means retyping every row below it. The field's name, "QTY per Assy", says the opposite of what it now means. **What the design does:** a hint on the field saying it is the count for the whole order (UX-52), and H beside every row on SCR-06, so a Lead can check it. **What it cannot do:** detect a wrong count, because the portal holds no second figure to compare with. Asking for a per-assembly count as well would bring back the rule just withdrawn, so that is not proposed. Whether to rename the field is for the product-manager and the delivery lead; the Excel column stays as it is.
 
-**The named step.** Every use of a quantity in a roll-up passes through one function.
+**NFR-008.** No walk is left, so the roll-up's share of the budget goes. BL is one `SUM` in the compiled plan. Excel holds 15 significant digits, so a cell stops being exact to the paisa above about ₹ 10 trillion. SPEC sets no ceiling on H and none is added.
 
-```ts
-// src/lib/rollup/quantity-step.ts — the ONLY place a quantity is applied to a sum.
-/** What a row's children add to that row: their totals times the row's OWN quantity.
- *  The row's own BG is never passed here, so its H cannot be applied twice. */
-export function applyQuantityStep(
-  childTotals: RolledUp | null,
-  ownQuantity: Decimal,
-): RolledUp | null {
-  return childTotals === null ? null : childTotals.times(ownQuantity);
-}
-```
+**A zero quantity (OQ-ARCH-10, OQ-PM-07, Q-38, Q-41; RISK-013).** **A 0 now affects only its own row.** `BB = BA x 0`, so that row costs 0, and the rows below it are untouched: item 2, part 0, sub-part 24 gives BL = 24 with each lid at 1, where the old rule gave 0. The minimum for H stays 0.
 
-**How it is called.** `roll-up.ts` holds the rows in depth-first order, so a child always follows its parent. It walks them once in reverse, without recursion, in O(n).
-
-```text
-T(row)              = BG(row) + applyQuantityStep(Σ over children c of T(c), H(row))
-BL                  = Σ over top-level items of T(item)
-multiplierAbove(c)  = multiplierAbove(parent) x H(parent);  1 at a top-level item
-```
-
-Only `roll-up.ts` imports `quantity-step.ts`. H may reach the roll-up only as a value handed to that function, and a test holds both rules (`test-strategy.md` section 5.4).
-
-**Correction to v0.2.** Version 0.2 and ADR-006 said the change would be one branch: `'into-parent'` returning `sum.times(quantity)`. That was true only when the item's own row holds 0. Changing that branch alone leaves `itemTotal = H(item) x (BG(item) + ...)`, which counts the item's own row twice: the version 1.3 reading (c), which SPEC v1.4 withdraws. So the real change was the step, the `top-item` level going away, and the T line in the walk. It stayed inside `src/lib/rollup/`, with no schema or API change.
-
-| Item | Changed by the rule? |
-|------|----------------------|
-| `quantity-step.ts`, and the T line in `roll-up.ts` | **Yes** |
-| Expected values in `tests/unit/rollup/quantity-cases.ts` | **Yes** |
-| SPEC §7.4 BL, BR-046, BR-047 | Done (business-analyst, v1.4) |
-| FR-024, 025, 029, 030, 056, GOAL-03 | Done (product-manager, PRD v0.6) |
-| Wording on SCR-06, 07, 10 ("How the total is built", the parent figure note, "How BL2 is made") | **Yes.** UX spec v0.3 holds the new wording (UX-28). The developer builds it into one file, `src/components/features/estimate-review/rollup-copy.ts` |
-| Database schema, migrations, API shape, screen structure | No. `multiplierAbove` is one more key in the `rollup` JSONB |
-| Row outputs (M to BK) | No: `BB = BA * H` is not touched |
-| Previously approved estimates | None exist yet |
-
-**Q-35 (a) is settled, for what was asked (DL-024).** The question gave a single-piece item, QTY per Assy 5, 200 rupees a piece, invented for the question. Their answer is 1000 (AQP-14 comment 10510). That fits this design, where T(item) = BG(item) = 5 x 200, and not the other reading, which gives 5000. **Only CE-12 variants A, B and D carry this number.** Their example has nothing below the item, and their working reads "500 x 2", which is unexplained, so the ruling rests on the number alone (DL-024).
-
-**Q-39 is unresolved, and this rule is frozen as written.** Q-39 asked for an item at QTY per Assy 4 with its own work at 150, and one part at QTY per Assy 3 and 20 a piece, all invented. Their answer is 660: "Parts cost - 20*3 = 60 rupees", "Items Cost - 150*4 = 600 rupees" (AQP-26 comment 10530). Asked how many of the part Accucut makes, they said: "The number of parts that Accucut actually makes is the number of main item. Subparts are the ones that will attach to the main item." (AQP-26 comment 10531). Asked on an invented example, they said: "4 frames with 3 brackets each will make 12 brackets in total" (AQP-26 comment 10533). **That is a count, not a price.** One last question asks for the rupee total, and whether the Engineer enters this as 4 and 3 was asked and is not yet answered.
-
-| Point | Fact |
-|-------|------|
-| The rule gives | 840: 4 x 150 + 4 x (3 x 20) |
-| Where 660 agrees | The item's own row, 600: its H counts once, as in Q-35 (a) |
-| Where 660 differs | The part: 60, not 240. It counts the part 3 times |
-| What agrees with the rule | Their counts: 12 brackets for 4 frames with 3 each, and 24 lids, 2 x 3 x 4 (AQP-1 comment 10490). Every level's quantity applies to how many pieces exist |
-| What is still open | Whether the rupee total follows that count. Until they say so, 660 stands as their last rupee figure, and it differs from their count |
-| Who decides | They do. Both are their answers, and the team does not choose between them |
-
-Until they answer: the rule, D-12, FR-030 and `src/lib/rollup/` as designed stay as they are. CE-1 and CE-2 are marked unconfirmed with their values unchanged, and the roll-up story cannot pass G7 (`test-strategy.md` section 5.6). **No alternative rule is designed here.** If the rupee total follows their count, nothing changes but the labels. The question for planning is `master`'s, and it depends on that total: DL-024 let the story reach Ready because a different answer would change "an expected value and at most the T line". An answer that takes the item's quantity off what sits below it would reach further than that: the step itself, the multiplier above each row, the closed form, most constructed cases and the wording on SCR-06, 07 and 10 (section 16.11). It would still sit in `src/lib/rollup/`, its tests and the wording, with no schema or API change.
-
-| Open point | Change | Effect |
-|------------|--------|--------|
-| Q-39: what a row's quantity reaches | Not designed, as above | Depends on their answer. The rule is frozen until then |
-| Q-35 (b): a part below the top shows something else | The figure stored in `rollup`, and `rollup-copy.ts` | Display only. BL does not change |
-
-**Large trees (Evidence, 2026-11-01).** Throwaway script, invented data, Node 24.19, decimal.js 10.6.0 at 34 significant digits. This is not the target host or Node version. p95 over 40 runs (20 for the closed form), 500 nodes. The designed form was timed with BG, BJ and BK rolled up (three passes).
-
-| Tree shape | T form, three columns | Closed form, one column only |
-|------------|-----------------------|------------------------------|
-| One parent, 499 children | 2.8 ms | 0.9 ms |
-| Random, depth bias | 4.0 ms | 4.7 ms |
-| One chain, depth 500 | **6.0 ms** | **186 ms** |
-
-- **NFR-008 (under 2 s for 500 nodes):** the roll-up costs about 6 ms at worst, against the 136 to 153 ms measured for the row engine in section 7. It is not a material part of the budget.
-- **The closed form is not used in the product.** It is O(n x depth): on a deep chain, one column took about 30 times as long as all three columns by the T form. It appears only as a test oracle.
-- **Depth:** the walk has no recursion, so unlimited depth (SPEC §6.1) cannot overflow the stack. Validation's 500-node limit bounds the work.
-- **Precision:** decimal.js rounds at 34 digits, so the two forms can differ in the last digits (worst relative difference 8.7e-33 over 300 trees). Tests compare at 2 decimals, not exactly. With every H = 1 the result equals a plain `SUM(BG)` in 300 of 300 trees, so the sample's total is unchanged.
-- **Size of numbers:** a multiplier grows with depth (8 levels at H 99.99 gives about 1.2e19). Nothing overflows: 40 levels at H 9999.99 evaluates normally, at about 1.2e163. Stored values keep 34 significant digits. The export is the weaker link: Excel holds 15 significant digits, so a cell stops being exact to the paisa above about ₹ 10 trillion. SPEC sets no ceiling on H and none is added. NFR-010 is not affected: the export reads `outputs`, not the roll-up.
-
-**A zero quantity (OQ-ARCH-10, the same point as OQ-PM-07; Q-38; RISK-013).** The rule multiplies a subtree by H, so **H = 0 on a part with parts below it removes everything under it**, and the part's own cost as well, because `BB = BA x H`. Item quantity 2, part quantity 0, sub-part quantity 4 gives BL = 0 with the sub-parts unpriced. Under version 1.3 this could not happen below the top item. D-06 tells Engineers to enter 0 in numbers a part does not need, and an Engineer never sees a total, so the Engineer cannot see the effect.
-
-**Their answer is "Warn" (AQP-15 comment 10511), and "Yes" to the same for a part with nothing below it (Q-38, AQP-15 comment 10527).** So Warn covers every 0 in QTY per Assy. No reason was given for either. The DL-013 block never took effect (DL-023). The minimum for H stays 0 in SPEC §7.1, and SCR-05's field rule stays "0 or more". A 0 is accepted once it is acknowledged, so this is a question at the press, not a refusal. Nothing else in the calculation changes: `rollUp` stays a plain function of the tree.
+**Warn stays, for every 0 in QTY per Assy: "Q-41: Keep warning" (AQP-15 comment 10543).** Asked knowing a 0 now touches only its own row, they kept it. The warning names the row and says that row costs 0. A row's position in the tree no longer matters, so the design has one rule, one code and one wording. This closes A-27: a top-level item is a row with a QTY per Assy, so its own 0 warns.
 
 | Point | Warn, as designed |
 |-------|-------------------|
-| Rule | `quantityWarnings(tree, inputs)` in `lib/estimate/validation`, pure. One warning per row where H is 0 after normalising (`0.00` is 0). A top-level item counts. Every such row is listed, nested ones too. It finds H through `systemRole: 'quantity'`, so re-lettering cannot break it |
-| A top-level item's own 0 | **Warns**, with parts below it or without (A-27). Q-38 and D-22 say "part", and the rule reads "every row". An item's H is the same field, and an item with H = 0 and nothing below it, a single-piece product, gives a total of 0 for that item, which is the worst case the warning exists for |
-| Code | `QTY_ZERO_ABOVE_PARTS` if the row has at least one child, `QTY_ZERO_NO_PARTS_BELOW` if not. The code chooses the wording and nothing else: both take the same path through the 409, the record and the notices |
-| When | Inside the transaction, under the estimate row lock, at Calculate **and at Recalculate**, because A-08 and FR-064 give them the same checks and a Lead can type the 0. A save never warns. A move that puts parts under a row with H = 0, or takes them away, changes its code at the next press |
+| Rule | `quantityWarnings(rows)` in `lib/estimate/validation`, pure. One warning per row where H is 0 after normalising (`0.00` is 0). Every such row is listed, wherever it sits in the tree. It finds H through `systemRole: 'quantity'`, so re-lettering cannot break it |
+| Code | One: `QTY_ZERO`. Kept as a code so that a later warning can join the same path |
+| When | Inside the transaction, under the estimate row lock, at Calculate **and at Recalculate**, because A-08 and FR-064 give them the same checks and a Lead can type the 0. A save never warns |
 | Order | Status and ownership, then blank inputs (422 `CALCULATE_BLOCKED`), then this. So nobody acknowledges a warning and is then refused for a blank. **It runs before any master or cost is read** |
 | First press | 409 `CALCULATE_ACK_REQUIRED` with `inputsRevision` and the `warnings` list. Nothing is written: no calculation, no status change, no audit row |
 | Acknowledgement | The person presses "Calculate anyway". The client sends the same `POST` with `{ "acknowledge": { "inputsRevision": n } }`, the value from the 409 |
-| Check | The server recomputes the list. If it is empty, the calculation runs and `acknowledge` is ignored. If it is not empty, `acknowledge.inputsRevision` must equal `estimates.inputs_revision`. If not, the 409 comes back with the new revision and list, and nothing is written. A warning can therefore never be passed by an acknowledgement given for an earlier state of the tree |
+| Check | The server recomputes the list. If it is empty, the calculation runs and `acknowledge` is ignored. If it is not empty, `acknowledge.inputsRevision` must equal `estimates.inputs_revision`. If not, the 409 comes back with the new revision and list, and nothing is written. A warning can therefore never be passed by an acknowledgement given for an earlier state of the estimate |
 | Recorded | `calculations.warnings`, JSONB, default `[]`: `{code, nodeId, slNo, label}` per row, as text at that moment. The row is immutable (ADR-007). **Who and when need no new column:** a calculation with warnings cannot exist unless they were acknowledged, so `created_by` and its time are the acknowledgement. Plus one audit event, `calculation.warning_acknowledged`, in the same transaction, naming the rows and holding no figure |
 | Each press stands alone | A Lead's Recalculate asks again, even for a 0 the Engineer acknowledged (A-26). The Engineer's calculation keeps the Engineer's name, and the Lead's new one has the Lead's |
-| What the Engineer sees | SCR-05: a dialog naming each part, with "Go back" and "Calculate anyway". On success the same single message as ever. Afterwards nothing: no Engineer route reads `calculations.warnings` |
-| What the Lead sees | Every warning on the calculation in view. SCR-06: a notice above the tiles naming each part, who went ahead and when, and a mark on that row in the tree and in "How the total is built". SCR-10: the same notice above "How BL2 is made", where such a row shows "Rows above multiply by" 0 for the parts under it. SCR-08: one line. Data comes from `/costs` and `/export-summary`, through `figure-state`, **only while `current`**. While `out-of-date` the list may be stale, the total is withheld and approval is refused, and Recalculate raises it afresh |
+| What the Engineer sees | SCR-05: a dialog naming each row, with "Go back" and "Calculate anyway". On success the same single message as ever. Afterwards nothing: no Engineer route reads `calculations.warnings` |
+| What the Lead sees | Every warning on the calculation in view. SCR-06: a notice above the tiles naming each row, who went ahead and when, and a mark on that row. SCR-10: the same notice. SCR-08: one line. Data comes from `/costs` and `/export-summary`, through `figure-state`, **only while `current`**. While `out-of-date` the list may be stale, approval is refused, and Recalculate raises it afresh |
 | Approval | Warn never stops it. `POST /approve` is unchanged. The approval points at the calculation, so the warnings stay with what was approved |
 | The file | No cell changes. The row shows H 0 and BG 0, as it would by hand, and no warning goes in the worksheet layout (A-24) |
-| Wording | One file, `src/lib/estimate/warning-copy.ts`, keyed by `code`. Proposed, for UX-36 and UX-51 to settle: "QTY per Assy is 0 on `<Sl. No>` `<part>`. That part and every part under it will count as 0 pieces in this estimate."; with nothing below it: "QTY per Assy is 0 on `<Sl. No>` `<part>`. That part will count as 0 pieces in this estimate." |
+| Wording | One file, `src/lib/estimate/warning-copy.ts`. Proposed, for UX-36 to settle: "QTY per Assy is 0 on `<Sl. No>` `<part>`. That row will cost 0 in this estimate." |
 
 **The acknowledgement: options.** This follows the export's existing pattern, a 409 and then the same request with a stated choice (section 4.6), so it adds no new idea.
 
 | Option | Result |
 |--------|--------|
-| **Chosen:** 409, then the same `POST` carrying `inputsRevision` | Ties the acknowledgement to the exact tree the person saw, since every change that can alter the list already bumps the revision (section 4.8). One integer comparison, under the lock that already serialises saves. The success body stays exactly `{status, message}` |
+| **Chosen:** 409, then the same `POST` carrying `inputsRevision` | Ties the acknowledgement to the exact estimate the person saw, since every change that can alter the list already bumps the revision (section 4.8). One integer comparison, under the lock that already serialises saves. The success body stays exactly `{status, message}` |
 | A plain flag, `acknowledge: true` | **Rejected.** A retry or a stale tab could pass a warning nobody saw, including one for a 0 added since |
 | Echo the list of node IDs | **Rejected.** A second comparison for the same guarantee |
 | Warn in the response after calculating | **Rejected.** The estimate is already SUBMITTED and read-only for the Engineer, so "Go back" would have nothing to go back to |
@@ -385,28 +335,24 @@ Until they answer: the rule, D-12, FR-030 and `src/lib/rollup/` as designed stay
 
 **No cost reaches an Engineer.** This holds on the server, by structure, and not by the dialog's wording.
 
-- The rule reads only typed H and the tree's shape, both of which the Engineer already holds, and it runs before any master, rate or calculated value is read. So its result cannot depend on anything Restricted, and the 409 tells an Engineer nothing about a cost, by content or by timing.
-- The 409 has one strict schema, with the same keys for every role, and no number except `inputsRevision`, Sl. No and the field's own 0. `inputsRevision` is a count of changes. On its own it says nothing about figure state, which no Engineer route carries.
-- The warning states pieces, not money, and for a Lead too: the figures are on the tiles, so no role needs a second copy in the message.
+- The rule reads only typed H, which the Engineer already holds, and it runs before any master, rate or calculated value is read. So its result cannot depend on anything Restricted, and the 409 tells an Engineer nothing about a cost, by content or by timing.
+- **"That row will cost 0" is the only cost statement, and it reveals nothing.** It follows from the 0 the person typed, at any rate and for any part, so it is the same on every estimate. It is not a calculated value, and it comes from no Restricted data.
+- The 409 has one strict schema, with the same keys for every role, and no number except `inputsRevision`, Sl. No and that 0. `inputsRevision` is a count of changes. On its own it says nothing about figure state, which no Engineer route carries.
 - The wording keeps to UX-24's Engineer-page rule: no "rate", "price" or "formula".
 - The canary scan runs this path, and shows the same 409 body under two different sets of masters (`test-strategy.md` section 6).
 
-**A part with nothing below it (Q-38 "Yes", AQP-15 comment 10527).** H = 0 there makes that row's own cost 0, and on a childless top-level item, a single-piece product, it removes the whole item. The answer came before the Warn story was built, so the change is about 0.5 h (estimate) and sits in the design above: one code and one wording. The routes, the dialog, the record and the notices are the same for both codes, and the scope stays in code and not a setting (ADR-006 rejected a run-time switch on a price rule for the same reason). A-25 ends, and the answer changes no number: `rollUp` gives that row 0 either way (DL-022).
+**Residual risk.** A warning can be passed without being read, so a low price can reach the Lead, who sees the notice and the row and is not stopped (RISK-013). D-06 tells Engineers to enter 0 in numbers a part does not need, and an assembly row with no cost of its own may now get a 0 in H by habit, which changes nothing and still raises the dialog. A warning seen often is pressed through. A rule that skipped those rows would have to read a cost, which the warning must never do. How often this happens is not known: the first estimates in use will show it, and the audit event counts it.
 
-**Residual risk.** D-06 tells Engineers to enter 0 in numbers a part does not need. If some type 0 in H by habit, the dialog appears often, and a warning that appears often is pressed through. They were told this before answering (AQP-15 comment 10524), and how often it will happen is not known: the sample has quantity 1 on every row. The first estimates in use will show it, and the audit event counts it. A warning can also be passed without being read, and the Engineer cannot see what it does to the total, so a low price can reach the Lead. That is what they accepted in choosing Warn over Block (AQP-15). The design's answer is to put it above the total on SCR-06 and SCR-10, beside the row, and on the record. That makes it hard to overlook, and it cannot make a Lead read it. If a Lead approves anyway, the portal does not stop them (RISK-013).
-
-**In the formula language.** BL cannot be written as `SUM(BG)`, because SPEC §8.2 defines `SUM` as a plain sum across all nodes. A new product-scope function is added, seeded as:
+**In the formula language.** `ROLLUP` is removed. BL is back to a function SPEC §8.2 already has, so the language gains nothing for it:
 
 ```text
-BL = ROLLUP(BG)
+BL = SUM(BG)
 BN = BL / SUM(BM)
 ```
 
-`ROLLUP(column)` calls the roll-up above with the chosen column, so BL stays visible and re-letters like any other formula (FR-075). `ROLLUP` is valid only in product-scope fields. PRD FR-022 lists it, and SPEC §8.2 is to follow (gate condition 10). SCR-06 "How the total is built" explains it in words.
+BL stays visible and re-letters like any other formula (FR-075), and it stays a system field that cannot be deleted. The warning that a formula has stopped using `ROLLUP` goes with the function. Comparisons inside `IF` stay, because seed O needs them (section 4.9).
 
-**Displayed BJ and BK.** BG, BJ and BK carry a registry flag `rollupDisplay: true`. The roll-up runs once per flagged column with the same code, so no column letter is special-cased in code and re-lettering is safe. A parent's displayed BJ equals its displayed BG divided by the rate. Row BH and BI are not rolled up.
-
-**Division by zero and totals (A-07).** The evaluator's value type is `Decimal | null`, where `null` means divide by zero. `null` spreads through every operator, and through `SUM` and `ROLLUP`, so a total shows "—" rather than a silently low price. The calculation never stops (FR-026). Seed formulas can only reach this through BJ, BK or BN, none of which feed BL.
+**Division by zero and totals (A-07).** The evaluator's value type is `Decimal | null`, where `null` means divide by zero. `null` spreads through every operator and through `SUM`, so a total shows "—" rather than a silently low price. The calculation never stops (FR-026). Seed formulas can only reach this through BJ, BK or BN, none of which feed BL.
 
 ### 4.4 Estimate state machine
 
@@ -431,8 +377,7 @@ SPEC §8.1's `FieldDefinition` is the document's element type. The UX screens sh
 | Added property | Why | Screen |
 |----------------|-----|--------|
 | `engineerVisible` | True only for `input` fields and for F. A schema rule refuses it everywhere else, including I, BH and BI | SCR-05, ADR-008 |
-| `rollupDisplay` | BG, BJ, BK show a Σ figure on a parent | SCR-06, 07, 10 |
-| `systemRole` | Marks fields the code depends on: `sl-no` (A), `quantity` (H), `unit-price` (BG), `total` (BL), `approved-price` (BO), `tool-cost` (BM). These cannot be deleted, and A and BO have no editable formula. `ROLLUP` finds H through this role, so deleting H cannot break the roll-up, and the export finds BM the same way for its footer | SCR-17, 20 |
+| `systemRole` | Marks fields the code depends on: `sl-no` (A), `quantity` (H), `unit-price` (BG), `total` (BL), `approved-price` (BO), `tool-cost` (BM). These cannot be deleted, and A and BO have no editable formula. The quantity warning finds H through this role, and the export finds BM the same way for its footer | SCR-17, 20 |
 | `unit`, `hint`, `formOrder` | Unit tags and hints sit beside each input. `formOrder` is separate from column position because section 08 shows AP, AU, BM, then AJ (SPEC §7.1), which is not letter order. Enter follows it | SCR-05 |
 | `stageId`, `group` | Output placement in the six stages and their sub-headings | SCR-07, 17 |
 | `options`, `displayUnit` | List values for a new choice field; "kg", "$", "€" on values | SCR-07, 19 |
@@ -445,29 +390,24 @@ The configuration seed comes from SPEC §7 and is committed. One seed formula di
 
 ### 4.6 Excel export
 
-ADR-012. `export-service` loads one calculation record and streams its images in batches of 50, builds an `ExportModel`, and hands it to `src/server/export/build-workbook.ts` in a `node:worker_threads` thread, so the event loop stays free for other users. Export reads `calculation_rows.outputs`, never `rollup` (D-12 (b3)). If an estimate has no calculation yet, input columns are filled and output columns stay empty (A-05). The date in the file name is the IST date of the download.
+ADR-012. `export-service` loads one calculation record and streams its images in batches of 50, builds an `ExportModel`, and hands it to `src/server/export/build-workbook.ts` in a `node:worker_threads` thread, so the event loop stays free for other users. Export reads `calculation_rows.outputs` (D-12 (b3)). If an estimate has no calculation yet, input columns are filled and output columns stay empty (A-05). The date in the file name is the IST date of the download.
 
-**One total only, plus the total Tool Cost (D-16, Q-31 answered).** BL, BN and BO appear once, in row 2, and the file has no per-item totals. The export now knowingly differs from the sample on this point (SPEC §14.12). The total Tool Cost, the plain sum of BM with no quantity, cannot go in row 2, because BM2 is the first node's own Tool Cost. It goes in a **footer row at `lastNodeRow + 2`**, so one row stays empty between the last node and the footer: the value in the Tool Cost column, with the label "Total Tool Cost" in the cell to its left. With 10 parts in rows 2 to 11, the footer is row 13. UX spec v0.3 places it the same way (section 16.9). It sits directly under column BM, follows that column if letters move (`systemRole: 'tool-cost'`), and changes no node row. The label is written in every state; only the value is empty. With no Tool Cost entered, a `current` file shows 0 and BN2 stays empty. The value comes from `product_values.toolCostTotal`, so an approved file never changes. Adding up the exported BG column gives BL only when every quantity above a row is 1 (SPEC §10), so SCR-10 gives the method (UX-28).
+**One total only, plus the total Tool Cost (D-16, Q-31 answered).** BL, BN and BO appear once, in row 2, and the file has no per-item totals. The export now knowingly differs from the sample on this point (SPEC §14.12). The total Tool Cost, the plain sum of BM with no quantity, cannot go in row 2, because BM2 is the first node's own Tool Cost. It goes in a **footer row at `lastNodeRow + 2`**, so one row stays empty between the last node and the footer: the value in the Tool Cost column, with the label "Total Tool Cost" in the cell to its left. With 10 parts in rows 2 to 11, the footer is row 13. UX spec v0.3 places it the same way (section 16.9). It sits directly under column BM, follows that column if letters move (`systemRole: 'tool-cost'`), and changes no node row. The label is written in every file; the value is empty only while `none`. With no Tool Cost entered, a `current` file shows 0 and BN2 stays empty. The value comes from `product_values.toolCostTotal`, so an approved file never changes. Adding up the exported BG column gives BL, at any quantity.
 
 **What the file holds, by state (section 4.8).**
 
 | Cell | `none` | `current` | `out-of-date` |
 |------|--------|-----------|---------------|
-| Node rows | Inputs; outputs empty (A-05) | The calculation record | The last record, inputs and costs together, so each row agrees with itself (ASSUMPTION-55) |
-| BL2, BN2 | Empty | Filled | **Empty** |
-| BO2 | Empty | Filled while an approval is active | **Empty** |
-| Footer, total Tool Cost | Empty | Filled | **Empty** |
+| Node rows | Inputs; outputs empty (A-05) | The calculation record | **No file** |
+| BL2, BN2 | Empty | Filled | **No file** |
+| BO2 | Empty | The latest approved price, if there is one (Q-37 (c)) | **No file** |
+| Footer, total Tool Cost | Empty | Filled | **No file** |
 
-**An out-of-date figure cannot leave unnoticed (architect's addition to ASSUMPTION-55).** Row costs are still in the file, so four things mark it. All four apply only in the `out-of-date` state, and Q-37 can remove them.
+**The download is refused while figures are cleared (Q-37 (b)).** "Yes, block the portal when the total is not calculated or recalculated" (AQP-1 comment 10545). While `out-of-date`, `GET /export` returns 409 `EXPORT_OUT_OF_DATE`, with no way round it, and SCR-10 says why and links to Recalculate. The stated choice, the `_OUT-OF-DATE` file name, the `OUT OF DATE` sheet tab, the notice row and the confirmation dialog are all gone.
 
-1. **A stated choice first.** `GET /export` returns 409 `EXPORT_OUT_OF_DATE` unless the request carries `allowOutOfDate=true`, which SCR-10 sends only after a Lead confirms a dialog (UX-30). An old link cannot fetch such a file by accident.
-2. **File name:** `Quotation_<Customer>_<TaskId>_<YYYY-MM-DD>_OUT-OF-DATE.xlsx`.
-3. **Sheet tab** named `OUT OF DATE`.
-4. **A notice row** at `lastNodeRow + 3`, directly under the footer, with the text in **column A** so that it shows when the file opens, not far to the right under BM: "OUT OF DATE. Inputs changed after this calculation on <IST time>. Press Recalculate and download again." The time is that of the calculation in the file.
+The state is read in the same repeatable-read transaction that builds the file, never taken from an earlier `export-summary`, so a change between the two cannot slip through. An approved estimate cannot reach this state: its inputs are locked. **Limits:** a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it; the date in its name is the only signal. And their words "not calculated" could also reach an estimate that was never calculated, which still exports its inputs (A-05, FR-070, A-32).
 
-The state is read in the same repeatable-read transaction that builds the file, never taken from an earlier `export-summary`, so a change between the two cannot slip through. On that 409 the client opens SCR-10's confirmation. An approved estimate cannot reach this state: its inputs are locked. **Limits:** a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it; the date in its name is the only signal. And an out-of-date file for a single-piece product shows the old total in that row's BG, because the file keeps row costs (section 4.8).
-
-The decisions on row-2 cells, the footer and the markers live in one file, `src/server/export/product-cells.ts`. The optional override reason goes in no cell (FR-103, PRD v0.7). Cell values are full-precision numbers with a two-decimal number format, so Excel's own sums reconcile with the stored values. Text goes in as strings only, so nothing an Engineer types can become a live formula.
+The decisions on row-2 cells and the footer live in one file, `src/server/export/product-cells.ts`. The optional override reason goes in no cell (FR-103, PRD v0.7). Cell values are full-precision numbers with a two-decimal number format, so Excel's own sums reconcile with the stored values. Text goes in as strings only, so nothing an Engineer types can become a live formula.
 
 **Measured feasibility (Evidence, 2026-11-01).** Throwaway benchmark with invented data on an Intel i7-10510U with 8 GB, Node 24, in-memory ExcelJS 4.4.0, 67 columns, one incompressible 199 KB image per row. Excludes database reads. Runs shared one process, so memory figures are upper bounds. This is not the target host and not the target Node version.
 
@@ -528,11 +468,9 @@ In `oauth2-client-credentials` mode, a small function posts to `https://login.mi
 
 **Sources (read 2026-11-01).** [Microsoft Learn: send email from an application](https://learn.microsoft.com/en-us/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365); [Enable or disable SMTP AUTH](https://learn.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission); [OAuth for SMTP](https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth); [Outlook.com settings](https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040); [Nodemailer OAuth2](https://nodemailer.com/smtp/oauth2). **The December 2026 date is second-hand:** [Microsoft's post of 27 January 2026](https://techcommunity.microsoft.com/blog/exchange/updated-exchange-online-smtp-auth-basic-authentication-deprecation-timeline/4489835) could not be read directly with the tools here, so it rests on search summaries and [Office 365 IT Pros](https://office365itpros.com/2026/01/29/smtp-auth-basic-retirement/). The IT person should check the current position.
 
-### 4.8 Cleared totals (FR-100, FR-101, D-20, Q-37)
+### 4.8 Cleared figures (FR-100, FR-101, D-20, Q-37)
 
-**Decision (their words, relayed).** "Block approval. And clear the total cost when any input is updated. So, the user will be forced to press calculate or recalculate to see the total cost." "Any input" is applied as written, so Remarks counts.
-
-**Working assumption (ASSUMPTION-55, Q-37 open).** Only the total (BL) is cleared, with what comes from it. Each part's own cost stays as last calculated and is marked out of date. The export leaves BL2 and BN2 empty and carries row costs as last calculated. A price approved before an unlock stays in the history and is not shown as the current price. This section applies that, plus two additions by the architect, both marked below, so the working assumption does not leak a total or let an old figure leave unnoticed.
+**Decision (their words, relayed).** "Block approval. And clear the total cost when any input is updated. So, the user will be forced to press calculate or recalculate to see the total cost." "Any input" is applied as written, so Remarks counts. Q-37 settled the rest (AQP-1 comment 10545): (a) each row's own cost clears too, "Yes"; (b) "Yes, block the portal when the total is not calculated or recalculated"; (c) the earlier approved price "should stay until it's approved again or be removed".
 
 **"Cleared" is a rule on reading, not a change to a record.** `calculations` is immutable and the database refuses updates (ADR-007), and an approved calculation must survive. So nothing is deleted or nulled. `lib/estimate/figure-state.ts` works out one state from data already held, and every read of a figure goes through it.
 
@@ -542,38 +480,38 @@ In `oauth2-client-credentials` mode, a small function posts to `https://login.mi
 | `current` | `estimates.inputs_revision = calculations.inputs_revision` | Calculate, Recalculate |
 | `out-of-date` | The revisions differ | Any input change |
 
-The clearing is server-side: the `/costs` projection omits the values, so no browser state can show them.
+**One rule: no calculated value is read unless the state is `current`.** The clearing is server-side: the projections omit the values, so no browser state can show them. Because the rule has no exceptions by column or by row, the earlier special cases, parent figures, item totals and a single-piece row, have gone with their figures.
 
 **What counts as an input change.** Every write that bumps `inputs_revision`, in the same transaction, which also serialises against Calculate through the estimate row:
 
 - a changed value in any input field, including Remarks;
 - a changed customer;
 - a part image added, replaced or removed;
-- a part added, deleted, moved or reordered. **A move to another parent changes the price under the every-level rule**, so this one is not cosmetic.
+- a part added, deleted, moved or reordered. **Under the whole-order rule a move or a reorder no longer changes BL**, as a row's count is typed. It still clears (A-29): the calculation record holds a copy of the tree, so its Sl. No would be out of date.
 
-**A save that changes nothing is not a change.** The 30-second autosave (SPEC §11) and a repeated PATCH must not clear a total. `estimate-service` compares normalised values in the transaction (`1.50` equals `1.5`) and bumps only on a real difference. Changing a value and changing it back still counts as two changes, and the total stays cleared.
+**A save that changes nothing is not a change.** The 30-second autosave (SPEC §11) and a repeated PATCH must not clear a total. `estimate-service` compares normalised values in the transaction (`1.50` equals `1.5`) and bumps only on a real difference. Changing a value and changing it back still counts as two changes, and the figures stay cleared.
 
 **What each figure does.**
 
 | Figure | `current` | `out-of-date` |
 |--------|-----------|---------------|
-| BL, BN | Shown | **Withheld** (ASSUMPTION-55) |
-| Approved Quote Price pre-fill | BL | **Withheld**; SCR-08 cannot open |
-| Total Tool Cost | Shown | **Withheld** with BN, which it feeds (D-20 reading) |
-| Item totals and every parent's Σ figure (`rollup`) | Shown | **Withheld (architect's addition).** T(item) is a share of BL, and with one item it **is** BL. Leaving these on screen would show the cleared total under another name |
-| A row's own costs (`outputs`) | Shown | Shown, marked out of date (ASSUMPTION-55), except the next line |
-| BG, BJ, BK of a top-level item with no rows below it | Shown | **Withheld on screen (architect's addition, v0.4).** For such a row T(item) is its own BG, and in a one-row estimate that is BL itself. A single-piece product is such a row (DL-012), so the cleared total would stay on screen as a part figure. Its other stage lines stay, as on any row. `figure-state` decides this in one place, from the tree. The file keeps the row (section 4.6), as it is confirmed and marked, and Q-37 can change that |
-| Reconciliation on SCR-06 and SCR-10 | Shown | Withheld |
-| Quantity warnings (`calculations.warnings`, section 4.3) | Shown | Not shown: the list may be stale, and Recalculate raises it afresh. They hold no figure, so this is for accuracy and not secrecy |
-| BO, current price | Shown if an approval is active (`unlocked_at` is null) | Not shown, as no approval is active. History keeps it |
+| BL, BN | Shown | **Cleared** |
+| Approved Quote Price pre-fill | BL | **Cleared**; SCR-08 cannot open |
+| Total Tool Cost | Shown | **Cleared** |
+| Every row's calculated values (`outputs`, M to BK) | Shown | **Cleared** (Q-37 (a)). Weights go with the costs: the question named costs, and one rule per column set is simpler than sorting them (A-31) |
+| Reconciliation on SCR-06 and SCR-10 | Shown | **Cleared** |
+| Quantity warnings (`calculations.warnings`, section 4.3) | Shown | Not shown: the list may be stale, and Recalculate raises it afresh |
+| The Excel file | Downloads | **Refused** (Q-37 (b); section 4.6) |
+| **BO, the latest approved price** | Shown | **Stays** (Q-37 (c)), labelled as approved earlier if the estimate has been unlocked. It is the one figure that clears for nothing except a new approval |
+| Inputs, H included | Shown | Shown: they are what the person is changing |
 
 **Approval.** `POST /approve` runs under the estimate row lock and refuses with 409: `NOT_CALCULATED` for `none`, `TOTALS_OUT_OF_DATE` for `out-of-date`. `calculationId` must still match, so a figure that changed under a Lead cannot be approved. The check lives on the server: SCR-08 being closed is only a convenience.
 
-**Unlock.** Unlock alone changes no input, so figures stay `current` and SCR-06 keeps showing them, as UX-04 expects. The state is DRAFT, so approval still needs a Recalculate, which reads current rates (FR-063). The approved price is not shown as current from the moment of unlock.
+**Unlock and the earlier price.** Unlock alone changes no input, so figures stay `current` and SCR-06 keeps showing them, as UX-04 expects. The state is DRAFT, so approval still needs a Recalculate, which reads current rates (FR-063). **The approved price stays** through the unlock and any later input change, labelled as approved earlier, until a new approval replaces it. BO is simply the latest `approvals` row, so no "active approval" test is needed. An earlier row stays on record after that, for the audit trail. **"Or be removed":** the design has no way to delete an estimate, so today only a new approval replaces the price. The orchestrator's reading is being put back to them (A-30).
 
 **Engineers.** No Engineer route carries the state. An Engineer never sees a figure, so nothing there changes, and a status is not a cost. Rate and configuration changes after a calculation do not count as input changes: that stays OQ-ARCH-06 and OQ-UX-16.
 
-**Export.** See section 4.6. The file cannot carry an out-of-date figure unnoticed.
+**Export.** See section 4.6. No file leaves while figures are cleared.
 
 ### 4.9 "Not applicable" entries (FR-018, D-17, Q-36)
 
@@ -588,7 +526,7 @@ The clearing is server-side: the `/costs` projection omits the values, so no bro
 | Where it is returned | `GET /options/materials` and `/options/treatments`, for the drop-down, and the calculation's own lookup (A-17). `materialConsidered` comes back null |
 | Cannot be edited or deleted | `PATCH` or `DELETE` on a hidden ID returns 404, the same as an unknown ID, so the Admin API does not confirm it exists. A database trigger refuses `UPDATE` and `DELETE` where `is_hidden`, so this holds even if the service is wrong |
 | Cannot be imitated | `POST` or `PATCH` with that name, in any letter case, returns 422 `NAME_RESERVED`. The message does not name the entry |
-| As a part's value | Per ASSUMPTION-54 the words show where a part's Material or Treatment is shown, including the export: `calculation_rows.inputs` holds the resolved text |
+| As a part's value | **Their answer (Q-36, AQP-1 comment 10544):** "a) Yes / b) Everyone can see the fields with "Not Applicable" text". So it is offered to a Lead or Admin editing a part, and the words show to everyone where a part's Material or Treatment is shown, including the export: `calculation_rows.inputs` holds the resolved text. This narrows their earlier "do not show this anywhere": the words show on parts, and the zero values and master-list entries stay hidden |
 | Its zero rates | The evaluator gets 0, and the snapshot keeps them. They are never served: F and I are blank for such a row on screen and in the export. `GET /nodes/{nodeId}/costs` leaves `Material-*` and I out of the operands on that row, so SCR-07 prints no worked line for M, O and AK (UX-34) |
 
 **Negative Scrap Weight.** With Specific Gravity 0, Blank Weight M is 0, so `O = M - N` gives `-N` whenever Part Weight N is above 0. AK is still 0 with the seed formulas, because the scrap rate is 0, so no price changes. It still needs handling: a negative weight would appear on SCR-07 and in the export, and a later Admin formula that reads O, such as a Rejection rule in BC, would pick it up as a real number.
@@ -647,9 +585,9 @@ erDiagram
 | `estimates` | `task_id` (unique), `customer_id` (null until chosen), `status`, `inputs_revision`, `current_calculation_id` | Confidential | Every input change bumps `inputs_revision`, in the same transaction (section 4.8) |
 | `estimate_nodes` | `estimate_id`, `parent_id`, `sort_index`, `inputs` JSONB, `image_id`, `revision` | Confidential | Inputs only. Sl. No is derived, never stored here |
 | `part_images` | `sha256`, `mime`, `bytes` bytea, `size_bytes`, `file_name` | Confidential | Immutable; deduplicated per estimate. `file_name` is display text on SCR-05, sanitised |
-| `calculations` | `estimate_id`, `config_version_id`, `inputs_revision`, `master_snapshot` JSONB, `product_values` JSONB, `item_totals` JSONB, `warnings` JSONB, `created_by` | Restricted | Immutable. FR-031. `product_values` holds BL, BN and `toolCostTotal`. `warnings` defaults to `[]` and holds the warnings acknowledged for this calculation; its `created_by` and time are that acknowledgement (section 4.3) |
-| `calculation_rows` | `calculation_id`, `node_id`, `parent_id`, `sort_index`, `sl_no`, `inputs` JSONB, `image_id`, `outputs` JSONB, `rollup` JSONB | Restricted | Immutable. A full copy of the tree as calculated. `rollup` holds T(row) and `multiplierAbove`. `inputs` holds **resolved display text** for E, F and G, so renaming a material or treatment later cannot change an approved estimate |
-| `approvals` | `estimate_id`, `calculation_id`, `approved_price`, `calculated_bl`, `is_override`, `override_reason`, `approved_by`, `approved_at`, `unlocked_by`, `unlocked_at`, `unlock_reason` | Restricted | BO lives here. One row per approval cycle; the active one has `unlocked_at` null. Override rule: A-12. `override_reason` is optional text of at most 500 characters (D-18), null unless `is_override`, and is copied to the audit row |
+| `calculations` | `estimate_id`, `config_version_id`, `inputs_revision`, `master_snapshot` JSONB, `product_values` JSONB, `warnings` JSONB, `created_by` | Restricted | Immutable. FR-031. `product_values` holds BL, BN and `toolCostTotal`. `warnings` defaults to `[]` and holds the warnings acknowledged for this calculation; its `created_by` and time are that acknowledgement (section 4.3) |
+| `calculation_rows` | `calculation_id`, `node_id`, `parent_id`, `sort_index`, `sl_no`, `inputs` JSONB, `image_id`, `outputs` JSONB | Restricted | Immutable. A full copy of the tree as calculated. `inputs` holds **resolved display text** for E, F and G, so renaming a material or treatment later cannot change an approved estimate |
+| `approvals` | `estimate_id`, `calculation_id`, `approved_price`, `calculated_bl`, `is_override`, `override_reason`, `approved_by`, `approved_at`, `unlocked_by`, `unlocked_at`, `unlock_reason` | Restricted | BO lives here. One row per approval cycle, and BO is the latest row, whether or not it has been unlocked (Q-37 (c)). `unlocked_at` says it was unlocked. Override rule: A-12. `override_reason` is optional text of at most 500 characters (D-18), null unless `is_override`, and is copied to the audit row |
 | `audit_log` | `actor_id`, `event`, `object_type`, `object_id`, `object_label`, `before`, `after`, `request_id` | Restricted | Append-only. Admin read only. `object_label` keeps the name at that time (SCR-16) |
 | `email_outbox` | `idempotency_key` (unique), `event`, `to`, `cc`, `subject`, `body_html`, `body_text`, `status`, `attempts`, `next_attempt_at`, `last_error` | Internal | Is also the e-mail log (DR-013) |
 | `job_runs` | `job`, `started_at`, `finished_at`, `result` | Internal | Also records each weekly backup (`job = 'backup'`) |
@@ -715,7 +653,7 @@ Prisma Migrate only. `prisma migrate dev` locally, `prisma migrate deploy` throu
 
 **Style.** JSON over HTTPS. Route Handlers under `/api/v1`. Server Components call services directly for first paint, through the same projections. **Server Actions are not used** (ADR-010), so every entry point appears in the manifest and can be tested. Roles: **A** Admin, **L** Lead, **E** Engineer; **E own** means only the Engineer's own task. Versioning: the path prefix `/api/v1`, for the portal's own client only; no external consumers in scope.
 
-**One route, one schema (added at reconciliation).** A route an Engineer can call has exactly one response schema, with no cost field, **whoever calls it**. Lead and Admin extras come from separate routes that an Engineer cannot call. So `GET /tree` and `GET /form` return the same shape to everyone, and the Σ figures, item totals and Material Rate (I) that SCR-06 needs come from `GET /costs` and `GET /nodes/{nodeId}/costs`. Draft v0.1 had `/tree` add figures for Lead and Admin by role. That is the kind of branch where a mistake leaks a value, so it is gone.
+**One route, one schema (added at reconciliation).** A route an Engineer can call has exactly one response schema, with no cost field, **whoever calls it**. Lead and Admin extras come from separate routes that an Engineer cannot call. So `GET /tree` and `GET /form` return the same shape to everyone, and the row figures, totals and Material Rate (I) that SCR-06 needs come from `GET /costs` and `GET /nodes/{nodeId}/costs`. Draft v0.1 had `/tree` add figures for Lead and Admin by role. That is the kind of branch where a mistake leaks a value, so it is gone.
 
 **Page addresses.** `/queue` (bell target `/queue?tab=overdue`, with `assignedBy=me` for a Lead so the tab matches the bell count), `/estimates/<code>` where `<code>` is `Q-YYYY-NNNN`, `/estimates/<code>/costs/<slNo>`, `/estimates/<code>/export`. One address serves SCR-05 to an Engineer and SCR-06 to Lead and Admin, as separate component trees and loaders. API paths below use the UUID that the page has loaded.
 
@@ -734,7 +672,7 @@ A warning that needs an acknowledgement (section 4.3) has the same frame. It is 
 ```json
 { "type": "about:blank", "title": "Please confirm", "status": 409,
   "code": "CALCULATE_ACK_REQUIRED", "requestId": "req-…", "inputsRevision": 42,
-  "warnings": [{ "code": "QTY_ZERO_ABOVE_PARTS", "nodeId": "…", "fieldId": "…",
+  "warnings": [{ "code": "QTY_ZERO", "nodeId": "…", "fieldId": "…",
                  "slNo": "…", "label": "…", "message": "…" }] }
 ```
 
@@ -784,16 +722,16 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | Image | `PUT, DELETE /estimates/{id}/nodes/{nodeId}/image`; `GET /images/{id}` | Multipart file | Image reference; bytes | 413, 415 | A L; E own | Yes | R1 |
 | Calculate | `POST /estimates/{id}/calculate` | None, or `{acknowledge: {inputsRevision}}` from the 409 (section 4.3) | `{status, message}`, nothing else, with or without an acknowledgement | 409 (including `CALCULATE_ACK_REQUIRED`, with no cost), 422 (`CALCULATE_BLOCKED`) | E own, DRAFT | Status guard | R1 |
 | Recalculate | `POST /estimates/{id}/recalculate` | None, or `{acknowledge: {inputsRevision}}`, as Calculate. SCR-06's "Calculate" button for a Lead calls this route (A-08) | Costs | 409 (including `CALCULATE_ACK_REQUIRED`), 422 (`CALCULATE_BLOCKED`, the same checks as Calculate) | A L | Yes | R1 |
-| Costs | `GET /estimates/{id}/costs` | none | State of figures (`none`, `current`, `out-of-date`), calculated at, configuration number. The latest approval: approver, time, price, override, reason; unlock by, time, reason. By node, whenever a calculation exists: H, own BG, BJ and BK, flagged while `out-of-date`, except a childless top-level item (section 4.8). Only while `current`: BL, BN, item totals, Tool Cost total and count, Σ figures and multiplier by node, and the quantity warnings with who went ahead and when. BO only while an approval is active | 404 | A L | Yes | R1 |
-| Cost details | `GET /estimates/{id}/nodes/{nodeId}/costs` | none | Stages, formulas, operands at stored precision, values, the pair of figures, own row plus children's figures, I. While `out-of-date`: row values only, flagged, with no Σ figure, and no BG, BJ or BK for a childless top-level item. On a "Not applicable" row: no `Material-*` or I operands (section 4.9) | 404 | A L | Yes | R1 |
+| Costs | `GET /estimates/{id}/costs` | none | State of figures (`none`, `current`, `out-of-date`), calculated at, configuration number. The latest approval: approver, time, price, override, reason; unlock by, time, reason. Only while `current`: by node, H, own BG, BJ and BK; BL, BN, Tool Cost total and count; and the quantity warnings with who went ahead and when. BO, the latest approved price, whenever there is one (section 4.8) | 404 | A L | Yes | R1 |
+| Cost details | `GET /estimates/{id}/nodes/{nodeId}/costs` | none | Stages, formulas, operands at stored precision, values, I, for that row alone, only while `current`. While `out-of-date`: the state alone, with no values. On a "Not applicable" row: no `Material-*` or I operands (section 4.9) | 404 | A L | Yes | R1 |
 | Approve | `POST /estimates/{id}/approve` | `calculationId`, price, optional `reason` (at most 500 characters; kept only on an override) | Approval | 409 (`NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, changed `calculationId`, wrong status), 422 | A L | Status guard | R1 |
 | Unlock preview | `GET /estimates/{id}/unlock-preview` | none | Configuration versions; counts of changed rates | 409 | A L | Yes | R1 |
 | Unlock | `POST /estimates/{id}/unlock` | Reason | Estimate | 409, 422 | A L | Status guard | R1 |
-| Export | `GET /estimates/{id}/export` | `allowOutOfDate=true`, required while `out-of-date` | `.xlsx`, attachment, `no-store` | 404, 409 (`EXPORT_OUT_OF_DATE`), 503 | A L | Yes | R1 |
-| Export summary | `GET /estimates/{id}/export-summary` | none | File name, row and picture counts, state of figures, the approved price's difference and reason. Whenever a calculation exists, by row: H, own BG and BM as the file holds them. Only while `current`: total Tool Cost, the screen figure and multiplier above by row, reconciliation, and the quantity warnings with who went ahead and when | 404 | A L | Yes | R1 |
+| Export | `GET /estimates/{id}/export` | none | `.xlsx`, attachment, `no-store` | 404, 409 (`EXPORT_OUT_OF_DATE`, always while `out-of-date`), 503 | A L | Yes | R1 |
+| Export summary | `GET /estimates/{id}/export-summary` | none | File name, row and picture counts, state of figures, the approved price's difference and reason. Only while `current`: by row, H, own BG and BM as the file holds them; total Tool Cost, reconciliation, and the quantity warnings with who went ahead and when | 404 | A L | Yes | R1 |
 | Configuration | `GET /config/fields`; `GET /config/current` | none | Fields, formulas, letters; version, saved by and at, estimates in use | 403 | A L | Yes | R1 read; R2 UI |
 | Sample rows | `GET /config/sample-rows` | none | Rows of the latest calculated estimate, for preview (UX-11) | 403 | A | Yes | R2 |
-| Formula check | `POST /config/formula-check` | Text, sample row | Valid or message, fields used, fields fed; preview; a warning, not an error, when a field that held `ROLLUP` stops using it (SCR-18) | 422 | A | Yes | R2 |
+| Formula check | `POST /config/formula-check` | Text, sample row | Valid or message, fields used, fields fed; preview | 422 | A | Yes | R2 |
 | Save formula | `PUT /config/fields/{id}/formula` | Text, password | New version | 409 (system field), 422 | A, step-up | No | R2 |
 | Insert preview | `POST /config/fields/preview` | Insert spec, one or two fields | Letter changes, moved cells | 422 | A | Yes | R2 |
 | Insert field | `POST /config/fields` | Insert spec, one or two fields | One new version | 422 | A | No | R2 |
@@ -823,7 +761,7 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | NFR-005 | 0 wrong-type files | Own magic-byte check for four formats, size check, stored MIME, `nosniff`; React escaping; zod; no `dangerouslySetInnerHTML` | `image-service`, `lib/images` | Renamed text file, 201 KB image, polyglot; XSS payload in every text field |
 | NFR-006 | 0 findings | Gitleaks in CI; data-file allow-list; placeholder pattern test; GitHub secret scanning; section 5.5 | CI | CI stages on every PR |
 | NFR-007 | 100 %; 0 editable | Audit row in the same transaction; DB trigger and grants | `audit-service`, migrations | One test per event type; direct SQL `UPDATE` refused |
-| NFR-008 | p95 < 2 s, 500 nodes | Compiled plan cached per version; O(n) roll-up; one read per kind; `createMany` in one transaction. **Evidence:** engine shape alone, p95 136 to 153 ms over 20 runs (500 nodes, 45 outputs, 3 operators each) on the laptop in section 4.6; the every-level roll-up adds about 6 ms at worst, on a 500-deep chain (section 4.3); leaves over 1.8 s for reads and writes | `calculation-service`, `lib/formula` | Timed test on a 500-node fixture; machine recorded |
+| NFR-008 | p95 < 2 s, 500 nodes | Compiled plan cached per version; one read per kind; `createMany` in one transaction. **Evidence:** engine shape alone, p95 136 to 153 ms over 20 runs (500 nodes, 45 outputs, 3 operators each) on the laptop in section 4.6; BL is one `SUM` in that plan (section 4.3); leaves over 1.8 s for reads and writes | `calculation-service`, `lib/formula` | Timed test on a 500-node fixture; machine recorded |
 | NFR-009 | ≤ 2 s on 5 key screens | Server Components for first paint; tree skeleton then per-node fetch; route-level code splitting; self-hosted fonts; no images from `next/image`; skeleton states | `src/app` | Lighthouse CI on the mobile preset: LCP ≤ 2 s, TBT ≤ 200 ms (definition in `test-strategy.md` section 8) |
 | NFR-010 | p95 ≤ 500 ms at 25 users; export 50 nodes ≤ 10 s | Indexed queries; `select` of needed columns; bounded pool; export on a worker thread. **Feasible:** export measured at under 2 s; the 500 ms target is unmeasured, and is a reasoned estimate for small indexed queries on one host | `app`, `db` | k6 load test on staging; export timing test |
 | NFR-011 | 50 users, 25 concurrent, 500 nodes; 2 × headroom | Single host is sized for 50 concurrent; pools hold; nothing scales with named users | `app`, `db` | k6 at 25 and at 50 concurrent |
@@ -911,7 +849,7 @@ It applies wherever a password is set (ASSUMPTION-56): `POST /account/password`,
 | TB-2 | Engineer calls a Lead API directly | Elevation of privilege | Server role check on every route; role-matrix test |
 | TB-2 | Calculated value slips into an Engineer payload (RSC props, debug field) | Information disclosure | Separate tables, import rule, strict schemas, canary scan |
 | TB-2 | Engineer infers a cost from timing, status or errors | Information disclosure | One fixed message; no number in any error; Calculate is the same call whatever the result |
-| TB-2 | Engineer infers a cost from the quantity warning | Information disclosure | The rule reads only typed H and tree shape, before any master or cost is read, so the 409 cannot vary with a cost, in content or timing; one strict schema; canary scan on this path |
+| TB-2 | Engineer infers a cost from the quantity warning | Information disclosure | The rule reads only typed H, before any master or cost is read, so the 409 cannot vary with a cost, in content or timing; one strict schema; canary scan on this path |
 | TB-2 | Engineer denies going ahead past a warning, or a stale acknowledgement passes a new 0 | Repudiation, Tampering | The calculation's `created_by` and `warnings`, plus an audit row, in one transaction; the acknowledgement must match `inputs_revision` under the row lock |
 | TB-2 | Engineer opens another Engineer's task | Information disclosure | Ownership in the service; 404, not 403 |
 | TB-2 | Engineer changes a submitted or approved estimate | Tampering | State machine in the service, under the row lock |
@@ -1024,7 +962,7 @@ Rollback: set the previous image tag and `up -d`. Expand-then-contract migration
 
 Nothing is built for offline and no room is reserved beyond what costs nothing (RISK-004). These choices were made for other reasons and leave the door open:
 
-- `src/lib/formula` and `src/lib/rollup` are pure TypeScript with no I/O.
+- `src/lib/formula` is pure TypeScript with no I/O.
 - Node IDs are client-generated UUIDs and writes carry a revision, which suits a client that syncs later.
 - Compose runs on any machine with Docker, so a full local copy stays possible.
 
@@ -1058,7 +996,6 @@ What would conflict: a local copy would place rates on a machine (BRQ-002, RISK-
 │   │   └── features/        estimate-workspace, estimate-review, tree, queues, masters, config
 │   ├── lib/                 Pure code: no I/O, no Next.js, no Prisma
 │   │   ├── formula/         tokenizer, parser, ast, graph, evaluator, internal-form
-│   │   ├── rollup/          roll-up.ts, quantity-step.ts
 │   │   ├── estimate/        state-machine, tree, validation, completeness, figure-state
 │   │   ├── auth/            password-rule, common-passwords list
 │   │   ├── fields/          registry types, config edits, visibility rules
@@ -1097,9 +1034,9 @@ Tests stay under `tests/e2e/` rather than the template's `e2e/`, so that one wri
 |------|-------------|
 | `src/lib/**` imports nothing from `src/server`, `src/app`, `src/components`, Prisma or `next/*` | ESLint `no-restricted-imports` |
 | Only `src/server/repositories/**` imports the Prisma client | ESLint |
-| `src/server/views/engineer-*.ts` and Engineer pages may not import cost repositories, `lib/formula` or `lib/rollup` | ESLint, build failure |
-| `src/lib/formula/**` and `src/lib/rollup/**` start with `import 'server-only'` | Build error if a client component imports them |
-| Only `src/lib/rollup/roll-up.ts` imports `quantity-step.ts` | Architecture test |
+| `src/server/views/engineer-*.ts` and Engineer pages may not import cost repositories or `lib/formula` | ESLint, build failure |
+| `src/lib/formula/**` starts with `import 'server-only'` | Build error if a client component imports them |
+| H is an operand in BB alone among the seed formulas, and BL is `SUM` over the `unit-price` field | Tests, `test-strategy.md` section 5.4 |
 | No figure is read from `calculations` for a screen or a file without going through `figure-state` | Architecture test |
 | Only `master-repository` may read `is_hidden` rows, through its separately named method | Architecture test |
 | Every route file uses `withRoute` and is in the manifest | Architecture test |
@@ -1175,7 +1112,7 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 
 ## 12. Coverage Matrix
 
-Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `server/views`; **Users, Masters, Tasks, Estimates, Calc, Approval, Config, Export, Images, Audit, Settings** the matching services; **Formula** `lib/formula`; **Rollup** `lib/rollup`; **EstLib** `lib/estimate`; **Fields** `lib/fields`; **Time** `lib/time.ts`; **Jobs** `server/jobs` and `worker`; **Mail** `server/mail`; **UI** `src/components` and `src/app`; **Ops** Compose, scripts, README.
+Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `server/views`; **Users, Masters, Tasks, Estimates, Calc, Approval, Config, Export, Images, Audit, Settings** the matching services; **Formula** `lib/formula`; **EstLib** `lib/estimate`; **Fields** `lib/fields`; **Time** `lib/time.ts`; **Jobs** `server/jobs` and `worker`; **Mail** `server/mail`; **UI** `src/components` and `src/app`; **Ops** Compose, scripts, README.
 
 | Requirement (FR/NFR) | Component(s) | Notes |
 |----------------------|--------------|-------|
@@ -1200,15 +1137,15 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-019 | Settings, Mail | R2; sender open, OQ-ARCH-11 |
 | FR-020 | Fields, seed | ADR-004 |
 | FR-021 | `lib/columns.ts` | Derived, never stored |
-| FR-022 | Formula | Adds `ROLLUP`, and comparisons inside `IF` (section 16.8) |
+| FR-022 | Formula | Comparisons inside `IF` (section 16.8). `ROLLUP` is removed: BL is `SUM(BG)` |
 | FR-023 | Formula, Config | Kahn's algorithm; reports the cycle |
 | FR-024 | Formula, Calc | Section 4.2 |
-| FR-025 | Formula, Rollup, Calc | BL and BN are product-scope formulas |
+| FR-025 | Formula, Calc | BL and BN are product-scope formulas |
 | FR-026 | Formula, `lib/format.ts`, Export | `null` value type; A-07 |
 | FR-027 | Calc, Formula | 34 digits; section 5.1 |
 | FR-028 | Formula | Rate resolver divides by 100 in one place |
-| FR-029 | Rollup, Views | T(row) on screen, own row in the export; section 4.3 |
-| FR-030 | Rollup | Every level's quantity, `applyQuantityStep`; section 4.3 |
+| FR-029 | Views, UI | A parent shows only its own row, on screen and in the export; section 4.3. The FR's text is for product-manager to follow |
+| FR-030 | Formula | `SUM(BG)` over all rows, with no multiplying down the tree; section 4.3. The FR's text is for product-manager to follow |
 | FR-031 | Calc | `master_snapshot` |
 | FR-032 | Tasks | One transaction with the empty estimate |
 | FR-033 | UI, Tasks | Path validated; copy button |
@@ -1234,7 +1171,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-053 | Estimates, UI | Partial PATCH accepted |
 | FR-054 | UI, Estimates | R1+; same PATCH; revision guard |
 | FR-055 | Calc, EstLib, Views | Fixed response for Engineers |
-| FR-056 | EstLib, Formula | 0 is a value; blank is not. A 0 in H warns: FR-104 |
+| FR-056 | EstLib, Formula | 0 is a value; blank is not. A 0 in H affects only its own row, and warns: FR-104 |
 | FR-057 | EstLib, UI | R1+; completeness in the tree DTO |
 | FR-058 | Views, UI | Lead view only |
 | FR-059 | Views, UI | Generic `hideWhenZero` |
@@ -1248,7 +1185,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-067 | Export | Depth-first from the record; Sl. No as text; images in column C |
 | FR-068 | Export | All columns; `null` is an empty cell |
 | FR-069 | Export | `product-cells.ts`; one total, footer for total Tool Cost (D-16) |
-| FR-070 | Http, Export | L and A only; at any status; `out-of-date` needs a stated choice and is marked (section 4.6) |
+| FR-070 | Http, Export | L and A only; refused while `out-of-date` (section 4.6). The FR's text is for product-manager to follow |
 | FR-071 | Export | Sanitised customer name; suffix when out of date |
 | FR-072 | Config, UI | R2 |
 | FR-073 | Config, Formula, UI | R2; server check per pause |
@@ -1282,7 +1219,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-101 | Approval | 409 under the row lock; section 4.8 |
 | FR-102 | Views, UI | A status is not a cost; no Engineer route carries figure state |
 | FR-103 | Approval, Audit, UI | `override_reason`; section 5.1 |
-| FR-104 | EstLib, Calc, Views, Audit, UI | `quantityWarnings`, 409 `CALCULATE_ACK_REQUIRED`, `calculations.warnings`; section 4.3. Covers every 0 since Q-38; the FR's text is for product-manager to follow |
+| FR-104 | EstLib, Calc, Views, Audit, UI | `quantityWarnings`, 409 `CALCULATE_ACK_REQUIRED`, `calculations.warnings`; section 4.3. Every 0, on every row (Q-41). The FR's text is for product-manager to follow |
 | FR-105 | Settings, UI | `job_runs`; the `GET /settings` line and `backup-watch`'s 8 days (section 9.5). PROPOSED: built only if OQ-ARCH-12 allows it |
 | NFR-001 | Http, Auth | Section 7 |
 | NFR-002 | Views, Formula | Section 7, ADR-008 |
@@ -1291,7 +1228,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | NFR-005 | Images | Section 8 |
 | NFR-006 | CI, repository rules | ADR-014 |
 | NFR-007 | Audit, migrations | Section 8 |
-| NFR-008 | Calc, Formula, Rollup | Measured headroom, section 7 |
+| NFR-008 | Calc, Formula | Measured headroom, section 7 |
 | NFR-009 | UI | Section 7 |
 | NFR-010 | App, db, Export | Section 7 |
 | NFR-011 | Ops | Section 3 sizing |
@@ -1321,7 +1258,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 
 All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Accepted" settles the design decision. It does not settle a labelled assumption underneath it, so the table says where one remains. DL-009 limits what APPROVED (AQP-1 comment 10491) covers: the wider clearing and the out-of-date export are `master`'s acceptance of a working design, not the delivery lead's.
 
-**Revised for v0.3:** ADR-002, 004, 006, 007, 009, 011, 012 and 013. **Revised for v0.4:** ADR-006, 009 and 012. **Revised for v0.5:** ADR-006, 007 and 008, for Warn and the Q-35 (a) answer, for `master` to check at G4. **Revised for v0.6:** ADR-006, for the correction under DL-024, Q-38 and Q-39 unresolved. Warn is a small check on an existing path and is cheap to reverse, so it needs no ADR of its own. **No new ADR.** The roll-up, the immutable record, the export, sessions, the mail transport and the Compose host each already have an ADR, and these changes apply or amend those decisions. The backup cadence is the delivery lead's decision, and the design only follows it.
+**Revised for v0.3:** ADR-002, 004, 006, 007, 009, 011, 012 and 013. **Revised for v0.4:** ADR-006, 009 and 012. **Revised for v0.5:** ADR-006, 007 and 008, for Warn and the Q-35 (a) answer, for `master` to check at G4. **Revised for v0.6:** ADR-006, for the correction under DL-024, Q-38 and Q-39 unresolved. **Revised for v0.7:** ADR-006, rewritten for the new rule, ADR-003, 004, 005 and 008, which named what is removed, and ADR-007 and 012, for Q-37. Warn is a small check on an existing path and is cheap to reverse, so it needs no ADR of its own. **No new ADR.** The roll-up, the immutable record, the export, sessions, the mail transport and the Compose host each already have an ADR, and these changes apply or amend those decisions. The backup cadence is the delivery lead's decision, and the design only follows it.
 
 | ADR | Title | Status | Rests on |
 |-----|-------|--------|----------|
@@ -1330,13 +1267,13 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | [ADR-003](adr/ADR-003-postgresql-prisma-jsonb-inputs.md) | PostgreSQL and Prisma, with JSONB for configurable values | Accepted | |
 | [ADR-004](adr/ADR-004-registry-as-versioned-document.md) | Field registry as an immutable versioned document | Accepted | |
 | [ADR-005](adr/ADR-005-custom-formula-engine.md) | Custom formula engine on decimal.js | Accepted | |
-| [ADR-006](adr/ADR-006-rollup-and-quantity-step.md) | Cost roll-up and one named quantity step | Accepted | **Q-39 unresolved** (AQP-26 comments 10530, 10531, 10533): the rule is frozen as written, and the roll-up story cannot pass G7 (DL-024). ASSUMPTION-52 (Q-35 (b)). A top-level item with nothing below it is settled (D-21). OQ-ARCH-10 and Q-38 answered: Warn covers every 0 (A-27 for a top-level item) |
-| [ADR-007](adr/ADR-007-immutable-calculation-records.md) | Immutable calculation records | Accepted | ASSUMPTION-55, A-18 (Q-37), for what clears |
+| [ADR-006](adr/ADR-006-rollup-and-quantity-step.md) | BL as a plain sum of BG, with no roll-up | Accepted, rewritten for v0.7 | The rule on AQP-26 (comment 10537), for `master` to record |
+| [ADR-007](adr/ADR-007-immutable-calculation-records.md) | Immutable calculation records | Accepted, revised for v0.7 | |
 | [ADR-008](adr/ADR-008-server-side-role-projection.md) | Cost confidentiality by server-side role projection | Accepted | |
 | [ADR-009](adr/ADR-009-authentication-and-sessions.md) | Authentication and sessions | Accepted | ASSUMPTION-56 |
 | [ADR-010](adr/ADR-010-route-handlers-no-server-actions.md) | Route Handlers, one wrapper, no Server Actions | Accepted | |
 | [ADR-011](adr/ADR-011-worker-and-email-outbox.md) | Worker with node-cron and a Postgres e-mail outbox | Accepted | **A-02**, OQ-ARCH-11; OAuth mode unproven until one real send (gate condition 16) |
-| [ADR-012](adr/ADR-012-excel-export.md) | Excel export with ExcelJS on a worker thread | Accepted | ASSUMPTION-55, A-18 (Q-37), for an out-of-date file |
+| [ADR-012](adr/ADR-012-excel-export.md) | Excel export with ExcelJS on a worker thread | Accepted, revised for v0.7 | A-32, what a never-calculated estimate exports |
 | [ADR-013](adr/ADR-013-images-in-postgres.md) | Part images in PostgreSQL | Accepted | |
 | [ADR-014](adr/ADR-014-master-data-outside-repository.md) | Master data outside the public repository | Accepted | The file's location, theirs at HOLD-01 |
 
@@ -1344,11 +1281,11 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 
 ## 14. Technical Risks & Debt
 
-`master` owns the register. G3 merged ARCH-R1 into RISK-011, and registered ARCH-R3 as RISK-014 and ARCH-R5 as RISK-013; ARCH-R2 and ARCH-R4 stay here with their GitHub issues. GitHub issues: TD-01 to TD-05 are #2 to #6; ARCH-R1, R2 and R3 are #7, #8 and #9; ARCH-R4 is #10.
+`master` owns the register. G3 merged ARCH-R1 into RISK-011, and registered ARCH-R3 as RISK-014 and ARCH-R5 as RISK-013; ARCH-R2 and ARCH-R4 stay here with their GitHub issues. GitHub issues: TD-01 to TD-05 are #2 to #6; ARCH-R1, R2 and R3 are #7, #8 and #9; ARCH-R4 is #10; ARCH-R6 is #11.
 
 | Risk / debt | Impact | Mitigation | Addressed by (epic/story) |
 |-------------|--------|------------|---------------------------|
-| RISK-002 (restated by `master`, DL-024; **further restatement proposed**): Q-39's rupee answer, 660, differs from their counts of 24 lids and 12 brackets, so whether the price follows the count is open until the rupee total is confirmed (AQP-26 comment 10533). ASSUMPTION-52 rests on Q-35 (b), and no test can catch a wrong rule | If the rule is wrong, everything below a quantity above 1 is mispriced, by a factor of that quantity | Their answer before the roll-up story passes G7. The rule is frozen. CE-1 and CE-2 are unconfirmed, and G7 refuses them so (`test-strategy.md` section 5.6). One quantity step inside `src/lib/rollup/`. Tests prove the code matches the rule, not that the rule is right | EPIC-03; delivery lead |
+| RISK-002 (**restatement proposed for `master`**): the rule is settled in their numbers (840, 1000, 2, 6, 24) and matches the worksheet's `SUM(BG)`. What remains of this risk moves to ARCH-R6 | Lower: a parallel run against the worksheet can now test BL at any quantity | CE-1, CE-2 and CE-12 carry their numbers (`test-strategy.md` section 5). Tests prove the code matches the rule | EPIC-03 |
 | RISK-006 (existing): real data reaching the public repository | Rates exposed | Section 5.5, ADR-014, CI checks | EPIC-10 (scaffold), HOLD-01 |
 | RISK-010 (existing): export size. Closure was not taken at G3; close at the G7 of the export story | Slow export | Bounded at about 100 MB, measured at 16.9 s, worker thread and gate. No hard limit needed | EPIC-07 |
 | RISK-004 (existing): meaning of offline | Conflict with BRQ-002 | Section 9.8 | EPIC-12 |
@@ -1356,7 +1293,8 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | ARCH-R2: a calculated value leaks through a new route or a passed prop | Breach of the main promise | Defence in layers, canary scan on every build | EPIC-01, 05 |
 | RISK-014 (ARCH-R3): open hosting details (Q-18). The mail account type matters most: SMTP with a password cannot be relied on (section 4.7) | Alerts cannot go live until the facts arrive. Configuration only for a Microsoft 365 mailbox; about half a day of code if the organisation refuses SMTP AUTH | OAuth mode built, `FEATURE_EMAIL`, Mailpit until then; TLS proxy optional | EPIC-10, EPIC-09 |
 | ARCH-R4: Next.js, React and Prisma all on recent majors; patch churn | Security patches arrive often | Dependabot, pinned versions, full suite on every update | EPIC-10 |
-| RISK-013 (ARCH-R5): H = 0 removes a row, and everything under it, from BL. Not silent, since every 0 warns (Q-38), but a warning can be passed unread, the Engineer cannot see the effect, and a dialog seen often is pressed through. The register's path (b) closes; **`master` to restate** | A low price can reach the Lead and be approved | Warn (section 4.3): acknowledged at each press, shown to the Lead on SCR-06 and SCR-10, recorded and audited. Tracked on AQP-15, so no GitHub issue | EPIC-03, EPIC-06 |
+| RISK-013 (ARCH-R5; **restatement proposed for `master`**): H = 0 now removes only that row's own cost, and every 0 warns (Q-41). A warning can be passed unread, and one seen often is pressed through | A mistyped 0 lowers a price by that row's cost. On a single-piece product the item shows 0 | Warn (section 4.3): acknowledged at each press, shown to the Lead on SCR-06 and SCR-10, recorded and audited. Tracked on AQP-15 | EPIC-03, EPIC-05, EPIC-06 |
+| ARCH-R6 (**new, proposed for `master`**, GitHub #11): the Engineer now does the multiplying by hand, so a mistyped count is a wrong price. The delivery lead's own first answers were 3 for 12 and 12 for 24 | An underpriced order that is valid as far as the code can tell. No check can catch it | A hint on the field (UX-52), and H beside every row for the Lead. Renaming the field is for the product-manager and the delivery lead. Detection is not possible without a second figure | EPIC-05, EPIC-06 |
 | TD-01: ExcelJS has had no stable release since 2023 and has 9 moderate transitive advisories | Future breakage; a patch may not come | Pin; isolated behind `build-workbook.ts`; read-back tests allow a swap; `overrides` if needed | EPIC-07 |
 | TD-02: next-auth 4 is the older line, and needs a nodemailer override | Migration later if v4 support ends | Used narrowly, behind `session.ts`. Review at each release | EPIC-01 |
 | TD-03: no retention rule for calculations, audit before and after values, or images | Data grows without limit; unresolved Q-26 | Monitor size; decide with Q-26 | After Q-26 |
@@ -1387,27 +1325,32 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | A-14 | Reassign and deadline change are refused on an approved task. SCR-03 shows the action on Closed rows (UX-20) | No | One guard |
 | A-15 | An input with a default takes it when its key is absent, for older drafts after a field insert | No | One rule in `lib/estimate` |
 | A-16 | "Missing data" in the tree is client state from the blocked Calculate response, and is not stored. After a reload the node shows "In progress" | No | One column, if it must survive a reload |
-| A-17 | ASSUMPTION-54 applied: "Not applicable" is offered to anyone who enters inputs, shows as the part's value including in the export, and F and I are blank for it. The reading "drop-down for Engineers only" was put to them and not stated (Q-36) | No | One filter on `GET /options`, and the projection |
-| A-18 | ASSUMPTION-55 applied, plus three additions: rolled-up figures are withheld with BL; so are the BG, BJ and BK of a top-level item with no rows below it, on screen (v0.4); and an out-of-date file needs a stated choice and carries the markers of section 4.6 (Q-37) | No | `figure-state.ts` and `product-cells.ts` |
+| A-17 | **Closed.** Q-36 answered (AQP-1 comment 10544): offered to anyone who enters inputs, shows as the part's value including in the export, and F and I are blank for it (section 4.9) | No | Not applicable |
+| A-18 | **Closed.** Q-37 answered (AQP-1 comment 10545): every calculated value clears, and the file is refused, so neither the withheld rows nor the out-of-date file exist (sections 4.6, 4.8) | No | Not applicable |
 | A-19 | **Closed.** The delivery lead answered "Warn" (AQP-15 comment 10511), so neither the earlier text nor the DL-013 block applies. The design is in section 4.3 | No | Not applicable |
-| A-20 | ASSUMPTION-57 and 52 applied. A row with its own cost and parts below it counts its H once, and multiplies what is below it. **Unconfirmed:** Q-39 was answered 660, against 840 by this rule, and their later count of 12 brackets fits the rule; the rupee total is still being confirmed (section 4.3). A part shows T(row) (Q-35 (b)). ASSUMPTION-51 is retired: a top-level item with nothing below it is settled by Q-35 (a) (D-21, DL-024). **Correction:** v0.5 called ASSUMPTION-51 confirmed for every item, which overclaimed | **Price**, for Q-39. Holds the roll-up story at G7; `master` to say whether it still may reach Ready; silence does not close it | `src/lib/rollup/`, its tests and the wording (section 4.3); `rollup` and `rollup-copy.ts`, display only, for Q-35 (b) |
+| A-20 | **Closed.** ASSUMPTION-51, 52, 57 and 59 are retired or ended: an item's own row is a row like any other in `SUM(BG)`, and a parent shows only its own row (AQP-1 comment 10542) | No | Not applicable |
 | A-21 | Seed `O = IF(Material-Specific-Gravity > 0, M - N, 0)` is acceptable as a technical handling of D-17, with no change on any row with a real material (section 4.9) | No | One seed formula |
 | A-22 | ASSUMPTION-53 applied: the person in the Admin role holds the backup key and the off-host copies, and the IT person restores (Q-18) | No | Runbook only |
 | A-23 | ASSUMPTION-56 applied: a session runs 12 hours from sign-in, not from last activity; any non-alphanumeric character is a symbol | No | One check in `session.ts`; one character class |
 | A-24 | The exported file carries no quantity warning. The worksheet layout stays, the row shows H 0, and SCR-10 is the last place the warning shows, as with the override reason (FR-103) | No | One notice row in `product-cells.ts`, about 0.25 h |
 | A-25 | **Ended.** Q-38 answered "Yes" (AQP-15 comment 10527): Warn covers a part with nothing below it (section 4.3) | No | Not applicable |
 | A-26 | Each press stands alone: a Lead's Recalculate asks again for a 0 the Engineer acknowledged, and every calculation has its own record. "Warn" did not say who is asked, beyond the Engineer | No | One comparison against the last calculation's warnings |
-| A-27 | A top-level item's own 0 warns, with parts below it or without. Q-38, its answer and D-22 say "part" (AQP-1 comment 10529 asks), so this is this design's reading of "Yes", not their words | No | One condition in `quantityWarnings`, under 0.25 h |
+| A-27 | **Closed.** Warn stays for every 0 in QTY per Assy (AQP-15 comment 10543), and a top-level item has a QTY per Assy like any row, so its own 0 warns | No | Not applicable |
+| A-28 | **Closed.** Row costs clear too (Q-37 (a)), so they cannot be added up to a cleared total | No | Not applicable |
+| A-29 | A move or reorder still clears the figures, although it no longer changes BL, because the record's Sl. No would be out of date and D-20 says "any input" | No | One condition in `estimate-service` |
+| A-30 | The earlier approved price is shown, labelled, not only kept on record, and only a new approval replaces it. "Or be removed" has nothing to act on, as the design has no way to delete an estimate. The orchestrator's reading of Q-37 (c) is being put back to them | No | The label; a delete route would be new scope |
+| A-31 | "Every cost figure" clears all calculated columns, M to BK, weights included. The question named costs. One rule for every output is simpler, and a weight beside a cleared cost tells a Lead little | No | One list in `figure-state` |
+| A-32 | A never-calculated estimate still exports its inputs (A-05, FR-070), though their words "not calculated" could reach it. It carries no cost, and the answer was relayed as about a cleared total | No | One condition in `export-service` |
 
 ### 15.2 Open questions
 
 | ID | Question | Owner | Needed by |
 |----|----------|-------|-----------|
 | Q-18 | Open in part: web address; sender address; which Outlook account (OQ-ARCH-11); what "Admin looks after them" means; where the 2-year copies are kept | Santhosh, Accucut IT | Before the first deployment |
-| Q-35 | (a) **Answered:** 1000, for a top-level item with nothing below it (AQP-14 comment 10510; D-21; DL-024). (b) Open: what a part below the top shows (A-20). Display only | Santhosh | G4 |
-| Q-39 | **Unresolved.** What a row's quantity reaches when the row has parts below it. Answered 660 (AQP-26 comment 10530), against 840 by the rule. Their count of 12 brackets for 4 frames with 3 each (10533) fits the rule. A last question asks for the rupee total, and whether the Engineer enters this as 4 and 3 is unanswered. The rule is frozen (section 4.3) | Santhosh | Before the roll-up story passes G7; silence does not close it |
-| Q-36 | Where "Not applicable" is shown to Lead and Admin (A-17) | Santhosh | G4 |
-| Q-37 | What a cleared total means for per-part costs, BN, the export and a price approved before an unlock (A-18). Should also cover the single-piece product, on screen and in the file (section 16.9) | Santhosh | G4 |
+| Q-35 | **Closed.** (a) 1000 (AQP-14 comment 10510; D-21). (b) "no, not required": a parent shows only its own row (AQP-1 comment 10542) | Closed | Closed |
+| Q-39 | **Closed.** 840 and "Engineer should typ 24" (AQP-26 comments 10535, 10537), recorded in SPEC v1.9. The rule is in section 4.3 | Closed | Closed |
+| Q-36 | **Closed.** Offered to Lead and Admin, and the words show to everyone; the zero values stay hidden (AQP-1 comment 10544) | Closed | Closed |
+| Q-37 | **Closed**, apart from A-30 and A-32. (a) every cost figure clears; (b) the download is refused while cleared; (c) the approved price stays (AQP-1 comment 10545) | Santhosh, for A-30 and A-32 | Before the story that shows the approved price reaches Ready |
 | OQ-ARCH-01 | Closed: A-05 and A-08 confirmed (PRD v0.7 section 12.2, a product-manager decision for `master` to record) | Closed | Closed |
 | OQ-ARCH-02 | Who runs deployments is answered: "My IT person" (D-15). Still open: where GitHub Container Registry images may be pulled from | Accucut IT | G4 |
 | OQ-ARCH-03 | Closed for the session, password and backup rotation (D-15, D-19). Still open: VM size | Accucut IT | G4 |
@@ -1416,7 +1359,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | OQ-ARCH-06 | Should a Lead be told when rates changed after the last calculation but before approval? Today SCR-06 says nothing, and approval uses the calculated figures. The data for a notice exists (same diff as unlock) | Santhosh, through product-manager | G4 |
 | OQ-ARCH-07 | Closed: a Lead's edit to inputs is not an audit event in Release 1, and the design does not log it (PRD v0.7 section 12.2) | Closed | Closed |
 | OQ-ARCH-08 | Closed: the hand-over asks for the password (PRD v0.7 FR-006, NFR-004) | Closed | Closed |
-| OQ-ARCH-10 (same as OQ-PM-07), Q-38 | **Closed.** "Warn" (AQP-15 comment 10511) and "Yes" for a part with nothing below it (10527), designed in section 4.3. A top-level item's own 0 is A-27 | Closed | Closed |
+| OQ-ARCH-10 (same as OQ-PM-07), Q-38, Q-41 | **Closed.** "Warn", "Yes" and "Q-41: Keep warning" (AQP-15 comments 10511, 10527, 10543): every 0 warns, and the wording says that row costs 0 (section 4.3) | Closed | Closed |
 | OQ-ARCH-11 | Mail account facts: type of account, tenant administrator and Security Defaults, a dedicated mailbox and its address, outbound port 587 (section 4.7) | Accucut IT, Santhosh | Before alerts go live |
 | OQ-ARCH-12 | Backup duties: where the 2-year copies are kept, who confirms each week, and whether Settings may show "Last backup" (UX-35) | Santhosh | Before the first deployment |
 | OQ-ARCH-09 | Closed: in Release 1 a Lead reads formulas on SCR-07; SCR-17-lead arrives with R2 (PRD v0.7 section 12.2) | Closed | Closed |
@@ -1425,7 +1368,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 
 ## 16. Reconciliation with UX, PRD and Standards
 
-**Reading note (v0.6).** Section 16.11 replaces section 16.10 on the Warn hours, Q-35 (a), Q-38 and what each role owes. Sections 16.1 to 16.7 record the reconciliation of v0.2 against SPEC v1.3 and UX v0.1, and section 16.8 records v0.3 against SPEC v1.4, written while UX was still at v0.2. Both are kept as that record. Where they state the roll-up rule, the password rule, the session or a question as open, **section 16.8 replaces 16.1 to 16.7, section 16.9 replaces all of them, and section 16.10 replaces all of them on OQ-ARCH-10, UX-36 and Q-35 (a)**.
+**Reading note (v0.7).** Section 16.12 replaces every earlier part of section 16 on the quantity rule, `ROLLUP`, the multiplier, parent figures, item totals, Warn, cleared figures, the out-of-date file, Q-35 to Q-37, Q-39 and what each role owes. Section 16.11 replaces section 16.10 on the rest. Sections 16.1 to 16.7 record the reconciliation of v0.2 against SPEC v1.3 and UX v0.1, and section 16.8 records v0.3 against SPEC v1.4, written while UX was still at v0.2. Both are kept as that record. Where they state the roll-up rule, the password rule, the session or a question as open, **section 16.8 replaces 16.1 to 16.7, section 16.9 replaces all of them, and section 16.10 replaces all of them on OQ-ARCH-10, UX-36 and Q-35 (a)**.
 
 **Result.** Every screen from SCR-00 to SCR-26 is reconciled against this architecture. Nothing found needs a redesign, and no screen shows or needs a cost, rate or formula for an Engineer. The review did change the architecture in 20 places (16.5), and UX has 27 items to change (16.6), 20 of them before build. Six questions go to the delivery lead or product manager (OQ-ARCH-04 to 09). Whether any of this holds G3 is for `master` to decide.
 
@@ -1809,6 +1752,77 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 
 ---
 
+### 16.12 The quantity rule, Q-35 (b), Q-41, Q-36 and Q-37 (v0.7)
+
+**Method and limits.** AQP-26 comments 10530 to 10537, AQP-1 comments 10538 to 10545 and AQP-15 comment 10543 were read in Jira, with the SPEC v1.9 version line. Every expected value was re-run through a throwaway script on 2026-11-02. **Not done:** nothing is built, `ux-spec.md` v0.4 and the screens were not re-read against this, and the PRD and release plan are still at v0.8. The hours are estimates, with no velocity behind them.
+
+**`SUM(BG)` is confirmed.** ux-expert asked the architect to confirm BL shown as `SUM(BG)` (AQP-1 comment 10539). It is correct.
+
+**Effort (estimate by the architect, development with tests), against release plan v0.8.** Nothing is built, so there is no rework, and the "0 to about 1 h" of rework in PRD section 9.1 goes.
+
+| Work | Epic | Before (h) | Now (h) | Change (h) |
+|------|------|------------|---------|------------|
+| FR-030: quantity step, multiplied walk, `ROLLUP`, closed-form tests | EPIC-03 | 2.5 to 4 | 0.5 to 0.75: `SUM(BG)` seed and the CE cases | **-2 to -3.25** |
+| `rollup`, `item_totals`, withholding parent figures | EPIC-05, 06 | Inside those epics | None | **-0.25 to -0.5** |
+| SCR-06, 07, 10: Σ figures, the pair of boxes, the item table, the multiplier reconciliation | EPIC-06, 07 | Inside those epics | One box per row, a plain sum | **-0.75 to -1.25** |
+| `ROLLUP` warning on the formula check and SCR-18 | EPIC-08 | Inside that epic | None | **-0.25** |
+| Hint on H (UX-52), H beside each row | EPIC-05, 06 | None | Wording; the data is already there | 0 |
+| **Rule and parent change, total** | | | | **-3.25 to -5.25, central -4.25** |
+
+**Warn, re-sized for one rule on every row (Q-41).** It replaces the 3.75 to 5.75 h in the release plan and the 4.25 to 6.25 h of v0.6. The 0.5 h for Q-38 goes, as the second code and wording no longer exist, and the row check needs no tree.
+
+| Work | Epic | Hours |
+|------|------|-------|
+| `quantityWarnings` and its unit tests | EPIC-03 | 0.25 to 0.5 |
+| Both routes: request body, 409, revision check under the lock, writing `warnings` | EPIC-03, 05 | 0.75 to 1.25 |
+| `calculations.warnings` migration; `/costs` and `/export-summary` | EPIC-06, 07 | 0.25 to 0.5 |
+| Audit event | EPIC-06 | 0.25 |
+| One dialog (SCR-05, 06), one notice (SCR-06, 08, 10), `warning-copy.ts` | EPIC-05, 06, 07 | 1 to 1.25 |
+| Integration table, canary path, E2E at 3 widths (CE-9) | EPIC-03, 05, 06 | 1 to 1.5 |
+| **Total** | | **3.5 to 5.25, central 4.375** |
+
+**Q-37 and Q-36.**
+
+| Work | Epic | Change (h) |
+|------|------|------------|
+| `allowOutOfDate`, the file name, sheet tab and notice row, the dialog (1 to 1.5 h in section 16.8), less the refusal, which stays | EPIC-07 | **-0.75 to -1.25** |
+| `figure-state`: one rule, with no flagged rows and no per-column cases | EPIC-05, 06 | **-0.25 to -0.5** |
+| BO as the latest approval, and its "approved earlier" label | EPIC-06 | **+0.25** |
+| Q-36: already designed as A-17 | EPIC-02 | 0 |
+| **Total** | | **-0.75 to -1.5, central -1.125** |
+
+**All together, against release plan v0.8:** **-4.25 to -7.25 h, central -5.75 h**, which makes scope A **83.25 to 124.25 h, central 103.75 h**. product-manager decides what that does to dates.
+
+**CR-11 stands.** STORY-10.01 no longer needs the rule "H is an operand in BB alone" in ESLint: it is a test, and arrives with the BL story.
+
+**UX items, for ux-expert (not edited here).** UX-36 and UX-44 to UX-51 are released by Q-41, with the wording below. UX v0.4 applied the whole-order rule before Q-35 (b), so some of these may be only partly done there.
+
+| ID | Screen | Change | Why |
+|----|--------|--------|-----|
+| UX-36 (reworded) | SCR-05 | The Quantity warning dialog names each row and says that row costs 0: "QTY per Assy is 0 on `<Sl. No>` `<part>`. That row will cost 0 in this estimate." No figure beyond that 0, and none of "rate", "price" or "formula" | Q-41 |
+| UX-44 to UX-50 | SCR-06, 08, 10, 16 | Apply as listed in section 16.10, with "row" for "part". No "every part under it" anywhere, and the row mark no longer depends on the tree | Q-41 |
+| UX-51 | SCR-05, 06, 08, 10 | **Withdrawn.** There is one wording | Q-41 |
+| UX-52 | SCR-05, 06 | Hint on QTY per Assy (H): it is the count for the whole order, not for one assembly, with one invented example. Keep the label and letter unless the field is renamed | ARCH-R6 |
+| UX-53 | SCR-06, 07 | A parent shows only its own row. Remove the Σ tag and legend, the pair of boxes, the sum written out, the item table and every per-item figure. Every row has one box. Remove "Not multiplied again", "counts it 2 times", "pieces counted" and "Rows above multiply by". Show H beside each row | Q-35 (b) |
+| UX-54 | SCR-10 | Remove the "On screen: this row and below" column. "How BL2 is made": add the BG column and you get BL2, at any quantity. Keep the rounding sentence | Q-35 (b); BL is `SUM(BG)` |
+| UX-55 | SCR-17, 18 | BL shows `SUM(BG)`. Remove `ROLLUP` from the function line, its explanation and the warning | The function is removed |
+| UX-56 | SCR-06, 07, 10 mock-up data | Typed counts follow the rule: 2, 6, 24 gives 0, 6, 24 on screen and in the file | The rule |
+| UX-57 | SCR-06, 07 | Total cleared state: every calculated value on every row clears, with no italic "out of date" figures and no legend for them. SCR-07 shows "Cleared. Press Recalculate" in place of the stages. UX-38 and UX-39 are overtaken, as a one-row estimate is no longer a special case | Q-37 (a) |
+| UX-58 | SCR-10 | Remove Confirm out-of-date download, the `_OUT-OF-DATE` name, the sheet tab and the notice row. While cleared the page says the download is off until Recalculate, and shows no table | Q-37 (b) |
+| UX-59 | SCR-06, 08, 10 | BO shows the latest approved price after an unlock and while cleared, labelled as approved earlier, until a new approval replaces it. Remove "Not set yet" and "Cleared by the unlock" for such an estimate. Wording waits for A-30 | Q-37 (c) |
+| UX-60 | SCR-05, 06, 07, 13 | "Not applicable": remove the working-assumption labels. The words show to everyone, and F and I stay blank | Q-36 |
+
+**Issues for other roles.**
+
+| Owner | Issue |
+|-------|-------|
+| master | Record the rule and Q-35 (b). They reverse what G3 accepted (DL-011, DL-024), and G2 conditions 5 and 6 are overtaken in form (section 1). Restate RISK-002 and RISK-013, close RISK-012 (AQP-1 comment 10545), register ARCH-R6, and check A-29 to A-32 and the ADRs. DL-018's hold on stories 06.04 and 07.04 for UX-38 can end, as UX-38 is overtaken |
+| product-manager | Rewrite FR-022, 029, 030, 056, 063, 069, 070, 100 and 104, and take the multiplier from GOAL-03. FR-100 clears every calculated value, and FR-070 refuses the download while cleared. Take -4.25 to -7.25 h. Decide with the delivery lead whether "QTY per Assy" keeps its name on screen |
+| business-analyst | SPEC should say a parent shows only its own row, and that item totals are gone. D-22 follows Q-41. SPEC §6.5 "download at any status" follows Q-37 (b). Put A-30 and A-32 to the delivery lead with the reading of Q-37 (c) |
+| product-owner, scrum-master | The roll-up story shrinks to the `SUM(BG)` seed and the CE cases. FR-029 is no longer a story of its own. Warn is released, and crosses EPIC-03, 05, 06 and 07 |
+| qa-engineer | Parallel run: BL can now be compared with the worksheet at any quantity. The test plan takes section 5 of `test-strategy.md` as rewritten |
+
+---
 ## 17. Change Log
 
 | Version | Date | Change |
@@ -1816,6 +1830,7 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |
 | 0.3 | 2026-11-01 | G3 answers, SPEC v1.4. Every level's quantity (section 4.3), corrects v0.2's "one branch" claim. Weekly backups, kept 2 years, RPO up to 7 days (section 9.5). Microsoft mail check and OAuth mode (section 4.7). Cleared totals (section 4.8). "Not applicable" (section 4.9). Password rule and 12-hour session from sign-in (section 8). Optional reason, one export total, Tool Cost footer. Scope A: `FEATURE_CONFIG_EDITOR` dropped. New A-17 to A-23, OQ-ARCH-10 to 12, UX-28 to UX-37. Aligned with PRD v0.6: FR-098 to FR-103 in the coverage matrix, NFR-013, NFR-018 at 2.2 AA. ADR-002, 004, 006, 007, 009, 011, 012, 013 revised |
+| 0.7 | 2026-11-02 | The quantity rule (AQP-26), Q-35 (b) and Q-41. H is the count for the whole order, BL is `SUM(BG)`, and a parent shows only its own row. Section 4.3 rewritten. Removed: `src/lib/rollup/`, `T(row)`, `applyQuantityStep`, the multiplier, `ROLLUP`, the item total, `calculation_rows.rollup`, `calculations.item_totals`, `rollupDisplay`. Warn stays for every 0, with one code and the wording "That row will cost 0". Section 4.8 rewritten for Q-37: no calculated value is read unless `current`, and the approved price stays. Section 4.6: the download is refused while cleared, and the out-of-date file and its markers are removed. Section 4.9 follows Q-36. A move no longer changes BL. ARCH-R6 new (GitHub #11). A-17, A-18, A-20, A-27, A-28 closed; A-29 to A-32 new; Q-35, Q-36, Q-39, OQ-ARCH-10 closed. Sections 1, 4.1, 4.2, 4.5, 5.1, 6, 7, 8, 10, 12 to 15 follow. New section 16.12: -4.25 to -7.25 h. ADR-006 rewritten; ADR-003, 004, 005, 007, 008, 012 revised |
 | 0.6 | 2026-11-02 | Q-38 "Yes": Warn covers every 0, with a second code and wording, A-25 ended, A-27 new for a top-level item's own 0, hours 4.25 to 6.25. Correction to v0.5 (DL-024): ASSUMPTION-51 was not confirmed for every item; only a top-level item with nothing below it is settled. Q-39 recorded as unresolved: 660 against 840 by the rule, while their counts of 24 lids and 12 brackets fit it, and the rupee total is still being confirmed (AQP-26 comments 10530, 10531, 10533). The roll-up rule is frozen as written and no alternative is designed. CR-11 placement confirmed, with what goes in STORY-10.01. OQ-ARCH-05 and OQ-ARCH-10 closed (Q-40, Q-38). FR-104 and FR-105 in the coverage matrix. Section 14 follows the register, with RISK-002 and RISK-013 restatements proposed. New section 16.11. ADR-006 revised |
 | 0.5 | 2026-11-01 | The delivery lead's answers. "Warn" (AQP-15 comment 10511) designed in section 4.3: 409 `CALCULATE_ACK_REQUIRED`, an acknowledgement tied to `inputs_revision`, `calculations.warnings`, one audit event, Lead data on `/costs` and `/export-summary` while `current`; DL-013's block no longer applies. A part with nothing below it stays open and is costed at about 0.5 h. Q-35 (a) answered 1000 (AQP-14 comment 10510): ASSUMPTION-51 confirmed, the other reading withdrawn. A-19 closed, A-20 narrowed, A-24 to A-26 new. Sections 4.2, 4.8, 5.1, 6, 8, 12 to 15 follow. New section 16.10 with 3.75 to 5.75 h and UX-36 (replaced), UX-44 to UX-51. ADR-006, 007, 008 revised |
 | 0.4 | 2026-11-01 | G3 condition 14. All 14 ADRs Accepted, with what each rests on (section 13). New section 16.9 reconciles against UX spec v0.3: footer position agrees and is stated as `lastNodeRow + 2`; notice row placed; API rows corrected for `/costs`, `/nodes/{id}/costs`, `/export-summary`, settings, test e-mail and formula check; a childless top-level item's own figures withheld while out of date (A-18); UX-38 to UX-43. A-19 replaced by DL-013, block as labelled fallback. Q-35 (a) restated per DL-012, "narrow" removed, the "one line" claim corrected. Section 14 follows the G3 register. PRD v0.7 followed: hand-over step-up, Admin-set password temporary, sign-in `noindex`, no reason in the file, OQ-ARCH-01, 07, 08, 09 closed. ADR-006, 009, 012 revised |
