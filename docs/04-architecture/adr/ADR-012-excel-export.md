@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20) and for architecture v0.7: Q-37 answered, so the download is refused while figures are cleared (AQP-1 comment 10545), for `master` to check at G4. What a never-calculated estimate exports rests on A-32 |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20) and for architectures v0.7 and v0.8: no file exists until a calculation is current (AQP-1 comments 10545, 10554), for `master` to check at G4 |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31, Q-37; D-16, D-20; ADR-007 |
@@ -44,7 +44,7 @@ We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.t
 
 **Added for v0.3: one total, and the Tool Cost total (D-16).** BL, BN and BO appear once, in row 2, with no per-item totals, a known difference from the sample. The total Tool Cost cannot go in row 2, because BM2 is the first node's own entry. It goes in a footer row, two rows below the last node so that one row stays empty between them: the value under column BM and the label to its left. UX v0.3 places it the same way (architecture section 16.9). Considered and rejected: a new column after BO, which changes the A to BO layout, and a second sheet, which is easily missed.
 
-**Replaced for v0.7: no file while figures are cleared (D-20, Q-37 (b)).** "Yes, block the portal when the total is not calculated or recalculated" (AQP-1 comment 10545). While `out-of-date`, the export returns 409 `EXPORT_OUT_OF_DATE`, with no way round it. The state is read in the same transaction that builds the file. The stated choice (`allowOutOfDate`), the `_OUT-OF-DATE` file name, the `OUT OF DATE` sheet tab and the notice row of v0.3 are removed. BO2 holds the latest approved price (Q-37 (c)). A never-calculated estimate still exports its inputs (A-05, FR-070), though their words could reach it (A-32).
+**Replaced for v0.7: no file while figures are cleared (D-20, Q-37 (b)).** "Yes, block the portal when the total is not calculated or recalculated" (AQP-1 comment 10545). For a never-calculated estimate: "Refuse it" (10554). So the export returns 409 `NOT_CALCULATED` at `none` and 409 `EXPORT_OUT_OF_DATE` at `out-of-date`, with no way round either. The state is read in the same transaction that builds the file. The stated choice (`allowOutOfDate`), the `_OUT-OF-DATE` file name, the `OUT OF DATE` sheet tab, the notice row of v0.3 and the file with empty cost columns are removed. BO2 holds the latest approved price (Q-37 (c)), unless its approval has been cancelled (architecture section 4.10).
 
 **No hard limit on size.** Validation caps the worst case at about 100 MB (500 × 200 KB). Evidence below shows that this builds, so a limit would only add a failure mode. One large export runs at a time (over 100 nodes), and another gets 503 with `Retry-After`. The proxy read timeout is at least 120 s.
 
@@ -60,7 +60,7 @@ We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.t
 - Positive: NFR-010 is met with margin at 50 nodes on this evidence. RISK-010 stays open at low score until the G7 of the export story, as `master` ruled at G3: laptop figures show feasibility only. The boundary makes a library swap possible (TD-01).
 - Negative / trade-offs accepted: a 500-node export takes about 17 s on similar hardware. `npm audit` lists 9 moderate transitive advisories, in `archiver`, `glob`, `minimatch` and `uuid`. The export passes neither user-controlled glob patterns nor buffers to `uuid`, so reachability is judged low. CI blocks at high, so these stay visible but do not fail the build.
 - Negative / trade-offs accepted, added for v0.3: a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it. Adding the exported BG column equals BL, at any quantity (ADR-006).
-- Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears; Santhosh answers A-32.
+- Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears.
 
 ## Verification
 Read-back tests of the generated file (cells, widths, formats, image anchors, footer, each marker); timing on staging; manual open in Excel desktop before each release (NFR-027).
