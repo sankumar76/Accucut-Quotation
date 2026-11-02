@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. Revised for v0.3 (D-16, D-20) |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20). What an out-of-date file holds and its markers **rest on ASSUMPTION-55 and A-18** until Q-37 is answered; APPROVED did not cover them (DL-009) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31, Q-37; D-16, D-20; ADR-007 |
@@ -40,9 +40,9 @@ The export replicates the worksheet: columns A to BO, images in column C, curren
 ## Decision
 We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.ts`, whose only input is a plain `ExportModel`. The thread runs that function. Export reads one calculation record, `outputs` only, so a parent row holds its own values (D-12 (b3)). Cells hold full-precision numbers with two-decimal formats. Text is written as strings, never formulas. An empty cell stands for divide by zero. Row-2 cells, the footer and the out-of-date markers are chosen in `product-cells.ts`, one file.
 
-**Added at UX reconciliation.** The file holds one calculation record, so after inputs change it stays consistent but falls behind the screen. A never-calculated estimate exports inputs with empty outputs (A-05). The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by 0.01 (UX-02).
+**Added at UX reconciliation.** The file holds one calculation record, so after inputs change it stays consistent but falls behind the screen. A never-calculated estimate exports inputs with empty outputs (A-05). The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by a few hundredths (UX-02).
 
-**Added for v0.3: one total, and the Tool Cost total (D-16).** BL, BN and BO appear once, in row 2, with no per-item totals, a known difference from the sample. The total Tool Cost cannot go in row 2, because BM2 is the first node's own entry. It goes in a footer row, one blank row below the last node: the value under column BM and the label to its left. Considered and rejected: a new column after BO, which changes the A to BO layout, and a second sheet, which is easily missed.
+**Added for v0.3: one total, and the Tool Cost total (D-16).** BL, BN and BO appear once, in row 2, with no per-item totals, a known difference from the sample. The total Tool Cost cannot go in row 2, because BM2 is the first node's own entry. It goes in a footer row, two rows below the last node so that one row stays empty between them: the value under column BM and the label to its left. UX v0.3 places it the same way (architecture section 16.9). Considered and rejected: a new column after BO, which changes the A to BO layout, and a second sheet, which is easily missed.
 
 **Added for v0.3: out-of-date figures (D-20, Q-37).** SPEC §6.5 allows download at any status, so the export is not refused outright. Following ASSUMPTION-55, while out of date the file keeps the last record's rows and leaves BL2, BN2, BO2 and the footer empty. Row costs would then leave the portal, so the export cannot go unnoticed: it needs a stated choice (`allowOutOfDate=true`, otherwise 409 `EXPORT_OUT_OF_DATE`), and the file carries an `_OUT-OF-DATE` file name, an `OUT OF DATE` sheet tab and a notice row. The state is read in the same transaction that builds the file. The alternatives were to refuse the download, against SPEC §6.5, or to leave the costs empty too, which departs from ASSUMPTION-55. Either is a small change in this file if Q-37 chooses it.
 
@@ -57,7 +57,7 @@ We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.t
 | 500 | 16.9 s | 97.5 MB | 528 MB |
 
 ## Consequences
-- Positive: NFR-010 is met with margin at 50 nodes on this evidence, and RISK-010 can be closed. The boundary makes a library swap possible (TD-01).
+- Positive: NFR-010 is met with margin at 50 nodes on this evidence. RISK-010 stays open at low score until the G7 of the export story, as `master` ruled at G3: laptop figures show feasibility only. The boundary makes a library swap possible (TD-01).
 - Negative / trade-offs accepted: a 500-node export takes about 17 s on similar hardware. `npm audit` lists 9 moderate transitive advisories, in `archiver`, `glob`, `minimatch` and `uuid`. The export passes neither user-controlled glob patterns nor buffers to `uuid`, so reachability is judged low. CI blocks at high, so these stay visible but do not fail the build.
 - Negative / trade-offs accepted, added for v0.3: a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it. Adding the exported BG column equals BL only when the quantities above a row are 1.
 - Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears; Santhosh answers Q-37.

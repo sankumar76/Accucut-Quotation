@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. Revised for v0.3 (D-19) |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-19) and v0.4 (PRD v0.7 FR-004, FR-006). The session measured from sign-in and the meaning of "symbol" **rest on ASSUMPTION-56** |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-001 to 006, 080, 098, 099; NFR-003, 004; SPEC §2, §12, §18 D-19; BR-049, BR-050; ASSUMPTION-56; ADR-010 |
@@ -49,7 +49,8 @@ Step-up (FR-080) is a password field in the same request as the protected action
 - A wrong step-up password returns 422 with `STEP_UP_FAILED`, not 401, so the client shows SCR-18's message rather than treating it as a lost session. Step-up has its own throttle key, so a slip in a dialog cannot lock an Admin out of signing in.
 - Sign-in returns a separate `locked` code for SCR-01's message, and an Admin password reset clears the block, as that message promises.
 - The return address after sign-in is accepted only as a same-origin relative path.
-- Admin hand-over has no step-up, following FR-080, NFR-004 and SCR-14. The architect recommends adding it (OQ-ARCH-08).
+- Admin hand-over takes the step-up too (PRD v0.7 FR-006, NFR-004, a product-manager decision closing OQ-ARCH-08 and OQ-UX-17). Earlier versions of this ADR left it out.
+- A password the Admin sets or resets is temporary (PRD v0.7 FR-004, closing OQ-UX-15). It sets `must_change_password`, as `bootstrap:admin` does, so that user reaches only SCR-23 until they choose their own.
 - The password rule is decided (D-19, BR-049): 10 to 128 characters, at least one number and one symbol, not the user's e-mail, not a common password. Any non-alphanumeric character counts as a symbol (ASSUMPTION-56). It is one zod schema, `src/lib/auth/password-rule.ts`, applied wherever a password is set, including `bootstrap:admin`, and never at sign-in. Because a composition rule produces `Password1!`, the common-password check also runs on the password with digits and symbols stripped from both ends.
 - The Admin cannot change their own role or deactivate themselves; the server refuses both.
 
@@ -61,4 +62,4 @@ Step-up (FR-080) is a password field in the same request as the protected action
 - Follow-up actions (with owners): architect reviews v5 status at each release; moving is contained in `src/server/auth`.
 
 ## Verification
-Tests: deactivated user refused at the next request; old password refused after change; cookie flags; 6th attempt blocked; step-up on all three actions; every part of the password rule at each entry point; a session used constantly still ends 12 hours after sign-in.
+Tests: deactivated user refused at the next request; old password refused after change; cookie flags; 6th attempt blocked; step-up on all four actions (three until FR-006 is built); every part of the password rule at each entry point; an Admin-set password leads to SCR-23 and no other page; a session used constantly still ends 12 hours after sign-in.

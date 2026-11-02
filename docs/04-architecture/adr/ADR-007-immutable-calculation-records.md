@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. Revised for v0.3 (D-18, D-20) |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-18, D-20). What clears besides BL, BN and the pre-fill **rests on ASSUMPTION-55 and A-18** until Q-37 is answered; APPROVED did not cover it (DL-009) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-031, 061, 062, 063, 065, 068, 100, 101, 103; NFR-007, 026; D-07, D-18, D-20; Q-37; ADR-004, ADR-012 |

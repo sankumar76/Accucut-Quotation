@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | NFR-002, 008, 010, 011, 025, 030; FR-091; ADR-002, ADR-010, ADR-011 |

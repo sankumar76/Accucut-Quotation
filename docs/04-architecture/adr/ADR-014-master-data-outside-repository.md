@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. The location of the delivery lead's file is theirs to decide at HOLD-01 |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). The location of the delivery lead's file is theirs to decide at HOLD-01 |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3 and HOLD-01) |
 | Related | NFR-006; TR-002, TR-009; D-09, D-13; DL-008; G2 conditions 5, 8; RISK-006 |

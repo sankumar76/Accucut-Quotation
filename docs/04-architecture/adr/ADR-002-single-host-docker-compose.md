@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. Revised for v0.3 (D-15). Rests on A-01 until the open part of Q-18 is answered |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-01** until the open part of Q-18 is answered. Revised for v0.3 (D-15) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh and Accucut IT at G3) |
 | Related | NFR-003, 011, 012, 013, 030; FR-091; Q-18; ADR-001 |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed. Revised for v0.3 (D-15). The mail sign-in mode depends on OQ-ARCH-11 |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-02** until OQ-ARCH-11 is answered: the Outlook account type is unknown, and the OAuth mode is unproven until one real send on the real mailbox (gate condition 16). Revised for v0.3 (D-15) |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-019, 081 to 084; NFR-013, 014, 015, 024; SPEC §2, §5.4, §18 D-15; Q-18; OQ-ARCH-11; ADR-001 |
