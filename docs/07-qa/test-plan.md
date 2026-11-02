@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Owner | qa-engineer |
-| Version | 0.1 (first issue, for G4; answers G3 condition 15 and CR-20) |
+| Version | 0.2 (G4 remediation 10: AQP-1 comments 10573 and 10574 and DL-035 applied to sections 4, 5, 9, 12, 13, 14 and 18; v0.1 was the first issue, for G4, answering G3 condition 15 and CR-20) |
 | Date | 2026-11-02 |
 | Status | Draft. Nothing is built, so **no command in this plan has been run** and no test exists. Commands come from `CLAUDE.md`, the brief and `test-strategy.md`, and are not checked against a `package.json` (none exists) |
 | Based on | PRD v0.10 (FR-001 to FR-108, NFR-001 to NFR-030, 12.2); `test-strategy.md` v0.9; SPEC v1.12 (section 14, section 18.5); `architecture.md` v0.9 (9.5, 16.14); `ux-spec.md` v0.6 (8, 10); `backlog.md` v0.2 (88 candidate stories); DL-017, DL-026; consistency report v0.2 (CR-20) |
@@ -46,8 +46,8 @@
 | QA-A2 | Playwright has three projects for mobile, tablet and desktop widths, as `CLAUDE.md` describes. Their names are not known; this plan writes `--project=<name>` | Edit section 17 |
 | QA-A3 | A story's acceptance criteria are written in Jira with IDs `AC-1`, `AC-2` and so on. None exists yet | The AC matrix in each test report uses whatever IDs Jira shows |
 | QA-A4 | Until Jira keys exist, a test is named with the provisional story ID (`STORY-03.04`); the Jira key is added when the scrum-master creates the story | Rename only |
-| QA-A5 | The usability test and the restore rehearsal are run by people the delivery lead names; QA supplies the scripts, data, forms and analysis, and does not sit in the room | Section 18, QA-OQ-03 |
-| QA-A6 | "Under 200 KB" (NFR-005) is tested at 199 and 201 x 1024 bytes as the strategy says. The exact 200 KB boundary, and whether KB means 1000 or 1024 bytes, is unspecified. QA records what the build does there and asks the product-owner | Low risk |
+| QA-A5 | **Answered (10573, 10574, DL-035).** The delivery lead provides the devices, sits with the testers at the usability test, and acts as both Admin and IT for the validation rehearsal. The actual Admin repeats the rehearsal at hand-over. QA supplies the scripts, data, forms and analysis, and does not sit in the room | Sections 13 and 14 |
+| QA-A6 | **Answered in part (10573).** The picture limit is **204,800 bytes** (200 x 1024). Whether a file of exactly 204,800 bytes is accepted is unanswered; the labelled assumption is that "under" means it is **refused**. Boundary tests: 204,799 accepted, 204,800 refused, 204,801 refused, plus the strategy's 199 x 1024 and 201 x 1024 | If the delivery lead says exactly 204,800 is accepted, one expected value flips |
 
 ---
 
@@ -139,9 +139,9 @@ None of these exists yet. Each is a dependency, owned by the story named.
 | Mail capture | Mailpit | 10.01 (Compose) | No e-mail tests |
 | Load and page timing | k6, Lighthouse CI | 10.09, 07.05 | No NFR-009 to 011 evidence |
 | Excel read-back | ExcelJS | 07.01 | No file checks |
-| A real phone, ideally low end, Android with Chrome and an iPhone with Safari | Hardware | **Not identified** | Section 12 cannot start |
-| A Windows machine with NVDA and a Windows contrast theme | Hardware, software | **Not identified** | Section 12 cannot start |
-| Excel desktop | Software | **Not identified** | No manual open of the export |
+| A real phone, ideally low end, Android with Chrome and an iPhone with Safari | Hardware | **Provided by the delivery lead (10573).** One phone was offered, so one platform is covered; each report names the phone, system and browser used, and the other platform goes on the list of checks not run that G8 shows (DL-035) | One platform unchecked |
+| A Windows PC with a screen reader, and a Windows contrast theme | Hardware, software | **Provided by the delivery lead (10573).** Each report names the screen reader and its version (NVDA is the plan's assumption) | Section 12 cannot start |
+| Excel desktop | Software | **Provided by the delivery lead (10573)** | No manual open of the export |
 | A staging host with the Admin's limited account | Hosting, Accucut IT | A-35, OQ-ARCH-03 | No rehearsal |
 
 ---
@@ -168,7 +168,7 @@ None of these exists yet. Each is a dependency, owned by the story named.
 | 10.11 | The scripted failure-path tests of section 14.4 pass on staging. The Admin's rehearsal is a separate, later item |
 | The last UI story of each epic | The axe and keyboard run covers every screen delivered so far |
 
-**Release entry (G8 support, `release-<version>-qa-summary.md`).** All stories Done or deferred in writing; full regression and nightly matrix green on the release candidate; k6 and Lighthouse results on staging; one manual open of the export in Excel desktop; the real mail send done or the e-mail alerts marked not live; the Admin's restore rehearsal passed (section 14); the usability test is **not** a release gate (it happens after hand-over, section 13). The summary lists open defects by severity and the residual risks, including the ones this plan says cannot be tested.
+**Release entry (G8 support, `release-<version>-qa-summary.md`).** All stories Done or deferred in writing; full regression and nightly matrix green on the release candidate; k6 and Lighthouse results on staging; one manual open of the export in Excel desktop; the real mail send done or the e-mail alerts marked not live; the validation rehearsal passed and the hand-over rehearsal with the actual Admin passed, or the G8 record states plainly that only the validation run was done (section 14; DL-035); the checks of section 12 that were not run are listed; the usability test is **not** a release gate (it happens after hand-over, section 13). The summary lists open defects by severity and the residual risks, including the ones this plan says cannot be tested.
 
 ---
 
@@ -302,7 +302,7 @@ The 88 candidates of `backlog.md` v0.2, in backlog order. **No story has accepta
 | 05.04 Part form, remaining sections | FR-045: every SPEC section 7.1 field present, in eight sections, each section showing its column range; Enter order across sections | E | B |
 | 05.05 Fasteners fields | FR-048, SPEC item 4: S defaults to "None"; with "None" or blank T and U are hidden, not required and stored and exported as 0; choosing another value shows and requires them | U, E | B |
 | 05.06 Surface Treatments, Treatment / Color | FR-049, 050: one multi-select sets the eight flags Z to AG (selected 1, not selected 0), none allowed; "Other" reveals a text box whose text is stored and exported | U, E, X | B |
-| 05.07 Part picture, optional | FR-047: 199 KB PNG accepted; 201 KB refused; PNG, JPG, GIF and WebP accepted; a text file renamed `.png` and a polyglot refused with a clear message; paste, drag and drop, file choice; camera and gallery on a phone (once on a real device); preview, replace, remove; a part with no picture passes Calculate, is not listed as missing and exports an empty cell C | I, S, E | B |
+| 05.07 Part picture, optional | FR-047: the limit is 204,800 bytes (10573): 204,799 accepted, 204,800 refused (labelled assumption, "under"; QA-OQ-08), 204,801 refused, and the strategy's 199 x 1024 accepted and 201 x 1024 refused; PNG, JPG, GIF and WebP accepted; a text file renamed `.png` and a polyglot refused with a clear message; paste, drag and drop, file choice; camera and gallery on a phone (once on a real device); preview, replace, remove; a part with no picture passes Calculate, is not listed as missing and exports an empty cell C | I, S, E | B |
 | 05.08 Save a draft, unsaved warning | FR-053: a draft saves with blanks; leaving with unsaved changes warns (browser close, in-app navigation and sign-out); a save that changes nothing does not bump `inputs_revision` | I, E | B |
 | 05.09 Calculate | FR-055, 056, SPEC item 4: a blank visible input (Remarks included, Part Model excepted) blocks, names the nodes and fields, flags the tree and submits nothing; hidden Fasteners fields never block; 0 in any other number field is accepted; success gives status Submitted and exactly the one message; **the Engineer's response body is exactly `{status, message}`**; blank check precedes the warning (a blank with an H of 0 gives 422 `CALCULATE_BLOCKED`, not the 409); two simultaneous presses give one calculation; only the assigned Engineer may press | U, I, S, E | A |
 | 05.12 Warn on a 0 in QTY per Assy | FR-104 conditions 1, 2, 5, 6, 7, 8, 9 and **the whole of strategy 5.2 CE-9 test table**: 409 `CALCULATE_ACK_REQUIRED` with the revision and one warning per row and nothing written; the acknowledged request succeeds, records the warning, creates one `calculation.warning_acknowledged` audit row in the same transaction naming rows and no figure; a stale acknowledgement never passes, including two concurrent requests; an acknowledgement with no warning due is ignored; `{"acknowledge": true}` is 400; 0.01 gives no warning, `0.00` does; dialog wording, "Go back" leaves the estimate Draft, focus starts on the safe choice; the same 409 body under two sets of `canaryMasters` | U, I, S, E | A |
@@ -476,11 +476,11 @@ A value hidden in an image or a PDF (neither exists in scope); a leak through ti
 | Alert dialog (Warn), approval dialogs | 05.12, 06.06 | Focus enters the dialog, is trapped, returns; initial focus on the safe choice; the dialog is announced; Escape closes |
 | Cleared state, notices, Settings | 06.04, 06.10, 02.09 | The cleared total is announced as needing Recalculate, not as an error; notices reachable and read |
 
-The master is asked to record that the DL-017 condition is met at 10.02 for the shell and that these deltas finish it (QA-OQ-01).
+**Accepted (DL-035, QA-OQ-01):** DL-017 is met at the G7 of 10.02 for the shell only, and these carry-forward checks finish it. Any carry-forward check not run is listed in the G8 record.
 
 ### 12.1 Real phone
 
-**Devices.** At least one real phone per release (NFR-019); for 10.02, a low-end phone if one can be found, because brand red with white text is 4.59:1 and the margin is narrow (R-5). Android with Chrome and an iPhone with Safari are both wanted. **Not identified; see QA-OQ-04.**
+**Devices.** At least one real phone per release (NFR-019); for 10.02, a low-end phone if one can be found, because brand red with white text is 4.59:1 and the margin is narrow (R-5). Android with Chrome and an iPhone with Safari are both wanted. **The delivery lead provides a real phone (10573, QA-OQ-04 answered), and offered one.** The report states which phone, system and browser was used; the other platform is a check not run and is listed at G8. The Windows PC, its screen reader and Excel desktop are also provided.
 
 | # | Check | Pass |
 |---|-------|------|
@@ -525,6 +525,8 @@ Windows contrast themes (Aquatic, Desert, Dusk, Night sky) in Edge or Chrome on 
 
 Decided in PRD 12.2 (CR-20) and DL-026: a facilitated test of the `ux-spec.md` section 10 tasks, **on built pages, during Accucut's testing and acceptance after the hand-over**. It is **not a gate before hand-over and is not in the dates**; the price-reading risks are covered before hand-over by the scripted checks of figures and wording in sections 9 and 10. The participants are the delivery lead's: 2 Engineers, 2 Leads and 1 Admin, no specific names (AQP-1 10556). Whether a person reads a price correctly, and types the right count (ARCH-R6), stays unverified until this test (RISK-015).
 
+**Who sits with the testers (AQP-1 10574, QA-OQ-03 answered):** the delivery lead. They are the facilitator. QA does not attend and works from the filled-in observation form. Because the facilitator is the sponsor, who set the rules and employs the participants, two limits are stated rather than assumed away: participants may defer to them or rate ease higher than they feel, and a facilitator who knows the right answer may hint without meaning to. So the ease ratings are read with care, and the scoring rule in 13.3 (any hint makes the attempt *assisted*) is the check on the second.
+
 ### 13.2 Who and what
 
 | Participant | Tasks | Risks tested |
@@ -540,7 +542,7 @@ No names, e-mail addresses or roles beyond the labels are recorded. Notes use P-
 ### 13.3 Procedure
 
 1. **Readiness check (QA, before any session).** The scripted wording and state checks pass on the build: the Warn dialog, the cleared state with "Recalculate", the notices, the refused download message, the quantity hint. The three fixtures load. A pilot run with one person who is not a participant tests the script, the sheets and the timing, and is thrown away.
-2. **Sessions.** One at a time, think aloud, about 45 minutes for an Engineer or Lead and 30 for the Admin, about one working day in all (PRD estimate). A facilitator the delivery lead names reads the task cards and does not help; an observer records. No video or audio is kept in the repository; if sessions are recorded at all it is with the person's agreement, stored outside the repository and deleted after the notes are made.
+2. **Sessions.** One at a time, think aloud, about 45 minutes for an Engineer or Lead and 30 for the Admin, about one working day in all (PRD estimate). The delivery lead, as facilitator, reads the task cards aloud word for word, answers no question about the portal ("what would you do?" is the only reply), and records on QA's form every hint, pause of more than a minute, wrong click and remark. Anything they say that points to the answer, including a nod or "are you sure?", is written down and makes the attempt *assisted*. If they name a separate note-taker, that person records and they only facilitate; QA does not assume one. No video or audio is kept in the repository; if sessions are recorded at all it is with the person's agreement, stored outside the repository and deleted after the notes are made.
 3. **Scoring per attempt.** *Success*: finished without help. *Assisted*: finished after a hint (counts as not a success). *Failed*: not finished. *Critical error*: a wrong price outcome the participant did not notice, such as 4 typed for the lids and Calculate pressed, or a Lead approving after misreading a figure. Time is taken for task 1. Each task ends with one ease rating from 1 to 5.
 4. **Excel baseline for R-1.** One Engineer enters the part in the portal first and then in Excel, the other the reverse, so neither order is favoured. This is a rough comparison from two people, and is reported as such.
 5. **Analysis (QA).** Findings with the task, what happened, what the participant said, and a proposed severity.
@@ -561,16 +563,25 @@ Targets are the ux-spec's: task success at least 90 percent without help; no cri
 
 ### 14.1 What it proves and what it does not
 
-It proves that **the Admin, from the README alone, on a healthy staging server, can restore a weekly copy using the key they hold**, in the time the requirement gives (RTO at most 4 hours), with the IT person on hand and not helping unless the command stops. It proves nothing about the loss of the server or its disk, which loses the live data and every backup together (their decision, they were told). It does not rehearse a hand-over of the key, only that the Admin can produce it.
+There are **two runs, and only the second meets the requirement** (DL-035).
+
+| Run | Who runs it | When | What it shows |
+|-----|-------------|------|---------------|
+| **A. Validation** | The delivery lead, as both Admin and IT (10573: "I will do the validations before giving it to the actual admin") | Before go-live, once 10.04, 10.05, 10.11 and 02.09 are Done | That the README steps, `restore.sh`, the failure paths and the post-checks work. **It does not show that the actual Admin can follow the README alone, and it does not satisfy FR-091 or NFR-013 for hand-over.** The runner knows the system and wrote or approved the rules |
+| **B. Hand-over** | **The actual Admin**, from the README alone | At hand-over, before go-live | That **the Admin, from the README alone, on a healthy staging server, can restore a weekly copy using the key they hold**, in the time the requirement gives (RTO at most 4 hours), with the IT person on hand and not helping unless the command stops. This is the rehearsal FR-091 and NFR-013 name |
+
+The G8 record states which run was done. If only A was done, it says so, and NFR-013's "the Admin can restore" stays a claim.
+
+Neither run proves anything about the loss of the server or its disk, which loses the live data and every backup together (their decision, they were told). Neither rehearses a hand-over of the key, only that the Admin can produce it.
 
 ### 14.2 People and conditions
 
-| Role | Who | Does |
-|------|-----|------|
-| Runner | **The Admin** (the person who will do it for real; not yet named, see QA-OQ-05) | Follows the README alone |
-| IT person | The person who grants the Admin's server access (A-35) | Sets up staging and the Admin's account; **sits by and says nothing, and helps only after `restore.sh` has stopped and printed its stop message** ("Call your IT person") |
-| Observer | A person the delivery lead names, who is **not** the IT person (one person cannot both help and judge whether help was needed). QA supplies the form | Times each step, notes every hesitation, reads nothing aloud |
-| QA | Sets the preconditions, runs the failure drills (14.4), checks the result (14.6), records | |
+| Role | Run A (validation) | Run B (hand-over) |
+|------|--------------------|-------------------|
+| Runner | The delivery lead, as Admin. Follows the README | **The actual Admin**, the person who will do it for real. Not yet named; the delivery lead names them at hand-over (QA-OQ-05). Follows the README alone |
+| IT person | The delivery lead again (10573). They set up staging and the Admin's account. With one person in both roles there is no one to sit silent, so the "helps only when stopped" rule is not applied | The person who grants the Admin's server access (A-35): Accucut IT, or the delivery lead acting as IT if they say so. Sets up staging and the account; **sits by and says nothing, and helps only after `restore.sh` has stopped and printed its stop message** ("Call your IT person") |
+| Observer | **None independent.** The delivery lead cannot be runner, IT and observer. Times come from the host log line `restore.sh` writes and from the delivery lead's own notes on QA's form. Hesitations they notice are logged as README defects | A person the delivery lead names, who is **not** the IT person (one person cannot both help and judge whether help was needed). If the delivery lead is again the IT person, the observer is someone else. QA supplies the form. Times each step, notes every hesitation, reads nothing aloud |
+| QA | Sets the preconditions, runs the failure drills (14.4), checks the result (14.6), records | The same |
 
 **Preconditions (QA checks before the Admin sits down).**
 1. Staging runs the release candidate image, on the same Compose file as production, with invented data, and `/api/health` passes.
@@ -588,9 +599,11 @@ It proves that **the Admin, from the README alone, on a healthy staging server, 
 
 The observer starts a stopwatch when the Admin opens the README, and records the clock time of each step: T0 opens the README, T1 connected to the server, T2 starts `restore.sh`, T3 sees the list of copies and chooses the newest, T4 pre-checks pass, T5 pastes the key, T6 reads what will be lost and types the date, T7 restore ends, T8 `/api/health` passes and the Admin signs in. The observer also records every pause of more than a minute, every re-read of the README, every wrong command and every question asked.
 
-**What counts as stopped.** The IT person may help only after the script exits with its stop message. If the Admin is stuck at a README step for more than **15 minutes (PROPOSED)** without making progress, the observer notes the step, a hint is given, and the rehearsal is marked **assisted**: this is a README defect and the rehearsal is repeated after the fix. A second attempt by the same person is a weaker test, because they have now read it; the report says so.
+**What counts as stopped (Run B).** The IT person may help only after the script exits with its stop message. If the Admin is stuck at a README step for more than **15 minutes** without making progress (accepted at DL-035, QA-OQ-06: a label, not a pass mark, and well inside the 4-hour RTO), the observer notes the step, a hint is given, and the rehearsal is marked **assisted**: this is a README defect and the rehearsal is repeated after the fix. A second attempt by the same person is a weaker test, because they have now read it; the report says so.
 
-### 14.4 Scripted failure paths (QA with the IT person, on staging, before the Admin's session; at 10.11's G7)
+**Run A.** There is no observer to apply the 15-minute limit, so no run is marked assisted. The delivery lead notes any step where they stopped, re-read or guessed, and each becomes a README defect. Run A cannot be marked a pass for hand-over; it is marked "validation passed" or "validation failed".
+
+### 14.4 Scripted failure paths (QA with the IT person, on staging, before the Admin's session; at 10.11's G7, where the delivery lead is the IT person)
 
 These are the A-35 tests of the strategy (section 9). Each stops with a plain message and leaves the portal running on the old database.
 
@@ -608,7 +621,9 @@ After the main run, the Admin does one drill (D1 or D4) and says aloud what the 
 
 ### 14.5 Pass criteria
 
-All of: (1) the Admin completes the restore **unassisted**; (2) every post-check in 14.6 passes; (3) the total time is recorded and is at most 4 hours (it is expected to be far less; the number is the finding); (4) every README fault found is logged as a defect: Sev-2 if it caused an assist or a wrong command, Sev-3 for unclear wording; (5) D1 to D7 pass. Otherwise the rehearsal fails, the README or script is fixed and it is run again.
+**Run B (hand-over).** All of: (1) the actual Admin completes the restore **unassisted**; (2) every post-check in 14.6 passes; (3) the total time is recorded and is at most 4 hours (it is expected to be far less; the number is the finding); (4) every README fault found is logged as a defect: Sev-2 if it caused an assist or a wrong command, Sev-3 for unclear wording; (5) D1 to D7 pass. Otherwise the rehearsal fails, the README or script is fixed and it is run again.
+
+**Run A (validation).** Items (2), (3), (4) and (5) apply. Item (1) is not required and not claimed. A pass means the steps work; the report heading says "validation", and the G8 record does not count it as the rehearsal FR-091 and NFR-013 name.
 
 ### 14.6 Post-checks (QA, with the IT person)
 
@@ -625,7 +640,7 @@ All of: (1) the Admin completes the restore **unassisted**; (2) every post-check
 
 ### 14.7 Evidence and timing
 
-The log (observer's form, filled-in checks, times, defects) is `docs/07-qa/restore-rehearsal-<date>.md`; it holds no key, no secret and no real data. It happens before go-live, after 10.04, 10.05, 10.11 and 02.09 are Done, and after Accucut IT has granted the account (A-35) and the disk is sized (OQ-ARCH-03). It is a human step, outside the hours and the dates (release plan 3.1), and G8 evidence. Recommended, not required: once a year with the oldest retained copy, because a two-year retention is worth only what can still be read.
+The log (the form, filled-in checks, times, defects) is `docs/07-qa/restore-rehearsal-<date>-validation.md` for Run A and `docs/07-qa/restore-rehearsal-<date>-handover.md` for Run B; neither holds a key, a secret or real data. Run A happens after 10.04, 10.05, 10.11 and 02.09 are Done and after the Admin's account exists on staging (A-35); Run B at hand-over, once the actual Admin is named and has their key, and before go-live. Both are human steps, outside the hours and the dates (release plan 3.1), and G8 evidence. The disk is 40 GB by the delivery lead's decision (10576); the free-space and "Disk nearly full" checks run at that size. Recommended, not required: once a year with the oldest retained copy, because a two-year retention is worth only what can still be read.
 
 ---
 
@@ -672,7 +687,7 @@ One session per charter at the G7 of the first story that matches it, time-boxed
 | C2 | Break the quantity rule in the people's hands | Typing the per-assembly count instead of the whole-order count; 0, 0.5, 0.01, 1000, 99999, pasting a number with a comma or a rupee sign; changing a parent's count after the children were typed; moving a node; two top-level items | 03.04, 05.03, 05.12 |
 | C3 | Break the cleared-totals rule | Two tabs (Engineer and Lead) editing the same estimate; change and change back; autosave racing a Recalculate; browser back after Calculate; Approve pressed during an edit; slow network; a double click on Recalculate | 06.04, 06.05 |
 | C4 | Break the approval sequence | Approve, unlock, edit, recalculate, cancel, remove, approve, in every order and from stale tabs; the Lead and the Admin acting at once; a wrong password three times; the audit rows afterwards; the earlier price label | 06.06 to 06.13 |
-| C5 | Break the export | Customer and part names with `=`, `+`, `@`, quotes, accents, very long text, emoji; a 500-node estimate; images of 1 pixel and 199 KB; a part with no picture; a node deleted between summary and download | 07.01 to 07.04 |
+| C5 | Break the export | Customer and part names with `=`, `+`, `@`, quotes, accents, very long text, emoji; a 500-node estimate; images of 1 pixel and 204,799 bytes; a part with no picture; a node deleted between summary and download | 07.01 to 07.04 |
 | C6 | Break the tree | Depth 10; 500 nodes; rapid add and delete; moving a node under itself; reordering at the top and bottom; "1.10" and "1.2" order; deleting a parent with children | 05.02 |
 | C7 | Time | A deadline at 23:59 IST and 00:00 IST; 03:00 IST (previous date in UTC); the year boundary for task IDs; the server clock behind or ahead; overdue exactly at the deadline | 04.01, 04.03, 09.x |
 | C8 | Masters | Rates with 3 decimals, 0, negative, 1e9, text; a very long customer name; duplicate names in different case and with trailing spaces; deleting a used item from two tabs | 02.x |
@@ -717,17 +732,18 @@ Direct commands, not `npm run`, because a global rule prompts on `npm run` (`npm
 
 | ID | Question | Owner | Needed by | Assumption until answered |
 |----|----------|-------|-----------|---------------------------|
-| QA-OQ-01 | DL-017 puts the device and assistive-technology checks at the G7 of "the first UI story" and CR-20 names 10.02, but at that G7 only the shell exists. Does the master accept 10.02 as met for the shell with the carry-forward checks of section 12 finishing it? | master | G4 | Yes: section 12 runs as written |
+| QA-OQ-01 | **Closed.** DL-017 puts the device and assistive-technology checks at the G7 of "the first UI story" and CR-20 names 10.02, but at that G7 only the shell exists | master | | Accepted at DL-035: met at 10.02's G7 for the shell only, finished by the carry-forward checks of section 12; G8 lists any not run |
 | QA-OQ-02 | The brief names tasks 1, 4 and 7. PRD 12.2 also gives the Admin task 6 (Release 2, in scope A's single hand-over) and the Last backup line. Does the Admin take task 6? | product-manager | Before the sessions | The Admin takes the backup-line task; task 6 only if the product-manager says so |
-| QA-OQ-03 | Who facilitates and observes the usability test and the rehearsal? QA writes the scripts but cannot sit with Accucut staff | delivery lead | Hand-over | A person the delivery lead names; the observer in the rehearsal is not the IT person |
-| QA-OQ-04 | Who holds a real phone (ideally low end; Android and iPhone), a Windows machine with NVDA and contrast themes, and Excel desktop? | delivery lead | 10.02's G7 for the first two; first export story for Excel | None; the checks wait |
-| QA-OQ-05 | Who is the Admin and who is the IT person for the rehearsal? Architecture 16.14 says the rehearsal "depends on a person nobody has named" | delivery lead | Before the rehearsal | Section 14 waits |
-| QA-OQ-06 | Is 15 minutes stuck at one README step the right limit for "stops"? | master | The rehearsal | 15 minutes (PROPOSED) |
-| QA-OQ-07 | The picture size boundary: is "under 200 KB" 200,000 or 204,800 bytes, and what happens at exactly the limit? | product-owner | 05.07 Ready | Test 199 and 201 x 1024 bytes as the strategy says; record the build's behaviour at the boundary |
+| QA-OQ-03 | **Answered (10574).** Who sits with the testers at the usability test? | delivery lead | | "I sit with the testers": the delivery lead facilitates, QA does not attend (13.1, 13.3). For the rehearsal, Run A has no independent observer (14.2); Run B's observer is a person they name, not the IT person |
+| QA-OQ-04 | **Answered (10573).** Devices | delivery lead | | "A real phone, a Windows PC with a screen reader and excel desktop." One phone offered: reports name the platform used, and the other is listed at G8 as not run. The screen reader on the PC is not named; NVDA is assumed |
+| QA-OQ-05 | **Answered for validation (10573, DL-035):** "Both Admin and IT will be me. I will do the validations before giving it to the actual admin." **Still open for Run B:** who the actual Admin is, and who is the IT person and the observer at hand-over | delivery lead | Hand-over | Run B waits for the actual Admin to be named |
+| QA-OQ-06 | **Closed.** Is 15 minutes stuck at one README step the right limit? | master | | Accepted at DL-035 for Run B. Not applied to Run A, which has no observer |
+| QA-OQ-07 | **Answered (10573).** The picture limit | delivery lead | | "It is 204,800 bytes." Business-analyst applies it to SPEC and NFR-005 |
+| QA-OQ-08 | Is a file of exactly 204,800 bytes accepted or refused? 10573 notes it is unanswered | delivery lead; product-owner | 05.07 Ready | Refused ("under"); one expected value flips if they say accepted |
 
 ### 18.2 Dependencies that hold QA work
 
-OQ-ARCH-11 (mail account) holds the real send; OQ-ARCH-03 (disk size) and A-35 (the Admin's account) hold the rehearsal and 10.05's retention at real size; Q-18 holds the uptime check; No CE case waits on Q-35, Q-38 or Q-39: SPEC 18.5 and test-strategy 5.6 treat the rule as settled, and `backlog.md` v0.2 holds no story. The `ux-expert` stop (BLK-03) holds G4 but not this plan.
+OQ-ARCH-11 (mail account) holds the real send; A-35 (the Admin's account) holds Run A of the rehearsal, and the naming of the actual Admin holds Run B; the disk stays at 40 GB by the delivery lead's decision (10576), so 10.05's retention and free-space tests run at that size, and who clears old copies is open (the master's G4 condition); Q-18 holds the uptime check; No CE case waits on Q-35, Q-38 or Q-39: SPEC 18.5 and test-strategy 5.6 treat the rule as settled, and `backlog.md` v0.2 holds no story. The `ux-expert` stop (BLK-03) holds G4 but not this plan.
 
 ### 18.3 Issues for other roles
 
@@ -735,11 +751,12 @@ OQ-ARCH-11 (mail account) holds the real send; OQ-ARCH-03 (disk size) and A-35 (
 |----|-------|
 | solution-architect | (1) `test-strategy.md` section 12 maps SPEC section 14 items 1 to 14 and section 11's target says "14 of 14"; SPEC now has 17. Items 15 (download refused), 16 (Admin-only cancel and remove) and 17 (rate notice) need rows and the target should read 17 of 17. (2) Section 10 names `npm run lint`, `npm run typecheck`, `npm run build` and `npm run test:e2e`; CI is unaffected, but local runs use the direct forms, so the scripts must wrap those commands exactly. (3) Where the canary suite lives (`tests/security/` or `tests/e2e/`) is not fixed. (4) The Last backup line after a restore (check V8 in section 14.6) |
 | ux-expert | `ux-spec.md` section 10 task 4 (line 919) still asks the Lead to explain a parent's summed figure and a rounding difference of 0.01 between a sum shown and a sum of parts. Under D-25 and FR-029 a parent shows only its own row, so that wording appears stale. Its figures also carry two-decimal rupee amounts that this plan did not use and could not verify as invented (section 0.7 repeats such figures). Please align task 4 to CE-1 and CE-4 and confirm the figures on the screens are not workbook values (the figure check in `check-figures.cjs` is against the data model, not against the workbook) |
-| product-owner | Testability review of every story's ACs at Ready (section 2); QA-OQ-07 |
+| product-owner | Testability review of every story's ACs at Ready (section 2); QA-OQ-08 (exactly 204,800 bytes) |
+| business-analyst | Apply the 204,800-byte picture limit (10573) to SPEC and NFR-005 wording, so the AC for 05.07 can cite a number |
 | product-manager | QA-OQ-02; the usability target of 90 percent cannot be read with 7 attempts (section 13.4) |
 | scrum-master | Story 10.02's G7 evidence list is section 12; 05.03's includes R-10 on a real phone; 10.11's G7 is the scripted drills, not the Admin's rehearsal |
 | developer | The database guard (4.1); the canary negative control; `quantity-cases-complete` with a planted-`it.todo` negative control; the test-name convention of section 2 |
-| master | QA-OQ-01, QA-OQ-06; condition 15 is answered by this plan, for the G4 check. `docs/project-state.md` (open questions table) still says Q-39 is open and "03.04 cannot pass G7 without it"; SPEC 18.5 and test-strategy 5.6 say the rule is settled and nothing is held. Please reconcile |
+| master | QA-OQ-01 and QA-OQ-06 are accepted (DL-035) and closed here; condition 15 is answered by this plan, for the G4 check. The G8 record must state which rehearsal run was done and list the device checks not run. `docs/project-state.md` (open questions table) still says Q-39 is open and "03.04 cannot pass G7 without it"; SPEC 18.5 and test-strategy 5.6 say the rule is settled and nothing is held. Please reconcile |
 
 ### 18.4 Risks raised
 
@@ -751,4 +768,5 @@ No new register entry is proposed. Two restate existing ones from the testing si
 
 | Version | Date | Change |
 |---------|------|--------|
+| 0.2 | 2026-11-02 | G4 remediation 10 (AQP-1 10573, 10574; DL-035). Devices come from the delivery lead (one phone: platform named per report, the other listed at G8); the delivery lead sits with the testers and facilitates the usability test, with the limits of that stated; the restore rehearsal is two runs, A validation (delivery lead as Admin and IT, no independent observer, does not satisfy FR-091 or NFR-013) and B hand-over (the actual Admin, 15-minute limit accepted), and the G8 record states which was done; QA-OQ-01 and QA-OQ-06 closed; QA-OQ-03, 04, 07 answered, QA-OQ-05 answered for Run A only; picture limit 204,800 bytes with the exact-limit file refused as a labelled assumption (new QA-OQ-08) |
 | 0.1 | 2026-11-02 | First issue for G4. Acceptance conditions for the 88 candidate stories, the 17 SPEC section 14 items, the CE cases with expected values, the canary scan and its independent pass, the device and assistive-technology checks, the usability test (tasks 1, 4, 7), the Admin's restore rehearsal, regression, commands. Written against PRD v0.10, test-strategy v0.9, SPEC v1.12, architecture v0.9, ux-spec v0.6, backlog v0.2. No code existed; nothing was run |
