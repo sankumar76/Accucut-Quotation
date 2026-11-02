@@ -312,3 +312,58 @@ Attempt 1 remediation 8 is therefore met early. G3 no longer waits on (c), (d) o
 **Risks registered:** RISK-011 (weekly backup), RISK-012 (out-of-date export), RISK-013 (ARCH-R5), RISK-014 (ARCH-R3), RISK-015 (evidence limits) new. RISK-001 raised to 10; RISK-002 restated, score unchanged at 10; RISK-003, 006, 007 restated; RISK-008 reduced to 9; RISK-010 reduced to 3, not closed. ARCH-R1 merged into RISK-011; ARCH-R2, R4 and TD-01 to 05 stay in `architecture.md` §14 with their GitHub issues.
 **Rationale:** Every mandatory item passes on evidence I checked, including the six FRs the UX table omits, so the checklist gives CONDITIONAL GO. The largest open item from G2 closed in their own words and reversed the rule, which shows the check was worth holding. What remains cannot produce a wrong price before G4: nothing is built, and the two price questions now hold the roll-up story. Development does not start until HOLD-01 and G4.
 
+---
+
+## G4 – Backlog Ready — 2026-11-02
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none. No human stop at this gate (DL-010)
+- **Attempt:** 1
+- **Artefacts evaluated:** at commit 97d8a1f: `docs/05-backlog/consistency-report.md` v0.3, `backlog.md` v0.3 (sections 3 to 7), `sprint-01-plan.md` v0.1 and the header of v0.2, `docs/07-qa/test-plan.md` v0.1 (sections 12, 13, 14, 18), `docs/standards/definition-of-ready.md`, PRD v0.11 (9.1, 12, 13.3 to 13.6), release plan v0.11 (3.2, 3.3, 6.2), architecture v0.10 (9.5, 16.12 to 16.14, A-27 to A-35), ADR-006, SPEC v1.12 §18, `docs/03-ux/generator/README.md`. Jira: AQP-1 latest 100 of 125 comments, AQP-26 and AQP-15 all, all 18 story descriptions, links on the 8 corrected stories and AQP-89, validation comments on AQP-38, 74, 123, sub-tasks of AQP-27, all 15 open-question issues. GitHub: PR #1, issues #11, #12, repository visibility. Session log, read only, by role. **Not done:** generator rebuild not re-run (my shell call was denied, no retry); epic files not re-read; the other 15 stories' validation comments not opened. Sample workbook not opened; this record holds no value from it.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | PO consistency report shows no Critical | ✱ | ✅ | v0.3: 0 Critical; FR and NFR coverage complete (scripted by the product-owner). Written before the corrections, so CR-23 and CR-34 need re-issuing (remediation 2) |
+| 2 | Every sprint-1 story meets DoR 100 % | ✱ | ❌ | **Done and verified by me:** 13 links read in Jira (AQP-48 to 89; AQP-57 to 90, 113, 122, 123, 130, 142, 148; AQP-113 to 122, 123, 130; AQP-122 to 123, 130); AQP-27 has AC-10 and sub-task AQP-164. **Missing:** (a) product-owner re-validation of the nine (10605 asks for it; AQP-27's text says "Pending re-validation"); (b) the "Depends on" lines on the eight stories, which `backlog.md` section 7 asked for along with the link: AQP-90 still reads 10.02 and 01.02; (c) the validation counted 16 items and the DoR has 17 checkboxes; section 8's list of what was checked names no BR-ID item. AQP-123 and AQP-130 list no BR, though BR-004 (only the Admin manages masters) applies to both, and AQP-123 also touches BR-003 |
+| 3 | Stories trace to FRs and epics | ✱ | ✅ | Scripted: 18 of 18 have a Trace line and the right parent epic (AQP-16, 17, 18, 19, 25) |
+| 4 | G3 conditions 12, 13, 15 and the DL-026 inputs | ✱ | ✅ | Condition 12: DL-036. Condition 13: met by acceptance, DL-033. Condition 15: test plan present |
+| 5 | AC form and sizing | | ✅ | Scripted: 18 of 18 have story form, 5 to 10 ACs, every AC row Given/When/Then, Dev Context, UX, Tasks, Testing notes and points. 53 + 20 = 73 points. Sub-tasks 120 |
+| 6 | Dependencies sequenced | | ✅ | All 13 new links run earlier to later in the plan's order; 41 links (10605). The text gap is under check 2 |
+| 7 | Sprint goal stated | | ✅ | `sprint-01-plan.md` v0.2 |
+| 8 | Capacity plausible | | ⚠️ | 53 committed against an assumed 55: a stated calibration with no velocity, and the sprint has no length. Merge model not recalibrated (release plan 6.2): 7 merge waits on sprint 1's critical path against 2 stage waits. DL-038, RISK-008 |
+| 9 | No open question blocks a sprint-1 story | | ⚠️ | None held by a business question: Q-38, Q-39, Q-41 are closed. To settle first: CR-33 (a 403 or the uniform 404, story AC defers it), A-1 (IMP-S1-02), CR-32 |
+| 10 | Master's record (CR-23) | | ✅ | Done here: DL-027 to DL-038; register updated; CR-23 closes on this record |
+| 11 | Docs PR qualifies for docs-auto | | ✅ | Every changed file is under `docs/` or the SPEC (checked with git). PR #1 stays draft until GO; its gate list is stale |
+| 12 | Backlog internally consistent | | ⚠️ | `backlog.md` section 4 "top 10" ranks 03.01, 03.02 and 02.01 at 8, 9, 10; section 5 ranks them 11, 12, 13. The execution order is section 5's. Remediation 2 |
+
+**Rulings on the known points**
+
+1. **Can G4 pass with CR-34 in progress? No.** DoR 100 % is mandatory, and a mandatory item cannot be carried as a condition. The corrections landed at 15:41Z, after the brief; that removes most of the gap and not all of it.
+2. **Quantity rule:** recorded, DL-027. Their words meet the own-words standard for what is typed and how each row is costed. The sentence is the team's. The answer given before any reading was offered is "So the user will enter 4 frames and 12 brackets". 2, 6 and 24 are weaker: the rule had been put to them. No question is added.
+3. **The error:** the orchestrator's question and my acceptance of it, DL-028.
+4. **Generator:** condition 13 is met by acceptance, not by the check. RISK-006 stays at 12, DL-033.
+5. **Disk:** they accepted 40 GB, so 2-year retention will not hold, and both stand. New: under A-35 nobody has the rights to clear old copies, DL-034.
+6. **Admin and IT at validation:** the rehearsal with the actual Admin is still owed, DL-035.
+7. **Reviews:** three stay, DL-032. **Readings and assumptions:** DL-031. **CR-31:** DL-037.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | scrum-master | Jira AQP-89, 90, 113, 122, 123, 130, 142, 148 | Add the new dependencies to each "Depends on" line, as the correction specified. Add BR-004 to AQP-123 and AQP-130, BR-003 to AQP-123, and any other relevant BR the product-owner names | G4 attempt 2 |
+| 2 | product-owner | Jira; `consistency-report.md`; `backlog.md` | Re-validate the nine with a comment each. Check all 18 against all 17 DoR items, and say which item was not counted. Fill the PO Validation section, which reads Pending on 17 stories. Issue report v0.4: CR-23 closed, CR-34 and CR-35 status, CR-31 widened. Align `backlog.md` section 4 ranks | G4 attempt 2 |
+| 3 | master | `gate-log.md` | Attempt 2 reads remediation 1 and 2 only; every check marked ✅ stands unless changed | G4 attempt 2 |
+| 4 | product-manager | `release-plan.md` 3.3, 6.2 | Recalibrate the merge model from the story count and dependencies. Set out the ways to work (merge cadence, stacked branches, batched PRs) for them to choose. No date adopted | Before sprint 1 starts |
+| 5 | solution-architect | Architecture manifest rule | State once what an Engineer gets on a Lead or Admin route (CR-33); stories follow | Before AQP-48 starts |
+| 6 | solution-architect | Architecture | Confirm or replace A-1 (IMP-S1-02) | Before AQP-97 starts |
+| 7 | ux-expert | `ux-spec.md` | CR-32: say whether a failed sign-in clears the password field | Before AQP-38 starts |
+| 8 | solution-architect | Architecture 9.5; README | Who clears old copies, and how, given A-35 (DL-034) | Before 10.05 reaches Ready |
+| 9 | product-manager; business-analyst | `prd.md`; SPEC | State the retention limit: 2 years is not a guarantee on 40 GB | Before 10.05 reaches Ready |
+| 10 | qa-engineer | `test-plan.md` 13, 14, 18 | Apply 10573, 10574, DL-035; section 14.2 for one person in both roles at validation; a rehearsal with the actual Admin at hand-over | Before 10.02 reaches G7 |
+| 11 | orchestrator | AQP-2 to 15, AQP-26; PR #1 | Transitions per DL-037; refresh the PR gate list. Report this result, as they asked to see it, including RISK-016 to 018, the DL-031 list and the 7 merge waits. No approval requested and no reply text | Now |
+| 12 | Owners in the report | CR-13, 16, 17, 18, 27, 28 | Minor; carried | G8 |
+
+G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due.
+
+**Risks registered:** RISK-016 (ARCH-R6 and the whole-order count, one risk, 16 🔴), RISK-017 (ARCH-R7, 12), RISK-018 (ARCH-R8, 10) new. RISK-002 reduced to 5; RISK-013 reduced to 6; RISK-011 raised to 10; RISK-008 raised to 12; RISK-012 and RISK-009 closed; RISK-001, 003, 006, 007, 015 restated.
+**Rationale:** The backlog is close: 0 Critical, full trace, and every link and acceptance criterion I checked is there. But the mandatory DoR item lacks the product-owner's re-validation, a correction was left half done, and the checklist was counted short, so the procedure gives NO-GO and attempt 1 of G2 sets the precedent. It costs one short loop with no human wait. The bigger finding for the delivery lead is not the gate: a typed count can now misprice an order with nothing to flag it (RISK-016).
+
