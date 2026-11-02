@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.9 (OQ-ARCH-12 answered: the Admin holds the key, has server access and runs a restore; only the Excel download is refused; the changes are listed under "What changed in v0.9") |
+| Version | 0.10 (a corrected hours total and FR-106 to 108 in the matrix; the last content change was 0.9) |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers, which changes what G3 accepted. Version 0.8 applies their answers in AQP-1 comments 10546 to 10554. **Backups on the same server change NFR-013 and RISK-011.** Version 0.9 applies 10559 and 10560: **the Admin's server access changes what the audit log can prove.** For `master` to record and check at G4 |
 | Date | 2026-11-02 |
-| Inputs | SPEC v1.10 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10560; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.8; release plan v0.8; UX spec v0.3 (section 16.9); consistency report (CR-11). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
+| Inputs | SPEC v1.11 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10560; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.10; release plan v0.10; UX spec v0.3 (section 16.9); consistency report v0.2 (CR-11, CR-22, CR-29). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
 | Companions | `docs/04-architecture/adr/ADR-001` to `ADR-014`; `docs/04-architecture/test-strategy.md` |
 | Scope | Scope A (D-14): every FR through Release 2 and every NFR. Offline (FR-092) is not designed and not blocked (section 9.8) |
 
@@ -30,7 +30,7 @@
 | 4 | "Yes only Admin only checks", "Backup on the same server" | **A server or disk failure loses the data and every backup together.** 105 full copies do not fit the 40 GB disk: at 0.1 GB of new data a week it fills in about 6 months. A free-space check is added. **Who holds the backup key and who restores are open** | 0 to +0.25 | Section 9.5 |
 | 5 | A-30: "Removable", "Admin only" | **Feasible.** Two steps, Admin only: cancel the approval, then remove the price. Each is audited, and the audit keeps the price | +2.75 to +4 | Section 4.10 |
 | 6 | A-32: "Refuse it" | No Excel file until a calculation is current, for a never-calculated estimate too. A-05 ends | -0.25 to -0.5 | Section 4.6 |
-| | **Total** | | **+3.75 to +6.5, central +5.125** | Section 16.13 |
+| | **Total** | | **+3.75 to +6, central +4.875** (corrected in v0.10; first published as +6.5) | Section 16.13 |
 **What changed in v0.7 (the quantity rule, Q-35 (b), Q-41, Q-36, Q-37).** This replaces the rule in versions 0.3 to 0.6. Where those tables and sections 16.1 to 16.11 describe `T(row)`, a multiplier, `applyQuantityStep`, `ROLLUP`, a Σ figure, an item total, or Q-39, Q-35 (b) or Warn's scope as open, this version overrides them.
 
 | # | Change | Result | Where |
@@ -781,8 +781,8 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | Approve | `POST /estimates/{id}/approve` | `calculationId`, price, optional `reason` (at most 500 characters; kept only on an override) | Approval | 409 (`NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, changed `calculationId`, wrong status), 422 | A L | Status guard | R1 |
 | Unlock preview | `GET /estimates/{id}/unlock-preview` | none | Configuration versions; counts of changed rates | 409 | A L | Yes | R1 |
 | Unlock | `POST /estimates/{id}/unlock` | Reason | Estimate | 409, 422 | A L | Status guard | R1 |
-| Cancel approval | `POST /estimates/{id}/approval/cancel` | `approvalId`, reason, password | Estimate | 403, 409 (`APPROVAL_CHANGED`, already cancelled), 422 (`STEP_UP_FAILED`) | A, step-up | Status guard | R2 |
-| Remove price | `POST /estimates/{id}/approval/remove-price` | `approvalId`, password | Estimate | 403, 409 (`APPROVAL_CHANGED`, not cancelled), 422 (`STEP_UP_FAILED`) | A, step-up | Status guard | R2 |
+| Cancel approval | `POST /estimates/{id}/approval/cancel` | `approvalId`, reason, password | Estimate | 403, 409 (`APPROVAL_CHANGED`, already cancelled), 422 (`STEP_UP_FAILED`) | A, step-up | Status guard | R1 |
+| Remove price | `POST /estimates/{id}/approval/remove-price` | `approvalId`, password | Estimate | 403, 409 (`APPROVAL_CHANGED`, not cancelled), 422 (`STEP_UP_FAILED`) | A, step-up | Status guard | R1 |
 | Export | `GET /estimates/{id}/export` | none | `.xlsx`, attachment, `no-store`, only while `current` | 404, 409 (`NOT_CALCULATED`, `EXPORT_OUT_OF_DATE`), 503 | A L | Yes | R1 |
 | Export summary | `GET /estimates/{id}/export-summary` | none | File name, row and picture counts, state of figures, the approved price's difference and reason. Only while `current`: by row, H, own BG and BM as the file holds them; total Tool Cost, reconciliation, and the quantity warnings with who went ahead and when | 404 | A L | Yes | R1 |
 | Configuration | `GET /config/fields`; `GET /config/current` | none | Fields, formulas, letters; version, saved by and at, estimates in use | 403 | A L | Yes | R1 read; R2 UI |
@@ -795,7 +795,7 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | Checkpoints | `GET, POST /config/checkpoints` | Name | Checkpoint | 409 | A | No | R2 |
 | Revert | `POST /config/versions/{id}/revert` | Password | New version | 422 | A, step-up | No | R2 |
 | Audit | `GET /audit?category=&event=&who=&from=&to=` | Filters | Page of entries, total | 403 | A | Yes | R1; config R2 |
-| Settings | `GET, PUT /settings` | Alerts, sender | Settings; last good backup, "late" and "disk nearly full" from `job_runs` (FR-105, SCR-15) | 422 | A | Yes | R2 |
+| Settings | `GET, PUT /settings` | Alerts, sender | Settings; last good backup, "late" and "disk nearly full" from `job_runs` (FR-105, SCR-15) | 422 | A | Yes | R1 for FR-105; R2 for alerts and sender |
 | Test e-mail | `POST /settings/test-email` | none | Result | 502, with `SENDER_NOT_ALLOWED` when Microsoft refuses the sender (5.7.60), and no secret in any body | A | No | R2 |
 
 **Engineer-reachable routes** are only those listing E in the table. Every one has an allow-list response schema.
@@ -1283,7 +1283,7 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-060 | Views, UI | No edit controls; server refuses writes |
 | FR-061 | Calc, Estimates, EstLib | `figure-state`; any input change clears; section 4.8 |
 | FR-062 | Approval, Audit | Refused unless `current`; override when price differs from rounded BL; optional reason |
-| FR-063 | Approval, EstLib | Unlock preview through `rate-diff`; recalculation reads current masters. The notice before approval (section 4.8) has no FR yet |
+| FR-063 | Approval, EstLib | Unlock preview through `rate-diff`; recalculation reads current masters. The notice before approval is FR-106 |
 | FR-064 | EstLib, Estimates | State machine |
 | FR-065 | Calc, Approval, migrations | Immutable record; ADR-007 |
 | FR-066 | Export, Fields | Widths and formats from the registry |
@@ -1325,7 +1325,10 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 | FR-102 | Views, UI | A status is not a cost; no Engineer route carries figure state |
 | FR-103 | Approval, Audit, UI | `override_reason`; section 5.1 |
 | FR-104 | EstLib, Calc, Views, Audit, UI | `quantityWarnings`, 409 `CALCULATE_ACK_REQUIRED`, `calculations.warnings`; section 4.3. Every 0, on every row (Q-41). The FR's text is for product-manager to follow |
-| FR-105 | Settings, UI | `job_runs`; the `GET /settings` line and `backup-watch` (section 9.5). Wanted ("Yes", AQP-1 comment 10549). Cancel approval and remove price (section 4.10) have no FR yet |
+| FR-105 | Settings, UI | `job_runs`; the `GET /settings` line and `backup-watch` (section 9.5). R1 core in PRD v0.10 |
+| FR-106 | EstLib, Approval, Views, UI | `rate-diff`, `ratesChanged` on `GET /costs`, a notice on SCR-06 and one line on SCR-08; counts only; approval not blocked (section 4.8) |
+| FR-107 | Approval, Audit, Http, UI | `POST /approval/cancel`, Admin only, step-up; `cancelled_*` columns; to DRAFT from APPROVED; `approval.cancelled` audit event (section 4.10) |
+| FR-108 | Approval, Audit, Export, Views, UI | `POST /approval/remove-price`, Admin only, step-up, only after a cancel; `removed_*` columns; BO and BO2 follow; `approval.price_removed` audit event, which keeps the price (section 4.10) |
 | NFR-001 | Http, Auth | Section 7 |
 | NFR-002 | Views, Formula | Section 7, ADR-008 |
 | NFR-003 | Auth, Http | Section 8 |
@@ -1947,9 +1950,9 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | 4 | Backups on the same server | EPIC-10 | Off-host step gone, -0.25; free-space check and the alert, +0.25 to +0.5 | 0 to +0.25 |
 | 5 | Cancel approval, remove price | EPIC-06 | Columns and grants 0.25 to 0.5; two routes, service and audit 0.75 to 1; SCR-06 buttons and two dialogs 0.75 to 1; BO rules on screen and in the file 0.25; tests 0.75 to 1.25 | +2.75 to +4 |
 | 6 | No file until current | EPIC-07 | The `none` branch in the export and its SCR-10 state go; the refusal is one more condition | -0.25 to -0.5 |
-| | **Total** | | | **+3.75 to +6.5, central +5.125** |
+| | **Total** | | | **+3.75 to +6, central +4.875** (corrected in v0.10; first published as +6.5, section 16.14) |
 
-**All together, against release plan v0.8:** -0.5 to -0.75 h, central -0.625 h, which makes scope A **87 to 130.75 h, central 108.875 h**. So the savings of v0.7 are nearly used up by these additions.
+**All together, against release plan v0.8:** -0.5 to -1.25 h, central -0.875 h, which makes scope A **87 to 130.25 h, central 108.625 h** (corrected in v0.10). So the savings of v0.7 are nearly used up by these additions.
 
 **UX items, for ux-expert (not edited here).**
 
@@ -1968,7 +1971,7 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | Owner | Issue |
 |-------|-------|
 | master | Restate RISK-011, which is now total loss on a server or disk failure, and register ARCH-R7. Note that NFR-013 no longer holds for that failure. Check A-33, A-34 and ADR-002, 007, 012. OQ-ARCH-12 needs a key holder before go-live |
-| product-manager | New FRs: the rate notice, cancel approval and remove price (Admin only). Restate NFR-013 and NFR-004 (six actions). FR-070: refused until `current`. FR-047 or wherever Part Model is required. FR-105 is firm. It is R2 with Settings, and the Admin has nothing to check until it ships: say whether it should move earlier. Take +3.75 to +6.5 h |
+| product-manager | New FRs: the rate notice, cancel approval and remove price (Admin only). Restate NFR-013 and NFR-004 (six actions). FR-070: refused until `current`. FR-047 or wherever Part Model is required. FR-105 is firm. It is R2 with Settings, and the Admin has nothing to check until it ships: say whether it should move earlier. Take +3.75 to +6 h |
 | business-analyst | SPEC §6.5 and §7.3 (Part Model). OQ-ARCH-12 to the delivery lead: **who holds the backup key, and who restores?** Record that the audit log keeps a removed price |
 | Accucut IT | VM disk size against section 9.5 (OQ-ARCH-03). 40 GB is too small |
 | qa-engineer | Test plan: section 9 rows below, and the rehearsal needs a named person to run a restore |
@@ -1987,7 +1990,9 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | Tests of its failure paths | EPIC-10 | +0.25 |
 | **Total** | | **+1 to +1.5, central +1.25** |
 
-**All together, against release plan v0.8:** +0.5 to +0.75 h, central +0.625 h, which makes scope A **88 to 132.25 h, central 110.125 h**. The Admin's own time on the rehearsal is not in these hours.
+**All together, against release plan v0.8:** +0.5 to +0.25 h, central +0.375 h, which makes scope A **88 to 131.75 h, central 109.875 h** (corrected in v0.10). The Admin's own time on the rehearsal is not in these hours.
+
+**Correction (v0.10): the 0.5 h was an addition error of the architect's, not a row.** Section 16.13's rows are right and sum to +3.75 to +6: additions of 4 to 6.5, less the file saving of 0.25 to 0.5. The published +6.5 left that saving off the high end. So the "surplus" release plan v0.10 dropped was never a piece of work, and no row is missing or to be restored. The plan's central 109.875 h agrees with this. Its ends, 87.75 and 132, differ by 0.25 h each way, because it takes the file saving as 0.5 low and 0.25 high. Every other saving in the plan is taken small with low, as removing work sized 0.25 to 0.5 lowers the low estimate by 0.25 and the high by 0.5. Taken the same way, the ends are 88 and 131.75. That is for product-manager to apply.
 
 **Issues for other roles.**
 
@@ -2008,6 +2013,7 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |
 | 0.3 | 2026-11-01 | G3 answers, SPEC v1.4. Every level's quantity (section 4.3), corrects v0.2's "one branch" claim. Weekly backups, kept 2 years, RPO up to 7 days (section 9.5). Microsoft mail check and OAuth mode (section 4.7). Cleared totals (section 4.8). "Not applicable" (section 4.9). Password rule and 12-hour session from sign-in (section 8). Optional reason, one export total, Tool Cost footer. Scope A: `FEATURE_CONFIG_EDITOR` dropped. New A-17 to A-23, OQ-ARCH-10 to 12, UX-28 to UX-37. Aligned with PRD v0.6: FR-098 to FR-103 in the coverage matrix, NFR-013, NFR-018 at 2.2 AA. ADR-002, 004, 006, 007, 009, 011, 012, 013 revised |
+| 0.10 | 2026-11-02 | CR-22, CR-29. FR-106, 107, 108 added to the coverage matrix, and the stale FR-063 and FR-105 notes cleared. Release labels follow PRD v0.10: cancel, remove and the Last backup line are R1. **Corrected:** section 16.13's total is +3.75 to +6 h, not +6.5, an addition error; section 16.14 explains it. ADR-007 and ADR-012 cleared of stale text |
 | 0.9 | 2026-11-02 | AQP-1 comments 10559, 10560. The Admin holds the key, has server access and runs a restore, replacing "Admin only checks"; A-22 and OQ-ARCH-12 closed. Section 9.5: what server access reaches, a limited account proposed (A-35), what the restore assumes about the person, and a guided `restore.sh`. ARCH-R8 new (GitHub #12). Section 4.10: the audit log is a record, not a control over the Admin. Section 4.6: only the Excel download is refused, confirmed. New section 16.14: +1 to +1.5 h. ADR-002 revised |
 | 0.8 | 2026-11-02 | AQP-1 comments 10546 to 10554. Picture optional, OQ-ARCH-04 closed. Rate notice on SCR-06 and SCR-08, approval not blocked, OQ-ARCH-06 closed. FR-105 firm. Section 9.5 rewritten: the Admin only checks, copies on the same server, a server or disk failure loses everything, disk growth over 2 years, free-space check, key holder and restorer open. New section 4.10: Admin-only cancel approval and remove price, feasible, audited. No Excel file until a calculation is current; A-05, A-30, A-32 closed. A-33, A-34, ARCH-R7 new. Sections 4.4, 4.7, 4.8, 5, 6, 7, 8, 12 to 15 follow. New section 16.13: +3.75 to +6.5 h. ADR-002, 007, 012 revised |
 | 0.7 | 2026-11-02 | The quantity rule (AQP-26), Q-35 (b) and Q-41. H is the count for the whole order, BL is `SUM(BG)`, and a parent shows only its own row. Section 4.3 rewritten. Removed: `src/lib/rollup/`, `T(row)`, `applyQuantityStep`, the multiplier, `ROLLUP`, the item total, `calculation_rows.rollup`, `calculations.item_totals`, `rollupDisplay`. Warn stays for every 0, with one code and the wording "That row will cost 0". Section 4.8 rewritten for Q-37: no calculated value is read unless `current`, and the approved price stays. Section 4.6: the download is refused while cleared, and the out-of-date file and its markers are removed. Section 4.9 follows Q-36. A move no longer changes BL. ARCH-R6 new (GitHub #11). A-17, A-18, A-20, A-27, A-28 closed; A-29 to A-32 new; Q-35, Q-36, Q-39, OQ-ARCH-10 closed. Sections 1, 4.1, 4.2, 4.5, 5.1, 6, 7, 8, 10, 12 to 15 follow. New section 16.12: -4.25 to -7.25 h. ADR-006 rewritten; ADR-003, 004, 005, 007, 008, 012 revised |

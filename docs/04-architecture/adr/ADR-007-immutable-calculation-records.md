@@ -5,10 +5,10 @@
 | Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-18, D-20) and for architecture v0.7: Q-37 answered, so what clears is their decision (AQP-1 comment 10545), for `master` to check at G4 |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
-| Related | FR-031, 061, 062, 063, 065, 068, 100, 101, 103; NFR-007, 026; D-07, D-18, D-20; Q-37; ADR-004, ADR-012 |
+| Related | FR-031, 061, 062, 063, 065, 068, 100, 101, 103, 106, 107, 108; NFR-007, 026; D-07, D-18, D-20; Q-37; ADR-004, ADR-012 |
 
 ## Context
-An approved estimate must keep the fields, formulas, rates, master values and results it was approved with, whatever changes later (AQP-8). Each calculation must record the configuration version and every master value used. Recalculation after an unlock uses current values and shows a notice. Export is allowed at any status.
+An approved estimate must keep the fields, formulas, rates, master values and results it was approved with, whatever changes later (AQP-8). Each calculation must record the configuration version and every master value used. Recalculation after an unlock uses current values and shows a notice. Export is allowed only while a calculation is current (ADR-012).
 
 ## Decision Drivers
 - FR-065, NFR-026: screen and export of an approved estimate never change
