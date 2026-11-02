@@ -19,15 +19,20 @@
 
   /* ---- States ---- */
   var states = [];
-  function applyState(name) {
+  /* An overlay state (body data-bases="qtywarn=cleared") shows the content of its base state and also
+     the elements that name the overlay, for example a dialog over the Total cleared screen. */
+  var bases = {};
+  (doc.body.getAttribute('data-bases') || '').split(',').forEach(function (p) { var kv = p.split('='); if (kv[1]) bases[kv[0].trim()] = kv[1].trim(); });
+  function applyState(overlay) {
+    var name = bases[overlay] || overlay;
     root.setAttribute('data-state', name);
     doc.querySelectorAll('[data-show]').forEach(function (el) {
       var tokens = el.getAttribute('data-show').split(/\s+/);
-      el.hidden = tokens.indexOf(name) === -1 && tokens.indexOf('*') === -1;
+      el.hidden = tokens.indexOf(name) === -1 && tokens.indexOf(overlay) === -1 && tokens.indexOf('*') === -1;
     });
     doc.querySelectorAll('[data-hide]').forEach(function (el) {
       var tokens = el.getAttribute('data-hide').split(/\s+/);
-      el.hidden = tokens.indexOf(name) !== -1;
+      el.hidden = tokens.indexOf(name) !== -1 || tokens.indexOf(overlay) !== -1;
     });
     /* Fields that show as empty and invalid in a given state (data-error-in="error"). */
     doc.querySelectorAll('[data-error-in]').forEach(function (el) {
@@ -45,7 +50,7 @@
       t.setAttribute('aria-selected', on ? 'true' : 'false'); t.classList.toggle('is-active', on);
     });
     doc.querySelectorAll('.rb-states button').forEach(function (b) {
-      b.setAttribute('aria-pressed', b.getAttribute('data-state') === name ? 'true' : 'false');
+      b.setAttribute('aria-pressed', b.getAttribute('data-state') === overlay ? 'true' : 'false');
     });
     doc.querySelectorAll('[aria-busy-when]').forEach(function (el) {
       el.setAttribute('aria-busy', el.getAttribute('aria-busy-when').split(/\s+/).indexOf(name) !== -1 ? 'true' : 'false');
