@@ -1,0 +1,248 @@
+# Project Brief — Accucut Quotation Portal
+
+| Field | Value |
+|-------|-------|
+| Version | 1.5 (Draft, 2026-11-02, AQP-1 comments 10559 and 10560, relayed verbatim from the chat by the orchestrator, not in their own words on Jira: the Admin holds the backup key, has server access and runs restores; "block the portal" means only the Excel download is refused; the Q-18 restore item is closed; SPEC 1.11). Version 1.4 (Draft, 2026-11-02, the second set of answers, relayed verbatim from the chat by the orchestrator, AQP-1 comments 10542 to 10555 and AQP-15 comment 10543, none in their own words on Jira: Q-35 (b), Q-36, Q-37 and Q-41 answered; Q-18 answered in part (backups); picture optional, rate-change notice, Last backup line, QTY per Assy hint, Admin-only cancel approval, no download until calculated; ASSUMPTION-52, 53, 54, 55, 59 and 60 end or become rules; SPEC 1.10). Version 1.3 (Draft, 2026-11-02, the quantity rule the delivery lead settled, relayed verbatim in AQP-26 comments 10530 to 10537: QTY per Assy (H) is the count for the whole order on every row and BL is the sum of BG over every row; Q-39 answered, ASSUMPTION-57 retired, ASSUMPTION-52 replaced by ASSUMPTION-59, Q-35 (b) reworded, Q-41 and ASSUMPTION-60 added; new business risk in section 10; SPEC 1.9). Version 1.2 (Draft, 2026-11-02, two answers relayed verbatim from the chat: Q-38 "Yes" (AQP-15 comment 10527; AQP-1 comment 10528), ASSUMPTION-58 retired; Q-40 "No" (AQP-1 comment 10528), OQ-ARCH-05 closed). Version 1.1 (Draft, 2026-11-02, master's rulings DL-018 to DL-026: ASSUMPTION-55 restated to match the design (everything that shows the cleared total, and on screen the single row of a single-piece product; Q-37 reworded, DL-018); ASSUMPTION-57 asked as Q-39 (Jira AQP-26, DL-024); Q-40 added, OQ-ARCH-05 re-routed with no values (DL-025); SPEC §4 delete limit aligned, DL-019 item 6). Version 1.0 (Draft, 2026-11-01: three delivery lead answers applied, relayed verbatim: Q-35 (a) (1000 rupees on the invented example, D-21), OQ-ARCH-10 ("Warn", D-22) and the master data holder (the Admin, D-23; HOLD-01 met); Q-38 raised; ASSUMPTION-51 retired, ASSUMPTION-57 and 58 added). Version 0.9 (Draft, G3 conditions 3 and 10, 2026-11-01: Q-35 (a) restated: the claim that the case is rare is removed and the single-piece item is stated, classed blocking at G4 for the roll-up story and raised as Jira issue AQP-14; WCAG 2.2 AA and light-only first release follow SPEC 1.5; catalogue NFR numbers written "cat. NFR-nnn"). Version 0.8 (Draft, G3 answers applied, 2026-11-01: every level's quantity applies (24 lids); scope A; hosting details in part; one export total with the total Tool Cost; "Not applicable" handling; password, session, stale totals and screen decisions; Q-35 to Q-37 raised; ASSUMPTION-50 retired) |
+| Author | business-analyst |
+| Date | 2026-11-01 (Pass 1: 2026-10-31) |
+| Status | G3 approved by the delivery lead (AQP-1 comment 10491). Answered 2026-11-01: Q-32 (a) in their own words (definition AQP-13 comment 10487; count of 24 lids relayed in AQP-1 comment 10490), Q-34 scope A (AQP-12 comment 10488, their own words), and, relayed verbatim from the chat in AQP-1 comment 10490 (DL-007 (2); the session-log check is the master's), Q-18 in part, Q-31, Q-33 and the UX questions. Answered 2026-11-01 (their words, relayed verbatim from the chat): Q-35 (a) (AQP-14 comment 10510), OQ-ARCH-10 in part (AQP-15 comment 10511) and the master data holder (AQP-10 comment 10512). Answered 2026-11-02 (relayed verbatim from the chat): Q-38 "Yes" and Q-40 "No". Open: Q-18 (web address, sender address, which Outlook account), Q-30. Answered 2026-11-02 (relayed verbatim, AQP-26 comments 10530 to 10537): the quantity rule (H is the count for the whole order; BL is the sum of BG) and Q-39. Answered 2026-11-02, second set (relayed verbatim from the chat by the orchestrator, AQP-1 comments 10542 to 10555, AQP-15 comment 10543): Q-35 (b), Q-36, Q-37, Q-41, backups (Q-18 in part) and the items in SPEC §18 D-25 to D-35. The master decides whether the conditions are met |
+| Intake issue | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## 1. Executive Summary
+Accucut Lasers Pvt Ltd prepares manufacturing cost estimates (quotations) in an Excel worksheet with columns A to BO. The Admin, Leads and Engineers need a role-based web portal that does the same job: Admin or a Lead assigns the estimate to an Engineer, the Engineer enters part data without ever seeing a cost, the portal calculates every cost column from master data, a Lead or Admin approves and locks a price, and the result is exported to Excel in the worksheet's layout. The Admin must also be able to change fields and formulas in the portal, with Excel-style re-lettering and an audit trail. Why now: the sponsor has supplied a full requirements specification, a worksheet sample and a UI sample, and wants delivery to start. Budget: no limit. Start 2026-11-02; target 10 working days at 8 hours a day, ending 2026-11-13 (confirmed as a target, not a fixed constraint: it is the date to complete development and hand the version to their customer for testing and acceptance, and they ask for a realistic date, AQP-12 comment 10446; the scope behind that date is scope A, Q-34 answered 2026-11-01, AQP-12 comment 10488). Sources: SPEC §1, DOCX §1.
+
+## 2. Problem Statement
+- **Who is affected:** Admin (one), Leads (many) who assign and approve estimates, and Engineers (many) who prepare them (SPEC §3). Indirectly, Accucut's customers who receive the quoted price.
+- **Current situation:** Estimates are prepared in one Excel worksheet with columns A to BO; one row per item, part or sub-part; formulas calculate the costs (SPEC §1; XLSX structure). The inputs do not describe how work is assigned, tracked or approved today (Q-28).
+- **Pain / impact (inferred from the design of the requested solution, not evidenced):** a worksheet gives every holder of the file access to all rates and formulas, so an Engineer cannot be kept from seeing cost (the requirement "Engineers never see any cost" implies this); formulas, rates and material data are typed into cells (the sample worksheet hard-codes the rates in every formula); there is no assignment, deadline tracking, review step, lock or audit trail inside the file itself. None of this is quantified: no baseline for time, error rate or volume was provided (Q-24).
+- **Evidence:** SPEC §1, §3, §8; DOCX §1; XLSX (formulas contain hard-coded constants; the second sheet holds three text labels only). No complaints, audit findings or metrics were supplied.
+
+## 3. Business Objectives (SMART)
+Baselines marked "not measured" are open until Q-24 and Q-28 are answered. No figure here is invented; targets come from the SPEC's acceptance criteria.
+
+| ID | Objective | Metric | Baseline | Target | By when |
+|----|-----------|--------|----------|--------|---------|
+| GOAL-01 | Move estimation from the worksheet to the portal | Share of new estimation tasks created and approved in the portal after cut-over | 0 % (all work is in Excel; DOCX §1) | 100 % of new tasks | Development-complete target 2026-11-13, a target and not a fixed date (Q-01, Q-29 answered); a realistic date is requested (AQP-12); go-live follows the customer's testing and the parallel run, date open (Q-25) |
+| GOAL-02 | Keep costs, rates and formulas hidden from Engineers | Cost, rate or formula values found in any Engineer page, API response or file in the automated test | Not applicable to a shared worksheet; no control exists (inferred) | 0 found, test run on every build | Before go-live (SPEC §14.1) |
+| GOAL-03 | Calculate exactly as the worksheet does | Share of the SPEC §7.4 outputs matching a hand-calculated worksheet to 2 decimals on the acceptance tree (nodes 1, 1.1, 1.1.1, 1.1.2, 1.2 to 1.5). **Test oracle:** the worksheet, with the delivery lead's cost rule (D-08, D-12 as rewritten 2026-11-02): QTY per Assy is the count of the part for the whole order, typed on every row, and BL is the sum of BG over every row, which is the worksheet's own rule. The match therefore holds at any quantity (checked on the sample at quantity 1, SPEC §18.5). A parent's own cost counts (the children-only reading, 58.6 % lower on the sample, was rejected). The sample cannot exercise a count above 1, so their oracle includes a constructed example (SPEC §18.5: 2 frames, 3 pipes on each frame and 4 lids on each pipe are typed 2, 6 and 24; 4 and 12 typed with BL 840; 5 typed with BL 1000). What a parent shows on screen beyond its own row is Q-35 (b) | Not applicable | 100 % | Before go-live (SPEC §14.2) |
+| GOAL-04 | Export in the worksheet layout | Share of the export checks passed (A to BO layout, original widths, centre/middle alignment, currency formats, embedded images, BL2 and BO2 filled) | Not applicable | 100 % | Before go-live (SPEC §14.12) |
+| GOAL-05 | Make late work visible and acted on | (a) Overdue e-mail sent within 5 minutes of a task becoming overdue when alerts are ON; (b) 11:00 AM IST digest sent every day when overdue tasks exist; (c) duplicates sent | Not measured; no tracking exists (inferred) | (a) 100 %, (b) 100 %, (c) 0 | Before go-live (SPEC §5.4, §14.11) |
+| GOAL-06 | Control approved prices and configuration | (a) Approved estimates with an Approved Quote Price, approver and time recorded; (b) configuration, master, approval, unlock and price-override events logged with who, when and before → after | Not measured | (a) 100 %, (b) 100 % | Before go-live (SPEC §12) |
+| GOAL-07 | Work on all screen sizes with a consistent professional design | Screens that work with no horizontal page scroll and every action reachable at 360, 768 and 1366 px; design-system review passed | Not applicable | 100 % of screens | Before go-live (SPEC §14.13, §17) |
+
+Business outcome measures such as estimate turnaround time cannot be set until the baseline is provided (Q-24).
+
+## 4. Stakeholders & Personas
+Summary here; full detail in `stakeholder-map.md`.
+
+| Stakeholder / Persona | Role | Primary need | Influence | Interest |
+|-----------------------|------|--------------|-----------|----------|
+| Santhosh - MD | Sponsor and delivery lead (one person; Q-02 answered) | A trusted quoting tool delivered to a date and budget | High | High |
+| Admin (exactly one) | Owns masters, formulas, fields, users, settings | Change pricing rules safely without a developer | High | High |
+| Lead (many) | Assigns, reviews, approves and locks estimates | Fast review and a defensible price | Medium | High |
+| Engineer (many) | Enters part data | Quick, guided entry; clear tasks | Low | High |
+| Accucut's customers | Receive quotes (not portal users) | Accurate, timely quotes | Low | Medium |
+| Accucut IT contact (to be named) | Hosts and backs up the system | A deployable, supportable system | Medium | Medium |
+
+## 5. Scope
+**In scope** (sources in the catalogue)
+- Sign-in, users and roles; exactly one Admin (UR-001 to UR-003).
+- Masters: Process, Customer (with synchronisation rules), Material, Exchange Rate, Treatment/Color, and Settings (UR-031, UR-032, UR-037).
+- Task assignment with network folder path and IST deadline; Open, Closed and Overdue queues; notification bell; e-mail alerts and a daily 11:00 AM IST digest (UR-004 to UR-011).
+- Estimate workspace: customer choice, product tree to any depth, guided form with column letters, image attachment, conditional fields, validation, save and autosave, Calculate (UR-012 to UR-024, UR-040). One estimate holds one complete product (D-04). The Engineer enters Tool Cost with all other inputs (confirmed), and enters 0 for anything a part does not need (UR-043; confirmed). The Engineer also chooses "Not applicable" in the Material and Treatment lists (confirmed; offered to Lead and Admin too, and shown as text on a part to everyone, D-27). Approval is blocked while the totals are out of date or never calculated, every cost figure is cleared when any input is updated, and the Excel download is refused until a calculation is current (D-20, D-28, D-30). The earlier approved price stays until approved again or removed by the Admin, who alone cancels an approval (D-29). The part picture is optional (D-31). A notice tells the Lead when rates changed since the last calculation (D-32). A price that differs from the calculated total may carry an optional reason (D-18). Engineers see status and never a price (D-18).
+- Cost counting on the tree: the cost of a parent is built from its own row and the rows below it, and QTY per Assy (H) is the count of the part for the whole order, typed on every row: 2 frames, 3 pipes on each frame and 4 lids on each pipe are typed 2, 6 and 24, and BL is the sum of BG over every row (BR-046, BR-047; D-12 as rewritten 2026-11-02 from their answers on AQP-26, comments 10533 to 10537, relayed). This is the worksheet's own rule. The earlier every-level reading (AQP-13 comment 10487 read as a per-parent count; the 24 lids as 2 x 3 x 4 worked out by the portal) is superseded. The item's own row has no special rule (D-21: 1000 on a single piece typed 5 at 200 rupees; Q-39: typed 4 and 12 at 150 and 20 rupees, BL 840). What a parent shows on screen beyond its own row is Q-35 (b). The Warn on a 0 in QTY per Assy: its premise changed, Q-41.
+- Cost view with formulas for Lead and Admin; recalculate; approve and lock with Approved Quote Price; unlock (UR-025 to UR-029).
+- Excel export that replicates the worksheet layout (UR-030, BRQ-005). One total only, with the total Tool Cost shown; the export knowingly differs from the sample on this point (D-16).
+- Admin configuration of fields and formulas with re-lettering, configuration versions, checkpoints and change history (UR-033 to UR-036).
+- Audit trail, server-side access control, and the design, brand, responsive, accessibility and SEO/Open Graph standards (cat. NFR-001 to cat. NFR-023).
+- About page, version 1.0.
+
+**Out of scope** (explicitly excluded)
+- "Copy from part" and "Apply to selected" actions (DEC-03).
+- A spreadsheet-style entry grid for Engineers (DEC-01).
+- Reading data from drawings; no drawing file goes into the portal in this version (DEC-04).
+- Engineers seeing or downloading any cost or export (BR-003, ASSUMPTION-36).
+- The "Not needed for this part" switch: not built, the Engineer enters 0 instead (DEC-05, Q-06); Q-15 closed (confirmed, AQP-1 comment 10441 (f)).
+- Offline use (running the portal locally without internet): the next release (confirmed, AQP-11 comment 10444 and AQP-1 comment 10441 (e)); not in Release 1 (BRQ-014, Q-18). Hosting details are answered in part (D-15).
+- Import of past Excel estimates (ASSUMPTION-25, unless Q-25 changes it).
+- Customer-facing quote documents, customer log-in, invoicing, ordering or ERP integration (not in any input).
+- Estimate data in checkpoints (checkpoints cover configuration only; SPEC §8.3).
+
+**Future consideration**
+- Drawing display beside the form, then data reading from drawings (SPEC §17.5).
+- A sharper logo original replaces the current file (Q-16).
+- Offline use in the next release (confirmed; BRQ-014, Q-18).
+- UI-sample ideas not in the SPEC (review-queue counts, global search, workload counts) for the product manager to rank (finding F-16).
+- Dark mode is outside scope A (D-14; cat. NFR-015, which is not the PRD's NFR-015).
+
+## 6. Key Requirements Summary
+Full list in `requirements-catalog.md`.
+- Business: BRQ-001 (replace the worksheet), BRQ-002 (no cost to Engineers), BRQ-003 (review, approve, lock), BRQ-004 (matching calculations), BRQ-005 (Excel layout), BRQ-006 (Admin-configurable worksheet), BRQ-007 and BRQ-008 (audit, pinned approved estimates).
+- User: UR-004 (assign), UR-013 and UR-014 (tree and numbering), UR-016 to UR-023 (guided entry and Calculate), UR-025 to UR-029 (review, approve, lock, unlock), UR-033 to UR-036 (formulas, fields, checkpoints).
+- Rules: BR-003 (server-side hiding), BR-007 (Calculate validation), BR-015 to BR-023 (all calculations), BR-031 (master synchronisation), BR-035 (re-lettering), BR-046 to BR-048 (parent and child cost, zero entry; added in Pass 2, updated in Pass 3).
+- Answers recorded in SPEC §18 (D-01 to D-23; D-21 to D-23 are their words relayed from the chat on 2026-11-01: Q-35 (a) 1000 rupees on the invented example, "Warn" for a QTY per Assy of 0 on a part with parts below it, and the Admin holding and loading the master data at first use). Tool Cost entered by the Engineer, enter 0, approved estimates unaffected, master data at first use, the corrected cost rule, the offline decision, the date target, the definition of QTY per Assy and scope A are in their own words on Jira; the BN divisor, "Not applicable", recalculation with current rates, Q-15 closed and the kept assumptions are confirmed on the orchestrator's list wording (AQP-1 comment 10441, DL-001), not in their own words; the G3 answers of 2026-11-01 (hosting details in part, one export total and the total Tool Cost, "Not applicable" handling, no switch, optional reason, password and session, stale totals, About wording, Engineers see status, and the count of 24 lids) are their words relayed from the chat (AQP-1 comment 10490, DL-007 (2)). The answers are: Tool Cost entered by the Engineer and BN = BL / total of all Tool Cost entries; 0 for parts that need nothing and "Not applicable" in the Material and Treatment lists; approved estimates unaffected by later changes, and recalculation after unlock with current rates and a notice; the cost of a parent built from its own row and the rows below it, with the Engineer typing the count for the whole order on every row (2, 6 and 24 for 2 frames, 3 pipes on each and 4 lids on each pipe) and BL the sum of BG; master data entered at first use; Release 1 internet-hosted and offline use in the next release; the stated assumptions kept; 2026-11-13 a target, not a fixed constraint. Later answers of 2026-11-02 (D-25 to D-35) are their words relayed verbatim from the chat by the orchestrator (AQP-1 comments 10542 to 10555; AQP-15 comment 10543); none is in their own words on Jira. Where the orchestrator read a short answer, the reading is marked as a reading in SPEC §18.
+- Decided input (2026-10-31): guided form with column letters; "Red Leads" brand; "Copy from part" and "Apply to selected" rejected; drawing input deferred with room left for it (DEC-01 to DEC-04). Details are in the catalogue and already appear in SPEC §17.
+
+## 7. Constraints
+- CONSTRAINT-01 Technology stack (SPEC §2, `CLAUDE.md`).
+- CONSTRAINT-02 No `eval` in the formula engine.
+- CONSTRAINT-03 IST display and scheduling, UTC storage.
+- CONSTRAINT-04 Exactly one active Admin.
+- CONSTRAINT-05 Logo file is 200 × 200 px until replaced.
+- CONSTRAINT-06 Human approval at G1, G3, G8; code PRs merged by a human.
+- CONSTRAINT-07 Budget: no limit. Start 2026-11-02; target 10 working days at 8 hours a day, Monday to Friday, ending 2026-11-13. A target, not a fixed constraint (AQP-1 comment 10441 (h); AQP-12 comment 10446); a realistic completion date is requested. Scope behind the date: scope A (Q-34 answered, AQP-12 comment 10488).
+- CONSTRAINT-08 Part images below 200 KB.
+
+## 8. Assumptions
+**Status rule (same as SPEC §18):** an item is Confirmed when the delivery lead's own words on Jira support it (comment IDs shown), and Confirmed as corrected or qualified when they changed it first. A detail that is still unclear is not guessed: a question records it and a labelled assumption applies until they answer. **Provenance:** comment 10415 was an assistant recommendation adopted unedited; on 2026-11-01 they confirmed, corrected or qualified each of its items. In their own words: AQP-1 comment 10443, AQP-9 comment 10442, AQP-13 comment 10445, AQP-11 comment 10444, AQP-12 comment 10446, and the sentence that opens AQP-1 comment 10441. Items (a), (b), (c), (f) and (g) of comment 10441 repeat the orchestrator's list wording and are **confirmed on list wording**, not in their own words (DL-001). Register UNC-a to UNC-h: `requirements-questions.md` section 4.
+
+The ones that most change the result are below.
+
+| ID | Assumption | Impact if false | Validation owner |
+|----|------------|-----------------|------------------|
+| ASSUMPTION-18 | **Revised (D-10, confirmed; D-15):** Release 1 is internet-hosted; offline use is the next release. E-mail service Microsoft Outlook; weekly backup kept 2 years, copies on the same server, the Admin holds the backup key, has server access and runs restores (D-33, D-36); updates by their IT person. Web address and sender address stay open (Q-18) | Security and delivery design change | Santhosh |
+| ASSUMPTION-45 | **Replaced by answer (D-01):** 2026-11-13 is a target to complete development and hand the version to the customer for testing and acceptance; go-live, training and the parallel run follow later (Q-29 answered) | Release plan wrong | Santhosh |
+| ASSUMPTION-47 | **Answered (D-16, Q-31):** one total only in row 2; the total Tool Cost is shown in the export, which differs from the sample | Export differs from the sample (known) | Santhosh |
+| ASSUMPTION-48 | **Retired 2026-11-01 (Q-32; SPEC §18 D-12), revised the same day.** Rule now in force (rewritten 2026-11-02): H is the count for the whole order and BL is the sum of BG over every row; a parent's own cost counts (their own words, AQP-13 10464) and nothing typed on a parent is ignored, refused or warned about; the estimate's BL is the sum over its top-level items. Equals the sample's stored total when every quantity is 1 (SPEC §18.5). The version 1.3 reading (multiply once, at the top) is withdrawn | Wrong prices if a reading differs from their intent | Santhosh |
+| ASSUMPTION-49 | **Retired (D-17, Q-33 answered):** "Not applicable" entries have values 0, are system-created, cannot be edited or deleted, are shown nowhere in the portal and skip the material cost only. Display for Lead and Admin: ASSUMPTION-54 | Cost on a part that has none | Santhosh |
+| ASSUMPTION-50 | **Retired (D-14, Q-34 answered):** scope A. The dates are the product manager's | Wrong scope behind the date | Santhosh |
+| ASSUMPTION-51 | **Retired 2026-11-01 (D-21): Q-35 (a) answered, 1000 rupees on the invented example (QTY per Assy 5, 200 rupees a piece, 5 x 200); their working "500 x 2" is unexplained. An item that also has parts below it: ASSUMPTION-57.** Text as it stood: The item's own row counts with its own H once, not a second time through the item quantity (Q-35 (a)). It changes a quoted price wherever a top-level item has a non-zero cost on its own row and the item quantity is above 1, which includes any item with no rows below it, such as a product made of a single piece. Working assumption only; Q-35 (a) asks for a number (Jira AQP-14) and silence does not close it | Item's own row under- or over-counted, including every single-piece product | Santhosh |
+| ASSUMPTION-52 | **Retired 2026-11-02: the multiplied-down figure no longer exists; replaced by ASSUMPTION-59 (Q-35 (b), reworded).** *Text as it stood:* A part below the top shows the same rule applied from that part downward (Q-35 (b)). No effect on BL or the price | Lead or Admin misreads a part's figure | Santhosh |
+| ASSUMPTION-53 | "Admin looks after the backups" is a responsibility of the person in the Admin role, outside the portal, with README steps; no backup screen in Release 1 (Q-18) | A portal feature is wanted | Santhosh |
+| ASSUMPTION-54 | **Became the rule 2026-11-02 (D-27, Q-36 answered).** *Text as it stood:* "Not applicable" is offered to anyone who enters inputs, shows as the part's value where inputs are shown and in the export, and appears in no master list or Admin page (Q-36) | Lead cannot edit such a part | Santhosh |
+| ASSUMPTION-55 | **Ended 2026-11-02 (D-28 to D-30, Q-37 answered).** *Text as it stood:* The total (BL) is cleared when an input changes, and with it every figure that shows it under another name (BN, the price pre-fill, the total Tool Cost, each item's total, each parent's rolled-up figure, the reconciliation of the total); on screen, the cost figures of a top-level item with nothing below it are withheld too, because that row is the cleared total (a labelled reading, DL-018). Other rows keep their last calculated cost, marked out of date. The export leaves BL2, BN2, BO2 and the total Tool Cost empty and carries row costs as last calculated, marked (Q-37) | A download carries out-of-date row figures, including the one row of a single-piece product | Santhosh |
+| ASSUMPTION-56 | Any non-alphanumeric character is a symbol; the 12-hour session runs from sign-in (D-19) | Different rule from what was meant | Santhosh |
+| ASSUMPTION-57 | **Retired 2026-11-02 (Q-39 answered, AQP-26 comments 10533, 10535, 10537): typed 4 and 12, BL 840; the item's own row is a row like any other.** *Text as it stood:* An item that has parts below it and a cost on its own row counts its own row with its own H once, the same as the single-piece item their answer settled (D-21). Their example had nothing below the item, so it does not test this case; it is asked as Q-39 (AQP-26, 2026-11-02): one number on an invented example, with no reading to accept; it does not hold G4, and the roll-up story cannot pass G7 until it is answered | Item with parts below it under- or over-counted | Santhosh |
+| ASSUMPTION-58 | **Retired 2026-11-02 (Q-38 answered "Yes", D-22).** The Warn covers a 0 in QTY per Assy on a part with nothing below it. *Text as it stood:* A 0 in QTY per Assy on a part with nothing below it is accepted with no block and no message (Q-38); that row's own cost is then 0 | (was) A low price reaches the Lead without a message | Santhosh |
+| ASSUMPTION-59 | **Ended 2026-11-02 (D-25, Q-35 (b) answered "no, not required").** *Text as it stood:* On screen a row shows its own BG, BJ and BK (what the worksheet and the export show). A parent also shows the plain sum of BG over its own row and every row below it, for the whole order, labelled as a sum. Nothing is multiplied. Replaces ASSUMPTION-52 (Q-35 (b), reworded). No effect on BL or the price | Lead or Admin misreads a parent's figure, or the sum is not wanted | Santhosh |
+| ASSUMPTION-60 | **Ended 2026-11-02 (D-26, Q-41 answered "Keep warning").** *Text as it stood:* The Warn on a QTY per Assy of 0 stands as decided (D-22) until the product-manager and the delivery lead rule on it. Their answers were given when a 0 could zero the rows below it; under the whole-order rule it zeroes its own row only (Q-41) | A warning the delivery lead no longer wants, or none where a typing slip lowers a price | Santhosh |
+| ASSUMPTION-17 | Meta and Open Graph tags on all pages with generic text; authenticated pages "do not index" (kept) | Leakage or rework | Santhosh |
+| ASSUMPTION-21 | All SPEC `[DEFAULT]` items stand (kept; confirmed on list wording, AQP-1 comment 10441 (g)) | Policy changes | Santhosh |
+
+Resolved by the delivery lead (no longer assumptions to validate; 05 BN divisor, 06 "Not applicable", 07 recalculation and 15 are confirmed on the orchestrator's list wording, the others in their own words or, for the G3 answers, relayed in their words): ASSUMPTION-02 (one person, D-02), 03 (sample file, D-03), 04 (one product per estimate, D-04), 05 (Engineer enters Tool Cost; BN divisor, D-05), 06 (enter 0; "Not applicable", D-06), 07 (approved estimates unaffected; recalculation with current rates, D-07), 08 (cost rule, D-08, corrected), 48 (roll-up details, D-12, retired and revised), 49 ("Not applicable" handling, D-17, retired), 50 (scope A, D-14, retired), 09 (master data entered at first use, D-09), 15 (switch not built, D-06, D-18), 01 and 45 (start date, 10 working days and the 2026-11-13 target, D-01), 47 (one total, D-16) and the Release 1 hosting half of 18 (D-10, D-15). ASSUMPTION-51 is retired as answered for a single-piece item (D-21). Still labelled assumptions: 56 (D-19), the hosting details still open in 18 (Q-18), and the others kept by their confirmation (UNC-g). ASSUMPTION-52 to 55 and 57 to 60 are retired, ended or became rules (D-21 to D-33). The full list (ASSUMPTION-01 to 60) is in the catalogue.
+
+## 9. Dependencies
+| Dependency | Type (internal/3rd party/data) | Owner | Status |
+|------------|-------------------------------|-------|--------|
+| Cleaned sample worksheet at `docs/reference/sample-estimate.xlsx`; blank template if any | Data | Santhosh | Open (Q-30); the sample itself is confirmed (Q-03) |
+| Master data defaults (process rates, materials, exchange rates, customers, treatments, users) | Data | Santhosh | The Admin holds the values and types them in at first use; kept in storage Accucut controls until then; no import file for first use; no values were asked for or given (Q-09 answered, D-23) |
+| E-mail service and sender address | 3rd party | Accucut IT | Service decided: Microsoft Outlook (D-15). Sender address and which Outlook account sends: open (Q-18) |
+| Hosting, web address and internet access (offline use is the next release) | Internal / 3rd party | Accucut IT | Web address open (Q-18); weekly backup kept 2 years on the same server, with the Admin holding the key and running restores, and updates by their IT person decided (D-15, D-33, D-36); the Admin's server access is Accucut IT's to grant |
+| Answers to Q-18 (web address, sender address, Outlook account; before first deployment) | Internal | Santhosh | Open |
+| Sharper logo original | Data | Santhosh | Open (Q-16, assumption kept) |
+| Engineers and Leads available for the process walk-through and parallel run | Internal | Santhosh | Open (Q-25, Q-28) |
+
+## 10. Business Risks
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| The quantity rule changed twice in two days (24 lids, not 8, on 2026-11-01; the count for the whole order on 2026-11-02), each time after an earlier reading had been accepted or inferred | Low | High (wrong quotes) | The 2026-11-02 rule rests on their own examples (AQP-26: 4 and 12 typed, 2, 6 and 24 typed; AQP-14: 1000) and equals the worksheet's rule; the rule as one sentence is the delivery team's statement, which the master records; the sample cannot exercise a count above 1, so the test plan uses the constructed example in SPEC §18.5 |
+| **New 2026-11-02: Engineers must work out the whole-order counts themselves.** The portal multiplies nothing, so the count typed on a child is the whole-order count (3 pipes on each of 2 frames is typed 6; 4 lids on each of those pipes, 24). A count worked out per parent, or left unchanged when the count above it changes, goes straight into the price, and the Engineer never sees a cost, so nothing on their screen shows the mistake. The slip is easy: the delivery lead's own first answers were a count for one frame (12 lids, AQP-26 comment 10536) and, as read, 3 brackets for 4 frames (comment 10530), each corrected by them within a few comments | Medium | High (a wrong quote in either direction, which the Lead can catch only by reading the counts) | Options for the ux-expert and product-manager to weigh, none decided: field text that says the count is for the whole order; showing the Engineer the per-parent count that follows from what they typed (for example "3 per frame"), which is a count and not a cost; a Lead check of each row's count against the product. The Warn on a 0 (D-22) covers a 0 only and its premise changed (Q-41). For the master to register; RISK-002 is largely answered by the same rule and is for the master to restate |
+| The export does not match the sample because it has one total only and shows the total Tool Cost | Certain (decided, D-16) | Low | Accepted by the delivery lead; acceptance test 12 and BRQ-005 carry the exception |
+| Cost leaks to an Engineer through an API, page or export | Low | High | Server-side filtering and automated test (BR-003, GOAL-02) |
+| Master or rate changes alter approved prices | Low (rule decided, D-07) | High | Record of master values at each calculation (DR-003) |
+| Starting master data is late or wrong when the Admin loads it at first use; the stop to ask for defaults after G3 was met on 2026-11-01 (HOLD-01, D-23) | Medium | High | TR-009 (met); placeholders in the meantime; parallel run (TR-004) |
+| Export does not match the sample in Excel (headers, formats, subtotal row) | Medium | Medium | Q-03, Q-10; compare file to sample |
+| Single Admin is absent or leaves | Medium | Medium | Hand-over step (Q-23) |
+| Engineers cannot Calculate on assembly parents | Low (answered: enter 0, "Not applicable") | Low | UR-043; Q-33 answered; display for Lead and Admin: Q-36 |
+| Brand red and status colours are confused; red on white barely meets contrast | Medium | Medium | Q-27; contrast checks (cat. NFR-018) |
+| Browsers block network-folder links | High | Low | Copy-path button (SPEC §5.1) |
+| Development is not complete by the target date 2026-11-13 (the full SPEC may not fit 10 working days with three human gates and the master data stop) | High | Medium (they treat the date as a target and not a blocker, AQP-12) | The product manager supplies a realistic completion date (Q-29 answered; scope: Q-34). The analyst makes no effort estimate |
+| Internet hosting exposes the sign-in page; network-folder paths cannot be opened from outside the office; offline use is deferred to the next release | Medium | Medium | Q-18: hosting details at G3; server-side security (cat. NFR-001, cat. NFR-002); Copy path button (Q-12) |
+| A weekly backup can lose up to a week of work, and the architecture assumed a nightly backup | Medium | High if the database is lost | The delivery lead chose weekly (AQP-1 comment 10490) after the orchestrator warned them; the solution architect reconciles the design; the master logs the risk. **Added 2026-11-02 (D-33):** copies stay on the same server, so one server or disk failure loses the live data and every backup together; they were told (AQP-1 comment 10550); RISK-011 is for the master to restate. The Admin now holds the key, server access and the restores (D-36); the solution-architect raised ARCH-R8, one person holding the top role, the key and server access (AQP-1 comment 10562), for the master |
+| A downloaded export taken while the total is cleared carries out-of-date row figures | Closed 2026-11-02 | Closed | The download is refused until a calculation is current (D-28, D-30), so an out-of-date file cannot leave the portal; RISK-012 is for the master to close |
+| The sample worksheet is in a public repository and turns out to hold real customer or price data | Not assessed by the analyst. The delivery lead decided to keep the repository public (AQP-1 comment 10465) and states the workbook has no real data and the formulas are not self-explanatory; their statement, not verified | High only if the statement is wrong | No sample cell values are copied into documents (cat. NFR-023, ASSUMPTION-46); structure only; the delivery lead can change the rule or the visibility at any time; the register entry RISK-006 is the master's (Q-03, Q-30) |
+
+## 11. Compliance & Regulatory Considerations
+Assessed from general knowledge; no web research was done, so none of this has been verified against current law. The company's legal adviser should confirm (Q-26).
+- **Personal data:** the portal holds user names and e-mails and customer contact details (name, phone, e-mail, address). India's Digital Personal Data Protection Act, 2023 and the IT Act 2000 rules may apply. Measures already in the SPEC: role-based access, password hashing, audit log. Retention period and policy are open (Q-26).
+- **GDPR:** EUR pricing suggests EU customers, but only business contact data is held; considered unlikely to apply. Confirm in Q-26.
+- **Internet exposure (new in Pass 2):** if Release 1 is hosted on the internet (ASSUMPTION-18, confirmed in part: D-10), the sign-in page is reachable by anyone and login protection, encrypted connections and "do not index" settings matter more. No new law was identified; the security requirements (cat. NFR-001, cat. NFR-002, cat. NFR-020) apply.
+- **Commercial confidentiality:** rates, prices and formulas are commercially sensitive; this is treated as a business requirement (BRQ-002), not a regulation.
+- **Customer data in test material:** the delivery lead states that the sample worksheet has no real data (AQP-1 comment 10465; their statement, not verified by the analyst). The rule stays: sample cell values must not be copied into artefacts, Jira, GitHub, tests or fixtures (cat. NFR-023) unless the delivery lead changes it.
+- **Accessibility:** WCAG 2.2 AA is a SPEC requirement (raised from 2.1 AA at SPEC 1.5, DL-016; the delivery lead may revert it), not a legal finding.
+- **Tax (GST) and e-invoicing:** not in any input; no requirement identified.
+- No sector regulation (for example PCI-DSS, HIPAA, SOX) was identified from the inputs.
+
+## 12. Open Questions
+Blocking questions are in bold and each has its own Jira issue. The full text, the assumption used and the answer line for every question are in `requirements-questions.md`.
+
+| ID | Question | Owner | Needed by | Status |
+|----|----------|-------|-----------|--------|
+| Q-01 to Q-09 | Budget and date, one person, sample, one product, Tool Cost, zero entry, approved estimates, parent and child cost, master data | Santhosh | G2 to G4 | Q-01, Q-02, Q-04 to Q-09 **Answered** (Q-08 details closed in Q-32); Q-03 answered in part (remainder Q-30); answers in SPEC §18 |
+| Q-10 to Q-14, Q-16, Q-17, Q-19 to Q-28 | Export details, Rejection (BC), folder links, Remarks, Plating flag, logo, SEO, workflow gaps, `[DEFAULT]` confirmation, IDs, succession, baseline, cut-over, retention, colours, as-is walk-through | Santhosh | G2 to G8 | Assumption kept (confirmed on list wording, AQP-1 comment 10441 (g)) |
+| Q-15 | "Not needed" switch | Santhosh | G3 | Closed: not needed (confirmed, AQP-1 comment 10441 (f)) |
+| **Q-18** | Hosting and access | Santhosh | Before first deployment | **Answered in part 2026-11-01** (D-15). Open: web address, sender address, what "Admin looks after them" means |
+| Q-29 | What 2026-11-13 delivers | Santhosh | G2 | **Answered** (AQP-12 comment 10446): a target to complete development and hand over for testing and acceptance |
+| Q-30 | Cleaned sample copy; blank template | Santhosh | G3 | Open in part; repository decision recorded (AQP-1 comment 10465); cleaned copy and blank template still asked |
+| Q-31 | Sample shows totals per top-level item; answer is one total | Santhosh | G3 | **Answered 2026-11-01** (D-16): one total only; total Tool Cost shown |
+| Q-32 | Roll-up details left after the corrected cost rule | Santhosh | (a), (b) G2; (c) to (e) G3 (DL-005) | **Answered; (a) revised 2026-11-01 in their own words** (AQP-13 10487; AQP-1 10490): every level's quantity applied (version 1.4); rewritten 2026-11-02: H is the count for the whole order and BL is the sum of BG (AQP-26 10533 to 10537). (b3): Q-35 (b); (c) answered |
+| Q-33 | Values and handling of the "Not applicable" Material row | Santhosh | G3 | **Answered 2026-11-01** (D-17); display for Lead and Admin: Q-36 |
+| Q-34 | Which scope the realistic development completion date covers | Santhosh / product-manager | G3 approval (DL-004) | **Answered 2026-11-01**: scope A (AQP-12 10488, their own words) |
+| Q-35 | The item's own row; what a part below the top shows | Santhosh | G4, before the roll-up story reaches Ready | **(a) answered 2026-11-01** (1000 rupees on the invented example, 5 x 200; D-21; it holds under the whole-order rule; ASSUMPTION-51 and 57 retired). **(b) answered 2026-11-02** ("Q-35(b) - no, not required", AQP-1 10542, relayed): a parent shows only its own row (D-25); ASSUMPTION-52 retired, ASSUMPTION-59 ended. (a) was blocking at G4 for the roll-up story ([AQP-14](https://sankumar76.atlassian.net/browse/AQP-14)): it changed a quoted price wherever a top-level item has a non-zero cost on its own row and a quantity above 1, including any item with no rows below it. (b) was display only |
+| Q-36 | Where "Not applicable" is shown to Lead and Admin | Santhosh | G4 | **Answered 2026-11-02** (AQP-1 10544, relayed): offered to Lead and Admin; the text shows on a part to everyone (D-27) |
+| Q-37 | What a cleared total means for the figures that show it, each row's cost, the export and a price approved before an unlock | Santhosh | G4 | **Answered 2026-11-02** (AQP-1 10545, 10552 to 10554, relayed): every cost figure clears; the download is refused until a calculation is current; the earlier price stays until approved again or removed by the Admin, who alone cancels an approval (D-28 to D-30) |
+| Q-38 | Whether "Warn" on a QTY per Assy of 0 also covers a part with nothing below it (OQ-ARCH-10, second case; asked in [AQP-15](https://sankumar76.atlassian.net/browse/AQP-15)) | Santhosh | G4 | **Answered 2026-11-02:** "Yes" (AQP-15 comment 10527, relayed verbatim). ASSUMPTION-58 retired (D-22). OQ-ARCH-10 for a part with parts below it: answered "Warn" (D-22) |
+| Q-39 | The item's own row when the item also has a part below it, at a QTY per Assy above 1 (asked in [AQP-26](https://sankumar76.atlassian.net/browse/AQP-26)) | Santhosh | Before the roll-up story passes G7 | **Answered 2026-11-02** (AQP-26 comments 10533, 10535, 10537, relayed): typed 4 and 12, BG 600 and 240, BL 840 on the invented example (the 840 is their two figures added, not stated by them). ASSUMPTION-57 retired |
+| Q-40 | Whether any real rate, material price or exchange rate needs more than 2 digits after the decimal point (OQ-ARCH-05, DL-025) | Santhosh (may pass to the Admin) | G4 | **Answered 2026-11-02:** "No" (AQP-1 comment 10528, relayed verbatim). OQ-ARCH-05 closed (D-24) |
+| Q-41 | Whether the Warn on a QTY per Assy of 0 (D-22) is still wanted, now that a 0 affects only its own row | Santhosh | G4 | **Answered 2026-11-02:** "Q-41: Keep warning" (AQP-15 10543, relayed); the Warn stays for every 0 (D-26) |
+
+**Findings from comparing the SPEC, the Draft v5 document, the sample worksheet and the UI sample** (F-01 to F-21) are in `requirements-questions.md` section 3. Findings F-22 to F-25 were added in Pass 2. The most important: the sample has two top-level items each with its own total, while the answer is one total per estimate (F-01, F-22); the delivery lead's corrected cost rule agrees with the worksheet when every quantity is 1, and on 2026-11-01 their definition of QTY per Assy and count of 24 lids made every level's quantity apply, and on 2026-11-02 their answers on AQP-26 replaced that with a count for the whole order on every row and a BL that is the sum of BG, the worksheet's own rule (F-23, SPEC §18.5, Q-32; one display point left: Q-35 (b)); the two hosting answers conflicted and are resolved for Release 1 (F-24); SPEC §17 already holds the 2026-10-31 decisions (F-20).
+
+## 13. Glossary
+| Term | Definition |
+|------|------------|
+| Estimate / quotation | The cost calculation for one product, held as a tree of nodes. |
+| Product, item, part, sub-part | Levels of the tree; all share the same fields. |
+| Node (row) | One row of the worksheet; one node of the tree. |
+| QTY per Assy (H) | The count of a part for the whole order. The Engineer enters the details of one piece and types here how many of that piece the whole order needs (their words, relayed, AQP-26 comments 10535 and 10537; the definition of 2026-11-01, AQP-13 comment 10487, fits when the parent's count is 1). 2 frames, 3 pipes on each frame and 4 lids on each pipe are typed 2, 6 and 24. No row is multiplied by another row's H. |
+| Sl. No (A) | Automatic number from the tree position: 1, 1.1, 1.1.1 … |
+| Column letter | Excel-style identifier (A, B … AA …) of a field, derived from its position. |
+| Input field | A field an Engineer, Lead or Admin types or selects. |
+| Auto field | A field filled from a master (for example Material Considered). |
+| Output (calculated) field | A field the system calculates; hidden from Engineers. |
+| Process Master | List of default named rates (for example Cutting-Rate-per-Sec, OH Profit %). |
+| Customer Master | Customers with contact details and one value for each Process Master rate. |
+| Material Master | Table mapping Material in Drawing to Material-Considered, price per kg, specific gravity and scrap rate. |
+| Exchange Rate Master | 1 USD in INR and 1 EUR in INR. |
+| Treatment / Color list | Options for column G, plus "Other" with free text. |
+| Override (manual) | A customer rate that differs from the previous Process Master default. |
+| Task | An assignment of an estimate to an Engineer with a folder path and a deadline. |
+| Queue (Open / Closed / Overdue) | Task lists by state; an overdue task stays in Open. |
+| Overdue | An open task past its deadline (IST). |
+| Calculate | Engineer action that checks inputs, calculates costs and submits for review. |
+| Recalculate | Lead/Admin action that recalculates after changes. |
+| Approve & Lock | Lead/Admin action that records the Approved Quote Price and makes inputs read-only. |
+| Unlock | Lead/Admin action that reopens an approved estimate. |
+| Approved Quote Price (BO) | Final price set by Lead/Admin at approval (formerly "Final-Final Estimate"). |
+| Unit Production Price (BG) | A node's price in INR before totalling. |
+| Total Unit Production Price (BL) | Total cost of the estimate: the sum of BG over every row, each BG carrying the whole-order count typed on its row (D-08, D-12 as rewritten 2026-11-02). It equals the worksheet's sum of BG at any quantity. Cleared when any input is updated until Calculate or Recalculate is pressed (D-20). |
+| Tool Cost (BM) | Cost of tooling, entered by the Engineer on each part (0 where none). BN divides BL by the total of all Tool Cost entries (D-05, confirmed). |
+| Parent / child node | A node with parts below it is a parent; the parts directly below it are its children. A parent's cost is its own row plus the costs of all its children, grandchildren and deeper, each counted once, with the count typed on its own row for the whole order (D-12). |
+| Not applicable | A system-created option in Material in Drawing and Treatment / Color for a part that needs none, used with 0 in number fields. Values 0; cannot be edited or deleted; shown nowhere in the portal other than as the choice; a part with it skips the material cost only (D-17). |
+| Field registry | The list of fields, sections and formulas that defines the worksheet. |
+| Formula engine | The part of the portal that reads and calculates formulas safely. |
+| ConfigVersion | An unchangeable snapshot of the field and formula configuration. |
+| Checkpoint | A named ConfigVersion the Admin can revert to. |
+| Re-lettering | Automatic shifting of column letters when a field is inserted or deleted. |
+| Step-up authentication | Asking the Admin for their password again before a sensitive change. |
+| IST | Indian Standard Time (Asia/Kolkata). |
+| UTC | Coordinated Universal Time; used for storing times. |
+| MoSCoW | Must, Should, Could, Won't (priority scale). |
+| SEO | Search-engine optimisation: page titles and descriptions that help search engines. |
+| Open Graph | Page tags that set the title and description shown when a link is shared on social media or chat. |
+| Red Leads | The chosen brand direction: logo red for buttons and markers, white top bar, graphite side menu. |
+| Guided form | One part at a time, section by section, with the parts tree beside it. |
+| Gate (G0 to G8) | Quality checkpoints in the delivery process. |
+| UNC-a to UNC-h | Identifiers for the eight items first proposed in AQP-1 comment 10415 or 10417 (an assistant draft) and confirmed, corrected or qualified by the delivery lead on 2026-11-01; register in `requirements-questions.md` section 4. |
+
+## 14. Sources
+- `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` v1.0 (SPEC), all sections including §15 and §17.
+- `Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx` (DOCX).
+- `AMADA-20261006.xlsx` (XLSX): read for structure only (sheet layout, headers, formulas, widths, formats); no cell data is reproduced.
+- `Accucut Quotation Portal UI-UX.html` (UI): design system and 14 screens, read for structure and behaviour; names in it are samples and are not used.
+- `docs/project-state.md`, `docs/00-governance/gate-log.md` (G0 record and carry-forward items), `CLAUDE.md`.
+- Delivery lead decisions of 2026-10-31 and standing website standards (from the delegation brief).
+- Delivery lead answers on Jira AQP-1 and AQP-2 to AQP-11, 2026-10-31 (Pass 2), and their replies of 2026-11-01 (Pass 3): AQP-1 comments 10441 and 10443, AQP-9 comment 10442, AQP-13 comment 10445, AQP-11 comment 10444, AQP-12 comment 10446; register UNC-a to UNC-h in `requirements-questions.md` section 4. G3 answers of 2026-11-01: AQP-13 comment 10487 and AQP-12 comment 10488 (their own words on Jira), AQP-1 comment 10490 (their words relayed from the chat by the orchestrator) and AQP-1 comment 10491 ("APPROVED").
+- `AMADA-20261006.xlsx` was opened again in Pass 3 for the parent cost check (SPEC §18.5); formulas and totals only, no cell value is reproduced.
+- `docs/00-governance/gate-log.md`, section G1 (2026-11-01): provenance findings and conditions 1, 4 and 5. The BA relied on the gate log and did not read any session log.
+- No web sources were used.

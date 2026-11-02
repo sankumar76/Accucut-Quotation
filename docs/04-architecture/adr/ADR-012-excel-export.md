@@ -1,0 +1,66 @@
+# ADR-012: Excel export with ExcelJS on a worker thread
+
+| Field | Value |
+|-------|-------|
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20) and for architectures v0.7 and v0.8: no file exists until a calculation is current (AQP-1 comments 10545, 10554), for `master` to check at G4 |
+| Date | 2026-11-01 |
+| Deciders | solution-architect (+ Santhosh at G3) |
+| Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31, Q-37; D-16, D-20; ADR-007 |
+
+## Context
+The export replicates the worksheet: columns A to BO, images in column C, currency formats, centred cells, BL, BN and BO in row 2. ExcelJS is the stated library. RISK-010 asked for a limit or a strategy: 500 nodes with images up to 200 KB could exceed 100 MB. ExcelJS's streaming worksheet has no `addImage` (read in the 4.4.0 source, `lib/stream/xlsx/worksheet-writer.js`), so embedded images need the in-memory workbook and the design must plan for memory. ExcelJS's last stable release is 4.4.0 of October 2023.
+
+## Decision Drivers
+- NFR-010: 50 nodes with 50 images within 10 s, and 500 ms p95 for other users meanwhile
+- NFR-027: opens in Excel with no repair prompt
+- FR-065: approved exports never change
+- Simplicity: no job queue for a download
+
+## Considered Options
+### Option A — Build in memory on a `worker_threads` thread, gate large exports, stream the finished file
+- Pros: the event loop stays free; a plain download; bounded by validation; no new infrastructure
+- Cons: holds the file in memory while building; a thread entry file must be built and shipped
+- Cost / effort: low
+
+### Option B — Build on the main thread
+- Pros: simplest
+- Cons: seconds of blocked event loop for every other user
+- Cost / effort: lowest, fails NFR-010 under load
+
+### Option C — Background job through the `worker` container, with a "file ready" notice
+- Pros: fully isolated
+- Cons: file storage, status polling and clean-up to build, and a slower experience for the common small estimate
+- Cost / effort: medium
+
+### Option D — Generate XLSX by hand, or use a newer library
+- Pros: no stale dependency
+- Cons: high risk to NFR-027; leaves the stated stack
+- Cost / effort: high
+
+## Decision
+We will use ExcelJS 4.4.0 (Option A), behind `src/server/export/build-workbook.ts`, whose only input is a plain `ExportModel`. The thread runs that function. Export reads one calculation record, `outputs` only, so a parent row holds its own values (D-12 (b3)). Cells hold full-precision numbers with two-decimal formats. Text is written as strings, never formulas. An empty cell stands for divide by zero. Row-2 cells, the footer and the out-of-date markers are chosen in `product-cells.ts`, one file.
+
+**Added at UX reconciliation.** The file holds one calculation record, so a copy already downloaded stays consistent but falls behind the screen once inputs change. The file name's date is the IST date of the download. An Engineer gets no data from the file route, the summary route or the page. Because cells keep full precision, a Lead who adds a column in Excel gets the stored total, even though printed figures can differ by a few hundredths (UX-02).
+
+**Added for v0.3: one total, and the Tool Cost total (D-16).** BL, BN and BO appear once, in row 2, with no per-item totals, a known difference from the sample. The total Tool Cost cannot go in row 2, because BM2 is the first node's own entry. It goes in a footer row, two rows below the last node so that one row stays empty between them: the value under column BM and the label to its left. UX v0.3 places it the same way (architecture section 16.9). Considered and rejected: a new column after BO, which changes the A to BO layout, and a second sheet, which is easily missed.
+
+**Replaced for v0.7: no file while figures are cleared (D-20, Q-37 (b)).** "Yes, block the portal when the total is not calculated or recalculated" (AQP-1 comment 10545). For a never-calculated estimate: "Refuse it" (10554). So the export returns 409 `NOT_CALCULATED` at `none` and 409 `EXPORT_OUT_OF_DATE` at `out-of-date`, with no way round either. The state is read in the same transaction that builds the file. The stated choice (`allowOutOfDate`), the `_OUT-OF-DATE` file name, the `OUT OF DATE` sheet tab, the notice row of v0.3 and the file with empty cost columns are removed. BO2 holds the latest approved price (Q-37 (c)), unless its approval has been cancelled (architecture section 4.10).
+
+**No hard limit on size.** Validation caps the worst case at about 100 MB (500 × 200 KB). Evidence below shows that this builds, so a limit would only add a failure mode. One large export runs at a time (over 100 nodes), and another gets 503 with `Retry-After`. The proxy read timeout is at least 120 s.
+
+**Evidence (2026-11-01).** Throwaway benchmark, invented data, in-memory ExcelJS 4.4.0 on an Intel i7-10510U with 8 GB, Node 24, 67 columns, one incompressible 199 KB image per row, excluding database reads. Runs shared one process, so memory figures are upper bounds.
+
+| Nodes and images | Time | File | Peak memory |
+|------------------|------|------|-------------|
+| 50 | 1.7 to 1.8 s | 9.8 MB | 178 MB |
+| 200 | 7.9 s | 39 MB | 312 MB |
+| 500 | 16.9 s | 97.5 MB | 528 MB |
+
+## Consequences
+- Positive: NFR-010 is met with margin at 50 nodes on this evidence. RISK-010 stays open at low score until the G7 of the export story, as `master` ruled at G3: laptop figures show feasibility only. The boundary makes a library swap possible (TD-01).
+- Negative / trade-offs accepted: a 500-node export takes about 17 s on similar hardware. `npm audit` lists 9 moderate transitive advisories, in `archiver`, `glob`, `minimatch` and `uuid`. The export passes neither user-controlled glob patterns nor buffers to `uuid`, so reachability is judged low. CI blocks at high, so these stay visible but do not fail the build.
+- Negative / trade-offs accepted, added for v0.3: a file downloaded while current can go out of date later on someone's disk, and the portal cannot recall it. Adding the exported BG column equals BL, at any quantity (ADR-006).
+- Follow-up actions (with owners): architect reviews the library at each release; `overrides` if a transitive fix appears.
+
+## Verification
+Read-back tests of the generated file (cells, widths, formats, image anchors, footer, each marker); timing on staging; manual open in Excel desktop before each release (NFR-027).
