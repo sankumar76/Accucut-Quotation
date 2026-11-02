@@ -8,12 +8,12 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | G4 Backlog Ready; HOLD-01 stop first (master data defaults) |
+| Current phase      | G4 Backlog Ready, in preparation. HOLD-01 met. Master's rulings recorded (DL-018 to DL-026); G4 not decided |
 | Last gate passed   | G3 Solution Design (CONDITIONAL GO, attempt 1) |
-| Next gate          | G4 Backlog Ready. No human approval stop (DL-010); Q-35 (a) and OQ-ARCH-10 needed before the roll-up story reaches Ready |
+| Next gate          | G4 Backlog Ready. No human approval stop (DL-010). Cannot pass while G3 conditions 12 and 13 are open: both need the ux-expert, stopped since 2026-11-02 (BLK-03, DL-026) |
 | Current sprint     | —                        |
-| Overall health     | 🟡 Amber (G3 CONDITIONAL GO, 16 conditions; no red risk; RISK-006, 007 and 013 at 12; Q-35 (a) and OQ-ARCH-10 are open price rules; no date adopted) |
-| Last updated       | 2026-11-01 by master |
+| Overall health     | 🟡 Amber (BLK-03 holds G4; no red risk; RISK-006 and 007 at 12; Q-39 and Q-38 are open price points, neither holds G4; no date adopted) |
+| Last updated       | 2026-11-02 by master |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## Request (G0 Intake)
@@ -46,13 +46,17 @@
 |----|----------|-----------|-------|-----------|--------|
 | Q-01 to Q-33 | Full list with assumptions in docs/01-discovery/requirements-questions.md | business-analyst | Santhosh | G2 to G8, per question | See file |
 | Q-18 | Offline decided: next release (AQP-11 comment 10444). Hosting answered in chat 2026-11-01 (AQP-1 10490): e-mail service Microsoft Outlook, weekly backup kept 2 years by Admin, updates by their IT person. Open: web address, sender address, what "Admin looks after them" means, where copies are kept | business-analyst | Santhosh, Accucut IT | Before first deployment; checked at G8 | Open in part |
-| Q-35 (a) | The item's own row. Answered 1000 on the invented example (5 x 200; AQP-14 10510), so the item's own row counts its quantity once. Not yet applied to the SPEC | business-analyst | Santhosh | G4, before the roll-up story reaches Ready | Answered; to apply |
-| OQ-ARCH-10 / OQ-PM-07 | QTY per Assy of 0 on a part with parts below it. Answered "Warn" (AQP-15 10511); the DL-013 block fallback no longer applies. Warn is not designed or sized. Whether it covers a part with nothing below it is unanswered | solution-architect, product-manager, ux-expert | Santhosh | G4, before the roll-up story reaches Ready | Answered in part |
-| Q-35 (b), Q-36, Q-37 | What a part shows; "Not applicable" for Lead and Admin; what a cleared total means. Labelled assumptions run if unanswered | business-analyst | Santhosh | G4 | Open |
+| Q-35 (a) | The item's own row, top-level item with nothing below it. Settled at 1000 (AQP-14 10510; D-21; DL-024). Their working "500 x 2" is unexplained; the ruling rests on the number | business-analyst | Santhosh | G4 | Closed for the case asked |
+| Q-39 (proposed ID) | ASSUMPTION-57: an item or part with its own cost and parts below it, at quantity above 1. One number, no reading to accept. Silence does not close it (DL-024). business-analyst words it; orchestrator posts it as a Jira open-question issue | master | Santhosh | Next contact; 03.04 cannot pass G7 without it. Does not hold G4 or Ready | New, to be asked |
+| OQ-ARCH-10 / OQ-PM-07 | QTY per Assy of 0 on a part with parts below it. Answered "Warn" (AQP-15 10511; D-22); designed and sized (architecture 4.3, 16.10); FR-104. DL-013 fallback overtaken (DL-023). UX-36 and UX-44 to UX-50 not done | solution-architect, product-manager, ux-expert | Santhosh | G4 | Closed, except Q-38 and the UX items |
+| Q-38 | A 0 on a part with nothing below it: does Warn cover it? ASSUMPTION-58: no message, no block. Holds neither 03.04 nor G4 (DL-022). Silence does not close it: if unanswered at G8 the record states it. PRD 12.1 wording to go on AQP-15 | business-analyst | Santhosh | G4; wanted before the Warn story starts; checked at G8 | Open |
+| Q-35 (b), Q-36, Q-37 | What a part shows; "Not applicable" for Lead and Admin; what a cleared total means. Labelled assumptions run if unanswered. Q-37 to be reworded to name the single-piece row (CR-15, DL-018) | business-analyst | Santhosh | G4 | Open |
+| OQ-ARCH-05, OQ-UX-07 | Rates beyond 2 decimals, and units. Were to be checked when defaults arrived; no defaults reach the team, so asked with no values and confirmed by the Admin (DL-025) | solution-architect, ux-expert | Santhosh; the Admin | G4 | Open |
+| OQ-ARCH-12, FR-105; OQ-UX-13; OQ-UX-16; usability participants | Last backup line (PROPOSED, built only if they agree); a picture on every part; a notice of changed rates; who takes part. None holds a story | product-manager | Santhosh | G4 | Open |
 | OQ-UX-19, OQ-UX-03 | Override reason in the file; sign-in indexing (overdue, was G3) | ux-expert | product-manager | G4 | Open |
 | OQ-ARCH-11 | Mail account facts | solution-architect | Accucut IT, Santhosh | Before the e-mail story reaches Ready | Open |
 | OQ-ARCH-12 | Backup duties; whether Settings shows "Last backup" | solution-architect | Santhosh | Before first deployment; checked at G8 | Open |
-| OQ-PM-02 | Holidays and unavailable days in the date range | product-manager | Santhosh | G4 | Open |
+| OQ-PM-02 | Holidays and unavailable days in the date range. A date input only; asked in 10508 and in chat | product-manager | Santhosh | G4 | Open |
 | Q-29 | Answered on AQP-12 comment 10446: 2026-11-13 is a target for customer hand-over, not a blocker | business-analyst | Santhosh | G2 | Answered |
 | Q-34 | Which scope the realistic date covers: A (whole SPEC except offline, dark mode and UI-sample extras) or B (R1 core only) | business-analyst | Santhosh | G3 approval (DL-004) | Answered: scope A (AQP-12 comment 10488) |
 | G3 answers | Q-31, Q-33, OQ-UX-01, 02, 05, 06, 10, 12 and OQ-ARCH-03 answered in chat 2026-11-01 (AQP-1 10490); recorded as D-14 to D-20 (DL-015) | business-analyst, product-manager, ux-expert, solution-architect | orchestrator | G3 | Answered and applied |
@@ -61,10 +65,32 @@
 | G1 condition 2 | Q-32 answered or accepted; (b) in their own words (gate log, G2 attempt 2) | master | Santhosh | G2 attempt 2 | Met |
 | G1 condition 3 | Q-29 answered (AQP-12 comment 10446) | master | Santhosh | G2 | Met |
 
+## G3 Conditions (status 2026-11-02, master; gate record unchanged)
+
+| # | Owner | Status | Evidence or what is left |
+|---|-------|--------|--------------------------|
+| 1 | orchestrator | Closed | AQP-1 10501; chat report 02:42:06Z |
+| 2 | orchestrator; business-analyst | Closed | 10508; AQP-14, AQP-15 |
+| 3 | business-analyst | Closed | 10507; architecture A-20 (v0.4). `ux-spec.md` line 124 is CR-08 |
+| 4 | Santhosh | Closed | AQP-14 10510, for the case asked (DL-024). Remainder is Q-39 |
+| 5 | Santhosh; ux-expert | Answer closed; UX part open | "Warn" (DL-023). UX-36 replaced, not applied |
+| 6 | Santhosh | Open, runs labelled | Q-35 (b), Q-36, Q-37. Holds no story on its own terms |
+| 7 | product-manager | Closed | PRD 12.2; recorded DL-019. OQ-UX-13, 16 are with the delivery lead |
+| 8 | Accucut IT, Santhosh | Open, not yet due | OQ-ARCH-11; asked 10508 item 9; before the e-mail story reaches Ready |
+| 9 | Santhosh, Accucut IT | Open, not yet due | OQ-ARCH-12, Q-18; before first deployment; FR-105 needs OQ-ARCH-12 sooner |
+| 10 | business-analyst | Closed | SPEC 1.5 and 1.6; spot-checked: ROLLUP, WCAG 2.2 AA, light mode only, minimum for H. Full check at G4 |
+| 11 | product-manager | Closed | PRD and release plan v0.7, v0.8. FR-100 "pending" wording to drop (DL-018) |
+| 12 | ux-expert | **Open, holds G4** | CR-05; §9 now lacks FR-098 to FR-105; SCR-18 edit follows condition 13 |
+| 13 | ux-expert | **Open, holds G4** | CR-09; generator untracked, not read for sample values |
+| 14 | solution-architect | Closed, one correction | ADR-001 to 014 Accepted (checked); §16.9, CE-12 present; A-19 closed. Revised ADR-006, 007, 008 checked at G4. CE-2 label to correct (DL-024) |
+| 15 | product-manager; scrum-master; qa-engineer | Part closed | Usability test decided (DL-026). Test plan owed by qa-engineer by G4 |
+| 16 | developer | Open, not yet due | One real send; G8 |
+
 ## Blockers
 
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
+| BLK-03 | The ux-expert is stopped by an action on the delivery lead's side, reason not stated (session 04:26:11Z). G3 conditions 12 and 13 need it, so G4 cannot pass (DL-026). Not in the date model: each working day past the rework pass moves every later date by a working day | 2026-11-02 | Santhosh | Say "restart UX", or give the reason, or override and have it logged |
 | BLK-01 | CLEARED 2026-11-01: draft PR #1 created with the new token; verified at G2 attempt 2; RISK-005 closed. History: GitHub MCP create_pull_request returned 403, later HTTP 401 | 2026-10-31 | Santhosh | None |
 | BLK-02 | CLOSED 2026-11-01 at G2 attempt 2: the delivery lead decided the repository stays public (AQP-1 10465; DL-008). That the content is not real is their statement, not verified; RISK-006 stays open, restated | 2026-11-01 | Santhosh | None |
 | HOLD-02 | RELEASED 2026-11-01: G2 attempt 2 returned CONDITIONAL GO. ux-expert and solution-architect may start now, in parallel | 2026-11-01 | Santhosh; orchestrator | Start both, with conditions 5 and 6 of the gate record |
@@ -74,6 +100,11 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-02 | master | Rulings before G4, no gate decision: A-18 extension accepted on screen (DL-018); PRD 13.2 and 13.3 recorded (DL-019, DL-020); A-24 to A-26 accepted (DL-021); Q-38 holds neither 03.04 nor G4 (DL-022); DL-013 overtaken (DL-023); Q-35 (a) settled at 1000, ASSUMPTION-57 must be asked as Q-39, CE-2 relabelled (DL-024); HOLD-01 met, master data wait dropped, no date moves (DL-025); G4 cannot pass while conditions 12 and 13 are open (DL-026, BLK-03). RISK-002 to 8, RISK-013 to 9; RISK-003, 006, 007, 008, 012, 015 restated | docs/00-governance/ |
+| 2026-11-02 | product-manager | PRD and release plan v0.8: FR-104, FR-105, Warn hours, dates re-issued unadopted | docs/02-product/ |
+| 2026-11-02 | solution-architect | Architecture and test strategy v0.5: Warn designed, 3.75 to 5.75 h; ADR-006, 007, 008 revised | docs/04-architecture/ |
+| 2026-11-02 | business-analyst | SPEC v1.6: D-21 to D-23, Q-38 raised | ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md, docs/01-discovery/ |
+| 2026-11-02 | product-owner | Ten epics AQP-16 to AQP-25, backlog, consistency report v0.1 (now overtaken on CR-01, CR-02) | docs/05-backlog/ |
 | 2026-11-01 | orchestrator | Delivery lead's answers collected in chat: Q-35 (a) 1000 (AQP-14), OQ-ARCH-10 Warn (AQP-15), HOLD-01 met (AQP-10). Stopped ux-expert remains stopped pending their word | AQP-10, AQP-14, AQP-15 |
 | 2026-11-01 | master | G3 Solution Design: CONDITIONAL GO, attempt 1, 16 conditions. APPROVED stands (DL-009); 10495 logged as an override, G8 treatment set, HOLD-01 stands (DL-010); DL-006 met (DL-011); Q-35 (a) not narrow, holds G4 for the roll-up story (DL-012); OQ-ARCH-10 goes to the delivery lead, block as fallback (DL-013); scope A stands, no date adopted (DL-014); DL-015 to DL-017; RISK-011 to 015 new; RISK-001 raised, 008 and 010 reduced | docs/00-governance/ |
 | 2026-11-01 | ux-expert | UX spec v0.3 and screens: 9 answer items and UX-28 to UX-35, UX-37 applied; UX-36 held for OQ-ARCH-10; 41 pages and 146 states checked at 360, 768 and 1280 px, axe 0 violations; OQ-UX-19 raised | docs/03-ux/ |
