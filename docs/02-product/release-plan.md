@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.9 (Draft; the delivery lead's answers of 2026-11-02 applied, with SPEC v1.10 and architecture v0.8. The quantity rule is the worksheet's own (QTY per Assy typed for the whole order, BL = SUM(BG)); Warn is re-sized to 3.5 to 5.25 h; the rate-change notice and the Admin-only cancel approval and remove price are added; FR-105 is firm and moves into the R1 core. Scope A is **87 to 130.75 h, central 108.875 h**. The master data wait is dropped and no holidays are assumed (they said none to 2026-12-09). Dates re-issued: **central Thu 2026-11-26, range Thu 2026-11-19 to Fri 2026-12-04**. The central value sits 0.06 working day (about half an hour of work) over a day boundary, so Wed 2026-11-25 is the same estimate. All of this is an estimate and none of it is adopted by the delivery lead) |
+| Version | 0.10 (Draft; architecture v0.9 section 16.14 and the delivery lead's answers on AQP-1 10559 and 10560 applied, 2026-11-02. The Admin holds the backup key, has server access and runs the restore: the guided restore command, its README and tests add **+1 to +1.5 h in EPIC-10**. The architect's 0.5 h high-end surplus is **dropped** against his rows. Scope A is **87.75 to 132 h, central 109.875 h**. **The dates do not move:** central Thu 2026-11-26, range Thu 2026-11-19 to Fri 2026-12-04; the working-day figures change (13.72 / 18.18 / 24.25). The central value now sits 0.18 working day (about 1.5 h) over a boundary. The Admin's restore rehearsal is a human step before go-live, outside the dates. All of this is an estimate and none of it is adopted by the delivery lead) |
 | Owner | product-manager |
 | Date | 2026-11-02 |
-| Status | **Estimates. Not adopted.** The scope is decided (scope A). Their reply says "prefer" and does not mention dates, so no date in this plan is theirs. These dates supersede the v0.8, v0.7 and v0.6 dates and the v0.4 dates posted on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10478) |
-| Companion | `docs/02-product/prd.md` v0.9 (FR, NFR, readings, epics, release moves in section 6.3, decisions in sections 12.2 and 13.4) |
+| Status | **Estimates. Not adopted.** The scope is decided (scope A). Their reply says "prefer" and does not mention dates, so no date in this plan is theirs. These dates supersede the v0.9, v0.8, v0.7 and v0.6 dates and the v0.4 dates posted on [AQP-12](https://sankumar76.atlassian.net/browse/AQP-12) (comment 10478) |
+| Companion | `docs/02-product/prd.md` v0.10 (FR, NFR, readings, epics, release moves in section 6.3, decisions in sections 12.2, 13.4 and 13.5) |
 
 ## 1. What is fixed, what is labelled
 
@@ -25,7 +25,7 @@
 | Cost rule | **Settled on 2026-11-02 as the worksheet's own rule:** QTY per Assy is the count of the part for the whole order, typed on every row; a row's BG is that count times the cost of one piece; BL = SUM(BG) over every row; no parent sum, no multiplying down the tree. It replaces the every-level rule of v0.6 to v0.8. The portal now agrees with the worksheet at any quantity. A parent shows only its own row. Q-35 (a) is 1000 (their number; their working "500 x 2" does not match the example and the number is taken as the answer) | AQP-26 10533 to 10537; AQP-14 10510; AQP-1 10542; D-12, D-21, D-25 |
 | Warn on a QTY per Assy of 0 | **Decided for every 0**, with one wording ("That row will cost 0"), no minimum and no block: "Warn" (AQP-15 10511), "Yes" for a part with nothing below it (10527), "Keep warning" (10543). FR-104, 3.5 to 5.25 h in the figures | D-22, D-26 |
 | Cleared figures and the download | Every figure clears on any input change; the Excel download is refused until a calculation is current; the earlier approved price stays, labelled, until approved again or removed by the Admin after a cancel | AQP-1 10545, 10552, 10553, 10554 (D-28 to D-30) |
-| Picture, rate notice, backups | The Part Model picture is optional (D-31). A Lead is told when rates changed before approval (D-32). The Settings page shows a Last backup line; the Admin only checks that backups ran; copies stay on the same server; a server or disk failure loses the live data and every backup (D-33) | AQP-1 10546, 10548, 10549, 10550 |
+| Picture, rate notice, backups | The Part Model picture is optional (D-31). A Lead is told when rates changed before approval (D-32). The Settings page shows a Last backup line; copies stay on the same server; a server or disk failure loses the live data and every backup (D-33). **The Admin holds the backup key, is given server access and runs the restore**, which replaces "the Admin only checks" (their words, relayed: "Admin holds hte backup key"; "Admin should be given teh server access and run the restore") | AQP-1 10546, 10548, 10549, 10550, 10559, 10560 |
 | "Not applicable" in the Material and Treatment lists | Offered to Engineer, Lead and Admin; the words show on the part to everyone; zero values and master-list entries stay hidden (D-27, narrowing D-17) | AQP-1 10544 |
 | Export totals | One total only; the total Tool Cost is shown (the export differs from the sample on purpose) | AQP-1 10490 (D-16) |
 | Usability test | 2 Engineers, 2 Leads and 1 Admin, no names, on built pages during the customer's acceptance, after the date | AQP-1 10556; CR-20 |
@@ -44,29 +44,29 @@ Every hour, day and date below is an **estimate** by the product manager. **Ther
 | | **Scope A (adopted)**: whole SPEC except offline, dark mode and the UI-sample extras |
 |---|---|
 | Contents | R1 core + R1+ stretch + R2: EPIC-01 to EPIC-10, 101 FRs (78 + 6 + 17; v0.8: 98, with FR-106 to FR-108 added and FR-105 moved into the core). Excludes dark mode (FR-090), the UI-sample extras (FR-097) and offline use (FR-092), which are not estimated; if the delivery lead wants any of them inside the date they say so and the product manager estimates them |
-| Development effort (estimate) | 87 to 130.75 h, central 108.875 h (v0.8: 87.5 to 131.5 h, central 109.5 h). **Not in:** the forced password change after an Admin-set password (OQ-UX-15) and the password step on an Admin hand-over (OQ-UX-17), under 0.75 h together (estimate), which moves no date; a refused SMTP sign-in (about 4 h, architect). See the sensitivity rows in 3.4 |
-| **Central date** | **Thursday 2026-11-26** (v0.8: the same) |
-| **Range** | **Thursday 2026-11-19 to Friday 2026-12-04** (v0.8: the same) |
-| Working days from 2026-11-02 | central 19 (range 14 to 25); unrounded 13.63 / 18.06 / 24.09 |
+| Development effort (estimate) | 87.75 to 132 h, central 109.875 h (v0.9: 87 to 130.75 h, central 108.875 h). **Not in:** the forced password change after an Admin-set password (OQ-UX-15) and the password step on an Admin hand-over (OQ-UX-17), under 0.75 h together (estimate), which moves no date; a refused SMTP sign-in (about 4 h, architect). See the sensitivity rows in 3.4 |
+| **Central date** | **Thursday 2026-11-26** (v0.9: the same) |
+| **Range** | **Thursday 2026-11-19 to Friday 2026-12-04** (v0.9: the same) |
+| Working days from 2026-11-02 | central 19 (range 14 to 25); unrounded 13.72 / 18.18 / 24.25 |
 | Misses the 2026-11-13 target? | Yes in every case modelled (3.6) |
 | SPEC §14 criteria met at hand-over | all except any that touch offline |
 
-The range is "everything goes well" to "everything goes slowly" taken together: low = low effort estimate, shortest waits; high = high effort estimate, longest waits. A date near the central value is the most likely single outcome of this model, and the model is itself uncertain (no velocity). **The central value 18.06 working days sits 0.06 day, about half an hour of work, over the boundary to day 18:** half an hour less effort makes it Wed 2026-11-25, and it needs about 7.5 h more to reach Fri 2026-11-27. So treat Wed 2026-11-25 and Thu 2026-11-26 as one estimate. The high value 24.09 sits 0.91 day (7.3 h) under its next boundary. The R1 core is complete on about **Wednesday 2026-11-18** (central), an interim point at which they can still choose to hand over the core (section 6).
+The range is "everything goes well" to "everything goes slowly" taken together: low = low effort estimate, shortest waits; high = high effort estimate, longest waits. A date near the central value is the most likely single outcome of this model, and the model is itself uncertain (no velocity). **The central value 18.18 working days sits 0.18 day, about 1.5 h of work, over the boundary to day 18:** 1.5 h less effort makes it Wed 2026-11-25, and about 6.5 h more reaches Fri 2026-11-27. So treat Wed 2026-11-25 and Thu 2026-11-26 as close neighbours. The high value 24.25 sits 0.75 day (6 h) under its next boundary. The R1 core is complete on about **Wednesday 2026-11-18** (central), an interim point at which they can still choose to hand over the core (section 6).
 
-### 2.3 How the central date moved since v0.8
+### 2.3 How the central date moved since v0.9
 
 | Step | Working days (central) |
 |------|------------------------|
-| v0.8 central, scope A | 18.54, Thu 2026-11-26 |
-| Drop the master data wait: HOLD-01 is met, so the term is the backlog and G4 time (0.6) and no longer the wait W (1 day) | -0.40 |
-| Effort 109.5 h to 108.875 h (-0.625 h at 8 h a day) | -0.08 |
-| **v0.9 central** | **18.06, rounded up to 19: Thu 2026-11-26** |
+| v0.9 central, scope A | 18.06, Thu 2026-11-26 |
+| Add the Admin's guided restore command, its README and tests (EPIC-10): +1 to +1.5 h, central +1.25 h | +0.16 |
+| Drop the architect's 0.5 h high-end surplus (the central share of it is 0.25 h) | -0.03 |
+| **v0.10 central** | **18.18, rounded up to 19: Thu 2026-11-26** |
 
-Low: 13.69 - 0 - 0.06 = 13.63, day 14 (Thu 2026-11-19), as W and the backlog were both 0.5. High: 24.94 - 0.75 - 0.09 = 24.09, day 25 (Fri 2026-12-04). The net effort change is small because the whole-order rule and the answers that remove work (-4.25 to -7.25 h) are nearly used up by the rate notice, cancel approval and remove price, the Last backup line and the other additions (+3.75 to +6.5 h). The v0.6 credit for steps completed on 2026-11-01 (2.90 days) is unchanged; if the delivery lead would rather not count it, the central date is Mon 2026-11-30 (3.4).
+Low: 13.63 + 0.75 / 8 = 13.72, day 14 (Thu 2026-11-19). High: 24.09 + 1.25 / 8 = 24.25, day 25 (Fri 2026-12-04). **No date moves.** Nothing else changed: the G3 rework term, the backlog term, the merge waits and the close-out keep their v0.9 values. The v0.6 credit for steps completed on 2026-11-01 (2.90 days) is unchanged; if the delivery lead would rather not count it, the central date is Tue 2026-12-01 (3.4).
 
 ### 2.4 Risks of scope A
 
-The estimate has no velocity behind it; EPIC-08 (11.75 to 15.75 h) and now EPIC-06 (11.1 to 15.9 h, with cancel approval and remove price) are the largest and least certain blocks; the architect's hours are the architect's estimate, not a measurement, and his stated total is 0.5 h above the sum of his rows at the high end; the scaffold, CI gates, secret scan and design tokens were never itemised (3.1); the Engineer now types the whole-order counts and nothing on the screen flags a wrong one (ARCH-R6), which no hour estimate covers; alerts can only be tested against a capturing mail server until the Outlook account is named (Q-18), and the OAuth sign-in to Outlook is designed and unproven (RISK-014); the backup key holder, the restorer and the disk size are unnamed (OQ-ARCH-12, OQ-ARCH-03) and block go-live, not the date.
+The estimate has no velocity behind it; EPIC-08 (11.75 to 15.75 h) and now EPIC-06 (11.1 to 15.9 h, with cancel approval and remove price) are the largest and least certain blocks; the architect's hours are the architect's estimate, not a measurement, and his stated total for the answers of 10546 to 10554 was 0.25 h above the sum of his own rows at each end, which is now dropped (3.1); the scaffold, CI gates, secret scan and design tokens were never itemised (3.1); the Engineer now types the whole-order counts and nothing on the screen flags a wrong one (ARCH-R6), which no hour estimate covers; alerts can only be tested against a capturing mail server until the Outlook account is named (Q-18), and the OAuth sign-in to Outlook is designed and unproven (RISK-014); the disk size is unnamed (OQ-ARCH-03), no restore has been tried and only the Admin's rehearsal will show that the Admin can do it from the README alone; both block go-live, not the date.
 
 ## 3. How the dates were built
 
@@ -82,18 +82,20 @@ Effort per epic includes development, the three reviews and QA for each story, a
 | EPIC-04 Tasks and queues | R1 core | 3.25 to 5.75 | 4.5 | 0 |
 | EPIC-05 Estimate workspace | R1 core | 11.75 to 17.125 | 14.4375 | -0.25 to -0.625: the parent and item figures go; one clearing rule; Warn re-sized; picture optional |
 | EPIC-06 Cost review and approval | R1 core | 11.125 to 15.875 | 13.5 | +3.375 to +4.375: rate notice +1 to 1.5; cancel approval and remove price +2.75 to 4; latest approved price +0.25; less the sums and the item table |
-| EPIC-07 Excel export | R1 core | 5.625 to 7.875 | 6.75 | -1.375 to -2.375: no out-of-date file, markers or dialog; no file until current; fewer figures to show |
-| EPIC-10 Experience, brand, delivery (incl. the CI gates, secret and repository scan and design tokens, which no estimate itemised) | R1 core | 6.5 to 10.25 | 8.375 | 0 to +0.25: the free-space check and its alert for backups on the same server |
-| **R1 core** | | **58.75 to 89.5** | **74.125** | v0.8: 59 to 90.5 (74.75); -0.25 low, -1 high |
+| EPIC-07 Excel export | R1 core | 5.375 to 8.125 | 6.75 | -1.625 to -2.125: no out-of-date file, markers or dialog; no file until current; fewer figures to show. The architect's "-0.25 to -0.5" for the file is taken as a range, so the low case saves 0.5 h and the high case 0.25 h |
+| EPIC-10 Experience, brand, delivery (incl. the CI gates, secret and repository scan and design tokens, which no estimate itemised; the guided restore command, its README for the Admin and tests of its failure paths, 1 to 1.5) | R1 core | 7.5 to 11.75 | 9.625 | +1 to +1.5: the Admin's restore (architecture 16.14), on top of the free-space check (0 to 0.25) |
+| **R1 core** | | **59.5 to 91.25** | **75.375** | v0.9: 58.75 to 89.5 (74.125); +0.75 low, +1.75 high |
 | R1+ stretch: FR-014 (2 to 3), 035, 039, 054, 057, 088 | R1+ | 6 to 9.5 | 7.75 | 0 |
 | EPIC-08 Admin configuration | R2 | 11.75 to 15.75 | 13.75 | -0.25: no ROLLUP warning on the formula check |
 | EPIC-09 Alerts and jobs, plus FR-003, 006, 040 | R2 | 10.5 to 15.5 | 13 | 0 |
-| Held, in no epic | | 0 to 0.5 | 0.25 | The architect's stated total (+3.75 to +6.5) is 0.5 h above the sum of his rows at the high end; held until he confirms |
-| **Scope A total** | | **87 to 130.75** | **108.875** | v0.8: 87.5 to 131.5 (109.5); -0.5 low, -0.75 high |
+| Checked against the architect's rows | | 0 | 0 | The v0.9 "held" 0 to 0.5 h is **dropped**: his rows for 10546 to 10554 sum to +3.5 to +6.25 h (best and worst case for the file saving), against his stated +3.75 to +6.5, so 0.25 h at each end was in no row. Effort follows the rows. He can restore it if a row is missing |
+| **Scope A total** | | **87.75 to 132** | **109.875** | v0.9: 87 to 130.75 (108.875); +0.75 low, +1.25 high (+1 to +1.5 for the restore, -0.25 for the dropped surplus) |
 
 **Where the scaffold, CI, tokens and shell effort sits (CR-11).** Unchanged from v0.8: no hours moved between epics. The scaffold and the application shell were sized in EPIC-01 as SPEC step 1; the CI gates, the secret and repository scan and the design tokens sit in EPIC-10. Neither was ever itemised, so no separate figure exists. Stories 10.01 (scaffold, CI, scan) and 10.02 (tokens, shell) come before every EPIC-01 story, which changes the order and not the totals. Checkpoint A reads EPIC-01 with 10.01 and 10.02 and is the first place a shortfall shows. The architect confirmed the placement and says the hours are not shown to be enough.
 
-**FR-105 moves earlier (CR-14).** Its line is built in the R1 core (EPIC-02) with the Settings page frame, whose hours stay in EPIC-09's row; the alert switch, sender and test e-mail follow in R2. The total does not change. The reason is that backups start at the first deployment, the Admin has no access to the host, and until the line ships the Admin has nothing to check.
+**FR-105 moves earlier (CR-14).** Its line is built in the R1 core (EPIC-02) with the Settings page frame, whose hours stay in EPIC-09's row; the alert switch, sender and test e-mail follow in R2. The total does not change. The reason is that backups start at the first deployment and, until the line ships, the Admin has no quick sign that they ran.
+
+**The Admin's restore (architecture 16.14).** The Admin holds the key, has server access and runs the restore with one guided command (`restore.sh`), from a README, on a limited account that Accucut IT grants (A-35, proposed). The +1 to +1.5 h is the command, its README and tests of its failure paths, all in EPIC-10. No restore has been tried: only the Admin's rehearsal, run from the README alone, shows that the Admin can do it, and that rehearsal is a human step before go-live (3.3). The Admin's time on it is not in the hours.
 
 Not in the hours: dark mode and the UI-sample extras (outside scope A), offline use, the two small PRD 12.2 decisions on passwords (OQ-UX-15 and 17, under 0.75 h together, estimate), and a refused SMTP sign-in (about 4 h for another transport, architect).
 
@@ -113,12 +115,12 @@ Elapsed working days = G3 rework + backlog + effort / 8 + stages x M + close-out
 
 | Case | Effort | Elapsed working days | Completion |
 |------|--------|----------------------|------------|
-| Low | 87 h | 13.63 | Thu 2026-11-19 |
-| **Central** | 108.875 h | 18.06 | **Thu 2026-11-26** |
-| High | 130.75 h | 24.09 | Fri 2026-12-04 |
-| v0.8 for comparison | 87.5 / 109.5 / 131.5 h | 13.69 / 18.54 / 24.94 | Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04 |
+| Low | 87.75 h | 13.72 | Thu 2026-11-19 |
+| **Central** | 109.875 h | 18.18 | **Thu 2026-11-26** |
+| High | 132 h | 24.25 | Fri 2026-12-04 |
+| v0.9 for comparison | 87 / 108.875 / 130.75 h | 13.63 / 18.06 / 24.09 | Thu 2026-11-19 / Thu 2026-11-26 / Fri 2026-12-04 |
 
-Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-development ends Tue 2026-11-03; EPIC-01 with enablers 10.01 and 10.02 complete and merged Wed 2026-11-04; EPIC-05 complete about Thu 2026-11-12; **R1 core complete Wed 2026-11-18** (merged the same day); stretch complete Thu 2026-11-19; R2 complete Tue 2026-11-24 (merged Wed 2026-11-25); **the master's G8 decision Thu 2026-11-26**. The working-day numbers behind them: 1.35, 2.3 / 2.8, 8.0, 12.1 / 12.6, 13.6, 17.0 / 17.5 and 18.1.
+Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-development ends Tue 2026-11-03; EPIC-01 with enablers 10.01 and 10.02 complete and merged Wed 2026-11-04; EPIC-05 complete about Thu 2026-11-12; **R1 core complete Wed 2026-11-18** (merged the same day); stretch complete Thu 2026-11-19; R2 complete Wed 2026-11-25 (merged the same day); **the master's G8 decision Thu 2026-11-26**. The working-day numbers behind them: 1.35, 2.3 / 2.8, 8.0, 12.3 / 12.8, 13.7, 17.1 / 17.6 and 18.2.
 
 ### 3.3 What the human waits are assumed to be
 
@@ -127,6 +129,7 @@ Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-
 - **Docs PR:** draft PR #1 (`docs/AQP-1-inception`) exists. The orchestrator merges it after G4 GO (`MERGE_POLICY` docs-auto), so story branches start when it is merged.
 - **Code PR merges (`MERGE_POLICY` = docs-auto, code-human; one human merge per story):** the story count is not known yet. The model does not count PRs. It assumes the delivery lead merges ready PRs at least once a working day, that agents work on independent stories while a merge waits, and that only a dependent stage waits: M per stage (0.25, 0.5, 1.0 working days) for 5 stages, which adds 1.25 to 5 days. A wait longer than a working day on a stage boundary is the main way the high case arises.
 - **G8:** no wait (DL-010). The master evaluates the whole checklist inside the close-out time; a NO-GO stops the run.
+- **The Admin's restore rehearsal (NFR-013):** a human step **before go-live**, after the hand-over and outside the dates. The Admin runs the restore from the README alone, on staging, timed, with the IT person on hand and not helping unless it stops. It needs Accucut IT to grant the Admin's account first (A-35). The Admin's and IT's time is not estimated. If the delivery lead wants it done before the hand-over, it is one more wait of about a day (3.4).
 - **Customer testing, acceptance and the usability test:** after the date, not in it. They need Accucut staff, whose time this plan cannot assume.
 - **Clock:** the clock does not stop at any human point; every wait above is inside the dates.
 
@@ -134,9 +137,9 @@ Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-
 
 | Change | Scope A date |
 |--------|--------------|
-| Central case (18.06 working days) | Thu 2026-11-26 |
-| Effort 0.5 h or more lower | Wed 2026-11-25 |
-| Effort 1 h higher (for example the two password decisions, 0.75 h) | Thu 2026-11-26 (about 7.5 h more than the central effort are needed to move it) |
+| Central case (18.18 working days) | Thu 2026-11-26 |
+| Effort 1.5 h or more lower | Wed 2026-11-25 |
+| Effort 1 h higher (for example the two password decisions, 0.75 h) | Thu 2026-11-26 (about 6.5 h more than the central effort are needed to move it) |
 | Cut cancel approval and remove price (FR-107, FR-108), -2.75 to -4 h | Wed 2026-11-25 |
 | Merges do not wait (M = 0) | Mon 2026-11-23 |
 | Each merge stage waits 1 day | Mon 2026-11-30 |
@@ -144,11 +147,10 @@ Central-case milestones: the G3 conditions rework pass runs from Mon 2 Nov; pre-
 | Effort at the high end, waits central | Mon 2026-11-30 |
 | G3 rework pass at its low value (0.5 day) | Wed 2026-11-25 |
 | G3 rework pass at its high value (1.25 days) | Thu 2026-11-26 |
-| Backlog and G4 at its low value (0.5 day) | Wed 2026-11-25 |
-| The delivery lead is asked to review the changed screens again, or a G8 sign-off is asked for after all (one wait of 1 day) | Fri 2026-11-27 |
+| The delivery lead is asked to review the changed screens again, a G8 sign-off is asked for after all, or the Admin's restore rehearsal is done before the hand-over (one wait of about 1 day, estimate) | Fri 2026-11-27 |
 | A refused SMTP sign-in needs another transport (+4 h, architect) | Thu 2026-11-26 |
 | One weekday is lost to a closure announced later | Fri 2026-11-27 |
-| No credit for the work done on 2026-11-01 (v0.5 treatment: 2.90 days added back) | Mon 2026-11-30 |
+| No credit for the work done on 2026-11-01 (v0.5 treatment: 2.90 days added back) | Tue 2026-12-01 |
 
 ### 3.5 Holidays
 
@@ -156,16 +158,16 @@ The delivery lead said there are no holidays or days away between 2026-11-02 and
 
 ### 3.6 Can 2026-11-13 be reached?
 
-Not with scope A in any case modelled. Even the low-effort case (87 h) with no merge wait and no backlog wait takes 12.38 working days and ends Wed 2026-11-18; the model's own low case ends Thu 2026-11-19. For information only, because scope B was not chosen: the R1 core alone, handed over at checkpoint C, would end about Thu 2026-11-19 at the centre (13.22 working days: 74.125 h) and reaches Fri 2026-11-13 only if every input is at its low value (9.84 working days: 58.75 h, a 0.5-day rework, a 0.5-day backlog, merges of 0.25 day over 4 stages, a close-out of 0.5 day), which leaves about an hour of margin. I do not consider that combination realistic.
+Not with scope A in any case modelled. Even the low-effort case (87.75 h) with no merge wait and no backlog wait takes 11.97 working days and ends Tue 2026-11-17; the model's own low case ends Thu 2026-11-19. For information only, because scope B was not chosen: the R1 core alone, handed over at checkpoint C, would end about Thu 2026-11-19 at the centre (13.37 working days: 75.375 h) and reaches Fri 2026-11-13 only if every input is at its low value (9.94 working days: 59.5 h, a 0.5-day rework, a 0.5-day backlog, merges of 0.25 day over 4 stages, a close-out of 0.5 day), which leaves about half an hour of margin. I do not consider that combination realistic.
 
 ## 4. Fit analysis against the target (estimate)
 
-The target is 80 hours (10 days x 8 h). The date is a target and not a blocker, so the analysis states how far scope A is from it and what the fit rule says. **The low end of the effort, 87 h, is above the 80 h itself.**
+The target is 80 hours (10 days x 8 h). The date is a target and not a blocker, so the analysis states how far scope A is from it and what the fit rule says. **The low end of the effort, 87.75 h, is above the 80 h itself.**
 
 | Scope | Effort | Elapsed working days (low / central / high) | Against the 10-day target |
 |-------|--------|---------------------------------------------|----------------------------|
-| A (adopted): R1 core + R1+ + R2 | 87 to 130.75 h | 13.63 / 18.06 / 24.09 | Misses by 4 to 15 working days; central 9 days over |
-| v0.8 for comparison (same scope) | 87.5 to 131.5 h | 13.69 / 18.54 / 24.94 | Misses by 4 to 15 working days; central 9 days over |
+| A (adopted): R1 core + R1+ + R2 | 87.75 to 132 h | 13.72 / 18.18 / 24.25 | Misses by 4 to 15 working days; central 9 days over |
+| v0.9 for comparison (same scope) | 87 to 130.75 h | 13.63 / 18.06 / 24.09 | Misses by 4 to 15 working days; central 9 days over |
 
 **The "Must at most about 60 % of MVP effort" rule is not met.** Scope A: Musts are about 90 to 91 % of the effort (about 7.75 to 12.5 h of Should across FR-003, 006, 035, 039, 040, 041, 054, 057, 071, 088, 103; FR-105 to FR-108 are Musts by the delivery lead's decision). The R1 core alone is about 97 % Must or a little more. The split of hours between Must and Should is a rough estimate. The rule cannot be met without removing SPEC MUST items or decisions of the delivery lead; the cut ladder in 6.1 moves Musts to a later stage but does not lower the Must share of what is built. What stands in for the rule: the date is a range with its assumptions stated, the build order puts the core first, and checkpoints re-issue the date. This is a recorded deviation (DL-002) for the master and the delivery lead to weigh.
 
@@ -173,7 +175,7 @@ The target is 80 hours (10 days x 8 h). The date is a target and not a blocker, 
 
 | Stage | Name | Epics | What a user can do at the end | Brief goals |
 |-------|------|-------|-------------------------------|-------------|
-| **R1 core** | Assign, enter, calculate, approve, export | EPIC-01, 02, 03, 04, 05, 06, 07, 10 | Admin creates users and masters, reads the audit record and sees that the weekly backup ran (the Last backup line); Lead assigns a task; Engineer enters a part tree with the count of each part for the whole order, presses Calculate (and is warned about a 0 quantity), sees the status and no cost; Lead views costs and formulas, is told if rates changed, approves and locks a price only from a current calculation, unlocks if needed; Admin can cancel an approval and remove its price; Lead downloads the Excel file in the worksheet layout with one total and the total Tool Cost, only from a current calculation; the bell and Overdue tab show late work | GOAL-01, 02, 03, 04, 07 in full; GOAL-05 in part (no e-mail); GOAL-06 in part |
+| **R1 core** | Assign, enter, calculate, approve, export | EPIC-01, 02, 03, 04, 05, 06, 07, 10 | Admin creates users and masters, reads the audit record, sees that the weekly backup ran (the Last backup line) and, with server access from Accucut IT, can restore from a copy with one guided command; Lead assigns a task; Engineer enters a part tree with the count of each part for the whole order, presses Calculate (and is warned about a 0 quantity), sees the status and no cost; Lead views costs and formulas, is told if rates changed, approves and locks a price only from a current calculation, unlocks if needed; Admin can cancel an approval and remove its price; Lead downloads the Excel file in the worksheet layout with one total and the total Tool Cost, only from a current calculation; the bell and Overdue tab show late work | GOAL-01, 02, 03, 04, 07 in full; GOAL-05 in part (no e-mail); GOAL-06 in part |
 | R1+ stretch | Built after the core | FR-014, 035, 039, 054, 057, 088 | Propagation prompt for process defaults, Lead default filter, task filters, autosave, completeness count, loading and empty states | Same |
 | **R2** | Admin control and alerts | EPIC-08, EPIC-09 (FR-003, 006, 019, 040, 072 to 084) | Admin changes fields and formulas with re-lettering, versions, checkpoints and change history; e-mail alerts and the 11:00 IST digest; password reset by e-mail; task reassign | GOAL-05, GOAL-06 in full |
 | R3 | Later; **outside scope A** | EPIC-11 (FR-090, 097) | Dark mode; UI-sample extras. Drawing input only if scheduled | GOAL-07 |
@@ -227,7 +229,8 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | Point | Type | Effect on the plan |
 |-------|------|--------------------|
 | G3 | Done: the delivery lead approved (AQP-1 10491) and the master decided CONDITIONAL GO. Approval stops lifted afterwards (DL-010) | No wait in the dates. If they are asked to look again at the changed screens: one more wait of a day (3.4) |
-| The open business questions | Answered on 2026-11-02 except the backup key holder and the restorer (OQ-ARCH-12) and the disk size (OQ-ARCH-03, Accucut IT) | No wait: these block go-live and not the dates |
+| The open business questions | Answered on 2026-11-02, the backup key and the restore included (the Admin; AQP-1 10559, 10560). Open: the disk size (OQ-ARCH-03) and the Admin's server access (A-35), both Accucut IT's | No wait: these block go-live and not the dates |
+| The Admin's restore rehearsal (NFR-013) | **Human step before go-live**, by the Admin from the README alone, on staging, with the IT person on hand | Outside the dates (go-live is after the hand-over); the time of the Admin and of Accucut IT is not estimated. One wait of about a day if it is done before the hand-over (3.4) |
 | Master data stop (HOLD-01, TR-009) | **Met** (AQP-10 10512, D-23) | No wait in the model |
 | G4 | `master` | Draft PR #1 exists; the orchestrator merges it after G4 GO (docs-auto) |
 | Each story G5 to G7 | Agents | Three reviews and QA per story |
@@ -243,11 +246,12 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | R1 core | Master data (TR-009) | the Admin | **Met** (D-23). Invented placeholders until the Admin types the real values at first use |
 | R1 core | Hosting details: web address, IT person's name, which Outlook account (Q-18) | Santhosh, their IT person | Open; before the first deployment |
 | R1 core | VM disk size (OQ-ARCH-03): 40 GB is too small for about 105 full copies on the same server | Accucut IT | Open; before go-live |
-| R1 core | Who holds the backup key and who restores (OQ-ARCH-12 remainder) | Santhosh | Open; before go-live. Without a key holder no copy can be opened |
+| R1 core | Server access for the Admin: their own limited account (key-only SSH, `sudo` for the restore script only, not in the `docker` group) as the architect proposes (A-35), or full access as they asked | Accucut IT | Open; before the rehearsal. The backup key is held by the Admin (OQ-ARCH-12 closed) |
 | R1 core | Cleaned sample worksheet (Q-30, not blocking) | Santhosh | Open. The repository stays public by their decision (D-13); structure only is read from it |
 | R1 core | Docs PR | orchestrator | Draft PR #1 exists; merged after G4 GO (docs-auto) |
 | R2 | Sender address and Outlook account; whether it allows SMTP; one real send on the real mailbox before alerts go live | Santhosh, their IT person; solution-architect; developer | Open; alerts tested against a capturing mail server until then |
 | After the date | Customer testing, acceptance, change requests; the usability test (2 Engineers, 2 Leads, 1 Admin, no names; the qa-engineer writes the plan); go-live, training, parallel run (TR-003 to TR-005) | Santhosh, Accucut; qa-engineer | Not in the dates |
+| Before go-live | The Admin's restore rehearsal: the Admin runs `restore.sh` from the README alone on staging, timed, with the IT person on hand (NFR-013) | the Admin; Accucut IT | Not in the dates; the time of both is not estimated |
 | R-OFF | Meaning of offline, hosting design | Santhosh | Open; settled when the release is planned |
 
 ## 9. Effect of each open item on this plan
@@ -258,7 +262,7 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | Reading R-2: a top-level item's own 0 warns | As built | It should not: one condition in the rule, small, not sized |
 | Reading R-3: "rates" are the master values only | As built | Configuration changes included: the comparison grows; not estimated |
 | Reading R-4: a removed price stays in the audit record | As built | Erased from audit: breaks NFR-007; needs their decision; not estimated |
-| Reading R-5 and OQ-ARCH-12: the Admin only checks; a key holder and restorer are named before go-live | README steps name them; no extra hours | The Admin is meant to restore: README and key duty change; not estimated |
+| Reading R-5: "server access" is the limited account of A-35, granted by Accucut IT | The restore command and README as costed (+1 to +1.5 h) | Full server access: the audit log is then a record kept by the person it records (ARCH-R8), and the portal's promises do not hold against that person; no hours change |
 | OQ-ARCH-03 disk size | A larger VM; no effect on hours | A smaller disk is kept: backups fill it in about 6 months at an invented rate and stop the database (ARCH-R7) |
 | Q-18 hosting details | Docker Compose; Outlook; weekly backup on the same server | Deployment and mail settings change; effect on hours not estimated |
 | ASSUMPTION-56 (symbols, session start) | Any non-alphanumeric character; 12 hours from sign-in | Under 1 h (estimate) |
@@ -278,3 +282,4 @@ Steps 1 to 4 save 6.75 to 11 h (about 0.85 to 1.4 working day). Not cut candidat
 | 0.7 | 2026-11-01 | G3 condition 11. **Effort:** the architect's 7.5 to 13 h added by epic (R1 core 55.25 to 84.75 h, R2 22.5 to 31.5 h); scope A is 83.75 to 125.75 h, central 104.75 h. **Model:** the final G8 sign-off wait W is removed (DL-010); every other input keeps its v0.6 value. **Date definition changed:** the master's G8 decision day with the last code PR merged, no sign-off wait (2.1). **Dates re-issued, not adopted:** central Wed 2026-11-25 (unchanged; 17.94 days), range Thu 2026-11-19 to Fri 2026-12-04 (the low end moved one day); sensitivity recomputed, with new rows for the 1 h of OQ-ARCH-10, a refused SMTP sign-in and a G8 wait asked for after all; the central date is 0.06 day from a boundary and the plan says so. Milestones, checkpoints, 3.5, 3.6 and the fit table recomputed. Sections 1, 3.3, 7 and 8 aligned with DL-010 to DL-014 (G3 decided; HOLD-01 a data input; backup design done). Section 9: OQ-ARCH-10 / OQ-PM-07, OQ-UX-13, OQ-UX-16 added; "narrow case" wording for Q-35 removed (DL-012). Supersedes the v0.6 dates | `docs/00-governance/gate-log.md` G3, condition 11; DL-010, DL-012, DL-013, DL-014; architecture v0.3 section 16.8; PRD v0.7 |
 | 0.8 | 2026-11-01 | The delivery lead's answers on AQP-14, AQP-15 and AQP-10 (D-21 to D-23, SPEC v1.6; architecture v0.5 section 16.10; consistency report CR-11, 14, 20). **Effort:** Warn (FR-104) 3.75 to 5.75 h, central 4.75 h, split over EPIC-03, 05, 06 and 07, replaces the 1 h block that v0.7 held outside the headline; scope A is 87.5 to 131.5 h, central 109.5 h (R1 core 59 to 90.5 h). **Dates re-issued, not adopted:** central Thu 2026-11-26 (18.54 days; v0.7 Wed 2026-11-25), range Thu 2026-11-19 to Fri 2026-12-04 (unchanged). HOLD-01 shown as met (D-23): the W term stayed for that re-issue. Decisions: CR-11 (no hours moved; enablers 10.01 and 10.02 first), CR-14 (FR-105 added, Should, R2), CR-20 (usability test during customer acceptance, after the date, not in the dates). Supersedes the v0.7 dates | AQP-14 10510; AQP-15 10511; AQP-10 10512; SPEC v1.6; architecture v0.5; PRD v0.8 |
 | 0.9 | 2026-11-02 | The delivery lead's answers of 2026-11-02 (AQP-26 10530 to 10537; AQP-1 10542 to 10557; AQP-15 10543; SPEC v1.10; architecture v0.8 sections 16.12 and 16.13). **Effort:** 87 to 130.75 h, central 108.875 h (v0.8: 87.5 to 131.5 h): the whole-order rule and parent change -3.25 to -5.25, Warn re-sized to 3.5 to 5.25, clearing every figure -0.75 to -1.5, and six additions +3.75 to +6.5 (rate notice, cancel approval and remove price, Last backup line, same-server backups, picture optional, no file until current), with the architect's 0.5 h high-end surplus held outside any epic. Epics re-split; R1 core 58.75 to 89.5 h. **Model:** the master data wait W is dropped (HOLD-01 met, D-23; DL-025) and no holiday is assumed (D-35); the term is now the backlog and G4 time. **Dates re-issued, not adopted:** central Thu 2026-11-26 (18.06 days, unchanged date), range Thu 2026-11-19 to Fri 2026-12-04 (unchanged), the central value 0.06 day over a boundary. Sensitivity, milestones, checkpoints, 3.5, 3.6 and the fit table recomputed; the Q-38 row and the 1 h rows removed (answered); a cut ladder step 4 added for FR-107 and FR-108. FR-105 firm and moved into the R1 core (CR-14); the usability test has its participants (2 Engineers, 2 Leads, 1 Admin, no names). Supersedes the v0.8 dates | AQP-26; AQP-1 10542 to 10557; AQP-15 10543; SPEC v1.10; architecture v0.8; PRD v0.9 |
+| 0.10 | 2026-11-02 | Architecture v0.9 section 16.14 and AQP-1 10559, 10560. **Effort:** the Admin's guided restore command, its README and tests, **+1 to +1.5 h in EPIC-10**; the architect's 0.5 h high-end surplus of 10546 to 10554 is **dropped** against his rows (they sum to +3.5 to +6.25 h against his +3.75 to +6.5), and the file saving of EPIC-07 is taken as a range; scope A is 87.75 to 132 h, central 109.875 h (R1 core 59.5 to 91.25 h). **Dates:** the working-day figures are 13.72 / 18.18 / 24.25 and **no date moves** (Thu 2026-11-19, Thu 2026-11-26, Fri 2026-12-04); the central value sits 0.18 day over a boundary (v0.9: 0.06). Sensitivity, milestones (R2 complete Wed 2026-11-25), 3.6 and the fit table recomputed. **New human step:** the Admin's restore rehearsal before go-live, outside the dates (3.3, 7, 8). Section 1 and 9: the Admin holds the key, has server access and runs the restore. Supersedes the v0.9 working-day figures, not its dates | AQP-1 10559, 10560; architecture v0.9; PRD v0.10 |
