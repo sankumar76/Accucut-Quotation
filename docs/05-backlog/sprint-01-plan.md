@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.3 (2026-11-02: applies architecture v0.11 section 16.15, see "Changes from architecture v0.11" below; 0.2 refreshed the plan after the product-owner's Definition of Ready validation, `backlog.md` section 7, and consistency report CR-34 and CR-35; 0.1 was written before that validation) |
+| Version | 0.4 (2026-11-02: G4 CONDITIONAL GO, attempt 2 (AQP-1 comment 10643); conditions 1 and 3 done: the 18 stories read Ready for Dev and the way of working is named below; 0.3 applied architecture v0.11 section 16.15, see "Changes from architecture v0.11"; 0.2 refreshed the plan after the product-owner's Definition of Ready validation, `backlog.md` section 7, and consistency report CR-34 and CR-35; 0.1 was written before that validation) |
 | Dates | Not adopted. No date model is adopted (project state; DL-014). The Jira sprint "AQP Sprint 1" (id 37, state future) holds the 18 stories and is not started. No story branch starts before G4, which is the master's decision; the delivery lead starts the sprint after it. Dates are set then |
 | Sprint goal | By the end of the sprint a person can sign in to a responsive Red Leads portal, an Admin can manage users, read the audit record and keep the rate, material, customer and exchange-rate masters, a Lead can assign a task, and the formula engine and field registry are ready for the calculation, all built under the secret scan and the cost-confidentiality scan |
 | Capacity assumption | **Assumed 55 points for the committed set (53 points, ranks 1 to 12); 20 points of stretch (ranks 13 to 18); 73 points planned in all.** There is no velocity: this is the first sprint. The number is a calibration, not a forecast. The basis is the dependency chain (10.01, then 10.02, then the sign-in chain is serial), the largest items (10.01 and 03.02 at 8 points each) and the architect's warning that the scaffold hours are not shown to be enough (architecture 16.11). The sprint review sets the real velocity |
@@ -12,9 +12,23 @@
 
 ## Definition of Ready status (product-owner, 2026-11-02)
 
-The product-owner validated all 18 stories (16 DoR items each, `backlog.md` section 7). **Nine passed** (ranks 2 to 8, 11 and 12). **Nine needed one correction each (CR-34), now made:** 10.01 gained AC-10 (the database guard the test plan asks for, and sub-task T10, AQP-164); eight stories gained the missing "is blocked by" links (13 links, listed below). The product-owner re-validates the nine. **Every story stays Draft in Jira until the master decides G4**, then Ready.
+The product-owner validated all 18 stories, first on 16 DoR items (`backlog.md` section 7) and then, in remediation 2, on all 17: **READY, 17 of 17, on all 18** (comment 10641). Nine had needed one correction each (CR-34): 10.01 gained AC-10 (the database guard the test plan asks for, and sub-task T10, AQP-164); eight stories gained the missing "is blocked by" links (13 links, listed below).
 
-## Jira stories (all Draft, label `sprint-01`)
+**G4 was decided CONDITIONAL GO on 2026-11-02 (attempt 2, comment 10643).** Under its conditions 1 and 3 the scrum-master moved **all 18 stories to Ready for Dev** (checked by search: 18 read Ready for Dev, 0 do not) and confirmed the 11 Trace lines below.
+
+**Trace lines the product-owner corrected (DL-039), confirmed by the scrum-master:** AQP-48 (BR-002, 003, 004), AQP-57 (BR-003, 004), AQP-65 (BR-001, 004), AQP-90 (BR-003), AQP-97 (BR-003, 008, 023, 026, 027, 034, 036, 047), AQP-106 (FR-027 and BR-025 added to BR-021, 024, 036, 037), AQP-113 (FR-011; BR-003, 004, 021, 030, 032), AQP-122 (FR-011; BR-003, 004, 033), AQP-130 (FR-011; BR-003, 004), AQP-142 (FR-011; BR-003, 004, 028, 029, 030, 032), AQP-148 (BR-002, 004, 045, 052). Each line was read against the story's acceptance criteria and the business-rule catalogue (BR-001 to 005, 008, 021, 023, 025 to 036, 045, 047, 052); every added ID is asserted by an AC and none is invented. **No disagreement to raise.** One tidy-up: the scrum-master's own "DoR self-check" paragraph inside several stories still names the shorter BR list; the Trace line and the PO Validation section are the record.
+
+## Way of working assumed (condition 3 of G4 attempt 2; release plan v0.12 section 3.3, DL-041)
+
+**Until the delivery lead chooses another way, this plan assumes way 1: one pull request per story, and the delivery lead merges each within half a working day.**
+
+- Each story has its own branch `feat/<JIRA-KEY>-<slug>` from `master` and its own PR. A story that depends on another starts its branch **after** the earlier one is merged (no stacked branches, no bundled PRs).
+- Code PRs are merged by a human (`MERGE_POLICY`: docs-auto, code-human). The orchestrator does not merge code after G7 (that is way 5, which needs the delivery lead's explicit word).
+- Why this matters: sprint 1's longest chain is 8 to 9 stories, so it has 7 to 8 merge waits. The product-manager's model puts sprint 1 at about 5.85 days for 2.4 days of work at a half-day merge, and the merge turnaround is the largest input to every date (release plan v0.12). **No date is adopted.** The 53-point commitment and the 55-point capacity are stated without a velocity (above) and do not allow for a slower merge than half a day.
+- The other ways, for the delivery lead to choose by name (release plan 3.3): 2 fixed merge times twice a day; 3 stacked branches; 4 bundled PRs; 5 the orchestrator merges after G7 GO. If they name one, or a different turnaround (for example a whole day), this section and the capacity row change at the next sprint plan; silence leaves way 1 at half a day and is not a stop (condition 2, orchestrator).
+- The ceiling on backup copies (A-36, about 5 to 6 GB of data) is for the orchestrator to tell them; it does not touch these stories.
+
+## Jira stories (all Ready for Dev since G4 attempt 2, label `sprint-01`)
 
 Estimates are Fibonacci story points in the Jira field "Story point estimate". Every story has sub-tasks (one per top-level task, AC IDs in the summary) and "is blocked by" links. The "Blocked by" column shows the 28 links of v0.1 plus the 13 added for CR-34 (marked +).
 
@@ -48,18 +62,18 @@ Sprint assignment: all 18 are in the Jira sprint "AQP Sprint 1" (id 37) and carr
 
 | # | Story | Points | Depends on | Critical path | Status |
 |---|-------|--------|-----------|---------------|--------|
-| 1 | 10.01 AQP-27 | 8 | none | Yes | Draft |
-| 2 | 10.02 AQP-28 | 5 | 10.01 | Yes | Draft |
-| 3 | 01.01 AQP-38 | 5 | 10.01, 10.02 | Yes | Draft |
-| 4 | 01.02 AQP-48 | 5 | 01.01 | Yes | Draft |
-| 5 | 01.03 AQP-57 | 5 | 01.02 | No (but the scan must exist before any cost-bearing view, and seven later stories use it) | Draft |
-| 6 | 01.04 AQP-65 | 3 | 01.02 | Yes | Draft |
-| 7 | 01.07 AQP-74 | 5 | 01.02, 01.04 | Yes | Draft |
-| 8 | 01.05 AQP-81 | 3 | 01.01, 01.04 | No | Draft |
-| 9 | 01.06 AQP-89 | 2 | 01.01, 01.02 | No | Draft |
-| 10 | 01.08 AQP-90 | 1 | 10.02, 01.02, 01.03 | No | Draft |
-| 11 | 03.01 AQP-97 | 3 | 10.01 | Engine chain | Draft |
-| 12 | 03.02 AQP-106 | 8 | 03.01 | Engine chain | Draft |
+| 1 | 10.01 AQP-27 | 8 | none | Yes | Ready for Dev |
+| 2 | 10.02 AQP-28 | 5 | 10.01 | Yes | Ready for Dev |
+| 3 | 01.01 AQP-38 | 5 | 10.01, 10.02 | Yes | Ready for Dev |
+| 4 | 01.02 AQP-48 | 5 | 01.01 | Yes | Ready for Dev |
+| 5 | 01.03 AQP-57 | 5 | 01.02 | No (but the scan must exist before any cost-bearing view, and seven later stories use it) | Ready for Dev |
+| 6 | 01.04 AQP-65 | 3 | 01.02 | Yes | Ready for Dev |
+| 7 | 01.07 AQP-74 | 5 | 01.02, 01.04 | Yes | Ready for Dev |
+| 8 | 01.05 AQP-81 | 3 | 01.01, 01.04 | No | Ready for Dev |
+| 9 | 01.06 AQP-89 | 2 | 01.01, 01.02 | No | Ready for Dev |
+| 10 | 01.08 AQP-90 | 1 | 10.02, 01.02, 01.03 | No | Ready for Dev |
+| 11 | 03.01 AQP-97 | 3 | 10.01 | Engine chain | Ready for Dev |
+| 12 | 03.02 AQP-106 | 8 | 03.01 | Engine chain | Ready for Dev |
 
 **Total committed:** 53 points / assumed capacity 55 points.
 
@@ -112,7 +126,7 @@ Proposed for the ledger (the orchestrator records them).
 
 | ID | Description | Impact | Owner | Action | Target date | Status |
 |----|-------------|--------|-------|--------|-------------|--------|
-| BLK-03 (existing) | The ux-expert was stopped from the delivery lead's side. Conditions 12, 13 and 15 are met in substance (consistency report v0.3), so the blocker can clear | G4 waits for the master's decision | master; Santhosh | The master decides G4 and records CR-23 | Before sprint start | Open, can clear |
+| BLK-03 (existing) | The ux-expert was stopped from the delivery lead's side. Conditions 12, 13 and 15 are met in substance (consistency report v0.3), so the blocker can clear | None now: G4 is decided (CONDITIONAL GO, attempt 2) | master; Santhosh | Master to clear it on the record | Before sprint start | Can clear |
 | IMP-S1-01 | The test plan (G3 condition 15) was absent | None now | qa-engineer | `docs/07-qa/test-plan.md` exists (5b46e00) | n/a | **Closed** |
 | IMP-S1-02 | The seed Process Master IDs, the production loader of the seed configuration and the creation of "Other" were not stated in the architecture (A-1) | None now | solution-architect | Confirmed in architecture v0.11 section 5.6; A-1 marked confirmed in 03.01, 02.01 and 02.05 | n/a | **Closed** |
 | IMP-S1-03 | A real phone, a screen reader and Windows high-contrast mode are needed for 10.02 at its G7 (DL-017) | 10.02 cannot be accepted without them | qa-engineer; Santhosh | The delivery lead has supplied the devices (comment 10573); agree how the phone reaches the dev server | Before 10.02 reaches G7 | **Answered**; the check itself is done at G7 |
@@ -144,7 +158,7 @@ The password step-up check ships in Release 1 with FR-107 and FR-108. **Answered
 
 ## Rules that apply to every story in this sprint
 
-1. **Definition of Ready.** Ready only after the product-owner validates and the master decides G4. Nine stories passed validation and nine were corrected (above); all 18 stay Draft until G4.
+1. **Definition of Ready.** Ready only after the product-owner validates and the master decides G4. Both are done: all 18 read Ready for Dev. A change to a story's acceptance criteria after this point goes back to the product-owner.
 2. **Direct commands.** Testing notes use `npx vitest run`, `npx eslint .`, `npx tsc --noEmit`, `npx prisma generate`, `npx prisma migrate deploy`, `npx next build`, `npx next dev`, `npx playwright test`, `docker compose -f compose.dev.yml …`, `npm ci` and `npm audit`. They never use `npm run`. CLAUDE.md §1 and test-strategy §10 still name the `npm run` forms; `package.json` may keep them as aliases.
 3. **Every story that adds a Restricted table or an Engineer-reachable route** adds its values to `canaryMasters` and its route to the manifest, and the canary scan must still find 0 (stories 01.03, 02.x, 04.01).
 4. **Every UI story** carries NFR-016, 017 and 018 as one acceptance criterion and a Playwright spec at 360×800, 768×1024 and 1366×768 with axe (`wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`) and a keyboard-only run.
@@ -157,17 +171,17 @@ The password step-up check ships in Release 1 with FR-107 and FR-108. **Answered
 
 | Owner | Issue |
 |-------|-------|
-| product-owner | Put `clear-copies.sh` (with its `sudo` rule and the `job_runs` row) on the 10.05 row of `backlog.md`; story 10.05 is not in Jira yet. Re-validate the nine corrected stories (10.01 AC-10 and sub-task AQP-164; the 13 links). The "Depends on" text inside the eight link-corrected descriptions was not rewritten (a Jira comment records it); say if the description text should be rewritten too |
+| product-owner | Done: `clear-copies.sh` is on the 10.05 row of `backlog.md` v0.4 (story 10.05 is not in Jira; the scrum-master creates it when due); all 18 re-validated 17 of 17. Going forward the product-owner names a Trace correction and the scrum-master writes it (DL-039) |
 | solution-architect | Answered in architecture v0.11: the seed IDs and loader, "Other" (A-1), and what an Engineer gets on a Lead or Admin route (CR-33: 403). Still open: (3) what a draft estimate shows when its treatment is deleted, since `treatments` has no `deleted_at` (before story 05.06); (4) whether sign-out should also raise `session_version`; (5) the names of the two database roles and who creates them on a production install (10.01 A-1) |
 | ux-expert | SCR-01 "clears nothing else" against UJ-01 "field values kept except the password" (CR-32) |
 | product-manager | FR-011's fit criterion still calls the audit screen PROPOSED (CR-29). The `npm run` forms in CLAUDE.md §1 and test-strategy §10 differ from the direct commands used here |
-| master | Record CR-23 and decide G4. The stories are written, validated in part and wait |
+| master | Done: CR-23 recorded and G4 decided (CONDITIONAL GO, attempt 2). Open on the master's list: the conditions above |
 
 ## Not Ready, and why
 
-None of the 18 is Ready; all are **Draft** because Ready follows the master's G4 decision. Where they stand:
-- **Passed the DoR (9):** 10.02, 01.01, 01.02, 01.03, 01.04, 01.07, 01.05, 03.01, 03.02.
-- **Corrected, awaiting re-validation (9):** 10.01, 01.06, 01.08, 02.01, 02.03, 02.04, 02.05, 02.02, 04.01.
+None. All 18 are **Ready for Dev** (G4 CONDITIONAL GO, attempt 2). What is still open, none of it holding a story:
+- **Before a given story reaches its gate (master's conditions):** sign-out and `session_version` before AQP-38 reaches G5 (solution-architect); the test plan's 403 rows before AQP-48 reaches G7 (qa-engineer); a deleted treatment on a draft before 05.06 is Ready; SCR-15 wording before 02.09; the SPEC retention and picture-size wording before 10.05 and 05.07.
+- **Before sprint 1 starts:** the delivery lead's choice of way of working and turnaround (orchestrator, condition 2); this plan assumes way 1.
 - **03.01, 02.01 and 02.05:** assumption A-1 is now confirmed by architecture v0.11.
 - No story is held by an open question: the open ones (Q-38, Q-39, OQ-ARCH-02, 03, 11, 12, Q-18) do not touch ranks 1 to 18.
 
