@@ -41,7 +41,9 @@ We will enforce confidentiality in five layers.
 4. **Transport.** Every authenticated response is `private, no-store`. No Next.js data caching on role-dependent routes. Engineer and Lead views at one address are separate component trees with separate loaders.
 5. **Proof.** On every build, a canary test seeds every Restricted value with a unique invented sentinel, runs the Engineer journeys, and scans every response (HTML, RSC payload, JSON, chunks) for those sentinels and for formula and rate text.
 
-Calculate returns the fixed message and status only. Task codes are sequential and so can be guessed. An Engineer asking for another Engineer's task, or one that does not exist, gets an identical response: 404 from the API, and SCR-26 "no access" from the page (UX-22).
+Calculate returns the fixed message and status only. **Added for v0.5, for `master` to check at G4:** before it does, it can return 409 `CALCULATE_ACK_REQUIRED` for a quantity of 0 (AQP-15 comment 10511). This holds to the rules above. The warning is built only from typed H and the tree's shape, before any master or cost is read, so it cannot vary with a Restricted value. It has one strict schema for every role, with no cost field. The success body stays exactly the same with an acknowledgement. No `engineer-*.ts` view reads `calculations.warnings`. Layer 5 scans this path, and shows the same body under two sets of masters (architecture section 4.3).
+
+Task codes are sequential and so can be guessed. An Engineer asking for another Engineer's task, or one that does not exist, gets an identical response: 404 from the API, and SCR-26 "no access" from the page (UX-22).
 
 ## Consequences
 - Positive: the leak path is closed at several independent points, and a new field is hidden by default.

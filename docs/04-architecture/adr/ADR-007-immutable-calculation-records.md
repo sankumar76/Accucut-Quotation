@@ -43,6 +43,8 @@ Every Calculate and Recalculate inserts one `calculations` row (configuration ve
 
 **Added for v0.3: reason and current price.** `approvals.override_reason` is optional (D-18) and copied to the audit row. The price approved before an unlock stays in its `approvals` row. Only a row with `unlocked_at` null is the current price.
 
+**Added for v0.5: quantity warnings (AQP-15 comment 10511, revised for `master` to check at G4).** `calculations.warnings`, JSONB with a default of `[]`, holds the warnings acknowledged for that calculation: code, node, Sl. No and label, as text at that moment. A calculation with warnings cannot be written unless they were acknowledged, so its `created_by` and time are the acknowledgement, and no other column is needed. An immutable row suits this: the record of who went ahead cannot be changed afterwards. Nothing is written on an unacknowledged press. The warnings are read through `figure-state`, while `current` only, and hold no figure (architecture section 4.3).
+
 ## Consequences
 - Positive: the guarantee rests on a database rule, not on code never making a mistake. Unlock notices are a plain diff.
 - Negative / trade-offs accepted: no pruning (TD-03) until Q-26 gives a policy. Images referenced by a record are never deleted.
