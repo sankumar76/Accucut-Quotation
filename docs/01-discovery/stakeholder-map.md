@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.6 (G3 conditions 3 and 10, 2026-11-01: Q-35 (a) is blocking at G4 for the roll-up story, Jira AQP-14; no other change) |
+| Version | 0.7 (2026-11-01: Q-35 (a), OQ-ARCH-10 in part and the master data holder answered, relayed verbatim; Q-38 raised). Version 0.6 (G3 conditions 3 and 10, 2026-11-01: Q-35 (a) is blocking at G4 for the roll-up story, Jira AQP-14; no other change) |
 | Author | business-analyst |
 | Date | 2026-11-01 (Pass 1: 2026-10-31) |
 
@@ -12,14 +12,14 @@ No interviews have taken place. Goals, pains and measures below are **derived fr
 
 | Stakeholder / persona | Role in the project | Goals | Pains (inferred unless cited) | Influence | Interest | How they measure success |
 |-----------------------|---------------------|-------|-------------------------------|-----------|----------|--------------------------|
-| **Santhosh - MD** (one person; Q-02 answered on AQP-3) | Business sponsor; delivery lead; final approver at every gate (`CLAUDE.md` §1) | A portal that replaces the worksheet, protects pricing, looks professional and carries the Accucut brand | Budget: no limit; target 10 working days from 2026-11-02 (confirmed; 2026-11-13 is a target, not a fixed constraint, AQP-12 comment 10446; they ask for a realistic completion date, scope A chosen, AQP-12 comment 10488); the open points are Q-18 (web address, sender address), Q-35 to Q-37 | High | High | Acceptance tests in SPEC §14 pass; brand and UI direction (SPEC §17) delivered |
+| **Santhosh - MD** (one person; Q-02 answered on AQP-3) | Business sponsor; delivery lead; final approver at every gate (`CLAUDE.md` §1) | A portal that replaces the worksheet, protects pricing, looks professional and carries the Accucut brand | Budget: no limit; target 10 working days from 2026-11-02 (confirmed; 2026-11-13 is a target, not a fixed constraint, AQP-12 comment 10446; they ask for a realistic completion date, scope A chosen, AQP-12 comment 10488); the open points are Q-18 (web address, sender address), Q-35 (b), Q-36, Q-37, Q-38 | High | High | Acceptance tests in SPEC §14 pass; brand and UI direction (SPEC §17) delivered |
 | **Admin** (exactly one; person not named in the inputs) | Owns users, masters, settings, fields and formulas; also can assign, review and approve | Change prices, fields and formulas without a developer and without breaking old estimates (SPEC §1.6, §8) | One person is a single point of failure (Q-23); formula mistakes are costly | High | High | Can insert a field, edit a formula and revert a checkpoint safely (SPEC §14.6 to §14.9) |
 | **Leads** (many) | Assign tasks, track queues, review costs, approve and lock, unlock | See overdue work early; review costs and formulas quickly; set the Approved Quote Price with confidence | Cannot tell today who is late (inferred); parent and child cost: rule confirmed as corrected (Q-08; the cost of a parent = the sum of the costs of all children x the item quantity), every level's quantity applies (Q-32, D-12 as revised 2026-11-01) | Medium | High | Overdue tasks visible; estimates reach them calculated; approval takes a few steps |
 | **Engineers** (many) | Enter part data for assigned tasks; never see costs | Clear task list, fast guided entry, little re-typing, knowing exactly what is missing (SPEC §6, §17.4) | Large part trees and many mandatory fields (eased: enter 0 and choose "Not applicable", Q-06, confirmed); network-folder links blocked by browsers (SPEC §15.4) | Low | High | Complete a tree and Calculate without errors; keyboard-friendly entry |
 | **Accucut's customers** (external, not users) | Receive the quoted price; their rates drive the estimate | Accurate, timely quotes at agreed rates | Rate overrides must be respected (SPEC §4.2) | Low | Medium | Quote matches their agreed rates (not measured by the project) |
 | **Accucut IT contact** (to be named, Q-18; installs updates, D-15) | Hosts the system, backups, e-mail service, network access | A supportable system with clear backup and update steps | Unknown | Medium | Medium | System runs, backups restore, e-mail delivers |
 | **Accucut legal / data-protection adviser** (to be confirmed, Q-26) | Confirms personal-data duties and retention | Compliance with data-protection law | Unknown | Low | Low | Retention and access rules approved |
-| **Delivery team** (AI agents; human delivery lead) | Builds and verifies | Clear, testable requirements | Questions still open: Q-18 (web address, sender address), Q-35 to Q-37 (G4) | Medium | High | Gates passed first time |
+| **Delivery team** (AI agents; human delivery lead) | Builds and verifies | Clear, testable requirements | Questions still open: Q-18 (web address, sender address), Q-35 (b), Q-36, Q-37, Q-38 (G4) | Medium | High | Gates passed first time |
 
 ### Personas (role-based, from SPEC §3)
 - **The Engineer** works on a task from a network folder of requirement documents, chooses the customer, builds the part tree, and fills the guided form on a laptop or tablet, sometimes on a phone. Success: never blocked by a rule that does not apply to the part.
@@ -44,7 +44,7 @@ R = Responsible (does it), A = Accountable (decides), C = Consulted, I = Informe
 | Answer open questions Q-01 to Q-28 | A/R | C | C | — | C (Q-18) | R (ask) |
 | Project budget and target date | A/R | I | I | I | I | C |
 | Scope changes (logged in decision log) | A | C | C | I | I | R (product manager) |
-| Starting master data (rates, materials, customers, treatments): defaults supplied by Santhosh, entered by the Admin at first use | A | R | C | I | — | C |
+| Starting master data (rates, materials, customers, treatments): held and entered by the Admin at first use (D-23); no values supplied to the delivery team | A | R | C | I | — | C |
 | Business rules: parent versus child cost, Rejection (BC), Tool Cost | A | C | C | C | — | R (record) |
 | Export layout sign-off (sample worksheet) | A | C | R (compare) | I | — | R (build) |
 | Field and formula changes after go-live | I | A/R | C (view only) | — | — | — |
@@ -63,8 +63,8 @@ R = Responsible (does it), A = Accountable (decides), C = Consulted, I = Informe
 
 | Stakeholder | When | How | Purpose |
 |-------------|------|-----|---------|
-| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 to Q-37 (G4; Q-35 (a) is a number on an invented example, Jira AQP-14, and holds the roll-up story); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
-| Santhosh | After G3 approval, before development | Orchestrator stops and asks for the master data defaults (Q-09, TR-009) | Defaults for the Admin to enter at first use |
+| Santhosh | Now (G1) | Answers received on AQP-1 to AQP-13 (2026-10-31 and 2026-11-01); still to decide: Q-18 web address and sender address, Q-35 (b), Q-36, Q-37, Q-38 (G4); answered 2026-11-01 and relayed: Q-35 (a) (AQP-14), OQ-ARCH-10 in part (AQP-15), the master data holder (AQP-10); G3 approved (AQP-1 comment 10491) | Approval and remaining answers |
+| Santhosh | After G3 approval, before development | Orchestrator stopped and asked about the master data (Q-09, TR-009); answered 2026-11-01 (AQP-10 comment 10512, D-23): the Admin holds the values and types them in at first use; no values were asked for or given | None further for first use |
 | Admin, one Lead, one Engineer | Before G2 | 30-minute call each (Q-28) | Confirm the as-is and to-be process; baseline (Q-24) |
 | Leads and Engineers | G3 | Review the HTML screens | Usability feedback |
 | Accucut IT contact | Before G3 | One call (Q-18) | Hosting, network access, e-mail service, backup |
