@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-17](https://sankumar76.atlassian.net/browse/AQP-17) (labels `ai-delivery`, `aiid-EPIC-02`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-014 is R1+ stretch) |
-| Priority | High. PRD value 4. Effort 5.75 to 9.5 h core plus 2 to 3 h stretch (estimate, release plan v0.10) |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. Scope changed (FR-105 added; "Not applicable" narrowed), so the Jira epic was edited |
+| Priority | High. PRD value 4. Effort 5.75 to 9.5 h core plus 2 to 3 h stretch (estimate, release plan v0.11) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. Scope changed (FR-105 added; "Not applicable" narrowed), so the Jira epic was edited |
 
 ## Goal & User Value
 The Admin holds the rates and lists that drive every calculation, so a Lead gets prices that follow Accucut's own rates and an Engineer picks customers and materials without ever seeing a rate. The Admin can also see on Settings that the weekly backup ran.
@@ -21,7 +21,7 @@ The Admin holds the rates and lists that drive every calculation, so a Lead gets
 **Out:** the alert switch, sender and test e-mail on Settings (FR-019, EPIC-09, which fills the frame this epic builds); the backup job and the restore command (EPIC-10); real master data (the Admin types it at first use, D-23, ADR-014); entry of rates beyond 2 decimals (D-24: no).
 
 ## UX & Architecture References
-- Screens / journeys: SCR-11, 12, 13, 15 (the review mock-up labels SCR-15 "R2"; see CR-26); UJ-10, UJ-13.
+- Screens / journeys: SCR-11, 12, 13, 15 (staged R1 core for the Last backup line and R2 for the alert controls since UX v0.6, CR-26 closed); UJ-10, UJ-13.
 - Components: `server/masters`, `server/settings`, `lib/fields`; architecture sections 4.9, 5.1, 5.5, 9.5; ADR-002, ADR-014.
 
 ## Stories (ordered)
@@ -38,7 +38,7 @@ The Admin holds the rates and lists that drive every calculation, so a Lead gets
 | 8 | STORY-02.08 | Propagate a changed default (R1+) | Customers equal to the old default update; others get apply or keep, with apply-all and keep-all (FR-014) | Workflow step | 02.02 | Draft |
 | 9 | STORY-02.09 | Settings page frame and the Last backup line | Admin-only Settings page with the date of the last good backup, "Backup late" after 8 days, "Disk nearly full" below 20 percent free; read-only, no control that starts, restores or deletes a backup; an Engineer or Lead cannot open it (FR-105, NFR-013) | Workflow step (read) | 01.02, 01.04, 10.05 (the `job_runs` it reads) | Draft |
 
-Splitting note: 02.09 is the page frame that EPIC-09 later fills (STORY-09.02). Its hours are in EPIC-09's row, not here (release plan 3.1, CR-26).
+Splitting note: 02.09 is the page frame that EPIC-09 later fills (STORY-09.02). Its hours are in EPIC-09's row, not here (release plan 3.1, CR-27).
 
 ## Epic Acceptance Criteria
 - [ ] A new customer's rates equal the current defaults; reset after confirmation restores them.

@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-20](https://sankumar76.atlassian.net/browse/AQP-20) (labels `ai-delivery`, `aiid-EPIC-05`, `agent-product-owner`; relates to AQP-1, AQP-15) |
 | Release | R1 core (FR-054, 057 R1+ stretch) |
-| Priority | Highest. PRD value 5. Effort 11.75 to 17.125 h core plus 1.5 to 2.5 h stretch (estimate, release plan v0.10); the largest R1 epic |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. FR-104 added to this epic, the picture is optional, QTY per Assy gets a hint; the zero check is no longer held. The Jira epic was edited |
+| Priority | Highest. PRD value 5. Effort 11.75 to 17.125 h core plus 1.5 to 2.5 h stretch (estimate, release plan v0.11); the largest R1 epic |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. FR-104 added to this epic, the picture is optional, QTY per Assy gets a hint; the zero check is no longer held. The Jira epic was edited |
 
 ## Goal & User Value
 Engineers enter a product tree quickly through a guided form with no cost shown, type the count of each part for the whole order, and press Calculate. If any count is 0 they are warned and can go ahead. This is the primary user flow (GOAL-01).

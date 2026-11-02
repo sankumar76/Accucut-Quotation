@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-22](https://sankumar76.atlassian.net/browse/AQP-22) (labels `ai-delivery`, `aiid-EPIC-07`, `agent-product-owner`; relates to AQP-1; blocked by EPIC-05 and EPIC-06) |
 | Release | R1 core |
-| Priority | High. PRD value 4. Effort 5.375 to 8.125 h (estimate, release plan v0.10; was 6.5 to 9.5 h at v0.1) |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. **No story is held any more.** The out-of-date file is gone and the download is refused instead. The Jira epic was edited |
+| Priority | High. PRD value 4. Effort 5.625 to 7.875 h (estimate, release plan v0.11; was 6.5 to 9.5 h at v0.1) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. **No story is held any more.** The out-of-date file is gone and the download is refused instead. The Jira epic was edited |
 
 ## Goal & User Value
 A Lead or Admin downloads the estimate as an `.xlsx` in the worksheet's own layout (GOAL-04), with one total and the total Tool Cost. A file exists only when a calculation is current, so no file with figures that are out of date can leave the portal.
@@ -46,5 +46,5 @@ A Lead or Admin downloads the estimate as an `.xlsx` in the worksheet's own layo
 - Depends on: EPIC-05 (inputs and pictures), EPIC-06 (approval, cleared state). 07.01 and 07.02 can start as soon as the form exists.
 - **Nothing is held.** The questions that held 07.03 and 07.04 at v0.1 (the roll-up number, the A-18 ruling, Q-37) are all answered.
 - Open inputs: OQ-PM-05 (largest realistic estimate with images; the architect measured about 17 s for 500 nodes on a laptop against a 10 s target set for 50 nodes: different sizes, so no conflict, but the limit decision is open and the PROPOSED value stands).
-- Staleness to watch: SPEC §10 still says the exported BG column equals BL "only when every quantity above a row is 1", which contradicts FR-069 and the rule (CR-24). The story follows FR-069 and SPEC §14.2.
+- SPEC §10 is corrected in v1.12 (CR-24 closed): the exported BG column adds up to BL at any quantity, as FR-069 says.
 - Risks: RISK-010, TD-01 (ExcelJS has had no stable release since 2023). A file downloaded while current can fall behind later on someone's disk; the portal cannot recall it (ADR-012).

@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-18](https://sankumar76.atlassian.net/browse/AQP-18) (labels `ai-delivery`, `aiid-EPIC-03`, `agent-product-owner`; relates to AQP-1, AQP-14, AQP-15) |
 | Release | R1 core |
-| Priority | Highest. PRD value 5. Effort 9 to 13.625 h (estimate, release plan v0.10; v0.1 of this file said 10 to 15 h) |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. **No story is held any more.** Scope changed, so the Jira epic was edited |
+| Priority | Highest. PRD value 5. Effort 9 to 13.625 h (estimate, release plan v0.11; v0.1 of this file said 10 to 15 h) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. **No story is held any more.** Scope changed, so the Jira epic was edited |
 
 ## Goal & User Value
 The portal calculates every cost column from master data as the worksheet does, and totals an estimate as the worksheet does: BL is the sum of BG over every row. The Engineer types QTY per Assy as the count for the whole order on every row; the portal multiplies no row by another row's count. The user value reaches people through EPIC-05 (Calculate) and EPIC-06 (the Lead's figures).

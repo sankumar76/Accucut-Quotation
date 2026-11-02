@@ -6,7 +6,7 @@
 | Jira | [AQP-23](https://sankumar76.atlassian.net/browse/AQP-23) (labels `ai-delivery`, `aiid-EPIC-08`, `agent-product-owner`; relates to AQP-1; blocked by EPIC-03) |
 | Release | R2 (built after the R1 core, one hand-over under scope A) |
 | Priority | Medium. PRD value 3, effort 12 to 16 h (estimate); the largest and least certain block |
-| Status | Draft. Re-issued 2026-11-02 against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. Scope unchanged, so the Jira epic was not edited (the only change is 0.25 h less: no ROLLUP warning on the formula check) |
+| Status | Draft. Re-issued 2026-11-02 against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. Scope unchanged, so the Jira epic was not edited (the only change is 0.25 h less: no ROLLUP warning on the formula check) |
 
 ## Goal & User Value
 The Admin changes fields and formulas without a developer, with Excel-style re-lettering, immutable versions, checkpoints and a change history. This closes SPEC MUST BRQ-006.
@@ -29,7 +29,7 @@ The Admin changes fields and formulas without a developer, with Excel-style re-l
 | # | Story ID | Title | Intent (one line) | Splitting pattern | Depends on | Status |
 |---|----------|-------|-------------------|-------------------|------------|--------|
 | 1 | STORY-08.01 | Fields and formulas list | Letter, label, section, type, formula; Admin and Lead views (FR-072) | Workflow step (read) | 03.01 | Draft |
-| 2 | STORY-08.02 | Edit a formula | Autocomplete, live check, preview on a sample node; unknown name, syntax error and cycle cannot be saved; password re-entry through the step-up primitive built in STORY-06.12 (FR-073, FR-080 part). BL is listed as `SUM(BG)`, a system formula that can be edited and re-lettered like any other | Happy path, then unhappy paths | 08.01, 03.02, 06.12 | Draft |
+| 2 | STORY-08.02 | Edit a formula | Autocomplete, live check, preview on a sample node; unknown name, syntax error and cycle cannot be saved; password re-entry through the step-up check built in STORY-06.14 (FR-073, FR-080 part). BL is listed as `SUM(BG)`, a system formula that can be edited and re-lettered like any other | Happy path, then unhappy paths | 08.01, 03.02, 06.14 | Draft |
 | 3 | STORY-08.03 | Insert a field with re-lettering | Choose position and group; preview letter changes; new inputs mandatory and visible to Engineers, new outputs hidden; formulas keep results (FR-074, 075) | Workflow step | 08.02 | Draft |
 | 4 | STORY-08.04 | Delete a field | Refused while any formula references it, listing them; password re-entry (FR-076, FR-080 part) | Business rule | 08.02 | Draft |
 | 5 | STORY-08.05 | Configuration versions | Every change creates an immutable version; each estimate records its version; approved estimates pinned (FR-077) | Workflow step | 08.02, 03.05 | Draft |
@@ -44,7 +44,7 @@ The Admin changes fields and formulas without a developer, with Excel-style re-l
 - [ ] The change history shows each change with all its parts and filters by user and date.
 
 ## Dependencies & Risks
-- Depends on: EPIC-03 (engine, registry, versioning from R1), EPIC-01 (audit, step-up).
+- Depends on: EPIC-03 (engine, registry, versioning from R1), EPIC-01 (audit) and EPIC-06 (the step-up check, story 06.14).
 - Order inside R2: this epic before EPIC-09. PRD section 8 leaves the order open; ruling in `backlog.md`: EPIC-08 first, because it is the largest and riskiest block (more time to recalibrate), it closes a SPEC MUST, and EPIC-09 depends on mail facts that may arrive late.
 - Open inputs: none blocking.
 - Risks: underestimation (no velocity; the audit screen may lower the estimate by up to 1 h, not taken); re-lettering correctness (property test in the test strategy).

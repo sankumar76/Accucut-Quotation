@@ -6,14 +6,14 @@
 | Jira | [AQP-16](https://sankumar76.atlassian.net/browse/AQP-16) (labels `ai-delivery`, `aiid-EPIC-01`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-006 is R2) |
 | Priority | Highest. PRD value 5, effort 5.75 to 9.5 h (estimate). Rank 2 in `backlog.md`, after the two EPIC-10 enabler stories |
-| Status | Draft (no story exists yet). Re-issued 2026-11-02 against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9; scope unchanged, so the Jira epic was not edited |
+| Status | Draft (no story exists yet). Re-issued 2026-11-02 against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10; scope unchanged, so the Jira epic was not edited |
 
 ## Goal & User Value
 People sign in and reach only what their role allows. Engineers never receive a cost, a rate or a formula (the main promise, GOAL-02). Passwords and sessions follow the delivery lead's rule (D-19). The Admin can read the audit record.
 
 ## Requirements Covered
 - Functional: FR-001, 002, 004, 005, 007, 008, 009, 010, 011, 098, 099 (R1 core); FR-006 (R2, Should). 12 FRs.
-- Non-functional: NFR-001, 002, 003, 007 primary; NFR-004 for the hand-over step (six step-up actions in all: cancel approval and remove price in EPIC-06 at R1, formula save, field delete and revert in EPIC-08, this hand-over; the step-up primitive is built first in STORY-06.12 and reused here); NFR-017, 018 apply to every screen story here.
+- Non-functional: NFR-001, 002, 003, 007 primary; NFR-004 for the hand-over step (six step-up actions in all: cancel approval and remove price in EPIC-06 at R1, formula save, field delete and revert in EPIC-08, this hand-over; the step-up check is built first in STORY-06.14 and reused here); NFR-017, 018 apply to every screen story here.
 - Business rules: BR-001, 003, 004, 005, 049, 050; D-05, D-18, D-19.
 
 ## Scope
@@ -37,7 +37,7 @@ Candidate stories, provisional IDs. The scrum-master creates them in Jira; the p
 | 6 | STORY-01.06 | 12-hour session | Session ends 12 hours after sign-in; "Session ended" page (FR-099) | Business rule | 01.01 | Draft |
 | 7 | STORY-01.07 | Audit service and audit screen | Append-only entries (who, when, object, before and after); Admin lists and filters them; the event list is open to the later epics (approvals, unlocks, overrides, master edits, acknowledged quantity warnings, cancelled approvals and removed prices, FR-011, NFR-007) | Workflow step: service first, screen on top | 01.02 | Draft |
 | 8 | STORY-01.08 | About page | Exact SPEC section 9 description, "Version No: 1.0" and copyright (FR-010) | Single read-only screen | 10.02 | Draft |
-| 9 | STORY-01.09 | Admin hand-over (R2) | One confirmed step that asks for the Admin's password; exactly one Admin after (FR-006, NFR-004). Effort is carried in EPIC-09's row (release plan 3.1) | Workflow step | 01.04, 01.05, 01.07, 06.12 (step-up) | Draft |
+| 9 | STORY-01.09 | Admin hand-over (R2) | One confirmed step that asks for the Admin's password; exactly one Admin after (FR-006, NFR-004). Effort is carried in EPIC-09's row (release plan 3.1) | Workflow step | 01.04, 01.05, 01.07, 06.14 (step-up) | Draft |
 
 Splitting note: 01.01 to 01.08 are vertical (UI, API, data). 01.07's service is the only layer-shaped item and is justified because masters, approval and configuration all emit into it; its screen ships in the same story so it is not a bare enabler.
 

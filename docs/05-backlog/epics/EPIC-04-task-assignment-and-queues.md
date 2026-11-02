@@ -6,7 +6,7 @@
 | Jira | [AQP-19](https://sankumar76.atlassian.net/browse/AQP-19) (labels `ai-delivery`, `aiid-EPIC-04`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-035, 039 R1+ stretch; FR-040 R2) |
 | Priority | High. PRD value 4, effort 3.25 to 5.75 h core plus 1.5 to 2.5 h stretch (estimate) |
-| Status | Draft. Re-issued 2026-11-02 against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9; scope unchanged, so the Jira epic was not edited |
+| Status | Draft. Re-issued 2026-11-02 against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10; scope unchanged, so the Jira epic was not edited |
 
 ## Goal & User Value
 A Lead or Admin assigns work with a folder path and deadline; Engineers see their own queue and the status of their work, never a price; late work is visible in the portal (bell and Overdue tab).

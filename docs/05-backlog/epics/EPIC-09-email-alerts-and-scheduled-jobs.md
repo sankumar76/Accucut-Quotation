@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-24](https://sankumar76.atlassian.net/browse/AQP-24) (labels `ai-delivery`, `aiid-EPIC-09`, `agent-product-owner`; relates to AQP-1; blocked by EPIC-04) |
 | Release | R2 (built after the R1 core, one hand-over under scope A) |
-| Priority | Medium. PRD value 3. Effort 10.5 to 15.5 h (estimate, release plan v0.10), including 1.5 to 2.5 h for FR-006 and FR-040 which belong to EPIC-01 and EPIC-04, and the Settings page frame that story 02.09 builds in the R1 core (CR-26, CR-27) |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. Scope unchanged except that the Settings page already exists from the R1 core. The Jira epic was edited for that dependency |
+| Priority | Medium. PRD value 3. Effort 10.5 to 15.5 h (estimate, release plan v0.11), including 1.5 to 2.5 h for FR-006 and FR-040 which belong to EPIC-01 and EPIC-04, and the Settings page frame that story 02.09 builds in the R1 core (CR-26, CR-27) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. Scope unchanged except that the Settings page already exists from the R1 core. The Jira epic was edited for that dependency |
 
 ## Goal & User Value
 Late work reaches people by e-mail (GOAL-05) and a forgotten password can be reset by an e-mailed link. Release 2, built after the R1 core as one hand-over (scope A).

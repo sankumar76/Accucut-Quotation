@@ -5,8 +5,8 @@
 | Owner | product-owner |
 | Jira | [AQP-25](https://sankumar76.atlassian.net/browse/AQP-25) (labels `ai-delivery`, `aiid-EPIC-10`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-088 R1+ stretch); repeated for R2 screens |
-| Priority | High. PRD value 4. Effort 7.5 to 11.75 h core plus 1 to 1.5 h stretch (estimate, release plan v0.10; includes +1 to 1.5 h for the Admin's guided restore) |
-| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. The Admin now holds the backup key, has server access and runs the restore (D-36), so story 10.11 is new. The Jira epic was edited |
+| Priority | High. PRD value 4. Effort 7.5 to 11.75 h core plus 1 to 1.5 h stretch (estimate, release plan v0.11; includes +1 to 1.5 h for the Admin's guided restore) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.12, PRD v0.11, UX v0.6, architecture v0.10. The Admin now holds the backup key, has server access and runs the restore (D-36), so story 10.11 is new. The Jira epic was edited |
 
 ## Goal & User Value
 Every screen is usable on a phone, a tablet and a desktop, branded as decided ("Red Leads", GOAL-07), accessible to WCAG 2.2 AA, installable by Accucut's IT person with Docker Compose, backed up weekly on the same server, **restorable by the Admin with one guided command**, and tested end to end.
@@ -56,6 +56,6 @@ Numbering note: 10.11 was added at the end so that IDs shown in comment 10515 do
 
 ## Dependencies & Risks
 - Depends on: none for 10.01 and 10.02; the others follow their predecessors.
-- Open inputs: **OQ-ARCH-03 (VM disk size: 40 GB is too small for about 105 full copies on the same server; it fills in about 6 months at an invented 0.1 GB of new data a week, CR-30)**, OQ-ARCH-02 (where container images may be pulled from), Q-18 (web address, for the uptime check), OQ-PM-03, 04, 05 (PROPOSED availability, browsers, export size: the PROPOSED values stand for the DoR), Q-26 (retention, NFR-028), Q-16 (sharper logo), A-35 (the Admin's limited server account, Accucut IT). **Answered since v0.1:** OQ-ARCH-12 (the Admin holds the key, has server access and runs the restore, D-36).
+- Open inputs: **OQ-ARCH-03 (VM disk size): the delivery lead keeps the disk at 40 GB (comment 10576, "40 GB is good"), though it is too small for about 105 full copies on the same server and fills in about 6 months at an invented 0.1 GB of new data a week. So 2-year retention will not hold in practice; the "Disk nearly full" line tells the Admin and old copies are then cleared by hand, or the disk fills and the portal stops (ARCH-R7). They were told. Accepted, CR-30 closed; the master carries the risk**, OQ-ARCH-02 (where container images may be pulled from), Q-18 (web address, for the uptime check), OQ-PM-03, 04, 05 (PROPOSED availability, browsers, export size: the PROPOSED values stand for the DoR), Q-26 (retention, NFR-028), Q-16 (sharper logo), A-35 (the Admin's limited server account, Accucut IT). **Answered since v0.1:** OQ-ARCH-12 (the Admin holds the key, has server access and runs the restore, D-36).
 - The human step before go-live: the Admin's restore rehearsal. It is not in the hours or the dates (release plan 3.1).
 - Risks: RISK-006 (real data in a public repository), RISK-011 (a server or disk failure loses the live data and every backup together; their decision, they were told), ARCH-R7 (a full disk stops PostgreSQL), ARCH-R8 (the one Admin holds the top role, the key and server access, so the audit log is a record and not a control over them), RISK-015 (evidence limits), ARCH-R4.
