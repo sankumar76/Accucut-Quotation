@@ -2,13 +2,13 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-01** until the open part of Q-18 is answered. Revised for v0.3 (D-15) and for architecture v0.8: backups stay on the same server (AQP-1 comment 10550), for `master` to check at G4 |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-01** until the open part of Q-18 is answered. Revised for v0.3 (D-15) and for architectures v0.8 and v0.9: backups stay on the same server, and the Admin holds the key, has server access and runs a restore (AQP-1 comments 10550, 10559, 10560), for `master` to check at G4 |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh and Accucut IT at G3) |
 | Related | NFR-003, 011, 012, 013, 030; FR-091; Q-18; ADR-001 |
 
 ## Context
-Release 1 is hosted on the internet (D-10). SPEC §2 and FR-091 fix Docker Compose with app, worker and Postgres. Hosting details were open (Q-18). Answered in part on 2026-11-01 (D-15): e-mail service Microsoft Outlook; backup once a week, kept 2 years, the Admin looks after them; updates by their IT person. Answered on 2026-11-02 (AQP-1 comment 10550): "Yes only Admin only checks", "Backup on the same server". Still open: web address, sender address, which Outlook account, who holds the backup key and who restores. The design does not wait for them.
+Release 1 is hosted on the internet (D-10). SPEC §2 and FR-091 fix Docker Compose with app, worker and Postgres. Hosting details were open (Q-18). Answered in part on 2026-11-01 (D-15): e-mail service Microsoft Outlook; backup once a week, kept 2 years, the Admin looks after them; updates by their IT person. Answered on 2026-11-02: "Backup on the same server" (AQP-1 comment 10550), "Admin holds hte backup key" (10559), and "Admin should be given teh server access and run the restore" (10560). Still open: web address, sender address, which Outlook account. The design does not wait for them.
 
 **Assumption A-01 (labelled, not a fact):** one Linux VM with Docker, a public DNS name, their IT person as operator.
 
@@ -39,8 +39,8 @@ We will deploy with Docker Compose on one host: `app`, `worker`, `db`, a one-sho
 
 ## Consequences
 - Positive: the install story is one file, staging is the same file under another project name, and hosting answers do not hold design.
-- Negative / trade-offs accepted: **with backups on the same server, a server or disk failure loses the live data and every backup together. Nothing can be recovered, and the portal starts again empty** (AQP-1 comment 10550, their decision, and they were told; RISK-011; architecture section 9.5). A bad update on a healthy server loses up to 7 days, or 14 if one run fails unnoticed. About 105 full copies on one disk also mean the 40 GB disk is too small, and a full disk stops PostgreSQL (ARCH-R7). Deployment has a brief interruption, which NFR-012 allows.
-- Follow-up actions (with owners): Santhosh and Accucut IT answer the open part of Q-18, and say who holds the backup key and who restores; Accucut IT sizes the disk from architecture section 9.5; developer writes Compose and the README; the IT person confirms disk encryption.
+- Negative / trade-offs accepted: **with backups on the same server, a server or disk failure loses the live data and every backup together. Nothing can be recovered, and the portal starts again empty** (AQP-1 comment 10550, their decision, and they were told; RISK-011; architecture section 9.5). A bad update on a healthy server loses up to 7 days, or 14 if one run fails unnoticed. About 105 full copies on one disk also mean the 40 GB disk is too small, and a full disk stops PostgreSQL (ARCH-R7). **Anyone with server access can reach everything on the host, and the Admin now has it,** so the audit log is a record and not a control over them (ARCH-R8). Deployment has a brief interruption, which NFR-012 allows.
+- Follow-up actions (with owners): Santhosh and Accucut IT answer the open part of Q-18; Accucut IT sizes the disk from architecture section 9.5, and grants the Admin's server access, as the limited account in A-35 if it suits them; developer writes Compose, `restore.sh` for someone who is not a system administrator, and the README; the IT person confirms disk encryption.
 
 ## Verification
-Timed clean-machine walk-through (NFR-030). Restore rehearsal from an encrypted weekly copy (NFR-013), which proves a restore on a healthy server only: the loss of the server cannot be rehearsed, as nothing survives it. External monitor reading over a month (NFR-012).
+Timed clean-machine walk-through (NFR-030). Restore rehearsal by the Admin, from an encrypted weekly copy (NFR-013), which proves a restore on a healthy server only: the loss of the server cannot be rehearsed, as nothing survives it. External monitor reading over a month (NFR-012).

@@ -2,16 +2,24 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.8 (OQ-ARCH-04, OQ-ARCH-06, OQ-ARCH-12, FR-105, A-30 and A-32 answered; the changes are listed under "What changed in v0.8") |
+| Version | 0.9 (OQ-ARCH-12 answered: the Admin holds the key, has server access and runs a restore; only the Excel download is refused; the changes are listed under "What changed in v0.9") |
 | Owner | solution-architect |
-| Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers, which changes what G3 accepted. Version 0.8 applies their answers in AQP-1 comments 10546 to 10554. **Backups on the same server change NFR-013 and RISK-011.** For `master` to record and check at G4 |
+| Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers, which changes what G3 accepted. Version 0.8 applies their answers in AQP-1 comments 10546 to 10554. **Backups on the same server change NFR-013 and RISK-011.** Version 0.9 applies 10559 and 10560: **the Admin's server access changes what the audit log can prove.** For `master` to record and check at G4 |
 | Date | 2026-11-02 |
-| Inputs | SPEC v1.9 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10555; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.8; release plan v0.8; UX spec v0.3 (section 16.9); consistency report (CR-11). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
+| Inputs | SPEC v1.10 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10560; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.8; release plan v0.8; UX spec v0.3 (section 16.9); consistency report (CR-11). Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
 | Companions | `docs/04-architecture/adr/ADR-001` to `ADR-014`; `docs/04-architecture/test-strategy.md` |
 | Scope | Scope A (D-14): every FR through Release 2 and every NFR. Offline (FR-092) is not designed and not blocked (section 9.8) |
 
 **How to read the labels.** **Evidence** = measured or read on 2026-11-01, with the source named. **A-nn** = an architecture assumption, listed in section 15 with what changes if it is wrong. **Proposed** = a value set here for an owner to confirm. The quantity rule comes from the delivery lead's answers on AQP-26 (comments 10535, 10537) and AQP-14 (comment 10510), as SPEC v1.9 records them. Other rule text comes from SPEC §7.4 and §18.
 
+**What changed in v0.9 (AQP-1 comments 10559, 10560).** This replaces "Admin only checks" and A-22 in v0.8.
+
+| # | Answer | Result | Hours (estimate) | Where |
+|---|--------|--------|------------------|-------|
+| 1 | "Admin holds hte backup key"; "Admin should be given teh server access and run the restore" | OQ-ARCH-12 closed. **Anyone with server access can reach everything on the host,** and the audit log stops being a control over the Admin (ARCH-R8). A narrower account is proposed to Accucut IT | 0 | Section 9.5, section 4.10 |
+| 2 | The restore is run by the Admin, not a system administrator | `restore.sh` becomes one guided, safe command, and the Admin rehearses it | +1 to +1.5 | Section 9.5 |
+| 3 | "Block the portal" means the Excel download only: "Yes" | Confirms section 4.6. Nothing else is refused while figures are not current | 0 | Section 4.6 |
+| | **Total** | | **+1 to +1.5, central +1.25** | Section 16.14 |
 **What changed in v0.8 (AQP-1 comments 10546 to 10554).**
 
 | # | Answer | Result | Hours (estimate) | Where |
@@ -120,7 +128,7 @@ C4Context
   Person(admin, "Admin (one)", "Masters, users, formulas")
   Person(lead, "Lead", "Assigns, reviews, approves, exports")
   Person(engineer, "Engineer", "Enters part data; never sees cost")
-  Person(it, "Accucut IT person", "Hosts, installs updates, restores")
+  Person(it, "Accucut IT person", "Hosts, installs updates, grants server access")
   System(portal, "Accucut Quotation Portal", "Role-based estimating, calculation, approval and export")
   System_Ext(smtp, "Microsoft mail service (Q-18)", "Sends alerts; account type not known yet")
   System_Ext(share, "Accucut network share", "Requirement documents; opened by the user's own machine, never by the portal")
@@ -129,6 +137,7 @@ C4Context
   Rel(lead, portal, "Uses", "HTTPS")
   Rel(engineer, portal, "Uses", "HTTPS")
   Rel(it, portal, "Operates", "SSH, docker compose")
+  Rel(admin, portal, "Runs a restore", "SSH, restore.sh")
   Rel(portal, smtp, "Sends mail", "SMTP over TLS")
   Rel(uptime, portal, "Polls health", "HTTPS")
 ```
@@ -143,7 +152,7 @@ The portal never reads the network share. It stores the path as text and renders
 | TB-2 | Engineer to cost data | Inside the app, between an authenticated Engineer and everything Restricted. This is the boundary the product exists for |
 | TB-3 | Application to database | App and worker to Postgres, on a private Docker network |
 | TB-4 | Application to mail service | Worker and `app` to Microsoft's token endpoint and mail service; message content leaves Accucut's control |
-| TB-5 | Host and backups | Host filesystem, Docker volumes, the backup copies on the same server, and the backup key, held away from it |
+| TB-5 | Host and backups | Host filesystem, Docker volumes, the backup copies on the same server, and the backup key, held by the Admin away from it. The IT person and the Admin both cross this boundary |
 | TB-6 | Public repository and CI | Everything committed is world-readable, including CI logs (D-13) |
 
 ---
@@ -408,6 +417,8 @@ ADR-012. `export-service` loads one calculation record and streams its images in
 
 **No file exists until a calculation is current (Q-37 (b), A-32 answered).** "Yes, block the portal when the total is not calculated or recalculated" (AQP-1 comment 10545), and for a never-calculated estimate, "Refuse it" (10554). `GET /export` answers by state, with no way round it:
 
+**Only the Excel download is refused.** "Block the portal" was read as this, and they confirmed it: "Yes" (AQP-1 comment 10560). While figures are not current, the screens, the inputs, Calculate and Recalculate all work as usual.
+
 | State | Result |
 |-------|--------|
 | `none` | 409 `NOT_CALCULATED`. SCR-10 says why and links to Calculate |
@@ -581,7 +592,7 @@ This changes one seed formula against SPEC §7.4, so business-analyst should rec
 | Database | `UPDATE` on `approvals` is granted by column to the runtime role: the unlock, cancel and remove columns only. So `approved_price` cannot be changed, even by a fault in the service |
 | Engineers | Nothing new. They see the status change, as with an unlock |
 
-**Limits.** With one Admin, no second person checks this, and the Admin may be the person who approved. The audit log is the only control, and only the Admin reads it.
+**Limits.** With one Admin, no second person checks this, and the Admin may be the person who approved. The audit log is the only control, and only the Admin reads it. **It is a record, not a control over the Admin:** with server access the Admin can reach or roll back the database that holds it (section 9.5, ARCH-R8).
 
 ---
 
@@ -908,6 +919,8 @@ It applies wherever a password is set (ASSUMPTION-56): `POST /account/password`,
 | TB-4 | Mail credentials stolen | Spoofing | Env only, never in `settings` or logs; a dedicated mailbox that holds nothing else (Microsoft's steps give the app `FullAccess` to it); access granted to that one mailbox only; a secret with an expiry |
 | TB-5 | Stolen disk with its backups | Information disclosure | Encrypted backups, disk encryption, limited host access; the host holds only the public key |
 | TB-5 | Backup key lost, or lost with an Admin hand-over | Denial of service | Two copies kept apart; hand-over checklist in the README (section 9.5). Every backup depends on it |
+| TB-5 | **The Admin's server access is used, or stolen, to read secrets, change data or audit rows, or destroy backups** | Tampering, Repudiation, Information disclosure | An account of its own, limited to `restore.sh` (A-35), key-only SSH, removed at an Admin hand-over. Host login logs. **With full access no control in the portal holds** (ARCH-R8) |
+| TB-5 | A restore is run on the wrong copy, or fails half way | Tampering, Denial of service | Guided `restore.sh`: restores into a new database, swaps only on success, and takes a safety copy first (section 9.5) |
 | TB-5 | **Server or disk failure, or host compromise, destroys the data and every backup together** | Denial of service | **No mitigation: their decision** (AQP-1 comment 10550; section 9.5). RISK-011 |
 | TB-5 | Backups fill the disk and stop PostgreSQL | Denial of service | Free-space check before each run; alert below 20 % free; disk sized for the copies (section 9.5) |
 | TB-5 | Backup silently stops | Denial of service | `backup-watch` after 8 days; the Admin checks the Last backup line |
@@ -957,7 +970,7 @@ Base branch `master`. Code PRs merge by a human after CI passes (`MERGE_POLICY`)
 
 ### 9.5 Backup, restore and DR
 
-**Their decisions (relayed).** "Weekly once backup is good. It should be kept for 2 years. Admin looks after them" (D-15). Then: "Yes only Admin only checks", "Backup on the same server" (AQP-1 comment 10550), and "Yes" to the Last backup line (10549). The design follows them. They were told what weekly means (10490) and what the same server means (10550).
+**Their decisions (relayed).** "Weekly once backup is good. It should be kept for 2 years. Admin looks after them" (D-15). Then: "Backup on the same server" (AQP-1 comment 10550), "Yes" to the Last backup line (10549), "Admin holds hte backup key" (10559) and "Admin should be given teh server access and run the restore" (10560), which replaces "Yes only Admin only checks" (10550). The design follows them. They were told what weekly means (10490) and what the same server means (10550).
 
 **What this protects against, stated plainly. A failure of the server or its disk loses the live data and every backup together. Nothing can then be recovered, and the portal starts again empty.** A backup on the same server protects against a bad update or damaged data. It does not protect against losing the server.
 
@@ -993,22 +1006,48 @@ Each figure is the live database plus all copies kept. At 0.1 GB a week, 557 of 
 | Extra points | Each release takes one more backup (section 9.7). These follow the same retention |
 | Retention | Each backup is kept 2 years: about 105 copies. The script removes only copies past 2 calendar years, and never removes a newer copy to make room. Retention no longer waits for Q-26, which still covers live data (section 5.4) |
 | Manifest | Each copy has a small text file beside it: date, app image tag, PostgreSQL version, size, SHA-256. A 2-year-old dump needs these to restore: restore into the same or a newer PostgreSQL, then run `migrate` forward |
-| Restore | `scripts/restore.sh`, step by step in the README. **Not an Admin task.** Who runs it is not stated (OQ-ARCH-12); the design assumes the IT person (A-22) |
-| RTO | ≤ 4 h, for a restore on the same healthy server. It assumes the person with the key and the person with the host are both reachable |
-| Rehearsal | Once before go-live, on staging (NFR-013). Recommended, not required: once a year with the oldest copy, because a 2-year retention is worth only what can still be read |
+| Restore | `scripts/restore.sh`, one guided command, run by the Admin (below), with a README written for them |
+| RTO | ≤ 4 h, for a restore on the same healthy server. It assumes the Admin is reachable, and the IT person if the script stops |
+| Rehearsal | Once before go-live, on staging (NFR-013), **by the Admin, from the README alone**, timed, with the IT person on hand and not helping unless it stops. Recommended, not required: once a year with the oldest copy, because a 2-year retention is worth only what can still be read |
 | Scope | The database holds everything, including images. Only `.env` and the Caddy data volume are outside it; the IT person keeps a sealed copy of `.env` |
 
 | Who | Does what |
 |-----|-----------|
 | Host cron | Runs the backup unattended. It needs no person, and no secret: `age` encrypts to a public key |
-| Admin | **Only checks** that backups ran, on the Last backup line on Settings. Nothing else: no host access, no restore (AQP-1 comment 10550) |
-| IT person | Sets up cron, installs updates. **Assumed**, not stated: runs a restore and holds the private key (A-22, OQ-ARCH-12) |
+| Admin | Holds the backup private key. Has server access, granted by Accucut IT. Checks the Last backup line on Settings. **Runs a restore** (AQP-1 comments 10559, 10560) |
+| IT person | Sets up cron, installs updates, grants and removes the Admin's server access, and helps if `restore.sh` stops |
 
-**The Last backup line (FR-105, "Yes", AQP-1 comment 10549).** Read-only, on Settings, Admin only: the time of the last good backup, "Backup late" after 8 days without one, and "Disk nearly full" below 20 % free. `GET /settings` reads them from `job_runs`, so nothing new runs on the host. **The check depends on it:** the Admin has no host access, so while this line is missing the Admin has nothing to check.
+**The Last backup line (FR-105, "Yes", AQP-1 comment 10549).** Read-only, on Settings, Admin only: the time of the last good backup, "Backup late" after 8 days without one, and "Disk nearly full" below 20 % free. `GET /settings` reads them from `job_runs`, so nothing new runs on the host. It is how the Admin checks without logging in to the server, and nothing on the server needs to be touched for a routine check.
 
 **A silent failure is the main risk of a weekly cadence**, because it doubles the loss. So `backup.sh` records its result as a `job_runs` row (`job = 'backup'`), and a daily `backup-watch` job treats 8 days without a good run as a failure: it logs at `error`, and sends the Admin an outbox e-mail once e-mail is on.
 
-**Key custody.** Backups contain Restricted data, so they are encrypted before they are written. The private key never sits on the host: on the same server as the copies, it would make the encryption pointless. **Losing it loses every backup.** The design used to give it to the Admin, who now only checks, so **the holder is open (OQ-ARCH-12)**. It must be settled before go-live, because a copy nobody can open is no backup. Two copies are kept apart. If the key is rotated, old keys stay until the last copy they opened expires, up to 2 years. A hand-over must pass the key too: the README checklist says so, because the portal cannot.
+**Key custody.** Backups contain Restricted data, so they are encrypted before they are written. **The Admin holds the private key** (AQP-1 comment 10559). It never stays on the host: on the same server as the copies, it would make the encryption pointless. For a restore it is pasted at a prompt, held in memory and never written to disk, and the decrypted dump is never written to disk either. **Losing it loses every backup.** Two copies are kept apart. If the key is rotated, old keys stay until the last copy they opened expires, up to 2 years. An Admin hand-over must pass the key and move the server access: the README checklist says so, because the portal cannot.
+
+**What server access gives. Anyone with server access can reach everything on the host.** That is true of any account that can run Docker or use `sudo`, and the `docker` group is the same as root. It reaches:
+
+- `.env`, so `AUTH_SECRET`, which can forge a sign-in as anyone, the owner-role database password, and the mail credentials;
+- the whole database, directly: every cost, rate and approval, outside the portal's role checks;
+- the audit log. The database refuses changes to the runtime role, but the owner role can remove those guards, so **audit rows can be changed, and restoring an older copy rolls them back**;
+- every backup copy, to delete. It can read them too, as the same person holds the key.
+
+So the portal's promises hold against Leads and Engineers, and not against whoever has this access. The Admin already sees all costs in the portal, so what is new is the secrets, and that the audit log becomes a record kept by the person it records. **With one Admin holding both, nothing in the design can check them** (ARCH-R8). Accucut accepts this by giving the access; it should be a deliberate choice of person, and the IT person already holds the same reach.
+
+**Proposed to Accucut IT, who grant it (A-35).** "Server access" does not need to be full access. Give the Admin their own account, with key-only SSH, not in the `docker` group, whose `sudo` allows `scripts/restore.sh` and nothing else. That keeps `.env`, the direct database and the audit tables out of reach. It does not remove the last two lines above, because a restore itself replaces the database. Host login logs show each use. If Accucut IT gives full access instead, the paragraph above applies in full.
+
+**What the restore assumes about the person.** The Admin is not assumed to be a system administrator. The design does assume they can open an SSH session, paste one command, paste the key from where they keep it, and read a plain message. It does **not** assume they know Linux, Docker or PostgreSQL, or can diagnose a failure. So `restore.sh` must:
+
+| Step | What it does | Why |
+|------|--------------|-----|
+| One command | Takes no arguments and asks its questions in plain words | Nothing to remember under pressure |
+| Choose | Lists copies by date and size, newest first | No file names to type |
+| Check first | Verifies the SHA-256, the manifest, the PostgreSQL version and the free space, before touching anything | A copy that cannot work stops here, with no harm done |
+| Say what is lost | States the date of the copy, that everything after it is lost, **and that audit rows after it go too**, and asks the Admin to type that date | The step cannot be undone by a slip of a key |
+| Safety copy | Takes a copy of the database as it stands, kept as an ordinary copy | A wrong restore can be put back |
+| Restore safely | Stops `app` and `worker`, restores into a **new** database, runs `migrate`, and swaps only if that succeeds. On failure the old database comes back and the portal restarts | It never leaves a half-restored portal |
+| Finish | Checks `/api/health`, prints what happened, and writes a line to a log file on the host, outside the database, so a rollback does not erase the record | The audit log is what was just rolled back |
+| If it stops | Prints a plain message, what state things are in, and "Call your IT person" | They are not expected to repair it |
+
+Backups need no such care: cron runs them unattended, and the Admin never touches them.
 
 **Personal data.** Anything erased from the live database stays in backups for up to 2 years. Q-26 and the DPDP Act position are unchanged (section 5.4).
 
@@ -1324,12 +1363,12 @@ Component shorthand: **Auth** `server/auth`; **Http** `server/http`; **Views** `
 
 All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Accepted" settles the design decision. It does not settle a labelled assumption underneath it, so the table says where one remains. DL-009 limits what APPROVED (AQP-1 comment 10491) covers: the wider clearing and the out-of-date export are `master`'s acceptance of a working design, not the delivery lead's.
 
-**Revised for v0.3:** ADR-002, 004, 006, 007, 009, 011, 012 and 013. **Revised for v0.4:** ADR-006, 009 and 012. **Revised for v0.5:** ADR-006, 007 and 008, for Warn and the Q-35 (a) answer, for `master` to check at G4. **Revised for v0.6:** ADR-006, for the correction under DL-024, Q-38 and Q-39 unresolved. **Revised for v0.7:** ADR-006, rewritten for the new rule, ADR-003, 004, 005 and 008, which named what is removed, and ADR-007 and 012, for Q-37. **Revised for v0.8:** ADR-002, for backups on the same server, and ADR-007 and 012, for A-30 and A-32. The cancel step and the rate notice use decisions those ADRs already own, so they need no ADR of their own. Warn is a small check on an existing path and is cheap to reverse, so it needs no ADR of its own. **No new ADR.** The roll-up, the immutable record, the export, sessions, the mail transport and the Compose host each already have an ADR, and these changes apply or amend those decisions. The backup cadence is the delivery lead's decision, and the design only follows it.
+**Revised for v0.3:** ADR-002, 004, 006, 007, 009, 011, 012 and 013. **Revised for v0.4:** ADR-006, 009 and 012. **Revised for v0.5:** ADR-006, 007 and 008, for Warn and the Q-35 (a) answer, for `master` to check at G4. **Revised for v0.6:** ADR-006, for the correction under DL-024, Q-38 and Q-39 unresolved. **Revised for v0.7:** ADR-006, rewritten for the new rule, ADR-003, 004, 005 and 008, which named what is removed, and ADR-007 and 012, for Q-37. **Revised for v0.8:** ADR-002, for backups on the same server, and ADR-007 and 012, for A-30 and A-32. **Revised for v0.9:** ADR-002, for the Admin's server access. The cancel step and the rate notice use decisions those ADRs already own, so they need no ADR of their own. Warn is a small check on an existing path and is cheap to reverse, so it needs no ADR of its own. **No new ADR.** The roll-up, the immutable record, the export, sessions, the mail transport and the Compose host each already have an ADR, and these changes apply or amend those decisions. The backup cadence is the delivery lead's decision, and the design only follows it.
 
 | ADR | Title | Status | Rests on |
 |-----|-------|--------|----------|
 | [ADR-001](adr/ADR-001-modular-monolith-on-nextjs.md) | Modular monolith on Next.js with a separate worker | Accepted | |
-| [ADR-002](adr/ADR-002-single-host-docker-compose.md) | Single-host Docker Compose deployment | Accepted, revised for v0.8 | **A-01**, the open part of Q-18; A-22, who restores and who holds the key |
+| [ADR-002](adr/ADR-002-single-host-docker-compose.md) | Single-host Docker Compose deployment | Accepted, revised for v0.9 | **A-01**, the open part of Q-18; A-35, how the Admin's server access is granted |
 | [ADR-003](adr/ADR-003-postgresql-prisma-jsonb-inputs.md) | PostgreSQL and Prisma, with JSONB for configurable values | Accepted | |
 | [ADR-004](adr/ADR-004-registry-as-versioned-document.md) | Field registry as an immutable versioned document | Accepted | |
 | [ADR-005](adr/ADR-005-custom-formula-engine.md) | Custom formula engine on decimal.js | Accepted | |
@@ -1347,7 +1386,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 
 ## 14. Technical Risks & Debt
 
-`master` owns the register. G3 merged ARCH-R1 into RISK-011, and registered ARCH-R3 as RISK-014 and ARCH-R5 as RISK-013; ARCH-R2 and ARCH-R4 stay here with their GitHub issues. GitHub issues: TD-01 to TD-05 are #2 to #6; ARCH-R1, R2 and R3 are #7, #8 and #9; ARCH-R4 is #10; ARCH-R6 is #11.
+`master` owns the register. G3 merged ARCH-R1 into RISK-011, and registered ARCH-R3 as RISK-014 and ARCH-R5 as RISK-013; ARCH-R2 and ARCH-R4 stay here with their GitHub issues. GitHub issues: TD-01 to TD-05 are #2 to #6; ARCH-R1, R2 and R3 are #7, #8 and #9; ARCH-R4 is #10; ARCH-R6 is #11; ARCH-R8 is #12.
 
 | Risk / debt | Impact | Mitigation | Addressed by (epic/story) |
 |-------------|--------|------------|---------------------------|
@@ -1362,6 +1401,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | RISK-013 (ARCH-R5; **restatement proposed for `master`**): H = 0 now removes only that row's own cost, and every 0 warns (Q-41). A warning can be passed unread, and one seen often is pressed through | A mistyped 0 lowers a price by that row's cost. On a single-piece product the item shows 0 | Warn (section 4.3): acknowledged at each press, shown to the Lead on SCR-06 and SCR-10, recorded and audited. Tracked on AQP-15 | EPIC-03, EPIC-05, EPIC-06 |
 | ARCH-R6 (**new, proposed for `master`**, GitHub #11): the Engineer now does the multiplying by hand, so a mistyped count is a wrong price. The delivery lead's own first answers were 3 for 12 and 12 for 24 | An underpriced order that is valid as far as the code can tell. No check can catch it | The field keeps "QTY per Assy" for now, with a hint below it (AQP-1 comment 10551, UX-52), and H beside every row for the Lead. Detection is not possible without a second figure | EPIC-05, EPIC-06 |
 | ARCH-R7 (**new, proposed for `master`**): 105 full copies on the same disk. A full disk stops PostgreSQL, so the backups can take the portal down, and the 40 GB disk is too small | An outage, and no new backups | Free-space check, alert below 20 % free, VM sizing (OQ-ARCH-03). Depends on a volume nobody has stated (Q-24) | EPIC-10; Accucut IT |
+| ARCH-R8 (**new, proposed for `master`**, GitHub #12): the one Admin holds the portal's top role, the backup key and server access. Anyone with server access can reach everything on the host, including secrets and the audit log. The audit log then records the Admin but cannot hold them to it | Undetectable change to prices, approvals or audit by that person, or by anyone who steals the access | A limited account (A-35), key-only SSH, host login logs, removed at a hand-over. **Accepted by giving the access.** No design can check a sole holder of all three | EPIC-10; Accucut IT |
 | TD-01: ExcelJS has had no stable release since 2023 and has 9 moderate transitive advisories | Future breakage; a patch may not come | Pin; isolated behind `build-workbook.ts`; read-back tests allow a swap; `overrides` if needed | EPIC-07 |
 | TD-02: next-auth 4 is the older line, and needs a nodemailer override | Migration later if v4 support ends | Used narrowly, behind `session.ts`. Review at each release | EPIC-01 |
 | TD-03: no retention rule for calculations, audit before and after values, or images | Data grows without limit; unresolved Q-26 | Monitor size; decide with Q-26 | After Q-26 |
@@ -1397,7 +1437,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | A-19 | **Closed.** The delivery lead answered "Warn" (AQP-15 comment 10511), so neither the earlier text nor the DL-013 block applies. The design is in section 4.3 | No | Not applicable |
 | A-20 | **Closed.** ASSUMPTION-51, 52, 57 and 59 are retired or ended: an item's own row is a row like any other in `SUM(BG)`, and a parent shows only its own row (AQP-1 comment 10542) | No | Not applicable |
 | A-21 | Seed `O = IF(Material-Specific-Gravity > 0, M - N, 0)` is acceptable as a technical handling of D-17, with no change on any row with a real material (section 4.9) | No | One seed formula |
-| A-22 | The IT person runs a restore and holds the backup private key. **Assumed:** the Admin only checks (AQP-1 comment 10550), and neither duty has been given to anyone (OQ-ARCH-12) | **Yes, before go-live** | Runbook only |
+| A-22 | **Closed.** The Admin holds the key, has server access and runs a restore (AQP-1 comments 10559, 10560) | No | Not applicable |
 | A-23 | ASSUMPTION-56 applied: a session runs 12 hours from sign-in, not from last activity; any non-alphanumeric character is a symbol | No | One check in `session.ts`; one character class |
 | A-24 | The exported file carries no quantity warning. The worksheet layout stays, the row shows H 0, and SCR-10 is the last place the warning shows, as with the override reason (FR-103) | No | One notice row in `product-cells.ts`, about 0.25 h |
 | A-25 | **Ended.** Q-38 answered "Yes" (AQP-15 comment 10527): Warn covers a part with nothing below it (section 4.3) | No | Not applicable |
@@ -1410,6 +1450,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | A-32 | **Closed.** "Refuse it" (AQP-1 comment 10554): no Excel download until a calculation is current | No | Not applicable |
 | A-33 | Cancel approval and remove price each ask the Admin's password. They did not ask for it. It suits two steps that cannot be undone, and it makes NFR-004 six actions | No | One check in `approval-service` |
 | A-34 | The notice covers rates, material prices and exchange rates, as they said. A formula or configuration change is not included, though it too would change the price at Recalculate | No | One comparison in `rate-diff` |
+| A-35 | The Admin's "server access" is its own limited account, key-only SSH, `sudo` for `restore.sh` alone. Proposed: they said "server access", and it is Accucut IT's to grant. `restore.sh` is written for someone who is not a system administrator (section 9.5) | No | Full access works too, and `restore.sh` is unchanged; ARCH-R8 then applies in full |
 
 ### 15.2 Open questions
 
@@ -1430,14 +1471,14 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | OQ-ARCH-08 | Closed: the hand-over asks for the password (PRD v0.7 FR-006, NFR-004) | Closed | Closed |
 | OQ-ARCH-10 (same as OQ-PM-07), Q-38, Q-41 | **Closed.** "Warn", "Yes" and "Q-41: Keep warning" (AQP-15 comments 10511, 10527, 10543): every 0 warns, and the wording says that row costs 0 (section 4.3) | Closed | Closed |
 | OQ-ARCH-11 | Mail account facts: type of account, tenant administrator and Security Defaults, a dedicated mailbox and its address, outbound port 587 (section 4.7) | Accucut IT, Santhosh | Before alerts go live |
-| OQ-ARCH-12 | Answered in part: the Admin only checks, copies stay on the same server, and the Last backup line is wanted (AQP-1 comments 10549, 10550). **Still open: who holds the backup private key, and who runs a restore** (A-22). Without a key holder no copy can be opened | Santhosh, Accucut IT | Before the first deployment |
+| OQ-ARCH-12 | **Closed.** The Admin holds the key, has server access and runs a restore, copies stay on the same server, and the Last backup line is wanted (AQP-1 comments 10549, 10550, 10559, 10560). How the access is granted is Accucut IT's (A-35) | Closed | Closed |
 | OQ-ARCH-09 | Closed: in Release 1 a Lead reads formulas on SCR-07; SCR-17-lead arrives with R2 (PRD v0.7 section 12.2) | Closed | Closed |
 
 ---
 
 ## 16. Reconciliation with UX, PRD and Standards
 
-**Reading note (v0.8).** Section 16.13 replaces every earlier part of section 16 on backups, the download, the approved price and the hours. Section 16.12 replaces every earlier part of section 16 on the quantity rule, `ROLLUP`, the multiplier, parent figures, item totals, Warn, cleared figures, the out-of-date file, Q-35 to Q-37, Q-39 and what each role owes. Section 16.11 replaces section 16.10 on the rest. Sections 16.1 to 16.7 record the reconciliation of v0.2 against SPEC v1.3 and UX v0.1, and section 16.8 records v0.3 against SPEC v1.4, written while UX was still at v0.2. Both are kept as that record. Where they state the roll-up rule, the password rule, the session or a question as open, **section 16.8 replaces 16.1 to 16.7, section 16.9 replaces all of them, and section 16.10 replaces all of them on OQ-ARCH-10, UX-36 and Q-35 (a)**.
+**Reading note (v0.9).** Section 16.14 replaces every earlier part of section 16 on who does what for backups, and on the hours. Section 16.13 replaces every earlier part of section 16 on backups, the download and the approved price. Section 16.12 replaces every earlier part of section 16 on the quantity rule, `ROLLUP`, the multiplier, parent figures, item totals, Warn, cleared figures, the out-of-date file, Q-35 to Q-37, Q-39 and what each role owes. Section 16.11 replaces section 16.10 on the rest. Sections 16.1 to 16.7 record the reconciliation of v0.2 against SPEC v1.3 and UX v0.1, and section 16.8 records v0.3 against SPEC v1.4, written while UX was still at v0.2. Both are kept as that record. Where they state the roll-up rule, the password rule, the session or a question as open, **section 16.8 replaces 16.1 to 16.7, section 16.9 replaces all of them, and section 16.10 replaces all of them on OQ-ARCH-10, UX-36 and Q-35 (a)**.
 
 **Result.** Every screen from SCR-00 to SCR-26 is reconciled against this architecture. Nothing found needs a redesign, and no screen shows or needs a cost, rate or formula for an Engineer. The review did change the architecture in 20 places (16.5), and UX has 27 items to change (16.6), 20 of them before build. Six questions go to the delivery lead or product manager (OQ-ARCH-04 to 09). Whether any of this holds G3 is for `master` to decide.
 
@@ -1933,6 +1974,33 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | qa-engineer | Test plan: section 9 rows below, and the rehearsal needs a named person to run a restore |
 
 ---
+### 16.14 The Admin's key, server access and restore (v0.9)
+
+**Method and limits.** AQP-1 comments 10559 and 10560 were read in Jira. **Not done:** nothing is built, no restore has been tried, and `restore.sh` is a stated requirement here, not a tested script. Whether the Admin can do this is shown only by the rehearsal, and it depends on a person nobody has named. The hours are estimates, with no velocity behind them.
+
+**Hours, against architecture v0.8.** No change to the portal's code, screens or hours for FR-105.
+
+| Work | Epic | Hours |
+|------|------|-------|
+| Guided `restore.sh`: pre-checks, the typed date, safety copy, new database and swap, plain messages, the host log | EPIC-10 | +0.5 to +1 |
+| README for the Admin, and the limited account steps for Accucut IT | EPIC-10 | +0.25 |
+| Tests of its failure paths | EPIC-10 | +0.25 |
+| **Total** | | **+1 to +1.5, central +1.25** |
+
+**All together, against release plan v0.8:** +0.5 to +0.75 h, central +0.625 h, which makes scope A **88 to 132.25 h, central 110.125 h**. The Admin's own time on the rehearsal is not in these hours.
+
+**Issues for other roles.**
+
+| Owner | Issue |
+|-------|-------|
+| master | Register ARCH-R8. RISK-011 stands as restated. Note that the audit log (NFR-007) is not a control over a person with server access. Check A-35 and ADR-002 |
+| product-manager | FR-091 and NFR-013: the Admin holds the key and restores. NFR-007 should say what it does not cover. Take +1 to +1.5 h. The Admin's rehearsal is a human step before go-live, and belongs in the plan as a wait |
+| business-analyst | Record the answers in 10559 and 10560 in SPEC §18, and that "block the portal" is confirmed as the Excel download only |
+| Accucut IT | Grant the access, and say whether the limited account in A-35 suits them |
+| qa-engineer | The rehearsal is run by the Admin from the README alone. The test plan takes the `restore.sh` row in section 9 |
+| ux-expert | None. There is no screen change |
+
+---
 ## 17. Change Log
 
 | Version | Date | Change |
@@ -1940,6 +2008,7 @@ Compared with the block, that is 2.75 to 4.75 h more. **A part with nothing belo
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |
 | 0.3 | 2026-11-01 | G3 answers, SPEC v1.4. Every level's quantity (section 4.3), corrects v0.2's "one branch" claim. Weekly backups, kept 2 years, RPO up to 7 days (section 9.5). Microsoft mail check and OAuth mode (section 4.7). Cleared totals (section 4.8). "Not applicable" (section 4.9). Password rule and 12-hour session from sign-in (section 8). Optional reason, one export total, Tool Cost footer. Scope A: `FEATURE_CONFIG_EDITOR` dropped. New A-17 to A-23, OQ-ARCH-10 to 12, UX-28 to UX-37. Aligned with PRD v0.6: FR-098 to FR-103 in the coverage matrix, NFR-013, NFR-018 at 2.2 AA. ADR-002, 004, 006, 007, 009, 011, 012, 013 revised |
+| 0.9 | 2026-11-02 | AQP-1 comments 10559, 10560. The Admin holds the key, has server access and runs a restore, replacing "Admin only checks"; A-22 and OQ-ARCH-12 closed. Section 9.5: what server access reaches, a limited account proposed (A-35), what the restore assumes about the person, and a guided `restore.sh`. ARCH-R8 new (GitHub #12). Section 4.10: the audit log is a record, not a control over the Admin. Section 4.6: only the Excel download is refused, confirmed. New section 16.14: +1 to +1.5 h. ADR-002 revised |
 | 0.8 | 2026-11-02 | AQP-1 comments 10546 to 10554. Picture optional, OQ-ARCH-04 closed. Rate notice on SCR-06 and SCR-08, approval not blocked, OQ-ARCH-06 closed. FR-105 firm. Section 9.5 rewritten: the Admin only checks, copies on the same server, a server or disk failure loses everything, disk growth over 2 years, free-space check, key holder and restorer open. New section 4.10: Admin-only cancel approval and remove price, feasible, audited. No Excel file until a calculation is current; A-05, A-30, A-32 closed. A-33, A-34, ARCH-R7 new. Sections 4.4, 4.7, 4.8, 5, 6, 7, 8, 12 to 15 follow. New section 16.13: +3.75 to +6.5 h. ADR-002, 007, 012 revised |
 | 0.7 | 2026-11-02 | The quantity rule (AQP-26), Q-35 (b) and Q-41. H is the count for the whole order, BL is `SUM(BG)`, and a parent shows only its own row. Section 4.3 rewritten. Removed: `src/lib/rollup/`, `T(row)`, `applyQuantityStep`, the multiplier, `ROLLUP`, the item total, `calculation_rows.rollup`, `calculations.item_totals`, `rollupDisplay`. Warn stays for every 0, with one code and the wording "That row will cost 0". Section 4.8 rewritten for Q-37: no calculated value is read unless `current`, and the approved price stays. Section 4.6: the download is refused while cleared, and the out-of-date file and its markers are removed. Section 4.9 follows Q-36. A move no longer changes BL. ARCH-R6 new (GitHub #11). A-17, A-18, A-20, A-27, A-28 closed; A-29 to A-32 new; Q-35, Q-36, Q-39, OQ-ARCH-10 closed. Sections 1, 4.1, 4.2, 4.5, 5.1, 6, 7, 8, 10, 12 to 15 follow. New section 16.12: -4.25 to -7.25 h. ADR-006 rewritten; ADR-003, 004, 005, 007, 008, 012 revised |
 | 0.6 | 2026-11-02 | Q-38 "Yes": Warn covers every 0, with a second code and wording, A-25 ended, A-27 new for a top-level item's own 0, hours 4.25 to 6.25. Correction to v0.5 (DL-024): ASSUMPTION-51 was not confirmed for every item; only a top-level item with nothing below it is settled. Q-39 recorded as unresolved: 660 against 840 by the rule, while their counts of 24 lids and 12 brackets fit it, and the rupee total is still being confirmed (AQP-26 comments 10530, 10531, 10533). The roll-up rule is frozen as written and no alternative is designed. CR-11 placement confirmed, with what goes in STORY-10.01. OQ-ARCH-05 and OQ-ARCH-10 closed (Q-40, Q-38). FR-104 and FR-105 in the coverage matrix. Section 14 follows the register, with RISK-002 and RISK-013 restatements proposed. New section 16.11. ADR-006 revised |
