@@ -5,52 +5,57 @@
 | Owner | product-owner |
 | Jira | [AQP-25](https://sankumar76.atlassian.net/browse/AQP-25) (labels `ai-delivery`, `aiid-EPIC-10`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-088 R1+ stretch); repeated for R2 screens |
-| Priority | High. PRD value 4, effort 6.5 to 10 h core plus 1 to 1.5 h stretch (estimate) |
-| Status | Draft |
+| Priority | High. PRD value 4. Effort 7.5 to 11.75 h core plus 1 to 1.5 h stretch (estimate, release plan v0.10; includes +1 to 1.5 h for the Admin's guided restore) |
+| Status | Draft. **Re-issued 2026-11-02** against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9. The Admin now holds the backup key, has server access and runs the restore (D-36), so story 10.11 is new. The Jira epic was edited |
 
 ## Goal & User Value
-Every screen is usable on a phone, a tablet and a desktop, branded as decided ("Red Leads", GOAL-07), accessible to WCAG 2.2 AA, installable by Accucut's IT person with Docker Compose, backed up weekly and tested end to end.
+Every screen is usable on a phone, a tablet and a desktop, branded as decided ("Red Leads", GOAL-07), accessible to WCAG 2.2 AA, installable by Accucut's IT person with Docker Compose, backed up weekly on the same server, **restorable by the Admin with one guided command**, and tested end to end.
 
 ## Requirements Covered
-- Functional: FR-085, 086, 087, 089, 091 (Must, R1); FR-088 (Should, R1+). 6 FRs. FR-090 (dark mode) is EPIC-11, outside scope A.
-- Non-functional (allocated here, see the consistency report): NFR-006, 009, 010 (load part), 011, 012, 013, 016 to 025, 028, 029, 030.
-- Business rules: none of its own; D-15 (backup), D-14 (light mode only).
+- Functional: FR-085, 086, 087, 089, 091 (Must, R1); FR-088 (Should, R1+). 6 FRs. FR-105 (the Last backup line) is EPIC-02; FR-090 dark mode is EPIC-11, outside scope A.
+- Non-functional (allocated here, see the consistency report): NFR-006, 009 to 013, 016 to 025, 028 to 030.
+- Business rules: none of its own; D-14 (light mode only), D-15, D-33, D-36 (backups).
 
-## Sequencing ruling (product-owner)
-The PRD says this epic "runs alongside" and gives EPIC-01 no dependency. The architecture puts the scaffold (TD-05, RISK-006) in this epic, and the release plan puts it in EPIC-01 (SPEC step 1). Every UI story needs the scaffold, the CI gates, the secret scan, the design tokens and the app shell. **Stories 10.01 and 10.02 are therefore enablers sequenced before every EPIC-01 story.** Each is justified: 10.01 carries the secret scan that protects a public repository (RISK-006, NFR-006) and the build gates every pull request needs (NFR-025); 10.02 gives every screen one design system (NFR-020) at three widths. The rest of the epic runs alongside the others. Effort placement is for the product-manager and solution-architect to confirm (CR-11).
+## Sequencing ruling (product-owner; confirmed by the product-manager and the solution-architect)
+The PRD said this epic "runs alongside" and gave EPIC-01 no dependency. Every UI story needs the scaffold, the CI gates, the secret scan, the design tokens and the app shell. **Stories 10.01 and 10.02 are enablers sequenced before every EPIC-01 story**; each is justified: 10.01 carries the secret scan that protects a public repository (RISK-006, NFR-006) and the build gates every pull request needs (NFR-025); 10.02 gives every screen one design system (NFR-020) at three widths. The rest runs alongside the others. The architect confirmed the placement and says the hours are not shown to be enough (architecture 16.11); checkpoint A is the first reading. What goes into 10.01 is listed in architecture 16.11: pinned versions, the `.env.example` fix (TD-05), Gitleaks and the data-file allow-list, the CI workflow with its stages, the import rules, the placeholder pattern test.
 
 ## Scope
-**In:** scaffold, CI pipeline (lint, type-check, tests, coverage thresholds, secret and repository scan), design tokens and responsive shell on shadcn/ui; per-page title, description and Open Graph tags with "do not index" behind sign-in and on the sign-in page, no sharing image; Docker Compose (app, worker, database), `.env.example`, README with install, update, backup and restore steps; weekly backup, backup-watch check, manifest and 2-year pruning; restore rehearsal; the reserved drawing region on the workspace; loading, empty and error states (stretch); accessibility, responsive, end-to-end, performance and observability suites.
-**Out:** dark mode, UI-sample extras, offline use, drawing input.
+**In:** scaffold and CI (build, lint, type-check, tests, coverage, secret and repository scan); design tokens and shell; per-page title, description and Open Graph tags with "do not index" behind sign-in and on the sign-in page, no sharing image; Docker Compose (app, worker, database), `.env.example`, README; **the weekly backup taken automatically on the same server, kept 2 years, with the free-space check, the `backup-watch` job, the manifest beside each copy and the pruning; the guided `restore.sh` and its README for the Admin, who holds the key (pasted at a prompt, never kept on the host) and rehearses the restore from the README alone before go-live**; the reserved drawing region; loading, empty and error states (stretch); accessibility, responsive, end-to-end, performance and observability suites.
+**Out:** the Last backup line on Settings (FR-105, EPIC-02); the Admin's server account (Accucut IT grants it; the limited account of architecture A-35 is a proposal to them); dark mode, UI-sample extras, offline use, drawing input.
 
 ## UX & Architecture References
 - Screens / journeys: SCR-00 (design system), SCR-25, SCR-26, and the phone and tablet frames; every screen for the responsive and accessibility checks.
-- Components: `src/components`, `src/app`, `Ops` (Compose, scripts, README), CI. Architecture sections 7, 9, 10, 11, 12; ADR-001, 002, 013, 014. Test strategy sections 8, 9, 10, 11.
+- Components: `src/components`, `src/app`, `Ops` (Compose, `scripts/backup.sh`, `scripts/restore.sh`, README), CI. Architecture sections 7, 9 (9.5 in particular), 10, 11, 12; ADR-001, 002, 013, 014. Test strategy sections 8, 9, 10, 11.
 
 ## Stories (ordered)
 
 | # | Story ID | Title | Intent (one line) | Splitting pattern | Depends on | Status |
 |---|----------|-------|-------------------|-------------------|------------|--------|
-| 1 | STORY-10.01 | Scaffold, CI and repository hygiene (enabler) | Next.js, Prisma, tooling; the pipeline gates; secret and repository scan; `.env.example` committed (TD-05); master data loaded from outside the repository (ADR-014) (NFR-006, 025) | Enabler, justified above | none (first story) | Draft |
+| 1 | STORY-10.01 | Scaffold, CI and repository hygiene (enabler) | Next.js, Prisma, tooling pinned; the pipeline gates; secret and repository scan; `.env.example` committed (TD-05); master data loaded from outside the repository (ADR-014) (NFR-006, 025) | Enabler, justified above | none (first story) | Draft |
 | 2 | STORY-10.02 | Design tokens and responsive app shell (enabler) | One palette, type, spacing and button set; header, navigation frame, three widths with no horizontal scroll; the first built page carries the real-phone, screen-reader and high-contrast checks (FR-085, 086, NFR-016 to 018, 020, 021, DL-017) | Enabler, justified above | 10.01 | Draft |
 | 3 | STORY-10.03 | Page metadata and indexing | Title, description and Open Graph tags on every route; "do not index" behind sign-in and on the sign-in page; no image tag (FR-089, NFR-022) | Business rule | 10.02, 01.01 | Draft |
 | 4 | STORY-10.04 | Install and update with Docker Compose | One `docker compose up` after copying `.env.example`; README install and update; clean-machine sign-in page within 30 minutes (FR-091 part, NFR-030) | Workflow step | 10.01, 01.01 | Draft; OQ-ARCH-02, 03 |
-| 5 | STORY-10.05 | Weekly backup, watch check and restore | Automatic weekly backup, a check that flags a missed week, a manifest, 2-year pruning, a restore rehearsal in the README (FR-091, NFR-013) | Workflow step | 10.04 | Draft; OQ-ARCH-12 |
+| 5 | STORY-10.05 | Weekly backup, watch check and free-space check | Automatic weekly encrypted backup on the same server, a check that flags a missed week, a free-space check before each run, a manifest per copy, 2-year pruning that never removes a newer copy to make room (FR-091, NFR-013, ARCH-R7) | Workflow step | 10.04 | Draft; OQ-ARCH-03 (disk) |
 | 6 | STORY-10.06 | Reserved drawing region | One reserved region at 1024 px and wider on the workspace (FR-087, NFR-023) | Single UX requirement | 05.03 | Draft |
 | 7 | STORY-10.07 | Loading, empty and error states (R1+) | Three states and a save confirmation on each data screen (FR-088) | Data variation by screen | 10.02 | Draft |
 | 8 | STORY-10.08 | End-to-end, responsive and accessibility suites | Playwright at 360, 768 and 1366 px, axe at the WCAG 2.2 AA rules, keyboard-only key flows, one run per delivered screen set (NFR-016, 018, 019); repeated for the R2 screens | Non-functional verification | 05.09, 06.06 | Draft |
 | 9 | STORY-10.09 | Performance, capacity and observability | Page timings, 25 concurrent users, logging of errors and job runs, an uptime check when the web address exists (NFR-009, 010, 011, 012, 024) | Non-functional verification | 07.05 | Draft; Q-18 |
 | 10 | STORY-10.10 | Privacy and data-handling checks | Repository scan for real personal data in fixtures; English-only inspection (NFR-028, 029) | Non-functional verification | 10.01 | Draft |
+| 11 | STORY-10.11 | Admin restores a backup with one guided command | `restore.sh` lists copies, checks the SHA-256, manifest, PostgreSQL version and free space before touching anything, states what will be lost including audit rows and asks the Admin to type the date, takes a safety copy, restores into a new database and swaps only on success, never keeps the key or the decrypted dump on disk, logs each restore on the host outside the database, and says "Call your IT person" if it stops; the README is written for a person who is not a system administrator (FR-091, NFR-013, architecture 9.5, D-36) | Workflow step, with its failure paths | 10.05, 10.04 | Draft; A-35 (Accucut IT) |
+
+Numbering note: 10.11 was added at the end so that IDs shown in comment 10515 do not move.
 
 ## Epic Acceptance Criteria
-- [ ] Following the README on a clean machine reaches a working sign-in page within 30 minutes, and one restore is rehearsed.
+- [ ] Following the README on a clean machine reaches a working sign-in page within 30 minutes.
 - [ ] Playwright at 360, 768 and 1366 px finds 0 horizontal page scroll and every action reachable on every delivered screen; axe finds 0 WCAG 2.2 AA violations; the key flows complete by keyboard only.
 - [ ] The pull request pipeline fails on a lint, type, test, coverage (80 percent of changed code, 95 percent of the formula module) or secret-scan finding.
 - [ ] The tag check passes on every route, with "do not index" on the sign-in page and no sharing image.
-- [ ] A backup runs every 7 days, each is kept 2 years, and a missed week is detected.
-- [ ] At the G7 of the first built page: a real phone, a screen reader and Windows high-contrast checks are done and recorded (DL-017); the usability test is decided (G3 condition 15, CR-20).
+- [ ] A backup runs every 7 days on the same server, each is kept 2 years, a missed week is detected, and a run that would fill the disk makes no copy and records a failed run.
+- [ ] **The Admin, from the README alone and with the IT person on hand but not helping unless it stops, restores from a copy on a healthy server; the rehearsal is timed and logged.** It proves a restore on a healthy server only; the loss of the server or its disk loses everything and cannot be rehearsed (ADR-002).
+- [ ] At the G7 of the first built page: a real phone, a screen reader and Windows high-contrast checks are done and recorded (DL-017).
 
 ## Dependencies & Risks
 - Depends on: none for 10.01 and 10.02; the others follow their predecessors.
-- Open inputs: OQ-ARCH-02 (where container images may be pulled from), OQ-ARCH-03 (VM size), Q-18 (web address), OQ-ARCH-12 (backup duties), OQ-PM-03, 04, 05 (PROPOSED availability, browsers, export size: the PROPOSED values stand for the DoR), Q-26 (retention, NFR-028), Q-16 (sharper logo).
-- Risks: RISK-006 (real data in a public repository), RISK-011 (weekly backup, up to 7 days of work lost, 14 if one run fails unnoticed), RISK-015 (evidence limits), ARCH-R4 (Next.js, React and Prisma on recent majors).
+- Open inputs: **OQ-ARCH-03 (VM disk size: 40 GB is too small for about 105 full copies on the same server; it fills in about 6 months at an invented 0.1 GB of new data a week, CR-30)**, OQ-ARCH-02 (where container images may be pulled from), Q-18 (web address, for the uptime check), OQ-PM-03, 04, 05 (PROPOSED availability, browsers, export size: the PROPOSED values stand for the DoR), Q-26 (retention, NFR-028), Q-16 (sharper logo), A-35 (the Admin's limited server account, Accucut IT). **Answered since v0.1:** OQ-ARCH-12 (the Admin holds the key, has server access and runs the restore, D-36).
+- The human step before go-live: the Admin's restore rehearsal. It is not in the hours or the dates (release plan 3.1).
+- Risks: RISK-006 (real data in a public repository), RISK-011 (a server or disk failure loses the live data and every backup together; their decision, they were told), ARCH-R7 (a full disk stops PostgreSQL), ARCH-R8 (the one Admin holds the top role, the key and server access, so the audit log is a record and not a control over them), RISK-015 (evidence limits), ARCH-R4.

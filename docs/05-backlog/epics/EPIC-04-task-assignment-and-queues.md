@@ -6,7 +6,7 @@
 | Jira | [AQP-19](https://sankumar76.atlassian.net/browse/AQP-19) (labels `ai-delivery`, `aiid-EPIC-04`, `agent-product-owner`; relates to AQP-1) |
 | Release | R1 core (FR-035, 039 R1+ stretch; FR-040 R2) |
 | Priority | High. PRD value 4, effort 3.25 to 5.75 h core plus 1.5 to 2.5 h stretch (estimate) |
-| Status | Draft |
+| Status | Draft. Re-issued 2026-11-02 against SPEC v1.11, PRD v0.10, UX v0.5, architecture v0.9; scope unchanged, so the Jira epic was not edited |
 
 ## Goal & User Value
 A Lead or Admin assigns work with a folder path and deadline; Engineers see their own queue and the status of their work, never a price; late work is visible in the portal (bell and Overdue tab).
@@ -32,7 +32,7 @@ A Lead or Admin assigns work with a folder path and deadline; Engineers see thei
 | 2 | STORY-04.02 | My tasks and the task queue by role | Open, Closed and Overdue tabs sorted by deadline; Engineer sees own tasks only, Lead and Admin see all (FR-034) | Business-rule variation by role | 04.01 | Draft |
 | 3 | STORY-04.03 | Overdue cues and bell | Colour, icon and "Overdue by X"; bell count per role opens the Overdue tab and stays visible on mobile (FR-036, 037, NFR-015) | Data variation by role | 04.02 | Draft |
 | 4 | STORY-04.04 | Engineer sees the status of own work | Draft, Submitted, Approved, Closed on every Engineer page that lists or opens a task, and no price (FR-102) | Business rule | 04.02, 01.03 | Draft |
-| 5 | STORY-04.05 | Task closes on approval, reopens on unlock | Derived from estimate status (FR-038) | Workflow step | 04.02, 06.04, 06.06 | Draft |
+| 5 | STORY-04.05 | Task closes on approval, reopens on unlock or cancel | Derived from estimate status, so an unlock and an Admin's cancel approval (FR-107) both reopen it (FR-038) | Workflow step | 04.02, 06.06, 06.08, 06.12 | Draft |
 | 6 | STORY-04.06 | Lead default filter and task filters (R1+) | "Assigned by me" opens by default and can be changed; filter by Engineer, customer and date (FR-035, 039) | Data variation | 04.02 | Draft |
 | 7 | STORY-04.07 | Reassign or change a deadline (R2) | Logged with who, when, old and new; refused on an approved task (FR-040) | CRUD (update) | 04.02, 01.07 | Draft |
 
