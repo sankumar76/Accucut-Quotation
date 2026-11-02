@@ -367,3 +367,56 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due.
 **Risks registered:** RISK-016 (ARCH-R6 and the whole-order count, one risk, 16 🔴), RISK-017 (ARCH-R7, 12), RISK-018 (ARCH-R8, 10) new. RISK-002 reduced to 5; RISK-013 reduced to 6; RISK-011 raised to 10; RISK-008 raised to 12; RISK-012 and RISK-009 closed; RISK-001, 003, 006, 007, 015 restated.
 **Rationale:** The backlog is close: 0 Critical, full trace, and every link and acceptance criterion I checked is there. But the mandatory DoR item lacks the product-owner's re-validation, a correction was left half done, and the checklist was counted short, so the procedure gives NO-GO and attempt 1 of G2 sets the precedent. It costs one short loop with no human wait. The bigger finding for the delivery lead is not the gate: a typed count can now misprice an order with nothing to flag it (RISK-016).
 
+---
+
+## G4 – Backlog Ready — 2026-11-02 (attempt 2)
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. No human stop at this gate (DL-010)
+- **Attempt:** 2
+- **Artefacts evaluated:** at commit d3f8aef: `consistency-report.md` v0.4 in full, `backlog.md` v0.4 (section 7 through the report), `sprint-01-plan.md` v0.3 header, PRD v0.12 13.7, release plan v0.12 (2, 3.2, 3.3, 6), architecture v0.11 (6, 9.5, 16.15, A-35, A-36), `ux-spec.md` v0.7 (CR-32 lines), test plan v0.2 (section 9 rows, 11, 14). Jira: AQP-1 latest 30 of 137 comments, including 10608 to 10612, 10614, 10620, 10621, 10641, 10642; AQP-11; all 18 story descriptions compared with the attempt 1 snapshot; PO Validation on all 18; sub-tasks of AQP-113; links on AQP-142; validation comments on AQP-97; all 15 open-question issues. Session log, read only, by role. **Not done:** the simulation could not be re-run, as it is not in the repository; links on the other stories not re-read since attempt 1 (10611 and 10620 report no link change); `backlog.md` not re-read line by line. Sample workbook not opened; this record holds no value from it.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | PO consistency report shows no Critical | ✱ | ✅ | v0.4: 0 Critical, 0 Major, 8 Minor. One wording error (check 10) |
+| 2 | Every sprint-1 story meets DoR 100 % | ✱ | ✅ | PO Validation reads READY, 17 of 17, on all 18. **Verified by me:** scripted, 18 of 18 have 5 to 10 ACs in Given/When/Then, a Trace line and unchanged points; all 8 "Depends on" lines name every required story; every added BR ID exists in the catalogue; BR-004 on AQP-123, AQP-130; BR-003 on AQP-123; sampled fits (DL-039); AQP-165 exists |
+| 3 | Stories trace to FRs and epics | ✱ | ✅ | Stands from attempt 1; Trace lines now fuller; parent epics unchanged |
+| 4 | G3 conditions 12, 13, 15 and DL-026 inputs | ✱ | ✅ | Stands from attempt 1 |
+| 5 | AC form and sizing | | ✅ | As check 2. Sub-tasks 121 |
+| 6 | Dependencies sequenced | | ✅ | Stands; the text now matches the links |
+| 7 | Sprint goal stated | | ✅ | Unchanged in sprint plan v0.3 |
+| 8 | Capacity plausible | | ⚠️ | 53 of an assumed 55. Recalibrated: sprint 1 is 5.85 days for 2.4 days of work at a half-day merge. The way of working is not chosen; way 1 at half a day stands until it is (DL-041) |
+| 9 | No open question blocks a sprint-1 story | | ⚠️ | CR-33 and A-1 settled in architecture v0.11; CR-32 in UX v0.7. Open, labelled in stories, non-blocking: sign-out and `session_version` for AQP-38; the two database roles |
+| 10 | Report and test plan agree with the sources | | ⚠️ | Test plan: 5 rows, the scan paragraph and a `sudo -l` precondition are stale; QA-OQ-08 is answered (DL-042). Report section 1 says "keeps the e-mail only"; UX v0.7 keeps both fields. SPEC still says "kept 2 years" and "< 200 KB" (DL-040) |
+| 11 | Trace lines written outside the owner's lane | | ⚠️ | They stand; recorded; scrum-master confirms at Ready (DL-039) |
+| 12 | Backlog internally consistent | | ✅ | Section 4 ranks aligned (10641; report section 8) |
+| 13 | Docs PR qualifies for docs-auto | | ✅ | Every changed file on the branch is under `docs/` or the SPEC (git) |
+| 14 | Attempt 1 conditions | | ✅ | 1, 2 and 3 done here. 4 met, choice open. 5 and 6 done. 7 done. 8 done by design. 9 PRD half done, SPEC half carried. 10 done, new residual carried. 11 done: 13 issues Done, AQP-4 and AQP-11 open as ruled |
+
+**Rulings on the points asked**
+
+1. **Trace lines (DL-039):** they stand. It was a step outside the lane, disclosed, with one real cost: the product-owner validated their own text. I gave those lines the missing check. The scrum-master confirms as each story moves to Ready. From here the product-owner names and the scrum-master writes.
+2. **PRD 13.7 and A-36 (DL-040):** recorded. A-36 is a labelled proposal, and they are to be told what 4 copies means.
+3. **Merge recalibration (DL-041):** accepted as an estimate, no date adopted. The way of working is theirs; way 1 stands until they choose; way 5 needs their explicit word. My attempt 1 figure overstated the effect on the end date, and that is corrected.
+4. **Test plan (DL-042):** carried as a condition. It is wider than audit and Settings.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | scrum-master | Jira, 18 stories | Confirm the Trace corrections on the 11 as they move; raise any disagreement with the product-owner; move the 18 to Ready for Dev | Before the first story branch |
+| 2 | orchestrator | Chat; AQP-1 | Get the way of working and turnaround **by name, not number** (DL-041). Tell them A-36 and the ceiling at about 5 to 6 GB. No reply text. Silence leaves way 1 at half a day and is not a stop | Before sprint 1 starts |
+| 3 | scrum-master | `sprint-01-plan.md` | Name the way of working assumed | Before sprint 1 starts |
+| 4 | qa-engineer | `test-plan.md` 9, 11, 14, 18 | 403 on rows 01.02, 01.07, 02.09, 06.06, 06.12 and the scan paragraph; `sudo -l` shows two scripts, and the rehearsal covers `clear-copies.sh`; QA-OQ-08 answered "refuse it" | Before AQP-48 reaches G7 |
+| 5 | business-analyst | SPEC §7.1, §12, §18; catalogue | Retention "up to 2 years, as the disk allows"; picture under 204,800 bytes; Q-18 and OQ-ARCH-11 answers (10610, 10613, 10615) | Retention before 10.05 reaches Ready; picture before 05.07 reaches Ready |
+| 6 | solution-architect | Architecture | Sign-out and `session_version`; a deleted treatment on a draft | Before AQP-38 reaches G5; before 05.06 reaches Ready |
+| 7 | ux-expert | SCR-15 | "Disk nearly full" points to the README section (16.15) | Before 02.09 reaches Ready |
+| 8 | product-owner | `consistency-report.md` | Correct the CR-32 wording; close CR-31 (13 Done, 2 open as ruled) | Next issue |
+| 9 | product-manager | `release-plan.md` | Re-run the model when each sprint is written and at checkpoint A, with the real merge wait | Checkpoint A |
+| 10 | orchestrator | PR #1; AQP-1 | Commit the records; refresh the gate list; mark ready; docs-auto merge if checks pass; report this result | Now |
+| 11 | Owners in the report | CR-13, 16, 17, 18, 27, 28 | Minor; carried | G8 |
+
+G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 must state:** RISK-016's earliest evidence comes after the date; rehearsal run A or B (DL-035); whether the real send was done.
+
+**Risks registered:** none new. RISK-003, RISK-008 restated, scores unchanged (10, 12). RISK-007, 014, 017, 018 restated, scores unchanged.
+**Rationale:** All four mandatory items pass on evidence I checked myself, not on the summary. The three gaps from attempt 1 are closed, and the one irregularity, the Trace lines, was disclosed and now has the second check it lacked. What remains is non-mandatory, owned and dated, and none of it touches a price or a sprint-1 acceptance criterion. Red RISK-016 does not hold this gate: its field is story 05.03, but it is the risk the delivery lead most needs to keep in view.
+
