@@ -32,7 +32,9 @@
     });
     doc.querySelectorAll('[data-hide]').forEach(function (el) {
       var tokens = el.getAttribute('data-hide').split(/\s+/);
-      el.hidden = tokens.indexOf(name) !== -1 || tokens.indexOf(overlay) !== -1;
+      var hit = tokens.indexOf(name) !== -1 || tokens.indexOf(overlay) !== -1;
+      /* an element with both attributes is shown when data-show matches and data-hide does not */
+      el.hidden = el.hasAttribute('data-show') ? (el.hidden || hit) : hit;
     });
     /* Fields that show as empty and invalid in a given state (data-error-in="error"). */
     doc.querySelectorAll('[data-error-in]').forEach(function (el) {
@@ -49,6 +51,11 @@
       var on = t.getAttribute('data-tab-for').split(/\s+/).indexOf(name) !== -1;
       t.setAttribute('aria-selected', on ? 'true' : 'false'); t.classList.toggle('is-active', on);
     });
+    /* The safe button of a dialog takes focus when the dialog shows (not inside a device frame: the browser blocks it there). */
+    if (window.top === window) {
+      var dlgBtn = doc.querySelector('.backdrop:not([hidden]) [data-autofocus]');
+      if (dlgBtn) dlgBtn.focus();
+    }
     doc.querySelectorAll('.rb-states button').forEach(function (b) {
       b.setAttribute('aria-pressed', b.getAttribute('data-state') === overlay ? 'true' : 'false');
     });
