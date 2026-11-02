@@ -2,19 +2,20 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.3 (v0.2 was issued earlier on 2026-11-02 against SPEC v1.11, PRD v0.9 to v0.10, UX v0.5, architecture v0.9; v0.1 on 2026-11-01) |
+| Version | 0.4, G4 remediation 2 (v0.3 was the input to G4 attempt 1, which was NO-GO; v0.2 was issued earlier on 2026-11-02 against SPEC v1.11, PRD v0.9 to v0.10, UX v0.5, architecture v0.9; v0.1 on 2026-11-01) |
 | Owner | product-owner |
 | Date | 2026-11-02 |
 | Scope | Scope A (D-14): EPIC-01 to EPIC-10, 101 FRs. EPIC-11, EPIC-12 and FR-093 to 096 are outside it |
-| Compared | SPEC v1.12, PRD v0.11, release plan v0.11, UX spec v0.6 and `screens/` (41 pages), architecture v0.10, test strategy v0.9, test plan v0.1 (`docs/07-qa/test-plan.md`), ADR-001 to 014, `sprint-01-plan.md` and the 18 sprint 01 stories (Jira AQP-27 to AQP-148); decision log DL-001 to DL-026; Jira AQP-1 comments to 10576, AQP-14, AQP-15, AQP-26 |
-| Result | **0 Critical. 2 Major open (CR-23, CR-34), 10 Minor open.** Closed since v0.2: CR-09, 20, 22, 24, 26, 29, 30. FR and NFR coverage is complete. Sprint 01 validation: 9 of 18 stories pass the Definition of Ready, 9 need one small correction each (`backlog.md` section 7) |
+| Compared | SPEC v1.12, PRD v0.11 (PRD v0.12 and release plan v0.12 landed during this pass, AQP-1 10621: their changes are effort and scheduling, so the FR to epic map is unchanged), UX spec v0.7 and `screens/` (41 pages), architecture v0.11, test strategy v0.10, test plan v0.2 (`docs/07-qa/test-plan.md`), ADR-001 to 014, `sprint-01-plan.md` v0.3 and the 18 sprint 01 stories (Jira AQP-27 to AQP-148, read after the scrum-master's edits of 11:51 and 11:52, AQP-1 10620); decision log DL-001 to DL-038; Jira AQP-1 comments to 10621, AQP-14, AQP-15, AQP-26 |
+| Result | **0 Critical. 0 Major open. 8 Minor open** (CR-13, 16, 17, 18, 27, 28, 31, 33 residual). Closed since v0.3: CR-23 (master, DL-027 to DL-038), CR-32, CR-34, CR-35, and CR-33 apart from one test-plan edit. FR and NFR coverage is complete. **Sprint 01 validation against all 17 DoR items: 18 of 18 stories READY** (`backlog.md` section 7). The v0.3 check counted 16 items and did not apply the business-rule item systematically (CR-36); 11 stories failed that item as found, and the product-owner corrected their Trace lines (CR-37, scrum-master to confirm) |
 
 ## 0. Method and limits
 
 - **Scripted** (Node, working tree): the 108 FR rows of PRD section 4; the FR to epic map; the architecture coverage matrix; the UX section 9 table; the 30 NFR rows; the text of all 41 screen pages; the message strings quoted in the 18 stories against the UX spec and the screens.
 - **Read**: all 18 sprint stories in Jira (description, acceptance criteria, Dev Context, sub-tasks, links, points); `sprint-01-plan.md` in full; `docs/standards/definition-of-ready.md`; test plan sections 1, 4, 5 and 9; the PRD, SPEC, architecture, UX and ADR content read for v0.2, with the changes after it checked by script and by grep (SPEC §10, UX section 5 and 9, SCR-15, architecture matrix, PRD FR-011 and headers).
 - **Not done**: the SPEC §2, §17 and §18.1 D-01 to D-20 were not re-read in full; the requirements catalogue, questions file and risk register were not read; the screens were read as text and not rendered (no browser); the test plan sections 10 to 16 and the strategy beyond section 5 were not re-read; the generator was not read and I did not check it for sample values (the delivery lead accepts its ten numbers, comment 10576). The sample workbook was not opened. This report contains no sample value.
-- The sprint stories carry sub-tasks (119), which I counted from the story lists but did not open one by one.
+- The sprint stories carry sub-tasks (121 after AQP-164 and AQP-165), which I counted from the story lists but did not open one by one.
+- **Definition of Ready: 17 items.** `docs/standards/definition-of-ready.md` has 17 checkboxes (business clarity 4, acceptance criteria 4, technical clarity 4, UX clarity 3, sizing 2). The v0.3 check and its Jira comments said "16 items". The item not counted was "Relevant business rules (BR-IDs) listed": it had been marked "n/a" for most stories instead of being checked (CR-36). **Rule used now (R-BR):** a story lists every BR-ID that one of its acceptance criteria asserts (including the Admin-only and role-refusal criteria and the Engineer scan), plus the BRs its epic assigns it; an enabler that asserts none says so in the Trace line.
 
 ## 1. Summary of the seven checks
 
@@ -24,8 +25,8 @@
 | 2 | Every user-facing FR has a UX screen | **Pass.** UX sections 5 and 9 now have FR-001 to FR-108 (108 of 108) | none |
 | 3 | Every FR and NFR in the architecture coverage matrix | **Pass.** 108 of 108 FRs and 30 of 30 NFRs | none |
 | 4 | Terminology consistent | Minor conflicts | CR-17 |
-| 5 | UX and architecture agree | **Agree on every rule re-checked.** Two small differences remain between documents (what an Engineer gets on a Lead or Admin route; whether sign-in clears the password field) | CR-32, CR-33 |
-| 6 | Sequencing: enablers before dependents | Source documents agree. One story split out (06.14, the step-up check) and nine dependencies the sprint stories need were found | CR-25 (fixed), CR-34 |
+| 5 | UX and architecture agree | **Agree on every rule re-checked.** Both v0.3 differences are settled: sign-in keeps the e-mail only (UX v0.7); a refused role gets 403, role check first (architecture v0.11 section 6). One test-plan sentence still says 404 | CR-32 (closed), CR-33 (residual, qa-engineer) |
+| 6 | Sequencing: enablers before dependents | Source documents agree. One story split out (06.14, the step-up check); the 13 added links are in Jira (41 links) and agree with the sprint order | CR-25 (fixed), CR-34 (closed) |
 | 7 | NFRs allocated | **Pass.** 30 of 30 allocated (section 8) | none |
 
 ## 2. Check 1: FR to epic map (exactly one epic each)
@@ -70,10 +71,10 @@ All are CR-17.
 
 ## 5. Check 5: UX against architecture and the PRD
 
-The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; every figure clears; no file until current; cancel then remove, Admin only; rate notice; optional picture; Last backup; one figure per row). Closed since: the Last backup line is staged R1 in the UX (CR-26); the restore is the Admin's in the UX 11.1 and in the PRD v0.10 (CR-21). The step-up check now has its own story (06.14). Two small differences:
+The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; every figure clears; no file until current; cancel then remove, Admin only; rate notice; optional picture; Last backup; one figure per row). Closed since: the Last backup line is staged R1 in the UX (CR-26); the restore is the Admin's in the UX 11.1 and in the PRD v0.10 (CR-21). The step-up check now has its own story (06.14). Two differences were open in v0.3 and are now settled:
 
-- **CR-32.** SCR-01 says a failed sign-in "keeps the e-mail, clears nothing else, moves focus to the notice"; UJ-01 says "field values kept except the password". The story 01.01 keeps the e-mail and leaves the password alone (as SCR-01).
-- **CR-33.** What an Engineer gets on a Lead or Admin route. Architecture 4.10 and test strategy A-30 give the uniform 404 for cancel and remove; the test plan section 9 gives the uniform 404 for audit and Settings; stories 01.04, 01.07 and the masters say "403 / SCR-26 / 401" or defer to the manifest; story 01.02 AC-4 says "403 (or the uniform 404 where the manifest says so)". No document states the rule once.
+- **CR-32, closed.** SCR-01 and UJ-01 disagreed on what a failed sign-in keeps. UX v0.7 (b451726) settles it; story 01.01 keeps the e-mail and leaves the password alone, as SCR-01.
+- **CR-33, closed except one sentence.** Architecture v0.11 section 6 (AQP-1 10614) states the rule once: `withRoute` checks the role first, before any lookup, so a Lead or an Engineer on a route not listed for their role gets 403 with a fixed body and SCR-26; the uniform 404 stays only for an Engineer's own routes (a missing estimate or another Engineer's). Architecture 4.10 and the test strategy follow it. The scrum-master applied it to AQP-48 (the words "or the uniform 404 where the manifest says so" removed), 57, 65, 74, 113 and 130 and checked 122, 123, 142 and 148 (10620). **Residual:** test plan section 9 still gives the uniform 404 for audit and Settings; owner qa-engineer.
 
 ## 6. Check 6: sequencing
 
@@ -118,7 +119,13 @@ The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; 
 
 ## 8. Sprint 01: Definition of Ready validation (summary)
 
-The full table, the reason per story and the dependency list are in `backlog.md` section 7. Summary: **pass (9):** AQP-28 (10.02), AQP-38 (01.01), AQP-48 (01.02), AQP-57 (01.03), AQP-65 (01.04), AQP-74 (01.07), AQP-81 (01.05), AQP-97 (03.01), AQP-106 (03.02). **Need one correction (9):** AQP-27 (10.01: add the database guard as AC-10), AQP-89 (01.06), AQP-90 (01.08), AQP-113 (02.01), AQP-122 (02.03), AQP-123 (02.04), AQP-130 (02.05), AQP-142 (02.02), AQP-148 (04.01): each lacks a dependency it uses. All 18 meet the other 15 items: story form, trace, MoSCoW, 5 to 10 acceptance criteria in Given/When/Then with negative paths, measurable NFRs, Dev Context, data and API changes, UX state and accessibility notes, estimates and sub-tasks. No status is changed in Jira before the master decides G4.
+The full table, the reason per story and the dependency list are in `backlog.md` section 7. All **17** DoR items were checked on each story, read from Jira after the scrum-master's edits (AQP-1 10611, 10620).
+
+- **Result: 18 of 18 READY (17 of 17 items each).** The nine corrected stories (AQP-27, 89, 90, 113, 122, 123, 130, 142, 148) now state their dependencies in the text and in Jira, and AQP-27 has AC-10 and sub-task T10 (AQP-164). The seven stories changed after architecture v0.11 (AQP-48, 57, 65, 74, 97, 113, 130) were re-read; AQP-113 has a new AC-9 (the README first-use sentence) and sub-task T7 (AQP-165), and has 9 acceptance criteria.
+- **Business-rule item (item 4), as found:** passed for AQP-38, 81, 89, 123 and (with an explicit "none asserted") 27, 28, 74. **Failed as found for 11:** AQP-48 (BR-002, BR-003 missing), 57 (BR-004), 65 (BR-004), 90 (BR-003), 97 (BR-003, 008, 023, 026, 027, 036, 047), 106 (BR-025, and FR-027 cited in AC-2 but not traced), 113 (BR-003, 004, 021), 122 (BR-003, 004), 130 (BR-003), 142 (BR-003, 004, 030, 032), 148 (BR-004). Five master stories (113, 122, 123, 130, 142) also cited FR-011 in an AC without tracing it.
+- **Decision on the question asked for AQP-113, 122 and 142:** yes, they need BR-004, because their Admin-only criteria (a Lead, an Engineer or a signed-out caller is refused) assert it. They also need BR-003, because they add Restricted values to `canaryMasters` and assert that no rate reaches an Engineer. AQP-142 also asserts BR-030 and BR-032 in AC-4.
+- **Who corrected:** these are Trace-line additions only (no AC, estimate or dependency changed). The product-owner made them while writing each PO Validation, and records each in the story ("Corrections made by the product-owner"). The scrum-master should confirm them; they do not gate G4.
+- No status is changed in Jira before the master decides G4 attempt 2; only the scrum-master moves a story to Ready after it.
 
 ## 9. Issues
 
@@ -140,31 +147,33 @@ Rating: **Critical** blocks G4 for the stories named; **Major** weakens a Ready 
 | CR-16 | Stale version references and wording | **Open (Minor).** PRD header: Source brief v0.8, SPEC v1.4, questions v0.8, Date 2026-11-01, a Status line from v0.7, and FR-011's "PROPOSED"; architecture Inputs: PRD v0.8, release plan v0.8, UX v0.3; test strategy Inputs: SPEC v1.10, PRD v0.8 | file headers |
 | CR-17 | Terminology | **Open (Minor)**, section 4 | |
 | CR-18 | PROPOSED NFR values | **Open (Minor).** OQ-PM-03, 04, 05 stand as PROPOSED; OQ-ARCH-03 is closed (CR-30) | PRD §12 |
-| CR-23 | The master has not recorded the whole-order rule, D-25 to D-37, PRD 13.4 to 13.6, the readings R-1 to R-5, or restated RISK-002, 011, 012, 013 and registered ARCH-R6, R7, R8; decision log ends at DL-026; `project-state.md` still shows BLK-03, Q-38 and Q-39 open. The master has not said whether "their two figures added" (840) meets DL-024 | **Open (Major).** Owner: master; orchestrator for project-state | decision log; project state |
+| CR-23 | The master had not recorded the whole-order rule, D-25 to D-37, PRD 13.4 to 13.6, the readings R-1 to R-5, or restated RISK-002, 011, 012, 013 and registered ARCH-R6, R7, R8 | **Closed by the master** (DL-027 to DL-038 recorded; risk register updated, RISK-016 to 018 new; gate-log G4 attempt 1). Not re-read by me; I rely on the master's record | decision log; gate log |
 | CR-25 | Sequencing slips | **Fixed here** (section 6) | |
 | CR-27 | Hours and stories do not line up by epic (Warn split over four epics; FR-006 and FR-040 hours in EPIC-09; the Settings frame hours in EPIC-09 while the frame is built in the core) | **Open (Minor).** product-manager; scrum-master | release plan 3.1 |
 | CR-28 | The Warn notice states on SCR-06, 08 and 10 are wording previews | **Open (Minor).** Accepted for the DoR; check on built pages | ux-spec 0.8 |
-| CR-31 | Jira: AQP-10, 14, 15, 26 still read To Do although answered; AQP-14 and AQP-15 keep a "blocks AQP-18" link that DL-022 and DL-024 say no longer holds; the Jira tools here cannot remove a link | **Open (Minor).** orchestrator; master | Jira search 2026-11-02 |
+| CR-31 | Jira status of answered or finished items, widened by the master (DL-037): AQP-10, 14, 15, 26 still read To Do although answered; AQP-14 and AQP-15 keep a "blocks AQP-18" link that DL-022 and DL-024 say no longer holds (the Jira tools here cannot remove a link). Per DL-037 the master or orchestrator also moves AQP-2, 3, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15 and 26 to Done; AQP-4 and AQP-11 stay open | **Open (Minor).** orchestrator; master. I do not change those statuses | Jira search 2026-11-02; DL-037 |
 
-### 9.2 New issues
+### 9.2 Issues first raised in v0.3 and v0.4
 
-| ID | Rating | Issue | Owner | Action |
-|----|--------|-------|-------|--------|
-| CR-32 | Minor | SCR-01 "clears nothing else" against UJ-01 "field values kept except the password" | ux-expert | Say which; story 01.01 follows SCR-01 |
-| CR-33 | Minor | What an Engineer gets on a Lead or Admin route is stated three ways (section 5) | solution-architect; qa-engineer | State once, in the architecture manifest rule; stories 01.02, 01.04, 01.07 and the masters then follow it |
-| CR-34 | **Major** | **Nine of the 18 sprint stories are not Ready:** eight are missing a dependency they use (13 links, `backlog.md` section 7) and 10.01 lacks the database guard that the test plan asks of it (PO ruling: in scope, AC-10, about 0.25 h). None changes an estimate | scrum-master | Make the corrections; product-owner re-validates; Ready follows G4 |
-| CR-35 | Minor | `sprint-01-plan.md` carries notes that are now stale: BLK-03 and G3 conditions 12 and 13 (met in substance), "the test plan does not exist" (it does), IMP-S1-01 and IMP-S1-03 (answered), the sequencing note on the step-up (answered by 06.14), and "All 18 are Draft" (true, but 9 pass the DoR) | scrum-master | Refresh |
+| ID | Rating | Issue | Owner | Status now |
+|----|--------|-------|-------|------------|
+| CR-32 | Minor | SCR-01 "clears nothing else" against UJ-01 "field values kept except the password" | ux-expert | **Closed.** Settled in UX v0.7 (b451726); story 01.01 follows SCR-01 |
+| CR-33 | Minor | What an Engineer gets on a Lead or Admin route is stated three ways (section 5) | solution-architect; scrum-master; qa-engineer | **Closed in architecture v0.11 section 6 and in the stories (10620).** Residual: test plan section 9 still says 404 for audit and Settings; qa-engineer. **Open (Minor)** until that edit |
+| CR-34 | Major | Nine of the 18 sprint stories were not Ready (missing dependency text; 10.01 lacked the database guard) | scrum-master; product-owner | **Closed.** Scrum-master corrected them (10611); re-validated here: all nine pass |
+| CR-35 | Minor | `sprint-01-plan.md` carried stale notes | scrum-master | **Closed.** Refreshed (v0.2, 10605; v0.3, 10620, 121 sub-tasks, IMP-S1-02 closed). Not re-read line by line by me |
+| CR-36 | Minor | **My DoR check of 2026-11-02 counted 16 items; the standard has 17.** The item not counted was "Relevant business rules (BR-IDs) listed", marked n/a for most stories. The Jira comments 10577 to 10594 repeat the error | product-owner | **Closed.** All 18 re-checked on 17 items; new comments supersede the old ones |
+| CR-37 | Minor | The BR item failed as found for 11 stories (section 8). Five master stories cited FR-011 and AQP-106 cited FR-027 without tracing them | product-owner (made); scrum-master (confirm) | **Closed here.** Trace lines corrected; no AC, estimate or link changed. EPIC-02 now lists BR-003 and BR-004 |
 
-Counts: Critical 0. Major open 2 (CR-23, CR-34). Minor open 10 (CR-13, 16, 17, 18, 27, 28, 31, 32, 33, 35).
+Counts: Critical 0. Major open 0. Minor open 8 (CR-13, 16, 17, 18, 27, 28, 31, 33 residual).
 
 ## 10. Open inputs and what they gate
 
 | Input | Reference | Gates | Fallback |
 |-------|-----------|-------|----------|
-| The master's G4 decision and the records of CR-23 | DL-026; BLK-03 | Ready status and any story branch | none |
-| The nine corrections | CR-34 | Ready for those nine stories | none |
-| Confirm assumption A-1 (fixed IDs for the 14 seed Process Master items; the production loader; how "Other" is created) | IMP-S1-02; solution-architect | 03.01, 02.01 and 02.05 start (changes no AC) | the stories' labelled assumption |
-| What an Engineer gets on a Lead or Admin route | CR-33 | the manifest rule in 01.02 | the stories' own wording |
+| The master's G4 decision, attempt 2 | gate log | Ready status and any story branch | none |
+| The delivery lead's way of working and merge turnaround | PRD v0.12, release plan 3.3 (AQP-1 10621) | the sprint 1 plan, dates | today's way |
+| Test plan section 9: 403, not 404, for audit and Settings | CR-33 residual; qa-engineer | the QA test for AQP-74 | the story's own assertion (403) |
+| Open for the architect, none blocking: a deleted treatment on a draft estimate (before 05.06); sign-out and `session_version`; the two database roles | 10620 | none in sprint 1 | the stories' labelled assumptions |
 | Container image source | OQ-ARCH-02 (Accucut IT) | 10.04 deployment | none needed to build |
 | The Admin's limited server account | A-35 (Accucut IT) | 10.11 rehearsal | full access, which widens ARCH-R8 |
 | Mail account facts | OQ-ARCH-11 (Accucut IT) | 09.02 onward, 09.08 | capturing server; `FEATURE_EMAIL` off |
@@ -174,4 +183,4 @@ Counts: Critical 0. Major open 2 (CR-23, CR-34). Minor open 10 (CR-13, 16, 17, 1
 
 ## 11. For G4
 
-**Zero Critical.** The two Major items are the master's record (CR-23) and the nine small story corrections (CR-34). DL-026's remaining inputs are met in substance: G3 conditions 12, 13 and 15 (UX closed, generator committed and accepted, test plan written), so BLK-03 can clear. The first sprint's ranks 1 to 18 have no open question; nine pass the DoR now and nine pass after one correction each. The step-up check is its own story (06.14) ahead of cancel approval and remove price.
+**Zero Critical, zero Major.** CR-23 is closed by the master and CR-34 by the scrum-master's corrections and this re-validation. All 18 sprint 01 stories pass all 17 DoR items (section 8); 11 needed a Trace-line correction for the business-rule item, which I made and disclosed, so the scrum-master should confirm them. The remaining items are Minor and none gates G4. The first sprint's ranks 1 to 18 have no open question. The step-up check is its own story (06.14) ahead of cancel approval and remove price. The hours moved to scope A 88.5 to 132.5 h, central 110.5 h (architecture v0.11, PRD v0.12), from `clear-copies.sh` in EPIC-10 (10.05); no story estimate changed.

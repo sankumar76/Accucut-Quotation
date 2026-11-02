@@ -14,7 +14,7 @@ The Admin holds the rates and lists that drive every calculation, so a Lead gets
 ## Requirements Covered
 - Functional: FR-012, 013, 015, 016, 017, 018, 105 (R1 core); FR-014 (R1+ stretch). 8 FRs. FR-019 (the alert switch on Settings) is EPIC-09.
 - Non-functional: NFR-001 (Admin-only), NFR-006 (invented placeholders only), NFR-007 (master edits audited), NFR-013 (the Last backup line is how the Admin checks).
-- Business rules: BR-028 to BR-033, BR-048; D-17, D-27, D-33, D-36.
+- Business rules: BR-003 and BR-004 (Admin-only masters; no rate reaches an Engineer; asserted by every master story's role and scan criteria), BR-028 to BR-033, BR-048; D-17, D-27, D-33, D-36.
 
 ## Scope
 **In:** Process Master (named rate, unit, default; used-by check); Customers (name only required, rates, Reset to Defaults, delete guard); Material Master (unique Material in Drawing, Specific Gravity above 0, delete guard); Exchange Rate Master; Treatment / Color list ("Other" always present); system-created "Not applicable" entries: offered to anyone who edits a part, the words show on a part to everyone, no master list or Admin page holds them, zero values and the Material Considered and Material Rate fields stay hidden or blank (D-27); propagation prompt when a default changes (stretch); **the Settings page frame with the read-only Last backup line, the "Backup late" notice after 8 days and the "Disk nearly full" notice below 20 percent free (FR-105, firm, R1 core)**.
