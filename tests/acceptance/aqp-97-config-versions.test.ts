@@ -568,14 +568,20 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
     }
   }
 
+  /**
+   * Each query holds its connection this long. Short, so a request queued behind two waves of holders waits about
+   * 1 s, far inside the 5 s connect limit even on a busy machine; the poll above still sees the peak.
+   */
+  const SHORT_HOLD_SECONDS = 0.5;
+
   it('[AQP-97 R4] an app client opens no more than 10 connections however many requests arrive at once (25 sent)', async () => {
-    const peak = await peakConnections('accucut-app', 25, 1.5, 'app');
+    const peak = await peakConnections('accucut-app', 25, SHORT_HOLD_SECONDS, 'app');
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(10);
   }, 120_000);
 
   it('[AQP-97 R4] a script client opens no more than 2 connections (6 sent)', async () => {
-    const peak = await peakConnections('accucut-script', 6, 1.5, 'script');
+    const peak = await peakConnections('accucut-script', 6, SHORT_HOLD_SECONDS, 'script');
     expect(peak).toBeGreaterThan(0);
     expect(peak).toBeLessThanOrEqual(2);
   }, 120_000);
