@@ -32,6 +32,11 @@ export const ALLOWED_DATA_FILES: ReadonlyArray<AllowedDataFile> = [
   { path: 'package.json', reason: 'npm manifest' },
   { path: 'package-lock.json', reason: 'npm lockfile' },
   { path: 'tsconfig.json', reason: 'TypeScript configuration' },
+  {
+    path: '.gitleaks-baseline.json',
+    reason:
+      'Gitleaks baseline: the 6 accepted documentation findings (delivery lead, 2026-11-02). Fingerprints and locations only, no matched text',
+  },
   { path: '.mcp.json', reason: 'Agent tooling configuration' },
   { path: '.claude/settings.json', reason: 'Agent tooling configuration' },
   { path: 'Agents/.mcp.json', reason: 'Agent tooling configuration' },

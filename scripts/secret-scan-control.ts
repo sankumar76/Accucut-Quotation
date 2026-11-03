@@ -1,7 +1,7 @@
 /**
  * Negative control for CI stage 2 (principle 5 of the test strategy: a check that can pass for the
  * wrong reason needs a control). Builds a throwaway repository, then proves the project's Gitleaks
- * configuration passes a clean commit and fails a commit holding a planted fake secret.
+ * configuration, with the baseline in use, passes a clean commit and fails a commit holding a planted fake secret.
  *
  * The fake secret is assembled at run time in a temporary directory and is never committed to this
  * repository, so nothing here can be mistaken for a real credential.
@@ -16,6 +16,9 @@ import { join, resolve } from 'node:path';
 
 const GITLEAKS = process.env['GITLEAKS_BIN'] ?? 'gitleaks';
 const CONFIG = resolve('.gitleaks.toml');
+// The scan in CI runs with the accepted-findings baseline, so the control runs with it too: a new
+// finding must still fail while the baseline is in use.
+const BASELINE = resolve('.gitleaks-baseline.json');
 const ALPHANUMERIC = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const TOKEN_BODY_LENGTH = 36;
 
@@ -33,7 +36,7 @@ function git(directory: string, ...args: string[]): void {
 }
 
 function scan(directory: string): number | null {
-  const result = spawnSync(GITLEAKS, ['git', '--redact', '--no-banner', '--config', CONFIG, directory], {
+  const result = spawnSync(GITLEAKS, ['git', '--redact', '--no-banner', '--config', CONFIG, '--baseline-path', BASELINE, directory], {
     stdio: 'ignore',
   });
   return result.status;

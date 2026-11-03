@@ -53,7 +53,7 @@ placeholder; the message names the variable and never prints a value.
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
 | Licence allow-list | `npx tsx scripts/check-licences.ts` |
 | Dependency audit | `npm audit --omit=dev --audit-level=high` |
-| Secret scan (full history) | `gitleaks git --redact --config .gitleaks.toml .` (Gitleaks 8.30.1) |
+| Secret scan (full history) | `gitleaks git --redact --config .gitleaks.toml --baseline-path .gitleaks-baseline.json .` (Gitleaks 8.30.1) |
 | Secret-scan control | `GITLEAKS_BIN=<path> npx tsx scripts/secret-scan-control.ts` |
 
 `npm test`, `npm run lint`, `npm run typecheck`, `npm run build` and `npm run test:e2e` are aliases.
@@ -67,6 +67,26 @@ Tests refuse to start against a database that is not local, CI or staging, and r
 data-file check, lint, type-check, unit with coverage, audit, licences, build, migrations, integration)
 on every pull request, in order; stages 12 (end-to-end) and 13 (image) are present and disabled until
 the stories that give them something to run. The workflow uses no secret and no production setting.
+
+## Secret scan and its baseline
+
+Gitleaks reads the whole history on every pull request. It reported six findings on the history that
+existed before the scan, all documentation text about passwords ("password, bcrypt/argon2 hashing" in the
+requirements file and the BR-049 wording in the requirements catalogue), not credentials. On 2026-11-02 the
+delivery lead decided to accept exactly those six through `.gitleaks-baseline.json`, which CI stage 2 passes
+with `--baseline-path`. It is not an allow-list: no path or pattern is exempt, no rule is changed, and
+nothing was removed from history. A new finding, or the same text on a different line or in a new commit,
+still fails the scan; `scripts/secret-scan-control.ts` proves this with the baseline in use.
+
+The baseline holds locations and commit metadata only (rule, file, line and column range, commit, author,
+e-mail, date and message, entropy), never the matched text; the scan must use `--redact`. Because an entry
+includes the line number, editing one of those three lines of text moves its finding and CI fails. In that case
+regenerate the baseline, review the diff, and get the delivery lead's agreement:
+
+```sh
+gitleaks git --redact --config .gitleaks.toml --report-format json --report-path report.json .
+npx tsx scripts/make-gitleaks-baseline.ts --report report.json   # then delete report.json
+```
 
 ## Repository rules enforced by the checks
 
