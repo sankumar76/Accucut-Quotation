@@ -590,8 +590,26 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
   const LONG_SLEEP_SECONDS = 40;
   /** Fails only on a hang: a cancelled statement, or a refused request, returns well before the long sleep would end. */
   const HANG_BOUND_MILLISECONDS = 35_000;
-  /** Timer granularity between the client's clock and the server's: a lower bound is checked this much short. */
+  /** Timer granularity of the client's own clock: a client-measured lower bound is checked this much short. */
   const CLOCK_SLACK_MILLISECONDS = 50;
+  /** PostgreSQL's code for a statement cancelled (here, by `statement_timeout`). */
+  const STATEMENT_CANCELLED = '57014';
+
+  /** The SQLSTATE inside a driver error: on the error itself, or in Prisma 7's driver-adapter wrapper, down the cause chain. */
+  function sqlStateIn(error: unknown, depth = 0): unknown {
+    if (typeof error !== 'object' || error === null || depth > MAX_CAUSE_DEPTH) return undefined;
+    // Prisma's own error has a code of its own (P2010); the PostgreSQL code is inside its driver-adapter error.
+    const meta: unknown = Reflect.get(error, 'meta');
+    const adapter: unknown = typeof meta === 'object' && meta !== null ? Reflect.get(meta, 'driverAdapterError') : undefined;
+    const driver: unknown = typeof adapter === 'object' && adapter !== null ? Reflect.get(adapter, 'cause') : undefined;
+    if (typeof driver === 'object' && driver !== null) {
+      const code: unknown = Reflect.get(driver, 'originalCode') ?? Reflect.get(driver, 'code');
+      if (code !== undefined) return code;
+    }
+    const own: unknown = Reflect.get(error, 'code');
+    if (typeof own === 'string' && /^[0-9A-Z]{5}$/.test(own) && !own.startsWith('P')) return own;
+    return sqlStateIn(error instanceof Error ? error.cause : undefined, depth + 1);
+  }
   /**
    * The ruled limits (architecture ruling R4), written out rather than read from `POOL_SETTINGS`, so a changed
    * constant fails these tests as well as the table test above.
@@ -604,6 +622,12 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
     const client = createPrismaClient('app', pair.database.runtimeUrl);
     try {
       await warm(client);
+      // "No earlier than the limit" is taken from the server, not from a stopwatch: the session that runs the
+      // statement holds the ruled 10 s, and the server says it cancelled the statement for running too long (SQLSTATE
+      // 57014). A client stopwatch is not compared with the server's timer: under heavy load the database
+      // container's clock drifts from the host's, and a 9.4 s reading was seen against a 10 s limit (QA run, AQP-168).
+      const [setting] = await client.$queryRaw<Array<{ statement_timeout: string }>>`SHOW statement_timeout`;
+      expect(setting?.statement_timeout).toBe(`${RULED_STATEMENT_TIMEOUT_MILLISECONDS / 1_000}s`);
       const started = Date.now();
       const error = await withDatabaseErrors(() => client.$queryRaw`SELECT 1 AS held FROM pg_sleep(${LONG_SLEEP_SECONDS}::double precision)`).then(
         () => undefined,
@@ -613,10 +637,10 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
       expect(error).toBeInstanceOf(DatabaseBusyError);
       expect(error).toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503, message: 'The service is busy. Try again in a moment.' });
       expect(error instanceof Error && error.cause instanceof Error).toBe(true);
+      expect(sqlStateIn(error)).toBe(STATEMENT_CANCELLED);
       expect(JSON.stringify(error)).not.toContain('pg_sleep');
       expect(JSON.stringify(error)).not.toContain(new URL(pair.database.runtimeUrl).password);
-      // Lower bound: the statement ran its full 10 s before it was cancelled; load can only make this longer.
-      expect(elapsed).toBeGreaterThanOrEqual(RULED_STATEMENT_TIMEOUT_MILLISECONDS - CLOCK_SLACK_MILLISECONDS);
+      // Fails only on a hang.
       expect(elapsed).toBeLessThan(HANG_BOUND_MILLISECONDS);
     } finally {
       await client.$disconnect();
