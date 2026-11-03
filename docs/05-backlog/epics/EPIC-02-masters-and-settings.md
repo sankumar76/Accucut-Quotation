@@ -30,7 +30,7 @@ The Admin holds the rates and lists that drive every calculation, so a Lead gets
 |---|----------|-------|-------------------|-------------------|------------|--------|
 | 1 | STORY-02.01 | Process Master list and edit | Admin adds, updates and deletes rates; a used item cannot be deleted and the formulas are listed (FR-012) | CRUD operations | 01.04, 03.01 (the used-by index) | Draft |
 | 2 | STORY-02.02 | Customers with default rates and Reset to Defaults | Name-only customer, one value per Process Master item, reload defaults after confirmation (FR-013) | CRUD (create, edit, reset) | 02.01 | Draft |
-| 3 | STORY-02.03 | Material Master | Unique Material in Drawing, price per kg, Specific Gravity above 0, scrap rate (FR-015) | CRUD | 01.04 | Draft |
+| 3 | STORY-02.03 | Material Master | Unique Material in Drawing, price per kg, Specific Gravity above 0, Material-Scrap-Rate per kg (FR-015) | CRUD | 01.04 | Draft |
 | 4 | STORY-02.04 | Exchange Rate Master | 1 USD and 1 EUR in INR with last updated by and at (FR-016) | Data variation (two rates) | 01.04 | Draft |
 | 5 | STORY-02.05 | Treatment / Color list | CRUD with "Other" locked (FR-017) | CRUD | 01.04 | Draft |
 | 6 | STORY-02.06 | "Not applicable" system entries | Created at install in Material and Treatment, values 0, not editable or deletable, in no list; offered in the drop-down to Engineer, Lead and Admin; the words show on a part to everyone; material cost only skipped (FR-018, D-27) | Business-rule variation | 02.03, 02.05, 03.03 | Draft |

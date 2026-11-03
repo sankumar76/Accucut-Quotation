@@ -2,15 +2,31 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.11 (G4 remediations 5, 6 and 8: CR-33, the seed and "Other", who clears old backup copies; the changes are listed under "What changed in v0.11") |
+| Version | 0.13 (SPEC v1.13, D-38 to D-40: 15 seed Process Master items with their units, and the operand Material-Scrap-Rate mapped to `materials.scrap_rate`; listed under "What changed in v0.13". Earlier, v0.12: G6 of AQP-27, the presentation import rule in section 10, the development tools in section 11; listed under "What changed in v0.12") |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers, which changes what G3 accepted. Version 0.8 applies their answers in AQP-1 comments 10546 to 10554. **Backups on the same server change NFR-013 and RISK-011.** Version 0.9 applies 10559 and 10560: **the Admin's server access changes what the audit log can prove.** For `master` to record and check at G4 |
-| Date | 2026-11-02 |
-| Inputs | SPEC v1.12 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §7.1, §7.4, §18 D-12 to D-24, §18.5; AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10609; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.11; release plan v0.11; UX spec v0.3 (section 16.9); consistency report v0.3 (CR-11, CR-33); gate log G4 attempt 1. Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
+| Date | 2026-11-03 |
+| Inputs | SPEC v1.13 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`), mainly §4.1, §4.3, §7.1, §7.4, §18 D-12 to D-24, D-38 to D-40, §18.5; AQP-1 comments 10672 and 10674 (D-38 to D-40); AQP-1 comments 10490, 10491, 10493, 10523, 10528, 10529, 10538 to 10609; AQP-13 comment 10487; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537 (Q-39); requirements questions as of SPEC v1.9. PRD v0.11; release plan v0.11; UX spec v0.3 (section 16.9); consistency report v0.3 (CR-11, CR-33); gate log G4 attempt 1. Gate log G2 attempt 2 and G3; DL-009 to DL-026; risk register; `docs/standards/` |
 | Companions | `docs/04-architecture/adr/ADR-001` to `ADR-014`; `docs/04-architecture/test-strategy.md` |
 | Scope | Scope A (D-14): every FR through Release 2 and every NFR. Offline (FR-092) is not designed and not blocked (section 9.8) |
 
 **How to read the labels.** **Evidence** = measured or read on 2026-11-01, with the source named. **A-nn** = an architecture assumption, listed in section 15 with what changes if it is wrong. **Proposed** = a value set here for an owner to confirm. The quantity rule comes from the delivery lead's answers on AQP-26 (comments 10535, 10537) and AQP-14 (comment 10510), as SPEC v1.9 records them. Other rule text comes from SPEC §7.4 and §18.
+
+**What changed in v0.13 (SPEC v1.13, D-38 to D-40; AQP-1 comments 10672, 10674).** Names and units only. No formula, FR, NFR, ADR or dependency changes, and no rate value is recorded anywhere (ADR-014). Wherever an earlier part of this document, section 16 included, says 14 seed items or 14 rows, read 15.
+
+| # | Item | Result | Where |
+|---|------|--------|-------|
+| 1 | D-38: 15 seed Process Master items | `Plating-rate-per-sqin` (per sq in) is the 15th, inserted by the same migration with a fixed ID in `seed-ids.ts` and 0. Every seed row carries its SPEC §4.1 unit; `Soft-Anodize-rate-per-sqin` is per sq in. Customers get 15 rates through the normal sync (FR-014); nothing counts them in code | Sections 5.1, 5.6 |
+| 2 | D-40 (Q-42 closed): the plating rate is data only | No seed formula references it. Plating Cost (AU) stays typed and the Plating flag (AD) stays unused. Because nothing uses it, the Admin can rename or delete it like any unused rate. A later plating formula is an ordinary configuration edit (FR-074 to FR-078), with no schema change | Sections 4.5, 5.6 |
+| 3 | D-39: Material-Scrap-Rate, per kg | The formula operand is `Material-Scrap-Rate`, stored as `{{mat:scrapRate}}`, Prisma field `scrapRate`, column `materials.scrap_rate`. **Column name kept** (ruling and reason in section 4.5). The formula for AK is unchanged | Sections 4.5, 4.9, 5.1 |
+
+**What changed in v0.12 (G6 of AQP-27, attempt 1, gate record condition 3).** No change to any FR, NFR or dependency. Section 16.16 holds the detail.
+
+| # | Item | Result | Where |
+|---|------|--------|-------|
+| 1 | QLT-01 | The Engineer rule covers all presentation code, as pages are shared by role | Section 10, ADR-008 |
+| 2 | QLT-05 | Coverage gates split: pure code at stage 6, the whole package and changed code at stage 11 | `test-strategy.md` sections 10, 11 |
+| 3 | STD-11 | `@types/pg` approved; every unnamed tool recorded | Section 11 |
 
 **What changed in v0.11 (G4 attempt 1, remediations 5, 6 and 8; DL-034).**
 
@@ -400,6 +416,16 @@ Pure code in `src/lib/estimate/state-machine.ts`; an exhaustive `switch` with `a
 
 ADR-004. The registry is one validated JSON document per version, not rows. A change is `load latest → apply a pure edit → validate all formulas, references and cycles → insert a new version`. Formulas use stable references, `{{f:<fieldId>}}`, `{{rate:<rateId>}}`, `{{mat:<key>}}`, `{{fx:USD}}`. Rates use a stable ID rather than the name in SPEC's example, so a rate rename cannot break a formula.
 
+**Material operands (v0.13, D-39).** The Admin cannot add a Material Master column, so the `{{mat:<key>}}` keys are a fixed set, and the evaluator reads each from the Material Master row for column E (SPEC §7.4). The formula text that a Lead or Admin sees shows the operand name; the stored formula holds the reference.
+
+| Operand in formula text (SPEC §4.3, §7.4) | Stored reference | Prisma field | Column in `materials` | Unit |
+|-------------------------------------------|------------------|--------------|-----------------------|------|
+| `Material-Price-per-kg` (also the value of I) | `{{mat:pricePerKg}}` | `pricePerKg` | `price_per_kg` | per kg |
+| `Material-Specific-Gravity` | `{{mat:specificGravity}}` | `specificGravity` | `specific_gravity` | none stated in SPEC |
+| `Material-Scrap-Rate` | `{{mat:scrapRate}}` | `scrapRate` | `scrap_rate` | per kg (D-39) |
+
+**Ruling: the column stays `scrap_rate`.** Each column is the operand name without the `Material-` prefix, in snake_case: the table already says "material", and Prisma maps each camelCase field with `@map`. `scrap_rate` already follows that rule for `Material-Scrap-Rate`, so D-39 changes the label and not the schema. Adding the unit to the name (`scrap_rate_per_kg`) would break the rule, as the operand name carries no unit; the unit is shown on SCR-13 and stated here. No migration exists yet, so this is consistency, not cost.
+
 SPEC §8.1's `FieldDefinition` is the document's element type. The UX screens show it needs more than SPEC lists:
 
 | Added property | Why | Screen |
@@ -568,12 +594,12 @@ In `oauth2-client-credentials` mode, a small function posts to `https://login.mi
 | As a part's value | **Their answer (Q-36, AQP-1 comment 10544):** "a) Yes / b) Everyone can see the fields with "Not Applicable" text". So it is offered to a Lead or Admin editing a part, and the words show to everyone where a part's Material or Treatment is shown, including the export: `calculation_rows.inputs` holds the resolved text. This narrows their earlier "do not show this anywhere": the words show on parts, and the zero values and master-list entries stay hidden |
 | Its zero rates | The evaluator gets 0, and the snapshot keeps them. They are never served: F and I are blank for such a row on screen and in the export. `GET /nodes/{nodeId}/costs` leaves `Material-*` and I out of the operands on that row, so SCR-07 prints no worked line for M, O and AK (UX-34) |
 
-**Negative Scrap Weight.** With Specific Gravity 0, Blank Weight M is 0, so `O = M - N` gives `-N` whenever Part Weight N is above 0. AK is still 0 with the seed formulas, because the scrap rate is 0, so no price changes. It still needs handling: a negative weight would appear on SCR-07 and in the export, and a later Admin formula that reads O, such as a Rejection rule in BC, would pick it up as a real number.
+**Negative Scrap Weight.** With Specific Gravity 0, Blank Weight M is 0, so `O = M - N` gives `-N` whenever Part Weight N is above 0. AK is still 0 with the seed formulas, because its Material-Scrap-Rate is 0, so no price changes. It still needs handling: a negative weight would appear on SCR-07 and in the export, and a later Admin formula that reads O, such as a Rejection rule in BC, would pick it up as a real number.
 
 | Option | Result |
 |--------|--------|
 | **Chosen:** seed `O = IF(Material-Specific-Gravity > 0, M - N, 0)` | O is 0 on such a row. Every row with a real material is exactly `M - N`, including N above M. Needs no new operand, and the formula text does not name the hidden entry, which a `Material-Not-Applicable` operand would show on SCR-07 and SCR-17 against D-17 |
-| `MAX(M - N, 0)` | **Rejected.** Changes the price on ordinary rows where N is above M and the scrap rate is above 0, which the worksheet does not do |
+| `MAX(M - N, 0)` | **Rejected.** Changes the price on ordinary rows where N is above M and Material-Scrap-Rate is above 0, which the worksheet does not do |
 | `IF(M > 0, M - N, 0)` | **Rejected.** An ordinary material with blank dimensions has M = 0 and N above 0. Its worksheet result would change |
 | Keep -N and show 0 | **Rejected.** Screen and export would differ from the stored value and from the formula printed beside it |
 
@@ -632,10 +658,10 @@ erDiagram
 | `users` | `name`, `email` (unique), `password_hash`, `role`, `is_active`, `session_version`, `must_change_password` | Confidential | Partial unique index allows one active Admin (CONSTRAINT-04) |
 | `login_throttles` | `key_hash`, `failures`, `blocked_until` | Internal | Holds unknown e-mails too, so they cannot be told apart (FR-001) |
 | `password_reset_tokens` | `token_hash`, `user_id`, `expires_at`, `used_at` | Confidential | R2. Hashed; single use (FR-003) |
-| `process_items` | `name` (unique), `unit`, `default_value` | Restricted | The 14 seed items exist from the first migration, with fixed IDs and 0 (section 5.6) |
+| `process_items` | `name` (unique), `unit`, `default_value` | Restricted | The 15 seed items exist from the first migration, with fixed IDs, their SPEC §4.1 units and 0 (section 5.6, D-38) |
 | `customers` | `name` (unique), `phone`, `email`, `address`, `deleted_at` | Confidential | Only the name is required (OQ-UX-04). Soft delete (A-13) |
 | `customer_rates` | `customer_id`, `process_item_id`, `value` | Restricted | Normalised, so sync is plain SQL (FR-014) |
-| `materials` | `material_in_drawing` (unique), `material_considered`, `price_per_kg`, `specific_gravity`, `scrap_rate`, `is_system`, `is_hidden`, `deleted_at` | Restricted | `is_hidden` marks "Not applicable" (D-17, section 4.9). Soft delete (A-13) |
+| `materials` | `material_in_drawing` (unique), `material_considered`, `price_per_kg`, `specific_gravity`, `scrap_rate`, `is_system`, `is_hidden`, `deleted_at` | Restricted | `is_hidden` marks "Not applicable" (D-17, section 4.9). Soft delete (A-13). `scrap_rate` holds Material-Scrap-Rate, per kg (D-39); each numeric column maps to one `{{mat:<key>}}` operand (section 4.5) |
 | `exchange_rates` | `currency`, `inr_value`, `updated_by`, `updated_at` | Restricted | |
 | `treatments` | `name`, `is_system`, `is_hidden` | Internal | `is_system` marks the fixed "Other" (FR-017) and "Not applicable". `is_hidden` marks only the second, so "Other" stays on the Admin's list |
 | `settings` | `alerts_enabled`, `sender_name`, `sender_address` | Internal | Single row. No credentials of any kind, in any mail mode (section 4.7) |
@@ -712,12 +738,12 @@ Prisma Migrate only. `prisma migrate dev` locally, `prisma migrate deploy` throu
 
 | Item | How it is created | Notes |
 |------|-------------------|-------|
-| **The 14 seed Process Master items** (SPEC §4.1) | The migration that creates `process_items` inserts them, on every environment, with fixed IDs, names from SPEC §4.1 and `default_value` 0. Story 02.01 owns it | Same pattern as the two "Not applicable" rows. The IDs live once, in `prisma/seed/config/seed-ids.ts`, which story 03.01 adds, so `{{rate:<id>}}` can be stored before the table exists. A test compares the rows with that file. An Admin can rename an item, as formulas hold the ID. Deleting one a formula uses is refused (409 with the list) |
+| **The 15 seed Process Master items** (SPEC §4.1, D-38) | The migration that creates `process_items` inserts them, on every environment, with fixed IDs, names and units from SPEC §4.1 and `default_value` 0. Story 02.01 owns it | Same pattern as the two "Not applicable" rows. The IDs live once, in `prisma/seed/config/seed-ids.ts`, which story 03.01 adds, so `{{rate:<id>}}` can be stored before the table exists. `seed-ids.ts` holds 15 IDs, including `Plating-rate-per-sqin`, which no seed formula references (D-40). Names and units are structure, not values, so they may be committed. A test compares the rows with that file. An Admin can rename an item, as formulas hold the ID. Deleting one a formula uses is refused (409 with the list) |
 | **Values** | **Production:** the Admin types them in at first use (D-23). **Dev, CI, staging:** `prisma/seed/placeholders/` updates those rows by ID with invented values, and never inserts them | No real value enters the repository (ADR-014) |
 | **Seed configuration, version 1** | `ensure-seed-version`, run in the `migrate` one-shot right after `prisma migrate deploy`, with the owner role, in one transaction. It inserts version 1, `created_by` null, and its seed checkpoint | **It runs only if no version exists,** so a later change to the seed module can never touch a live install. If it fails, `migrate` exits with an error and `app` and `worker` do not start. In tests it runs at set-up, from the same module |
 | **"Other"** (Treatment / Color) | The migration that creates `treatments` inserts it, on every environment, with a fixed ID, `is_system` true and `is_hidden` false. Story 02.05 owns it | Same pattern as "Not applicable". Protected in the service, as AC-3 of 02.05 states. The hidden-row trigger does not cover it, because "Other" is not hidden |
 
-**One limit.** A rate left at 0 is a valid value, so an estimate calculated before the Admin has entered it prices that process at 0, with no message. The first-use steps in the README must say to enter all 14 before any estimate is calculated. No check is designed: a real rate may be 0, and they did not ask for one.
+**One limit.** A rate left at 0 is a valid value, so an estimate calculated before the Admin has entered it prices that process at 0, with no message. The first-use steps in the README must say to enter all 15 before any estimate is calculated. No check is designed: a real rate may be 0, and they did not ask for one.
 
 ---
 
@@ -1191,7 +1217,8 @@ Tests stay under `tests/e2e/` rather than the template's `e2e/`, so that one wri
 |------|-------------|
 | `src/lib/**` imports nothing from `src/server`, `src/app`, `src/components`, Prisma or `next/*` | ESLint `no-restricted-imports` |
 | Only `src/server/repositories/**` imports the Prisma client | ESLint |
-| `src/server/views/engineer-*.ts` and Engineer pages may not import cost repositories or `lib/formula` | ESLint, build failure |
+| `src/server/views/engineer-*.{ts,tsx}` may not import cost repositories or `lib/formula` | ESLint, CI stage 4 |
+| `src/app/**` and `src/components/**` import no repository and no `lib/formula`, on every page and route, Lead and Admin ones included. Pages are shared by role (ADR-008), so no path marks an Engineer page and the rule has to cover all presentation code; they reach data through services and views only (section 4.1) | ESLint, CI stage 4 |
 | `src/lib/formula/**` starts with `import 'server-only'` | Build error if a client component imports them |
 | H is an operand in BB alone among the seed formulas, and BL is `SUM` over the `unit-price` field | Tests, `test-strategy.md` section 5.4 |
 | No figure is read from `calculations` for a screen or a file without going through `figure-state` | Architecture test |
@@ -1210,15 +1237,17 @@ Tests stay under `tests/e2e/` rather than the template's `e2e/`, so that one wri
 
 ## 11. Technology Stack
 
-Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and the override below are this document's decisions; the rest follow `CLAUDE.md` §1. Version 0.3 adds no dependency.
+Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and the override below are this document's decisions; the rest follow `CLAUDE.md` §1. Version 0.3 adds no dependency. Version 0.12 adds none either: it records the development tools STORY-10.01 installed that this table did not name, at the versions in `package.json` (STD-11).
 
 | Layer | Choice | Version | Rationale | Licence | ADR |
 |-------|--------|---------|-----------|---------|-----|
 | Language | TypeScript, strict | 5.9.x | Project standard; Prisma recommends 5.9 | Apache-2.0 | ADR-001 |
+| Type packages | `@types/pg`, `@types/node`, `@types/react`, `@types/react-dom` | 8.23.1, 22.20.5, 19.3.0, 19.3.0 | Compile-time only, erased from the build. **`@types/pg` is approved (STD-11):** `tests/integration/database-roles.test.ts` imports `pg` directly under strict types, and `@prisma/adapter-pg` already brings this version, so it adds no package. Keep it a dev dependency at the version the adapter resolves | MIT | ADR-001, ADR-003 |
 | Runtime | Node.js LTS | 22.x (at least 22.12, for Vitest) | Project standard | MIT | ADR-001 |
+| Package manager | npm | 11.17.0, pinned in CI | Enforces the `allowScripts` install-script list (section 8). Tool use only | Artistic-2.0 | ADR-001 |
 | Framework | Next.js, App Router | 16.4.3 | Project standard | MIT | ADR-001 |
-| UI runtime | React | 19.3.1 | With Next.js | MIT | ADR-001 |
-| Styling | Tailwind CSS | 4.3.3 | Project standard | MIT | ADR-001 |
+| UI runtime | React, `react-dom` | 19.3.1 | With Next.js | MIT | ADR-001 |
+| Styling | Tailwind CSS, `@tailwindcss/postcss` | 4.3.3 | Project standard | MIT | ADR-001 |
 | Components | shadcn/ui, radix-ui | radix-ui 1.8.1 | Project standard. Copied source; primitives give accessibility. Sub-dependencies (`sonner`, `cmdk`, `react-day-picker`, `react-resizable-panels`) pinned at scaffold | MIT | ADR-001 |
 | Icons | lucide-react | 1.66.0 | Project standard | ISC | ADR-001 |
 | Forms | react-hook-form, zod | 7.91.0, 4.6.7 | Shared client and server schemas | MIT | ADR-010 |
@@ -1233,10 +1262,12 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Logging | pino | 10.4.0 | JSON logs, redaction | MIT | ADR-001 |
 | TLS proxy | Caddy | 2.x | Automatic certificates, one small config file | Apache-2.0 | ADR-002 |
 | Fonts | IBM Plex Sans, IBM Plex Mono, Tinos Bold | Files from `docs/03-ux/screens/fonts/`, plus a subset with ₹ (UX-13) | UX spec §7.1. Self-hosted with `next/font/local`; preload only Plex Sans 400 and 600 and Tinos 700, and let the rest load on demand, for NFR-009. The six files total about 120 KB | SIL OFL 1.1, licence files shipped beside the fonts | UX spec |
-| Tests | Vitest, Playwright, axe, Lighthouse CI | 5.0.5, 1.64.1, 4.14.0, 0.15.1 | Project standard; all dev only | MIT; Apache-2.0; MPL-2.0; Apache-2.0 | Test strategy |
+| Tests | Vitest, `@vitest/coverage-v8`, Playwright, axe, Lighthouse CI | 5.0.5, 5.0.5, 1.64.1, 4.14.0, 0.15.1 | Project standard; all dev only | MIT; MIT; Apache-2.0; MPL-2.0; Apache-2.0 | Test strategy |
+| Lint | ESLint, `eslint-config-next`, `typescript-eslint` | 9.39.5, 16.4.3, 8.72.1 | Enforces the layering rules (section 10). Dev only | MIT | ADR-008 |
+| Script runner | `tsx` | 4.23.15 | Runs the TypeScript scripts in CI stages 2, 3, 8 and 11. Dev only | MIT | Test strategy |
 | Load test | k6 binary | Pinned at scaffold | Dev tool, not linked or shipped | AGPL-3.0 (tool use only) | Test strategy |
 | Mail in tests | Mailpit | Pinned at scaffold | Capturing mail server | MIT | Test strategy |
-| Secret scan | Gitleaks CLI | Pinned at scaffold | Runs in CI | MIT | ADR-014 |
+| Secret scan | Gitleaks CLI | 8.30.1, with its SHA-256 pinned in `ci.yml` | Runs in CI | MIT | ADR-014 |
 
 **Required override.** `next-auth` declares an optional peer on `nodemailer@^7`. The v5 beta has the same problem at `^7 || ^8`. Next-auth uses it only for its e-mail sign-in provider, which is never loaded here, but npm still refuses the install (ERESOLVE, verified). Downgrading to satisfy it would bring in high-severity advisories (verified). So `package.json` carries:
 
@@ -1253,6 +1284,8 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Critical | 0 | |
 | High | 0 | With Nodemailer 10.3.1 and the override. With Nodemailer 7.0.13 there are 2 high entries |
 | Moderate | 9 | All through `exceljs` (`archiver`, `glob`, `minimatch`, `uuid` and their parents). The two advisories concern glob patterns and a `uuid` buffer argument. Export passes neither user-controlled glob patterns nor a buffer to `uuid`, so reachability is judged low; this is a reading, not a proof. Tracked in the issue for `TD-01` |
+
+**Tools recorded in v0.12 (Evidence, 2026-11-02, head 11c57e6).** `npx tsx scripts/check-licences.ts` passed. `npm audit` over the full tree gives 0 high, 0 critical and 24 moderate: the 9 above, and 15 in the ESLint tree through the same `minimatch` advisory, which ships nothing and reads only this repository's files. CI stage 7 still audits production packages only. `@types/pg`, `tsx` and `@vitest/coverage-v8` have no advisory. The npm licence is from memory, not read from its package here.
 
 | Licence finding | Package | Position |
 |-----------------|---------|----------|
@@ -2083,6 +2116,39 @@ That makes scope A **88.5 to 132.5 h, central 110.5 h**, from 88 to 131.75 h.
 | master | Check A-36 and the rule in section 6. RISK-017 gains the limit no clearing can pass. Sprint plan items 3, 4 and 5 for this role (a deleted treatment on a draft, sign-out and `session_version`, the two database roles) are outside these remediations and stay open |
 | ux-expert | SCR-15: the "Disk nearly full" text should point to the README section. No new state |
 
+### 16.16 G6 of AQP-27, attempt 1 (v0.12)
+
+**Method and limits.** The gate record, review 5746060549, `vitest.config.ts`, `ci.yml`, `eslint.config.mjs`, the layer-rule tests and the installed Vitest source were read, and the stage 6 command was run on the real configuration (`test-strategy.md` section 11). **Not done:** a throwaway project for a service file covered only by integration, and for a worker thread, was refused by the session's permission system and not retried, so neither is proved here. The developer's probe below covers the first.
+
+**Rulings.**
+
+| Finding | Ruling | Why |
+|---------|--------|-----|
+| QLT-05 | Stage 6 measures `src/lib/**` and `scripts/lib/**` on unit tests, and keeps the 80 %, 95 % and 100 % gates there. Stage 11 runs every Vitest level with coverage in one run, and decides the whole-package and changed-code gates | Unit-only lines are the right measure of pure code, and the wrong one for services |
+| QLT-05, same fault, wider | `src/components/**` was also measured, and only `ui` was excluded. Vitest cannot render these files, so the first component (AQP-28, the app shell) would have failed the same way | Excluded, with E2E and axe named, because section 10 allows no logic there. `src/server/**` stays measured, as the gate record requires |
+| QLT-01 | One row in section 10: presentation imports no repository and no `lib/formula`. Engineer views keep the cost-repository list | Section 4.1 has no arrow from presentation to repositories, and ADR-008 shares pages by role. The rule follows the design, so no finding had to wait for this ruling |
+| STD-11 | `@types/pg` approved and recorded, with the other unnamed tools | Types only, MIT, no advisory, and already in the tree through `@prisma/adapter-pg` |
+
+**Rejected.**
+
+| Option | Why not |
+|--------|---------|
+| Move all gates after stage 11, stage 6 with no coverage | The 95 % gates would count engine lines that services run in passing, so they could pass with few direct tests. It would also change AC-4 and AC-8, and the story is at its AC limit |
+| Merge stage 6 and stage 11 reports with `--merge-reports` | A reporter, an output file and a merge step to save about 13 seconds |
+| Exclude `src/server/**` from stage 6 by configuration and leave it unmeasured | Removes the gate from the most sensitive code. The gate record forbids it |
+| Add a component test library for `src/components/**` | New dependencies with no requirement behind them. E2E and axe already cover these files |
+
+**Hours (estimate).** About 0.5 h of work inside AQP-27's G6 round. This is rework, not scope, so scope A's total does not move. Each later PR's CI gains about 13 seconds.
+
+**Issues for other roles.**
+
+| Owner | Issue |
+|-------|-------|
+| developer | Implement the three rulings. The hand-off, AQP-27 comment 10660, is complete on its own. README's check table changes to the two coverage commands |
+| reviewer-quality | Re-review: the probe in the Dev Record, and that `src/server/**` appears in no exclusion. From the first story with service code, check that `src/server/**` shows hits in the stage 11 summary |
+| qa-engineer | Test plan section on commands: `npx vitest run --coverage` needs the database, and is the combined run. Section 18.3's point on SPEC §14 items 15 to 17 in `test-strategy.md` section 12 stays open; it is outside this ruling |
+| master | The widened exclusion of `src/components/**` and `src/worker/main.ts` was not in the gate record: please check it at attempt 2. ADR-008's layer 2 now names presentation code |
+
 ---
 ## 17. Change Log
 
@@ -2091,6 +2157,8 @@ That makes scope A **88.5 to 132.5 h, central 110.5 h**, from 88 to 131.75 h.
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |
 | 0.3 | 2026-11-01 | G3 answers, SPEC v1.4. Every level's quantity (section 4.3), corrects v0.2's "one branch" claim. Weekly backups, kept 2 years, RPO up to 7 days (section 9.5). Microsoft mail check and OAuth mode (section 4.7). Cleared totals (section 4.8). "Not applicable" (section 4.9). Password rule and 12-hour session from sign-in (section 8). Optional reason, one export total, Tool Cost footer. Scope A: `FEATURE_CONFIG_EDITOR` dropped. New A-17 to A-23, OQ-ARCH-10 to 12, UX-28 to UX-37. Aligned with PRD v0.6: FR-098 to FR-103 in the coverage matrix, NFR-013, NFR-018 at 2.2 AA. ADR-002, 004, 006, 007, 009, 011, 012, 013 revised |
+| 0.13 | 2026-11-03 | SPEC v1.13, D-38 to D-40 (AQP-1 comments 10672, 10674). Sections 5.1 and 5.6: 15 seed Process Master items with units, `Plating-rate-per-sqin` added and referenced by no seed formula; first-use steps say 15. Section 4.5: the fixed `{{mat:<key>}}` operands mapped to their Prisma fields and columns, and the ruling that `scrap_rate` keeps its name for Material-Scrap-Rate. Section 4.9 says Material-Scrap-Rate. No formula, FR, NFR or ADR changes; no value recorded |
+| 0.12 | 2026-11-02 | G6 of AQP-27, attempt 1. Section 10: `src/app/**` and `src/components/**` import no repository and no `lib/formula` (QLT-01); Engineer views take `.tsx` too; the enforcement is named as CI stage 4. Section 11: `@types/pg` approved, and the other tools STORY-10.01 installed are recorded, with the audit and licence result (STD-11). New section 16.16, with the coverage ruling (QLT-05) that lands in `test-strategy.md` v0.11. ADR-008 layer 2 follows |
 | 0.11 | 2026-11-02 | G4 attempt 1, remediations 5, 6, 8. CR-33: one rule, 403 on a refused role, checked before any lookup; the uniform 404 stays on an Engineer's own routes. A-1 confirmed in section 5.6: fixed IDs and migration rows at 0, `ensure-seed-version` in `migrate`, "Other" by migration. Section 9.5: 40 GB stands, 2 years is not a guarantee, the Admin clears old copies with `clear-copies.sh`, A-35 widened by that one script, the limit no clearing can pass. RISK-016 to 018 follow the register. A-36 new; OQ-ARCH-03 closed. New section 16.15: +0.5 to +0.75 h |
 | 0.10 | 2026-11-02 | CR-22, CR-29. FR-106, 107, 108 added to the coverage matrix, and the stale FR-063 and FR-105 notes cleared. Release labels follow PRD v0.10: cancel, remove and the Last backup line are R1. **Corrected:** section 16.13's total is +3.75 to +6 h, not +6.5, an addition error; section 16.14 explains it. ADR-007 and ADR-012 cleared of stale text |
 | 0.9 | 2026-11-02 | AQP-1 comments 10559, 10560. The Admin holds the key, has server access and runs a restore, replacing "Admin only checks"; A-22 and OQ-ARCH-12 closed. Section 9.5: what server access reaches, a limited account proposed (A-35), what the restore assumes about the person, and a guided `restore.sh`. ARCH-R8 new (GitHub #12). Section 4.10: the audit log is a record, not a control over the Admin. Section 4.6: only the Excel download is refused, confirmed. New section 16.14: +1 to +1.5 h. ADR-002 revised |

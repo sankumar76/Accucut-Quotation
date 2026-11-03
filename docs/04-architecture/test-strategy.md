@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.10 (G4 attempt 1: CR-33, seed items, `clear-copies.sh`; earlier: AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
+| Version | 0.12 (SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; earlier: G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO. Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted. Versions 0.8 and 0.9 add the tests for their later answers. For `master` to record and check at G4 |
-| Date | 2026-11-02 |
-| Inputs | SPEC v1.12 §14, §18.5; PRD v0.11; `architecture.md` v0.11; DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
+| Date | 2026-11-03 |
+| Inputs | SPEC v1.13 §4.1, §4.3, §14, §18 D-38 to D-40, §18.5; PRD v0.11; `architecture.md` v0.13; gate log G6 AQP-27 attempt 1 and review 5746060549 (QLT-05); DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
 **Rule for all test data.** Every value here and in every fixture is invented. No cell value from the sample workbook is used, here or anywhere, and no real master data (NFR-006, ADR-014). Sample structure may be read for headers, widths and formats only.
@@ -221,11 +221,11 @@ The generator must make top-level items with their own cost, with no children an
 
 ## 6. Cost Confidentiality (NFR-002, SPEC §14.1)
 
-**Canary method.** `canaryMasters` gives every process rate, customer rate, material price, specific gravity, scrap rate and exchange rate a unique invented value with a rare digit pattern. The test calculates and approves an estimate, so every Restricted output exists in the database with a known value.
+**Canary method.** `canaryMasters` gives every process rate (all 15 seed items, `Plating-rate-per-sqin` included), customer rate, material price, specific gravity, Material-Scrap-Rate (`materials.scrap_rate`, per kg) and exchange rate a unique invented value with a rare digit pattern. The test calculates and approves an estimate, so every Restricted output exists in the database with a known value.
 
 **Forbidden list.**
 - Each sentinel, and each calculated output, as plain digits, in Indian grouping, in 2-decimal form.
-- Rate names, `Material-Price`, `{{f:`, `{{rate:`, formula text.
+- Rate names, `Material-Price`, `Material-Specific-Gravity`, `Material-Scrap-Rate`, `{{f:`, `{{rate:`, `{{mat:`, formula text.
 
 **Scan.** Signed in as an Engineer, Playwright runs the journeys (queue, open task, tree, form, images, Calculate, after submit, after approve) while recording every response. It also calls every Engineer-reachable route in the manifest directly. Scanned: HTML, RSC flight payloads, JSON, headers, and the JS chunks the Engineer's pages load. Plus direct requests to all Lead and Admin routes as an Engineer, which must give 403 with the fixed body and no data, for a real ID and an invented one alike (architecture section 6, CR-33).
 
@@ -356,7 +356,7 @@ The pre-design benchmark (architecture section 4.6, ADR-005, ADR-012) only shows
 | FR-105, Last backup line | With a controlled clock: a good run 7 days old shows its time with no notice; 9 days old adds "Backup late"; below 20 % free adds "Disk nearly full". Admin only: 403 for a Lead. The line has no control that starts, restores or deletes a backup |
 | A-35, `restore.sh` | On staging. Each failure stops with a plain message and leaves the portal running on the old database: a changed copy (SHA-256), a newer PostgreSQL in the manifest, too little free space, a wrong key, a typed date that does not match, and a restore that fails half way. A good run swaps the database, passes `/api/health` and writes the host log line. The key and the decrypted dump are on no disk afterwards. The limited account can run `restore.sh`, and cannot read `.env` or use Docker |
 | DL-034, `clear-copies.sh` | With a controlled set of copies: it removes the oldest first, each with its manifest, never one of the newest 4, and only after the typed date matches. With 4 copies or fewer it removes nothing and says the disk is too small. It writes one `job_runs` row and a host log line, and the Last backup line reflects the new free space. The limited account can run it, and it takes no arguments, so it cannot be pointed at any other path. The weekly script still removes nothing under 2 years old |
-| A-1, seed items | After `prisma migrate deploy` on an empty database, with no seed: 14 `process_items` rows with the IDs in `seed-ids.ts` and 0, and "Other" in `treatments`, `is_system` true, `is_hidden` false. `ensure-seed-version` creates version 1 once. Run again, or with a changed seed module on a database that has a version, it changes nothing. If it fails, `migrate` exits non-zero. Placeholders update the 14 rows by ID and add none. Every `{{rate:<id>}}` in the seed exists in `process_items` |
+| A-1, seed items | After `prisma migrate deploy` on an empty database, with no seed: 15 `process_items` rows with the IDs in `seed-ids.ts`, the names and units of SPEC §4.1 (D-38; `Plating-rate-per-sqin` and `Soft-Anodize-rate-per-sqin` per sq in) and 0, and "Other" in `treatments`, `is_system` true, `is_hidden` false. `ensure-seed-version` creates version 1 once. Run again, or with a changed seed module on a database that has a version, it changes nothing. If it fails, `migrate` exits non-zero. Placeholders update the 15 rows by ID and add none. Every `{{rate:<id>}}` in the seed exists in `process_items`, and no seed formula references `Plating-rate-per-sqin` (D-40). Every `{{mat:<key>}}` in the seed is one of `pricePerKg`, `specificGravity`, `scrapRate`, and AK reads `{{mat:scrapRate}}` (architecture section 4.5) |
 | FR-029, FR-100, Lead data | Only at `current`, `/costs` gives H and own BG, BJ and BK by node, and `/export-summary` gives H, BG and BM by row with the total Tool Cost. At `none` and `out-of-date`, neither gives a row figure |
 | FR-069, footer position | With 10 nodes in rows 2 to 11, row 12 is empty and row 13 holds the value in the Tool Cost column and the label in the cell to its left, in every file. Repeat with 1 node: the footer is row 4. With no Tool Cost, a `current` file shows 0 and BN2 is empty. Inserting a field before BM moves the value and label together |
 | FR-103, reason | The reason appears in no cell of the exported file, in `/costs` and `/export-summary` for Lead and Admin, and in no Engineer response |
@@ -375,28 +375,65 @@ No workflow exists yet; the scaffold story, STORY-10.01, adds `.github/workflows
 | 3 | Data-file check | Allow-list script | Yes |
 | 4 | Lint | `npm run lint` | Yes |
 | 5 | Type-check | `npm run typecheck` | Yes |
-| 6 | Unit, with coverage | `npm test` | Yes |
+| 6 | Unit, with coverage of pure code | `npx vitest run tests/unit --coverage --coverage.include='src/lib/**/*.{ts,tsx}' --coverage.include='scripts/lib/**/*.ts'` | Yes |
 | 7 | Dependency audit | `npm audit --omit=dev --audit-level=high` | Yes, at high or above |
 | 8 | Licence check | Allow-list with the named exceptions (architecture section 11) | Yes |
 | 9 | Build | `npm run build` | Yes |
 | 10 | Migrations | `prisma migrate deploy` on an empty database; drift check | Yes |
-| 11 | Integration, contract, security, export | Vitest with Postgres | Yes |
+| 11 | Integration, contract, security, acceptance, export, then the combined coverage gates | `npx vitest run tests/unit tests/integration tests/security tests/acceptance --coverage`; then, on a pull request, `npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"` | Yes |
 | 12 | E2E | `npm run test:e2e` (Chromium, 3 widths, axe, canary scan) | Yes |
 | 13 | Image | Docker build; run and check `/api/health` | Yes, on `master` |
 | Nightly | Full browser matrix, Lighthouse, 500-node timing | Scheduled | Reported; failure raises a bug |
 | Pre-release | k6, restore rehearsal, manual Excel, one real mail send | Manual | G8 evidence |
 
+**Where the coverage gates sit (QLT-05).** Coverage runs twice from one Vitest configuration, and the stage order does not change. Stage 6 has no database, so it can only judge pure code. Stage 11 has the database, so it judges the whole package.
+
+- **Stage 6** narrows `coverage.include` on the command line to `src/lib/**` and `scripts/lib/**`. Only unit tests count, so the 95 % gates cannot be met by engine lines a service happens to run. It fails fast, before the build.
+- **Stage 11** runs the unit tests again with every other Vitest level, in one run and one coverage report, under the configuration's full `coverage.include`. So unit and integration lines count together for `src/server/**`. The changed-code check reads that report and moves here from stage 6.
+- **Why one run, not a merge:** a single run gives one `lcov.info` with no reporter, artefact or merge step to maintain. The repeat of the unit tests costs about 13 seconds today (section 11 evidence).
+- **What stays:** the job name `Stages 1 to 11`, which is the required check on `master`, and no new stage number. The story's AC-4 ("unit with coverage") and AC-8 hold as written. `quantity-cases-complete` stays a stage 6 unit test (section 5.6, control 4).
+- `tests/acceptance` joins stage 11 because section 2 runs it on every PR and no stage named it.
+
 Flaky test policy: quarantine with a ticket within a day; never delete to make a build pass. Retries are off in unit and integration tests. Playwright allows 1 retry and reports it. Canary and role-matrix tests are never quarantined.
 
 ## 11. Coverage Targets
 
+**Line gates.** Each target is checked once, at the stage named, against the lines named. The percentages are the coding standards' and NFR-025's; only where they are decided has changed.
+
+| Scope | Target | Lines counted | Decided at | Source |
+|-------|--------|---------------|------------|--------|
+| Pure code: `src/lib/**`, `scripts/lib/**` | ≥ 80 % | Unit only | Stage 6, Vitest thresholds | Coding standards |
+| `src/lib/formula/**` | ≥ 95 % | Unit only | Stage 6, Vitest thresholds | FR-022, NFR-025 |
+| Quantity warnings: `src/lib/estimate/validation.ts` | ≥ 95 % | Unit only | Stage 6, Vitest thresholds | This strategy |
+| `src/lib/estimate/figure-state.ts`, `src/lib/auth/password-rule.ts` | 100 % of branches | Unit only | Stage 6, Vitest thresholds | FR-098, 100, 101 |
+| Whole package: the measured set below | ≥ 80 % | All Vitest levels together | Stage 11, Vitest thresholds | Coding standards |
+| Changed code in a PR, lines of the measured set | ≥ 80 % | All Vitest levels together | Stage 11, `check-changed-coverage` | Coding standards |
+
+The seed configuration is data with no lines to measure, so its 95 % target is dropped as a line gate. `quantity-in-one-formula` and `bl-is-sum-bg` hold it instead (section 5.4).
+
+**How it is configured.** One `vitest.config.ts`. Its `thresholds` hold the global 80 % and one glob entry per row above, and the same numbers apply in both runs. Stage 6's narrower `include` makes the global 80 % mean pure code there and the whole package at stage 11. The glob entries can only rise at stage 11, because the same unit tests run again, so stage 6 is the run that decides them.
+
+**The measured set.** `coverage.include`: `src/**/*.{ts,tsx}` and `scripts/lib/**/*.ts`. `coverage.exclude`, in full:
+
+| Not measured | Why | What checks it instead |
+|--------------|-----|------------------------|
+| `src/app/**` | Thin route files with no logic (architecture section 10) | Role matrix, manifest completeness, E2E |
+| `src/components/**`, including `ui` | Vitest runs in `node` with no component test library, so these files can only ever show 0 %. No business logic is allowed here (architecture section 10) | E2E, axe |
+| `src/worker/main.ts` | A process entry point that starts cron. Job logic is in `src/server/jobs`, which is measured | Heartbeat in `/api/health`, image check |
+| `src/generated/**`, `**/*.d.ts` | Generated code and types | Compiler |
+
+**`src/server/**` is never excluded.** Adding to this table is a change to this strategy, made by the solution-architect. A helper with logic moves to `src/lib`, which is measured, and does not get an exclusion. `vitest.config.ts` and `check-changed-coverage` import one list, so they cannot drift.
+
+**Code outside the test's own thread.** The v8 provider reads coverage through an inspector session in the Vitest worker, so code run by `new Worker()` or a child process is expected to show 0 %. The export thread's entry file therefore holds no logic, tests call the build functions in process, and the story that adds that file adds it to the table above.
+
+**Limit.** A threshold glob that matches no file passes in silence: `src/lib/formula/**` passes today with no such file. A rename can therefore drop a gate with no error. The story that adds one of these paths shows it in the coverage output in its Dev Record, and a move of one is a review item.
+
+**Evidence, 2026-11-02, real configuration at head 11c57e6.** Stage 6's command: 153 of 153 tests, 8 files measured, `src/instrumentation.ts` out of scope, lines 99.33 %, exit 0, 11.95 s of Vitest time. The same tests with invented local database URLs set, as at stage 11: all passed, exit 0, 13 s elapsed. Two test files named on one command give one report holding the hits of both. **Not run:** a real service file covered only by an integration test, and a real worker thread, because the throwaway project for them was refused by the session's permission system. The developer's proof covers the first.
+
+**Other targets.**
+
 | Scope | Target | Source |
 |-------|--------|--------|
-| Changed code in a PR | ≥ 80 % | Coding standards |
-| Whole package | ≥ 80 % | Coding standards |
-| `src/lib/formula/**` | ≥ 95 % | FR-022, NFR-025 |
-| BL and quantity warnings (`src/lib/estimate/validation`, the seed configuration) | ≥ 95 % | This strategy |
-| `src/lib/estimate/figure-state.ts`, `src/lib/auth/password-rule.ts` | 100 % of branches | FR-098, 100, 101 |
 | Route manifest | 100 % of routes in the role matrix | NFR-001 |
 | Engineer-reachable routes | 100 % in the canary scan | NFR-002 |
 | SPEC §14 items | 14 of 14 automated, except the Excel-desktop open | GOAL-03, 04 |
@@ -429,6 +466,8 @@ Flaky test policy: quarantine with a ticket within a day; never delete to make a
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
 | 0.3 | 2026-11-01 | SPEC v1.4 and PRD v0.6. Section 5 rewritten for every level's quantity: CE-1 is now 30 (24 lids), CE-6 246, CE-7 BN 6; CE-2 pending Q-35; CE-9 to CE-11 added; own-quantity-once test; property tests compare at 2 decimals; rule-change rehearsal retired. Added tests for cleared totals, the export markers and footer, optional reason, hidden entries, Scrap Weight, password rule, session, backup retention and watch, mail sign-in modes. Accessibility gate moves to WCAG 2.2 AA with PRD v0.6 |
+| 0.12 | 2026-11-03 | SPEC v1.13, D-38 to D-40. Section 9, A-1 seed items: 15 rows with their units; `Plating-rate-per-sqin` referenced by no seed formula; the `{{mat:<key>}}` set checked. Section 6: the canary covers all 15 rates and Material-Scrap-Rate, and the forbidden list adds the two other `Material-*` operand names and `{{mat:`. No value recorded |
+| 0.11 | 2026-11-02 | G6 of AQP-27, QLT-05. Stage 6 measures pure code on unit tests and keeps the 95 % and 100 % gates. Stage 11 runs every Vitest level with coverage in one run and decides the whole-package and changed-code gates. `src/server/**` stays measured. `src/components/**` and `src/worker/main.ts` join the exclusions, with what checks them. `tests/acceptance` joins stage 11. The seed configuration's line target goes, and `src/lib/estimate/validation` is named as `validation.ts` |
 | 0.10 | 2026-11-02 | G4 attempt 1, remediations 5, 6, 8. Engineer on a Lead or Admin route: 403, not "403 or 404"; the cancel and remove row follows. `clear-copies.sh` and the seed items added to section 9 |
 | 0.9 | 2026-11-02 | AQP-1 comments 10559, 10560. The Admin runs the restore rehearsal from the README alone. `restore.sh` failure paths and the limited account added. The export test also shows only the download is refused |
 | 0.8 | 2026-11-02 | AQP-1 comments 10546 to 10554. Export refused at `none` as well. Tests added for cancel and remove, the rate notice, picture optional and the Last backup line. NFR-013: free-space check, a named restorer, and stated as holding on a healthy server only. Step-up: six actions |
