@@ -89,6 +89,15 @@ function engineerVisibleIssues({ fields }: DocumentParts): DocumentIssue[] {
   );
 }
 
+/** `multiline` describes how text is entered, so only a text input may carry it, true or false. */
+function multilineIssues({ fields }: DocumentParts): DocumentIssue[] {
+  return fields.flatMap((field, index) =>
+    field.kind === 'input' && field.multiline !== undefined && field.dataType !== 'text'
+      ? [{ path: ['fields', index, 'multiline'], message: 'multiline is allowed only on a text input.' }]
+      : [],
+  );
+}
+
 function placementIssues({ sections, stages, fields }: DocumentParts): DocumentIssue[] {
   const sectionIds = new Set(sections.map((section) => section.id));
   const stagesById = new Map(stages.map((stage) => [stage.id, stage]));
@@ -191,6 +200,7 @@ export function collectDocumentIssues(parts: DocumentParts): DocumentIssue[] {
     ...uniquenessIssues(parts),
     ...positionIssues(parts),
     ...engineerVisibleIssues(parts),
+    ...multilineIssues(parts),
     ...placementIssues(parts),
     ...rowScopeIssues(parts),
     ...fieldReferenceIssues(parts),

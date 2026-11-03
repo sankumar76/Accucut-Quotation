@@ -40,7 +40,6 @@ import {
 /** Why version 1 exists. Stored in `config_versions.reason`. */
 export const SEED_VERSION_REASON = 'Seed configuration (SPEC section 7)';
 
-
 // ---- Fields ------------------------------------------------------------------------------------------
 
 type SystemRoleName = FieldDefinition['systemRole'];
@@ -70,6 +69,8 @@ interface InputDraft extends CommonDraft {
   readonly hiddenWhen?: { readonly letter: string; readonly values: ReadonlyArray<string> };
   /** Cost-view placement for inputs that SPEC section 7.4 lists under a stage (AP and AU). */
   readonly stage?: { readonly number: number; readonly group: string };
+  /** A text input shown over several lines (Remarks). Left out everywhere else, which means false. */
+  readonly multiline?: boolean;
 }
 
 interface AutoDraft extends CommonDraft {
@@ -177,7 +178,7 @@ const FIELD_DRAFTS: ReadonlyArray<FieldDraft> = [
   outputDraft('AH', 'area-sq-in', 'Area in Sq. in', { number: STAGE_WEIGHTS }, '(J * K * 2) / 645', { displayUnit: 'sq in', numFmt: NUMBER_FORMAT.number }),
   outputDraft('AI', 'area-sq-ft', 'Area in Sq. ft', { number: STAGE_WEIGHTS }, 'AH / 144', { displayUnit: 'sq ft', numFmt: NUMBER_FORMAT.number }),
   // 08 Other Costs and Remarks: the form shows AP, AU, BM, then AJ.
-  { letter: 'AJ', key: 'remarks', label: 'Remarks', kind: 'input', dataType: 'text', section: 8, formOrder: 35, mandatory: true, width: 40 },
+  { letter: 'AJ', key: 'remarks', label: 'Remarks', kind: 'input', dataType: 'text', section: 8, formOrder: 35, mandatory: true, width: 40, multiline: true },
   outputDraft('AK', 'material-cost', 'Material Cost', { number: STAGE_MATERIAL }, '(M * I) - (O * Material-Scrap-Rate)'),
   outputDraft('AL', 'cutting-cost', 'Cutting Cost', { number: STAGE_PROCESS, group: 'Cutting' }, 'P * Cutting-Rate-per-Sec'),
   outputDraft('AM', 'bending-cost', 'Bending Cost', { number: STAGE_PROCESS, group: 'Bending' }, 'R * Bending-Rate-per-stroke'),
@@ -305,6 +306,7 @@ function inputField(draft: InputDraft, index: number) {
         ? null
         : { fieldId: ids.field(draft.hiddenWhen.letter), operator: 'not-in', values: [...draft.hiddenWhen.values] },
     options: null,
+    ...(draft.multiline === undefined ? {} : { multiline: draft.multiline }),
   };
 }
 

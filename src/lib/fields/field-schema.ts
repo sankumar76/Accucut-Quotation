@@ -6,8 +6,15 @@ import { DATA_TYPES, DISPLAY_MODES, ROW_SCOPES, SYSTEM_ROLES } from './types';
  * The shape of one registry element (SPEC section 8.1 plus the properties architecture section 4.5 adds).
  *
  * Every schema is `strict`: an unknown property is an error. That is how the rule "no `letter` property
- * anywhere" holds: a letter is derived from `position`, never stored (FR-021). Optional values are
- * `null`, never absent, so a stored document always has the same shape.
+ * anywhere" holds: a letter is derived from `position`, never stored (FR-021).
+ *
+ * **Evolution rule: a property added after version 1 must parse when it is absent.** Stored versions are
+ * immutable (NFR-026) and `getCurrentVersion` validates the stored document on every read, so a new
+ * required key would make every earlier version, version 1 included, unreadable on a live install. A new
+ * property is therefore `.optional()` or `.default(...)`, and absent means the old behaviour (see
+ * `multiline`). The keys of version 1 are required and are pinned by
+ * `tests/unit/fields/schema-evolution.test.ts`, which fails if one is added. Within version 1's own keys, a
+ * value that does not apply is `null`, so the shape of the original keys never varies.
  *
  * `kind` is a discriminated union, so a property that only one kind has (a formula on an output, a
  * default on an input) cannot appear on another. Rules that look across fields are in `document-rules.ts`.
@@ -74,6 +81,11 @@ export const inputFieldSchema = z.strictObject({
   defaultValue: z.string().max(MAX_TEXT).nullable(),
   visibleWhen: visibleWhenSchema.nullable(),
   options: z.array(shortText).min(1).nullable(),
+  /**
+   * The text is entered and shown over several lines (Remarks, AJ). Added after the first design (ruling
+   * R2), so it is optional: absent means false. Only a text input may carry it (`document-rules.ts`).
+   */
+  multiline: z.boolean().optional(),
 });
 
 export const autoFieldSchema = z.strictObject({
