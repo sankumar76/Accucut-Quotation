@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Owner | qa-engineer |
-| Version | 0.2 (G4 remediation 10: AQP-1 comments 10573 and 10574 and DL-035 applied to sections 4, 5, 9, 12, 13, 14 and 18; v0.1 was the first issue, for G4, answering G3 condition 15 and CR-20) |
+| Version | 0.2.1 (AQP-169 renumbering applied to sections 4, 8 and 15; 0.2 was G4 remediation 10: AQP-1 comments 10573 and 10574 and DL-035 applied to sections 4, 5, 9, 12, 13, 14 and 18; v0.1 was the first issue, for G4, answering G3 condition 15 and CR-20) |
 | Date | 2026-11-02 |
 | Status | Draft. Nothing is built, so **no command in this plan has been run** and no test exists. Commands come from `CLAUDE.md`, the brief and `test-strategy.md`, and are not checked against a `package.json` (none exists) |
 | Based on | PRD v0.10 (FR-001 to FR-108, NFR-001 to NFR-030, 12.2); `test-strategy.md` v0.9; SPEC v1.12 (section 14, section 18.5); `architecture.md` v0.9 (9.5, 16.14); `ux-spec.md` v0.6 (8, 10); `backlog.md` v0.2 (88 candidate stories); DL-017, DL-026; consistency report v0.2 (CR-20) |
@@ -137,7 +137,7 @@ None of these exists yet. Each is a dependency, owned by the story named.
 | Accessibility scan | axe through Playwright | 10.08 | No automated a11y gate |
 | Secret scan | Gitleaks | 10.01 | A public repository without a scan (RISK-006) |
 | Mail capture | Mailpit | 10.01 (Compose) | No e-mail tests |
-| Load and page timing | k6, Lighthouse CI | 10.09, 07.05 | No NFR-009 to 011 evidence |
+| Load and page timing | k6, Lighthouse CI | 10.09, 10.10, 07.05 | No NFR-009 to 011 evidence |
 | Excel read-back | ExcelJS | 07.01 | No file checks |
 | A real phone, ideally low end, Android with Chrome and an iPhone with Safari | Hardware | **Provided by the delivery lead (10573).** One phone was offered, so one platform is covered; each report names the phone, system and browser used, and the other platform goes on the list of checks not run that G8 shows (DL-035) | One platform unchecked |
 | A Windows PC with a screen reader, and a Windows contrast theme | Hardware, software | **Provided by the delivery lead (10573).** Each report names the screen reader and its version (NVDA is the plan's assumption) | Section 12 cannot start |
@@ -343,8 +343,9 @@ The 88 candidates of `backlog.md` v0.2, in backlog order. **No story has accepta
 | 10.11 Admin restores with one guided command | Section 14: scripted failure paths at G7, then the Admin's rehearsal before G8 | I, M | A |
 | 10.07 Loading, empty, error states (R1+) | FR-088: three states and a save confirmation on each data screen | E | C |
 | 10.08 E2E, responsive, accessibility suites | QA reviews the suite for completeness: every delivered screen is in the matrix; NFR-016's five sizes and both orientations; axe rules `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa`; keyboard-only run of key flows; Chromium, Firefox, WebKit nightly | E | B |
-| 10.09 Performance, capacity, observability | NFR-009 Lighthouse mobile preset on the five key screens (LCP at or under 2 s and Total Blocking Time at or under 200 ms); NFR-010 and 011 k6 at 25 and 50 users; NFR-012 uptime check once Q-18 is answered; NFR-024 an injected fault in a route and a job is logged with time, request ID and user ID and no secret; logs kept 30 days | k6, M | B |
-| 10.10 Privacy and data handling | NFR-028, 029: repository scan finds 0 real personal data in fixtures; the interface is English only | I | C |
+| 10.09 Performance, capacity, observability | NFR-010 and 011 k6 at 25 and 50 users; NFR-012 uptime check once Q-18 is answered; NFR-024 an injected fault in a route and a job is logged with time, request ID and user ID and no secret; logs kept 30 days | k6, M | B |
+| 10.10 NFR-009 guards (AQP-169, enabler) | NFR-009 Lighthouse mobile preset on the five key screens (LCP at or under 2 s and Total Blocking Time at or under 200 ms), median of 5 runs (PROPOSED in the PRD) on the office Wi-Fi profile, which decides: 360 x 800 viewport, `rttMs` 40, `throughputKbps` 10240, `cpuSlowdownMultiplier` 4 (PRD NFR-009; Slow 4G is retired as the pass/fail profile). A nightly run on Slow 4G (`rttMs` 150, `throughputKbps` 1638.4, 4x) is reported and does not decide. First-load JavaScript at most 200 KB gzip on every route, checked after `npm run build`. The Lighthouse baseline of `/` moves to this story's G7. The G7 of AQP-28 (10.02) still records a reference Lighthouse run of `/` on the Wi-Fi profile if possible (AQP-1 10710); it is a reference, not a pass/fail check | Lighthouse CI, I | B |
+| 10.12 Privacy and data handling | NFR-028, 029: repository scan finds 0 real personal data in fixtures; the interface is English only | I | C |
 | 08.01 Fields and formulas list (R2) | FR-072: the list matches the registry; a Lead sees formulas read-only | I, E | B |
 | 08.02 Edit a formula (R2) | FR-073, 080, SPEC item 9: autocomplete, live check, preview against a sample node; unknown letter or rate name, syntax error and cycle cannot be saved; save needs the password | U, I, E | B |
 | 08.03 Insert a field (R2) | FR-074, 075, SPEC item 6: insert after AX gives a new AY, former AY to BO shift by one, formulas re-letter and calculate the same results, BL2 and BO2 move to BM2 and BP2; **property test over random insert positions**; export read-back; new inputs are mandatory and visible to Engineers, **new outputs hidden from Engineers (canary scan on a new output)** | U, I, X, S | A |
@@ -657,7 +658,7 @@ Methods and targets are the strategy's (sections 8 and 9). This table says when.
 | 006 | Gitleaks, data-file check, placeholder pattern | Yes | Every story | | Full history |
 | 007 | One test per audit event; direct UPDATE and DELETE refused | Yes | 01.07, each event story | | |
 | 008 | `tree500`, 20 runs, p95 under 2 s | | 03.06 | Yes | Yes |
-| 009 | Lighthouse mobile, five screens | | | Yes | Yes |
+| 009 | Lighthouse mobile, five screens; office Wi-Fi profile decides, Slow 4G nightly is report-only | | 10.10 | Yes | Yes |
 | 010, 011 | k6 at 25 and 50 users; export 50 nodes with 50 images | | | | Yes, on staging |
 | 012 | External uptime check | | | | Yes, once Q-18 answers; monthly after |
 | 013 | Retention, missed-run alert, free space, restore | Yes | 10.05, 10.11 | | **Rehearsal (section 14)** |
@@ -673,7 +674,7 @@ Methods and targets are the strategy's (sections 8 and 9). This table says when.
 | 026 | Approve, change masters, compare | Yes | 06.09 | | |
 | 027 | Export read-back | Yes | 07.x | | **Manual open in Excel desktop** |
 | 030 | Clean-VM README walk-through, 30 minutes | | 10.04 | | Repeat if the README changed |
-| 023, 028, 029 | Inspection, repository scan, English only | | 10.06, 10.10 | | |
+| 023, 028, 029 | Inspection, repository scan, English only | | 10.06, 10.12 | | |
 
 ---
 
@@ -720,7 +721,7 @@ Direct commands, not `npm run`, because a global rule prompts on `npm run` (`npm
 | Migrations on an empty database | `npx prisma migrate deploy` | Only against the local or CI test database; the guard of 4.1 must refuse any other |
 | Dependency audit | `npm audit --omit=dev --audit-level=high` | High or above blocks |
 | Secret scan | Gitleaks over the full history | Invocation set by 10.01 |
-| Load and page timing | k6; Lighthouse CI | Invocation set by 10.09 and 07.05; staging only |
+| Load and page timing | k6; Lighthouse CI | Invocation set by 10.09, 10.10 and 07.05; staging only |
 
 **Order of a G7 run:** `npm ci`; `npx eslint .`; `npx tsc --noEmit`; `npx prisma generate && npx next build`; `npx prisma migrate deploy` on the empty test database; `npx vitest run` (all, with coverage); `npx playwright test`; then the story's own acceptance file by name, the canary suite if section 11.1 applies, and the manual checks the story's row names.
 
@@ -768,5 +769,6 @@ No new register entry is proposed. Two restate existing ones from the testing si
 
 | Version | Date | Change |
 |---------|------|--------|
+| 0.2.1 | 2026-11-03 | Privacy and data handling renumbered 10.10 to 10.12; 10.10 is now AQP-169, the NFR-009 guards (JS budget and Lighthouse), per AQP-1 10724 and test strategy v0.13 section 10. NFR-009 moved from the 10.09 row to a new 10.10 row. The NFR-009 pass/fail profile is office Wi-Fi (`rttMs` 40, `throughputKbps` 10240, 4x, median of 5) with Slow 4G nightly and report-only, as PRD NFR-009. The Lighthouse baseline of `/` is at AQP-169's G7, and the G7 of AQP-28 still records a reference run of `/` if possible (AQP-1 10710) |
 | 0.2 | 2026-11-02 | G4 remediation 10 (AQP-1 10573, 10574; DL-035). Devices come from the delivery lead (one phone: platform named per report, the other listed at G8); the delivery lead sits with the testers and facilitates the usability test, with the limits of that stated; the restore rehearsal is two runs, A validation (delivery lead as Admin and IT, no independent observer, does not satisfy FR-091 or NFR-013) and B hand-over (the actual Admin, 15-minute limit accepted), and the G8 record states which was done; QA-OQ-01 and QA-OQ-06 closed; QA-OQ-03, 04, 07 answered, QA-OQ-05 answered for Run A only; picture limit 204,800 bytes with the exact-limit file refused as a labelled assumption (new QA-OQ-08) |
 | 0.1 | 2026-11-02 | First issue for G4. Acceptance conditions for the 88 candidate stories, the 17 SPEC section 14 items, the CE cases with expected values, the canary scan and its independent pass, the device and assistive-technology checks, the usability test (tasks 1, 4, 7), the Admin's restore rehearsal, regression, commands. Written against PRD v0.10, test-strategy v0.9, SPEC v1.12, architecture v0.9, ux-spec v0.6, backlog v0.2. No code existed; nothing was run |

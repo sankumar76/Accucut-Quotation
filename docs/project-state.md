@@ -13,7 +13,7 @@
 | Next gate          | G5 to G7 per story, from STORY-10.01. No story branch before the docs PR merge. Code merges stay human |
 | Current sprint     | —                        |
 | Overall health     | 🟡 Amber (G4 passed with 11 conditions; one red risk, RISK-016 at 16, a typed count can misprice an order, field in 05.03; way of working not chosen; no date adopted) |
-| Last updated       | 2026-11-03 by master (G7 AQP-27: CONDITIONAL GO, attempt 2; DL-049, DL-050) |
+| Last updated       | 2026-11-03 by master (G7 AQP-97: CONDITIONAL GO; DL-060) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## Request (G0 Intake)
@@ -40,6 +40,8 @@
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
 | AQP-27 (STORY-10.01) | Scaffold, CI and repository hygiene | Rejected (QA moves it on this decision) | developer | Passed (10653) | ⚠️ CONDITIONAL GO, attempt 2 (DL-047); conditions 1 and 2 met 2026-11-03 | ⚠️ CONDITIONAL GO, attempt 2 (DL-050); attempt 1 NO-GO (DL-048) | PR #16, head f1bb796, CI 41594298884 green. QA moves the story to Done. Before the merge: the docs PR (G6 condition 3). The human squash merge, then the first `master` run green (condition 4). DEF-003 (#24) before G8. Not merged |
+| AQP-97 (STORY-03.01) | Field registry seed and column letters | Done on this decision (QA moves it); merge is human | qa-engineer | Passed (10694) | ⚠️ CONDITIONAL GO (DL-051); conditions met (DL-054, DL-057) | ⚠️ CONDITIONAL GO, attempt 1 (DL-060) | PR #32, head da654ce, CI 41631686706 green. Before the merge: README OBS-4 fix verified by master; docs PR first. Routed: #40, #41, #34, #38. Not merged |
+| AQP-28 (STORY-10.02) | Design tokens and responsive app shell | In QA (G6 met; f903d48 verified) | qa-engineer | Passed (10703) | ⚠️ CONDITIONAL GO, attempt 1 (DL-053); conditions met (DL-059); f903d48 verified | — | PR #33, head f903d48, CI 41629593078 green (61 E2E passed, 11 skipped). G7: AC-9 with the delivery lead present. Playwright cache comes out with the next CI change. Docs PR before the merge. Not merged |
 
 ## Open Questions
 
@@ -116,6 +118,13 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-03 | master | G7 AQP-97: CONDITIONAL GO, attempt 1. QA files need no review; README OBS-4 fixed before the merge; observations to #40, #41, #34, #38 (DL-060) | docs/00-governance/ |
+| 2026-11-03 | master | AQP-28 STD-18/19 commit f903d48 verified; AQP-28 may go to G7. Playwright cache nets about 3 s, under the 5 s bar, so it comes out with the next CI change; the Next.js cache stays | docs/00-governance/gate-log.md |
+| 2026-11-03 | master | AQP-28 G6 conditions 1 to 3 met after re-review; STD-18 and STD-19 in one commit verified by master, then G7; interim JS budget measurement at each UI story's G6 until AQP-169 (DL-059). RISK-020 restated | docs/00-governance/ |
+| 2026-11-03 | master | AQP-97 follow-up 5f197ae verified, may go to G7; load-sensitive tests widened into DEF-003, due before sprint 1 ends (DL-057). AQP-169: 5 points stand, no G4 reopening, Lighthouse baseline moves to its G7; AQP-28 G6 condition 6 amended (DL-058) | docs/00-governance/ |
+| 2026-11-03 | master | AQP-97 G6 conditions 1 to 3 met after re-review; four new Minors fixed in one commit verified by master, QLT-13 to #38 (DL-054). Recorded: 10-minute CI target, NFR-009 Wi-Fi profile, OQ-ARCH-13 read (DL-055); STORY-10.10 is an enabler, not scope (DL-056). RISK-020 restated | docs/00-governance/ |
+| 2026-11-03 | master | G6 AQP-28: CONDITIONAL GO, attempt 1. STD-01 closed by approval; STD-02 and QLT-01 fixed and re-reviewed before G7; PRF-01 accepted, with the NFR-009 budget to the product-manager (#36); #17 split; #37 opened; RISK-020 new (DL-053) | docs/00-governance/ |
+| 2026-11-03 | master | G6 AQP-97: CONDITIONAL GO, attempt 1. STD-01, QLT-01, PRF-01 and PRF-02 upheld; fixed per the architect's rulings and re-reviewed before G7; 11 Minors now; #34, #35 opened; #18 satisfied (DL-051). No `updated_at` on immutable tables; standards text recommended (DL-052) | docs/00-governance/ |
 | 2026-11-03 | master | G7 AQP-27: CONDITIONAL GO, attempt 2 (DL-050); DEF-003 before G8. Master data names and units recorded, D-38 to D-40; Q-42's second sentence has two readings, asked at the next contact (DL-049) | docs/00-governance/ |
 | 2026-11-03 | master | G7 AQP-27 condition 2: 60eeb67 verified (three files, CI green, baseline 7, invalid environment exits 1 with names only, in a real child process) | docs/00-governance/gate-log.md |
 | 2026-11-03 | master | G7 AQP-27: NO-GO, attempt 1. AC-3 "fails fast" read as exit at start-up, DEF-001 Sev-2; DEF-002 in the same fix; QA's files after G6 need no re-review (DL-048). Observations to #19 and new #23 | docs/00-governance/ |

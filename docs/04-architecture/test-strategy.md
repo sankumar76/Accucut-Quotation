@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.12 (SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; earlier: G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
+| Version | 0.14 (master's rule on tests and machine load, DL-057, GitHub #24, section 10; the not-found row of the JS budget check, section 10.1; the path-limited pull-request trigger of the Lighthouse run, section 10.2, AQP-169 A-2. Earlier, 0.13: PRD NFR-009: the office Wi-Fi pass/fail profile, Slow 4G as report only, 200 KB gzip first-load JS per route, and CI feedback time, PROPOSED; AQP-1 comments 10712, 10713; GitHub #36; RISK-020; sections 2, 8 and 10. Earlier, 0.12: SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO. Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted. Versions 0.8 and 0.9 add the tests for their later answers. For `master` to record and check at G4 |
 | Date | 2026-11-03 |
-| Inputs | SPEC v1.13 §4.1, §4.3, §14, §18 D-38 to D-40, §18.5; PRD v0.11; `architecture.md` v0.13; gate log G6 AQP-27 attempt 1 and review 5746060549 (QLT-05); DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
+| Inputs | SPEC v1.13 §4.1, §4.3, §14, §18 D-38 to D-40, §18.5; PRD v0.11; `architecture.md` v0.14; PRD NFR-009 (AQP-1 comments 10712, 10713; GitHub #36); gate log G6 AQP-27 attempt 1 and review 5746060549 (QLT-05); DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
 **Rule for all test data.** Every value here and in every fixture is invented. No cell value from the sample workbook is used, here or anywhere, and no real master data (NFR-006, ADR-014). Sample structure may be read for headers, widths and formats only.
@@ -32,7 +32,7 @@
 | Acceptance | SPEC §14 items 1 to 14 | qa-engineer | Vitest, Playwright | `tests/acceptance/` | Every PR |
 | E2E | Critical journeys at all viewports | qa-engineer | Playwright 1.64 | `tests/e2e/` | Every PR (Chromium at 3 widths); nightly (full matrix) |
 | Accessibility | WCAG 2.2 AA (PROPOSED, PRD v0.6) | qa-engineer | axe, keyboard run | `tests/e2e/a11y/` | Every PR; manual per release |
-| Performance | NFR-008 to 011 | qa-engineer | Vitest timing, k6, Lighthouse CI | `tests/perf/` | Timing and Lighthouse nightly; load before release |
+| Performance | NFR-008 to 011 | qa-engineer | Vitest timing, k6, Lighthouse CI, JS budget check | `tests/perf/`, `scripts/check-js-budget.ts` | JS budget on every pull request; timing and Lighthouse nightly; Lighthouse before a key screen's G6; load before release |
 | Export | File fidelity | qa-engineer | ExcelJS read-back, Excel desktop | `tests/integration/export/` | Every PR; manual open per release |
 | Operational | Install, backup, restore | qa-engineer, IT contact, the Admin for the restore | Scripts, stopwatch | Rehearsal log | Before go-live |
 
@@ -276,12 +276,14 @@ The generator must make top-level items with their own cost, with no children an
 
 ## 8. Performance
 
-**Device definition for NFR-009.** Lighthouse CI mobile preset: simulated slow 4G (about 1.6 Mbps down, 150 ms round trip) with 4 times CPU slowdown. "Interactive" is measured as **LCP ≤ 2 s and Total Blocking Time ≤ 200 ms**, because Lighthouse no longer scores Time to Interactive. The five key screens are queue, workspace, cost view, masters and assign, signed in, on a production build.
+**Device definition for NFR-009 (PRD NFR-009; v0.13).** The pass/fail profile is office Wi-Fi on a recent phone. It uses the Lighthouse mobile form factor at 360 × 800, with simulated throttling at `rttMs` 40, `throughputKbps` 10,240 and `cpuSlowdownMultiplier` 4. These values are PROPOSED by the product-manager. Slow 4G (`rttMs` 150, `throughputKbps` 1,638.4, `cpuSlowdownMultiplier` 4) runs nightly and is reported only. "Interactive" is measured as **LCP ≤ 2 s and Total Blocking Time ≤ 200 ms**, taking the median of 5 runs, because Lighthouse no longer scores Time to Interactive. The five key screens are queue, workspace, cost view, masters and assign, measured signed in on a production build. Section 10.2 gives the reference hardware, browser and settings. Every route's first load also has a JavaScript budget of 200 KB gzip, checked on every pull request (section 10.1). Numbers taken anywhere else, such as the laptop figures in the AQP-28 review, are relative evidence only.
 
 | NFR | Scenario | Target | Tool | Where |
 |-----|----------|--------|------|-------|
 | NFR-008 | Recalculate `tree500`, 20 runs | p95 < 2 s | Timed integration test; record the machine | Nightly, staging |
-| NFR-009 | Five screens | Above | Lighthouse CI | Nightly |
+| NFR-009 | Five key screens, Wi-Fi profile | LCP ≤ 2 s and TBT ≤ 200 ms, median of 5 | Lighthouse CI on the reference hardware (10.2) | Nightly; on demand before the G6 of a key-screen story; pre-release |
+| NFR-009 | Five key screens, Slow 4G | Reported, not judged | Lighthouse CI (10.2) | Nightly |
+| NFR-009 | Every route's first load | ≤ 200 KB gzip JavaScript | `scripts/check-js-budget.ts` (10.1) | Every pull request, step 11b |
 | NFR-010 | 25 virtual users, mixed page-data and save | p95 ≤ 500 ms | k6 | Staging, before release |
 | NFR-010 | Export of 50 nodes with 50 images | p95 ≤ 10 s | k6 | Staging, before release |
 | NFR-010 | Page latency while a 500-node export runs | p95 ≤ 500 ms | k6 | Staging, before release |
@@ -381,10 +383,11 @@ No workflow exists yet; the scaffold story, STORY-10.01, adds `.github/workflows
 | 9 | Build | `npm run build` | Yes |
 | 10 | Migrations | `prisma migrate deploy` on an empty database; drift check | Yes |
 | 11 | Integration, contract, security, acceptance, export, then the combined coverage gates | `npx vitest run tests/unit tests/integration tests/security tests/acceptance --coverage`; then, on a pull request, `npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"` | Yes |
+| 11b | JS budget (NFR-009) | `npx next start` on the stage 9 build, then `npx tsx scripts/check-js-budget.ts` (section 10.1) | Yes |
 | 12 | E2E | `npm run test:e2e` (Chromium, 3 widths, axe, canary scan) | Yes |
 | 13 | Image | Docker build; run and check `/api/health` | Yes, on `master` |
-| Nightly | Full browser matrix, Lighthouse, 500-node timing | Scheduled | Reported; failure raises a bug |
-| Pre-release | k6, restore rehearsal, manual Excel, one real mail send | Manual | G8 evidence |
+| Nightly | Full browser matrix, Lighthouse on both profiles (section 10.2), 500-node timing, CI feedback time (section 10.3) | Scheduled (`.github/workflows/nightly.yml`) | Reported. A Wi-Fi Lighthouse or timing failure raises a bug; a CI-time breach raises a `tech-debt` issue |
+| Pre-release | k6, restore rehearsal, manual Excel, one real mail send, Lighthouse Wi-Fi run on the release build | Manual | G8 evidence |
 
 **Where the coverage gates sit (QLT-05).** Coverage runs twice from one Vitest configuration, and the stage order does not change. Stage 6 has no database, so it can only judge pure code. Stage 11 has the database, so it judges the whole package.
 
@@ -395,6 +398,59 @@ No workflow exists yet; the scaffold story, STORY-10.01, adds `.github/workflows
 - `tests/acceptance` joins stage 11 because section 2 runs it on every PR and no stage named it.
 
 Flaky test policy: quarantine with a ticket within a day; never delete to make a build pass. Retries are off in unit and integration tests. Playwright allows 1 retry and reports it. Canary and role-matrix tests are never quarantined.
+
+**Tests do not depend on machine load (master's rule, DL-057, GitHub #24).**
+- Heavy set-up warms up in its own `beforeAll` hook, with its own hook timeout, and never inside a test's time limit. Examples are the first ESLint run of the layer-rule tests and the creation of a scratch database.
+- The hook timeout for the database levels is set once, in `vitest.config.ts` (`hookTimeout`), and not per file.
+- A unit test carries no wall-clock limit. It counts the work instead (for example, the lookups made), and timing belongs to a performance check (section 8).
+- Raising a per-test limit or quarantining the test is not the fix for a test that fails only under load.
+- CI is the reference run. A timeout seen only on a loaded local machine is fixed under this rule and holds no gate.
+
+### 10.1 JS budget check (NFR-009)
+
+The PRD sets the budget and what it counts. This section says how the check counts it. The entry point is `scripts/check-js-budget.ts`, with its logic in `scripts/lib/js-budget.ts` so that stage 6 unit-tests it.
+
+| Item | Rule |
+|------|------|
+| Routes | Every page route of the stage 9 build, served by `npx next start` on a free port. The list comes from the route manifest (STORY-01.02); until that exists, it comes from the build's app path list. A dynamic segment is filled with an id the script creates from invented data through `tests/support/builders`. Any other route that does not answer 200 fails the check: nothing is skipped silently. The not-found page is measured too. The script requests an unused path the same way as the other routes, expects status 404, and reports it as the row `not-found` against the default limit. Any other status fails that row |
+| Sign-in | Each route is fetched as every role the route manifest allows on it, and the largest total counts. The CI users are created with `bootstrap-admin` and the user service from invented values set in the workflow. They are not secrets, because the database is thrown away after the run |
+| What counts | The distinct URLs in the HTML's `<script src>` elements without a `nomodule` attribute, and in `<link rel="preload">` or `<link rel="modulepreload">` with `as="script"`. Each file is read from `.next/static`, not over HTTP, so the server's own compression does not matter. Each is compressed with Node's `zlib.gzipSync(buffer, { level: 9 })`, the same as the `gzip -9` of the AQP-28 review, and 1 KB is 1,000 bytes. Inline scripts (the RSC payload) and chunks requested after the first load do not count |
+| Limit | 200,000 bytes per route. Per-route limits live in one table in `scripts/lib/js-budget.ts`. A raised limit names the product-manager decision (decision-log ID) and the Lighthouse run that met the targets. A lowered limit names the Lighthouse run that missed them |
+| Output | One table row per route: file count, raw bytes, gzip bytes, limit and headroom, written to the job summary. The script exits 1 if any route is over its limit or cannot be measured |
+| Calibration, once, when the check is added | Run the script against commit `6f66b97`, the build the AQP-28 review measured. It must report `/` at 184.6 KB and the not-found page at 135.1 KB, each within 1 KB. The developer records the result in the pull request. If either figure differs, the developer reports the difference and its cause to the solution-architect, who reports it to the product-manager before the check merges |
+| Where | Step 11b of the required job, after stage 11, because sign-in needs the migrated database, and before stage 12. It blocks merge and should add under a minute |
+| Tests | Unit tests: a `nomodule` script is excluded, a preload is counted, a duplicate counts once, plus the gzip sum and the limit table. Integration tests: a route over a lowered test limit fails, a route answering 500 fails, and the `not-found` row passes on 404 and fails on 200 |
+
+**Expected headroom.** After the AQP-28 fix round adds `tailwind-merge`, `clsx` and `class-variance-authority` to the shell, `/` is expected near 194 KB (184.6 + 9.0 + 0.6; an estimate from a scratch bundle, see architecture section 11). The first key screen will probably need `next/dynamic` for its heavier parts, or a recorded decision for its route.
+
+### 10.2 Lighthouse reference run (NFR-009)
+
+| Item | Rule |
+|------|------|
+| Reference hardware | A GitHub-hosted `ubuntu-24.04` runner, standard size for a public repository (4 vCPU, 16 GB RAM). A run anywhere else is evidence only and is labelled with its `benchmarkIndex` |
+| Browser | The Chromium that Playwright 1.64.1 installs (`npx playwright install chromium`), passed to Lighthouse as `chromePath`, so the browser changes only when Playwright is upgraded. Its version is recorded with each run |
+| Tool | `@lhci/cli` 0.15.1, which runs Lighthouse 12.6.1, as an exact dev dependency. Configuration lives in `lighthouserc.cjs` |
+| Server | `next start` on the CI production build, with the database migrated and invented data from `tests/support/builders`. Each screen is loaded signed in as the role it is for, through a `puppeteerScript` with `disableStorageReset` |
+| Wi-Fi profile (pass/fail) | `formFactor: 'mobile'`, `screenEmulation: { mobile: true, width: 360, height: 800, deviceScaleFactor: 1.75, disabled: false }`, `throttlingMethod: 'simulate'`, `throttling: { rttMs: 40, throughputKbps: 10240, cpuSlowdownMultiplier: 4 }`, `onlyCategories: ['performance']`, `numberOfRuns: 5` |
+| Assertions | `largest-contentful-paint` ≤ 2,000 ms and `total-blocking-time` ≤ 200 ms, each with `aggregationMethod: 'median'` (the median of the 5 runs). They apply to the five key screens as each comes into being: masters, assign, queue, workspace and cost view. Other routes, `/` included, are reported without assertions |
+| Slow 4G profile (report only) | The same settings with `throttling: { rttMs: 150, throughputKbps: 1638.4, cpuSlowdownMultiplier: 4 }` and no assertions |
+| `benchmarkIndex` | Each run's `environment.benchmarkIndex` goes into the summary with LCP and TBT. The baseline run records the median index as B0. A later run whose median index is more than 25 % away from B0 is marked "not comparable" and re-run. If that happens again, a new baseline is taken and noted in the summary |
+| Results | Lighthouse reports are kept as a workflow artefact for 30 days (`upload.target: 'filesystem'`), and the summary table goes in the job summary. Nothing is uploaded to a public server |
+| When | Nightly, on both profiles. On demand (`workflow_dispatch` on the branch) for the G6 of any story that builds or changes a key screen; its pull request links the run. Pre-release, at G8. Not in the required pull-request job, because of the CI time limit (10.3) |
+| Pull-request trigger (AQP-169 A-2) | `nightly.yml` also has a `pull_request` trigger limited by `paths` to the files that define the run: `.github/workflows/nightly.yml`, `lighthouserc.cjs`, and the scripts and `scripts/lib` modules that the workflow calls. GitHub dispatches only workflows that are on the default branch, so this is how the baseline runs before STORY-10.10 merges. It stays after the merge, so any change to the measuring setup is measured on its own pull request. The trigger is `pull_request`, never `pull_request_target`. The token stays read-only and no secret is used, and a `concurrency` group cancels a superseded run. It is never a required check, so a red run reports and never blocks a merge |
+| Results at the gates | At G6, reviewer-performance reads the on-demand run. A miss on the Wi-Fi profile is a finding against NFR-009. The product-manager then decides whether to lower that route's budget or record a decision. The targets change only by the delivery lead's decision (PRD NFR-009) |
+| Baseline | The first reference run on the shell, `/`, which is what AQP-28 builds (`/design-system` is not in a production build). It decides RISK-020 and the review of the 200 KB budget |
+
+### 10.3 CI feedback time (NFR-009, PROPOSED)
+
+The nightly workflow reads the GitHub API. It measures the duration of the required job, `Stages 1 to 11`, from start to finish, excluding queue wait. It uses first attempts of the last 20 pull-request runs and reports the p95 and the median. The target is a p95 of at most 10 minutes, with an early warning when the median passes 6 minutes. Both figures are PROPOSED, for Santhosh to confirm. A breach fails that nightly step with a message, and the orchestrator raises a `tech-debt` issue. A breach never blocks a merge. The nightly workflow has `contents: read` and `actions: read` only.
+
+### 10.4 Who builds it, and by when
+
+- **A new enabler story**, proposed as STORY-10.10 "NFR-009 guards: JS budget check and Lighthouse reference run", for the scrum-master to write (about 3 points, my estimate). It is carved out of STORY-10.09, which keeps NFR-010 to 012 and NFR-024. It covers sections 10.1 to 10.3, `@lhci/cli`, `lighthouserc.cjs`, `nightly.yml`, the calibration and the baseline.
+- **Order:** it can start once 01.01 has given sign-in, and it uses the route manifest once 01.02 is merged. **It must be Done before 02.01 (AQP-113), the first of the five key screens, reaches G6.** It touches only `scripts/`, `.github/workflows/`, `lighthouserc.cjs` and tests, so it can run in a second stream beside 01.04 and 01.07.
+- **The baseline** is taken at that story's G7 on `/`. That is the shell AQP-28 builds, measured on the reference hardware; AQP-28's own G7 has no reference run to use (master, DL-058).
+- **Every key-screen story** (02.01 masters, 04.01 assign, 04.02 queue, the workspace stories of EPIC-05, 06.03 cost view) links an on-demand Wi-Fi run at its G6.
 
 ## 11. Coverage Targets
 
@@ -466,6 +522,8 @@ The seed configuration is data with no lines to measure, so its 95 % target is d
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
 | 0.3 | 2026-11-01 | SPEC v1.4 and PRD v0.6. Section 5 rewritten for every level's quantity: CE-1 is now 30 (24 lids), CE-6 246, CE-7 BN 6; CE-2 pending Q-35; CE-9 to CE-11 added; own-quantity-once test; property tests compare at 2 decimals; rule-change rehearsal retired. Added tests for cleared totals, the export markers and footer, optional reason, hidden entries, Scrap Weight, password rule, session, backup retention and watch, mail sign-in modes. Accessibility gate moves to WCAG 2.2 AA with PRD v0.6 |
+| 0.14 | 2026-11-03 | Section 10: master's rule that tests do not depend on machine load (DL-057, GitHub #24): heavy set-up in its own hook, the hook timeout set once in `vitest.config.ts`, no wall-clock limit in a unit test, and CI as the reference run. Section 10.1: the not-found page is measured at an unused path, must answer 404 and is the row `not-found` (product-owner, AQP-169). Section 10.2: the path-limited `pull_request` trigger of `nightly.yml` (AQP-169 A-2). Section 10.4: the baseline at STORY-10.10's G7 (DL-058) |
+| 0.13 | 2026-11-03 | PRD NFR-009 (AQP-1 comments 10712, 10713; GitHub #36; RISK-020). Section 8: the office Wi-Fi pass/fail profile, Slow 4G as report only, the median of 5 runs, and three NFR-009 rows. Section 2: the JS budget on every pull request. Section 10: step 11b (the JS budget), nightly and pre-release rows, and new sections 10.1 (JS budget check, with its calibration on `6f66b97`), 10.2 (the Lighthouse reference run: hardware, browser, settings, assertions, `benchmarkIndex`), 10.3 (CI feedback time, PROPOSED) and 10.4 (who builds it: proposed STORY-10.10, done before 02.01 reaches G6) |
 | 0.12 | 2026-11-03 | SPEC v1.13, D-38 to D-40. Section 9, A-1 seed items: 15 rows with their units; `Plating-rate-per-sqin` referenced by no seed formula; the `{{mat:<key>}}` set checked. Section 6: the canary covers all 15 rates and Material-Scrap-Rate, and the forbidden list adds the two other `Material-*` operand names and `{{mat:`. No value recorded |
 | 0.11 | 2026-11-02 | G6 of AQP-27, QLT-05. Stage 6 measures pure code on unit tests and keeps the 95 % and 100 % gates. Stage 11 runs every Vitest level with coverage in one run and decides the whole-package and changed-code gates. `src/server/**` stays measured. `src/components/**` and `src/worker/main.ts` join the exclusions, with what checks them. `tests/acceptance` joins stage 11. The seed configuration's line target goes, and `src/lib/estimate/validation` is named as `validation.ts` |
 | 0.10 | 2026-11-02 | G4 attempt 1, remediations 5, 6, 8. Engineer on a Lead or Admin route: 403, not "403 or 404"; the cancel and remove row follows. `clear-copies.sh` and the seed items added to section 9 |
