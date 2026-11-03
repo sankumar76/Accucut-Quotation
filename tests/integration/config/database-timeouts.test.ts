@@ -11,6 +11,7 @@ import {
 } from '../../../src/server/repositories/prisma-client';
 import { ensureSeedVersion } from '../../../src/server/services/config-service';
 import { createMigratedScratchDatabase, type ScratchDatabase } from '../../support/scratch-database';
+import { createTestPrismaClient } from '../../support/test-prisma-client';
 import { SEED_VERSION_REASON, seedConfig } from '../../support/seed-config';
 
 /**
@@ -27,6 +28,8 @@ function requiredUrl(): string {
 }
 
 const MILLISECONDS_PER_SECOND = 1_000;
+/** Creating and migrating a scratch database can take longer than Vitest's 10 s hook default on a busy machine. */
+const HOOK_TIMEOUT_MILLISECONDS = 60_000;
 
 function showSetting(client: PrismaClient, name: 'statement_timeout' | 'idle_in_transaction_session_timeout' | 'application_name') {
   // `SHOW` takes no parameters; the name is one of the three literals above.
@@ -58,13 +61,13 @@ describe('statement timeout becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, ()
     database = await createMigratedScratchDatabase();
     blocker = new Client({ connectionString: database.ownerUrl });
     await blocker.connect();
-    client = createPrismaClient('script', database.ownerUrl, { statementTimeoutMillis: 500 });
-  });
+    client = createTestPrismaClient('script', database.ownerUrl, { statement_timeout: 500 });
+  }, HOOK_TIMEOUT_MILLISECONDS);
   afterAll(async () => {
     await client.$disconnect();
     await blocker.end();
     await database.drop();
-  });
+  }, HOOK_TIMEOUT_MILLISECONDS);
 
   it('a statement that waits longer than the limit is cancelled and surfaces as a 503, not a hang', async () => {
     // An open transaction holds version 1 uncommitted, so the seed insert waits on the unique index.
@@ -100,16 +103,19 @@ describe('statement timeout becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, ()
 
 describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, () => {
   it('a second request on a full pool fails after the connect timeout instead of waiting for ever', async () => {
-    const client = createPrismaClient('app', requiredUrl(), { max: 1, connectionTimeoutMillis: 300 });
+    const client = createTestPrismaClient('app', requiredUrl(), { max: 1, connectionTimeoutMillis: 1_000 });
     try {
-      // One request holds the only connection for 2 seconds.
+      // Open the pool's one connection first, so the wait below is for that connection and not for a slow connect.
+      await client.$queryRaw`SELECT 1 AS warm`;
+      // One request holds the only connection for 3 seconds.
       const holder = client.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(2)`;
+        await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(3)`;
       });
       await new Promise((resolve) => setTimeout(resolve, 300));
       const started = Date.now();
       await expect(createConfigRepository(client).findLatestRef()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
-      expect(Date.now() - started).toBeLessThan(1_500);
+      // Failed at about the 1 s limit, well before the holder let go.
+      expect(Date.now() - started).toBeLessThan(2_500);
       await holder;
     } finally {
       await client.$disconnect();

@@ -135,10 +135,22 @@ describe('getCurrentVersion cache (R5, PRF-02)', () => {
     await expect(getCurrentVersion(repository, createConfigVersionCache())).rejects.toBeInstanceOf(ConfigVersionMissingError);
   });
 
+  it('STD-16: the time is held as text, so no caller can change it for the others', async () => {
+    const repository = fakeRepository([recordFor(1)]);
+    const cache = createConfigVersionCache();
+    const first = await getCurrentVersion(repository, cache);
+    expect(typeof first.createdAt).toBe('string');
+    // Reflect.set reports a refused write by returning false, where an assignment would throw.
+    expect(Reflect.set(first, 'createdAt', 'changed')).toBe(false);
+    expect(first.createdAt).toBe('2026-11-03T00:00:00.000Z');
+    expect((await getCurrentVersion(repository, cache)).createdAt).toBe('2026-11-03T00:00:00.000Z');
+    expect(Object.isFrozen(first)).toBe(true);
+  });
+
   it('returns the version with its reason, author and time', async () => {
     const version = await getCurrentVersion(fakeRepository([recordFor(1)]), createConfigVersionCache());
     expect(version).toMatchObject({ number: 1, reason: 'Version 1', createdBy: null });
-    expect(version.createdAt).toEqual(new Date('2026-11-03T00:00:00Z'));
+    expect(version.createdAt).toBe('2026-11-03T00:00:00.000Z');
     expect(version.document).toEqual(parseConfigDocument(seedConfig));
   });
 });

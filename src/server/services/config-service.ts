@@ -21,7 +21,8 @@ export interface ConfigVersion {
   readonly document: ConfigDocument;
   readonly reason: string;
   readonly createdBy: string | null;
-  readonly createdAt: Date;
+  /** ISO 8601 UTC text, not a `Date`: the version is shared and frozen, and a frozen `Date` can still be changed. */
+  readonly createdAt: string;
 }
 
 export interface SeedVersionInput {
@@ -100,7 +101,7 @@ export async function getCurrentVersion(repository: ConfigRepository, cache: Con
     document: parseConfigDocument(record.snapshot),
     reason: record.reason,
     createdBy: record.createdBy,
-    createdAt: record.createdAt,
+    createdAt: record.createdAt.toISOString(),
   });
   cache.set(version);
   return version;

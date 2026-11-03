@@ -41,6 +41,22 @@ describe('deepFreeze', () => {
     expect(deepFreeze(null)).toBeNull();
   });
 
+  it('QLT-12: does not stop at a parent that is already frozen (a shallow freeze is not enough)', () => {
+    const shallow = Object.freeze({ inner: { deep: [{ leaf: 1 }] } });
+    const frozen = deepFreeze(shallow);
+    expect(Object.isFrozen(frozen.inner)).toBe(true);
+    expect(Object.isFrozen(frozen.inner.deep)).toBe(true);
+    expect(Object.isFrozen(defined(frozen.inner.deep[0]))).toBe(true);
+  });
+
+  it('QLT-12: freezes a shared child once and still ends on a cycle', () => {
+    const shared = { n: 1 };
+    const value: { a: unknown; b: unknown; loop?: unknown } = { a: shared, b: shared };
+    value.loop = value;
+    deepFreeze(value);
+    expect(Object.isFrozen(shared)).toBe(true);
+  });
+
   it('copes with a value that is already frozen and with a cycle', () => {
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;

@@ -66,13 +66,13 @@ export const POOL_SETTINGS = {
   },
 } as const satisfies Readonly<Record<DatabaseClientKind, PoolSettings>>;
 
-/** The `pg` pool configuration for a kind of process. Exported so a test can check what reaches the pool. */
-export function poolConfigFor(
-  kind: DatabaseClientKind,
-  connectionString: string,
-  overrides: Partial<PoolSettings> = {},
-): PoolConfig {
-  const settings: PoolSettings = { ...POOL_SETTINGS[kind], ...overrides };
+/**
+ * The `pg` pool configuration for a kind of process. Exported so a test can check what reaches the pool.
+ * It takes no overrides: the ruled limits cannot be loosened from production code (STD-15). A test that
+ * needs a short timeout builds its client with `tests/support/test-prisma-client.ts`.
+ */
+export function poolConfigFor(kind: DatabaseClientKind, connectionString: string): PoolConfig {
+  const settings: PoolSettings = POOL_SETTINGS[kind];
   return {
     connectionString,
     max: settings.max,
@@ -87,16 +87,11 @@ export function poolConfigFor(
 /**
  * Builds a client for one kind of process. Pass `DATABASE_URL` (the runtime role) from `app` and `worker`,
  * and `MIGRATE_DATABASE_URL` (the owner role) from the `migrate` step only. The caller validates the URL
- * (`src/lib/env.ts`) and closes the client with `$disconnect()`. `overrides` is for tests, which lower a
- * timeout to provoke it; production code never passes it.
+ * (`src/lib/env.ts`) and closes the client with `$disconnect()`.
  *
  * Not a singleton yet: the first `app` or `worker` caller adds `getPrismaClient(kind)` with the
  * `globalThis` cache (a second pool per Next.js route bundle would exceed `max`).
  */
-export function createPrismaClient(
-  kind: DatabaseClientKind,
-  connectionString: string,
-  overrides: Partial<PoolSettings> = {},
-): PrismaClient {
-  return new PrismaClient({ adapter: new PrismaPg(poolConfigFor(kind, connectionString, overrides)) });
+export function createPrismaClient(kind: DatabaseClientKind, connectionString: string): PrismaClient {
+  return new PrismaClient({ adapter: new PrismaPg(poolConfigFor(kind, connectionString)) });
 }

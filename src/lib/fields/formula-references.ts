@@ -49,7 +49,7 @@ export type FormulaReference =
   | { readonly kind: 'exchange'; readonly currency: string };
 
 /** How each `{{mat:<key>}}` operand reads in display form (SPEC section 4.3, architecture section 4.5). */
-export const MATERIAL_OPERAND_NAMES:Readonly<Record<MaterialOperandKey, string>> = {
+export const MATERIAL_OPERAND_NAMES: Readonly<Record<MaterialOperandKey, string>> = {
   pricePerKg: 'Material-Price-per-kg',
   specificGravity: 'Material-Specific-Gravity',
   scrapRate: 'Material-Scrap-Rate',

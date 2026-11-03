@@ -1,6 +1,9 @@
+import type { PoolConfig } from 'pg';
 import { describe, expect, it } from 'vitest';
 
 import { DATABASE_CLIENT_KINDS, poolConfigFor, POOL_SETTINGS } from '@/server/repositories/prisma-client';
+
+import { testPoolConfig } from '../support/test-prisma-client';
 
 /** Architecture ruling R4 (PRF-01): fixed pool and timeout settings per kind of process, nothing from the environment. */
 
@@ -36,8 +39,16 @@ describe('pool settings per kind (R4)', () => {
     expect(POOL_SETTINGS.app.max + POOL_SETTINGS.worker.max).toBe(13);
   });
 
-  it('a test may lower one setting, and the rest keep the kind\'s value', () => {
-    const config = poolConfigFor('app', URL_FOR_TEST, { statementTimeoutMillis: 250 });
+  it('STD-15: production code cannot loosen the ruled values: an extra argument changes nothing', () => {
+    // The signatures take no overrides. Passing one anyway (the types forbid it, so go around them) must not
+    // switch a limit off: a statement_timeout of 0 means no limit in PostgreSQL.
+    const config: PoolConfig = Reflect.apply(poolConfigFor, undefined, ['app', URL_FOR_TEST, { statementTimeoutMillis: 0, max: 1000 }]);
+    expect(config.statement_timeout).toBe(10_000);
+    expect(config.max).toBe(10);
+  });
+
+  it('test support can lower one setting on top of the ruled values, and only there', () => {
+    const config = testPoolConfig('app', URL_FOR_TEST, { statement_timeout: 250 });
     expect(config.statement_timeout).toBe(250);
     expect(config.max).toBe(10);
     expect(config.application_name).toBe('accucut-app');
