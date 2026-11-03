@@ -1,0 +1,11 @@
+// Generator and datasource only. Tables arrive with the stories that own them (architecture section 5).
+// Prisma 7: the connection URL is set in prisma.config.ts, not here.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

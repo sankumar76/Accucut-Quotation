@@ -1,0 +1,189 @@
+# CI pipeline: stages 1 to 11 of docs/04-architecture/test-strategy.md section 10 (STORY-10.01, AC-4).
+#
+# Stages 12 (E2E) and 13 (image) are present below as DISABLED steps. They are switched on by the
+# first story that gives them something to run (STORY-10.02 / the first page story for 12, the
+# Dockerfile story STORY-10.04 for 13): change `if: ${{ false }}` to `if: ${{ true }}` there.
+#
+# Security rules (architecture section 8, TB-6). The repository is public, so job logs are public.
+#   - The trigger is `pull_request`, never `pull_request_target`: a pull request from a fork runs
+#     without any secret and with a read-only token.
+#   - This workflow uses no repository secret and holds no production secret. The database below
+#     exists only for the life of the job and its passwords are generated inside the job.
+#   - Third-party actions are pinned to a commit SHA.
+#
+# Each stage is one step, so a failure names the stage. Steps run in order and the first failure
+# stops the job, which blocks merge once the check is marked required on the base branch.
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Only a pull request run is cancelled by a newer push. A run on master must finish, so the commit
+  # that stage 13 will check is never left without a result (STD-12).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: 'true'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+  # Pinned tool versions. Change them here, in a reviewed change.
+  NODE_VERSION: '22'
+  NPM_VERSION: '11.17.0'
+  GITLEAKS_VERSION: '8.30.1'
+  GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+
+jobs:
+  verify:
+    name: Stages 1 to 11
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      # PostgreSQL 17, pinned by digest (same image as compose.dev.yml; Dependabot updates only the Compose
+      # file, so change both together). Bootstrap superuser only; the application roles are created in
+      # stage 10. The superuser password below is a fixed throwaway for a database that exists only for this
+      # job and cannot be reached from outside the runner (a service `env:` cannot read a generated value),
+      # so a scanner hit on it is not a leak.
+      postgres:
+        image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-bootstrap-only
+          POSTGRES_DB: accucut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres --dbname accucut"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the secret scan reads every commit; changed-code coverage reads the base branch
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # npm 11.17 enforces the `allowScripts` install-script allow-list in package.json.
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      # ---- Stage 1: install ------------------------------------------------------------------
+      - name: "Stage 1: install (npm ci, prisma generate)"
+        run: |
+          npm ci
+          npx prisma generate
+
+      # ---- Stage 2: secret scan --------------------------------------------------------------
+      - name: "Stage 2: secret scan (Gitleaks, full history)"
+        run: |
+          mkdir -p "${RUNNER_TEMP}/gitleaks"
+          curl -sSfL -o "${RUNNER_TEMP}/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/gitleaks.tar.gz" | sha256sum --check -
+          tar -xzf "${RUNNER_TEMP}/gitleaks.tar.gz" -C "${RUNNER_TEMP}/gitleaks" gitleaks
+          echo "GITLEAKS_BIN=${RUNNER_TEMP}/gitleaks/gitleaks" >> "${GITHUB_ENV}"
+          "${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --config .gitleaks.toml --baseline-path .gitleaks-baseline.json .
+          # The baseline accepts exactly 7 documentation findings (delivery lead, 2026-11-02; README). It is
+          # not an allow-list: any other finding fails. Negative control: with the baseline in use, the scan must
+          # still fail on a fake secret built at run time (never committed).
+          GITLEAKS_BIN="${RUNNER_TEMP}/gitleaks/gitleaks" npx tsx scripts/secret-scan-control.ts
+
+      # ---- Stage 3: data-file check ----------------------------------------------------------
+      - name: "Stage 3: data-file check (allow-list)"
+        run: npx tsx scripts/check-data-files.ts
+
+      # ---- Stage 4 and 5: lint and type-check ------------------------------------------------
+      - name: "Stage 4: lint"
+        run: npx eslint .
+
+      - name: "Stage 5: type-check"
+        run: npx tsc --noEmit
+
+      # ---- Stage 6: unit tests with coverage of pure code ------------------------------------
+      # Coverage is decided in two places (test strategy sections 10 and 11, ruling on QLT-05). This stage
+      # has no database, so it measures only pure code, src/lib and scripts/lib, on unit lines. The
+      # thresholds for that code (80 percent, 95 percent for the formula engine and the quantity
+      # warnings, 100 percent of branches for figure-state and the password rule) are in vitest.config.ts.
+      # The whole-package gate and the changed-code gate are decided at stage 11, where integration lines count.
+      - name: "Stage 6: unit tests with coverage of pure code"
+        run: >-
+          npx vitest run tests/unit --coverage
+          --coverage.include='src/lib/**/*.{ts,tsx}'
+          --coverage.include='scripts/lib/**/*.ts'
+
+      # ---- Stage 7 and 8: supply chain -------------------------------------------------------
+      - name: "Stage 7: dependency audit (high and above)"
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: "Stage 8: licence check (allow-list with named exceptions)"
+        run: npx tsx scripts/check-licences.ts
+
+      # ---- Stage 9: build --------------------------------------------------------------------
+      - name: "Stage 9: build"
+        run: |
+          npx prisma generate
+          npx next build
+
+      # ---- Stage 10: migrations --------------------------------------------------------------
+      - name: "Stage 10: create the two database roles (throwaway passwords)"
+        run: |
+          owner="o$(openssl rand -hex 16)"
+          app="a$(openssl rand -hex 16)"
+          echo "::add-mask::${owner}"
+          echo "::add-mask::${app}"
+          {
+            echo "DB_OWNER_PASSWORD=${owner}"
+            echo "DB_APP_PASSWORD=${app}"
+            echo "MIGRATE_DATABASE_URL=postgresql://accucut_owner:${owner}@localhost:5432/accucut"
+            echo "DATABASE_URL=postgresql://accucut_app:${app}@localhost:5432/accucut"
+          } >> "${GITHUB_ENV}"
+          PGHOST=localhost PGPASSWORD=ci-bootstrap-only POSTGRES_USER=postgres POSTGRES_DB=accucut \
+            DB_OWNER_PASSWORD="${owner}" DB_APP_PASSWORD="${app}" \
+            bash docker/postgres-init/01-create-roles.sh
+
+      - name: "Stage 10: migrations on an empty database, then the drift check"
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      # ---- Stage 11: integration, contract, security, acceptance, then the combined coverage gates
+      # Every Vitest level runs in one run with the full coverage scope (scripts/lib/coverage-scope.ts), so a
+      # service tested only by an integration test counts as covered. The whole-package threshold is decided
+      # here; src/server is never excluded. A directory that does not exist yet is ignored by the filter.
+      - name: "Stage 11: integration tests against PostgreSQL, with combined coverage"
+        run: npx vitest run tests/unit tests/integration tests/security tests/acceptance --coverage
+
+      - name: "Stage 11: coverage of changed code (at least 80 percent)"
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"
+
+      # ---- Stage 12: E2E (DISABLED until the first page story) -------------------------------
+      # Chromium at three widths with axe and the canary scan (test strategy sections 2, 6, 9).
+      - name: "Stage 12: E2E (disabled)"
+        if: ${{ false }}
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      # ---- Stage 13: image (DISABLED until the Dockerfile story, STORY-10.04) ----------------
+      # Docker build; run it and check /api/health. Blocks merge on master only.
+      - name: "Stage 13: image build and health check (disabled)"
+        if: ${{ false }}
+        run: echo "Enabled by STORY-10.04 together with the Dockerfile."

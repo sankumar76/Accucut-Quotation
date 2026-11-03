@@ -1,0 +1,19 @@
+# Dependency updates (architecture section 8, supply chain: "Dependabot on").
+# Exact versions stay exact: Dependabot opens one pull request per update, and the whole CI pipeline
+# (audit, licence check, tests) runs on it before a human merges. Never accept a pre-release
+# (for example the `latest` tag of `prisma` points to a release candidate, see ARCH-R4).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
