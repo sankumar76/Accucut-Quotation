@@ -1,6 +1,8 @@
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
 
+import { Icon } from './icon';
+
 export interface BellLinkProps {
   /** Where the overdue tasks are listed. */
   readonly href: string;
@@ -17,7 +19,7 @@ export function BellLink({ href, count }: BellLinkProps) {
       aria-label={label}
       className="relative inline-flex h-(--control-h) w-(--control-h) shrink-0 items-center justify-center rounded-md border border-border bg-surface text-ink no-underline hover:bg-surface-2 hover:text-ink"
     >
-      <Bell aria-hidden="true" focusable="false" size={20} />
+      <Icon icon={Bell} size="large" />
       {count === undefined || count === 0 ? null : (
         <span
           aria-hidden="true"

@@ -11,7 +11,10 @@ import localFont from 'next/font/local';
  * The rupee sign (U+20B9) is in none of the Latin files. It comes from the Latin-extended subsets, declared
  * with `unicode-range` so a page with no rupee sign never fetches them. They are separate families listed
  * BEFORE the base family in the font stack (globals.css): the range sends only currency signs to them, and the
- * base family's own fallback faces (which hold a rupee sign too) can not answer for it first. next/font reads each option as a literal, so the range is written out in both places. tests/unit/fonts.test.ts reads the font files to prove which ones hold the glyph.
+ * base family's own fallback faces (which hold a rupee sign too) can not answer for it first.
+ *
+ * next/font reads each option as a literal, so the range is written out in both places.
+ * tests/unit/brand-assets.test.ts reads the font files to prove which ones hold the glyph.
  */
 
 export const plexSans = localFont({

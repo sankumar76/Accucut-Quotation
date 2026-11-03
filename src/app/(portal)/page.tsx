@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <>
       <PageHeader title="Accucut Quotation Portal" description="The portal is being built one screen at a time." />
-      {isDesignSystemAvailable(process.env.NODE_ENV) ? (
+      {isDesignSystemAvailable() ? (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-s-4">
             <p className="w-full min-w-0 text-ink-2 md:w-auto md:flex-1">

@@ -19,7 +19,7 @@ export function Header({ menuButton, bell, account }: HeaderProps) {
   return (
     <header
       data-sticky-bar="top"
-      className="sticky top-0 z-30 flex min-h-(--topbar-h) items-center gap-s-2 border-b border-border bg-surface px-s-3 md:gap-s-4 md:px-s-4 lg:px-s-5"
+      className="sticky top-0 z-(--z-bar) flex min-h-(--topbar-h) items-center gap-s-2 border-b border-border bg-surface px-s-3 md:gap-s-4 md:px-s-4 lg:px-s-5"
     >
       <div className="lg:hidden">{menuButton}</div>
       <BrandLockup href="/" className="flex-1 lg:flex-none" />

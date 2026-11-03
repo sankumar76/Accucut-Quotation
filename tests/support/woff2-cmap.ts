@@ -22,7 +22,9 @@ const KNOWN_TAGS = [
   'mort', 'morx', 'opbd', 'prop', 'trak', 'Zapf', 'Silf', 'Glat', 'Gloc', 'Feat', 'Sill',
 ] as const;
 
-export class FontFormatError extends Error {}
+export class FontFormatError extends Error {
+  override name = 'FontFormatError';
+}
 
 interface Cursor {
   offset: number;

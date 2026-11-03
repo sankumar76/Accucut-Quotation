@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { contrastRatio } from '@/lib/contrast';
-import { COLOUR_TOKENS, CONTRAST_PAIRS } from '@/lib/design-tokens';
+import { COLOUR_TOKENS, CONTRAST_PAIRS, type StatedContrastPair } from '@/lib/design-tokens';
 
-import { blocksOf, customProperties } from '../support/css-tokens';
+import { blocksOf, customProperties, stripComments } from '../support/css-tokens';
 
 /**
  * STORY-10.02 AC-1 (NFR-020): the colour, type, spacing, radius and control-height tokens are named once, in
@@ -40,6 +40,15 @@ describe('design tokens, AC-1', () => {
       .filter(([name, value]) => globalsRoot.get(name) !== value)
       .map(([name, value]) => `${name}: screens.css "${value}", globals.css "${globalsRoot.get(name) ?? 'missing'}"`);
     expect(differences).toEqual([]);
+  });
+
+  it('QLT-10: the token :root block is not inside an @layer (the radius theme names point at it)', () => {
+    const text = stripComments(GLOBALS);
+    const beforeTokens = text.slice(0, text.indexOf(':root {'));
+    const opened = (beforeTokens.match(/@layer[^{]*{/g) ?? []).length;
+    const closed = (beforeTokens.match(/}/g) ?? []).length;
+    expect(opened).toBe(closed);
+    expect(globalsRoot.size).toBeGreaterThan(40);
   });
 
   it('AC-1: four type sizes, with the 24/32 heading on phones', () => {
@@ -78,11 +87,11 @@ describe('design tokens, AC-1', () => {
       expect(ratio).toBeGreaterThanOrEqual(pair.minimum);
     });
 
-    it.each(CONTRAST_PAIRS.filter((pair) => pair.stated !== undefined))(
+    it.each(CONTRAST_PAIRS.filter((pair): pair is StatedContrastPair => pair.stated !== undefined))(
       'AC-1: $foreground on $background is the $stated:1 that UX spec section 7.3 prints',
       (pair) => {
         const ratio = contrastRatio(valueOf(pair.foreground), valueOf(pair.background));
-        expect(Math.abs(ratio - (pair.stated ?? Number.NaN))).toBeLessThanOrEqual(0.005);
+        expect(Math.abs(ratio - pair.stated)).toBeLessThanOrEqual(0.005);
       },
     );
   });

@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 import { Alert, AlertDescription, AlertTitle, type AlertTone } from '@/components/ui/alert';
 
+import { Icon } from './icon';
+
 const TONE_ICON: Readonly<Record<AlertTone, LucideIcon>> = {
   info: Info,
   success: CircleCheck,
@@ -34,11 +36,11 @@ export interface NoticeProps {
  * success with `role="status"`.
  */
 export function Notice({ tone, title, children, role, className }: NoticeProps) {
-  const Icon = TONE_ICON[tone];
+  const glyph = TONE_ICON[tone];
   const liveRole = role ?? TONE_ROLE[tone];
   return (
     <Alert tone={tone} role={liveRole} {...(className === undefined ? {} : { className })}>
-      <Icon aria-hidden="true" focusable="false" size={18} className="mt-s-1 shrink-0" />
+      <Icon icon={glyph} className="mt-s-1 shrink-0" />
       <AlertDescription>
         {title === undefined ? null : <AlertTitle>{title}</AlertTitle>}
         {children}

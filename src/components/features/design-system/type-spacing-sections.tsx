@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/cn';
 
 import { DsSection } from './section';
 
@@ -48,7 +49,7 @@ export function TypeSection() {
             <dt className="w-full font-mono text-label text-ink-2 md:w-1/4">
               {row.role} · {row.spec}
             </dt>
-            <dd className={`min-w-0 ${row.className}`}>{row.sample}</dd>
+            <dd className={cn('min-w-0', row.className)}>{row.sample}</dd>
           </div>
         ))}
       </dl>
@@ -69,7 +70,7 @@ export function SpacingSection() {
           <li key={row.token} className="flex flex-wrap items-center gap-s-3">
             <span className="w-s-7 font-mono text-label text-ink-2">{row.token}</span>
             <span className="w-s-5 font-mono text-label text-ink-2">{row.pixels}</span>
-            <span aria-hidden="true" className={`h-s-4 rounded-sm bg-nav ${row.barClass}`} />
+            <span aria-hidden="true" className={cn('h-s-4 rounded-sm bg-nav', row.barClass)} />
             <span className="min-w-0 text-label text-ink-3">{row.use}</span>
           </li>
         ))}

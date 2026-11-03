@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { Icon } from '@/components/shared/icon';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { initialsOf } from '@/lib/initials';
 
@@ -50,7 +51,7 @@ export function AccountMenu({ user, items = [], note }: AccountMenuProps) {
           <span className="block truncate font-semibold text-ink">{user.name}</span>
           <span className="block text-label text-ink-2">{user.role}</span>
         </span>
-        <ChevronDown aria-hidden="true" focusable="false" size={16} className="shrink-0 text-ink-2" />
+        <Icon icon={ChevronDown} size="small" className="shrink-0 text-ink-2" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuLabel>

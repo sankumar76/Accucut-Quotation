@@ -1,5 +1,13 @@
 import { MINIMUM_RATIO } from './contrast';
 
+/** Icon sizes in pixels, by role. The components take a role (`<Icon size="large" />`), never a bare number (STD-08). */
+export const ICON_SIZE = { badge: 12, hint: 14, small: 16, default: 18, large: 20, state: 28 } as const;
+
+export type IconSize = keyof typeof ICON_SIZE;
+
+/** The width at which the side menu becomes persistent. Tailwind's `lg` breakpoint is the same 1024 px. */
+export const PERSISTENT_MENU_MIN_WIDTH = 1024;
+
 /**
  * The colour tokens of UX spec section 7.3 and the pairs whose contrast the design system promises.
  * Names only: the values live in `src/app/globals.css`, the one token file (NFR-020), and
@@ -47,10 +55,13 @@ export interface ContrastPair {
 const TEXT = MINIMUM_RATIO.normalText;
 const UI = MINIMUM_RATIO.largeTextOrUi;
 
+/** A pair whose ratio UX spec section 7.3 prints. */
+export type StatedContrastPair = ContrastPair & { readonly stated: number };
+
 /** Every text-and-background pair of UX spec section 7.3, then the pairs the shell uses beyond it. */
 export const CONTRAST_PAIRS: ReadonlyArray<ContrastPair> = [
   { foreground: '--on-fill', background: '--primary', minimum: TEXT, stated: 4.59, note: 'White text on the main button' },
-  { foreground: '--primary', background: '--surface', minimum: UI, stated: 4.59, note: 'Brand red on white (marker, large text)' },
+  { foreground: '--primary', background: '--surface', minimum: TEXT, stated: 4.59, note: 'Brand name at 14 px bold on phones, and markers' },
   { foreground: '--primary', background: '--nav', minimum: UI, stated: 3.86, note: 'Active marker on the graphite menu' },
   { foreground: '--on-fill', background: '--primary-hover', minimum: TEXT, stated: 5.97, note: 'White text on the hovered button' },
   { foreground: '--primary-ink', background: '--surface', minimum: TEXT, stated: 6.48, note: 'Red as text on white' },

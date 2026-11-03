@@ -3,12 +3,27 @@
  * text and background pair of UX spec section 7.3 meets the ratio stated there (STORY-10.02, AC-1).
  */
 
-export class ColourParseError extends Error {}
+import { ValidationError } from './errors';
+
+/** A colour that is not written `#RRGGBB`. */
+export class ColourParseError extends ValidationError {
+  constructor(value: string) {
+    super(`Not a #RRGGBB colour: "${value}"`, { code: 'COLOUR_PARSE_FAILED' });
+  }
+}
 
 const HEX_COLOUR = /^#([0-9a-f]{6})$/i;
 const CHANNEL_BASE = 16;
 const MAX_CHANNEL = 255;
-const LINEAR_THRESHOLD = 0.03928;
+/** The constants of the WCAG 2.x relative-luminance formula (https://www.w3.org/TR/WCAG22/#dfn-relative-luminance). */
+const SRGB = {
+  linearThreshold: 0.03928,
+  linearDivisor: 12.92,
+  gammaOffset: 0.055,
+  gammaScale: 1.055,
+  gamma: 2.4,
+} as const;
+const LUMINANCE_WEIGHT = { red: 0.2126, green: 0.7152, blue: 0.0722 } as const;
 const LUMINANCE_OFFSET = 0.05;
 
 /** WCAG 2.2 minimum ratios: normal text, and large text or interface parts. */
@@ -23,7 +38,7 @@ export interface Rgb {
 /** Parses `#RRGGBB`. Other forms (three-digit hex, functional notation, names) are rejected so a typo cannot pass silently. */
 export function parseHexColour(value: string): Rgb {
   const match = HEX_COLOUR.exec(value.trim());
-  if (match?.[1] === undefined) throw new ColourParseError(`Not a #RRGGBB colour: "${value}"`);
+  if (match?.[1] === undefined) throw new ColourParseError(value);
   const digits = match[1];
   const channel = (start: number): number => Number.parseInt(digits.slice(start, start + 2), CHANNEL_BASE);
   return { red: channel(0), green: channel(2), blue: channel(4) };
@@ -31,12 +46,16 @@ export function parseHexColour(value: string): Rgb {
 
 function linearChannel(value: number): number {
   const scaled = value / MAX_CHANNEL;
-  return scaled <= LINEAR_THRESHOLD ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  return scaled <= SRGB.linearThreshold ? scaled / SRGB.linearDivisor : ((scaled + SRGB.gammaOffset) / SRGB.gammaScale) ** SRGB.gamma;
 }
 
 /** Relative luminance, 0 (black) to 1 (white). */
 export function relativeLuminance(colour: Rgb): number {
-  return 0.2126 * linearChannel(colour.red) + 0.7152 * linearChannel(colour.green) + 0.0722 * linearChannel(colour.blue);
+  return (
+    LUMINANCE_WEIGHT.red * linearChannel(colour.red) +
+    LUMINANCE_WEIGHT.green * linearChannel(colour.green) +
+    LUMINANCE_WEIGHT.blue * linearChannel(colour.blue)
+  );
 }
 
 /** Contrast ratio between two `#RRGGBB` colours, 1 to 21, in either order. */

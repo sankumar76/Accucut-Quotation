@@ -5,11 +5,18 @@ import { Select as SelectPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/cn';
+import { ICON_SIZE } from '@/lib/design-tokens';
+
+/** Gap between the select button and its list, in pixels. */
+const LIST_OFFSET = 4;
 
 /** shadcn/ui Select on the Radix primitive: keyboard type-ahead, arrow keys, Escape; 44 px trigger and rows. */
 export const Select = SelectPrimitive.Root;
+
+/** The chosen option (or the placeholder) inside the trigger. */
 export const SelectValue = SelectPrimitive.Value;
 
+/** The 44 px button that opens the list. `aria-invalid` gives it the error border. */
 export function SelectTrigger({ className, children, ...props }: ComponentProps<typeof SelectPrimitive.Trigger>) {
   return (
     <SelectPrimitive.Trigger
@@ -24,21 +31,22 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
     >
       <span className="min-w-0 truncate">{children}</span>
       <SelectPrimitive.Icon asChild>
-        <ChevronDown aria-hidden="true" focusable="false" size={16} className="shrink-0 text-ink-2" />
+        <ChevronDown size={ICON_SIZE.small} className="shrink-0 text-ink-2" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
 }
 
+/** The list of options, in a portal above the page. */
 export function SelectContent({ className, children, position = 'popper', ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
-        sideOffset={4}
+        sideOffset={LIST_OFFSET}
         className={cn(
-          'z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden rounded-lg border border-border bg-surface p-s-2 shadow-overlay',
+          'z-(--z-popover) max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden rounded-lg border border-border bg-surface p-s-2 shadow-overlay',
           className,
         )}
         {...props}
@@ -49,6 +57,7 @@ export function SelectContent({ className, children, position = 'popper', ...pro
   );
 }
 
+/** One option: a 44 px row with a check mark when chosen. */
 export function SelectItem({ className, children, ...props }: ComponentProps<typeof SelectPrimitive.Item>) {
   return (
     <SelectPrimitive.Item
@@ -61,7 +70,7 @@ export function SelectItem({ className, children, ...props }: ComponentProps<typ
     >
       <span className="flex w-s-4 shrink-0 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <Check aria-hidden="true" focusable="false" size={16} />
+          <Check size={ICON_SIZE.small} />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

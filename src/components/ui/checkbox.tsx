@@ -5,6 +5,7 @@ import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/cn';
+import { ICON_SIZE } from '@/lib/design-tokens';
 
 /**
  * shadcn/ui Checkbox. The button is the 44 px touch target; the 24 px box is drawn inside it, so the
@@ -19,7 +20,7 @@ export function Checkbox({ className, ...props }: ComponentProps<typeof Checkbox
     >
       <span className="flex h-s-5 w-s-5 items-center justify-center rounded-sm border border-border-strong bg-surface text-on-fill group-data-[state=checked]:border-primary-ink group-data-[state=checked]:bg-primary-ink group-disabled:border-border group-disabled:bg-surface-2">
         <CheckboxPrimitive.Indicator>
-          <Check aria-hidden="true" focusable="false" size={16} strokeWidth={3} />
+          <Check size={ICON_SIZE.small} strokeWidth={3} />
         </CheckboxPrimitive.Indicator>
       </span>
     </CheckboxPrimitive.Root>

@@ -11,6 +11,9 @@
  * pairs in UX spec section 7.3 are checked by the same test.
  */
 
+/* This block must stay outside any `@layer`. `@theme inline` below maps `--radius-sm` and `--radius-lg` to themselves
+   (`var(--radius-sm)`); that resolves only because this unlayered block beats the layered theme output. Inside a
+   layer, both would become self-references and every `rounded-sm` and `rounded-lg` would silently be 0 (QLT-10). */
 :root {
   /* Type: exactly four sizes. Phones step the heading down (media query below). */
   --fs-heading: 28px;
@@ -46,6 +49,16 @@
   --switch-w: 52px;
   --switch-travel: 20px;
   --logo-size: 56px;
+  --swatch-min: 168px;
+  --drawer-max: 88vw;
+
+  /* Stacking order, lowest to highest: the sticky bar, the dim behind a drawer, the drawer, menus and pickers (which
+     may open from inside a drawer), and the skip link. Used as `z-(--z-bar)` and so on. */
+  --z-bar: 30;
+  --z-overlay: 40;
+  --z-drawer: 50;
+  --z-popover: 60;
+  --z-skip-link: 100;
   --shadow-1: 0 1px 2px rgba(23, 24, 28, 0.06), 0 1px 3px rgba(23, 24, 28, 0.06);
   --shadow-2: 0 12px 32px rgba(23, 24, 28, 0.22);
 

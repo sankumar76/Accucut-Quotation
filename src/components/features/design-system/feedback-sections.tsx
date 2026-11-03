@@ -1,5 +1,6 @@
 import { CircleCheck, Contrast, Circle, Clock, FilePen, ListChecks, Send, TriangleAlert, type LucideIcon } from 'lucide-react';
 
+import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { EmptyState, ErrorState, SkeletonBlock } from '@/components/shared/states';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -7,8 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 import { DsSection } from './section';
-
-const BADGE_ICON = 12;
 
 interface StatusBadge {
   readonly label: string;
@@ -30,10 +29,10 @@ export function BadgesNoticesSection() {
   return (
     <DsSection number="07" id="ds-badges" title="Status badges and notices">
       <ul className="flex flex-wrap items-center gap-s-2">
-        {STATUS_BADGES.map(({ label, tone, icon: Icon }) => (
+        {STATUS_BADGES.map(({ label, tone, icon: Glyph }) => (
           <li key={label}>
             <Badge tone={tone}>
-              <Icon aria-hidden="true" focusable="false" size={BADGE_ICON} />
+              <Icon icon={Glyph} size="badge" />
               {label}
             </Badge>
           </li>
@@ -69,9 +68,9 @@ export function NodeIconsSection() {
   return (
     <DsSection number="08" id="ds-nodes" title="Node status icons">
       <ul className="flex flex-col gap-s-2">
-        {NODE_ICONS.map(({ label, icon: Icon, className }) => (
+        {NODE_ICONS.map(({ label, icon: Glyph, className }) => (
           <li key={label} className="flex items-center gap-s-3">
-            <Icon aria-hidden="true" focusable="false" size={18} className={className} />
+            <Icon icon={Glyph} className={className} />
             {label}
           </li>
         ))}
@@ -92,7 +91,7 @@ export function StatesSection() {
         <Card className="shadow-none">
           <EmptyState
             as="h3"
-            icon={<ListChecks size={28} focusable="false" />}
+            icon={<Icon icon={ListChecks} size="state" />}
             title="Nothing here yet"
             description="Say what is missing and what to do next, in one sentence."
             action={<Button variant="secondary">One clear action</Button>}

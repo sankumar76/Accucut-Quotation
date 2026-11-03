@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { cn } from '@/lib/cn';
 import { ColourParseError, contrastRatio, parseHexColour, relativeLuminance } from '@/lib/contrast';
+import { AppError } from '@/lib/errors';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
 import { initialsOf } from '@/lib/initials';
 import { isActivePath } from '@/lib/nav';
-import { computeStickyOffsets, STICKY_CLEARANCE } from '@/lib/sticky-offsets';
+import { computeStickyOffsets, reconcileObserved, STICKY_CLEARANCE } from '@/lib/sticky-offsets';
 
 describe('cn', () => {
   it('joins class names and drops the falsy ones', () => {
@@ -27,6 +28,19 @@ describe('contrast ratio (WCAG)', () => {
   it('gives the luminance of white as 1 and of black as 0', () => {
     expect(relativeLuminance(parseHexColour('#ffffff'))).toBeCloseTo(1, 5);
     expect(relativeLuminance(parseHexColour('#000000'))).toBe(0);
+  });
+
+  it('STD-12: a bad colour is a typed, named application error with a code', () => {
+    const error = (() => {
+      try {
+        parseHexColour('red');
+      } catch (thrown) {
+        return thrown;
+      }
+      return undefined;
+    })();
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({ name: 'ColourParseError', code: 'COLOUR_PARSE_FAILED' });
   });
 
   it('rejects a colour that is not #RRGGBB, so a typo cannot pass silently', () => {
@@ -89,7 +103,31 @@ describe('computeStickyOffsets (WCAG 2.4.11)', () => {
   });
 });
 
+describe('reconcileObserved (QLT-08)', () => {
+  it('says which bars to start watching and which to stop watching', () => {
+    const kept = { id: 'kept' };
+    const gone = { id: 'gone' };
+    const added = { id: 'added' };
+    expect(reconcileObserved(new Set([kept, gone]), [kept, added])).toEqual({ add: [added], remove: [gone] });
+  });
+
+  it('has nothing to do when the bars are the same', () => {
+    const bar = {};
+    expect(reconcileObserved(new Set([bar]), [bar])).toEqual({ add: [], remove: [] });
+    expect(reconcileObserved(new Set(), [])).toEqual({ add: [], remove: [] });
+  });
+});
+
 describe('isDesignSystemAvailable (AC-7)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('AC-7: with no argument it reads NODE_ENV, so every caller sees the same answer (STD-05)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(isDesignSystemAvailable()).toBe(false);
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(isDesignSystemAvailable()).toBe(true);
+  });
+
   it('AC-7: is available in development and test', () => {
     expect(isDesignSystemAvailable('development')).toBe(true);
     expect(isDesignSystemAvailable('test')).toBe(true);

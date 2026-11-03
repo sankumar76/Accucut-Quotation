@@ -24,7 +24,7 @@ export const metadata: Metadata = {
  * "not found" (STORY-10.02, AC-7).
  */
 export default function DesignSystemPage() {
-  if (!isDesignSystemAvailable(process.env.NODE_ENV)) notFound();
+  if (!isDesignSystemAvailable()) notFound();
 
   return (
     <>

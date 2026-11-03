@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 
+import { Icon } from './icon';
+
 /** The delay before a skeleton appears (UX spec section 6.0 "States": shown after 300 ms). */
 export const SKELETON_DELAY_MS = 300;
 
@@ -23,7 +25,7 @@ export interface SkeletonBlockProps {
 
 /**
  * Loading state: grey rows shaped like the content, shown after 300 ms, in a container with
- * `aria-busy="true"`, plus a visually hidden "Loading ..." in a polite live region. There is no page-level
+ * `aria-busy="true"`, plus a visually hidden "Loading ..." in a polite live region beside it. There is no page-level
  * spinner. The shimmer stops under `prefers-reduced-motion`.
  */
 export function SkeletonBlock({ rows = 3, delayMs = SKELETON_DELAY_MS, label = 'Loading', className }: SkeletonBlockProps) {
@@ -35,21 +37,25 @@ export function SkeletonBlock({ rows = 3, delayMs = SKELETON_DELAY_MS, label = '
     return () => window.clearTimeout(timer);
   }, [visible, delayMs]);
 
+  // The live region is a sibling of the busy container, not a child: a screen reader may hold back changes
+  // inside an `aria-busy` subtree until it clears, and this one stays busy while it is shown (QLT-03).
   return (
-    <div aria-busy="true" className={className}>
+    <>
       <p role="status" className="sr-only">
         {visible ? `${label} …` : ''}
       </p>
-      {visible
-        ? Array.from({ length: rows }, (_, index) => (
-            <div key={index} className="flex items-center gap-s-4 border-b border-border p-s-4 last:border-b-0">
-              <Skeleton className="h-s-4 flex-[2]" />
-              <Skeleton className="h-s-4 flex-1" />
-              <Skeleton className="h-s-4 flex-1" />
-            </div>
-          ))
-        : null}
-    </div>
+      <div aria-busy="true" className={className}>
+        {visible
+          ? Array.from({ length: rows }, (_, index) => (
+              <div key={index} className="flex items-center gap-s-4 border-b border-border p-s-4 last:border-b-0">
+                <Skeleton className="h-s-4 flex-[2]" />
+                <Skeleton className="h-s-4 flex-1" />
+                <Skeleton className="h-s-4 flex-1" />
+              </div>
+            ))
+          : null}
+      </div>
+    </>
   );
 }
 
@@ -111,7 +117,7 @@ export function ErrorState({
   return (
     <div className={cn('flex flex-col items-center gap-s-3 px-s-5 py-s-7 text-center', className)}>
       <span aria-hidden="true" className="flex h-s-7 w-s-7 items-center justify-center rounded-full bg-danger-soft text-danger">
-        <TriangleAlert focusable="false" size={28} />
+        <Icon icon={TriangleAlert} size="state" />
       </span>
       <Heading ref={headingRef} tabIndex={-1} className="text-sub font-semibold text-ink">
         {title}

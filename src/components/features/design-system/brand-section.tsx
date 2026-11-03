@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 
 import { BrandLockup } from '@/components/shared/brand-lockup';
+import { Icon } from '@/components/shared/icon';
 import { Badge } from '@/components/ui/badge';
 
 import { DsSection } from './section';
@@ -25,7 +26,7 @@ export function BrandSection() {
         <ul className="flex min-w-0 flex-1 flex-col gap-s-2">
           {BRAND_RULES.map((rule) => (
             <li key={rule} className="flex items-start gap-s-2">
-              <Check aria-hidden="true" focusable="false" size={16} className="mt-s-1 shrink-0 text-success" />
+              <Icon icon={Check} size="small" className="mt-s-1 shrink-0 text-success" />
               {rule}
             </li>
           ))}

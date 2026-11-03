@@ -26,3 +26,16 @@ export function computeStickyOffsets(bars: ReadonlyArray<StickyBar>, clearance: 
     bars.filter((bar) => bar.edge === edge).reduce((sum, bar) => sum + Math.max(0, bar.height), 0);
   return { top: Math.ceil(total('top') + clearance), bottom: Math.ceil(total('bottom') + clearance) };
 }
+
+export interface Reconciliation<T> {
+  /** In the page now, not watched yet. */
+  readonly add: ReadonlyArray<T>;
+  /** Watched, but no longer in the page: stop watching so the removed element can be freed (QLT-08). */
+  readonly remove: ReadonlyArray<T>;
+}
+
+/** Compares the bars being watched with the bars in the page. */
+export function reconcileObserved<T>(observed: ReadonlySet<T>, current: ReadonlyArray<T>): Reconciliation<T> {
+  const present = new Set(current);
+  return { add: current.filter((bar) => !observed.has(bar)), remove: [...observed].filter((bar) => !present.has(bar)) };
+}

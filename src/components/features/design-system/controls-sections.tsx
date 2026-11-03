@@ -2,6 +2,7 @@ import { Calculator, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import { ColumnTag } from '@/components/shared/column-tag';
 import { FormField } from '@/components/shared/form-field';
+import { Icon } from '@/components/shared/icon';
 import { UnitInput } from '@/components/shared/unit-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,31 +12,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DsSection } from './section';
 import { SwitchDemo } from './switch-demo';
 
-const ICON = 18;
-
 /** SCR-00 section 05: one button size, four variants and the icon-only square. */
 export function ButtonsSection() {
   return (
     <DsSection number="05" id="ds-buttons" title="Buttons" aside="One size: 44 px high, 16 px side padding, 8 px radius, 14 / 600">
       <div className="flex flex-wrap items-center gap-s-3">
         <Button>
-          <Calculator aria-hidden="true" focusable="false" size={ICON} />
+          <Icon icon={Calculator} />
           Calculate
         </Button>
         <Button variant="secondary">
-          <Plus aria-hidden="true" focusable="false" size={ICON} />
+          <Icon icon={Plus} />
           Add part
         </Button>
         <Button variant="ghost">Cancel</Button>
         <Button variant="danger">
-          <Trash2 aria-hidden="true" focusable="false" size={ICON} />
+          <Icon icon={Trash2} />
           Delete
         </Button>
         <Button variant="secondary" size="icon" aria-label="Edit part">
-          <Pencil aria-hidden="true" focusable="false" size={ICON} />
+          <Icon icon={Pencil} />
         </Button>
         <Button variant="secondary" size="icon-row" aria-label="Edit row">
-          <Pencil aria-hidden="true" focusable="false" size={16} />
+          <Icon icon={Pencil} size="small" />
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-s-3">

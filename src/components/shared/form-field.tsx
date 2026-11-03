@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 import { Label } from '@/components/ui/label';
 
+import { Icon } from './icon';
+
 /** What the control must receive so the label, hint and error are tied to it for assistive technology. */
 export interface FieldControlProps {
   readonly id: string;
@@ -52,7 +54,7 @@ export function FormField({ id, label, tag, hint, error, children }: FormFieldPr
       )}
       {error === undefined ? null : (
         <p id={errorId} className="flex items-start gap-s-1 text-label font-semibold text-danger">
-          <CircleAlert aria-hidden="true" focusable="false" size={14} className="mt-px shrink-0" />
+          <Icon icon={CircleAlert} size="hint" className="mt-px shrink-0" />
           {error}
         </p>
       )}

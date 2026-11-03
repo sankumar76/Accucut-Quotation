@@ -4,10 +4,9 @@ import type { ReactNode } from 'react';
 import { AccountMenu, type AccountMenuItem, type AccountUser } from '@/components/shared/account-menu';
 import { AppShell } from '@/components/shared/app-shell';
 import { BellLink } from '@/components/shared/bell-link';
+import { Icon } from '@/components/shared/icon';
 import type { NavGroup } from '@/components/shared/nav';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
-
-const ICON_SIZE = 20;
 
 /**
  * Invented person for the account menu until sign-in exists (STORY-01.01 / 01.02 replace this with the
@@ -15,8 +14,8 @@ const ICON_SIZE = 20;
  */
 const PREVIEW_USER: AccountUser = { name: 'Preview User', email: 'preview.user@example.test', role: 'Preview' };
 const ACCOUNT_ITEMS: ReadonlyArray<AccountMenuItem> = [
-  { label: 'Change password', icon: <KeyRound aria-hidden="true" focusable="false" size={ICON_SIZE} /> },
-  { label: 'Sign out', icon: <LogOut aria-hidden="true" focusable="false" size={ICON_SIZE} /> },
+  { label: 'Change password', icon: <Icon icon={KeyRound} size="large" /> },
+  { label: 'Sign out', icon: <Icon icon={LogOut} size="large" /> },
 ];
 const ACCOUNT_NOTE = 'Both actions are switched on by the sign-in story (STORY-01.01).';
 
@@ -27,19 +26,23 @@ const ACCOUNT_NOTE = 'Both actions are switched on by the sign-in story (STORY-0
 function navGroups(): ReadonlyArray<NavGroup> {
   const work: NavGroup = {
     label: 'Work',
-    items: [{ label: 'Home', href: '/', icon: <House aria-hidden="true" focusable="false" size={ICON_SIZE} /> }],
+    items: [{ label: 'Home', href: '/', icon: <Icon icon={House} size="large" /> }],
   };
   const review: NavGroup = {
     label: 'Review',
-    items: [{ label: 'Design system', href: '/design-system', icon: <Palette aria-hidden="true" focusable="false" size={ICON_SIZE} /> }],
+    items: [{ label: 'Design system', href: '/design-system', icon: <Icon icon={Palette} size="large" /> }],
   };
-  return isDesignSystemAvailable(process.env.NODE_ENV) ? [work, review] : [work];
+  return isDesignSystemAvailable() ? [work, review] : [work];
 }
 
 /** The page frame of every signed-in page (route group `(portal)`): top bar, side menu, skip link, `main`. */
 export default function PortalLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <AppShell navGroups={navGroups()} bell={<BellLink href="/" />} account={<AccountMenu user={PREVIEW_USER} items={ACCOUNT_ITEMS} note={ACCOUNT_NOTE} />}>
+    <AppShell
+      navGroups={navGroups()}
+      bell={<BellLink href="/" />}
+      account={<AccountMenu user={PREVIEW_USER} items={ACCOUNT_ITEMS} note={ACCOUNT_NOTE} />}
+    >
       {children}
     </AppShell>
   );

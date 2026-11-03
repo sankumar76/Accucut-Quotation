@@ -1,7 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/cn';
 import { MINIMUM_RATIO } from '@/lib/contrast';
-import { COLOUR_TOKENS, CONTRAST_PAIRS, type ColourTokenName } from '@/lib/design-tokens';
+import { COLOUR_TOKENS, CONTRAST_PAIRS, type ColourTokenName, type StatedContrastPair } from '@/lib/design-tokens';
 
 import { DsSection } from './section';
 import { TokenValue } from './token-value';
@@ -26,13 +27,12 @@ const SWATCH_CLASS: Readonly<Record<ColourTokenName, string>> = {
   '--surface-2': 'bg-surface-2',
 };
 
-const STATED_PAIRS = CONTRAST_PAIRS.filter((pair) => pair.stated !== undefined);
+const STATED_PAIRS = CONTRAST_PAIRS.filter((pair): pair is StatedContrastPair => pair.stated !== undefined);
 const formatRatio = (ratio: number): string => `${ratio.toFixed(2)}:1`;
 
 /** The printed ratios (UX spec section 7.3) in which a token is the foreground or the background. */
 function ratiosFor(name: string): ReadonlyArray<string> {
   return STATED_PAIRS.flatMap((pair) => {
-    if (pair.stated === undefined) return [];
     if (pair.foreground === name) return [`${formatRatio(pair.stated)} on ${pair.background}`];
     if (pair.background === name) return [`${formatRatio(pair.stated)} with ${pair.foreground}`];
     return [];
@@ -43,12 +43,12 @@ function ratiosFor(name: string): ReadonlyArray<string> {
 export function ColourSection() {
   return (
     <DsSection number="02" id="ds-colour" title="Colour tokens" aside="Values are read from the page; ratios are tested">
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-s-4">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(var(--swatch-min),1fr))] gap-s-4">
         {COLOUR_TOKENS.map((token) => {
           const ratios = ratiosFor(token.name);
           return (
             <li key={token.name} className="flex flex-col gap-s-1">
-              <span aria-hidden="true" className={`h-s-7 rounded-md border border-border ${SWATCH_CLASS[token.name]}`} />
+              <span aria-hidden="true" className={cn('h-s-7 rounded-md border border-border', SWATCH_CLASS[token.name])} />
               <span className="text-label font-semibold text-ink">{token.label}</span>
               <span className="text-label text-ink-2">
                 <span className="font-mono">{token.name}</span> · <TokenValue name={token.name} />
@@ -90,7 +90,7 @@ export function ColourSection() {
                 <TableCell className="font-mono text-label">{pair.foreground}</TableCell>
                 <TableCell className="font-mono text-label">{pair.background}</TableCell>
                 <TableCell>
-                  <Badge tone="success">{pair.stated === undefined ? '' : formatRatio(pair.stated)}</Badge>
+                  <Badge tone="success">{formatRatio(pair.stated)}</Badge>
                 </TableCell>
                 <TableCell>{formatRatio(pair.minimum)}</TableCell>
                 <TableCell className="text-ink-2">{pair.note}</TableCell>

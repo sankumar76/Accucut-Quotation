@@ -5,11 +5,17 @@ import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/cn';
 
+/** Gap between the trigger and the menu, in pixels. */
+const MENU_OFFSET = 8;
+
 /** shadcn/ui DropdownMenu: the account menu. Arrow keys move, Escape closes and returns focus to the trigger. */
 export const DropdownMenu = DropdownMenuPrimitive.Root;
+
+/** The button that opens the menu. */
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
-export function DropdownMenuContent({ className, sideOffset = 8, align = 'end', ...props }: ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+/** The menu panel, in a portal above the page, aligned to the trigger's right edge. */
+export function DropdownMenuContent({ className, sideOffset = MENU_OFFSET, align = 'end', ...props }: ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -17,7 +23,7 @@ export function DropdownMenuContent({ className, sideOffset = 8, align = 'end', 
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          'z-50 min-w-(--menu-w) max-w-[calc(100vw-var(--s-4)*2)] rounded-lg border border-border bg-surface p-s-2 shadow-overlay',
+          'z-(--z-popover) min-w-(--menu-w) max-w-[calc(100vw-var(--s-4)*2)] rounded-lg border border-border bg-surface p-s-2 shadow-overlay',
           className,
         )}
         {...props}
@@ -26,6 +32,7 @@ export function DropdownMenuContent({ className, sideOffset = 8, align = 'end', 
   );
 }
 
+/** A heading block inside the menu, for example the signed-in person. */
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Label>) {
   return (
     <DropdownMenuPrimitive.Label
@@ -36,6 +43,7 @@ export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof
   );
 }
 
+/** One 44 px action; pass `asChild` to make it a link. */
 export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Item>) {
   return (
     <DropdownMenuPrimitive.Item

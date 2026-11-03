@@ -21,7 +21,7 @@ export interface NavGroup {
 export interface NavProps {
   readonly groups: ReadonlyArray<NavGroup>;
   /** Called when a link is chosen, so the drawer can close. */
-  readonly onNavigate?: () => void;
+  readonly onNavigate?: (href: string) => void;
 }
 
 /**
@@ -45,7 +45,7 @@ export function Nav({ groups, onNavigate }: NavProps) {
                   <Link
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
-                    {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
+                    {...(onNavigate === undefined ? {} : { onClick: () => onNavigate(item.href) })}
                     className={cn(
                       'relative flex min-h-(--control-h) items-center gap-s-3 rounded-md px-s-3 font-semibold text-nav-ink no-underline hover:bg-nav-2 hover:text-on-fill',
                       active && 'bg-nav-2 text-on-fill before:absolute before:inset-y-s-2 before:-left-s-3 before:w-s-1 before:rounded-r-sm before:bg-primary',
