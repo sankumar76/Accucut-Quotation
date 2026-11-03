@@ -1,3 +1,293 @@
 @import 'tailwindcss';
 
-/* Design tokens, fonts and the app shell arrive with STORY-10.02. */
+/*
+ * THE TOKEN FILE (STORY-10.02, NFR-020). Every colour, size, space, radius and control height of the
+ * "Red Leads" design system is named here and nowhere else. Components use the utilities that the
+ * `@theme inline` block below builds from these names (`bg-primary`, `text-body`, `p-s-4`); a hard-coded
+ * hex colour or pixel font size anywhere else fails tests/unit/tokens.test.ts.
+ *
+ * Source of truth for the names and values: docs/03-ux/screens/screens.css `:root` (UX spec section 7).
+ * The test compares the two files, so a change to one without the other fails. Contrast ratios of the
+ * pairs in UX spec section 7.3 are checked by the same test.
+ */
+
+:root {
+  /* Type: exactly four sizes. Phones step the heading down (media query below). */
+  --fs-heading: 28px;
+  --lh-heading: 36px;
+  --fs-sub: 18px;
+  --lh-sub: 26px;
+  --fs-body: 14px;
+  --lh-body: 22px;
+  --fs-label: 12px;
+  --lh-label: 16px;
+
+  /* Spacing: 4-point scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* Shape and layout */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --control-h: 44px;
+  --control-h-row: 36px;
+  --topbar-h: 64px;
+  --side-w: 248px;
+  --drawer-w: 288px;
+  --page-max: 1320px;
+  --menu-w: 264px;
+  --switch-w: 52px;
+  --switch-travel: 20px;
+  --logo-size: 56px;
+  --shadow-1: 0 1px 2px rgba(23, 24, 28, 0.06), 0 1px 3px rgba(23, 24, 28, 0.06);
+  --shadow-2: 0 12px 32px rgba(23, 24, 28, 0.22);
+
+  /* Colour: "Red Leads" */
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --surface-2: #eeeef0;
+  --border: #d9dadf;
+  --border-strong: #85888f;
+  --ink: #17181c;
+  --ink-2: #4a4d57;
+  --ink-3: #5e616c;
+  --nav: #17181c;
+  --nav-2: #2a2c33;
+  --nav-ink: #c9cbd2;
+  --nav-muted: #9a9da8;
+
+  --primary: #de3030;
+  --primary-hover: #bf2626;
+  --primary-ink: #b52424;
+  --primary-soft: #fdecec;
+  --primary-line: #f2b8b8;
+
+  --accent: #b45309;
+  --accent-ink: #8a3f05;
+  --accent-soft: #fff4e5;
+  --accent-line: #f0c58f;
+
+  --success: #157f3b;
+  --success-ink: #0f5f2c;
+  --success-soft: #e8f5ec;
+  --success-line: #a9dbb9;
+
+  --danger: #b3261e;
+  --danger-ink: #8f1c13;
+  --danger-soft: #fcedeb;
+  --danger-line: #f0b3ad;
+
+  --info-ink: #333945;
+  --info-soft: #eceef2;
+  --info-line: #c5cad5;
+
+  --focus: #17181c;
+
+  /* Added for the app (not in the mock-up file): text on a solid fill, the dim behind a drawer, and the
+     highlight of the loading shimmer. screens.css writes these inline. */
+  --on-fill: #ffffff;
+  --scrim: rgba(23, 24, 28, 0.6);
+  --skeleton-hi: #f7f7f8;
+
+  /* Fonts: the families are loaded by next/font/local (src/app/fonts/fonts.ts). The rupee families come FIRST in
+     each stack: their unicode-range limits them to currency signs, so every other character falls through to the
+     base family, and the rupee sign is found in a project font before a fallback face (which also holds one)
+     can answer for it. A page with no rupee sign never fetches the rupee files. */
+  --font-sans-stack: var(--nf-plex-sans-rupee), var(--nf-plex-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono-stack: var(--nf-plex-mono-rupee), var(--nf-plex-mono), ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --font-brand-stack: var(--nf-tinos), 'Times New Roman', Times, serif;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --fs-heading: 24px;
+    --lh-heading: 32px;
+    --logo-size: 44px;
+  }
+}
+
+@media (max-width: 479px) {
+  :root {
+    --logo-size: 40px;
+  }
+}
+
+/* Utilities built from the tokens above. `inline` keeps the utility pointing at the :root variable. */
+@theme inline {
+  --color-*: initial;
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-nav: var(--nav);
+  --color-nav-2: var(--nav-2);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-muted: var(--nav-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-line: var(--primary-line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-info-ink: var(--info-ink);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+  --color-focus: var(--focus);
+  --color-on-fill: var(--on-fill);
+  --color-scrim: var(--scrim);
+  --color-skeleton-hi: var(--skeleton-hi);
+
+  /* Only the 4-point scale exists: p-s-4 is 16 px, and p-5 is not a utility. */
+  --spacing-*: initial;
+  --spacing-0: 0px;
+  --spacing-px: 1px;
+  --spacing-s-1: var(--s-1);
+  --spacing-s-2: var(--s-2);
+  --spacing-s-3: var(--s-3);
+  --spacing-s-4: var(--s-4);
+  --spacing-s-5: var(--s-5);
+  --spacing-s-6: var(--s-6);
+  --spacing-s-7: var(--s-7);
+
+  --text-heading: var(--fs-heading);
+  --text-heading--line-height: var(--lh-heading);
+  --text-sub: var(--fs-sub);
+  --text-sub--line-height: var(--lh-sub);
+  --text-body: var(--fs-body);
+  --text-body--line-height: var(--lh-body);
+  --text-label: var(--fs-label);
+  --text-label--line-height: var(--lh-label);
+
+  /* No separate 500 face of IBM Plex Sans is shipped (only 400 and 600 are preloaded), so medium is 600. */
+  --font-weight-medium: 600;
+
+  --font-sans: var(--font-sans-stack);
+  --font-mono: var(--font-mono-stack);
+  --font-brand: var(--font-brand-stack);
+
+  --radius-xs: var(--radius-sm);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-pill);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-overlay: var(--shadow-2);
+
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-sheet-in: sheet-in 200ms ease-out;
+  --animate-sheet-out: sheet-out 200ms ease-in;
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-fade-out: fade-out 200ms ease-in;
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes sheet-out {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Measured from the sticky bars by use-sticky-offsets.ts (WCAG 2.4.11); these are the fallback before it runs. */
+    scroll-padding-top: var(--sticky-top, calc(var(--topbar-h) + var(--s-2)));
+    scroll-padding-bottom: var(--sticky-bottom, var(--s-2));
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans-stack);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--primary-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  a:hover {
+    color: var(--primary-hover);
+  }
+
+  /* Focus ring: 3 px graphite with a 2 px offset; white on the dark menu (UX spec section 8). */
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  [data-on-dark] :focus-visible,
+  [data-on-dark]:focus-visible {
+    outline-color: var(--on-fill);
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+}
+
+/* The loading shimmer of the Skeleton component. */
+@layer components {
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--skeleton-hi) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+  }
+}
+
+/* Shimmer, spin and slide transitions are off for people who ask for less motion (UX spec section 8, AC-6). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
