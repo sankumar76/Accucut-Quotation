@@ -22,6 +22,17 @@ const RUNTIME_ROLE = 'accucut_app';
 const MIGRATIONS_DIRECTORY = fileURLToPath(new URL('../../prisma/migrations/', import.meta.url));
 const NAME_RANDOM_BYTES = 6;
 
+/**
+ * DDL (`CREATE DATABASE`, `DROP DATABASE`, `GRANT`) cannot take bind parameters, so these statements are built
+ * by interpolation. That is safe here because every interpolated value is internal: a name generated below
+ * from random bytes and checked against this pattern before it is used, and two constant role names.
+ */
+const SCRATCH_NAME = /^aqp_scratch_[0-9a-f]+$/;
+
+function assertScratchName(name: string): void {
+  if (!SCRATCH_NAME.test(name)) throw new Error('Unexpected scratch database name.');
+}
+
 export interface ScratchDatabase {
   /** Connection URL of the owner role (what `ensure-seed-version` uses). */
   readonly ownerUrl: string;
@@ -67,6 +78,7 @@ export async function createMigratedScratchDatabase(): Promise<ScratchDatabase> 
   const ownerBase = requiredUrl('MIGRATE_DATABASE_URL');
   const runtimeBase = requiredUrl('DATABASE_URL');
   const name = `aqp_scratch_${randomBytes(NAME_RANDOM_BYTES).toString('hex')}`;
+  assertScratchName(name);
   const ownerUrl = withDatabase(ownerBase, name);
   const runtimeUrl = withDatabase(runtimeBase, name);
 

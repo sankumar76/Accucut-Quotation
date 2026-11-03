@@ -2,7 +2,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConfigDocumentError, parseConfigDocument } from '../../../src/lib/fields/schema';
-import { createConfigRepository, type ConfigRepository } from '../../../src/server/repositories/config-repository';
+import { type ConfigRepository, createConfigRepository } from '../../../src/server/repositories/config-repository';
 import { createPrismaClient, type PrismaClient } from '../../../src/server/repositories/prisma-client';
 import {
   ConfigVersionMissingError,
@@ -62,6 +62,22 @@ async function versionCount(client: Client): Promise<number> {
   return Number(rows[0]?.count);
 }
 
+const LOCK_POLL_MILLISECONDS = 25;
+const LOCK_WAIT_LIMIT_MILLISECONDS = 10_000;
+
+/** Polls until some statement in this database is waiting on a lock, so the test never guesses with a sleep. */
+async function waitUntilAStatementWaitsOnALock(client: Client): Promise<void> {
+  const deadline = Date.now() + LOCK_WAIT_LIMIT_MILLISECONDS;
+  while (Date.now() < deadline) {
+    const { rows } = await client.query<{ waiting: string }>(
+      "SELECT count(*) AS waiting FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+    );
+    if (Number(rows[0]?.waiting) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MILLISECONDS));
+  }
+  throw new Error('No statement started waiting on a lock in time.');
+}
+
 describe('version 1: ensureSeedVersion (AC-6)', { timeout: 60_000 }, () => {
   let session: Session;
 
@@ -107,17 +123,23 @@ describe('version 1: ensureSeedVersion (AC-6)', { timeout: 60_000 }, () => {
     expect(current.createdBy).toBeNull();
   });
 
-  it('AC-6: two steps started at once create one version between them', async () => {
-    // A second empty database, so both really start from nothing.
+  it('AC-6: a step that overlaps another transaction inserting version 1 waits for it and then changes nothing', async () => {
+    // QLT-03: force the overlap, so the ON CONFLICT branch is what is tested. Another transaction holds
+    // version 1 uncommitted; the step cannot see it (READ COMMITTED), so it tries to insert and waits on
+    // the unique index. Without ON CONFLICT DO NOTHING it would fail with 23505 once the other commits.
     const other = await openSession();
+    const blocker = new Client({ connectionString: other.database.ownerUrl });
+    await blocker.connect();
     try {
-      const results = await Promise.all([
-        ensureSeedVersion(other.ownerRepository, { document: seedConfig, reason: SEED_VERSION_REASON }),
-        ensureSeedVersion(createConfigRepository(other.runtimePrisma), { document: seedConfig, reason: SEED_VERSION_REASON }),
-      ]);
-      expect(results.filter((result) => result.created)).toHaveLength(1);
+      await blocker.query('BEGIN');
+      await blocker.query(INSERT_VERSION, [1, JSON.stringify(seedConfig), SEED_VERSION_REASON]);
+      const pending = ensureSeedVersion(other.ownerRepository, { document: seedConfig, reason: SEED_VERSION_REASON });
+      await waitUntilAStatementWaitsOnALock(other.owner);
+      await blocker.query('COMMIT');
+      await expect(pending).resolves.toEqual({ created: false });
       expect(await versionCount(other.owner)).toBe(1);
     } finally {
+      await blocker.end();
       await closeSession(other);
     }
   });
