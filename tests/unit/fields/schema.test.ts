@@ -5,6 +5,7 @@ import { ConfigDocumentError, configDocumentSchema, parseConfigDocument, type Co
 
 import { cloneSeedConfig, seedFieldAt } from '../../support/seed-config';
 import { defined } from '../../support/defined';
+import { thrownAs } from '../../support/thrown';
 
 /**
  * AC-6 (negative) and AC-2/AC-3 rules: a document that fails the schema is refused whole, with a message that
@@ -206,31 +207,19 @@ describe('parseConfigDocument (AC-6)', () => {
     const document = plain();
     fieldOf(document, 'AK')['engineerVisible'] = true;
     fieldOf(document, 'AK')['formula'] = 'SECRET-LOOKING-TEXT';
-    let thrown: unknown;
-    try {
-      parseConfigDocument(document);
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(ConfigDocumentError);
+    const thrown = thrownAs(() => parseConfigDocument(document), ConfigDocumentError);
     expect(isAppError(thrown)).toBe(true);
     expect(thrown).toMatchObject({ code: 'CONFIG_DOCUMENT_INVALID', httpStatus: 422 });
-    const message = (thrown as ConfigDocumentError).message;
-    expect(message).toContain('fields.');
-    expect(message).not.toContain('SECRET-LOOKING-TEXT');
+    expect(thrown.message).toContain('fields.');
+    expect(thrown.message).not.toContain('SECRET-LOOKING-TEXT');
   });
 
   it('counts the problems it does not list', () => {
     const document = plain();
     for (const field of document.fields) field['position'] = 1;
-    let thrown: unknown;
-    try {
-      parseConfigDocument(document);
-    } catch (error) {
-      thrown = error;
-    }
-    expect((thrown as ConfigDocumentError).message).toMatch(/\(and \d+ more\)$/);
-    expect((thrown as ConfigDocumentError).issues.length).toBeGreaterThan(5);
+    const thrown = thrownAs(() => parseConfigDocument(document), ConfigDocumentError);
+    expect(thrown.message).toMatch(/\(and \d+ more\)$/);
+    expect(thrown.issues.length).toBeGreaterThan(5);
   });
 
   it('names a document that is not an object as the document itself', () => {

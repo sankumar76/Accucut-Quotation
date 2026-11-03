@@ -9,6 +9,8 @@ import {
 } from '@/lib/columns';
 import { isAppError } from '@/lib/errors';
 
+import { thrownAs } from '../support/thrown';
+
 /** AC-1 (FR-021): letters are derived from position with the Excel algorithm, and the inverse holds. */
 
 // Letters are written out here on purpose: tests are one of the two places they may be (coding standards).
@@ -43,14 +45,10 @@ describe('indexToColumnLetter (AC-1)', () => {
   });
 
   it('AC-1: the error is an application error with a stable code and no echo of the input', () => {
-    try {
-      indexToColumnLetter(-7);
-      expect.unreachable('should have thrown');
-    } catch (error) {
-      expect(isAppError(error)).toBe(true);
-      expect(error).toMatchObject({ code: 'COLUMN_REFERENCE_INVALID', httpStatus: 422 });
-      expect(String((error as Error).message)).not.toContain('-7');
-    }
+    const error = thrownAs(() => indexToColumnLetter(-7), ColumnReferenceError);
+    expect(isAppError(error)).toBe(true);
+    expect(error).toMatchObject({ code: 'COLUMN_REFERENCE_INVALID', httpStatus: 422 });
+    expect(error.message).not.toContain('-7');
   });
 });
 

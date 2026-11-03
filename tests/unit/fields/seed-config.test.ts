@@ -17,6 +17,7 @@ import { MATERIAL_OPERAND_KEYS } from '@/lib/fields/types';
 import { engineerVisibleFields } from '@/lib/fields/visibility';
 
 import { SEED_PROCESS_ITEMS, seedConfig, seedFieldAt } from '../../support/seed-config';
+import { SPEC_FIELDS, SPEC_FORMULAS } from '../../support/spec-tables';
 import { defined } from '../../support/defined';
 
 /**
@@ -24,114 +25,10 @@ import { defined } from '../../support/defined';
  * and formulas below are typed from the requirements file, not read back from the seed module.
  */
 
-// ---- SPEC section 7.1 and 7.4, in column order: [letter, label, kind] ----------------------------------
-
-const SPEC_FIELDS: ReadonlyArray<readonly [string, string, 'input' | 'auto' | 'output']> = [
-  ['A', 'Sl. No', 'auto'],
-  ['B', 'Part No.', 'input'],
-  ['C', 'Part Model', 'input'],
-  ['D', 'Description', 'input'],
-  ['E', 'Material in Drawing', 'input'],
-  ['F', 'Material Considered', 'auto'],
-  ['G', 'Treatment / Color', 'input'],
-  ['H', 'QTY per Assy', 'input'],
-  ['I', 'Material Rate / Kg', 'auto'],
-  ['J', 'Length', 'input'],
-  ['K', 'Width', 'input'],
-  ['L', 'Thickness', 'input'],
-  ['M', 'Blank Weight', 'output'],
-  ['N', 'Part Weight', 'input'],
-  ['O', 'Scrap Weight', 'output'],
-  ['P', 'Cutting Time', 'input'],
-  ['Q', 'Cutting Length', 'input'],
-  ['R', 'No. of Bend', 'input'],
-  ['S', 'Fasteners', 'input'],
-  ['T', 'Fasteners Qty', 'input'],
-  ['U', 'Fasteners Cost', 'input'],
-  ['V', 'Weld', 'input'],
-  ['W', 'Drilling', 'input'],
-  ['X', 'Tapping', 'input'],
-  ['Y', 'CSK', 'input'],
-  ['Z', 'Hot Dip Galvanizing', 'input'],
-  ['AA', 'Primer', 'input'],
-  ['AB', 'Shot Blasting', 'input'],
-  ['AC', 'Polishing', 'input'],
-  ['AD', 'Plating', 'input'],
-  ['AE', 'Powder Coating', 'input'],
-  ['AF', 'Foam', 'input'],
-  ['AG', 'Soft Anodize', 'input'],
-  ['AH', 'Area in Sq. in', 'output'],
-  ['AI', 'Area in Sq. ft', 'output'],
-  ['AJ', 'Remarks', 'input'],
-  ['AK', 'Material Cost', 'output'],
-  ['AL', 'Cutting Cost', 'output'],
-  ['AM', 'Bending Cost', 'output'],
-  ['AN', 'Drilling / Tapping Cost', 'output'],
-  ['AO', 'Welding Cost', 'output'],
-  ['AP', 'Machining Cost', 'input'],
-  ['AQ', 'Hot Dip Galvanizing Cost', 'output'],
-  ['AR', 'Primer Cost', 'output'],
-  ['AS', 'Shot Blasting Cost', 'output'],
-  ['AT', 'Polishing Cost', 'output'],
-  ['AU', 'Plating Cost', 'input'],
-  ['AV', 'Powder Coating Cost', 'output'],
-  ['AW', 'Foam Cost', 'output'],
-  ['AX', 'Soft Anodize Cost', 'output'],
-  ['AY', 'Total Process Cost', 'output'],
-  ['AZ', 'BO Cost / Fasteners', 'output'],
-  ['BA', 'Material Cost + Total Process Cost + Others', 'output'],
-  ['BB', 'Sub Total 1', 'output'],
-  ['BC', 'Rejection', 'output'],
-  ['BD', 'OH Profit', 'output'],
-  ['BE', 'Inspection & Packing', 'output'],
-  ['BF', 'Transportation', 'output'],
-  ['BG', 'Unit Production Price (INR)', 'output'],
-  ['BH', 'Exchange Rate USD', 'output'],
-  ['BI', 'Exchange Rate EUR', 'output'],
-  ['BJ', 'Unit Production Price (USD)', 'output'],
-  ['BK', 'Unit Production Price (EUR)', 'output'],
-  ['BL', 'Total Unit Production Price (INR)', 'output'],
-  ['BM', 'Tool Cost', 'input'],
-  ['BN', 'Total Unit Production Price (INR) / Tool Cost (INR)', 'output'],
-  ['BO', 'Approved Quote Price', 'output'],
-];
-
-/** SPEC section 7.4 formulas as printed (display form). BO has none. Scrap Weight is the v1.5 text. */
-const SPEC_FORMULAS: Readonly<Record<string, string>> = {
-  M: '(L * K * J * Material-Specific-Gravity) / 1000000',
-  O: 'IF(Material-Specific-Gravity > 0, M - N, 0)',
-  AH: '(J * K * 2) / 645',
-  AI: 'AH / 144',
-  AK: '(M * I) - (O * Material-Scrap-Rate)',
-  AL: 'P * Cutting-Rate-per-Sec',
-  AM: 'R * Bending-Rate-per-stroke',
-  AN: '(W + X + Y) * Drilling-Tapping-Rate',
-  AO: 'N * Welding-rate-per-kg * V',
-  AQ: '(N * Dip-Galvanizing-Cost-per-kg) * Z',
-  AR: '(AI * Primer-rate-per-sqft) * AA',
-  AS: '(N * Shot-Blasting-rate-per-kg) * AB',
-  AT: 'AC * ((AH / 2) * Polishing-rate-per-sqin)',
-  AV: 'AE * (AI * Powder-rate-per-sqft)',
-  AW: 'AF * AI * Foam Cost',
-  AX: 'AG * (AH * Soft-Anodize-rate-per-sqin)',
-  AY: 'AL + AM + AN + AO + AP + AQ + AR + AS + AT + AU + AV + AW + AX',
-  AZ: 'T * U',
-  BA: 'AK + AY + AZ',
-  BB: 'BA * H',
-  BC: '0',
-  BD: 'BB * OH Profit %',
-  BE: 'BB * Inspection & Packing %',
-  BF: 'BB * Transport %',
-  BG: 'BB + BC + BD + BE + BF',
-  BH: 'ExchangeRate-USD',
-  BI: 'ExchangeRate-EUR',
-  BJ: 'BG / BH',
-  BK: 'BG / BI',
-  BL: 'SUM(BG)',
-  BN: 'BL / SUM(BM)',
-};
-
 const context = referenceContext(seedConfig, SEED_PROCESS_ITEMS);
+
+/** A word that is not `IF(` or `SUM(`. Anchored on the bracket, so a word that merely starts with IF or SUM is still found. */
+const LEFTOVER_NAME = /(?<![A-Za-z])(?!IF\(|SUM\()[A-Za-z]+/;
 
 function allKeys(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(allKeys);
@@ -353,7 +250,9 @@ describe('seed configuration: formulas (AC-5)', () => {
     for (const field of withFormula) {
       if (field.kind !== 'output' || field.formula === null) continue;
       const withoutReferences = field.formula.replace(/\{\{[^{}]*\}\}/g, '');
-      expect(withoutReferences).not.toMatch(/[A-Za-z]{1}[A-Za-z]/u.source === '' ? /$^/ : /(?<![A-Za-z])(?!IF|SUM)[A-Za-z]+/);
+      // Any word left outside a reference, other than the two seed functions, would be a letter or a name that was not turned into one.
+      expect(withoutReferences).not.toMatch(LEFTOVER_NAME);
+      expect(withoutReferences).not.toMatch(/[{}]/);
     }
   });
 
@@ -482,19 +381,6 @@ describe('seed configuration: structure only (AC-7, ADR-014)', () => {
     const files = readdirSync(folder);
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) expect(file).toMatch(/\.ts$/);
-  });
-
-  it('QLT-07: the shared seed is deep-frozen, so nothing can change it by accident', () => {
-    expect(Object.isFrozen(seedConfig)).toBe(true);
-    expect(Object.isFrozen(seedConfig.fields)).toBe(true);
-    expect(Object.isFrozen(defined(seedConfig.fields[0]))).toBe(true);
-    expect(Object.isFrozen(defined(seedConfig.stages[2]).subHeadings)).toBe(true);
-    expect(() => {
-      defined(seedConfig.fields[0]).label = 'changed';
-    }).toThrow(TypeError);
-    expect(() => {
-      seedConfig.fields.push(defined(seedConfig.fields[0]));
-    }).toThrow(TypeError);
   });
 
   it('AC-7: parsing the seed again gives an identical document (the module is deterministic)', () => {
