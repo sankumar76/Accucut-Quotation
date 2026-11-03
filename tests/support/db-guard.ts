@@ -47,12 +47,12 @@ function normaliseHost(hostname: string): string {
   return unbracketed.toLowerCase();
 }
 
-/** Every host the URL could connect to, including a libpq `host=` override in the query string. */
+/**
+ * Every host the URL could connect to, including every libpq `host=` override in the query string.
+ * `getAll`, not `get`: with `?host=a&host=b` the driver keeps the last one, so all must be checked.
+ */
 function hostsOf(url: URL): string[] {
-  const hosts = [normaliseHost(url.hostname)];
-  const override = url.searchParams.get('host');
-  if (override !== null) hosts.push(normaliseHost(override));
-  return hosts;
+  return [url.hostname, ...url.searchParams.getAll('host')].map(normaliseHost);
 }
 
 function allowedHosts(env: GuardEnvironment): ReadonlyArray<string> {

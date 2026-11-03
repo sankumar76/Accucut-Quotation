@@ -84,6 +84,13 @@ describe('assertSafeDatabaseTarget (AC-10)', () => {
     expect(() => assertSafeDatabaseTarget({ DATABASE_URL: url })).toThrow(DatabaseGuardError);
   });
 
+  it.each([
+    ['a local host first, a remote one last', 'postgresql://u:p@localhost:5432/x?host=localhost&host=db.invented-remote.example'],
+    ['a remote host first, a local one last', 'postgresql://u:p@localhost:5432/x?host=db.invented-remote.example&host=localhost'],
+  ])('QLT-12: refuses a repeated host parameter with %s (the driver keeps the last)', (_name, url) => {
+    expect(messageOf(() => assertSafeDatabaseTarget({ DATABASE_URL: url }))).toContain('db.invented-remote.example');
+  });
+
   it('AC-10: refuses a URL it cannot read, without echoing it', () => {
     const message = messageOf(() => assertSafeDatabaseTarget({ DATABASE_URL: `not a url ${INVENTED_PASSWORD}` }));
     expect(message).toContain('not a readable connection URL');
