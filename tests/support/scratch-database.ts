@@ -101,6 +101,34 @@ export async function createMigratedScratchDatabase(): Promise<ScratchDatabase> 
   return {
     ownerUrl,
     runtimeUrl,
-    drop: () => withClient(ownerBase, async (client) => void (await client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`))),
+    drop: () => dropScratchDatabase(ownerBase, name),
   };
+}
+
+/** PostgreSQL's code for "permission denied" (insufficient_privilege). */
+const PERMISSION_DENIED = '42501';
+const DROP_ATTEMPTS = 20;
+const DROP_RETRY_DELAY_MILLISECONDS = 500;
+
+function isPermissionDenied(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === PERMISSION_DENIED;
+}
+
+/**
+ * Drops a scratch database. `WITH (FORCE)` ends the owner's own sessions, but the owner may not end a superuser's
+ * background process, and on a busy machine an autovacuum worker is often still in a freshly migrated database
+ * (DEF-003). It leaves on its own within moments, so a refusal for that reason is tried again, a bounded number of
+ * times, instead of failing the test file in its teardown.
+ */
+async function dropScratchDatabase(ownerBase: string, name: string): Promise<void> {
+  assertScratchName(name);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await withClient(ownerBase, (client) => client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`));
+      return;
+    } catch (error) {
+      if (!isPermissionDenied(error) || attempt >= DROP_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, DROP_RETRY_DELAY_MILLISECONDS));
+    }
+  }
 }

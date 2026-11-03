@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * AC-6: every layer rule of architecture section 10 fires on a planted fault, and a clean file passes.
@@ -101,7 +101,18 @@ const OTHER_FAULTS: ReadonlyArray<readonly [string, string, string, string]> = [
   ["'use server' in a .jsx file", 'src/app/example/form.jsx', "'use server';\nexport const x = 1;\n", 'no-restricted-syntax'],
 ];
 
-// The first lint of a run loads the whole configuration, which can take a few seconds.
+/**
+ * The first lint of a run loads the whole configuration (the Next.js and TypeScript plugins). That is set-up, not
+ * the behaviour under test, so it runs once here, in its own hook, with its own time limit (test strategy section
+ * 10, DL-057; DEF-003). On a busy machine it took up to about a minute; it must not count against a test.
+ */
+const ESLINT_WARM_UP_TIMEOUT = 180_000;
+
+beforeAll(async () => {
+  await ruleIdsFor(LIB, 'export const warmUp = 1;\n');
+}, ESLINT_WARM_UP_TIMEOUT);
+
+// After the warm-up a lint takes milliseconds; this limit only stops a hang.
 describe('ESLint layer rules (AC-6)', { timeout: 30_000 }, () => {
   it.each(IMPORT_FAULTS)('AC-6: static import fails lint: $name', async ({ filePath, specifier }) => {
     expect(await ruleIdsFor(filePath, staticImport(specifier))).toContain('no-restricted-imports');
