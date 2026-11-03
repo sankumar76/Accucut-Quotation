@@ -3,23 +3,25 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { BASELINE_KEYS, toBaseline } from '../../scripts/lib/gitleaks-baseline';
+import { BASELINE_KEYS, fingerprintOf, inconsistentEntries, toBaseline } from '../../scripts/lib/gitleaks-baseline';
 
 /**
- * AC-5 / delivery lead's decision of 2026-11-02: the baseline accepts exactly seven findings and
- * stores no matched text.
+ * AC-5 / delivery lead's decision of 2026-11-02: the baseline accepts exactly seven findings and stores
+ * no matched text. The seven are pinned by fingerprint, which holds the commit as well as the place
+ * (QLT-11): an entry pointed at another commit, file or line fails here.
  */
 
 const BASELINE_FILE = fileURLToPath(new URL('../../.gitleaks-baseline.json', import.meta.url));
-const ACCEPTED_LOCATIONS = [
-  'ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:35',
-  'ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:35',
-  'docs/01-discovery/requirements-catalog.md:224',
-  'docs/01-discovery/requirements-catalog.md:241',
-  'docs/01-discovery/requirements-catalog.md:244',
-  'ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:35',
-  // Added by the delivery lead's decision of 2026-11-02: the README of commit b513643 quoted the first sentence.
-  'README.md:74',
+
+const ACCEPTED_FINGERPRINTS = [
+  '09f39636ee68d73dacd72e2c34d1ffe7c9866a37:ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:generic-api-key:35',
+  '09f39636ee68d73dacd72e2c34d1ffe7c9866a37:docs/01-discovery/requirements-catalog.md:generic-api-key:244',
+  '315ea943fcd7a443faf0aa483683fc7eafe91d8d:docs/01-discovery/requirements-catalog.md:generic-api-key:224',
+  '338ce9a5129094d19bbe97366f533a40e8b100c8:ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:generic-api-key:35',
+  '338ce9a5129094d19bbe97366f533a40e8b100c8:docs/01-discovery/requirements-catalog.md:generic-api-key:241',
+  // Added by the delivery lead's decision of 2026-11-02: a README line in a commit already pushed.
+  'b51364378d9a49a20f2cfa7b1db75e0f8321abf2:README.md:generic-api-key:74',
+  'c7576f0e536abd9e8581c6e9b3c73bc760661a2c:ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md:generic-api-key:35',
 ];
 
 const rawEntry = {
@@ -62,12 +64,37 @@ describe('toBaseline', () => {
   });
 });
 
+describe('inconsistentEntries (QLT-11, negative control)', () => {
+  const [entry] = toBaseline([rawEntry]);
+
+  it('accepts an entry whose fingerprint names its own commit, file, rule and line', () => {
+    expect(entry && fingerprintOf(entry)).toBe(rawEntry.Fingerprint);
+    expect(inconsistentEntries(entry ? [entry] : [])).toEqual([]);
+  });
+
+  it.each([
+    ['another commit', { Commit: 'def456' }],
+    ['another file', { File: 'docs/other.md' }],
+    ['another line', { StartLine: 4 }],
+    ['another rule', { RuleID: 'github-pat' }],
+  ])('flags an entry edited to name %s while its fingerprint still names the old one', (_name, change) => {
+    const tampered = toBaseline([{ ...rawEntry, ...change }]);
+    expect(inconsistentEntries(tampered)).toEqual([rawEntry.Fingerprint]);
+  });
+});
+
 describe('the committed baseline', () => {
   const entries = toBaseline(JSON.parse(readFileSync(BASELINE_FILE, 'utf8')));
 
-  it('holds exactly the seven accepted findings, all documentation', () => {
-    expect(entries).toHaveLength(7);
-    expect(entries.map((entry) => `${entry.File}:${entry.StartLine}`).sort()).toEqual([...ACCEPTED_LOCATIONS].sort());
+  it('holds exactly the seven accepted fingerprints', () => {
+    expect(entries.map((entry) => entry.Fingerprint)).toEqual([...ACCEPTED_FINGERPRINTS].sort());
+  });
+
+  it('QLT-11: every entry matches its own fingerprint, so none accepts a different finding', () => {
+    expect(inconsistentEntries(entries)).toEqual([]);
+  });
+
+  it('accepts only documentation findings of one rule', () => {
     expect(new Set(entries.map((entry) => entry.RuleID))).toEqual(new Set(['generic-api-key']));
     for (const entry of entries) expect(entry.File).toMatch(/\.md$/);
   });

@@ -42,3 +42,17 @@ export function toBaseline(report: unknown): BaselineEntry[] {
     .parse(report)
     .sort((a, b) => a.Fingerprint.localeCompare(b.Fingerprint));
 }
+
+/** The fingerprint Gitleaks builds for a finding: commit, file, rule and line. */
+export function fingerprintOf(entry: Pick<BaselineEntry, 'Commit' | 'File' | 'RuleID' | 'StartLine'>): string {
+  return `${entry.Commit}:${entry.File}:${entry.RuleID}:${entry.StartLine}`;
+}
+
+/**
+ * Entries whose `Fingerprint` does not match their own commit, file, rule and line. Gitleaks matches an
+ * entry on those fields and ignores `Fingerprint`, so an entry edited in one place only would accept a
+ * different finding than the one its fingerprint names (QLT-11).
+ */
+export function inconsistentEntries(entries: ReadonlyArray<BaselineEntry>): string[] {
+  return entries.filter((entry) => entry.Fingerprint !== fingerprintOf(entry)).map((entry) => entry.Fingerprint);
+}
