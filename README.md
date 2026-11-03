@@ -13,6 +13,51 @@ TypeScript (strict), Node.js 22 LTS, Next.js 16 (App Router), React 19, Tailwind
 PostgreSQL 17 with Prisma 7, next-auth 4, ExcelJS, Nodemailer. Versions are pinned exactly in
 `package.json` (architecture section 11).
 
+## First use: see the portal on your computer
+
+Each screen is reviewed by running the portal on your own computer. There is no hosted preview. You need
+Node.js 22.12 or later, npm 11.17 or later and Docker Desktop (running), on Windows, macOS or Linux. Run these
+from the repository folder, one line at a time. They are direct commands, not `npm run` aliases.
+
+```sh
+npm ci
+docker compose -f compose.dev.yml up -d db     # wait about 10 seconds the first time
+cp .env.example .env                           # PowerShell or Command Prompt: copy .env.example .env
+npx prisma generate
+npx prisma migrate deploy
+npx next dev
+```
+
+Then open **http://localhost:3000/design-system** in a browser. Today that page is the design system
+(colours, type, spacing, buttons, form controls, notices and states) inside the page frame every screen will
+use: top bar, side menu, and a menu button that opens the same menu as a drawer on a narrow window. The home
+page, http://localhost:3000, links to it. Resize the window to see it at phone, tablet and desktop widths.
+The page is served only outside a production build; a production build answers "not found".
+
+**Fill in `.env` first.** After copying, open `.env` in a text editor and replace every `CHANGE_ME` value. Use
+letters and digits only for the two database passwords (they go into connection addresses). For `AUTH_SECRET`,
+generate a long random value:
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Every value in `.env` is a local placeholder for this one computer. None of them is a real password, and `.env`
+is never committed. The design system page does not read the database; the database lines are the same ones
+every later screen needs, so you set them up once. If `next dev` stops at start with a message that names a
+variable, that variable in `.env` is missing or still says `CHANGE_ME`; the message never prints a value.
+
+**On a phone on the same Wi-Fi.** Start the server so that it listens on the network, with
+`npx next dev -H 0.0.0.0`. Find the computer's address (`ipconfig` on Windows, the "IPv4 Address" line; it looks
+like `192.168.1.20`), allow Node.js through the Windows firewall for private networks if asked, and open
+`http://<that address>:3000/design-system` on the phone.
+
+**To stop.** Press Ctrl+C in the window running `npx next dev`, then `docker compose -f compose.dev.yml down`.
+That keeps the database for next time; `docker compose -f compose.dev.yml down -v` also erases it.
+
+This section grows as screens arrive (sign-in in STORY-01.01, the Dockerfile and a hosted copy in
+STORY-10.04). The next sections explain the same commands in more detail.
+
 ## Set up a development machine
 
 You need Node.js 22.12 or later, npm 11.17 or later (`npm install --global npm@11.17.0`) and Docker.
