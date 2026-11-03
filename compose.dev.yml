@@ -1,0 +1,36 @@
+# Local development database only (STORY-10.01, AC-9). The deployment file, docker-compose.yml, is
+# STORY-10.04's.
+#
+#   cp .env.example .env        # then replace every CHANGE_ME value
+#   docker compose -f compose.dev.yml up -d db
+#   npx prisma migrate deploy
+#
+# PostgreSQL 17, pinned by digest. To update it, pull the new tag, read the digest from
+# `docker image inspect`, and change it here in a reviewed change.
+services:
+  db:
+    image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+    restart: unless-stopped
+    environment:
+      # The image's bootstrap superuser, reachable on the private port only. The application never
+      # uses it; for local development it shares the owner password so .env stays short.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?Set DB_OWNER_PASSWORD in .env}
+      POSTGRES_DB: accucut
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?Set DB_OWNER_PASSWORD in .env}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+    ports:
+      # A private port: reachable from this machine only, never from the network.
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - accucut-dev-db:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP on 127.0.0.1: during first-run initialisation the image's temporary server listens on its socket only.
+      test: ['CMD-SHELL', 'pg_isready --host 127.0.0.1 --username postgres --dbname accucut']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  accucut-dev-db:

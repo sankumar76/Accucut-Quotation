@@ -1,0 +1,21 @@
+# Secret scan configuration (CI stage 2, NFR-006, architecture sections 5.5 and 8, ADR-014).
+#
+# This repository is public. The scan reads every ref the checkout holds (CI fetches all branches), so
+# "the full history" means all branches on origin. It uses Gitleaks' default rules; no rule is changed
+# or disabled here and there is no allow-list by path or pattern.
+#
+# Delivery lead's decision, 2026-11-02 (AQP-27): the six findings that the scan reported on the
+# existing history are documentation text about passwords (a sentence naming the hashing algorithms,
+# and the BR-049 wording), not credentials. A seventh, the same sentence quoted in an early commit of the
+# README (commit b513643), was accepted the same day. These seven, and only these, are accepted through
+# the baseline file `.gitleaks-baseline.json`, which CI passes with `--baseline-path`.
+#
+# The baseline holds locations and commit metadata, never matched text. An entry is recognised by its
+# commit among other fields, so the same text on another line or in a new commit still fails. After a
+# squash merge the branch commits are unreachable from master and their entries stay as a record. No
+# history was rewritten. For regenerating the file, merging (squash only) and editing an accepted line,
+# see the README, "Secret scan and its baseline".
+title = "Accucut Quotation Portal"
+
+[extend]
+useDefault = true
