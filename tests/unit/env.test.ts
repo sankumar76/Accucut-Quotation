@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   EnvValidationError,
   loadAdminBootstrapEnv,
   loadAppEnv,
   loadMigrateEnv,
+  ENV_VARIABLE_NAMES,
   type EnvSource,
+  type EnvVariableName,
 } from '@/lib/env';
 
 /** AC-3: validation at start-up, naming the variable, never printing a value. All values are invented. */
@@ -129,17 +131,61 @@ describe('loadMigrateEnv and loadAdminBootstrapEnv (AC-3)', () => {
   });
 });
 
+/**
+ * DEF-005 (AQP-180): these tests read `process.env`, which the test run has filled from the developer's `.env`
+ * (tests/support/dotenv.ts). Each one therefore sets every setting `env.ts` reads, present or absent, for its own
+ * duration, and puts the ambient values back afterwards, so the result never depends on the machine.
+ */
+function withEnvironment(settings: Partial<Record<EnvVariableName, string>>, action: () => void): void {
+  for (const name of ENV_VARIABLE_NAMES) vi.stubEnv(name, settings[name]);
+  try {
+    action();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
+
+const MIGRATE_URL = 'postgresql://accucut_owner:invented@localhost:55432/accucut';
+const COMPLETE: Partial<Record<EnvVariableName, string>> = {
+  ...validNone,
+  MIGRATE_DATABASE_URL: MIGRATE_URL,
+  ADMIN_EMAIL: 'admin@example.test',
+  ADMIN_INITIAL_PASSWORD: 'invented-admin-password',
+};
+
 describe('default environment source', () => {
-  it('reads process.env when no source is given', () => {
-    const before = process.env['MIGRATE_DATABASE_URL'];
-    process.env['MIGRATE_DATABASE_URL'] = 'postgresql://accucut_owner:invented@localhost:55432/accucut';
-    try {
+  it('reads process.env when no source is given: only the owner URL set, so the other two refuse', () => {
+    withEnvironment({ MIGRATE_DATABASE_URL: MIGRATE_URL }, () => {
       expect(loadMigrateEnv().MIGRATE_DATABASE_URL).toContain('localhost');
       expect(() => loadAppEnv()).toThrow(EnvValidationError);
       expect(() => loadAdminBootstrapEnv()).toThrow(EnvValidationError);
+    });
+  });
+
+  it('reads process.env when no source is given: every setting present, so all three load', () => {
+    withEnvironment(COMPLETE, () => {
+      expect(loadAppEnv().SMTP_PORT).toBe(1025);
+      expect(loadMigrateEnv().MIGRATE_DATABASE_URL).toBe(MIGRATE_URL);
+      expect(loadAdminBootstrapEnv().ADMIN_EMAIL).toBe('admin@example.test');
+    });
+  });
+
+  it('DEF-005: gives the same result on a machine whose .env is complete (the README setup)', () => {
+    // The ambient environment of a developer who followed the README: every setting present.
+    for (const [name, value] of Object.entries(COMPLETE)) vi.stubEnv(name, value);
+    try {
+      withEnvironment({ MIGRATE_DATABASE_URL: MIGRATE_URL }, () => {
+        expect(() => loadAppEnv()).toThrow(EnvValidationError);
+        expect(() => loadAdminBootstrapEnv()).toThrow(EnvValidationError);
+      });
     } finally {
-      if (before === undefined) delete process.env['MIGRATE_DATABASE_URL'];
-      else process.env['MIGRATE_DATABASE_URL'] = before;
+      vi.unstubAllEnvs();
     }
+  });
+
+  it('DEF-005: puts the ambient environment back afterwards', () => {
+    const before = ENV_VARIABLE_NAMES.map((name) => process.env[name]);
+    withEnvironment(COMPLETE, () => undefined);
+    expect(ENV_VARIABLE_NAMES.map((name) => process.env[name])).toEqual(before);
   });
 });
