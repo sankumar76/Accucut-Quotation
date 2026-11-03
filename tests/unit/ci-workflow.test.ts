@@ -8,7 +8,11 @@ import { describe, expect, it } from 'vitest';
  * unit test, so these read its text: a regression here would otherwise be noticed only on a runner.
  */
 
-const WORKFLOW = readFileSync(fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url)), 'utf8');
+// A Windows checkout with Git's default autocrlf writes CRLF; the checks below expect LF (DEF-002).
+const WORKFLOW = readFileSync(fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url)), 'utf8').replaceAll(
+  '\r\n',
+  '\n',
+);
 const LINES = WORKFLOW.split(/\r?\n/);
 
 /** The text of every `run:` block, so expressions can be checked where a shell would read them. */
