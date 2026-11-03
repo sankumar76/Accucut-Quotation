@@ -55,7 +55,6 @@ export function AppShell({ navGroups, bell, account, children }: AppShellProps) 
   useEffect(() => {
     if (previousPath.current === pathname) return;
     previousPath.current = pathname;
-    leavingPage.current = false;
     focusPageHeading();
   }, [pathname]);
 
@@ -100,8 +99,12 @@ export function AppShell({ navGroups, bell, account, children }: AppShellProps) 
         className="bg-nav text-nav-ink"
         // Radix returns focus to the menu button when the drawer closes. After choosing another page, focus
         // belongs on that page's title instead (QLT-02), which the effect above sets once the route has changed.
+        // The route can change before or after the drawer finishes closing, so the flag is cleared here, where it
+        // is used, and not by the route effect: clearing it there let Radix take focus back after the title had it.
         onCloseAutoFocus={(event) => {
-          if (leavingPage.current) event.preventDefault();
+          if (!leavingPage.current) return;
+          event.preventDefault();
+          leavingPage.current = false;
         }}
       >
         <div className="pt-s-7">
