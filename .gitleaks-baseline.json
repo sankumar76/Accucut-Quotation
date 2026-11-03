@@ -82,6 +82,22 @@
   {
     "RuleID": "generic-api-key",
     "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "StartLine": 74,
+    "EndLine": 74,
+    "StartColumn": 68,
+    "EndColumn": 91,
+    "File": "README.md",
+    "Commit": "b51364378d9a49a20f2cfa7b1db75e0f8321abf2",
+    "Author": "sankumar76",
+    "Email": "sankumar76@gmail.com",
+    "Date": "2026-11-03T01:14:39Z",
+    "Message": "feat(security): accept the six documented Gitleaks findings through a baseline [AQP-27]\n\nAC-4, AC-5. Delivery lead's decision of 2026-11-02 (AQP-27 comment 10649): the six findings on the\nexisting history are documentation text about passwords, not credentials. CI stage 2 now passes\n--baseline-path .gitleaks-baseline.json. The baseline holds locations and commit metadata only (no\nmatched text), is not an allow-list by path or pattern, and changes no rule. The negative control\nruns with the baseline in use and still fails a planted secret. The baseline file is a named\nexception in the data-file allow-list; README and .gitleaks.toml record the decision.",
+    "Entropy": 3.5465937,
+    "Fingerprint": "b51364378d9a49a20f2cfa7b1db75e0f8321abf2:README.md:generic-api-key:74"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
     "StartLine": 35,
     "EndLine": 35,
     "StartColumn": 50,

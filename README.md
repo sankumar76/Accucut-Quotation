@@ -74,7 +74,8 @@ Gitleaks reads the whole history on every pull request. It reported six findings
 existed before the scan, all documentation text about passwords (a sentence in the requirements file that
 names the hashing algorithms, and the BR-049 wording in the requirements catalogue), not credentials. The
 flagged text is deliberately not quoted here: quoting it makes the scan flag this file. On 2026-11-02 the
-delivery lead decided to accept exactly those six through `.gitleaks-baseline.json`, which CI stage 2 passes
+delivery lead decided to accept exactly those six, and then a seventh (an early commit of this README quoted
+the flagged sentence, and the commit cannot be removed), through `.gitleaks-baseline.json`, which CI stage 2 passes
 with `--baseline-path`. It is not an allow-list: no path or pattern is exempt, no rule is changed, and
 nothing was removed from history. A new finding, or the same text on a different line or in a new commit,
 still fails the scan; `scripts/secret-scan-control.ts` proves this with the baseline in use.

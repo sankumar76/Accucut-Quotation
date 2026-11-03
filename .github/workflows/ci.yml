@@ -93,7 +93,7 @@ jobs:
           tar -xzf "${RUNNER_TEMP}/gitleaks.tar.gz" -C "${RUNNER_TEMP}/gitleaks" gitleaks
           echo "GITLEAKS_BIN=${RUNNER_TEMP}/gitleaks/gitleaks" >> "${GITHUB_ENV}"
           "${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --config .gitleaks.toml --baseline-path .gitleaks-baseline.json .
-          # The baseline accepts exactly 6 documentation findings (delivery lead, 2026-11-02; README). It is
+          # The baseline accepts exactly 7 documentation findings (delivery lead, 2026-11-02; README). It is
           # not an allow-list: any other finding fails. Negative control: with the baseline in use, the scan must
           # still fail on a fake secret built at run time (never committed).
           GITLEAKS_BIN="${RUNNER_TEMP}/gitleaks/gitleaks" npx tsx scripts/secret-scan-control.ts

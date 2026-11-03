@@ -6,7 +6,9 @@
 #
 # Delivery lead's decision, 2026-11-02 (AQP-27): the six findings that the scan reported on the
 # existing history are documentation text about passwords (a sentence naming the hashing algorithms,
-# and the BR-049 wording), not credentials. They are accepted, and only they, through the baseline file
+# and the BR-049 wording), not credentials. A seventh, the same sentence quoted in an early commit of the
+# README (commit b513643, which cannot be removed without a force-push), was accepted the same day.
+# These seven, and only these, are accepted through the baseline file
 # `.gitleaks-baseline.json`, which CI passes with `--baseline-path`. The baseline holds locations and
 # commit metadata, never matched text, and a new finding (or the same text on another line) still
 # fails. No history was rewritten. To regenerate it, see the README, "Secret scan".
