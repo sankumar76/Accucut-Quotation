@@ -14,7 +14,19 @@ import DecimalJs from 'decimal.js';
 /** Significant digits kept by every operation. */
 export const DECIMAL_PRECISION = 34;
 
-export const Decimal = DecimalJs.clone({ precision: DECIMAL_PRECISION, rounding: DecimalJs.ROUND_HALF_UP });
+/**
+ * decimal.js's own limits on the exponent. Setting `toExpNeg` and `toExpPos` to them means `toString()` (and so
+ * `String()` and `JSON.stringify`) never writes a value in exponent form such as `1e-10`: a stored figure is
+ * always a plain decimal string (G6 QLT-16).
+ */
+const EXPONENT_LIMIT = 9e15;
+
+export const Decimal = DecimalJs.clone({
+  precision: DECIMAL_PRECISION,
+  rounding: DecimalJs.ROUND_HALF_UP,
+  toExpNeg: -EXPONENT_LIMIT,
+  toExpPos: EXPONENT_LIMIT,
+});
 export type Decimal = DecimalJs;
 
 /**

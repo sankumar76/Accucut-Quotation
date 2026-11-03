@@ -136,14 +136,14 @@ function readWord(text: string, start: number, word: string, source: TokenSource
   const end = start + word.length;
   if (nextNonSpace(text, end) === '(') {
     if (isFunctionName(word)) return { kind: 'function', name: word, start, end };
-    throw errorAt('UNKNOWN_FUNCTION', 'The function is not one of SUM, MIN, MAX, ROUND or IF', start, end, word);
+    throw errorAt('UNKNOWN_FUNCTION', 'The function is not one of SUM, MIN, MAX, ROUND or IF', start, end);
   }
   if (source.form === 'display' && isColumnLetters(word)) {
     const id = source.anyColumn === true ? '' : source.context.fieldIds[columnLetterToIndex(word) - 1];
     if (id !== undefined) return { kind: 'reference', reference: { kind: 'field', id }, start, end };
-    throw errorAt('UNKNOWN_COLUMN', 'The column is not in the registry', start, end, word);
+    throw errorAt('UNKNOWN_COLUMN', 'The column is not in the registry', start, end);
   }
-  throw errorAt('UNKNOWN_NAME', 'The name is not a column letter, rate name or function', start, end, word);
+  throw errorAt('UNKNOWN_NAME', 'The name is not a column letter, rate name or function', start, end);
 }
 
 /** Display form only: a name from the rate list, `Material-*` or `ExchangeRate-*`. */

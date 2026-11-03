@@ -118,7 +118,7 @@ export type FormulaCheck =
 
 /**
  * Checks one formula as the Admin typed it. If it is valid, `internalForm` is the text to store. Otherwise
- * `issue` says what is wrong and where; for an unknown name it also carries the name, for the editor to show.
+ * `issue` says what is wrong and where (`position`, `length`); the editor quotes the span from the text it holds.
  */
 export function checkDisplayFormula(displayForm: string, context: ReferenceContext): FormulaCheck {
   try {

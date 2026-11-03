@@ -138,7 +138,7 @@ describe('parser: what it refuses (AC-1, AC-5)', () => {
   });
 
   it('AC-1: ROLLUP is not a function', () => {
-    expect(refused('ROLLUP(BG)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', position: 1, name: 'ROLLUP' });
+    expect(refused('ROLLUP(BG)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', position: 1, length: 6 });
   });
 
   it('AC-1: IF needs a comparison as its first argument', () => {
@@ -206,7 +206,7 @@ describe('parser: what it refuses (AC-1, AC-5)', () => {
   });
 
   it('refuses a name it does not know (the tokenizer\'s error comes through the parser)', () => {
-    expect(refused('A + Mystery')).toMatchObject({ code: 'UNKNOWN_NAME', name: 'Mystery', position: 5 });
+    expect(refused('A + Mystery')).toMatchObject({ code: 'UNKNOWN_NAME', position: 5, length: 7 });
   });
 });
 

@@ -8,8 +8,9 @@ import { ValidationError } from '../errors';
  * **Messages carry no formula text.** A formula is Restricted data and an error message can reach a log or a
  * response (GitHub #35, STD-05; the `ConfigDocumentError` policy). A message therefore states the rule that
  * failed and the place, as a character number, and never a word, a letter, a number or a rate name taken from
- * the formula. What the person editing the formula needs to see on SCR-18, such as the unknown name itself, is
- * in the separate `name` property of the issue; it must not be written to a log.
+ * the formula. **No property of an issue holds formula text either** (G6 STD-01): an error or an issue can be
+ * logged whole, and the logger redacts by field name only. SCR-18 quotes what the person typed from their own
+ * text, using `position` and `length` (`text.slice(position - 1, position - 1 + length)`).
  */
 export const FORMULA_ISSUE_CODES = [
   // Reading the text
@@ -63,11 +64,6 @@ export interface FormulaIssue {
   readonly length?: number;
   /** The field whose formula has the problem, when the check ran over a whole configuration. */
   readonly fieldId?: string;
-  /**
-   * The word the person typed, for the unknown-name issues, so SCR-18 can say which one ("... is not a column
-   * letter, rate name or function"). Formula text: show it to the person editing, never log it.
-   */
-  readonly name?: string;
   /** For `CYCLE`: the field IDs around the loop, first and last the same. */
   readonly cycle?: ReadonlyArray<string>;
 }
@@ -83,17 +79,16 @@ export class FormulaError extends ValidationError {
 }
 
 /** Shorthand used by the reader and the parser: build an issue for a span of characters. */
-export function issueAt(code: FormulaIssueCode, message: string, start: number, end: number, name?: string): FormulaIssue {
+export function issueAt(code: FormulaIssueCode, message: string, start: number, end: number): FormulaIssue {
   return {
     code,
     message: `${message} (character ${start + 1}).`,
     position: start + 1,
     length: Math.max(end - start, 1),
-    ...(name === undefined ? {} : { name }),
   };
 }
 
 /** A formula problem raised at a span of characters. */
-export function errorAt(code: FormulaIssueCode, message: string, start: number, end: number, name?: string): FormulaError {
-  return new FormulaError(issueAt(code, message, start, end, name));
+export function errorAt(code: FormulaIssueCode, message: string, start: number, end: number): FormulaError {
+  return new FormulaError(issueAt(code, message, start, end));
 }

@@ -180,19 +180,19 @@ describe('checkDisplayFormula: one formula as typed (AC-5)', () => {
     expect(check.expression.kind).toBe('binary');
   });
 
-  it('AC-5: names an unknown rate, with its position, in the issue and not in the message', () => {
+  it('AC-5: gives the span of an unknown rate, and no part of the issue holds the text (STD-01)', () => {
     const check = checkDisplayFormula('P * Cutting-Rate-per-Min', context);
-    expect(check).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_NAME', position: 5, name: 'Cutting' } });
+    expect(check).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_NAME', position: 5, length: 7 } });
     if (check.ok) return;
-    expect(check.issue.message).not.toContain('Cutting');
+    expect(JSON.stringify(check.issue)).not.toContain('Cutting');
   });
 
-  it('AC-5: names an unknown column letter', () => {
-    expect(checkDisplayFormula('P * ZZZ', context)).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_COLUMN', name: 'ZZZ' } });
+  it('AC-5: refuses an unknown column letter, with its span', () => {
+    expect(checkDisplayFormula('P * ZZZ', context)).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_COLUMN', position: 5, length: 3 } });
   });
 
-  it('AC-5: names an unknown function', () => {
-    expect(checkDisplayFormula('ROLLUP(BG)', context)).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_FUNCTION', name: 'ROLLUP' } });
+  it('AC-5: refuses an unknown function, with its span', () => {
+    expect(checkDisplayFormula('ROLLUP(BG)', context)).toMatchObject({ ok: false, issue: { code: 'UNKNOWN_FUNCTION', position: 1, length: 6 } });
   });
 
   it('AC-5: a syntax error carries a character position', () => {

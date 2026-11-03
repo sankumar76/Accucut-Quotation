@@ -75,8 +75,8 @@ describe('tokenizer: operands in display form (AC-1)', () => {
   });
 
   it('AC-1: does not read a name out of the front of a longer word', () => {
-    expect(rejected('Test Spaced Rates').name).toBe('Test');
-    expect(rejected('Test-Rate-per-kgs').name).toBe('Test');
+    expect(rejected('Test Spaced Rates')).toMatchObject({ code: 'UNKNOWN_NAME', position: 1, length: 4 });
+    expect(rejected('Test-Rate-per-kgs')).toMatchObject({ code: 'UNKNOWN_NAME', position: 1, length: 4 });
   });
 
   it('AC-1: a name can be followed by an operator or a bracket with no space', () => {
@@ -179,22 +179,26 @@ describe('tokenizer: internal form (AC-1, AC-6)', () => {
 });
 
 describe('tokenizer: errors (AC-5, STD-05)', () => {
-  it('AC-5: names an unknown word and gives its character position', () => {
-    const issue = rejected('A * Mystery');
-    expect(issue).toMatchObject({ code: 'UNKNOWN_NAME', position: 5, length: 7, name: 'Mystery' });
+  it('AC-5: gives the span of an unknown word, from which the editor quotes it (STD-01: the word is not in the issue)', () => {
+    const text = 'A * Mystery';
+    const issue = rejected(text);
+    expect(issue).toMatchObject({ code: 'UNKNOWN_NAME', position: 5, length: 7 });
+    expect(text.slice((issue.position ?? 0) - 1, (issue.position ?? 0) - 1 + (issue.length ?? 0))).toBe('Mystery');
+    expect(Object.keys(issue).sort()).toEqual(['code', 'length', 'message', 'position']);
+    expect(JSON.stringify(issue)).not.toContain('Mystery');
   });
 
-  it('AC-5: names an unknown function', () => {
-    expect(rejected('ROLLUP(A)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', position: 1, name: 'ROLLUP' });
-    expect(rejected('sum(A)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', name: 'sum' });
+  it('AC-5: gives the span of an unknown function', () => {
+    expect(rejected('ROLLUP(A)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', position: 1, length: 6 });
+    expect(rejected('sum(A)')).toMatchObject({ code: 'UNKNOWN_FUNCTION', position: 1, length: 3 });
   });
 
-  it('AC-5: names a column letter that the registry does not have', () => {
-    expect(rejected('A + ZZ')).toMatchObject({ code: 'UNKNOWN_COLUMN', position: 5, name: 'ZZ' });
+  it('AC-5: gives the span of a column letter that the registry does not have', () => {
+    expect(rejected('A + ZZ')).toMatchObject({ code: 'UNKNOWN_COLUMN', position: 5, length: 2 });
   });
 
   it('AC-5: treats lower-case letters as a name and not as a column', () => {
-    expect(rejected('a')).toMatchObject({ code: 'UNKNOWN_NAME', name: 'a' });
+    expect(rejected('a')).toMatchObject({ code: 'UNKNOWN_NAME', position: 1, length: 1 });
   });
 
   it('AC-5: treats more than ten capital letters as a name and not as a column', () => {

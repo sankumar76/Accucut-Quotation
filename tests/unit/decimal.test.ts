@@ -40,6 +40,24 @@ describe('the configured Decimal (AC-2)', () => {
     expect(Decimal.precision).toBe(34);
   });
 
+  it.each([
+    ['a very small value', '0.0000000000000000000000000001', '0.0000000000000000000000000001'],
+    ['a small quotient', '1e-10', '0.0000000001'],
+    ['a very large value', '123456789012345678901234567890', '123456789012345678901234567890'],
+    ['a large product', '1e30', '1000000000000000000000000000000'],
+    ['a small negative value', '-0.00000000000000000025', '-0.00000000000000000025'],
+  ])('QLT-16: %s is written as a plain decimal string, never in exponent form', (_name, input, expected) => {
+    const value = new Decimal(input);
+    expect(value.toString()).toBe(expected);
+    expect(String(value)).toBe(expected);
+    expect(JSON.stringify({ value })).toBe(`{"value":"${expected}"}`);
+  });
+
+  it('QLT-16: a result of arithmetic is plain as well', () => {
+    expect(String(divide(new Decimal(1), new Decimal('10000000000')))).toBe('0.0000000001');
+    expect(String(multiply(new Decimal('1000000000000000'), new Decimal('1000000000000000')))).toBe('1000000000000000000000000000000');
+  });
+
   it('AC-2: 0.1 + 0.2 is exactly 0.3', () => {
     expect(show(add(new Decimal('0.1'), new Decimal('0.2')))).toBe('0.3');
   });

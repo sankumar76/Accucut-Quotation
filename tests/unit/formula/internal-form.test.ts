@@ -76,14 +76,15 @@ describe('toInternalForm (AC-6)', () => {
     }
   });
 
-  it('AC-5: refuses a column the registry does not have, naming it in the issue and not in the message', () => {
+  it('AC-5: refuses a column the registry does not have, giving its span and never the letters themselves', () => {
     const error = thrownAs(() => toInternalForm('A + ZZZ', CONTEXT), FormulaError);
-    expect(error.issue).toMatchObject({ code: 'UNKNOWN_COLUMN', name: 'ZZZ', position: 5 });
+    expect(error.issue).toMatchObject({ code: 'UNKNOWN_COLUMN', position: 5, length: 3 });
+    expect(JSON.stringify(error.issue)).not.toContain('ZZZ');
     expect(error.message).not.toContain('ZZZ');
   });
 
   it('AC-5: refuses a word that is no column, rate or material name', () => {
-    expect(thrownAs(() => toInternalForm('A * Mystery', CONTEXT), FormulaError).issue).toMatchObject({ code: 'UNKNOWN_NAME', name: 'Mystery' });
+    expect(thrownAs(() => toInternalForm('A * Mystery', CONTEXT), FormulaError).issue).toMatchObject({ code: 'UNKNOWN_NAME', position: 5, length: 7 });
     expect(thrownAs(() => toInternalForm('A * Test-Rate-per-kgs', CONTEXT), FormulaError).issue.code).toBe('UNKNOWN_NAME');
     expect(thrownAs(() => toInternalForm('A * a', CONTEXT), FormulaError).issue.code).toBe('UNKNOWN_NAME');
   });
