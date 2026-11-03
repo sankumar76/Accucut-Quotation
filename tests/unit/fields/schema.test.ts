@@ -172,10 +172,10 @@ describe('configuration document schema: formulas and system roles', () => {
     fieldOf(document, 'AK')['formula'] = '{{rate:Cutting-Rate-per-Sec}}';
     fieldOf(document, 'M')['formula'] = '{{f:oops';
     const found = problems(document);
-    expect(found.some((message) => message.endsWith('A formula refers to a material value that does not exist.'))).toBe(true);
-    expect(found.some((message) => message.endsWith('A formula refers to an exchange rate that does not exist.'))).toBe(true);
-    expect(found.some((message) => message.endsWith('A formula holds a rate reference that is not an ID.'))).toBe(true);
-    expect(found.some((message) => message.includes('not {{f:..}}'))).toBe(true);
+    expect(found.some((message) => message.includes('A formula refers to a material value that does not exist'))).toBe(true);
+    expect(found.some((message) => message.includes('A formula refers to an exchange rate that does not exist'))).toBe(true);
+    expect(found.some((message) => message.includes('A formula holds a rate reference that is not an ID'))).toBe(true);
+    expect(found.some((message) => message.includes('A reference is not written as {{f:..}}'))).toBe(true);
   });
 
   it('refuses a formula on the Approved Quote Price: it has no editable formula', () => {

@@ -29,3 +29,7 @@ npm-debug.log*
 *.pfx
 *.log
 .DS_Store
+
+# --- Formula engine (STORY-03.02) ---
+# Files Next writes into the server-only build fixtures; the test removes them again.
+tests/fixtures/server-only-build/*/tsconfig.json

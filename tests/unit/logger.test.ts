@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { ENV_VARIABLE_NAMES, SECRET_ENV_VARIABLE_NAMES } from '@/lib/env';
+import { checkDisplayFormula, FormulaError, toInternalForm } from '@/lib/formula';
 import { createLogger, PERSONAL_SETTING_NAMES, REDACTED_VALUE } from '@/lib/logger';
 
 function capture(): { readonly lines: () => Array<Record<string, unknown>>; readonly stream: Writable } {
@@ -131,5 +132,36 @@ describe('logger redaction (architecture section 9.4)', () => {
   it('exports a ready shared logger', async () => {
     const { logger } = await import('@/lib/logger');
     expect(typeof logger.info).toBe('function');
+  });
+});
+
+describe('formula errors in a log line (AQP-106 STD-01)', () => {
+  // Invented words that stand for formula text (Restricted): a rate name, a column and a function the person typed.
+  const FORMULA_WORDS = ['Zebra42', 'QQQ', 'ROLLUPX', 'Wombat'];
+  const CONTEXT = { fieldIds: ['00000000-0000-4000-8000-0fff00000001'], rates: [] };
+
+  /** Logs a refused formula the three ways a caller would: the error, its issue, and a validation result. */
+  function loggedFormulaError(text: string): string {
+    const { lines, stream } = capture();
+    let thrown: unknown;
+    try {
+      toInternalForm(text, CONTEXT);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(FormulaError);
+    const logger = createLogger({}, stream);
+    logger.error({ err: thrown }, 'formula refused');
+    if (thrown instanceof FormulaError) logger.warn({ issue: thrown.issue }, 'formula issue');
+    logger.warn({ check: checkDisplayFormula(text, CONTEXT) }, 'formula check');
+    return JSON.stringify(lines());
+  }
+
+  it.each(['A * Zebra42', 'A + QQQ', 'ROLLUPX(A)', 'Wombat + A'])('STD-01: no word of the formula "%s" reaches a log line', (text) => {
+    const output = loggedFormulaError(text);
+    for (const word of FORMULA_WORDS) expect(output).not.toContain(word);
+    // The line still says what failed and where.
+    expect(output).toMatch(/\(character \d+\)/);
+    expect(output).toContain('"position":');
   });
 });

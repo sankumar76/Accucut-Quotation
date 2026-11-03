@@ -15,13 +15,22 @@ import { createMigratedScratchDatabase, type ScratchDatabase } from '../../suppo
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const SCRIPT = 'scripts/ensure-seed-version.ts';
+/**
+ * The registry schema and the seed import the formula engine, whose files start with `import 'server-only'`. That
+ * package throws under plain Node, so the step runs with the `react-server` export condition, as the `migrate`
+ * one-shot does (architecture section 10; STORY-03.02 AC-8).
+ */
+const NODE_ARGUMENTS = ['--conditions=react-server', '--import', 'tsx', SCRIPT];
 
-function runStep(environment: Record<string, string | undefined>): { status: number | null; stdout: string; stderr: string } {
+function runStep(
+  environment: Record<string, string | undefined>,
+  nodeArguments: ReadonlyArray<string> = NODE_ARGUMENTS,
+): { status: number | null; stdout: string; stderr: string } {
   const base = { ...process.env };
   // The step reads only MIGRATE_DATABASE_URL; start from a clean slate so a stray setting cannot help it.
   delete base['MIGRATE_DATABASE_URL'];
   delete base['DATABASE_URL'];
-  const result = spawnSync(process.execPath, ['--import', 'tsx', SCRIPT], {
+  const result = spawnSync(process.execPath, [...nodeArguments], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...base, ...environment },
@@ -72,6 +81,14 @@ describe('scripts/ensure-seed-version.ts (AC-6)', { timeout: 120_000 }, () => {
     expect(status).toBe(1);
     expect(stderr).toContain('MIGRATE_DATABASE_URL (invalid)');
     expect(stderr).not.toContain('CHANGE_ME');
+  });
+
+  it('STORY-03.02 AC-8: without the react-server condition the step cannot start, because server-only throws', () => {
+    const { status, stderr } = runStep({ MIGRATE_DATABASE_URL: database.ownerUrl }, ['--import', 'tsx', SCRIPT]);
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('This module cannot be imported from a Client Component module');
+    // The connection string, with its password, is never printed.
+    expect(stderr).not.toContain(new URL(database.ownerUrl).password);
   });
 
   it('AC-6: when the database cannot be reached it fails with a non-zero exit, so migrate fails', () => {
