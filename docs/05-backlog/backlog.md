@@ -11,6 +11,10 @@
 
 ## 1. What changed
 
+**Added by the scrum-master, 2026-11-03 (a scope addition for the product-manager and the master, not a product-owner version):**
+- **STORY-10.10, the NFR-009 guards (enabler), row 12a, Jira AQP-169, 5 points**, carved out of 10.09 on the solution-architect's test strategy v0.13 section 10.4 and the master's G6 decision on AQP-28 (DL-053, RISK-020, issue #36). 10.09 keeps NFR-010 to 012 and NFR-024. It is the first story of the sprint 01 stretch and must be Done before 02.01 reaches G6. Candidates are now 90. The product-owner validated it READY, 17 of 17, on 2026-11-03 (AQP-169 comment 10726), and the scrum-master moved it to Ready for Dev.
+- **The privacy story is renumbered 10.12** (row 67), because 10.10 was its provisional ID. It is not in Jira.
+
 **Since v0.3 (G4 attempt 1 was NO-GO; remediation 2):**
 - **Definition of Ready re-validated on all 17 items, not 16.** The item missed was the business-rule item. All 18 sprint 01 stories are READY (section 7); 11 needed a Trace-line correction, made by the product-owner and disclosed.
 - **Section 4 now agrees with section 5.** The v0.3 top-10 table had 03.01, 03.02 and 02.01 at ranks 8 to 10, but section 5 (and the Jira ranks in the stories) put them at 11 to 13 after 01.05, 01.06 and 01.08. The table now follows section 5.
@@ -112,6 +116,7 @@ Status: **Draft** = to be written by the scrum-master. There is no Held story. A
 | 10 | 01.08 | About page | 01 | 010 | Must | R1 | |
 | 11 | 03.01 | Field registry seed and column letters | 03 | 020, 021 | Must | R1 | |
 | 12 | 03.02 | Formula engine | 03 | 022, 023, 026 | Must | R1 | |
+| 12a | 10.10 | NFR-009 guards: JS budget check and Lighthouse reference run (enabler) | 10 | NFR-009 | Enabler | R1 | Jira AQP-169, sprint 01 stretch, first. Needs 01.01 (AQP-38); Done before 02.01 reaches G6 (test strategy 10.4, DL-053). Added 2026-11-03 as a scope addition; no other rank moves |
 | 13 | 02.01 | Process Master | 02 | 012 | Must | R1 | |
 | 14 | 02.03 | Material Master | 02 | 015 | Must | R1 | |
 | 15 | 02.04 | Exchange Rate Master | 02 | 016 | Must | R1 | |
@@ -165,8 +170,8 @@ Status: **Draft** = to be written by the scrum-master. There is no Held story. A
 | 63 | 03.06 | Calculation performance gate | 03 | NFR-008 | Must | R1 | |
 | 64 | 07.05 | Export size and time gate | 07 | NFR-010 | Must | R1 | OQ-PM-05 |
 | 65 | 10.08 | End-to-end, responsive and accessibility suites | 10 | NFR-016, 018, 019 | Must | R1 | |
-| 66 | 10.09 | Performance, capacity and observability | 10 | NFR-009 to 012, 024 | Must | R1 | Q-18 (web address) |
-| 67 | 10.10 | Privacy and data-handling checks | 10 | NFR-028, 029 | Must | R1 | |
+| 66 | 10.09 | Performance, capacity and observability | 10 | NFR-010 to 012, 024 | Must | R1 | Q-18 (web address). NFR-009 moved to 10.10 on 2026-11-03 |
+| 67 | 10.12 | Privacy and data-handling checks | 10 | NFR-028, 029 | Must | R1 | Renumbered from 10.10 on 2026-11-03 (10.10 is now the NFR-009 guards). Not in Jira |
 | 68 | 02.08 | Propagate a changed default | 02 | 014 | Must | R1+ | |
 | 69 | 04.06 | Lead default filter and task filters | 04 | 035, 039 | Should | R1+ | |
 | 70 | 05.10 | Autosave every 30 seconds | 05 | 054 | Should | R1+ | |
@@ -190,11 +195,11 @@ Status: **Draft** = to be written by the scrum-master. There is no Held story. A
 | 88 | 09.07 | Reset a password by e-mailed link | 09 | 003 | Should | R2 | |
 | 89 | 09.08 | One real send on the real mailbox | 09 | 019 (verification) | Must | R2 | Waits for Accucut IT |
 
-89 candidate stories. Every in-scope FR appears in at least one row and is owned by exactly one epic (section 2). FR-104 is traced from four rows (05.12, 06.10, 07.06 and the rule in 03.04's cases); FR-091 from 10.04, 10.05 and 10.11.
+90 candidate stories (89 until 10.10 was added on 2026-11-03). Every in-scope FR appears in at least one row and is owned by exactly one epic (section 2). FR-104 is traced from four rows (05.12, 06.10, 07.06 and the rule in 03.04's cases); FR-091 from 10.04, 10.05 and 10.11.
 
 ## 6. What the scrum-master should know before sprint planning
 
-- **Sprint 1 is ranks 1 to 18** (Jira AQP-27 to AQP-148). The DoR result per story is in section 7: all 18 are READY on 17 of 17 items (after the product-owner's Trace-line corrections, which the scrum-master should confirm). No open question holds any of them. Nothing needs real master data (the Admin types it at first use, D-23; invented placeholders in tests, NFR-006, ADR-014). 03.03 follows once 02.01 to 02.04 exist.
+- **Sprint 1 is ranks 1 to 18 and 12a** (Jira AQP-27 to AQP-148, and AQP-169). The DoR result per story is in section 7: all 19 are READY on 17 of 17 items (after the product-owner's Trace-line corrections, which the scrum-master should confirm). No open question holds any of them. Nothing needs real master data (the Admin types it at first use, D-23; invented placeholders in tests, NFR-006, ADR-014). 03.03 follows once 02.01 to 02.04 exist.
 - **No Held stories.** Do not read an outdated mark from comment 10515 or from the v0.1 files.
 - **G4 is the master's.** Attempt 1 was NO-GO (gate log). The master has since recorded the whole-order rule, D-25 to D-37 and PRD 13.4 to 13.6 (DL-027 to DL-038, CR-23 closed). My remediation 2 (this file, the consistency report v0.4 and the 18 PO Validation sections) is ready for attempt 2; it reads remediation 1 (scrum-master) and 2 only. Moving any story to Ready waits for that decision.
 - **Slicing:** 05.03 and 05.04 may need splitting by section of SPEC 7.1 (eight sections) to fit a sprint. 03.03 may be split by output group after the first row works.
@@ -223,6 +228,7 @@ All 18 stories were read again from Jira after the scrum-master's edits (AQP-1 1
 | 10 | 01.08 About page | AQP-90 | 1 | 5 | **READY 17/17** | **Fail**: BR-003 missing (AC-3 scan) | BR-003 added |
 | 11 | 03.01 Field registry seed | AQP-97 | 3 | 7 | **READY 17/17** | **Fail**: only BR-034 | BR-003, 008, 023, 026, 027, 036, 047 added |
 | 12 | 03.02 Formula engine | AQP-106 | 8 | 9 | **READY 17/17** | **Fail**: BR-025 missing; AC-2 cites FR-027, not traced | BR-025 and FR-027 added |
+| 12a | 10.10 NFR-009 guards (enabler) | AQP-169 | 5 | 9 | **READY 17/17** (2026-11-03, comment 10726) | Pass (none asserted, stated in the Trace line) | none; wording of AC-1 and AC-2 and the Dev Context corrected by the product-owner (the not-found page) |
 | 13 | 02.01 Process Master | AQP-113 | 3 | 9 | **READY 17/17** | **Fail**: BR-003, 004, 021 missing | BR-003, 004, 021 added; FR-011 traced |
 | 14 | 02.03 Material Master | AQP-122 | 3 | 8 | **READY 17/17** | **Fail**: BR-003, 004 missing | BR-003, 004 added; FR-011 traced |
 | 15 | 02.04 Exchange Rate Master | AQP-123 | 2 | 7 | **READY 17/17** | Pass (BR-003, BR-004, added by the scrum-master) | FR-011 traced |
@@ -230,7 +236,7 @@ All 18 stories were read again from Jira after the scrum-master's edits (AQP-1 1
 | 17 | 02.02 Customers | AQP-142 | 5 | 8 | **READY 17/17** | **Fail**: BR-003, 004, 030, 032 missing | BR-003, 004, 030, 032 added; FR-011 traced |
 | 18 | 04.01 Assign a task | AQP-148 | 5 | 7 | **READY 17/17** | **Fail**: BR-004 missing (AC-5) | BR-004 added |
 
-Result: **18 of 18 READY on 17 of 17 items.** 11 stories failed the BR item as found and 7 passed it; the corrections are Trace-line text only (no AC, estimate, sub-task or link changed) and were made by the product-owner, so the scrum-master should confirm them (they do not gate G4). The nine stories the first check sent back (AQP-27, 89, 90, 113, 122, 123, 130, 142, 148) now have the dependency text and the Jira links; AQP-27 has AC-10 and sub-task T10 (AQP-164). The seven stories that changed after architecture v0.11 (AQP-48, 57, 65, 74, 97, 113, 130) were re-read in their v0.11 form; AQP-113 has a ninth AC (README first-use sentence) and sub-task T7 (AQP-165).
+Result: **19 of 19 READY on 17 of 17 items**: the 18 of G4 attempt 2, and AQP-169 (10.10), added and validated on 2026-11-03 (comment 10726; its BR item passes, none asserted; the scrum-master moved it to Ready for Dev). Of the 18, 11 stories failed the BR item as found and 7 passed it; the corrections are Trace-line text only (no AC, estimate, sub-task or link changed) and were made by the product-owner, so the scrum-master should confirm them (they do not gate G4). The nine stories the first check sent back (AQP-27, 89, 90, 113, 122, 123, 130, 142, 148) now have the dependency text and the Jira links; AQP-27 has AC-10 and sub-task T10 (AQP-164). The seven stories that changed after architecture v0.11 (AQP-48, 57, 65, 74, 97, 113, 130) were re-read in their v0.11 form; AQP-113 has a ninth AC (README first-use sentence) and sub-task T7 (AQP-165).
 
 **Answer on AQP-113, 122 and 142:** they need BR-004 (the Admin-only criterion asserts it) and BR-003 (they add Restricted values to `canaryMasters` and assert that no rate reaches an Engineer); AQP-142 also BR-030 and BR-032 (AC-4). AQP-123 and AQP-130 were treated the same way.
 

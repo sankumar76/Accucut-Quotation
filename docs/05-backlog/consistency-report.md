@@ -94,7 +94,7 @@ The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; 
 | NFR-006 | EPIC-10 | 10.01 secret and repository scan (enabler) |
 | NFR-007 | EPIC-01 | 01.07; 06.07, 06.08, 06.10, 06.12, 06.13 and 05.12 each carry their event |
 | NFR-008 | EPIC-03 | 03.06 |
-| NFR-009 | EPIC-10 | 10.09 |
+| NFR-009 | EPIC-10 | 10.10 (AQP-169, the NFR-009 guards; moved from 10.09 on 2026-11-03, DL-056) |
 | NFR-010 | EPIC-10, EPIC-07 | 10.09 (load); 07.05 (export) |
 | NFR-011 | EPIC-10 | 10.09 |
 | NFR-012 | EPIC-10 | 10.09 (needs the web address, Q-18) |
@@ -113,8 +113,8 @@ The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; 
 | NFR-025 | EPIC-10, EPIC-03 | 10.01 (gates); 03.02 (formula module 95 percent) |
 | NFR-026 | EPIC-06 | 06.09 |
 | NFR-027 | EPIC-07 | 07.01 to 07.04 |
-| NFR-028 | EPIC-10 | 10.10 (Q-26 open) |
-| NFR-029 | EPIC-10 | 10.10 |
+| NFR-028 | EPIC-10 | 10.12 (Q-26 open; renumbered from 10.10 on 2026-11-03) |
+| NFR-029 | EPIC-10 | 10.12 (renumbered from 10.10 on 2026-11-03) |
 | NFR-030 | EPIC-10 | 10.04 |
 
 ## 8. Sprint 01: Definition of Ready validation (summary)
@@ -126,6 +126,7 @@ The full table, the reason per story and the dependency list are in `backlog.md`
 - **Decision on the question asked for AQP-113, 122 and 142:** yes, they need BR-004, because their Admin-only criteria (a Lead, an Engineer or a signed-out caller is refused) assert it. They also need BR-003, because they add Restricted values to `canaryMasters` and assert that no rate reaches an Engineer. AQP-142 also asserts BR-030 and BR-032 in AC-4.
 - **Who corrected:** these are Trace-line additions only (no AC, estimate or dependency changed). The product-owner made them while writing each PO Validation, and records each in the story ("Corrections made by the product-owner"). The scrum-master should confirm them; they do not gate G4.
 - No status is changed in Jira before the master decides G4 attempt 2; only the scrum-master moves a story to Ready after it.
+- **Added 2026-11-03, after v0.4: AQP-169 (STORY-10.10, NFR-009 guards) is READY, 17 of 17 items** (Jira AQP-169, PO Validation section). It is the nineteenth sprint 01 story (stretch, first). The product-owner added two clarifications to its text (the not-found page is measured and expected to answer 404; no data or API change). Counts above (18 of 18) are as of G4 attempt 2 and are not re-stated.
 
 ## 9. Issues
 
