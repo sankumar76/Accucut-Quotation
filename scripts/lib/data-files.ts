@@ -43,6 +43,7 @@ export const ALLOWED_DATA_FILES: ReadonlyArray<AllowedDataFile> = [
   { path: 'package.json', reason: 'npm manifest' },
   { path: 'package-lock.json', reason: 'npm lockfile' },
   { path: 'tsconfig.json', reason: 'TypeScript configuration' },
+  { path: 'components.json', reason: 'shadcn/ui CLI settings (paths and the cn alias), architect ruling on AQP-28' },
   {
     path: '.gitleaks-baseline.json',
     reason:
