@@ -1,16 +1,7 @@
-import { z } from 'zod';
-
-import { assertNever } from '../assert-never';
+import { validateFormulas } from '../formula';
 
 import type { FieldDefinition, SectionDefinition, StageDefinition } from './field-schema';
-import { extractReferences, FormulaReferenceError } from './formula-references';
-import {
-  EXCHANGE_CURRENCIES,
-  MATERIAL_OPERAND_KEYS,
-  SYSTEM_ROLES,
-  type FieldKind,
-  type SystemRole,
-} from './types';
+import { SYSTEM_ROLES, type FieldKind, type SystemRole } from './types';
 import { isEngineerVisibleAllowed } from './visibility';
 
 /**
@@ -18,8 +9,8 @@ import { isEngineerVisibleAllowed } from './visibility';
  * refused whole and nothing is stored (STORY-03.01 AC-6). Each function checks one rule and returns
  * its problems, with the path of the offending value so the message can point at it.
  *
- * Not here: cycles between formulas and the grammar of a formula. They belong to the formula engine
- * (STORY-03.02), which runs on every edit.
+ * Formulas are read by the formula engine (`lib/formula`): grammar, references, the row/product scope rule
+ * and cycles (STORY-03.02).
  */
 
 export interface DocumentParts {
@@ -145,35 +136,17 @@ function fieldReferenceIssues({ stages, fields }: DocumentParts): DocumentIssue[
   return issues;
 }
 
-function formulaProblems(formula: string, fieldIds: ReadonlySet<string>): string[] {
-  try {
-    return extractReferences(formula).flatMap((reference) => {
-      switch (reference.kind) {
-        case 'field':
-          return fieldIds.has(reference.id) ? [] : ['A formula refers to a field that is not in the registry.'];
-        case 'rate':
-          return z.uuid().safeParse(reference.id).success ? [] : ['A formula holds a rate reference that is not an ID.'];
-        case 'material':
-          return MATERIAL_OPERAND_KEYS.some((key) => key === reference.key) ? [] : ['A formula refers to a material value that does not exist.'];
-        case 'exchange':
-          return EXCHANGE_CURRENCIES.some((currency) => currency === reference.currency) ? [] : ['A formula refers to an exchange rate that does not exist.'];
-        default:
-          return assertNever(reference);
-      }
-    });
-  } catch (error) {
-    if (error instanceof FormulaReferenceError) return [error.message];
-    throw error;
-  }
-}
-
+/**
+ * Formulas (STORY-03.02, AC-5): every stored formula is read by the formula engine, so a syntax error, a
+ * reference to a field that does not exist, a breach of the row/product scope rule and a cycle are all refused
+ * here, with the path of the field. The engine's messages hold no formula text.
+ */
 function formulaIssues({ fields }: DocumentParts): DocumentIssue[] {
-  const ids = new Set(fields.map((field) => field.id));
-  return fields.flatMap((field, index) =>
-    field.kind === 'output' && field.formula !== null
-      ? formulaProblems(field.formula, ids).map((message) => ({ path: ['fields', index, 'formula'], message }))
-      : [],
-  );
+  const indexById = new Map(fields.map((field, index) => [field.id, index]));
+  return validateFormulas(fields).map((issue) => {
+    const index = issue.fieldId === undefined ? undefined : indexById.get(issue.fieldId);
+    return { path: index === undefined ? ['fields'] : ['fields', index, 'formula'], message: issue.message };
+  });
 }
 
 function systemRoleIssues({ fields }: DocumentParts): DocumentIssue[] {
