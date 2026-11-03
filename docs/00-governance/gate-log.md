@@ -420,3 +420,236 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 **Risks registered:** none new. RISK-003, RISK-008 restated, scores unchanged (10, 12). RISK-007, 014, 017, 018 restated, scores unchanged.
 **Rationale:** All four mandatory items pass on evidence I checked myself, not on the summary. The three gaps from attempt 1 are closed, and the one irregularity, the Trace lines, was disclosed and now has the second check it lacked. What remains is non-mandatory, owned and dated, and none of it touches a price or a sprint-1 acceptance criterion. Red RISK-016 does not hold this gate: its field is story 05.03, but it is the risk the delivery lead most needs to keep in view.
 
+---
+
+## G6 – Peer Review — AQP-27 (STORY-10.01) — 2026-11-02
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none. No human stop at this gate; one repository setting is theirs to apply (QLT-04)
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #16 at head 11c57e6: all three reviews (5745972528, 5745993780, 5746060549), every inline thread, the three PR comments, check run "Stages 1 to 11" (run 41559671485, success). Jira AQP-27: description and all 12 comments, including 10649, 10651, 10654 to 10656. Code at 11c57e6: `eslint.config.mjs`, `vitest.config.ts`, `.github/workflows/ci.yml`, `scripts/check-changed-coverage.ts`, `scripts/lib/changed-coverage.ts`, `scripts/make-gitleaks-baseline.ts`, `tests/unit/lint/layer-rules.test.ts`, `README.md`, `.gitleaks-baseline.json` (locations and commits). Design: architecture 4.1, 10; ADR-008; test strategy 10, 11. Repository settings read through the API. Session log, read only, by role. **Not done:** Gitleaks not re-run by me (no binary available to me, and a search for one was denied, no retry), so QLT-08's scan result rests on the reviewer's run and on the baseline's own entries; two later shell checks were denied, no retry; `.env.example` not opened locally; sample workbook not opened, and this record holds no value from it.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All three submitted on 11c57e6. Counts recomputed from the threads: STD 11 Minor, 9 Info (corrected by a PR comment); PRF 3 Minor, 6 Info; QLT 2 Critical, 4 Major, 11 Minor, 1 Info |
+| 2 | Zero open Blocker or Critical | ✱ | ❌ | QLT-01 and QLT-04, both verified and upheld below |
+| 3 | Major fixed or explicitly accepted | | ⚠️ | None fixed. All four verified and upheld; none accepted here |
+| 4 | Findings cite file:line | | ✅ | Every Minor and above is inline; STD-16, STD-20 and QLT-18 are Info, in the summaries |
+| 5 | Reviewed head is green | | ✅ | Check run success on 11c57e6; reviews all name that commit |
+| 6 | Acceptance of the baseline and the template | | ✅ | Session log: three questions at 00:58:15Z, 01:05:33Z and 01:19:15Z, each answered by selection (DL-045) |
+| 7 | `.env.example` holds placeholders only | | ✅ | Blob 711cbab equals the hash of the reviewed comment text, byte for byte (DL-045) |
+| 8 | RISK-006 review | | ✅ | Public; both input files tracked; no new exposure in this PR (DL-046) |
+
+**Critical and Major, verified**
+
+| ID | Reviewer | Ruling | What I ran or read |
+|----|----------|--------|--------------------|
+| QLT-01 | Critical | **Upheld, and wider than reported** | Linted a cost-repository import through the PR config: `(portal)/engineer/page.tsx` fails; `(portal)/queue/page.tsx` and `(portal)/estimates/[code]/page.tsx` are clean, also for `lib/formula`. New: `src/components/features/x.tsx` is clean too. No Engineer page path exists in the design, and ADR-008 says Engineer and Lead views share one address. AC-6 and NFR-002 are not met where they matter |
+| QLT-04 | Critical | **Upheld. Not a code defect, and the developer cannot close it** | `branches/master/protection` returns 404, `rulesets` returns an empty list, `protected` is false, `allow_rebase_merge` is true. The shared scale makes an AC partly met at least Critical. The `ci.yml` half of AC-4 is done |
+| QLT-02 | Major | **Upheld** | A literal `import()` of a cost repository and of `lib/formula` from an Engineer view, of `@prisma/client` from a service, and of `next/headers` from `src/lib` all lint clean; the same static import fails |
+| QLT-05 | Major | **Upheld, as latent** | `coverage.include` is `src/**` and excludes only `src/app`, generated code and `ui`. `src/instrumentation.ts`, which no test loads, shows zero hits in lcov. Architecture 10 tests services by integration. So `src/server/**` will count as uncovered at stage 6. No false failure today, and it fires loudly on the next story |
+| QLT-06 | Major | **Upheld** | Real lcov 97.4 %, exit 0; zero hits 0.0 %, exit 1; zero hits with `./` paths **100.0 % (0 of 0), exit 0**. Also `--threshold abc` on zero coverage gives exit 0 (STD-07) |
+| QLT-08 | Major | **Upheld, with one narrowing** | The baseline proves the mechanism: the same SPEC line is held for c7576f0, 338ce9a and 09f3963, the last being the squash of PR #1, and each `Fingerprint` starts with the commit. It fires only when an edit keeps text the rule still flags; an edit that clears the pattern adds no finding. Recovery does not deadlock: the follow-up PR passes on its own baseline |
+
+**Rulings**
+
+1. **QLT-04 stays Critical and holds G6.** A mandatory item cannot be carried as a condition, and the same rule held G4 attempt 1. It is an action for the delivery lead, not a question and not an approval, and it does not wait for the developer. Agents do not change repository settings. If it is not on at attempt 2, only they can waive it, as a logged override (`CLAUDE.md` section 3); AC-4 would then stay partly met at G7.
+2. **QLT-01: the solution-architect is not needed before the fix.** Architecture 4.1 already has presentation reach services and views only, and 10 says `src/app` is thin, so a ban across `src/app` and `src/components` applies the design and asks no new question. The architect adds one line to section 10 saying why, in the same brief as ruling 3, and does not hold the developer. A later narrowing is theirs to propose.
+3. **QLT-05: the solution-architect is needed before the fix.** It changes test strategy 10 and 11, which is theirs, and the choice sets how every later story is measured. It is one ruling with no human wait. It must say where the gate decision sits, keep unit and integration lines counted together for `src/server/**`, and not exclude `src/server`. The reviewer's second option keeps the stage order and looks the smaller change; the choice is the architect's.
+4. **QLT-08: the procedure is the fix. The `gitleaks:allow` question waits** (DL-046).
+5. **STD-14 note 2 and STD-16 are closed; STD-15 needs no question** (DL-045, DL-046).
+6. **Minor split:** a Minor goes to the developer now if it shares a line or file with a must-fix, makes a control of this story fail open or miss what it claims, breaches a cheap security standard, or is a document that is wrong today. The rest wait for the story that gives them something to fix. No fix adds an AC, so the 10-AC limit is untouched. A Minor that proves more than cheap is listed in the Dev Record for me to defer, and does not grow the round.
+
+**Fix list, developer, before G6 passes**
+
+| Group | IDs | Required |
+|-------|-----|----------|
+| Layer rules | QLT-01, QLT-02, QLT-03 | Engineer rule covers `src/server/views/engineer-*.{ts,tsx}`, all of `src/app` and all of `src/components`. Literal `import()` is caught for every restricted path, composed per file group. Extensions widened. Fixtures at `(portal)/queue/page.tsx`, `(portal)/estimates/[code]/page.tsx` and a `src/components/features/` file, for the repository and for `lib/formula`, plus one `import()` fixture per layer rule. Keep the route-handler clean fixture |
+| Coverage gates | QLT-05 (after the ruling), QLT-06, QLT-07, STD-07 | Implement the ruling. Fail closed when code was added and nothing matched, with `isExcluded` in step with `coverage.exclude`, and keep passing a PR that touches only excluded code. Run the script as a child process for both failure cases. Fix the diff parser. Validate `--threshold`; name the buffer size |
+| Baseline documents and test | QLT-08, QLT-10, QLT-11 | README: first try wording that clears the pattern; otherwise the two-step route (branch entry, then a follow-up PR naming the squash commit), who agrees each step, and that `master` is red until then. All-refs behaviour; squash only, never rebase. Compare `Fingerprint`, not location. Say only what the control shows |
+| Guards | QLT-12, QLT-13, QLT-14, QLT-15, STD-06 | `getAll('host')`; a child-process test for the `globalSetup` wiring; `runIf`, a wider option pattern and a directory-walk test; a test for `register()`; the guard and the tests see the same settings as `.env`, stated in the Dev Record |
+| Secrets and data | STD-02, STD-03, STD-04, STD-05, STD-08, STD-09, QLT-16 item 1 | `\getenv` in the roles script, after confirming the runner's `psql`; database name as a variable; redaction of this project's own variable names, with tests; every `.env.example` value empty, a placeholder or a named safe literal; `MAX_TCP_PORT`; append key and certificate patterns; wider data-file list |
+| CI | STD-01, STD-12 / PRF-03 | `BASE_REF` through `env`. `cancel-in-progress` on pull requests only (Info, taken because the line is one and the first `master` run matters) |
+
+**Deferred (tech-debt, DL-044):** #17 PRF-01, PRF-02, QLT-17; #18 PRF-04; #19 QLT-16 item 2; #20 STD-10. **QLT-09** closes with the setting. **STD-11** goes to the solution-architect. Other Info items need no action; PRF-07, PRF-09 and STD-13 are noted in those issues.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | Santhosh (delivery lead); orchestrator tells them now, no reply text | GitHub, Settings, Branches | Rule for `master`: tick "Require a pull request before merging" and leave "Require approvals" unticked; tick "Require status checks to pass before merging" and "Require branches to be up to date before merging", and select `Stages 1 to 11`; tick "Do not allow bypassing the above settings"; leave force pushes and deletions unticked | G6 attempt 2 |
+| 2 | Santhosh | GitHub, Settings, General, Pull Requests | Untick "Allow rebase merging"; keep "Allow squash merging" | G6 attempt 2 |
+| 3 | solution-architect | `test-strategy.md` 10, 11; `architecture.md` 10, 11 | Rule on QLT-05 (ruling 3). One line in 10 for ruling 2. Record `@types/pg` and any other unnamed tool in 11 (STD-11) | Before the developer starts QLT-05 |
+| 4 | developer | PR #16 | The fix list; reply in each thread; update the Dev Record | G6 attempt 2 |
+| 5 | reviewer-quality, reviewer-standards; reviewer-performance for the CI change and the longer redaction list only | PR #16 | Re-review the new diff only (playbook 5.3) | G6 attempt 2 |
+| 6 | master | Repository settings | Read the protection API: required context `Stages 1 to 11`, strict on, `enforce_admins` on, force pushes off; `allow_rebase_merge` false | G6 attempt 2 |
+| 7 | orchestrator | `master` after the merge | Squash only. Check that the first push run on `master` is green: the reviewer's squash result came from scans, not a real squash | After the human merge |
+| 8 | product-manager | PRD | NFR-009 has no JS budget and no CI time target exists (PRF findings); state them or say none is wanted. Not a hold | G8 |
+
+**Risks registered:** RISK-019 new. RISK-006 reviewed, score unchanged.
+**Rationale:** The story's work is careful and most controls are real, but the rule that guards the product's main promise does not reach a single page the design defines, and nothing yet stops a merge past a red run. Both are confirmed by my own reads, and one fail-open gate and one latent gate sit with them. The loop is small and needs no human wait except the two settings, which take minutes and are needed before any code merge anyway.
+
+---
+
+## G6 – Peer Review — AQP-27 (STORY-10.01) — 2026-11-02 (attempt 2)
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2
+- **Artefacts evaluated:** PR #16 at head 3a01fdc (commits c4c5eee, d3ba026, 96ab2a9, 41d5dab, 3a01fdc): re-reviews 5747098132 (standards), 5747104660 (performance), 5747127322 (quality); all 52 review threads (25 unresolved, all Minor or Info); PR body and Dev Record; check run "Stages 1 to 11" (run 41574395485, success). Jira AQP-27 10659 to 10664. Code at 3a01fdc: `eslint.config.mjs`, `scripts/lib/coverage-scope.ts`, `.github/workflows/ci.yml` stages 6 and 11, `scripts/check-changed-coverage.ts`, `tests/support/env-example.ts`, `src/lib/logger.ts`, `scripts/lib/data-files.ts`. Working copy, uncommitted: `test-strategy.md` v0.11 section 11, `architecture.md` v0.12, ADR-008 (diff read for the exclusions only). Repository settings through the API. **Not done:** stage 11 not run locally (no database), so integration coverage rests on CI and the developer's one-time probe; Gitleaks not run by me; `.env.example` not opened.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Re-reviews on 3a01fdc, new diff only (playbook 5.3); attempt 1 reports stand for the rest |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | QLT-01 fixed, QLT-04 closed; both checked by me (below) |
+| 3 | Major fixed or explicitly accepted | | ✅ | QLT-02, 05, 06, 08 fixed and checked by me; none accepted |
+| 4 | Findings cite file:line | | ✅ | QLT-18, 19, 20, STD-21 to 23, PRF-10 all inline |
+| 5 | Reviewed head is green | | ✅ | Run 41574395485 on 3a01fdc; branch up to date with `master` |
+| 6 | Open Minors | | ⚠️ | QLT-16 (`.sql`, `.yaml`), QLT-18, QLT-19 / STD-21: conditions 1 and 2 |
+| 7 | Architect's documents in the repository | | ⚠️ | The ruling the code implements is in Jira 10660 and an uncommitted working copy: condition 3 |
+
+**Attempt 1 findings, checked by me at 3a01fdc**
+
+| ID | Result | What I ran or read |
+|----|--------|--------------------|
+| QLT-01 | Fixed | My attempt 1 probes repeated: a cost-repository import now fails at `(portal)/queue/page.tsx`, `(portal)/estimates/[code]/page.tsx` and `src/components/features/`, and so does `lib/formula` on the queue page and an `engineer-*.tsx` view. A service importing a cost repository and the health route importing a service stay clean |
+| QLT-02 | Fixed | Literal `import()` fails for an Engineer view (repository, formula), a component (any repository), a service (Prisma) and `src/lib` (`next/headers`) |
+| QLT-04, QLT-09 | Closed | Protection API: required check `Stages 1 to 11`, strict, `enforce_admins` true, 0 approvals, no code owners, force pushes and deletions off; rulesets none; `allow_rebase_merge` false, squash on. Merge commits stay allowed; that was optional |
+| QLT-05 | Fixed, per the ruling | Stage 6's exact command, reports in my scratchpad: exit 0, 9 `SF:` entries, none under `src/server` or `src/instrumentation.ts`. Stage 11 command read in `ci.yml`; the changed-code step now runs there with `BASE_REF` |
+| QLT-06 | Fixed | My attempt 1 input, zero hits with `./` paths: now exit 1 (was 100 %, exit 0). `--threshold abc`: exit 2 (was 0) |
+| QLT-08 | Fixed (documentation) | README procedure per the fix list, as the quality reviewer confirms. No squash rehearsal was possible |
+
+**Rulings**
+
+1. **Architect's extra exclusions, `src/components/**` and `src/worker/main.ts`: accepted.** They match the ruling (10660) and test strategy v0.11 section 11 word for word. `src/server` is excluded nowhere, and a test asserts it. Reasons: no component test library exists, so those files could only ever show 0 % and push someone to weaken the gate; architecture 10 allows no logic in components, and the new presentation rule now enforces their imports; job logic stays in `src/server/jobs`, which is measured. The cost: logic placed in a component is caught only by review. So a non-trivial function in `src/components/**` is a review finding from AQP-28 onward (QLT-20).
+2. **QLT-16 `.yaml`: deferred to #19.** Master data is unlikely to arrive as YAML, and the three tracked YAML files would need a path rule. **QLT-16 `.sql`: not deferred, fixed now** (condition 1). No `.sql` file is tracked yet, and the first migration story will add some, so the path rule is cheapest before then. A plain-text dump is the likeliest accidental route for a real table.
+3. **STD-13 part 2: deferred to #20**, as Info. Both digests are equal today, and the comment added in d3ba026 tells a maintainer to change both.
+4. **QLT-19 / STD-21, QLT-18 and the PRF-05 sentence: fixed now, not deferred.** It is the attempt 1 test: QLT-19 makes the `.env.example` control miss what its own header claims, and QLT-18 lets the changed-code gate measure fewer lines than were added, the QLT-06 class for one file. PRF-05 has been asked twice and is one sentence. STD-23 is taken too, because it touches the same lines as STD-04 and keeps a person's address out of a public log. STD-22 and PRF-10 need no action (PRF-10 is a trigger, noted in #20).
+5. **No further re-review. I verify the follow-up commit myself** (condition 1), because each fix is small, test-backed and specified by its reviewer. The verification has stated limits: if the follow-up touches any file outside the list, or CI is not green, it goes back to the reviewers for the new diff.
+6. **Labels:** the standards reviewer's brief removal and restoring of PR labels is disclosed and changed nothing; the three labels read approved.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #16, one follow-up commit | **QLT-19 / STD-21:** a value is a placeholder only if it starts with `CHANGE_ME`; a URL needs a `CHANGE_ME` password and host `localhost` or `127.0.0.1`; add the reviewers' real-host control rows; the sibling assertion at `env-example.test.ts:47` too. **QLT-18:** `globToRegExp` throws on syntax it does not support, with a test; the changed-code check prints a notice for each scoped changed file with no report entry, and does not fail on it. **QLT-16 `.sql`:** listed, allowed only at `prisma/migrations/*/migration.sql`, with planted tests either side. **PRF-05:** one sentence in `logger.ts`, no per-node or per-row logging at `info`. **STD-23:** `ADMIN_EMAIL` and `SMTP_USER` redacted, with test rows. Nothing else | Before G7 starts |
+| 2 | master | Same commit | Verify: the diff touches only `tests/support/env-example.ts`, `scripts/lib/coverage-scope.ts`, `scripts/check-changed-coverage.ts` or `scripts/lib/changed-coverage.ts`, `scripts/lib/data-files.ts`, `src/lib/logger.ts`, `src/lib/env.ts` and their tests; CI green on the new head; baseline unchanged at 7; the named tests and my own planted inputs fail as they should. A comment on AQP-27 and the PR records the result. Outside that list, the reviewers re-review the new diff | Before G7 starts |
+| 3 | orchestrator | Docs PR | Commit `architecture.md` v0.12, `test-strategy.md` v0.11 and the ADR-008 edit, and this record, through a docs PR, not PR #16; docs-auto applies | Before PR #16 is merged |
+| 4 | orchestrator | `master` after the merge | Squash only. The first push run on `master` must be green (carried from attempt 1) | After the human merge |
+| 5 | product-manager | PRD | Attempt 1 condition 8 stands: NFR-009 JS budget and a CI time target, or say none is wanted | G8 |
+
+**Risks registered:** RISK-019 restated: mitigation applied (bypass disabled), score unchanged. BLK-04 cleared.
+**Rationale:** Every mandatory item passes on evidence I re-ran myself, not on the reviewers' word, and AC-4 and AC-6 are now met where they matter. What remains is Minor and cheap, and two of the items are controls that miss what they claim. So they are fixed before QA, under a verification with stated limits, instead of becoming debt. No human wait is involved, and merging remains the delivery lead's act.
+
+**Condition 2 verified — 2026-11-03 (master).** Commit 5390559, the PR #16 head; check run "Stages 1 to 11" success (run 41583743245). Developer hand-off: AQP-27 10666. **Result: met. Conditions 1 and 2 are closed, and the story may go to G7.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Diff within the named list | ✅ | `git diff --name-status 3a01fdc 5390559`: 11 files, all modified, none added: `scripts/check-changed-coverage.ts`, `scripts/lib/changed-coverage.ts`, `scripts/lib/coverage-scope.ts`, `scripts/lib/data-files.ts`, `src/lib/logger.ts`, `tests/support/env-example.ts` and five unit test files for them. `src/lib/env.ts` was not needed: STD-23 lives in `logger.ts`. Diff read in full; nothing beyond the five fixes |
+| CI green | ✅ | Run 41583743245 on 5390559 |
+| Baseline still exactly 7 | ✅ | `.gitleaks-baseline.json`, `.gitleaks.toml` and `.env.example` unchanged since 3a01fdc; 7 fingerprints |
+| QLT-19 / STD-21 | ✅ | My planted inputs: a URL with an invented remote host and a placeholder password is flagged; a local URL with a non-placeholder password is flagged; a host with `CHANGE_ME` appended is flagged; an invented tenant ID is flagged; a local placeholder URL and a prefixed placeholder pass |
+| QLT-18 | ✅ | `globToRegExp` throws on `?(…)`, `[ab]`, `(a\|b)` and `!(…)`, and accepts `{ts,tsx}`. `filesMissingFromReport` names a scoped `src/server` file with no report entry, and leaves out excluded, measured and non-code files |
+| QLT-16 `.sql` | ✅ | `prisma/migrations/<one folder>/migration.sql` passes; a second file in a migration folder, a nested folder, a migration file at the top, a root dump and an upper-case `.SQL` elsewhere are all refused; `.yml` untouched (#19). The repository's own check passes |
+| PRF-05 | ✅ | `logger.ts` line 13 carries the rule |
+| STD-23 | ✅ | A logged object with `ADMIN_EMAIL` at top level and `SMTP_USER` and the two OAuth IDs nested prints `[Redacted]` for each and keeps an ordinary key |
+| Local checks | ✅ | The six named test files 170 of 170; `npx eslint scripts src tests` and `npx tsc --noEmit` exit 0; working tree left clean |
+
+**Not done:** stage 11 and Gitleaks not run by me (CI evidence); the planted inputs called the functions directly, not the CI scripts end to end. **Housekeeping, not a hold:** the PR body's CI line still names run 41574395485; the developer refreshes it to 41583743245.
+
+---
+
+## G7 – QA Acceptance — AQP-27 (STORY-10.01) — 2026-11-03
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** `docs/07-qa/AQP-27-test-report.md` at 2bbeaa7, read in full; `docs/07-qa/defects/DEF-001-…`, `DEF-002-…`; `tests/acceptance/aqp-27-scaffold.test.ts` and `aqp-27-database-roles.test.ts`, read in full (6ea8497); `src/instrumentation.ts`; `README.md`; test plan severity table and service levels; coding standards section 1. Jira AQP-27 10670. Check runs: 41588354487 on 2bbeaa7 (per the brief), 41588796386 on 6ea8497, success (read by me). **Not done:** I did not re-run the built-server start-up or a CRLF clone; I read QA's evidence and the code. The QA throwaway database is removed (brief).
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Report AC matrix: 10 of 10 with test IDs, technique and evidence. AC-3's result changes under ruling 1, but it is verified, with evidence |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ❌ | DEF-001 (AQP-166, #21) is Sev-2 under ruling 1 |
+| 3 | Regression recorded and green | ✱ | ✅ | 377 tests on 5390559 and 503 with QA's tests, 0 failed, 0 skipped; Playwright 3 of 3; lint, tsc, build exit 0; CI 41588796386 green on 6ea8497 |
+| 4 | Exploratory testing notes present | | ✅ | Report "Exploratory Testing": charter, 8 areas in risk order, what was not covered |
+| 5 | Accessibility checks for UI stories | | ✅ | Not a UI story: placeholder home page only; checks are due at 10.02 (DL-035) |
+| 6 | No secret, real rate or workbook value added | | ✅ | Report non-functional table; QA's two test files hold invented values only (read by me) |
+| 7 | Changes after G6 | | ✅ | 2bbeaa7 and 6ea8497 add QA files only (ruling 3) |
+
+**Rulings**
+
+1. **AC-3 "fails fast" means the process stops at start-up with a non-zero exit. So DEF-001 is Sev-2, and G7 cannot pass until it is fixed.** The project's own text decides the reading, not a dictionary. `src/instrumentation.ts` says a bad setting "stops the server here"; the README says "The app refuses to start"; coding standards section 1 says "fail fast and loudly at boundaries". Today none of these holds: the process stays up and every request gets 500. The test plan's severity table puts "an AC fails with a workaround" at Sev-2, and that is this case: the log names the variables, so an operator can find the cause. This is consistent with G6, where an AC met only in part was held as Critical (QLT-04). Proportion: it fails closed, so no data or price is at risk. But a process left running looks up to `docker compose ps` and to a restart policy, which is what 10.04 builds on, and the fix is a few lines. QA's reading, "fails at start-up, not at first use", is a fair reading of the AC sentence alone. It is not the reading the code and README promise.
+2. **DEF-002 is fixed in the same loop, not deferred.** It is Sev-3, and the test plan lets Sev-3 wait until G8 with written acceptance. But the delivery lead works on Windows and would see a red suite on a fresh clone, the fix is one line in a test, and a loop is open anyway.
+3. **QA's files added after G6 (2bbeaa7, 6ea8497) need no peer re-review.** They are QA's G7 artefacts, which this gate judges: two test files, two defect records and the report, with no production code, configuration or dependency changed. I read both test files in full. Every value is invented; temporary folders are removed; the database tests run behind the global guard, and both run green on CI 41588796386. Note: the AC-9 test asks the runtime role to drop the database and expects a refusal. That is correct as a negative control, and it can only do harm where the role is already wrongly privileged.
+4. **Observations:** OBS-1 to #19; OBS-2, OBS-3 and OBS-5, plus the Office lock files seen untracked in this working tree, to #23; OBS-4 is G6 condition 4 (unticking "Allow merge commits" stays optional for the delivery lead); OBS-6 is #13; OBS-7 is QA's for 03.04. None holds G7.
+
+**Fix, developer, one commit (DEF-001 and DEF-002 only)**
+
+| Defect | File | Required |
+|--------|------|----------|
+| DEF-001 | `src/instrumentation.ts` | In the Node.js runtime, outside the build phase, when `loadAppEnv()` throws `EnvValidationError`: write its message, which holds names only and never a value, to stderr in one line, then `process.exit(1)`. Keep the build-phase and Edge early returns. Rethrow any other error unchanged. Update the doc comment only if wording changes |
+| DEF-001 | `tests/unit/instrumentation.test.ts` | With `process.exit` and stderr stubbed: an invalid environment calls `exit(1)` once, the output names the variables, and a sentinel value placed in a variable is absent; both early returns still call neither |
+| DEF-002 | `tests/unit/ci-workflow.test.ts` | Normalise `\r\n` to `\n` when the workflow file is read, or match `\r?\n`. No `.gitattributes` change: renormalising would touch most files in this PR |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #16 | The commit above, touching only those three files | G7 attempt 2 |
+| 2 | master | Same commit | Verify, as at G6 condition 2: the file list, CI green, baseline still 7, and my own planted input (an invalid environment exits 1 with names and no value). Outside the list, the reviewers re-review the new diff | G7 attempt 2 |
+| 3 | qa-engineer | AQP-166, AQP-167, #21, #22; test report | Record DEF-001 as Sev-2 under this ruling. Then re-run the DEF-001 steps on the built server (exit non-zero, names only) and a CRLF clone for DEF-002, close both, and update the report. Make the test plan updates the report owes | G7 attempt 2 |
+| 4 | qa-engineer | Jira | Move AQP-27 to Rejected (`CLAUDE.md` section 4) | Now |
+| 5 | orchestrator | Docs PR; `master` | G6 conditions 3 and 4 still stand: architect documents before the merge; squash only; first `master` run green | Before and after the human merge |
+
+**Risks registered:** none new. RISK-006 unchanged: QA reports it reduced by these controls, not removed (OBS-1, OBS-3).
+**Rationale:** QA's work is thorough: every AC was attacked, not just run. But the one gap it found is that the server does not do what its own README says, and the test plan grades that Sev-2. The fix is a few lines, with a test and a re-check by QA, so the cost of holding is one short loop with no human wait, and AC-3 then means what the repository claims.
+
+**Condition 2 verified — 2026-11-03 (master).** Commit 60eeb67, the PR #16 head; check run "Stages 1 to 11" success (run 41591216308). Developer hand-off: AQP-27 10673. **Result: met.** G7 attempt 2 waits only for QA's re-test (condition 3).
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Only the three named files | ✅ | Commit read through the GitHub API, in full: `src/instrumentation.ts`, `tests/unit/instrumentation.test.ts`, `tests/unit/ci-workflow.test.ts`. The `process.env.NEXT_RUNTIME` dot access is in the named file and only changes how Next.js strips the Edge bundle; the runtime test still behaves as before (rows 4 and 5 below) |
+| CI green | ✅ | Run 41591216308 on 60eeb67 |
+| Baseline still 7 | ✅ | The baseline is not in the commit; 7 fingerprints at the local head (60eeb67) |
+| Invalid environment exits 1, names only | ✅ | My own run, `register()` in a real child process with a clean environment: exit 1; one stderr line naming `AUTH_SECRET (invalid)`, `APP_ORIGIN (missing)` and `SMTP_AUTH_MODE (missing)`; my planted value, placed in two settings, printed 0 times; nothing after the exit ran |
+| Skips and the valid case | ✅ | Same probe: build phase and Edge return with exit 0 and no output; a complete invented environment returns with exit 0 and no output |
+| Other errors re-thrown | ✅ | Read in the code; the unit test covers it |
+| DEF-002 | ✅ | The test now turns CRLF into LF on read; `.gitattributes` unchanged |
+| Local checks | ✅ | The two test files 15 of 15; eslint exit 0 on the three files |
+
+**Not done by me:** the built standalone server (the developer reports exit 1; QA re-tests it under condition 3) and a CRLF clone (QA). The developer's report of one load-related timeout in `layer-rules.test.ts` is noted; it passed in CI and on re-run, and a longer timeout can join #23.
+
+**For the orchestrator, outside this PR:** `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` is modified in the working tree by someone other than the developer (28 lines added at lines 6, 86, 121 and 584). It does not touch line 35, the accepted baseline line. It belongs in a docs PR, never PR #16, and stage 2 scans it there.
+
+---
+
+## G7 – QA Acceptance — AQP-27 (STORY-10.01) — 2026-11-03 (attempt 2)
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. Merging PR #16 stays the delivery lead's act
+- **Attempt:** 2
+- **Artefacts evaluated:** PR #16 at f1bb796 (head); QA comment AQP-27 10687; commits 5ba52c2 (report and DEF-001, DEF-002 records) and f1bb796 (DEF-003 record), both read through the GitHub API and both under `docs/07-qa/` only; the DEF-003 record in full; my condition 2 verification of 60eeb67 (above). Check runs read by me: 41591216308 on 60eeb67, 41593748430 on 5ba52c2 (per QA), and 41594298884 on f1bb796, all success. **Not done:** I did not re-run QA's built-server or CRLF-clone checks; the product code is unchanged since my verification of 60eeb67.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | 10 of 10 (attempt 1 matrix). AC-3 now also passes on the strict reading: QA's built server exits 1 with names only, and my child-process run agrees |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | DEF-001 (Sev-2) fixed in 60eeb67, re-tested by QA, AQP-166 Done, #21 closed. DEF-002 fixed, AQP-167 Done, #22 closed |
+| 3 | Regression recorded and green | ✱ | ✅ | 506 of 506 twice on an idle machine; Playwright 3 of 3; changed-code 100 %; Gitleaks 98 commits, baseline 7; CI green on f1bb796 with no retry. DEF-003, ruling 1 |
+| 4 | Exploratory notes | | ✅ | Attempt 1 report section; re-test notes in the updated report |
+| 5 | Accessibility | | ✅ | Not a UI story (attempt 1) |
+| 6 | Open Sev-3 | | ⚠️ | DEF-003 (AQP-168, #24): condition 1 |
+
+**Rulings**
+
+1. **DEF-003 does not count against G7.** The authoritative regression run is CI, where the suite is green with retries off, and it is also green twice locally on an idle machine. The failure is a 30-second budget that includes loading the ESLint configuration on a busy machine, not an assertion about a layer rule; the file passes alone. "Green only when idle" is enough for G7 because the failure tells nothing about the product, and QA's own acceptance lint cases, with a longer budget, did not fail under the same load. It is still a real defect, so it is fixed before G8: warm ESLint in a `beforeAll` with its own hook timeout, as the record suggests. It is not fixed now, because a further commit would reopen verification for no product gain. Under the flaky-test policy (test strategy 10) it is not quarantined, since it does not fail on CI.
+2. **QA's commits after attempt 1 need no review.** They are QA's own G7 records, all under `docs/07-qa/`, and CI is green on each head.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer; qa-engineer verifies | `tests/unit/lint/layer-rules.test.ts` (#24, AQP-168) | Warm the ESLint instance in a `beforeAll` with its own hook timeout. Do not raise the per-test limit only, and do not quarantine | Before G8 |
+| 2 | orchestrator | Docs PR | G6 condition 3: commit the architect's documents, these governance records and the other roles' uncommitted docs through a docs PR, merged before PR #16. Stage files by name: not the Office lock files `~$…`, and not PR #16's files | Before PR #16 is merged |
+| 3 | Santhosh (merge); orchestrator checks | PR #16; `master` | G6 condition 4: squash merge only; the first push run on `master` after the merge must be green, and the orchestrator reports it | At and after the human merge |
+| 4 | qa-engineer | Jira AQP-27 | Move the story to Done on this decision (`CLAUDE.md` section 4). The merge is separate and human | Now |
+| 5 | orchestrator | Chat | DL-049: at the next contact, ask one open question with no reading offered: did the plating message continue, and who adds the plating calculation, and where | Next contact; not a hold |
+
+**Risks registered:** none new. RISK-006 unchanged; review at G8.
+**Rationale:** Both blocking items from attempt 1 are fixed, verified by me and re-tested by QA on the built server and a CRLF clone. Every mandatory item passes. What remains is one load-sensitive test with an owner and a G8 due date, and the merge steps, which are the delivery lead's.
+

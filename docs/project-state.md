@@ -13,7 +13,7 @@
 | Next gate          | G5 to G7 per story, from STORY-10.01. No story branch before the docs PR merge. Code merges stay human |
 | Current sprint     | —                        |
 | Overall health     | 🟡 Amber (G4 passed with 11 conditions; one red risk, RISK-016 at 16, a typed count can misprice an order, field in 05.03; way of working not chosen; no date adopted) |
-| Last updated       | 2026-11-02 by master |
+| Last updated       | 2026-11-03 by master (G7 AQP-27: CONDITIONAL GO, attempt 2; DL-049, DL-050) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## Request (G0 Intake)
@@ -39,6 +39,7 @@
 
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
+| AQP-27 (STORY-10.01) | Scaffold, CI and repository hygiene | Rejected (QA moves it on this decision) | developer | Passed (10653) | ⚠️ CONDITIONAL GO, attempt 2 (DL-047); conditions 1 and 2 met 2026-11-03 | ⚠️ CONDITIONAL GO, attempt 2 (DL-050); attempt 1 NO-GO (DL-048) | PR #16, head f1bb796, CI 41594298884 green. QA moves the story to Done. Before the merge: the docs PR (G6 condition 3). The human squash merge, then the first `master` run green (condition 4). DEF-003 (#24) before G8. Not merged |
 
 ## Open Questions
 
@@ -104,6 +105,7 @@
 
 | ID | Description | Since | Owner | Action |
 |----|-------------|-------|-------|--------|
+| BLK-04 | CLEARED 2026-11-02 at G6 attempt 2: both settings applied (10659) and read back by master through the API. History: G6 of AQP-27 cannot pass until `master` has the branch rule and rebase merging is off (QLT-04, QLT-09, issue #14). Needs a repository admin; agents do not change settings. Exact settings: gate record, conditions 1 and 2. It holds G6, not the developer's fixes | 2026-11-02 | Santhosh | Apply both settings; master reads the API at attempt 2 |
 | BLK-03 | CLEARED 2026-11-02: "UX work: restart UX" (AQP-1 10528); conditions 12, 13, 15 met (DL-036). The cause of the stop was not established | 2026-11-02 | Santhosh | None |
 | BLK-01 | CLEARED 2026-11-01: draft PR #1 created with the new token; verified at G2 attempt 2; RISK-005 closed. History: GitHub MCP create_pull_request returned 403, later HTTP 401 | 2026-10-31 | Santhosh | None |
 | BLK-02 | CLOSED 2026-11-01 at G2 attempt 2: the delivery lead decided the repository stays public (AQP-1 10465; DL-008). That the content is not real is their statement, not verified; RISK-006 stays open, restated | 2026-11-01 | Santhosh | None |
@@ -114,6 +116,12 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-03 | master | G7 AQP-27: CONDITIONAL GO, attempt 2 (DL-050); DEF-003 before G8. Master data names and units recorded, D-38 to D-40; Q-42's second sentence has two readings, asked at the next contact (DL-049) | docs/00-governance/ |
+| 2026-11-03 | master | G7 AQP-27 condition 2: 60eeb67 verified (three files, CI green, baseline 7, invalid environment exits 1 with names only, in a real child process) | docs/00-governance/gate-log.md |
+| 2026-11-03 | master | G7 AQP-27: NO-GO, attempt 1. AC-3 "fails fast" read as exit at start-up, DEF-001 Sev-2; DEF-002 in the same fix; QA's files after G6 need no re-review (DL-048). Observations to #19 and new #23 | docs/00-governance/ |
+| 2026-11-03 | master | G6 AQP-27 condition 2: 5390559 verified (11 files within the list, CI green, baseline 7, planted inputs fail). Story may go to G7 | docs/00-governance/gate-log.md |
+| 2026-11-02 | master | G6 AQP-27: CONDITIONAL GO, attempt 2. All Critical and Major re-checked by master; settings read back; exclusions accepted; `.yaml` to #19, STD-13 part 2 to #20; five small fixes before G7, verified by master (DL-047). BLK-04 cleared; RISK-019 restated | docs/00-governance/ |
+| 2026-11-02 | master | G6 AQP-27: NO-GO, attempt 1. QLT-01 and QLT-04 Critical upheld; QLT-02, 05, 06, 08 Major upheld (DL-044). Baseline and template acceptance confirmed in the session log, no reconfirmation (DL-045). No question on the workbook; `gitleaks:allow` asked only if needed (DL-046). Issues #17 to #20. RISK-019 new; RISK-006 reviewed; BLK-04 opened | docs/00-governance/ |
 | 2026-11-02 | master | G4 Backlog Ready: CONDITIONAL GO, attempt 2, 11 conditions. Trace corrections stand, step outside the lane recorded, R-BR accepted (DL-039); PRD 13.7, A-36, answers on picture and mail (DL-040); merge recalibration accepted, way of working with the delivery lead, attempt 1 figure corrected (DL-041); CR-33 and CR-32 settled, test plan residual widened (DL-042); decision (DL-043). RISK-003, 007, 008, 014, 017, 018 restated, scores unchanged | docs/00-governance/ |
 | 2026-11-02 | master | G4 Backlog Ready: NO-GO, attempt 1: DoR not shown at 100 % (re-validation, "Depends on" lines, 16 of 17 items). Quantity rule recorded, own-words ruling (DL-027); errors recorded (DL-028); D-24 to D-37 (DL-029); PRD 13.4 to 13.6 (DL-030); readings and assumptions (DL-031); three reviews stay (DL-032); condition 13 met by acceptance (DL-033); 40 GB and retention, nobody can clear copies under A-35 (DL-034); Admin and IT at validation, QA-OQ-01, 06 (DL-035); BLK-03 cleared (DL-036); CR-31 (DL-037). RISK-016 to 018 new; RISK-002, 013 reduced; RISK-008, 011 raised; RISK-009, 012 closed | docs/00-governance/ |
 | 2026-11-02 | master | Rulings before G4, no gate decision: A-18 extension accepted on screen (DL-018); PRD 13.2 and 13.3 recorded (DL-019, DL-020); A-24 to A-26 accepted (DL-021); Q-38 holds neither 03.04 nor G4 (DL-022); DL-013 overtaken (DL-023); Q-35 (a) settled at 1000, ASSUMPTION-57 must be asked as Q-39, CE-2 relabelled (DL-024); HOLD-01 met, master data wait dropped, no date moves (DL-025); G4 cannot pass while conditions 12 and 13 are open (DL-026, BLK-03). RISK-002 to 8, RISK-013 to 9; RISK-003, 006, 007, 008, 012, 015 restated | docs/00-governance/ |
