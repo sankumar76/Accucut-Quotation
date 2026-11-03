@@ -37,6 +37,17 @@ describe('assertSafeDatabaseTarget (AC-10)', () => {
     expect(message).not.toContain('postgresql://');
   });
 
+  it('AC-10: the refusal reads plainly: its stack is the message, with no frames to rewrite', () => {
+    try {
+      assertSafeDatabaseTarget({ DATABASE_URL: BAD_URL });
+    } catch (error) {
+      expect(error).toBeInstanceOf(DatabaseGuardError);
+      if (error instanceof DatabaseGuardError) expect(error.stack).toBe(`DatabaseGuardError: ${error.message}`);
+      return;
+    }
+    throw new Error('Expected the guard to refuse.');
+  });
+
   it('AC-10: refuses NODE_ENV=production even with a local database', () => {
     const message = messageOf(() => assertSafeDatabaseTarget({ NODE_ENV: 'production', DATABASE_URL: LOCAL_URL }));
     expect(message).toContain('NODE_ENV is "production"');

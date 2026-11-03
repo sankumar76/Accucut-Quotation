@@ -25,6 +25,10 @@ export class DatabaseGuardError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'DatabaseGuardError';
+    // A refusal is a policy decision, not a bug, so it needs no stack trace. Dropping it also keeps
+    // the runner from rewriting frames through source maps, which hid this message behind an
+    // unrelated "code.charCodeAt is not a function" start-up error (Vitest 5, Windows).
+    this.stack = `${this.name}: ${message}`;
   }
 }
 
