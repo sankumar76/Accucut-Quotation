@@ -18,6 +18,7 @@
  */
 import { assertNever } from '../../../src/lib/assert-never';
 import { columnLetterToIndex, indexToColumnLetter } from '../../../src/lib/columns';
+import { deepFreeze } from '../../../src/lib/deep-freeze';
 import type { FieldDefinition } from '../../../src/lib/fields/field-schema';
 import { toInternalForm, type ReferenceContext } from '../../../src/lib/fields/formula-references';
 import { parseConfigDocument, type ConfigDocument } from '../../../src/lib/fields/schema';
@@ -370,5 +371,9 @@ function buildDocument(): unknown {
   };
 }
 
-/** The validated document that becomes version 1. Loading this module throws if the seed is not valid. */
-export const seedConfig: ConfigDocument = parseConfigDocument(buildDocument());
+/**
+ * The validated, deep-frozen document that becomes version 1. Loading this module throws if the seed is not
+ * valid; a write to it throws too, so a test or later code cannot change what every other caller shares.
+ * `cloneSeedConfig()` in the tests gives a copy that can be edited.
+ */
+export const seedConfig: ConfigDocument = deepFreeze(parseConfigDocument(buildDocument()));

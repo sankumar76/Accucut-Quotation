@@ -108,7 +108,7 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
       });
       await new Promise((resolve) => setTimeout(resolve, 300));
       const started = Date.now();
-      await expect(createConfigRepository(client).findLatest()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
+      await expect(createConfigRepository(client).findLatestRef()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
       expect(Date.now() - started).toBeLessThan(1_500);
       await holder;
     } finally {

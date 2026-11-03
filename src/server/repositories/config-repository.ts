@@ -14,9 +14,13 @@ import type { PrismaClient } from './prisma-client';
 /** Version numbers start at 1; the seed is version 1. */
 export const SEED_VERSION_NUMBER = 1;
 
-export interface ConfigVersionRecord {
+/** Which version is the latest, without its ~35 KB snapshot (architecture ruling R5). */
+export interface ConfigVersionRef {
   readonly id: string;
   readonly number: number;
+}
+
+export interface ConfigVersionRecord extends ConfigVersionRef {
   /** The stored document, unvalidated. */
   readonly snapshot: unknown;
   /** The user who made the change; null for the seed. */
@@ -32,10 +36,17 @@ export interface ConfigRepository {
    * unique number settles it.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
-  /** The version with the highest number, or null if there is none. */
-  findLatest(): Promise<ConfigVersionRecord | null>;
+  /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. */
+  findLatestRef(): Promise<ConfigVersionRef | null>;
+  /** One version with its snapshot, or null if no version has this ID. */
+  findById(id: string): Promise<ConfigVersionRecord | null>;
 }
 
+/**
+ * Builds the repository over a Prisma client. Pass the owner's client (kind `script`) from
+ * `ensure-seed-version` and the runtime role's client (kind `app` or `worker`) everywhere else. Every
+ * method turns a pool or statement timeout into `DatabaseBusyError` (architecture ruling R4).
+ */
 export function createConfigRepository(db: PrismaClient): ConfigRepository {
   return {
     insertSeedVersionIfNone({ snapshot, reason }) {
@@ -50,10 +61,17 @@ export function createConfigRepository(db: PrismaClient): ConfigRepository {
       });
     },
 
-    findLatest() {
+    findLatestRef() {
+      // ORDER BY number DESC LIMIT 1 is a backward scan of uq_config_versions_number.
       return withDatabaseErrors(() =>
-        db.configVersion.findFirst({
-          orderBy: { number: 'desc' },
+        db.configVersion.findFirst({ orderBy: { number: 'desc' }, select: { id: true, number: true } }),
+      );
+    },
+
+    findById(id) {
+      return withDatabaseErrors(() =>
+        db.configVersion.findUnique({
+          where: { id },
           select: { id: true, number: true, snapshot: true, createdBy: true, reason: true, createdAt: true },
         }),
       );

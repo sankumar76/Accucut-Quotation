@@ -484,6 +484,19 @@ describe('seed configuration: structure only (AC-7, ADR-014)', () => {
     for (const file of files) expect(file).toMatch(/\.ts$/);
   });
 
+  it('QLT-07: the shared seed is deep-frozen, so nothing can change it by accident', () => {
+    expect(Object.isFrozen(seedConfig)).toBe(true);
+    expect(Object.isFrozen(seedConfig.fields)).toBe(true);
+    expect(Object.isFrozen(defined(seedConfig.fields[0]))).toBe(true);
+    expect(Object.isFrozen(defined(seedConfig.stages[2]).subHeadings)).toBe(true);
+    expect(() => {
+      defined(seedConfig.fields[0]).label = 'changed';
+    }).toThrow(TypeError);
+    expect(() => {
+      seedConfig.fields.push(defined(seedConfig.fields[0]));
+    }).toThrow(TypeError);
+  });
+
   it('AC-7: parsing the seed again gives an identical document (the module is deterministic)', () => {
     expect(parseConfigDocument(JSON.parse(JSON.stringify(seedConfig)))).toEqual(seedConfig);
   });
