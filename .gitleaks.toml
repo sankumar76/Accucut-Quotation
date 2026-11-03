@@ -1,0 +1,10 @@
+# Secret scan configuration (CI stage 2, NFR-006, architecture sections 5.5 and 8, ADR-014).
+#
+# This repository is public. The scan runs over the FULL history on every pull request, with
+# Gitleaks' default rules and nothing suppressed here. A finding is never hidden to make the build
+# pass: removing anything from public history, or accepting a finding as a false positive, needs the
+# delivery lead's explicit decision (STORY-10.01, Dev Context).
+title = "Accucut Quotation Portal"
+
+[extend]
+useDefault = true
