@@ -92,6 +92,40 @@ describe('CI workflow', () => {
     expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
   });
 
+  it('#17 (PRF-02 of AQP-27, due with stage 12): the Next.js build cache and the Playwright browsers are cached, before the stages that use them', () => {
+    const next = stepNamed('Cache the Next.js build cache');
+    expect(next).toMatch(/uses: actions\/cache@[0-9a-f]{40}/);
+    expect(next).toContain('path: .next/cache');
+    expect(next).toContain("hashFiles('package-lock.json')");
+    expect(WORKFLOW.indexOf('Cache the Next.js build cache')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 9: build'));
+
+    const browsers = stepNamed('Cache the Playwright browsers');
+    expect(browsers).toMatch(/uses: actions\/cache@[0-9a-f]{40}/);
+    expect(browsers).toContain('path: ~/.cache/ms-playwright');
+    expect(browsers).toContain("hashFiles('package-lock.json')");
+    expect(WORKFLOW.indexOf('Cache the Playwright browsers')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12: E2E'));
+  });
+
+  it('STD-05: stage 9 checks the build output, so /design-system is shown to be a 404 in production on every run', () => {
+    const build = stepNamed('Stage 9: build');
+    expect(build).toContain('npx next build');
+    expect(build.indexOf('npx tsx scripts/check-production-routes.ts')).toBeGreaterThan(build.indexOf('npx next build'));
+  });
+
+  it('STD-02: the README says stage 12 is on and blocks merge, not that it is disabled', () => {
+    const readme = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
+    const section = readme.slice(readme.indexOf('## Continuous integration'), readme.indexOf('## Secret scan and its baseline'));
+    expect(section).toMatch(/stage 12 is on/i);
+    expect(section).toMatch(/blocks merge/i);
+    expect(section).not.toMatch(/stages 12 \(end-to-end\) and 13 \(image\) are present and disabled/);
+  });
+
+  it('STD-03: the job name is kept because it is the required check, and says that it now also runs stage 12', () => {
+    expect(WORKFLOW).toContain('name: Stages 1 to 11');
+    expect(WORKFLOW).toMatch(/#.*required status check.*stage 12/is);
+    expect(LINES[0]).toMatch(/stages 1 to 12/i);
+  });
+
   it('AC-5: the secret scan runs with the accepted-findings baseline and --redact', () => {
     const step = stepNamed('Stage 2: secret scan');
     expect(step).toContain('--redact');

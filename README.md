@@ -50,7 +50,9 @@ variable, that variable in `.env` is missing or still says `CHANGE_ME`; the mess
 **On a phone on the same Wi-Fi.** Start the server so that it listens on the network, with
 `npx next dev -H 0.0.0.0`. Find the computer's address (`ipconfig` on Windows, the "IPv4 Address" line; it looks
 like `192.168.1.20`), allow Node.js through the Windows firewall for private networks if asked, and open
-`http://<that address>:3000/design-system` on the phone.
+`http://<that address>:3000/design-system` on the phone. Use this only on your own home or office network, never
+on public Wi-Fi, and stop the server (Ctrl+C) when you are done: while it runs, anyone on that network can open
+the portal and its development tools.
 
 **To stop.** Press Ctrl+C in the window running `npx next dev`, then `docker compose -f compose.dev.yml down`.
 That keeps the database for next time; `docker compose -f compose.dev.yml down -v` also erases it.
@@ -96,6 +98,7 @@ placeholder; the message names the variable and never prints a value.
 | Integration tests only (needs the database above) | `npx vitest run tests/integration` |
 | All tests | `npx vitest run` |
 | Build | `npx prisma generate && npx next build` |
+| Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
 | End-to-end, three screen sizes | `npx playwright install chromium` once, then `npx playwright test` |
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
 | Licence allow-list | `npx tsx scripts/check-licences.ts` |
@@ -120,10 +123,14 @@ coverage measures are listed once, in `scripts/lib/coverage-scope.ts`: `src/serv
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs stages 1 to 11 of the test strategy (install, secret scan,
-data-file check, lint, type-check, unit with coverage of pure code, audit, licences, build, migrations,
-integration with combined coverage) on every pull request, in order; stages 12 (end-to-end) and 13 (image) are present and disabled until
-the stories that give them something to run. The workflow uses no secret and no production setting.
+`.github/workflows/ci.yml` runs stages 1 to 12 of the test strategy (install, secret scan,
+data-file check, lint, type-check, unit with coverage of pure code, audit, licences, build with a check that
+`/design-system` is a 404 in it, migrations, integration with combined coverage, and end-to-end with axe on
+Chromium at three widths) on every pull request, in order. **Stage 12 is on since STORY-10.02 and blocks merge:**
+it runs inside the job named `Stages 1 to 11`, which is the required check on `master` (the name was kept so the
+check keeps reporting). Stage 13 (image) is present and disabled until the Dockerfile story, STORY-10.04. The
+Next.js build cache and the Playwright browsers are cached between runs. The workflow uses no secret and no
+production setting.
 
 ## Secret scan and its baseline
 
