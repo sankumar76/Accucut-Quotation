@@ -856,3 +856,96 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 
 **Risks registered:** none new.
 **Rationale:** QA attacked every acceptance criterion and the immutability guard from both roles, and each deliberate fault was caught. Nothing open touches a price or a role. The README sentence matters because it states a security property, so it is corrected before the code reaches `master`.
+
+**AQP-97 G7, condition 2 verified — 2026-11-03 (master).** Commit eede13f on PR #32 (CI run 41633028254 green); developer hand-off AQP-97 10745. **Result: met.** Then PR #32 was brought up to date with `master` f0d5a16 (docs PR #42) by merge commit d564175.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| README only | ✅ | `git show --stat eede13f`: `README.md` only, 4 lines in, 2 out |
+| Wording correct | ✅ | It now says the runtime role has no UPDATE or DELETE grant, that the trigger refuses update, delete and truncate for every role, the owner's included, and that the owner can still disable the trigger with DDL, so protection against the owner depends on reviewed migrations. This matches the migration's own comment and OBS-4 |
+| CI | ✅ | Run 41633028254 on eede13f |
+| Merge from `master` | ✅ | `compare eede13f...d564175`: only the files of docs PR #42 (the SPEC and `docs/`), with no change of the developer's own. The PR's diff against `master` still contains no `docs/` file outside `docs/07-qa/` |
+| CI on d564175 | ✅ | Run 41633378091 success; GitHub reports the merge state CLEAN |
+
+**PR #32 is ready for the delivery lead's squash merge.** G6 condition 5 (docs PR first) is met by #42. After the merge, the orchestrator checks that the first push run on `master` is green, and closes #18 noting that the singleton moved to AQP-38.
+
+**AQP-28 G7, interim rulings before the AC-9 results — 2026-11-03 (master). G7 is not decided here.** QA's interim result: AQP-28 10749; report `docs/07-qa/AQP-28-test-report.md` at 90b1dd4 (CI 41638736886 green). AC-1 to AC-8 and AC-10 are verified; AC-9 is pending with the delivery lead.
+
+1. **Windows Narrator is accepted** as the Windows screen reader for AC-9, which says "NVDA or equivalent on Windows". Narrator is Windows' own screen reader and covers what this page asks: landmarks, headings, button names, the drawer's focus trap and Escape. The report names it with its version and the browser. The test plan's NVDA assumption (rows 143 and 497) becomes "NVDA or Narrator, named in the report"; QA updates it. NVDA is used later only if it is on the machine; it is not required.
+2. **The phone screen reader is not optional.** AC-9 names it ("VoiceOver or TalkBack on the phone"), and so does the test plan (row 497). It is built into the phone already being used, so it costs time, not equipment. Phones are the Engineers' main device (DL-055), and the drawer is the shell's phone-only part. Only the platform not available stays listed at G8 as not run (QA-OQ-04: one phone, so iPhone or Android, whichever it is not). A basic pass is enough: open the drawer, move through it, hear the page title after navigation, hear every button's name. If it cannot be done, AC-9 says G7 returns NO-GO.
+3. **DEF-004 (AQP-179, #43) and DEF-005 (AQP-180, #44) join DEF-003's fix** (#24, DL-057), due before sprint 1 ends. The scope becomes "a green local suite on a machine set up by the README": load-sensitive timing, the drawer-width assertion that compares floating-point pixels exactly (use a tolerance; the Playwright retry hid it), and `tests/unit/env.test.ts` reading the developer's real `.env` (isolate the test's environment). DEF-005 matters most, because the README's own set-up produces the failure. None of these holds G7: all are Sev-3, type Test, and CI is green.
+
+---
+
+## G6 – Peer Review — AQP-106 (STORY-03.02) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #45 at head 4ca5b61; check run "Stages 1 to 11" success (run 41644630495); Jira AQP-106 10761 (developer), 10763 (performance), 10764 (standards), 10765 (quality); labels all approved. Code read at 4ca5b61 with `git grep` and `git diff` (no branch switch): `src/lib/formula/errors.ts` (`issueAt`, `errorAt` carry an optional `name`), `rate-names.ts`, `evaluator.ts` (ROUND), and the one-line change to `tests/acceptance/aqp-97-config-versions.test.ts`. **Not done:** no test run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Performance APPROVE (Info 4); standards APPROVE WITH COMMENTS (Minor 1, Info 7); quality APPROVE WITH COMMENTS (Minor 2, Info 3) |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | None; quality's 20 planted bugs all caught |
+| 3 | Major fixed or accepted | | ✅ | None raised |
+| 4 | Findings cite file:line | | ✅ | Per the reviews |
+| 5 | Reviewed head green | | ✅ | Run 41644630495; 500-node calculation about 74 ms median, 146 ms p95 (NFR-008: 2 s) |
+
+**Rulings**
+1. **STD-01 and QLT-16 are fixed now, in one commit I verify myself** (DL-047, DL-054). STD-01: an issue's `name` is formula text (Restricted, architecture 5.1) on a thrown error, and the logger does not redact it; drop it from thrown errors, or rename it and add it to the redaction list, with a logger test that a formula word never reaches a log line. QLT-16: set Decimal's exponent settings so values are written as plain decimal strings, with a test, because 03.03 stores decimal strings and a value written as `1e-7` would be stored that way. Both are a few lines in this story's own module. **My check:** only `src/lib/formula/**`, `src/lib/logger.ts` and their tests change; CI green; my planted inputs (a thrown formula issue logged; a very small and a very large Decimal written) behave.
+2. **QLT-15 is deferred to #48** (the 02.01 rate-name check): it matters only once the Admin can add rates (02.01). Due at 02.01's G6. QLT-17 (percentage-by-name) goes with it.
+3. **ROUND's literal 0 to 20 rule goes to the product-owner, not the delivery lead,** before the R2 formula editor story reaches Ready. No R1 formula is affected, and no price moves: it only limits what an Admin may type later. If the product-owner judges that users would notice the difference from Excel, they take it to the delivery lead then. The other three SPEC-default readings match the SPEC and stand.
+4. **QA's acceptance-test line is accepted.** The seed step now imports the server-only formula engine, so the test must run it with `--conditions=react-server`, exactly as production runs it (AC-8; architecture section 10). The intent of QA's test is unchanged. QA confirms at G7; the file stays QA's.
+5. **DeepReadonly (#46) is a start condition of 03.03:** done before the 03.03 branch is cut, as quality recommends, since 03.03 is the first consumer of the cached document in a calculation path.
+6. **STD-05 versus AC-5:** the developer's reading stands; standards agrees. **Info:** QLT-18 (grammar may only widen) and QLT-19 (IF equality at 34 digits against Excel's 15) go to #48 as notes for 03.03, where equality against the worksheet is tested; the performance notes (one plan cache per process, `evaluateWithWorking` only on demand, a timed 500-node test) also go there. The rest need no action.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #45 | STD-01 and QLT-16 per ruling 1, one commit | Before G7 |
+| 2 | master | Same commit | Verify per ruling 1 | Before G7 |
+| 3 | product-owner | R2 formula editor story | ROUND literal range, ruling 3 | Before that story reaches Ready |
+| 4 | developer | #46 | DeepReadonly | Before the 03.03 branch is cut |
+
+**Risks registered:** none new.
+**Rationale:** The engine meets every AC, is fast against NFR-008, and its tests caught every planted bug. One Minor leaks Restricted formula text toward logs and one would store numbers in the wrong form in the next story, so both are taken now while they are a few lines; the rest belong to the stories that make them reachable.
+
+**AQP-106 G6, follow-up commit verified — 2026-11-03 (master).** Commit 5c2326d on PR #45 (check run "Stages 1 to 11" success, run 41648163968); hand-off AQP-106 10767. **Result: met. AQP-106 may go to G7.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | 10 files: `src/lib/decimal.ts`, `src/lib/formula/{errors,tokenizer,validate}.ts`, six unit test files. `src/lib/logger.ts` unchanged |
+| `src/lib/decimal.ts` | ✅ within the check | The only Decimal configuration and the place QLT-16 lives; my list named the module, not the file. The change adds two settings and nothing else |
+| STD-01 | ✅ | Diff read: `name` removed from `FormulaIssue`, `issueAt` and `errorAt`; all three tokenizer calls stop passing the word; no other field holds formula text. `logger.test.ts` logs refused formulas three ways with invented words and checks none appears |
+| QLT-16 | ✅ | `toExpNeg` and `toExpPos` set to decimal.js's limits. My own run with the same settings: `1e-12`, `-0.00000005`, `1e30` and a 24-digit integer all print and serialise as plain decimal strings |
+| CI | ✅ | Run 41648163968 on 5c2326d |
+
+**Not done:** the PR's own unit suite was not run by me (the working folder is another branch); CI is the evidence. **Note for the UX of SCR-18:** the editor now quotes the unknown word from the text it holds, using `position` and `length`, which is what the error doc comment says.
+
+---
+
+## G7 – QA Acceptance — AQP-106 (STORY-03.02) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. Merging PR #45 is the delivery lead's act
+- **Attempt:** 1
+- **Artefacts evaluated:** QA hand-off AQP-106 10770, PR comment 6606177091; QA commit 5c8b6f8 (report, DEF-006 record, one acceptance test file; read through the GitHub API); AQP-106 AC-1 to AC-9 as written; check run "Stages 1 to 11" success on 5c8b6f8 (run 41651772219), read by me. **Not done:** QA's tests not re-run by me.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | 9 of 9 against hand-worked and BigInt oracles; ten planted faults each caught |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | DEF-006 is Sev-3 (ruling 1); DEF-003 class (#24) known |
+| 3 | Regression green | ✱ | ✅ | CI green on 5c8b6f8 |
+| 4 | Exploratory notes | | ✅ | In the report |
+| 5 | Accessibility | | ✅ | No UI |
+
+**Rulings**
+1. **AC-6 does not cover DEF-006, so it is not a REJECT.** AC-6's round trip is the conversion between internal and display form for a given rate list, and its only name rule is "a rate name cannot be a valid column letter (refused)", which holds. DEF-006 is a different property: whether a new rate name can collide with a combination of existing names (`Cost-Waste` beside `Cost` and `Waste`). That is a rule on the rate list, reachable only once rates can be created (02.01) or formulas re-saved (R2). It is the same defect as QLT-15, deferred at G6 to #48 (DL-062), and the same evidence gives the same decision. **Because a re-save can silently change a price, it is bound harder than a Sev-3 usually is:** DEF-006 (AQP-181, #49) is fixed in 02.01 (AQP-113), and **02.01 cannot pass G7 while it is open**. This record is the written acceptance the test plan requires for a Sev-3 at G7.
+2. **QA's commit 5c8b6f8 needs no peer review** (report, defect record, one acceptance test; DL-050). QA confirmed that the developer's `--conditions=react-server` line in the AQP-97 acceptance test keeps what it checks (two cases fail without the flag), which closes the point left from G6.
+3. **Observations:** the nesting limit counts a call as two levels (Sev-4) and `ROUND(-0.4, 0)` serialises as `-0` both go to #48 as notes for 03.03, which stores and displays values; the `migrate` flag for 10.04 is already #47.
+
+**Before the delivery lead's merge:** QA moves AQP-106 to Done; PR #45 is brought up to date with `master` (branch protection) with CI green on the new head; any architecture or governance text for this story is in a docs PR merged first; squash only; the orchestrator checks the first `master` run afterwards.
+
+**Risks registered:** none new.
+**Rationale:** The engine is verified against independent oracles, and every planted fault was caught. The one new defect is real but outside what AC-6 asked for, and unreachable until 02.01, so it binds 02.01's G7 instead of this one.
