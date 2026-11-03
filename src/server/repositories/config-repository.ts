@@ -1,3 +1,4 @@
+import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 
 /**
@@ -37,21 +38,25 @@ export interface ConfigRepository {
 
 export function createConfigRepository(db: PrismaClient): ConfigRepository {
   return {
-    async insertSeedVersionIfNone({ snapshot, reason }) {
-      // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
-      const inserted = await db.$executeRaw`
-        INSERT INTO config_versions (number, snapshot, created_by, reason)
-        SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
-        WHERE NOT EXISTS (SELECT 1 FROM config_versions)
-        ON CONFLICT (number) DO NOTHING`;
-      return inserted === 1;
+    insertSeedVersionIfNone({ snapshot, reason }) {
+      return withDatabaseErrors(async () => {
+        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
+        const inserted = await db.$executeRaw`
+          INSERT INTO config_versions (number, snapshot, created_by, reason)
+          SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
+          WHERE NOT EXISTS (SELECT 1 FROM config_versions)
+          ON CONFLICT (number) DO NOTHING`;
+        return inserted === 1;
+      });
     },
 
-    async findLatest() {
-      return db.configVersion.findFirst({
-        orderBy: { number: 'desc' },
-        select: { id: true, number: true, snapshot: true, createdBy: true, reason: true, createdAt: true },
-      });
+    findLatest() {
+      return withDatabaseErrors(() =>
+        db.configVersion.findFirst({
+          orderBy: { number: 'desc' },
+          select: { id: true, number: true, snapshot: true, createdBy: true, reason: true, createdAt: true },
+        }),
+      );
     },
   };
 }

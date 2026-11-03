@@ -37,8 +37,8 @@ async function openSession(): Promise<Session> {
   const owner = new Client({ connectionString: database.ownerUrl });
   const runtime = new Client({ connectionString: database.runtimeUrl });
   await Promise.all([owner.connect(), runtime.connect()]);
-  const ownerPrisma = createPrismaClient(database.ownerUrl);
-  const runtimePrisma = createPrismaClient(database.runtimeUrl);
+  const ownerPrisma = createPrismaClient('script', database.ownerUrl);
+  const runtimePrisma = createPrismaClient('app', database.runtimeUrl);
   return {
     database,
     owner,

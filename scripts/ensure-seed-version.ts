@@ -17,7 +17,7 @@ import { ensureSeedVersion } from '../src/server/services/config-service';
 
 async function run(): Promise<void> {
   const { MIGRATE_DATABASE_URL } = loadMigrateEnv();
-  const client = createPrismaClient(MIGRATE_DATABASE_URL);
+  const client = createPrismaClient('script', MIGRATE_DATABASE_URL);
   try {
     const { created } = await ensureSeedVersion(createConfigRepository(client), {
       document: seedConfig,
