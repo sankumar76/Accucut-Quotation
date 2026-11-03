@@ -5,3 +5,19 @@
 .env
 .env.*
 .superpowers/
+
+# --- Application scaffold (STORY-10.01) ---
+# TD-05: `.env.*` above would also hide the committed template, so re-include it. `.env` and every
+# other `.env.*` stay ignored.
+!.env.example
+
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+src/generated/
+npm-debug.log*
