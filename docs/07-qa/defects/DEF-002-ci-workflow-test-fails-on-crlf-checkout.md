@@ -6,7 +6,7 @@
 | Severity | Sev-3 Moderate |
 | Priority | P3 |
 | Type | Test |
-| Status | New |
+| Status | Closed (verified by qa-engineer on `60eeb67`, 2026-11-03) |
 | Found by / date | qa-engineer, 2026-11-03 |
 | Build / commit | `5390559` on `feat/AQP-27-scaffold-ci` |
 | Environment | Windows 11, Git for Windows with `core.autocrlf=true` (the default), fresh `git clone`, `npm ci` |
@@ -36,6 +36,11 @@ The delivery lead works on Windows: a fresh clone or a second developer sees a r
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-03 | `60eeb67`: `tests/unit/ci-workflow.test.ts` converts `\r\n` to `\n` when it reads the workflow |
+| Regression test added | developer | 2026-11-03 | The fix is in the test itself; the failing case is the regression test |
+| Verified | qa-engineer | 2026-11-03 | Re-test below |
+
+## Re-test on `60eeb67` (qa-engineer)
+Fresh `git -c core.autocrlf=true clone --branch feat/AQP-27-scaffold-ci`, `npm ci`. `git ls-files --eol` shows `i/lf w/crlf` for `.github/workflows/ci.yml` and `tests/unit/ci-workflow.test.ts` (269 files with CRLF in the working tree), the same condition that failed on `5390559`.
+- `npx vitest run tests/unit/ci-workflow.test.ts`: 8 of 8 pass.
+- `npx vitest run tests/unit`: 19 files, 369 tests, 0 failed.

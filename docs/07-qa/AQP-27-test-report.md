@@ -3,21 +3,25 @@
 | Field | Value |
 |-------|-------|
 | Tester | qa-engineer |
-| Build / commit | `5390559` on `feat/AQP-27-scaffold-ci` (PR #16, `sankumar76/Accucut-Quotation`) |
-| CI | Run 41583743245, event `pull_request`, job "Stages 1 to 11" success; stages 12 and 13 skipped by design (`if: ${{ false }}`) |
+| Build / commit | G7 attempt 2: `60eeb67` on `feat/AQP-27-scaffold-ci` (PR #16, `sankumar76/Accucut-Quotation`). Attempt 1 was run on `5390559`; its evidence is kept below and was not repeated where `60eeb67` did not change the code it covers (the fix touches `src/instrumentation.ts` and two unit-test files only) |
+| CI | Attempt 1: run 41583743245 on `5390559`. Attempt 2: run 41591216308 on `60eeb67`, job "Stages 1 to 11" success, only stages 12 and 13 skipped by design (`if: ${{ false }}`) |
 | Environment | Windows 11; Node v24.19.0, npm 11.17.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17.11 from `compose.dev.yml` (see "Database used"); Chromium via Playwright 1.64.1 |
 | Date | 2026-11-03 |
-| **Recommendation** | **ACCEPT**, with two open Sev-3 defects (DEF-001, DEF-002) that do not block G7. One reading of AC-3 would turn DEF-001 into Sev-2; the master should confirm the reading (see "Decision for master") |
+| **Recommendation (attempt 2)** | **ACCEPT.** DEF-001 (Sev-2) and DEF-002 (Sev-3) are fixed and verified, and closed. One new Sev-3 defect, DEF-003 (type Test, a timing failure under machine load), is open and does not block G7. Open Sev-1 0, Sev-2 0, Sev-3 1, Sev-4 0 |
+| History | Attempt 1 (on `5390559`): recommendation ACCEPT with DEF-001 as Sev-3. Master's G7 attempt 1 was NO-GO (Jira 10671): "fails fast" in AC-3 means the process exits, so DEF-001 is Sev-2 |
 
 ## Summary
 
-All ten acceptance criteria were verified with evidence, by the existing suite, by new QA acceptance tests and by exploratory attacks on every negative control (secret scan, data-file check, lint layer rules, coverage gates, pending-test scanner, database guard, role privileges). The full regression is green: eslint, tsc, build, Vitest (377 tests, 21 files, 0 failed, 0 skipped) with the dev database, Playwright 3 of 3 on mobile, tablet and desktop. No secret, real rate, master datum or workbook value is added by the branch (ADR-014). Two Sev-3 defects were found; neither is a Sev-1 or Sev-2 under the reading stated below.
+**Attempt 2.** The developer's fix `60eeb67` changes `src/instrumentation.ts` (exit code 1 on an invalid environment) and two unit-test files. On the built standalone server an invalid environment now exits 1 with one line that names the variables and no value, and a complete invented environment serves HTTP 200, so DEF-001 is verified (see "Attempt 2 re-test"). A CRLF checkout of the workflow test now passes, so DEF-002 is verified. The full regression on `60eeb67` is green: eslint, tsc and build exit 0; Vitest 23 files, 506 tests, 0 failed, 0 skipped (with the 126 QA acceptance tests the coordinator committed in `6ea8497`); Playwright 3 of 3; Gitleaks 97 commits, no leaks, baseline still exactly 7. While re-running the suite I found a load-sensitive failure of the developer's first lint test (DEF-003).
+
+**Attempt 1 (unchanged below).** All ten acceptance criteria were verified with evidence on `5390559`, by the existing suite, by QA acceptance tests and by exploratory attacks on every negative control. No secret, real rate, master datum or workbook value is added by the branch (ADR-014); re-checked on `60eeb67`: the new commit adds no file outside `src/instrumentation.ts` and two test files.
 
 ## Decision for master (read this first)
 
-1. **DEF-001 (AQP-166, GitHub #21), AC-3 "fails fast".** With an invalid environment the log names the variables and prints no value, but the server process stays up and answers HTTP 500 to every request, instead of exiting. It fails closed. I read "fails fast" as "fails at start-up, not at first use", so AC-3 passes and the defect is Sev-3. If you read "fails fast" as "the process exits", AC-3 fails with a workaround and DEF-001 becomes Sev-2, which blocks G7 until fixed. The fix is small (`src/instrumentation.ts`).
-2. **DEF-002 (AQP-167, GitHub #22), type Test.** One unit test fails on a Windows clone with default Git line endings (CRLF). CI is Linux, so it is green. The delivery lead works on Windows.
-3. **Uncommitted QA files.** Per the brief, only this report is committed. My acceptance tests (126 tests) and the two defect records are in the working tree, untracked and not pushed (list in "Artefacts"). Once committed they run in CI stage 11.
+1. **DEF-001 (AQP-166, GitHub #21): Sev-2 as you ruled, fixed in `60eeb67`, verified and closed.** AC-3 now passes in full.
+2. **DEF-002 (AQP-167, GitHub #22): fixed in `60eeb67`, verified on a CRLF checkout, closed.**
+3. **DEF-003 (AQP-168, GitHub #24), new, Sev-3, type Test.** The first test of `tests/unit/lint/layer-rules.test.ts` times out at 30 s when the machine is busy (it loads the ESLint configuration inside its own budget). It passed on an idle machine twice and on CI. The test plan says a test that fails and then passes is a defect of type Test, so I raised it; I do not count it against G7 because no retry was used and the suite is green on an idle machine and on CI. If you read "green only when idle" as not green, say so and I will hold the recommendation.
+4. **Uncommitted file.** Per the brief, this commit holds the report and the two DEF records only. The new record `docs/07-qa/defects/DEF-003-layer-rules-test-times-out-under-load.md` is in the working tree, untracked; the Jira Bug and the GitHub issue name it. Commit it on your word.
 
 ## AC Verification Matrix
 
@@ -27,7 +31,7 @@ Test IDs are titles of the form `[AQP-27 AC-n]` in `tests/acceptance/aqp-27-scaf
 |----|-----------|-----------|--------|----------|
 | AC-1 | QA: 5 tests `[AQP-27 AC-1]`; manual clean-clone install and build | EP, EG | Pass | Fresh clone of `5390559` in a scratch folder: `npm ci` exit 0, `npx prisma generate && npx next build` exit 0 (routes `/` and `/_not-found`). All 32 dependencies match `^\d+\.\d+\.\d+$` (0 with `^`, `~`, range or tag). `prisma` and `@prisma/client` both 7.10.1. `overrides` equals `{"next-auth":{"nodemailer":"$nodemailer"}}`; `npm ls` shows next-auth resolving `nodemailer@10.3.1` (deduped). `package-lock.json` tracked. `.npmrc` has `legacy-peer-deps=false`; no `--legacy-peer-deps` or `--force` in the workflow. Installed versions agree with architecture section 11 (see OBS-6 for what section 11 names that is not installed) |
 | AC-2 | QA: 5 tests `[AQP-27 AC-2]`; `npx tsc --noEmit` | EP | Pass | tsc exit 0. `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `exactOptionalPropertyTypes` all true. `next.config.ts`: `output 'standalone'`, `images.unoptimized true`, `serverExternalPackages ['exceljs','@node-rs/argon2']`, `poweredByHeader false`. The built server sends no `X-Powered-By` header |
-| AC-3 | QA: 7 tests `[AQP-27 AC-3]`; developer `env.test`, `env-example.test`, `dotenv-loading.test`, `instrumentation.test`; manual start-up of the built server | EP, EG | Pass, with DEF-001 on "fails fast" | `git check-ignore -v .env.example` prints nothing and exits 1 (not ignored). `.env`, `.env.local`, `.env.production`, `.env.staging` are ignored. The only tracked env file is `.env.example`. Invalid start-up: the log lists `DATABASE_URL (invalid), AUTH_SECRET (invalid), APP_ORIGIN (missing), SMTP_AUTH_MODE (missing)`; three sentinel values I placed in the variables occur 0 times in the log. The process then stays up and returns 500 (DEF-001). I did not open `.env.example`; the tests that read it pass |
+| AC-3 | QA: 7 tests `[AQP-27 AC-3]`; developer `env.test`, `env-example.test`, `dotenv-loading.test`, `instrumentation.test`; manual start-up of the built server | EP, EG | Pass on `60eeb67` (attempt 1: fail on "fails fast", DEF-001) | `git check-ignore -v .env.example` prints nothing and exits 1 (not ignored). `.env`, `.env.local`, `.env.production`, `.env.staging` are ignored. The only tracked env file is `.env.example`. Invalid start-up: the log lists `DATABASE_URL (invalid), AUTH_SECRET (invalid), APP_ORIGIN (missing), SMTP_AUTH_MODE (missing)`; three sentinel values I placed in the variables occur 0 times in the log. On `5390559` the process then stayed up and returned 500 (DEF-001, Sev-2 by the master's ruling). On `60eeb67` it exits 1 after the same one-line message, with no value, and serves nothing (attempt 2 re-test below). I did not open `.env.example`; the tests that read it pass |
 | AC-4 | QA: 7 tests `[AQP-27 AC-4]`; developer `ci-workflow.test`; CI run 41583743245 | DT, EP | Pass | Read from the GitHub API: steps 6 to 18 are stages 1 to 11 in order, all success; stages 12 and 13 skipped. Trigger `pull_request` (plus `push` to `master`), no `pull_request_target`, no `secrets.` reference, `permissions: contents: read`, both actions pinned to 40-character SHAs, no `continue-on-error`, audit at `--audit-level=high`. Branch protection read back (read-only): required check "Stages 1 to 11", strict, admins enforced, force-push and deletion off |
 | AC-5 (negative) | QA: 6 tests `[AQP-27 AC-5]`; developer `data-files.test`, `gitleaks-baseline.test`; manual Gitleaks attacks | DT, EG | Pass | Data-file check: exit 0 on the repository; in throwaway repositories it exits 1 and names a new `.csv`, `.xlsx`, `.json`, `.tsv`, `.xls`, `.ods`, `.parquet`, `.dump`, `.sql` (outside `prisma/migrations/<one folder>/migration.sql`), upper-case and mixed-case extensions, a non-ASCII name, and look-alikes of the two named exceptions (`sub/AMADA-20261006.xlsx`, `amada-20261006.xlsx`, a copy-named file). The two exceptions pass only at their exact root paths. Secret scan: Gitleaks 8.30.1 (Windows build; its SHA-256 matches the release checksum file, whose Linux entry equals the value pinned in `ci.yml`). Full history with the baseline: 94 commits, no leaks. Without the baseline: exactly 7 findings, all rule `generic-api-key`, at the locations the 7 baseline entries record. A fake token assembled at run time and never committed was detected (exit 1) in a new `.md` file, after being removed in a later commit, on a side branch, as an AWS-shaped key pair and as a PEM block. A clean commit passed. The repository's own `scripts/secret-scan-control.ts` passed. Not run: a planted secret on a GitHub throwaway branch (I did not push a fake secret to a public repository; the local run uses the same pinned binary and config) |
 | AC-6 | QA: 29 tests `[AQP-27 AC-6]` (26 must fail, 3 must pass); developer `layer-rules.test`; 42 manual stdin probes | DT, EG | Pass | `npx eslint .` exit 0 (the repository lints clean). Every rule fires: src/lib importing src/server (alias, relative, nested relative), src/app, src/components, `next/*`, Prisma, generated Prisma, `pg`, `export ... from`, literal `import()`; a service importing Prisma; a page or component importing a repository or the formula engine; an Engineer view importing a cost, calculation or rate repository or lib/formula; `eval`, indirect `eval`, `globalThis.eval`, `new Function`, `Function()`, string `setTimeout`; `import(variable)` and `import(template)`; `'use server'` at top, double-quoted, inside a function, and in `tests/`; `console.log`, `any`, non-null assertion. Allowed cases pass (repository importing Prisma, Lead view importing a cost repository, clean file). 42 of 42 manual probes matched expectation; 0 unexpected |
@@ -42,9 +46,13 @@ All 10 ACs pass: AC coverage 10 of 10.
 
 | Suite | Command | Total | Passed | Failed | Skipped | Duration |
 |-------|---------|-------|--------|--------|---------|----------|
-| QA acceptance tests (new, uncommitted) | `npx vitest run tests/acceptance` with the QA database | 126 | 126 | 0 | 0 | 22 s |
-| Full regression (branch as pushed) | `npx vitest run --coverage` with the QA database | 377 (21 files) | 377 | 0 | 0 | 32 s |
-| Full regression (branch plus QA tests) | `npx vitest run --coverage` | 503 (23 files) | 503 | 0 | 0 | 44 s |
+| **Attempt 2, `60eeb67`:** full regression, idle machine | `npx vitest run --coverage` with the throwaway database (project `qa28`) | 506 (23 files) | 506 | 0 | 0 | about 45 s |
+| Attempt 2: same command, a second time | as above | 506 | 506 | 0 | 0 | 26 to 45 s |
+| Attempt 2: same command with `npm ci` running in the background, and again with `tsc`, `eslint` and `next build` running | as above | 506 | 505 | 1 | 0 | n/a |
+| Attempt 2: CRLF checkout, unit suite | `npx vitest run tests/unit` in a fresh `core.autocrlf=true` clone of `60eeb67` | 369 (19 files) | 369 | 0 | 0 | n/a |
+| Attempt 1: QA acceptance tests | `npx vitest run tests/acceptance` with the QA database | 126 | 126 | 0 | 0 | 22 s |
+| Attempt 1: full regression on `5390559` | `npx vitest run --coverage` with the QA database | 377 (21 files) | 377 | 0 | 0 | 32 s |
+| Attempt 1: full regression plus QA tests | `npx vitest run --coverage` | 503 (23 files) | 503 | 0 | 0 | 44 s |
 | Stage 6 command | `npx vitest run tests/unit --coverage --coverage.include='src/lib/**/*.{ts,tsx}' --coverage.include='scripts/lib/**/*.ts'` | 366 | 366 | 0 | 0 | n/a |
 | End to end, three widths | `npx playwright test` (projects mobile 360, tablet 768, desktop 1366) | 3 | 3 | 0 | 0 | 22 s |
 | Lint | `npx eslint .` | n/a | exit 0 | | | |
@@ -94,10 +102,44 @@ Not covered: Firefox and WebKit; a real phone; screen reader and high-contrast c
 
 | ID | Title | Severity | Status | Linked AC |
 |----|-------|----------|--------|-----------|
-| DEF-001 ([AQP-166](https://sankumar76.atlassian.net/browse/AQP-166), [#21](https://github.com/sankumar76/Accucut-Quotation/issues/21)) | Invalid environment at start-up leaves the server running and answering HTTP 500 | Sev-3 (Sev-2 under the strict reading of "fails fast") | New | AC-3 |
-| DEF-002 ([AQP-167](https://sankumar76.atlassian.net/browse/AQP-167), [#22](https://github.com/sankumar76/Accucut-Quotation/issues/22)) | `ci-workflow.test.ts` fails on a Windows clone with default Git line endings | Sev-3, type Test | New | AC-4 (regression) |
+| DEF-001 ([AQP-166](https://sankumar76.atlassian.net/browse/AQP-166), [#21](https://github.com/sankumar76/Accucut-Quotation/issues/21)) | Invalid environment at start-up leaves the server running and answering HTTP 500 | Sev-2 (master's ruling, Jira 10671; QA first rated it Sev-3) | **Closed**, verified on `60eeb67` | AC-3 |
+| DEF-002 ([AQP-167](https://sankumar76.atlassian.net/browse/AQP-167), [#22](https://github.com/sankumar76/Accucut-Quotation/issues/22)) | `ci-workflow.test.ts` fails on a Windows clone with default Git line endings | Sev-3, type Test | **Closed**, verified on `60eeb67` | AC-4 (regression) |
+| DEF-003 ([AQP-168](https://sankumar76.atlassian.net/browse/AQP-168), [#24](https://github.com/sankumar76/Accucut-Quotation/issues/24)) | `layer-rules.test.ts` first test times out at 30 s when the machine is busy | Sev-3, type Test | New (open) | AC-6 (regression) |
 
-Open by severity: Sev-1 0, Sev-2 0, Sev-3 2, Sev-4 0. Both Jira Bugs are linked to AQP-27 ("relates to") with labels `ai-delivery`, `aiid-DEF-nnn`, `agent-qa-engineer`, `sev-3`; both GitHub issues carry `bug`, `sev-3`, `ai-delivery`. Records: `docs/07-qa/defects/DEF-001-env-validation-does-not-stop-the-server.md` and `docs/07-qa/defects/DEF-002-ci-workflow-test-fails-on-crlf-checkout.md` (uncommitted, see below).
+Open by severity: Sev-1 0, Sev-2 0, Sev-3 1, Sev-4 0. The Jira Bugs are linked to AQP-27 ("relates to") with labels `ai-delivery`, `aiid-DEF-nnn`, `agent-qa-engineer` and the severity label; the GitHub issues carry `bug`, a severity label and `ai-delivery`. Records are in `docs/07-qa/defects/`: DEF-001 and DEF-002 (updated in this commit) and DEF-003 (written, untracked, see "Artefacts").
+
+## Attempt 2 re-test (on `60eeb67`)
+
+**DEF-001, built standalone server** (`npx prisma generate && npx next build` exit 0 with no environment; then `node server.js` in `.next/standalone` with a cleaned environment; all values invented; sentinel strings placed in the invalid variables):
+
+| Scenario | Result |
+|---|---|
+| One invalid variable, the rest unset | Exit 1. One stderr line: `Invalid environment: DATABASE_URL (missing), AUTH_SECRET (invalid), APP_ORIGIN (missing), SMTP_AUTH_MODE (missing). Check .env against .env.example.` Port not listening afterwards |
+| Empty environment | Exit 1; four names missing |
+| Three variables invalid, each holding a sentinel | Exit 1; names only; sentinels occur 0 times in the log |
+| `/` polled every 0.3 s during an invalid start | Never answered (connection failures only); server exit 1 |
+| `next start`, invalid environment | Exit 1, same line, 0 occurrences of the sentinel |
+| Complete invented environment | `GET /` 200; no `X-Powered-By`; no error line; still running 4 s later |
+
+**DEF-002:** fresh `git -c core.autocrlf=true clone` of `60eeb67` (269 files `w/crlf`, including the workflow and its test): `tests/unit/ci-workflow.test.ts` 8 of 8; whole unit suite 369 of 369. On `5390559` the same kind of checkout failed 1 test.
+
+**Regression on `60eeb67`:**
+
+| Check | Result |
+|---|---|
+| `npx eslint .` | exit 0 |
+| `npx tsc --noEmit` | exit 0 |
+| `npx prisma generate && npx next build` | exit 0; routes `/` and `/_not-found` |
+| `npx prisma migrate deploy` (throwaway project `qa28` from the unchanged `compose.dev.yml`, host port moved to 55433) | exit 0, nothing to apply |
+| `npx vitest run --coverage` | 23 files, 506 of 506, twice on an idle machine; statements 99.59, branches 96.77, functions 100, lines 100 percent; changed-code coverage 100 percent (215 of 215) |
+| `npx playwright test` | 3 of 3 (mobile, tablet, desktop), 21.5 s |
+| `npx tsx scripts/check-data-files.ts`, `check-licences.ts` | pass, pass |
+| `npm audit --omit=dev --audit-level=high` | exit 0 |
+| Gitleaks 8.30.1, full history, baseline | 97 commits, no leaks; baseline exactly 7 entries; `scripts/secret-scan-control.ts` passes |
+| CI run 41591216308 on `60eeb67` | all stages success, 12 and 13 skipped by design |
+| Scope of `60eeb67` | `src/instrumentation.ts`, `tests/unit/ci-workflow.test.ts`, `tests/unit/instrumentation.test.ts` only |
+
+**DEF-003 (new).** The same suite run while `npm ci` was running, and again while `tsc`, `eslint` and `next build` ran in another checkout, failed one test both times: the first case of `tests/unit/lint/layer-rules.test.ts` ("static import fails lint: src/lib imports src/server (alias)"), `Test timed out in 30000ms`. The file passes alone (67 of 67) and the whole suite passes twice when idle. Cause: the first case loads the ESLint configuration inside its own 30 s limit. Raised as a defect of type Test (test plan section 7). QA's own acceptance cases did not fail under the same load (180 s limit each).
 
 ## Observations (not defects; for the master to route)
 
@@ -113,8 +155,9 @@ Open by severity: Sev-1 0, Sev-2 0, Sev-3 2, Sev-4 0. Both Jira Bugs are linked 
 
 ## Residual Risks / Notes
 
-- DEF-001 and DEF-002 are open. Both are cheap to fix and neither touches a price, a role or a secret.
-- The QA acceptance tests are not in the PR. When they are committed, CI stage 11 runs them (they need the Postgres service, which stage 11 has) and the changed-code figure becomes 100 percent. They were written after I read the implementation tests, so they add independent negative cases rather than independent first-pass coverage; I say so rather than claim otherwise.
+- DEF-001 and DEF-002 are closed. DEF-003 is open (Sev-3, type Test): green on an idle machine and on CI, red when the machine is busy.
+- The QA acceptance tests are in the PR (commit `6ea8497`, made by the coordinator) and run in CI stage 11, which has the Postgres service; changed-code coverage is 100 percent. They were written after I read the implementation tests, so they add independent negative cases rather than independent first-pass coverage; I say so rather than claim otherwise.
+- The QA throwaway database project `qa28` was removed after the re-test (project `qa27` from attempt 1 was removed before it). Scratch clones and logs sit in the session's temporary folder, outside the repository.
 - `npx prisma migrate deploy` has no migration to apply, so "the migration command succeeds" is proven for connection and permissions only.
 - AC-5 was not exercised as a pull request from a throwaway branch on GitHub.
 - RISK-006 (real data in a public repository) is reduced by these controls, not removed: the data-file list is by extension (OBS-1) and the baseline accepts 7 documentation sentences by commit.
@@ -122,16 +165,14 @@ Open by severity: Sev-1 0, Sev-2 0, Sev-3 2, Sev-4 0. Both Jira Bugs are linked 
 
 ## Artefacts
 
-Committed with this report: `docs/07-qa/AQP-27-test-report.md`.
+Committed by the coordinator in `6ea8497`: `tests/acceptance/aqp-27-scaffold.test.ts`, `tests/acceptance/aqp-27-database-roles.test.ts`, the first versions of the DEF-001 and DEF-002 records.
 
-Written by QA and left untracked in the working tree (not staged, not pushed), to be committed on the master's or orchestrator's word:
-- `tests/acceptance/aqp-27-scaffold.test.ts`
-- `tests/acceptance/aqp-27-database-roles.test.ts`
-- `docs/07-qa/defects/DEF-001-env-validation-does-not-stop-the-server.md`
-- `docs/07-qa/defects/DEF-002-ci-workflow-test-fails-on-crlf-checkout.md`
+Committed with this update: `docs/07-qa/AQP-27-test-report.md`, `docs/07-qa/defects/DEF-001-env-validation-does-not-stop-the-server.md`, `docs/07-qa/defects/DEF-002-ci-workflow-test-fails-on-crlf-checkout.md`.
+
+Written by QA and left untracked (not staged, not pushed), to be committed on the master's or coordinator's word: `docs/07-qa/defects/DEF-003-layer-rules-test-times-out-under-load.md`.
 
 ## Hand-off
 - Status: COMPLETE
-- Recommendation: ACCEPT (Sev-1 0, Sev-2 0, Sev-3 2, Sev-4 0; DEF-001 would be Sev-2 under the strict reading of AC-3)
-- Jira / GitHub: AQP-166 and #21; AQP-167 and #22; summary comments on AQP-27 and PR #16
+- Recommendation (G7 attempt 2): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 1, Sev-4 0)
+- Jira / GitHub: AQP-166 and #21 and AQP-167 and #22 closed after verification; AQP-168 and #24 opened; summary comments on AQP-27 and PR #16
 - Story status: not changed by QA
