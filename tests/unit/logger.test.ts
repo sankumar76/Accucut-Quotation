@@ -1,0 +1,76 @@
+import { Writable } from 'node:stream';
+
+import { describe, expect, it } from 'vitest';
+
+import { createLogger, REDACTED_VALUE } from '@/lib/logger';
+
+function capture(): { readonly lines: () => Array<Record<string, unknown>>; readonly stream: Writable } {
+  const chunks: string[] = [];
+  const stream = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      chunks.push(chunk.toString());
+      callback();
+    },
+  });
+  const lines = () =>
+    chunks
+      .join('')
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line): Record<string, unknown> => JSON.parse(line));
+  return { lines, stream };
+}
+
+/** Narrows an unknown JSON value to an object without a type assertion. */
+function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) throw new Error('Expected an object.');
+  return Object.fromEntries(Object.entries(value));
+}
+
+function logOne(entry: Record<string, unknown>): Record<string, unknown> {
+  const { lines, stream } = capture();
+  createLogger({}, stream).info(entry, 'message');
+  const [line] = lines();
+  if (line === undefined) throw new Error('Nothing was logged.');
+  return line;
+}
+
+describe('logger redaction (architecture section 9.4)', () => {
+  it('writes structured JSON with the message', () => {
+    const line = logOne({ requestId: 'r-1' });
+    expect(line['msg']).toBe('message');
+    expect(line['requestId']).toBe('r-1');
+  });
+
+  it('redacts cookies and authorisation headers', () => {
+    const line = logOne({ req: { headers: { cookie: 'session=abc', authorization: 'Bearer xyz', accept: 'text/html' } } });
+    const headers = asRecord(asRecord(line['req'])['headers']);
+    expect(headers['cookie']).toBe(REDACTED_VALUE);
+    expect(headers['authorization']).toBe(REDACTED_VALUE);
+    expect(headers['accept']).toBe('text/html');
+  });
+
+  it.each([
+    ['password', { user: { password: 'invented-password' } }],
+    ['inputs', { estimate: { inputs: { a: 1 } } }],
+    ['outputs', { estimate: { outputs: { b: 2 } } }],
+    ['rates', { masters: { rates: [1, 2] } }],
+    ['top-level password', { password: 'invented-password' }],
+  ])('redacts %s', (_name, entry) => {
+    const text = JSON.stringify(logOne(entry));
+    expect(text).toContain(REDACTED_VALUE);
+    expect(text).not.toContain('invented-password');
+    expect(text).not.toMatch(/"a":1|"b":2|\[1,2\]/);
+  });
+
+  it('honours the level option', () => {
+    const { lines, stream } = capture();
+    createLogger({ level: 'error' }, stream).info('hidden');
+    expect(lines()).toHaveLength(0);
+  });
+
+  it('exports a ready shared logger', async () => {
+    const { logger } = await import('@/lib/logger');
+    expect(typeof logger.info).toBe('function');
+  });
+});
