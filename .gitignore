@@ -21,3 +21,11 @@ playwright-report/
 test-results/
 src/generated/
 npm-debug.log*
+
+# Keys, certificates and noise that `.env.*` does not cover (a public repository: defence in depth)
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+.DS_Store

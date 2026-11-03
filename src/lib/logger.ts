@@ -1,5 +1,7 @@
 import pino, { type DestinationStream, type Logger, type LoggerOptions } from 'pino';
 
+import { SECRET_ENV_VARIABLE_NAMES } from './env';
+
 /**
  * Structured JSON logs to stdout (architecture section 9.4, NFR-024).
  *
@@ -18,6 +20,8 @@ export const REDACTED_PATHS: ReadonlyArray<string> = [
   'headers.authorization',
   'req.headers.cookie',
   'req.headers.authorization',
+  'headers["set-cookie"]',
+  'req.headers["set-cookie"]',
   'res.headers["set-cookie"]',
   // Credentials.
   'password',
@@ -28,6 +32,16 @@ export const REDACTED_PATHS: ReadonlyArray<string> = [
   '*.token',
   'secret',
   '*.secret',
+  'apiKey',
+  '*.apiKey',
+  'clientSecret',
+  '*.clientSecret',
+  // This project's own secret settings, by name: a logged config object must not print them.
+  ...SECRET_ENV_VARIABLE_NAMES,
+  ...SECRET_ENV_VARIABLE_NAMES.map((name) => `*.${name}`),
+  // Personal data (coding standards section 4).
+  'email',
+  '*.email',
   // Estimate data that Engineers must never receive (NFR-002).
   'inputs',
   '*.inputs',

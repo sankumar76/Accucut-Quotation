@@ -47,6 +47,13 @@ describe('findDisallowedDataFiles (AC-5)', () => {
     ]);
   });
 
+  it.each(['.ods', '.xlsb', '.xltx', '.xltm', '.jsonl', '.ndjson', '.parquet', '.dump'])(
+    'QLT-16: flags a new %s file, another way for master data to arrive',
+    (extension) => {
+      expect(findDisallowedDataFiles([`prisma/seed/placeholders/rates${extension}`, `RATES${extension.toUpperCase()}`])).toHaveLength(2);
+    },
+  );
+
   it('AC-5: accepts the two documented exceptions and the project configuration files', () => {
     const tracked = ALLOWED_DATA_FILES.map((entry) => entry.path);
     expect(tracked).toContain('AMADA-20261006.xlsx');

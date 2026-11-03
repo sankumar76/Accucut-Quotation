@@ -41,6 +41,13 @@ describe('database roles (AC-9)', () => {
     expect((await runtime.query('SELECT current_user')).rows[0]).toEqual({ current_user: RUNTIME_ROLE });
   });
 
+  it('STD-03: the role script acted on the database it connected to (it is owned by the owner role)', async () => {
+    const { rows } = await owner.query(
+      'SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = current_database()',
+    );
+    expect(rows).toEqual([{ owner: OWNER_ROLE }]);
+  });
+
   it('AC-9: the runtime role is not a superuser and cannot create databases or roles', async () => {
     const { rows } = await owner.query(
       'SELECT rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = $1',

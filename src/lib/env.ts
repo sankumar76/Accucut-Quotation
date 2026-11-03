@@ -34,8 +34,24 @@ export const ENV_VARIABLE_NAMES = [
 
 export type EnvVariableName = (typeof ENV_VARIABLE_NAMES)[number];
 
+/**
+ * The settings that carry a credential or a connection string with one. The logger redacts these by
+ * name, so a configuration object that is logged by mistake does not print them (STD-04).
+ */
+export const SECRET_ENV_VARIABLE_NAMES = [
+  'DATABASE_URL',
+  'MIGRATE_DATABASE_URL',
+  'AUTH_SECRET',
+  'SMTP_PASSWORD',
+  'SMTP_OAUTH_CLIENT_SECRET',
+  'ADMIN_INITIAL_PASSWORD',
+] as const satisfies ReadonlyArray<EnvVariableName>;
+
 /** Minimum length of `AUTH_SECRET`, in characters. */
 export const AUTH_SECRET_MIN_LENGTH = 32;
+
+/** The highest TCP port number. */
+export const MAX_TCP_PORT = 65_535;
 
 const notPlaceholder = (value: string): boolean => !value.startsWith(PLACEHOLDER_PREFIX);
 
@@ -62,7 +78,7 @@ function isOrigin(value: string): boolean {
 
 const postgresUrl = z.string().refine(isPostgresUrl);
 
-const smtpBase = { SMTP_HOST: z.string().min(1), SMTP_PORT: z.coerce.number().int().min(1).max(65535) };
+const smtpBase = { SMTP_HOST: z.string().min(1), SMTP_PORT: z.coerce.number().int().min(1).max(MAX_TCP_PORT) };
 
 /** Mail sign-in modes (architecture section 4.7): one variant per mode, so a mode cannot lack its fields. */
 const smtpSchema = z.discriminatedUnion('SMTP_AUTH_MODE', [

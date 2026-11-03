@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
+import { ENV_VARIABLE_NAMES, SECRET_ENV_VARIABLE_NAMES } from '@/lib/env';
 import { createLogger, REDACTED_VALUE } from '@/lib/logger';
 
 function capture(): { readonly lines: () => Array<Record<string, unknown>>; readonly stream: Writable } {
@@ -61,6 +62,44 @@ describe('logger redaction (architecture section 9.4)', () => {
     expect(text).toContain(REDACTED_VALUE);
     expect(text).not.toContain('invented-password');
     expect(text).not.toMatch(/"a":1|"b":2|\[1,2\]/);
+  });
+
+  it.each([
+    ['a token', { auth: { token: 'invented-value' } }],
+    ['a secret', { client: { secret: 'invented-value' } }],
+    ['a top-level secret', { secret: 'invented-value' }],
+    ['a top-level authorization', { authorization: 'invented-value' }],
+    ['a top-level cookie', { cookie: 'invented-value' }],
+    ['a request set-cookie header', { req: { headers: { 'set-cookie': 'invented-value' } } }],
+    ['a response set-cookie header', { res: { headers: { 'set-cookie': 'invented-value' } } }],
+    ['an apiKey', { service: { apiKey: 'invented-value' } }],
+    ['a clientSecret', { service: { clientSecret: 'invented-value' } }],
+    ['a person e-mail address', { user: { email: 'someone@example.test' } }],
+  ])('STD-04: redacts %s', (_name, entry) => {
+    const text = JSON.stringify(logOne(entry));
+    expect(text).toContain(REDACTED_VALUE);
+    expect(text).not.toContain('invented-value');
+    expect(text).not.toContain('someone@example.test');
+  });
+
+  it.each(SECRET_ENV_VARIABLE_NAMES)('STD-04: redacts the setting %s, at the top level and one level down', (name) => {
+    const value = `invented-${name}-value`;
+    expect(JSON.stringify(logOne({ [name]: value }))).not.toContain(value);
+    expect(JSON.stringify(logOne({ config: { [name]: value } }))).not.toContain(value);
+  });
+
+  it('STD-04: the secret settings are exactly the secret ones of the environment list', () => {
+    expect([...SECRET_ENV_VARIABLE_NAMES].sort()).toEqual(
+      [
+        'ADMIN_INITIAL_PASSWORD',
+        'AUTH_SECRET',
+        'DATABASE_URL',
+        'MIGRATE_DATABASE_URL',
+        'SMTP_OAUTH_CLIENT_SECRET',
+        'SMTP_PASSWORD',
+      ].sort(),
+    );
+    for (const name of SECRET_ENV_VARIABLE_NAMES) expect(ENV_VARIABLE_NAMES).toContain(name);
   });
 
   it('honours the level option', () => {

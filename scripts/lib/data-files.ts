@@ -7,13 +7,24 @@
  * a new data file is always a deliberate, reviewed change to this file.
  */
 
+// `.sql` and `.yaml` are not listed on purpose: Prisma migrations are `.sql` files and the workflow and
+// Compose files are YAML, so listing them needs a rule for those paths, which is a decision for master
+// (G6 attempt 1, QLT-16 item 1, recorded in the Dev Record of AQP-27).
 export const DATA_FILE_EXTENSIONS: ReadonlyArray<string> = [
   '.csv',
   '.tsv',
   '.xls',
   '.xlsx',
   '.xlsm',
+  '.xlsb',
+  '.xltx',
+  '.xltm',
+  '.ods',
   '.json',
+  '.jsonl',
+  '.ndjson',
+  '.parquet',
+  '.dump',
   '.docx',
 ];
 
