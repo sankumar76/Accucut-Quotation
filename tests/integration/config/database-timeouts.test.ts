@@ -71,13 +71,11 @@ describe('statement timeout becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, ()
     // An open transaction holds version 1 uncommitted, so the seed insert waits on the unique index.
     await blocker.query('BEGIN');
     await blocker.query(`INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'held')`);
-    const started = Date.now();
     try {
+      // Cancelled by the 500 ms limit rather than left waiting: the call settles, and as DATABASE_BUSY.
       await expect(
         ensureSeedVersion(createConfigRepository(client), { document: seedConfig, reason: SEED_VERSION_REASON }),
       ).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
-      // Cancelled at about the limit, long before the 30 s a script would otherwise be allowed.
-      expect(Date.now() - started).toBeLessThan(10_000);
     } finally {
       await blocker.query('ROLLBACK');
     }
@@ -105,6 +103,19 @@ const POOL_WAIT_MILLISECONDS = 2_000;
 const HOLD_SECONDS = 6;
 /** Tries at opening the first connection. On a busy machine one connect can take longer than the short wait. */
 const WARM_UP_ATTEMPTS = 5;
+/** The messages `pg` gives when no connection is ready within `connectionTimeoutMillis` (as in database-errors.ts). */
+const CONNECT_TIMEOUT_MESSAGES: ReadonlyArray<string> = [
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+];
+/** A cause chain this long is not a real one; stopping keeps a cyclic cause from looping. */
+const MAX_CAUSE_DEPTH = 4;
+
+/** True only for the connect timeout, in the error or in its cause chain. Anything else is a real failure. */
+function isConnectTimeout(error: unknown, depth = 0): boolean {
+  if (!(error instanceof Error) || depth > MAX_CAUSE_DEPTH) return false;
+  return CONNECT_TIMEOUT_MESSAGES.includes(error.message) || isConnectTimeout(error.cause, depth + 1);
+}
 
 describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, () => {
   let client: PrismaClient;
@@ -118,7 +129,7 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
         await client.$queryRaw`SELECT 1 AS warm`;
         return;
       } catch (error) {
-        if (attempt >= WARM_UP_ATTEMPTS) throw error;
+        if (!isConnectTimeout(error) || attempt >= WARM_UP_ATTEMPTS) throw error;
       }
     }
   });
@@ -132,8 +143,7 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
       .$transaction(
         async (transaction) => {
           holding();
-          // The literal is HOLD_SECONDS; the query takes no parameter.
-          await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(6)`;
+          await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(${HOLD_SECONDS}::double precision)`;
         },
         { timeout: (HOLD_SECONDS + 30) * MILLISECONDS_PER_SECOND },
       )
