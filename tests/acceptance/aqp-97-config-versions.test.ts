@@ -375,7 +375,8 @@ describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
       const base = { ...process.env };
       delete base['MIGRATE_DATABASE_URL'];
       delete base['DATABASE_URL'];
-      const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/ensure-seed-version.ts'], { cwd: ROOT, env: { ...base, ...environment } });
+      // The step imports the formula engine (server-only), so it runs with the react-server condition (AQP-106 AC-8; architecture section 10).
+      const child = spawn(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'scripts/ensure-seed-version.ts'], { cwd: ROOT, env: { ...base, ...environment } });
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (chunk: Buffer) => void (stdout += chunk.toString()));

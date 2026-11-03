@@ -17,7 +17,11 @@ const target = (percent: number) => ({
 
 export default defineConfig({
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // An empty module in place of the `server-only` package: see tests/support/server-only-stub.ts.
+      'server-only': fileURLToPath(new URL('./tests/support/server-only-stub.ts', import.meta.url)),
+    },
   },
   test: {
     environment: 'node',

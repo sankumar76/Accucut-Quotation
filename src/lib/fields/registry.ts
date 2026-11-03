@@ -1,7 +1,7 @@
 import { indexToColumnLetter } from '../columns';
+import type { RateReference, ReferenceContext } from '../formula';
 
 import type { FieldDefinition, SectionDefinition, StageDefinition } from './field-schema';
-import type { ReferenceContext, RateReference } from './formula-references';
 import type { ConfigDocument } from './schema';
 import type { SystemRole } from './types';
 

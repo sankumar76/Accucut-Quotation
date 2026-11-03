@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { toDisplayForm, toInternalForm, extractReferences, MATERIAL_OPERAND_NAMES } from '@/lib/fields/formula-references';
+import { toDisplayForm, toInternalForm, extractReferences, MATERIAL_OPERAND_NAMES } from '@/lib/formula';
 import {
   describeVisibleWhen,
   fieldLetter,

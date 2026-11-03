@@ -70,7 +70,7 @@ cp .env.example .env                     # then replace every CHANGE_ME value (l
 docker compose -f compose.dev.yml up -d db
 npx prisma generate
 npx prisma migrate deploy
-npx tsx scripts/ensure-seed-version.ts   # the field registry, once; see below
+node --conditions=react-server --import tsx scripts/ensure-seed-version.ts   # the field registry, once; see below
 npx next dev
 ```
 
@@ -82,6 +82,16 @@ runtime role has no UPDATE or DELETE grant on `config_versions`, and a trigger r
 and truncate, the owner's included. The owner role can still disable that trigger with DDL, so protection
 against the owner depends on every migration being reviewed. If the step fails it exits with an
 error. Column letters are derived from field position (`src/lib/columns.ts`) and are never stored.
+
+**The formula engine (`src/lib/formula`).** A tokenizer, a Pratt parser and a tree-walking evaluator over
+decimal.js (`src/lib/decimal.ts`, 34 digits, half-up). It is pure and **server-only**: every file starts with
+`import 'server-only'`, so a client component that imports it fails the build. The `server-only` package throws
+under plain Node and loads under the `react-server` export condition, so anything outside Next.js that imports the
+engine runs with `node --conditions=react-server --import tsx` (the registry seed step above is one); Vitest maps
+the package to an empty module (`vitest.config.ts`), and `tests/unit/formula/server-only.test.ts` shows the real
+package's behaviour. `src/lib/formula/internal-form.ts` is the one converter between display form (`P * Foam
+Cost`) and the stored form (`{{f:<id>}}`, `{{rate:<id>}}`, `{{mat:<key>}}`, `{{fx:USD}}`). Formula error messages
+state a rule and a character number and never repeat text from the formula.
 
 The development database listens on `127.0.0.1:55432` only. It has two roles, created by
 `docker/postgres-init/01-create-roles.sh` on first start:

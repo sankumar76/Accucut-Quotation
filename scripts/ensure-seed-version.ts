@@ -7,7 +7,11 @@
  * structure, not master data (ADR-014). If it fails it exits non-zero, `migrate` fails, and `app` and
  * `worker` do not start.
  *
- * Usage: npx tsx scripts/ensure-seed-version.ts
+ * Usage: node --conditions=react-server --import tsx scripts/ensure-seed-version.ts
+ *
+ * The condition is required. The seed and the registry schema import the formula engine, whose files start with
+ * `import 'server-only'`, and that package throws under plain Node and loads only under the `react-server`
+ * condition (architecture section 10). The `migrate` one-shot runs the step the same way.
  */
 import { SEED_VERSION_REASON, seedConfig } from '../prisma/seed/config';
 import { loadMigrateEnv } from '../src/lib/env';
