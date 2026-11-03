@@ -84,6 +84,14 @@ describe('CI workflow', () => {
     for (const line of uses) expect(line).toMatch(/@[0-9a-f]{40}\b/);
   });
 
+  it('STORY-10.02 AC-8: stage 12 (E2E) is switched on and blocks merge, and stage 13 is still off', () => {
+    const e2e = stepNamed('Stage 12: E2E');
+    expect(e2e).not.toMatch(/^\s*if:/m);
+    expect(e2e).toContain('npx playwright install --with-deps chromium');
+    expect(e2e).toContain('npx playwright test');
+    expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
+  });
+
   it('AC-5: the secret scan runs with the accepted-findings baseline and --redact', () => {
     const step = stepNamed('Stage 2: secret scan');
     expect(step).toContain('--redact');
