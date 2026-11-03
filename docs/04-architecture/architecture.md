@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.13 (SPEC v1.13, D-38 to D-40: 15 seed Process Master items with their units, and the operand Material-Scrap-Rate mapped to `materials.scrap_rate`; listed under "What changed in v0.13". Earlier, v0.12: G6 of AQP-27, the presentation import rule in section 10, the development tools in section 11; listed under "What changed in v0.12") |
+| Version | 0.15 (the licences and audit reading of `@lhci/cli` 0.15.1's dependencies, AQP-169 AC-6, section 11; listed in the change log). Earlier, v0.14: the rulings on AQP-97 and AQP-28, PRF-01 and PRF-02 of AQP-97, OQ-ARCH-13 answered (SPEC v1.14 §7.5, D-41), and the NFR-009 test profile and JS budget (PRD NFR-009; AQP-1 comments 10712, 10713; GitHub #36); listed under "What changed in v0.14". Earlier, v0.13: SPEC v1.13, D-38 to D-40: 15 seed Process Master items with their units, and the operand Material-Scrap-Rate mapped to `materials.scrap_rate`; listed under "What changed in v0.13") |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO, attempt 1 (gate log; APPROVED, AQP-1 comment 10491; DL-009). Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers, which changes what G3 accepted. Version 0.8 applies their answers in AQP-1 comments 10546 to 10554. **Backups on the same server change NFR-013 and RISK-011.** Version 0.9 applies 10559 and 10560: **the Admin's server access changes what the audit log can prove.** For `master` to record and check at G4 |
 | Date | 2026-11-03 |
@@ -11,6 +11,17 @@
 | Scope | Scope A (D-14): every FR through Release 2 and every NFR. Offline (FR-092) is not designed and not blocked (section 9.8) |
 
 **How to read the labels.** **Evidence** = measured or read on 2026-11-01, with the source named. **A-nn** = an architecture assumption, listed in section 15 with what changes if it is wrong. **Proposed** = a value set here for an owner to confirm. The quantity rule comes from the delivery lead's answers on AQP-26 (comments 10535, 10537) and AQP-14 (comment 10510), as SPEC v1.9 records them. Other rule text comes from SPEC §7.4 and §18.
+
+**What changed in v0.14 (2026-11-03).** This version writes into the document the rulings already given on Jira and the pull requests. It also records the answer to OQ-ARCH-13 and the NFR-009 test profile and JS budget set by the product-manager. No FR changes. The NFR-009 verification changes by the product-manager's decision, not this document's. Four dependencies are added and one is named (section 11).
+
+| # | Item | Result | Where |
+|---|------|--------|-------|
+| 1 | AQP-97 rulings (PR #32, comment 6598858452) | The seed checkpoint and `config_checkpoints` belong to STORY-08.06 (R2), which backfills the checkpoint for an existing version 1. `config_versions.created_by` gets its foreign key from whichever of 03.01 and 01.01 merges second. Immutable tables have `created_at` only. The registry gains the property `multiline`. Stage totals are stated for all six stages | Sections 4.5, 5.1, 5.6 |
+| 2 | PRF-01 and PRF-02 of AQP-97 (PR #32, comment 6598912712) | Pool sizes and timeouts are fixed in code per process kind, with no environment variable, and a timeout answers 503 `DATABASE_BUSY`. The parsed configuration document is cached by version id | Sections 3, 4.2, 6 |
+| 3 | GitHub #31 | There is one formula converter, `lib/formula/internal-form.ts`. Scripts and Vitest load `server-only` under the `react-server` condition | Sections 10, 11 |
+| 4 | OQ-ARCH-13 answered (SPEC v1.14 §7.5, D-41) | Column widths and number formats come from SPEC §7.5, not from defaults. Issue #30, item 1, refines the seed before the first production install | Sections 4.5, 15.2 |
+| 5 | AQP-28 rulings (PR #33, comment 6599052433) | `class-variance-authority`, `clsx` and `tailwind-merge` are approved, with a configured `cn`. `@axe-core/playwright` is named. `/design-system` sits under `(portal)` and is absent from every production build, staging included | Sections 10, 11 |
+| 6 | NFR-009 (PRD; AQP-1 comments 10712, 10713; GitHub #36; RISK-020) | The pass/fail profile is office Wi-Fi on a recent phone, and Slow 4G runs nightly as report only. Every route's first-load JavaScript is limited to 200 KB gzip, checked on every pull request. The reference run is defined in `test-strategy.md` section 10. `tailwind-merge` takes about 9 KB of that budget on every route | Sections 7, 11, 14 |
 
 **What changed in v0.13 (SPEC v1.13, D-38 to D-40; AQP-1 comments 10672, 10674).** Names and units only. No formula, FR, NFR, ADR or dependency changes, and no rate value is recorded anywhere (ADR-014). Wherever an earlier part of this document, section 16 included, says 14 seed items or 14 rows, read 15.
 
@@ -205,7 +216,7 @@ C4Container
 |-----------|----------------|------------|-------------------|------------------|-------|
 | `app` | Server-rendered pages, `/api/v1`, auth, calculation, export | Next.js 16.4 (App Router, standalone output), Node 22 | `db` (TCP 5432); SMTP for the Settings test e-mail only (SCR-15 needs the result at once) | Vertical. One instance is enough (section 7, NFR-011). A second instance would need no code change: there is no in-process state that matters except the export gate | Delivery team; Accucut IT runs it |
 | `worker` | Scheduled jobs and the e-mail outbox (FR-081 to 084), and the watch on the weekly backup (section 9.5). In R1 only a heartbeat, the backup watch and the job log | Node 22, node-cron 4 | `db`, SMTP | Single instance. Row claims use `FOR UPDATE SKIP LOCKED`, so a second one would be safe | Delivery team; Accucut IT runs it |
-| `db` | System of record, including images | PostgreSQL 17 | none | Vertical. Pool sizes: app 10, worker 3 | Accucut IT |
+| `db` | System of record, including images | PostgreSQL 17 | none | Vertical. Pool sizes: app 10, worker 3, scripts 2. Connect timeout 5 s. `statement_timeout`: app 10 s, worker and scripts 30 s. `idle_in_transaction_session_timeout`: 30 s. Idle timeout: app 30 s, the others 10 s. Each pool sets its own `application_name`. These are fixed in code by process kind, not set by environment variables (v0.14, PRF-01 of AQP-97). `prisma migrate deploy` is not affected | Accucut IT |
 | `migrate` | `prisma migrate deploy`, then `ensure-seed-version` (section 5.6), then exit; `app` and `worker` wait for it | Prisma CLI 7.10 | `db` with the owner role | Not applicable | Delivery team |
 | `proxy` | TLS, HSTS, body-size cap. **Optional Compose profile** (A-01): skipped if Accucut IT already has a TLS terminator | Caddy 2 | `app` (TCP 3000) | Not applicable | Accucut IT |
 
@@ -292,7 +303,7 @@ sequenceDiagram
   C-->>R: Lead or Admin: results. Engineer: status and the one message
 ```
 
-The compiled plan (ordered list of parsed formulas) is cached in process by `config_versions.id`. A version is immutable, so the cache has nothing to invalidate.
+The compiled plan (ordered list of parsed formulas) is cached in process by `config_versions.id`. A version is immutable, so the cache has nothing to invalidate. The parsed configuration document is cached the same way, by `config_versions.id`. The cache holds at most 16 entries and evicts the oldest first. Each document is deep-frozen, because callers share it. Each read asks only for the latest version's id and number, so every process sees a new version at once (v0.14, PRF-02 of AQP-97).
 
 ### 4.3 The quantity rule: BL as a plain sum (G2 condition 5)
 
@@ -433,14 +444,15 @@ SPEC §8.1's `FieldDefinition` is the document's element type. The UX screens sh
 | `engineerVisible` | True only for `input` fields and for F. A schema rule refuses it everywhere else, including I, BH and BI | SCR-05, ADR-008 |
 | `systemRole` | Marks fields the code depends on: `sl-no` (A), `quantity` (H), `unit-price` (BG), `total` (BL), `approved-price` (BO), `tool-cost` (BM). These cannot be deleted, and A and BO have no editable formula. The quantity warning finds H through this role, and the export finds BM the same way for its footer | SCR-17, 20 |
 | `unit`, `hint`, `formOrder` | Unit tags and hints sit beside each input. `formOrder` is separate from column position because section 08 shows AP, AU, BM, then AJ (SPEC §7.1), which is not letter order. Enter follows it | SCR-05 |
-| `stageId`, `group` | Output placement in the six stages and their sub-headings | SCR-07, 17 |
+| `stageId`, `group` | Output placement in the six stages and their sub-headings. Also set on the inputs AP and AU, which stage 3 lists under "Entered directly" (SPEC §7.4). The product-scope fields (BL, BN, BO) carry stage 6, and SCR-07 lists row-scope fields only | SCR-07, 17 |
 | `options`, `displayUnit` | List values for a new choice field; "kg", "$", "€" on values | SCR-07, 19 |
+| `multiline` | True only on a `text` input that the form shows as a textarea, which is Remarks (AJ), SPEC §7.1 "text (multiline)". Enter moves to the next field and Shift+Enter adds a line (UX). The schema refuses the property on any other kind or data type, and an absent property means false. The export wraps the field's text (v0.14) | SCR-05 |
 
-Sections and stages get a `shortName` (the strip on SCR-05), a display mode (`cards` or `multi-select`, as section 07), and for stages `totalFieldIds`, because the total on a stage heading is sometimes one field (stage 3 is AY) and sometimes several (stage 5 adds BC to BF). Section range tags such as "E, F, J–L, N" are derived per role from the fields that role sees.
+Sections and stages get a `shortName` (the strip on SCR-05), a display mode (`cards` or `multi-select`, as section 07), and for stages `totalFieldIds`, because the total on a stage heading is sometimes one field (stage 3 is AY) and sometimes several (stage 5 adds BC to BF). In the seed, as SCR-07 shows: stage 1 has no total (weights and areas share no unit), stage 2 is AK, stage 3 AY, stage 4 BB, stage 5 BC to BF and stage 6 BG. Section range tags such as "E, F, J–L, N" are derived per role from the fields that role sees.
 
 A field's **references** include formulas, `hideWhenZero`, `visibleWhen` and stage totals. Field delete (SCR-20) checks all four. An input with `defaultValue` takes that value when its key is absent, so a new input with a default does not block Calculate on older drafts (A-15).
 
-The configuration seed comes from SPEC §7 and is committed. One seed formula differs from SPEC §7.4 on purpose: Scrap Weight O (section 4.9). Header texts, widths and formats are structure read from the sample (ASSUMPTION-46). Cell values are not read and never copied.
+The configuration seed comes from SPEC §7 and is committed. One seed formula differs from SPEC §7.4 on purpose: Scrap Weight O (section 4.9). Header texts are the SPEC §7 labels. Column widths and number formats come from SPEC §7.5. The business-analyst read them from the first worksheet of the sample with the delivery lead's permission (D-41, OQ-ARCH-13). Nothing else was read from the workbook, and cell values are never copied. The widths and formats must be in the seed before the first production install, because version 1 is never changed afterwards (GitHub #30, item 1).
 
 ### 4.6 Excel export
 
@@ -665,8 +677,8 @@ erDiagram
 | `exchange_rates` | `currency`, `inr_value`, `updated_by`, `updated_at` | Restricted | |
 | `treatments` | `name`, `is_system`, `is_hidden` | Internal | `is_system` marks the fixed "Other" (FR-017) and "Not applicable". `is_hidden` marks only the second, so "Other" stays on the Admin's list |
 | `settings` | `alerts_enabled`, `sender_name`, `sender_address` | Internal | Single row. No credentials of any kind, in any mail mode (section 4.7) |
-| `config_versions` | `number` (unique), `snapshot` JSONB, `created_by`, `reason` | Restricted | Immutable. Holds formulas. `created_by` is null for version 1 |
-| `config_checkpoints` | `name`, `config_version_id`, `created_by` | Restricted | `created_by` is null for the seed checkpoint |
+| `config_versions` | `number` (unique), `snapshot` JSONB, `created_by`, `reason` | Restricted | Immutable. Holds formulas. `created_by` is null for version 1. The table has `created_at` only, with no `updated_at`, because nothing can ever set it on an immutable table (section 16.7). The foreign key from `created_by` to `users` is added by whichever of stories 03.01 and 01.01 merges second, in a migration dated after both |
+| `config_checkpoints` | `name`, `config_version_id`, `created_by` | Restricted | `created_by` is null for the seed checkpoint. The table is created by story 08.06 (R2), whose migration also adds the seed checkpoint for a version 1 that already exists |
 | `task_sequences` | `year`, `last_value` | Internal | Issues `Q-<year>-<4 digits>`; year taken in IST (FR-041) |
 | `tasks` | `code` (unique, the `Q-YYYY-NNNN` in page addresses), `engineer_id`, `assigned_by`, `folder_path`, `deadline_at`, `title` (120), `notes` (1,000), `assignment_revision` | Internal | Length limits Proposed by UX |
 | `estimates` | `task_id` (unique), `customer_id` (null until chosen), `status`, `inputs_revision`, `current_calculation_id` | Confidential | Every input change bumps `inputs_revision`, in the same transaction (section 4.8) |
@@ -740,7 +752,7 @@ Prisma Migrate only. `prisma migrate dev` locally, `prisma migrate deploy` throu
 |------|-------------------|-------|
 | **The 15 seed Process Master items** (SPEC §4.1, D-38) | The migration that creates `process_items` inserts them, on every environment, with fixed IDs, names and units from SPEC §4.1 and `default_value` 0. Story 02.01 owns it | Same pattern as the two "Not applicable" rows. The IDs live once, in `prisma/seed/config/seed-ids.ts`, which story 03.01 adds, so `{{rate:<id>}}` can be stored before the table exists. `seed-ids.ts` holds 15 IDs, including `Plating-rate-per-sqin`, which no seed formula references (D-40). Names and units are structure, not values, so they may be committed. A test compares the rows with that file. An Admin can rename an item, as formulas hold the ID. Deleting one a formula uses is refused (409 with the list) |
 | **Values** | **Production:** the Admin types them in at first use (D-23). **Dev, CI, staging:** `prisma/seed/placeholders/` updates those rows by ID with invented values, and never inserts them | No real value enters the repository (ADR-014) |
-| **Seed configuration, version 1** | `ensure-seed-version`, run in the `migrate` one-shot right after `prisma migrate deploy`, with the owner role, in one transaction. It inserts version 1, `created_by` null, and its seed checkpoint | **It runs only if no version exists,** so a later change to the seed module can never touch a live install. If it fails, `migrate` exits with an error and `app` and `worker` do not start. In tests it runs at set-up, from the same module |
+| **Seed configuration, version 1** | `ensure-seed-version`, run in the `migrate` one-shot right after `prisma migrate deploy`, with the owner role, in one transaction. It inserts version 1 with `created_by` null. From story 08.06 on, it also inserts the seed checkpoint in the same statement. The 08.06 migration adds the checkpoint for any install whose version 1 already exists, which is every R1 install | **It runs only if no version exists,** so a later change to the seed module can never touch a live install. If it fails, `migrate` exits with an error and `app` and `worker` do not start. In tests it runs at set-up, from the same module |
 | **"Other"** (Treatment / Color) | The migration that creates `treatments` inserts it, on every environment, with a fixed ID, `is_system` true and `is_hidden` false. Story 02.05 owns it | Same pattern as "Not applicable". Protected in the service, as AC-3 of 02.05 states. The hidden-row trigger does not cover it, because "Other" is not hidden |
 
 **One limit.** A rate left at 0 is a valid value, so an estimate calculated before the Admin has entered it prices that process at 0, with no message. The first-use steps in the README must say to enter all 15 before any estimate is calculated. No check is designed: a real rate may be 0, and they did not ask for one.
@@ -784,7 +796,7 @@ A warning that needs an acknowledgement (section 4.3) has the same frame. It is 
                  "slNo": "…", "label": "…", "message": "…" }] }
 ```
 
-Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **also returned to an Engineer for another Engineer's task** so existence does not leak; 409 revision conflict, wrong status, `NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, `EXPORT_OUT_OF_DATE`, `CALCULATE_ACK_REQUIRED`, `APPROVAL_CHANGED`; 413 too large; 415 wrong image type; 422 validation, including `PASSWORD_RULE` (naming the part of the rule that failed) and `NAME_RESERVED`, and **a wrong step-up password (`STEP_UP_FAILED`)**, so the client shows SCR-18's message rather than treating it as a lost session; 429 throttled; 503 export gate.
+Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **also returned to an Engineer for another Engineer's task** so existence does not leak; 409 revision conflict, wrong status, `NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, `EXPORT_OUT_OF_DATE`, `CALCULATE_ACK_REQUIRED`, `APPROVAL_CHANGED`; 413 too large; 415 wrong image type; 422 validation, including `PASSWORD_RULE` (naming the part of the rule that failed) and `NAME_RESERVED`, and **a wrong step-up password (`STEP_UP_FAILED`)**, so the client shows SCR-18's message rather than treating it as a lost session; 429 throttled; 503 export gate, and 503 `DATABASE_BUSY` when a database connection or statement times out (section 3).
 
 **Concurrency.** `estimate_nodes.revision` on every node write; a mismatch gives 409 and the client keeps the typed values. This covers a Lead and an Engineer on one estimate and autosave races.
 
@@ -872,7 +884,7 @@ Codes used: 400 malformed; 401 no session; 403 role refused; 404 not found, **al
 | NFR-006 | 0 findings | Gitleaks in CI; data-file allow-list; placeholder pattern test; GitHub secret scanning; section 5.5 | CI | CI stages on every PR |
 | NFR-007 | 100 %; 0 editable | Audit row in the same transaction; DB trigger and grants | `audit-service`, migrations | One test per event type; direct SQL `UPDATE` refused |
 | NFR-008 | p95 < 2 s, 500 nodes | Compiled plan cached per version; one read per kind; `createMany` in one transaction. **Evidence:** engine shape alone, p95 136 to 153 ms over 20 runs (500 nodes, 45 outputs, 3 operators each) on the laptop in section 4.6; BL is one `SUM` in that plan (section 4.3); leaves over 1.8 s for reads and writes | `calculation-service`, `lib/formula` | Timed test on a 500-node fixture; machine recorded |
-| NFR-009 | ≤ 2 s on 5 key screens | Server Components for first paint; tree skeleton then per-node fetch; route-level code splitting; self-hosted fonts; no images from `next/image`; skeleton states | `src/app` | Lighthouse CI on the mobile preset: LCP ≤ 2 s, TBT ≤ 200 ms (definition in `test-strategy.md` section 8) |
+| NFR-009 | LCP ≤ 2 s and TBT ≤ 200 ms on the 5 key screens, median of 5 runs, office Wi-Fi profile; first-load JS ≤ 200 KB gzip on every route (PRD NFR-009) | Server Components for first paint; tree skeleton then per-node fetch; route-level code splitting; heavy client parts (dialogs, editors) loaded with `next/dynamic`; self-hosted fonts; no images from `next/image`; skeleton states; a JS budget check on every pull request | `src/app`, `src/components` | JS budget check, CI step 11b, on every pull request. Lighthouse CI on the reference hardware and profile, nightly and before the G6 of each key-screen story (`test-strategy.md` sections 8, 10.1, 10.2) |
 | NFR-010 | p95 ≤ 500 ms at 25 users; export 50 nodes ≤ 10 s | Indexed queries; `select` of needed columns; bounded pool; export on a worker thread. **Feasible:** export measured at under 2 s; the 500 ms target is unmeasured, and is a reasoned estimate for small indexed queries on one host | `app`, `db` | k6 load test on staging; export timing test |
 | NFR-011 | 50 users, 25 concurrent, 500 nodes; 2 × headroom | Single host is sized for 50 concurrent; pools hold; nothing scales with named users | `app`, `db` | k6 at 25 and at 50 concurrent |
 | NFR-012 | 99.0 % monthly | Restart policies, health checks, restart under 1 minute, deploy with short interruption. One host is a single point of failure, and 7 h 18 min a month tolerates it | Compose, `/api/health` | External monitor every 5 minutes (section 9.4) |
@@ -1170,7 +1182,7 @@ What would conflict: a local copy would place rates on a machine (BRQ-002, RISK-
 ├── src/
 │   ├── app/                 Next.js routes only; thin
 │   │   ├── (public)/        sign-in, reset
-│   │   ├── (portal)/        queue, assign, estimates/[code], masters/*, config/*, users, settings, audit, about, account
+│   │   ├── (portal)/        queue, assign, estimates/[code], masters/*, config/*, users, settings, audit, about, account, design-system (absent from every production build)
 │   │   ├── fonts/           Self-hosted fonts and their licences, loaded with next/font/local
 │   │   └── api/             api/v1/**, api/auth/[...nextauth], api/health
 │   ├── components/
@@ -1178,7 +1190,7 @@ What would conflict: a local copy would place rates on a machine (BRQ-002, RISK-
 │   │   ├── shared/          Header, nav, money, column tag, states
 │   │   └── features/        estimate-workspace, estimate-review, tree, queues, masters, config
 │   ├── lib/                 Pure code: no I/O, no Next.js, no Prisma
-│   │   ├── formula/         tokenizer, parser, ast, graph, evaluator, internal-form
+│   │   ├── formula/         tokenizer, parser, ast, graph, evaluator, internal-form (the one display/internal converter)
 │   │   ├── estimate/        state-machine, tree, validation, completeness, figure-state
 │   │   ├── auth/            password-rule, common-passwords list
 │   │   ├── fields/          registry types, config edits, visibility rules
@@ -1220,6 +1232,8 @@ Tests stay under `tests/e2e/` rather than the template's `e2e/`, so that one wri
 | `src/server/views/engineer-*.{ts,tsx}` may not import cost repositories or `lib/formula` | ESLint, CI stage 4 |
 | `src/app/**` and `src/components/**` import no repository and no `lib/formula`, on every page and route, Lead and Admin ones included. Pages are shared by role (ADR-008), so no path marks an Engineer page and the rule has to cover all presentation code; they reach data through services and views only (section 4.1) | ESLint, CI stage 4 |
 | `src/lib/formula/**` starts with `import 'server-only'` | Build error if a client component imports them |
+| Scripts and Vitest that import `lib/formula` resolve `server-only` with the `react-server` export condition (`node --conditions=react-server --import tsx`; Vitest `resolve.conditions`), because the package throws under plain Node | `ensure-seed-version-script.test.ts` |
+| Class names are joined only through `cn` (`src/lib/cn.ts`), built on `extendTailwindMerge` with every `--text-*` and `--spacing-s-*` token of the theme registered | Unit test that reads the names from the token file |
 | H is an operand in BB alone among the seed formulas, and BL is `SUM` over the `unit-price` field | Tests, `test-strategy.md` section 5.4 |
 | No figure is read from `calculations` for a screen or a file without going through `figure-state` | Architecture test |
 | Only `master-repository` may read `is_hidden` rows, through its separately named method | Architecture test |
@@ -1237,7 +1251,7 @@ Tests stay under `tests/e2e/` rather than the template's `e2e/`, so that one wri
 
 ## 11. Technology Stack
 
-Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and the override below are this document's decisions; the rest follow `CLAUDE.md` §1. Version 0.3 adds no dependency. Version 0.12 adds none either: it records the development tools STORY-10.01 installed that this table did not name, at the versions in `package.json` (STD-11).
+Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and the override below are this document's decisions; the rest follow `CLAUDE.md` §1. Version 0.3 adds no dependency. Version 0.12 adds none either: it records the development tools STORY-10.01 installed that this table did not name, at the versions in `package.json` (STD-11). Version 0.14 adds `class-variance-authority`, `clsx`, `tailwind-merge` and `server-only`, and names `@axe-core/playwright` (evidence below).
 
 | Layer | Choice | Version | Rationale | Licence | ADR |
 |-------|--------|---------|-----------|---------|-----|
@@ -1248,7 +1262,8 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Framework | Next.js, App Router | 16.4.3 | Project standard | MIT | ADR-001 |
 | UI runtime | React, `react-dom` | 19.3.1 | With Next.js | MIT | ADR-001 |
 | Styling | Tailwind CSS, `@tailwindcss/postcss` | 4.3.3 | Project standard | MIT | ADR-001 |
-| Components | shadcn/ui, radix-ui | radix-ui 1.8.1 | Project standard. Copied source; primitives give accessibility. Sub-dependencies (`sonner`, `cmdk`, `react-day-picker`, `react-resizable-panels`) pinned at scaffold | MIT | ADR-001 |
+| Components | shadcn/ui, radix-ui, `class-variance-authority`, `clsx`, `tailwind-merge` | radix-ui 1.8.1; 0.7.1, 2.1.1, 3.7.0 | Project standard. Copied source; primitives give accessibility. shadcn components are written against `class-variance-authority`, `clsx` and `tailwind-merge`, so those three are approved with it (v0.14, AQP-28; no new ADR). `cn` (`src/lib/cn.ts`) uses `extendTailwindMerge` with this theme's `text` sizes and its `s-1` to `s-7` spacing, because the default merge drops `text-body` when a colour class follows it (verified). `components.json` points `aliases.utils` at `@/lib/cn`. `tailwind-merge` costs about 9 KB gzip on every first load (NFR-009). Sub-dependencies (`sonner`, `cmdk`, `react-day-picker`, `react-resizable-panels`) pinned at scaffold | MIT; Apache-2.0 for `class-variance-authority` | ADR-001 |
+| Server-only marker | `server-only` | 0.0.1 | Every `src/lib/formula/**` file imports it, so a client component that imports one fails the build (STORY-03.02 AC-8). It resolves to an empty module under the `react-server` condition and throws everywhere else (section 10) | MIT | ADR-008 |
 | Icons | lucide-react | 1.66.0 | Project standard | ISC | ADR-001 |
 | Forms | react-hook-form, zod | 7.91.0, 4.6.7 | Shared client and server schemas | MIT | ADR-010 |
 | Database | PostgreSQL | 17 (pinned by digest at scaffold) | Project standard; JSONB, partial indexes, triggers | PostgreSQL | ADR-003 |
@@ -1261,8 +1276,8 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 | Scheduler | node-cron | 4.6.0 | Time-zone aware cron, no broker | ISC | ADR-011 |
 | Logging | pino | 10.4.0 | JSON logs, redaction | MIT | ADR-001 |
 | TLS proxy | Caddy | 2.x | Automatic certificates, one small config file | Apache-2.0 | ADR-002 |
-| Fonts | IBM Plex Sans, IBM Plex Mono, Tinos Bold | Files from `docs/03-ux/screens/fonts/`, plus a subset with ₹ (UX-13) | UX spec §7.1. Self-hosted with `next/font/local`; preload only Plex Sans 400 and 600 and Tinos 700, and let the rest load on demand, for NFR-009. The six files total about 120 KB | SIL OFL 1.1, licence files shipped beside the fonts | UX spec |
-| Tests | Vitest, `@vitest/coverage-v8`, Playwright, axe, Lighthouse CI | 5.0.5, 5.0.5, 1.64.1, 4.14.0, 0.15.1 | Project standard; all dev only | MIT; MIT; Apache-2.0; MPL-2.0; Apache-2.0 | Test strategy |
+| Fonts | IBM Plex Sans, IBM Plex Mono, Tinos Bold | Files from `docs/03-ux/screens/fonts/`, plus a subset with ₹ (UX-13) | UX spec §7.1. Self-hosted with `next/font/local`; preload only Plex Sans 400 and 600 and Tinos 700, and let the rest load on demand, for NFR-009. STORY-10.02 shipped nine files, about 154 KB, adding Mono and the ₹ subsets (size from its pull request, not measured here) | SIL OFL 1.1, licence files shipped beside the fonts | UX spec |
+| Tests | Vitest, `@vitest/coverage-v8`, Playwright, `@axe-core/playwright` (brings `axe-core`), Lighthouse CI (`@lhci/cli`, which runs Lighthouse 12.6.1) | 5.0.5, 5.0.5, 1.64.1, 4.14.0, 0.15.1 | Project standard; all dev only. `@axe-core/playwright` is named in v0.14 (AQP-28). MPL-2.0 is a file-level licence, and the package is used unmodified and never shipped | MIT; MIT; Apache-2.0; MPL-2.0; Apache-2.0 | Test strategy |
 | Lint | ESLint, `eslint-config-next`, `typescript-eslint` | 9.39.5, 16.4.3, 8.72.1 | Enforces the layering rules (section 10). Dev only | MIT | ADR-008 |
 | Script runner | `tsx` | 4.23.15 | Runs the TypeScript scripts in CI stages 2, 3, 8 and 11. Dev only | MIT | Test strategy |
 | Load test | k6 binary | Pinned at scaffold | Dev tool, not linked or shipped | AGPL-3.0 (tool use only) | Test strategy |
@@ -1287,12 +1302,29 @@ Versions are the current stable releases on npm on 2026-11-01. `next-auth@4` and
 
 **Tools recorded in v0.12 (Evidence, 2026-11-02, head 11c57e6).** `npx tsx scripts/check-licences.ts` passed. `npm audit` over the full tree gives 0 high, 0 critical and 24 moderate: the 9 above, and 15 in the ESLint tree through the same `minimatch` advisory, which ships nothing and reads only this repository's files. CI stage 7 still audits production packages only. `@types/pg`, `tsx` and `@vitest/coverage-v8` have no advisory. The npm licence is from memory, not read from its package here.
 
+**Dependencies added in v0.14 (Evidence, 2026-11-03).** `class-variance-authority` 0.7.1, `clsx` 2.1.1, `tailwind-merge` 3.7.0 and `@axe-core/playwright` 4.14.0 were resolved in a scratch project with `npm i --package-lock-only`. `npm audit` found 0 vulnerabilities. Licences, read from the lockfile: Apache-2.0, MIT, MIT and MPL-2.0 (`axe-core` is MPL-2.0 too). `server-only` 0.0.1 (MIT, no dependencies, released in 2022) was read from the registry only. First-load cost, bundled and minified with esbuild and compressed with `gzip -9`: `tailwind-merge` with `clsx` and this theme's configuration, 9,025 bytes; `class-variance-authority` with `clsx`, 558 bytes.
+
+**`@lhci/cli` 0.15.1 (Evidence, 2026-11-03; AQP-169 AC-6).**
+- **Resolution:** resolved alone in a scratch project with `npm i --package-lock-only`. 330 packages, none with an install script, so the `allowScripts` list does not change.
+- **Licences:** MIT 253, ISC 33, Apache-2.0 25, BSD-3-Clause 8, BSD-2-Clause 7, 0BSD 2, MPL-2.0 1 (`axe-core`). One package has no `license` field: `parse-cache-control` 1.0.1, through `lighthouse`. Its `LICENSE` file is the BSD 3-clause text, so it becomes a named exception (table below).
+- **Audit:** `npm audit` on that tree finds 13 high, 5 moderate and 2 low, all in development tooling that CI stage 7 (`--omit=dev`) does not cover.
+- **Reachability (read, not proved):**
+  - the proxy chain (`proxy-agent`, `pac-proxy-agent`, `get-uri`, `basic-ftp`) needs a proxy setting that the runner does not have;
+  - `extract-zip` and `@puppeteer/browsers` download a browser, but `chromePath` points at Playwright's Chromium instead;
+  - `tmp`, `external-editor` and `inquirer` serve the interactive wizard, which is not run;
+  - `zod`, through `chromium-bidi`, parses messages from the local browser;
+  - `uuid`, `glob` and `minimatch` take no outside input.
+- **Exposure:** the run uses invented data only, holds no secret, and has `contents: read`.
+- **Decision:** accepted for 0.15.1, with no `overrides` and no `npm audit fix --force`.
+- **Later version:** 0.16.0 (Lighthouse 13.6.0, released 2026-11-02) still audits at 8 high and 7 moderate, and is too new to adopt. A `tech-debt` issue re-checks it from 2026-11-17.
+
 | Licence finding | Package | Position |
 |-----------------|---------|----------|
 | LGPL-3.0-or-later | `@img/sharp-libvips-*` (optional dependency of `next`, through `sharp`) | Not used at runtime with `images.unoptimized`. Unmodified prebuilt binaries if installed. CI allow-list exception; legal view not verified |
 | EPL-2.0 | `elkjs` (through `@prisma/studio-core`) | Development tooling route; confirm it is not in the runtime image at scaffold |
 | Dual MIT or GPL-3.0 | `jszip` (through `exceljs`) | MIT elected |
 | Not stated in the lockfile | `buffers` (through `exceljs`) | Check at scaffold |
+| BSD-3-Clause, not stated in the lockfile (legacy `licenses` field, type BSD) | `parse-cache-control` 1.0.1 (through `@lhci/cli` > `lighthouse`) | Its `LICENSE` file is the BSD 3-clause text. AQP-169 adds it as a named exception in `scripts/lib/licences.ts`. Development only |
 
 **Rejected on the way.** `@azure/msal-node`: one client-credentials `fetch` needs no library. `file-type`: a signature check for four formats is a few lines and needs no dependency. `pg-boss`, BullMQ: see ADR-011. `@dnd-kit`, `react-arborist`: UX needs no drag (SCR-05), and the tree is custom per UX §7.5. `@tanstack/react-virtual`: added only if the 500-node test shows a need, as virtualising conflicts with `role="tree"` keyboard handling.
 
@@ -1495,6 +1527,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | TD-03: no retention rule for calculations, audit before and after values, or images | Data grows without limit; unresolved Q-26 | Monitor size; decide with Q-26 | After Q-26 |
 | TD-04: no metrics or tracing | Slower diagnosis | Logs and request IDs; revisit after incidents | Later |
 | TD-05: `.gitignore` ignores `.env.example` | FR-091 file silently not committed | Fix in the scaffold story (section 9.3) | EPIC-10 |
+| RISK-020 (registered by `master` at G6 of AQP-28; GitHub #36): NFR-009 is at risk. The shell adds 49.5 KB gzip to every first load. `/` is 184.6 KB of the 200 KB budget, and about 194 KB once `tailwind-merge` is in (estimate: 184.6 + 9.0 + 0.6). A shell-only page measured LCP about 2.7 s and TBT 0.4 to 0.5 s on a slow laptop, on the old Slow 4G profile | Key screens miss LCP or TBT, or have no budget left | JS budget check on every pull request. Lighthouse reference run nightly and before each key-screen G6. `next/dynamic` for heavy parts. A route's limit is raised only by a recorded product-manager decision (`test-strategy.md` section 10) | STORY-10.10 (proposed), done before 02.01 reaches G6 |
 
 ---
 
@@ -1562,6 +1595,7 @@ All 14 are **Accepted** under G3 condition 14, CONDITIONAL GO, 2026-11-01. "Acce
 | OQ-ARCH-11 | Mail account facts: type of account, tenant administrator and Security Defaults, a dedicated mailbox and its address, outbound port 587 (section 4.7) | Accucut IT, Santhosh | Before alerts go live |
 | OQ-ARCH-12 | **Closed.** The Admin holds the key, has server access and runs a restore, copies stay on the same server, and the Last backup line is wanted (AQP-1 comments 10549, 10550, 10559, 10560). How the access is granted is Accucut IT's (A-35) | Closed | Closed |
 | OQ-ARCH-09 | Closed: in Release 1 a Lead reads formulas on SCR-07; SCR-17-lead arrives with R2 (PRD v0.7 section 12.2) | Closed | Closed |
+| OQ-ARCH-13 | **Closed.** The business-analyst may read only the column widths and number formats of the first worksheet of the sample. They are recorded in SPEC §7.5 (D-41, AQP-1 comment 10709), and the seed takes them from there (GitHub #30, item 1) | Closed | Closed |
 
 ---
 
@@ -2157,6 +2191,8 @@ That makes scope A **88.5 to 132.5 h, central 110.5 h**, from 88 to 131.75 h.
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | Full UX reconciliation: section 16 rewritten with a table of 27 screens, 20 architecture changes and 27 UX items. Sections 3, 4.3, 4.5, 4.6, 4.7, 5.1, 6, 8, 10, 11, 15 updated. ADR-004 to 009 and 011 to 013 updated. Corrects v0.1's "feasible" claim, the Q-32 (a) note and the PRD version |
 | 0.3 | 2026-11-01 | G3 answers, SPEC v1.4. Every level's quantity (section 4.3), corrects v0.2's "one branch" claim. Weekly backups, kept 2 years, RPO up to 7 days (section 9.5). Microsoft mail check and OAuth mode (section 4.7). Cleared totals (section 4.8). "Not applicable" (section 4.9). Password rule and 12-hour session from sign-in (section 8). Optional reason, one export total, Tool Cost footer. Scope A: `FEATURE_CONFIG_EDITOR` dropped. New A-17 to A-23, OQ-ARCH-10 to 12, UX-28 to UX-37. Aligned with PRD v0.6: FR-098 to FR-103 in the coverage matrix, NFR-013, NFR-018 at 2.2 AA. ADR-002, 004, 006, 007, 009, 011, 012, 013 revised |
+| 0.15 | 2026-11-03 | AQP-169 AC-6. Section 11: the licences, install scripts and audit reading of the `@lhci/cli` 0.15.1 tree, and `parse-cache-control` added as a licence finding (BSD-3-Clause by its `LICENSE` file) |
+| 0.14 | 2026-11-03 | Rulings on AQP-97 (PR #32) and AQP-28 (PR #33), PRF-01 and PRF-02 of AQP-97, OQ-ARCH-13 answered (SPEC v1.14 §7.5, D-41), and the new NFR-009 test profile and JS budget (PRD; AQP-1 comments 10712, 10713; GitHub #36). Section 3: pool sizes and timeouts. Section 4.2: cache of the configuration document. Section 4.5: `multiline`, `stageId` on AP and AU, stage totals for all six stages, widths and formats from SPEC §7.5. Sections 5.1 and 5.6: `created_at` only on immutable tables, the `created_by` foreign key, and the seed checkpoint owned by 08.06. Section 6: 503 `DATABASE_BUSY`. Section 7: NFR-009 row. Section 10: one formula converter, `server-only` under `react-server`, the `cn` rule, `design-system`. Section 11: `class-variance-authority`, `clsx`, `tailwind-merge` and `server-only` added, `@axe-core/playwright` and `@lhci/cli` named, the font size corrected, with evidence. Section 14: RISK-020. Section 15.2: OQ-ARCH-13 closed |
 | 0.13 | 2026-11-03 | SPEC v1.13, D-38 to D-40 (AQP-1 comments 10672, 10674). Sections 5.1 and 5.6: 15 seed Process Master items with units, `Plating-rate-per-sqin` added and referenced by no seed formula; first-use steps say 15. Section 4.5: the fixed `{{mat:<key>}}` operands mapped to their Prisma fields and columns, and the ruling that `scrap_rate` keeps its name for Material-Scrap-Rate. Section 4.9 says Material-Scrap-Rate. No formula, FR, NFR or ADR changes; no value recorded |
 | 0.12 | 2026-11-02 | G6 of AQP-27, attempt 1. Section 10: `src/app/**` and `src/components/**` import no repository and no `lib/formula` (QLT-01); Engineer views take `.tsx` too; the enforcement is named as CI stage 4. Section 11: `@types/pg` approved, and the other tools STORY-10.01 installed are recorded, with the audit and licence result (STD-11). New section 16.16, with the coverage ruling (QLT-05) that lands in `test-strategy.md` v0.11. ADR-008 layer 2 follows |
 | 0.11 | 2026-11-02 | G4 attempt 1, remediations 5, 6, 8. CR-33: one rule, 403 on a refused role, checked before any lookup; the uniform 404 stays on an Engineer's own routes. A-1 confirmed in section 5.6: fixed IDs and migration rows at 0, `ensure-seed-version` in `migrate`, "Other" by migration. Section 9.5: 40 GB stands, 2 years is not a guarantee, the Admin clears old copies with `clear-copies.sh`, A-35 widened by that one script, the limit no clearing can pass. RISK-016 to 018 follow the register. A-36 new; OQ-ARCH-03 closed. New section 16.15: +0.5 to +0.75 h |
