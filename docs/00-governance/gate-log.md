@@ -653,3 +653,206 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 **Risks registered:** none new. RISK-006 unchanged; review at G8.
 **Rationale:** Both blocking items from attempt 1 are fixed, verified by me and re-tested by QA on the built server and a CRLF clone. Every mandatory item passes. What remains is one load-sensitive test with an owner and a G8 due date, and the merge steps, which are the delivery lead's.
 
+
+---
+
+## G6 – Peer Review — AQP-97 (STORY-03.01) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #32 at head f7d8cb7 (base b66c684): the three reviews (5749080444 standards, 5749059748 quality, 5749040114 performance), all 29 review threads, the quality addendum and the solution-architect's rulings (PR comments 6598858452 and 6598912712; Jira 10695, 10699), the PR body and Dev Record; Jira AQP-97, all 11 comments. Check run "Stages 1 to 11" success (run 41601423738). Code read at f7d8cb7 through `git show`, without switching branches: `src/server/repositories/prisma-client.ts`, `src/server/services/config-service.ts`, `src/lib/fields/field-schema.ts` header, and the size and header of `prisma/seed/config/seed-config.ts`. **Not done:** no test run of my own (the working folder holds another story's branch); I read the code behind each Major and rely on CI and the reviewers' runs for the rest.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All three on f7d8cb7; counts recomputed from the threads: STD 1 Major, 8 Minor, 5 Info; QLT 1 Major, 6 Minor, 4 Info (QLT-02 lowered to Info by the reviewer's addendum after ruling R1); PRF 2 Major, 2 Minor, 1 Info |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | None raised. The quality review's AC table: 7 of 7 met |
+| 3 | Major fixed or explicitly accepted | | ⚠️ | Four open and upheld (below); none accepted. Conditions 1 and 3 |
+| 4 | Findings cite file:line | | ✅ | All inline |
+| 5 | Reviewed head green | | ✅ | Run 41601423738 |
+
+**Major findings, checked by me in the code**
+
+| ID | Ruling | Evidence |
+|----|--------|----------|
+| STD-01 | Upheld | `seed-config.ts` is 428 lines with no inline justification; coding standards 1 allows an exception only when justified inline |
+| QLT-01 | Upheld | `field-schema.ts` lines 8 to 10: every schema is strict and "optional values are `null`, never absent"; `getCurrentVersion` re-parses the stored snapshot on every read. A property added later the way the header says would make every stored version unreadable, and stored versions can never be changed. It must be settled before any version is stored on a real install, which is now |
+| PRF-01 | Upheld; the trigger of #18 is met | `createPrismaClient` passes only a connection string, so pg defaults apply: no connect timeout, no statement timeout, the same pool size everywhere |
+| PRF-02 | Upheld | `getCurrentVersion` reads the snapshot and runs `parseConfigDocument` on every call, with no cache; architecture 4.2 assumes a cache by version id |
+
+**Rulings**
+
+1. **CONDITIONAL GO, not NO-GO, and G7 waits.** Every mandatory item passes, so the procedure gives CONDITIONAL GO; AQP-27 attempt 1 was NO-GO only because it had Criticals. But the Major fixes add production code (pool settings, a cache, a schema rule) and integration tests, so they are re-reviewed, not only verified by me. The story goes back to Changes Requested and does not enter QA until conditions 1 to 4 are met.
+2. **The solution-architect's rulings are accepted as the fix specification:** R2 `multiline` (optional, absent means false, only on text inputs); R4 pool and timeouts as fixed constants per kind, 503 `DATABASE_BUSY` on timeout, two integration tests, the singleton with the first app caller; R5 cache by version id, 16 entries, deep-frozen, latest id checked on every call. R1 (`config_checkpoints` to STORY-08.06; the `created_by` key added by whichever of AQP-97 and AQP-38 merges second) and the seed-content confirmations are accepted. QLT-02's carried test ("v1 exists, no checkpoint → exactly one after the migration") goes into 08.06 when the scrum-master writes it.
+3. **QLT-01 is closed together with R2.** `multiline` is added as `.optional()`. The header becomes the rule: a property added after version 1 must parse when absent, because stored versions are immutable. A guard test pins the set of required keys, so adding a required key fails it.
+4. **#18 is satisfied in this PR** by R4, apart from the `globalThis` singleton, which comes with the first app or worker caller (expected AQP-38). #18 closes when PR #32 merges.
+5. **No `updated_at` on `config_versions` is accepted as a standing rule** (DL-052, STD-10). Reviewers do not raise it on immutable or append-only tables.
+6. **Minor split, on the AQP-27 test** (the finding is in a file the Majors touch; it makes a control fail open or claim more than it shows; it is a cheap security point; or a document is wrong today). **Now:** PRF-04 (field and letter maps built once per cached version, R5), QLT-03 (force the overlap in the concurrency test), QLT-07 (deep-freeze `seedConfig`), QLT-08, STD-02, STD-03, STD-04 (a throwing default), STD-06 (`assertNever` names the description only, value as `cause`), STD-07, STD-08, STD-09, and Info STD-11 (one doc line, same file as PRF-02). **Closed by another fix:** PRF-03 (by R4). **Deferred:** QLT-04 and QLT-06 to #34; QLT-05 and STD-05 to #35, with #31. Info items need no action; STD-13 (no formatter) is a project-level suggestion the orchestrator can raise with the product-manager.
+7. **QLT-09 reading accepted:** AC-2's "each with … `defaultValue`" is met by inputs carrying it, since outputs cannot hold a default under the discriminated union. QA reads AC-2 the same way.
+8. **OQ-ARCH-13** (may the business-analyst read only column widths and number formats from the sample workbook?) is the delivery lead's. The orchestrator asks it before story 07.01 enters a sprint, and before the first production install in any case. It does not hold this story.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #32 | STD-01 (move sections and stages to their own module, or justify inline); QLT-01 with R2 (ruling 3); PRF-01 per R4; PRF-02 per R5; and the Minors marked "now" in ruling 6. Reply in each thread; update the Dev Record. Nothing else | Before G7 |
+| 2 | reviewer-standards, reviewer-quality; reviewer-performance for R4, R5 and PRF-04 only | PR #32 | Re-review the new diff only (playbook 5.3); each reviewer changes only their own label | Before G7 |
+| 3 | master | Gate log | Record that conditions 1 and 2 are met: no new Blocker or Critical, and the four Majors fixed. A new Critical reopens G6 | Before G7 |
+| 4 | orchestrator | Jira AQP-97 | Move the story to Changes Requested now; In QA only after condition 3 | Now |
+| 5 | orchestrator | Docs PR | Architecture v0.14 (13 edits), the R1 text correction, and these governance records | Before PR #32 is merged |
+| 6 | orchestrator | Chat | OQ-ARCH-13 to the delivery lead, worded without a preferred answer | Before 07.01 enters a sprint |
+
+**Risks registered:** none new. ARCH-R2 (Engineer leak through document data) is carried by #34 until the first edit path exists.
+**Rationale:** The work meets all seven ACs, and its immutability and column logic are tested well. The four Majors are real: two are performance contracts the architecture assumed and #18 was waiting for, one is a size rule, and one would make the first stored version unreadable after an ordinary later change. That last one costs almost nothing now and cannot be fixed once a real install holds version 1, so the fixes go in before QA.
+
+---
+
+## G6 – Peer Review — AQP-28 (STORY-10.02) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. Browser testing in CI stays on, as the delivery lead confirmed in chat on 2026-11-03 (relayed by the orchestrator)
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #33 at head 6f66b97 (base b66c684): the three reviews (5749252523 standards, 5749332280 performance, 5749351525 quality), all 32 review threads, the PR file list; Jira AQP-28 10702 to 10708, including the solution-architect's rulings (10705). Check run "Stages 1 to 11" success (run 41603405672), stage 12 included. Code read at 6f66b97 with `git show`: `src/lib/cn.ts`, `src/components/ui/button.tsx`, the README CI section, the `ci.yml` stage 12 step, `playwright.config.ts`. **Not done:** no test or browser run of my own; QLT-01 rests on the code and the reviewer's browser check, PRF-01 on the reviewer's measurements.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All on 6f66b97: STD 2 Major, 11 Minor, 4 Info; QLT 1 Major, 8 Minor, 4 Info; PRF 1 Major, 4 Minor, 4 Info |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | None. ACs 1 to 8 and 10 met; AC-9 is QA's at G7 |
+| 3 | Major fixed or explicitly accepted | | ⚠️ | STD-01 closed by approval; STD-02 and QLT-01 to fix; PRF-01 accepted (ruling 2) |
+| 4 | Findings cite file:line | | ✅ | All inline |
+| 5 | Reviewed head green, stage 12 on | | ✅ | Run 41603405672 |
+
+**Majors**
+
+| ID | Ruling | Evidence |
+|----|--------|----------|
+| STD-01 | Closed by the architect's approval (10705 item 1); no code change | `@axe-core/playwright` 4.14.0, dev only. The architecture section 11 text goes in the docs PR |
+| STD-02 | Upheld; fix | README "Continuous integration" still says stages 1 to 11 run and 12 is disabled; stage 12 now runs and blocks merge |
+| QLT-01 | Upheld; fix with the architect's item 2 | `cn.ts` only joins names and "does not resolve two conflicting utilities", so the base `border-transparent` can beat the secondary variant's border; the reviewer confirmed it in the browser |
+| PRF-01 | **Explicitly accepted for this story** (ruling 2) | No JS budget exists in NFR-009 to fail. The shell is the common cost every page carries |
+
+**Rulings**
+
+1. **CONDITIONAL GO, and QA waits for a re-review of the new diff.** No mandatory item fails. The fix round replaces the button and component variants with `cva` and a configured `tailwind-merge` across `src/components/ui`, and adds three dependencies. That is production code, so it is re-reviewed (DL-051). The story goes back to Changes Requested.
+2. **PRF-01 accepted, and the budget is the product-manager's to set,** with the solution-architect for the check. It does not hold this story: the measurable NFR-009 targets apply to the five key screens, none of which exists, and no budget number exists to fail. The reviewer's shell-only figures (LCP about 2.7 s, TBT 0.4 to 0.5 s under Slow 4G and 4x CPU) are not a Lighthouse score on reference hardware, but they say the targets are at risk, so RISK-020 is registered. The budget and the check are due before the first of those screens reaches G6 (#36). That brings forward AQP-27 G6 condition 8, which was due at G8. QA records a Lighthouse mobile run of `/` on the production build in the G7 evidence as a baseline, not as pass or fail.
+3. **#17 is split.** Trigger met, as with #18 at AQP-97 (DL-051). CI caching (`.next/cache`, Playwright browsers) is done in this PR. E2E against the production build is re-deferred to the first story with a production page: `/design-system`, the only page here, is hidden in every production build by the architect's ruling, so there would be nothing to test. The database URL item is re-deferred to the first story whose E2E page reads the database. Both are expected at AQP-38 (comment on #17).
+4. **Architect rulings accepted:** `@axe-core/playwright`; `class-variance-authority` 0.7.1, `clsx` 2.1.1 and `tailwind-merge` 3.7.0, with `cva` variants, `cn` on `extendTailwindMerge` (registering the theme's text sizes and spacing, with unit tests) and `components.json`, all in this PR; the route under `(portal)`; hidden whenever `NODE_ENV=production`. The product-owner rewords AC-7's first sentence to "any non-production build (local, CI)".
+5. **Minor split, on the AQP-27 test.** This story sets the patterns every page story copies, so shared-pattern Minors are cheaper now than after 30 pages. **Now:** STD-03 to STD-13, Info STD-16 (one README sentence, in the same file as STD-02), QLT-02 to QLT-09, and PRF-02 (cache header for the logo). **Deferred:** PRF-03 and PRF-04, with Info PRF-08 and PRF-09, to #36; STD-17 to #37 (security headers have no story). **Notes:** STD-15, removing `PREVIEW_USER`, goes to the scrum-master for AQP-38 (01.01). STD-14 (no formatter) stays with the orchestrator for the product-manager, as at AQP-97. PRF-06 and PRF-07 need no action. A Minor that proves more than cheap is listed in the Dev Record for me to defer.
+6. **The AQP-27 acceptance-test edit is accepted** (QLT-12): it switches the stage 12 assertion from off to on, which is what this story's AC-8 does, and stage 13 is still asserted off.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #33 | STD-02; QLT-01 with ruling 4 (and a computed-border E2E check); #17 caching; the Minors marked "now" in ruling 5. Reply in each thread; update the Dev Record | Before G7 |
+| 2 | reviewer-standards, reviewer-quality; reviewer-performance for the CI caching and PRF-02 only | PR #33 | Re-review the new diff only; each reviewer changes only their own label | Before G7 |
+| 3 | master | Gate log | Record that conditions 1 and 2 are met: no new Blocker or Critical, and the Majors fixed | Before G7 |
+| 4 | orchestrator | Jira AQP-28 | Changes Requested now; In QA after condition 3 | Now |
+| 5 | product-owner | AQP-28 AC-7 | Reword the first sentence per ruling 4 | Before G7 |
+| 6 | qa-engineer | G7 evidence | A Lighthouse mobile run of `/` on the production build, recorded as a baseline (ruling 2); AC-9 checks as planned | G7 |
+| 7 | product-manager; solution-architect | #36 | The NFR-009 budget, or a statement that none is wanted, and the check in test strategy 10 | Before the first NFR-009 screen reaches G6 |
+| 8 | orchestrator | Docs PR | Architecture v0.14 items 14 to 18, including section 11 for the four packages | Before PR #33 is merged |
+
+**Risks registered:** RISK-020 (NFR-009 targets at risk on phones), new.
+**Rationale:** The shell is careful work and every AC in scope is met, but the secondary button is visibly wrong and is fixed by the approved component pattern, which is new code and gets a re-review. The JS budget gap is real and is not this story's to close. It goes to the role that owns NFR-009, with a date before the screens it governs, and the measured risk is registered so it is not lost.
+
+---
+
+## G6 – Peer Review — AQP-97 (STORY-03.01) — 2026-11-03: conditions 1 to 3 (re-review)
+
+**Recorded by master.** Re-review of PR #32 at e8e6858 (diff f7d8cb7..e8e6858). Check run "Stages 1 to 11" success (run 41609909530). Reviews 5749718669 (performance), 5749726222 (quality) and 5749760792 (standards), all APPROVE WITH COMMENTS; Jira AQP-97 10717 to 10719. **Result: conditions 1 and 2 are met: no Blocker, Critical or Major is open, and no new Critical appeared. G6 does not reopen.** One small follow-up commit comes before G7 (below).
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Four Majors fixed | ✅ | Re-reviews, and my own read at e8e6858: `seed-config.ts` 379 lines, with sections and stages moved out (STD-01); the evolution rule in the `field-schema.ts` header, `multiline` optional, and the required keys pinned by `schema-evolution.test.ts` (QLT-01); constants per kind exactly as ruling R4 sets them (PRF-01); a cache by id with `findLatestRef` and deep-freeze, 16 entries (PRF-02) |
+| Minors taken at attempt 1 | ✅ | All fixed per the re-reviews; STD-05 stays deferred (#35) |
+| New findings | Minor 5, Info 4 | QLT-12 and STD-16 (one fix); QLT-13; STD-15; STD-17; Info QLT-14, STD-18, STD-19, PRF-06 |
+| Labels | ✅ | Three approved labels, each reviewer's own |
+
+**Rulings on the new findings**
+1. **Fixed now, in one commit, and verified by me, as at AQP-27 condition 2** (small, test-specified): **QLT-12 and STD-16** (`deepFreeze` also descends into a parent that is already frozen; the cached `createdAt` is no longer a mutable `Date`, for example a frozen copy or an ISO string, with a test that a cached version cannot be changed); **STD-15** (the production signatures `createPrismaClient` and `poolConfigFor` take no overrides; tests reach a separate test-only factory, or overrides are limited so they can only lower a limit, with a test); **STD-17** (the spacing slip). Their own control or claim ("deep-frozen", "fixed constants") is otherwise not true, and each is a few lines. Nothing else goes in the commit.
+2. **QLT-13 is deferred to #38**, with Info STD-19. PR #32's production code opens no interactive transaction (only `database-timeouts.test.ts` does), and no route exists. The P2028 mapping and `cause` handling belong to `withRoute` (01.02); the transaction values belong to the first story with an interactive transaction in production code.
+3. **Info notes:** STD-18 (`DeepReadonly` at boundaries) to #35, for 03.02. PRF-06 (shared in-flight load) to #34. QLT-14 needs no action. For the scrum-master and story 10.04: the `migrate` one-shot must wait on the database health check (performance note).
+4. **AQP-97 may go to G7 once I have verified that commit** (file list, CI green, baseline 7, planted inputs). The orchestrator moves the story to In QA after my verification comment, not before.
+
+**AQP-97 G6, follow-up commit verified — 2026-11-03 (master).** Commit 5f197ae, the PR #32 head; check run "Stages 1 to 11" success (run 41622866181). Developer hand-off: AQP-97 10730. **Result: met. AQP-97 may go to G7.** Verified read-only in the story's own worktree, without switching any branch.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Only the named fixes | ✅ | 9 files, diff read in full: `deep-freeze.ts` (QLT-12), `config-service.ts` (STD-16, `createdAt` as ISO text), `prisma-client.ts` (STD-15, no overrides in either production signature), `formula-references.ts:52` (STD-17), the new test-only `tests/support/test-prisma-client.ts`, and four test files. No production call passes a third argument |
+| `database-timeouts.test.ts` | ✅ within the check | It had to change, because it used the override STD-15 removed. The wider timings (1 s limit, 3 s hold, a warm-up query, 60 s hooks) still discriminate: a pool that waited for the holder would take about 2.7 s and fail the 2.5 s bound, so the test cannot pass wrongly. Test-only; no production code beyond the list |
+| CI green | ✅ | Run 41622866181 on 5f197ae |
+| Baseline still 7 | ✅ | Not in the commit; 7 fingerprints at the head |
+| My own run | ✅ | `seed-frozen`, `config-service` and `prisma-pool-settings` tests 26 of 26 (a shallow-frozen parent's children frozen; a cycle ends; `createdAt` cannot be changed through the cache; an extra argument to `poolConfigFor` leaves `statement_timeout` at 10,000 and `max` at 10); eslint on the 9 files and `tsc --noEmit` exit 0 |
+
+**Not done:** integration tests not run by me (CI evidence). One shell call was denied and not retried; the baseline was counted with a file search instead.
+
+**AQP-28 G6, condition 6 amended — 2026-11-03 (master).** The Lighthouse baseline of `/` moves from AQP-28's G7 to AQP-169's G7 (STORY-10.10 AC-9). No reference-hardware run exists until 10.10 builds it, and a local run would not be comparable, which is what DL-053 asked the baseline for. AQP-28's G7 keeps its AC-9 checks and no longer owes a Lighthouse figure. RISK-020's "falls to 6" trigger is the AQP-169 G7 run (DL-058).
+
+---
+
+## G6 – Peer Review — AQP-28 (STORY-10.02) — 2026-11-03: conditions 1 to 3 (re-review)
+
+**Recorded by master.** Re-review of PR #33 at f4739bc (diff 6f66b97..f4739bc). The first run of "Stages 1 to 11" on f4739bc (run 41624033120) was green, including stage 12 (61 passed, 11 skipped by layout), the new caches and the stage 9 production-route check. A second attempt was requested only to measure the warm-cache saving. Reviews: 5751259008 standards (APPROVE WITH COMMENTS), 5751322281 performance (APPROVE), 5751362012 quality (APPROVE); Jira AQP-28 10735 to 10737. **Result: conditions 1 and 2 are met; no Blocker, Critical or Major is open, and no new Critical appeared. G6 does not reopen.** One small commit comes before G7 (ruling 1).
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Majors fixed | ✅ | QLT-01: reviewer-quality checked it in the browser at three widths, and an E2E test compares the border with the token. My own read at f4739bc: `cn` is `clsx` plus `extendTailwindMerge`, with the theme's text sizes and spacing registered. STD-02: README now says stages 1 to 12 |
+| Minors taken at attempt 1 | ✅ | STD-03 to STD-13, STD-16, QLT-02 to QLT-09 (QLT-10 too), PRF-02 and #17 caching fixed. STD-14 rebuttal accepted (a formatter is a new dependency) |
+| Additions beyond the list | ✅ accepted | `scripts/check-production-routes.ts` (stage 9 requires `/design-system` to be 404) strengthens STD-05; `workers: 2` for slow machines. Standards raised no finding on either |
+| G6 condition 5 | ✅ | AC-7 reworded by the product-owner (10727) |
+| New findings | Minor 2, Info 10 | STD-18, STD-19; Info STD-20 to 24, QLT-14, QLT-15, PRF-10 to 12 |
+
+**Rulings**
+1. **STD-18 and STD-19 are fixed now, in one commit, and I verify it myself** (DL-047, DL-054). STD-18: extract two hooks so `AppShell` is within 40 lines. STD-19: split `design-system.spec.ts` by concern, each file within 400 lines. They are the same size rule held at AQP-97 (STD-01, STD-02), in the files every page story will copy, and both are mechanical and behaviour-preserving. **My check:** the diff touches only `app-shell.tsx`, new hook files under `src/components/shared/`, and the E2E spec files; CI is green including stage 12, with the same count of E2E tests run and skipped (61 and 11) unless a difference is explained; lint and type-check are clean; both line counts are within the limits. Anything else goes back to the reviewers.
+2. **Interim JS budget rule (PRF-12):** `/` is 193,907 bytes gzip, about 6.1 KB (3 %) under 200,000, and nothing enforces it until AQP-169 lands. Until then, reviewer-performance measures first-load JS of every changed route at the G6 of any story that adds client JavaScript, against 200,000 bytes per route, and a route over it is a Major. RISK-020 is restated.
+3. **Info needs no action:** STD-20 to 24, QLT-14 and QLT-15 (forward-looking, for later form flows); PRF-10 and PRF-11. The Playwright cache stays only if the warm re-run shows a saving of 5 s or more; the orchestrator reports the figure, and if it is under 5 s the cache comes out with the next CI change.
+4. **AQP-28 goes to G7 after my verification comment.** The G7 evidence: AC-9 by QA on a real phone, a screen reader and Windows high contrast, with the delivery lead sitting with the testers (10573, 10574; DL-035); device, OS, browser and versions recorded (test plan section 12). The Lighthouse baseline is not owed here (amended condition 6, DL-058). Condition 8 (the docs PR before the merge) still stands.
+
+**AQP-28 G6, STD-18/19 commit verified — 2026-11-03 (master).** Commit f903d48, the PR #33 head; check run "Stages 1 to 11" success (run 41629593078). Developer hand-off: AQP-28 10741. **Result: met. AQP-28 may go to G7.** Verified in the main folder, which is on this branch, with no branch switch.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Only the named files | ✅ | 6 files: `app-shell.tsx`, two new hooks in `src/components/shared/`, `design-system.spec.ts`, new `shell.spec.ts`, and new `tests/e2e/support/design-system.ts` |
+| `tests/e2e/support/design-system.ts` | ✅ within the check | Test-only. It holds the helpers the two spec files now share, which the STD-19 split made necessary, the same reasoning as `database-timeouts.test.ts` at AQP-97 (DL-057) |
+| Behaviour preserved | ✅ | Diff read: markup and classes unchanged. The drawer-close and focus-after-navigation effects moved to hooks; the QLT-02 race fix (flag cleared in `onCloseAutoFocus`) is identical. Skip link, menu button and drawer are now small components in the same file |
+| Limits met | ✅ | `AppShell` 29 lines; specs 177 and 208 lines; support 76 |
+| E2E counts | ✅ | CI log: 61 passed, 11 skipped, as before; 27 test definitions before and after |
+| CI, lint, types | ✅ | Run 41629593078 green; eslint on the 6 files and `tsc --noEmit` exit 0 |
+
+**Not done:** E2E not run locally (CI evidence).
+
+**Cache measurement (DL-059 ruling 3).** Run 41624033120, attempt 1 (cold) against attempt 2 (warm), step by step. Next.js build cache: stage 9 went from 14 s to 7 s with a 1 s restore, so it stays. Playwright browser cache: stage 12 went from 70 s to 65 s with a 2 s restore, a net 3 s, plus 5 s to save it on a miss. That is under the 5 s bar, so it comes out with the next CI change; no commit is needed in PR #33. The run totals (3 m 52 s against 3 m 06 s) are mostly npm install (75 s against 49 s), which these caches do not drive. The orchestrator's "caches stay" (PR comment 6602693103) is corrected for the Playwright cache only.
+
+---
+
+## G7 – QA Acceptance — AQP-97 (STORY-03.01) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. Merging PR #32 is the delivery lead's act
+- **Attempt:** 1
+- **Artefacts evaluated:** `docs/07-qa/AQP-97-test-report.md` at da654ce (sections read: AC matrix, pool and timeouts, mutation checks, non-functional, exploratory, defects, observations); QA commit da654ce file list (report and three files under `tests/acceptance/`); Jira AQP-97 10743; PR comment 6603217717. Check run "Stages 1 to 11" success on da654ce (run 41631686706), read by me. **Not done:** I did not re-run QA's tests.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | 7 of 7, with test IDs, techniques and evidence; eight deliberate faults each caught (mutation checks) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | None. Open: DEF-003 (Sev-3, #24), the known load-sensitive test class |
+| 3 | Regression recorded and green | ✱ | ✅ | CI green on da654ce with the 203 new tests. Locally 1,070 of 1,071; the one failure is DEF-003's layer-rules first case, and CI is the reference run (DL-050) |
+| 4 | Exploratory notes | | ✅ | Four charters with findings |
+| 5 | Accessibility | | ✅ | Not a UI story |
+| 6 | No real data | | ✅ | Structure-only assertions; data-file and secret checks pass. QA's workbook scan was count-only and the report prints no value, the same kind of check as mine at G3 (RISK-006) |
+
+**Rulings**
+1. **QA's files after G6 need no peer review,** as at AQP-27 (DL-050). da654ce adds the report and three test files under `tests/acceptance/`, changes no production code, and CI is green on it. The two tests that wait for the real 10 s and 5 s limits (about 35 s, OBS-8) stay: they are the only proof with production values, and the suite is well inside the 10-minute target (DL-055).
+2. **Observations routed:** OBS-3 (the Fasteners rule is case and space sensitive) to #40, product-owner and ux-expert before the first EPIC-05 form story with S, T and U reaches Ready. OBS-1, OBS-2 and OBS-7 (Sev-4) to #41. OBS-5 (no CHECK on `number` or `reason`) to #34. OBS-6 (idle-in-transaction kill not mapped) to #38. OBS-8: no action.
+3. **OBS-4 is fixed before the merge.** The README says `config_versions` cannot be changed "even by the owner", but the owner can disable the trigger with DDL, as the migration's own comment says. It is a security claim that is false today, and it costs one sentence. A docs-only commit needs no QA re-test; I verify it.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | `README.md` (PR #32) | OBS-4: say the trigger refuses UPDATE, DELETE and TRUNCATE for every role, and that the owner role can still remove it with DDL, so the owner credentials are kept to the migrate step. Nothing else in the commit | Before the human merge |
+| 2 | master | Same commit | Verify: README only, CI green | Before the human merge |
+| 3 | qa-engineer | Jira AQP-97 | Move to Done on this decision | Now |
+| 4 | orchestrator | Docs PR | G6 condition 5 stands: architecture v0.14 and the governance records merge before PR #32 | Before the human merge |
+| 5 | developer; qa-engineer | #24 (DEF-003) | As DL-057: before sprint 1 ends | Before sprint 1 ends |
+
+**Risks registered:** none new.
+**Rationale:** QA attacked every acceptance criterion and the immutability guard from both roles, and each deliberate fault was caught. Nothing open touches a price or a role. The README sentence matters because it states a security property, so it is corrected before the code reaches `master`.

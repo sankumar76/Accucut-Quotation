@@ -1,4 +1,4 @@
-// Generator and datasource only. Tables arrive with the stories that own them (architecture section 5).
+// Tables arrive with the stories that own them (architecture section 5).
 // Prisma 7: the connection URL is set in prisma.config.ts, not here.
 
 generator client {
@@ -8,4 +8,21 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// One immutable version of the field registry (ADR-004, architecture sections 4.5 and 5.1).
+/// `snapshot` is the whole zod-validated configuration document. A row is never changed: a trigger
+/// refuses UPDATE and DELETE for every role, and the runtime role holds no such grant (STORY-03.01).
+/// `created_by` is null for version 1, the seed. The users story adds its foreign key to `users`.
+/// There is no `updated_at`: a row never changes after it is inserted.
+model ConfigVersion {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  number    Int
+  snapshot  Json
+  createdBy String?  @map("created_by") @db.Uuid
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([number], map: "uq_config_versions_number")
+  @@map("config_versions")
 }

@@ -61,6 +61,17 @@ export class ConfigurationError extends AppError {
   }
 }
 
+/**
+ * The database did not answer in time: a request waited too long for a connection, or PostgreSQL cancelled
+ * a statement that ran too long (architecture ruling R4). `withRoute` maps it to 503 `DATABASE_BUSY`; a
+ * script exits with an error. The original error is kept as the cause for the log and never sent.
+ */
+export class DatabaseBusyError extends AppError {
+  constructor(options: AppErrorOptions = {}) {
+    super(options.code ?? 'DATABASE_BUSY', 503, 'The service is busy. Try again in a moment.', options.cause);
+  }
+}
+
 export function isAppError(value: unknown): value is AppError {
   return value instanceof AppError;
 }

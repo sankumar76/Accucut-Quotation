@@ -70,8 +70,18 @@ cp .env.example .env                     # then replace every CHANGE_ME value (l
 docker compose -f compose.dev.yml up -d db
 npx prisma generate
 npx prisma migrate deploy
+npx tsx scripts/ensure-seed-version.ts   # the field registry, once; see below
 npx next dev
 ```
+
+**The field registry (configuration version 1).** `scripts/ensure-seed-version.ts` stores the SPEC section 7
+field registry (`prisma/seed/config/seed-config.ts`) as configuration version 1 with the owner role
+(`MIGRATE_DATABASE_URL`). It runs after `prisma migrate deploy` and **only if no version exists**, so running it
+again, or after the seed module has changed, changes nothing. It holds structure, never master data. The
+runtime role has no UPDATE or DELETE grant on `config_versions`, and a trigger refuses every update, delete
+and truncate, the owner's included. The owner role can still disable that trigger with DDL, so protection
+against the owner depends on every migration being reviewed. If the step fails it exits with an
+error. Column letters are derived from field position (`src/lib/columns.ts`) and are never stored.
 
 The development database listens on `127.0.0.1:55432` only. It has two roles, created by
 `docker/postgres-init/01-create-roles.sh` on first start:
