@@ -26,7 +26,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a pull request run is cancelled by a newer push. A run on master must finish, so the commit
+  # that stage 13 will check is never left without a result (STD-12).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CI: 'true'
@@ -44,8 +46,11 @@ jobs:
     timeout-minutes: 30
 
     services:
-      # PostgreSQL 17, pinned by digest (same image as compose.dev.yml). Bootstrap superuser only; the
-      # application roles are created in stage 10.
+      # PostgreSQL 17, pinned by digest (same image as compose.dev.yml; Dependabot updates only the Compose
+      # file, so change both together). Bootstrap superuser only; the application roles are created in
+      # stage 10. The superuser password below is a fixed throwaway for a database that exists only for this
+      # job and cannot be reached from outside the runner (a service `env:` cannot read a generated value),
+      # so a scanner hit on it is not a leak.
       postgres:
         image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
         env:
@@ -109,14 +114,17 @@ jobs:
       - name: "Stage 5: type-check"
         run: npx tsc --noEmit
 
-      # ---- Stage 6: unit tests with coverage -------------------------------------------------
-      # The whole-package and formula thresholds are set in vitest.config.ts and fail this step.
-      - name: "Stage 6: unit tests with coverage"
-        run: npx vitest run tests/unit --coverage
-
-      - name: "Stage 6: coverage of changed code (at least 80 percent)"
-        if: github.event_name == 'pull_request'
-        run: npx tsx scripts/check-changed-coverage.ts --base "origin/${{ github.base_ref }}"
+      # ---- Stage 6: unit tests with coverage of pure code ------------------------------------
+      # Coverage is decided in two places (test strategy sections 10 and 11, ruling on QLT-05). This stage
+      # has no database, so it measures only pure code, src/lib and scripts/lib, on unit lines. The
+      # thresholds for that code (80 percent, 95 percent for the formula engine and the quantity
+      # warnings, 100 percent of branches for figure-state and the password rule) are in vitest.config.ts.
+      # The whole-package gate and the changed-code gate are decided at stage 11, where integration lines count.
+      - name: "Stage 6: unit tests with coverage of pure code"
+        run: >-
+          npx vitest run tests/unit --coverage
+          --coverage.include='src/lib/**/*.{ts,tsx}'
+          --coverage.include='scripts/lib/**/*.ts'
 
       # ---- Stage 7 and 8: supply chain -------------------------------------------------------
       - name: "Stage 7: dependency audit (high and above)"
@@ -153,9 +161,18 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
-      # ---- Stage 11: integration, contract, security, export ---------------------------------
-      - name: "Stage 11: integration tests against PostgreSQL"
-        run: npx vitest run tests/integration tests/security
+      # ---- Stage 11: integration, contract, security, acceptance, then the combined coverage gates
+      # Every Vitest level runs in one run with the full coverage scope (scripts/lib/coverage-scope.ts), so a
+      # service tested only by an integration test counts as covered. The whole-package threshold is decided
+      # here; src/server is never excluded. A directory that does not exist yet is ignored by the filter.
+      - name: "Stage 11: integration tests against PostgreSQL, with combined coverage"
+        run: npx vitest run tests/unit tests/integration tests/security tests/acceptance --coverage
+
+      - name: "Stage 11: coverage of changed code (at least 80 percent)"
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"
 
       # ---- Stage 12: E2E (DISABLED until the first page story) -------------------------------
       # Chromium at three widths with axe and the canary scan (test strategy sections 2, 6, 9).

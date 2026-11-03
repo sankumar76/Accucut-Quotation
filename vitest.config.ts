@@ -2,8 +2,11 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
+import { COVERAGE_EXCLUDE, COVERAGE_INCLUDE } from './scripts/lib/coverage-scope';
+
 const COVERAGE_TARGET = 80;
-const FORMULA_COVERAGE_TARGET = 95;
+const PURE_CODE_TARGET = 95;
+const FULL_BRANCH_TARGET = 100;
 
 const target = (percent: number) => ({
   lines: percent,
@@ -27,14 +30,21 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'lcov'],
-      include: ['src/**/*.{ts,tsx}', 'scripts/lib/**/*.ts'],
-      // Next.js route files and generated code are covered by E2E, not unit coverage.
-      exclude: ['src/app/**', 'src/generated/**', 'src/components/ui/**', '**/*.d.ts'],
-      // Test strategy section 11. The whole-package gate is below; changed-code coverage is checked by
-      // scripts/check-changed-coverage.ts in CI. The formula gate starts to bite once src/lib/formula exists.
+      // One list for Vitest and for the changed-code check (scripts/lib/coverage-scope.ts).
+      include: [...COVERAGE_INCLUDE],
+      exclude: [...COVERAGE_EXCLUDE],
+      // Test strategy section 11. Where each gate is decided:
+      //   CI stage 6 narrows `include` on the command line to src/lib and scripts/lib and runs the unit
+      //   tests only, so these thresholds judge pure code on unit lines.
+      //   CI stage 11 runs every level in one run with this full `include`, so the whole-package gate
+      //   counts unit and integration lines together (services are tested by integration).
+      // A glob below that matches no file passes silently, so each one starts to bite when its file exists.
       thresholds: {
         ...target(COVERAGE_TARGET),
-        'src/lib/formula/**': target(FORMULA_COVERAGE_TARGET),
+        'src/lib/formula/**': target(PURE_CODE_TARGET),
+        'src/lib/estimate/validation.ts': target(PURE_CODE_TARGET),
+        'src/lib/estimate/figure-state.ts': { branches: FULL_BRANCH_TARGET },
+        'src/lib/auth/password-rule.ts': { branches: FULL_BRANCH_TARGET },
       },
     },
   },

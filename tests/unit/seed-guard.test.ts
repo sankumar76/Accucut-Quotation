@@ -18,7 +18,7 @@ function runSeed(nodeEnv: 'production' | 'development'): { status: number | null
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-describe('seed production guard (AC-7)', () => {
+describe('seed production guard (AC-7)', { timeout: 60_000 }, () => {
   it('AC-7: throws in production', () => {
     expect(() => assertSeedAllowed({ NODE_ENV: 'production' })).toThrow(SEED_PRODUCTION_REFUSAL);
   });

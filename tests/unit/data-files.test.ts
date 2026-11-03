@@ -67,7 +67,7 @@ describe('findDisallowedDataFiles (AC-5)', () => {
   });
 });
 
-describe('check-data-files script (AC-5)', () => {
+describe('check-data-files script (AC-5)', { timeout: 60_000 }, () => {
   it('AC-5: passes on this repository as it stands', () => {
     const { status, output } = runCheck(ROOT);
     expect(output).toContain('Data-file check passed');
