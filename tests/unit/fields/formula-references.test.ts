@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractReferences,
   FormulaReferenceError,
+  referenceFromParts,
   toDisplayForm,
   toInternalForm,
   type ReferenceContext,
@@ -111,6 +112,14 @@ describe('extractReferences', () => {
   it('refuses text with a brace that is not part of a reference', () => {
     expect(() => extractReferences('A } B')).toThrow(FormulaReferenceError);
     expect(() => extractReferences('{{unknown:1}}')).toThrow(FormulaReferenceError);
+  });
+
+  it('STD-04: reads each of the four prefixes by name, and refuses a fifth rather than guessing exchange rate', () => {
+    expect(referenceFromParts('f', 'x')).toEqual({ kind: 'field', id: 'x' });
+    expect(referenceFromParts('rate', 'x')).toEqual({ kind: 'rate', id: 'x' });
+    expect(referenceFromParts('mat', 'x')).toEqual({ kind: 'material', key: 'x' });
+    expect(referenceFromParts('fx', 'USD')).toEqual({ kind: 'exchange', currency: 'USD' });
+    expect(() => referenceFromParts('tax', 'x')).toThrow(FormulaReferenceError);
   });
 
   it('carries a stable error code', () => {

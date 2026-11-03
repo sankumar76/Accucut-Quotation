@@ -48,7 +48,8 @@ export type FormulaReference =
   | { readonly kind: 'material'; readonly key: string }
   | { readonly kind: 'exchange'; readonly currency: string };
 
-export const MATERIAL_OPERAND_NAMES: Readonly<Record<MaterialOperandKey, string>> = {
+/** How each `{{mat:<key>}}` operand reads in display form (SPEC section 4.3, architecture section 4.5). */
+export const MATERIAL_OPERAND_NAMES:Readonly<Record<MaterialOperandKey, string>> = {
   pricePerKg: 'Material-Price-per-kg',
   specificGravity: 'Material-Specific-Gravity',
   scrapRate: 'Material-Scrap-Rate',
@@ -78,27 +79,29 @@ function assertNoStrayBraces(text: string): void {
   }
 }
 
+/**
+ * One reference from its prefix and value, as in `{{rate:<id>}}`. Every prefix is named; one that is not is
+ * refused, so a fifth prefix added to the pattern cannot be read as an exchange rate by accident.
+ */
+export function referenceFromParts(prefix: string, value: string): FormulaReference {
+  switch (prefix) {
+    case 'f':
+      return { kind: 'field', id: value };
+    case 'rate':
+      return { kind: 'rate', id: value };
+    case 'mat':
+      return { kind: 'material', key: value };
+    case 'fx':
+      return { kind: 'exchange', currency: value };
+    default:
+      throw new FormulaReferenceError('A formula reference could not be read.');
+  }
+}
+
 /** Every reference in a stored formula, in order. Throws if the text holds a malformed one. */
 export function extractReferences(internalForm: string): FormulaReference[] {
   assertNoStrayBraces(internalForm);
-  const references: FormulaReference[] = [];
-  for (const match of internalForm.matchAll(INTERNAL_REFERENCE)) {
-    const value = match[2] ?? '';
-    switch (match[1]) {
-      case 'f':
-        references.push({ kind: 'field', id: value });
-        break;
-      case 'rate':
-        references.push({ kind: 'rate', id: value });
-        break;
-      case 'mat':
-        references.push({ kind: 'material', key: value });
-        break;
-      default:
-        references.push({ kind: 'exchange', currency: value });
-    }
-  }
-  return references;
+  return [...internalForm.matchAll(INTERNAL_REFERENCE)].map((match) => referenceFromParts(match[1] ?? '', match[2] ?? ''));
 }
 
 interface NamedOperand {
