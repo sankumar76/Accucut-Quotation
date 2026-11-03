@@ -103,6 +103,15 @@ export function computeChangedCoverage(added: AddedLines, coverage: LineCoverage
 }
 
 /**
+ * Changed files that coverage measures but the report has no entry for. They are not a failure (a file
+ * that holds only types has none), but their added lines were not measured, so the check names them
+ * instead of skipping them silently (QLT-18).
+ */
+export function filesMissingFromReport(added: AddedLines, coverage: LineCoverage): string[] {
+  return [...added.keys()].filter((file) => /\.tsx?$/.test(file) && isCoverageScoped(file) && !coverage.has(file));
+}
+
+/**
  * Returns a message when the diff and the report cannot have been joined, and undefined when they can.
  * Code that coverage measures was added, but the report holds no path that coverage measures: the
  * report was written in a form this check does not read, so 100 percent would mean nothing. A change

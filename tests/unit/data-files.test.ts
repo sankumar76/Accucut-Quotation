@@ -54,6 +54,31 @@ describe('findDisallowedDataFiles (AC-5)', () => {
     },
   );
 
+  it.each([
+    'rates.sql',
+    'RATES.SQL',
+    'prisma/seed/placeholders/rates.sql',
+    'prisma/migrations/20261102000000_init/seed-data.sql',
+    'prisma/migrations/20261102000000_init/nested/migration.sql',
+    'prisma/migrations/migration.sql',
+    'docs/prisma/migrations/20261102000000_init/migration.sql',
+    'prisma/migrations/20261102000000_init/migration.sql.bak.sql',
+  ])('QLT-16: refuses the .sql file %s, a data dump or a misplaced migration', (path) => {
+    expect(findDisallowedDataFiles([path])).toEqual([path]);
+  });
+
+  it('QLT-16: accepts only prisma/migrations/<one folder>/migration.sql', () => {
+    const migrations = [
+      'prisma/migrations/20261102000000_init/migration.sql',
+      'prisma/migrations/20261103101500_add_users/migration.sql',
+    ];
+    expect(findDisallowedDataFiles(migrations)).toEqual([]);
+  });
+
+  it('QLT-16: the migration rule does not let another data file into a migration folder', () => {
+    expect(findDisallowedDataFiles(['prisma/migrations/20261102000000_init/rates.csv'])).toHaveLength(1);
+  });
+
   it('AC-5: accepts the two documented exceptions and the project configuration files', () => {
     const tracked = ALLOWED_DATA_FILES.map((entry) => entry.path);
     expect(tracked).toContain('AMADA-20261006.xlsx');

@@ -11,7 +11,13 @@ import { join, resolve } from 'node:path';
 
 import { z } from 'zod';
 
-import { computeChangedCoverage, describeJoinFailure, parseAddedLines, parseLcov } from './lib/changed-coverage';
+import {
+  computeChangedCoverage,
+  describeJoinFailure,
+  filesMissingFromReport,
+  parseAddedLines,
+  parseLcov,
+} from './lib/changed-coverage';
 
 const DEFAULT_THRESHOLD = 80;
 const DEFAULT_LCOV = 'coverage/lcov.info';
@@ -52,6 +58,11 @@ const coverage = parseLcov(lcov, root);
 
 const joinFailure = describeJoinFailure(added, coverage);
 if (joinFailure !== undefined) fail(`${joinFailure}\n`, 1);
+
+// A notice, not a failure: a file that holds only types has no entry. The log shows what was not measured.
+for (const file of filesMissingFromReport(added, coverage)) {
+  process.stdout.write(`Notice: ${file} has no entry in the coverage report, so its added lines were not measured.\n`);
+}
 
 const result = computeChangedCoverage(added, coverage);
 process.stdout.write(

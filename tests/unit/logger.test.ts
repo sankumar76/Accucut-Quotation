@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { ENV_VARIABLE_NAMES, SECRET_ENV_VARIABLE_NAMES } from '@/lib/env';
-import { createLogger, REDACTED_VALUE } from '@/lib/logger';
+import { createLogger, PERSONAL_SETTING_NAMES, REDACTED_VALUE } from '@/lib/logger';
 
 function capture(): { readonly lines: () => Array<Record<string, unknown>>; readonly stream: Writable } {
   const chunks: string[] = [];
@@ -100,6 +102,24 @@ describe('logger redaction (architecture section 9.4)', () => {
       ].sort(),
     );
     for (const name of SECRET_ENV_VARIABLE_NAMES) expect(ENV_VARIABLE_NAMES).toContain(name);
+  });
+
+  it.each(PERSONAL_SETTING_NAMES)('STD-23: redacts the personal or tenant setting %s, at the top level and one level down', (name) => {
+    const value = `invented-${name}-value`;
+    expect(JSON.stringify(logOne({ [name]: value }))).not.toContain(value);
+    expect(JSON.stringify(logOne({ config: { [name]: value } }))).not.toContain(value);
+  });
+
+  it('STD-23: the personal and tenant settings are exactly the four that identify a person or a tenant', () => {
+    expect([...PERSONAL_SETTING_NAMES].sort()).toEqual(
+      ['ADMIN_EMAIL', 'SMTP_OAUTH_CLIENT_ID', 'SMTP_OAUTH_TENANT_ID', 'SMTP_USER'].sort(),
+    );
+    for (const name of PERSONAL_SETTING_NAMES) expect(ENV_VARIABLE_NAMES).toContain(name);
+  });
+
+  it('PRF-05: the doc comment warns against per-node and per-row logging at info', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../src/lib/logger.ts', import.meta.url)), 'utf8');
+    expect(source).toContain('no per-node or per-row logging at info');
   });
 
   it('honours the level option', () => {

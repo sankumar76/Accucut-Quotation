@@ -43,8 +43,12 @@ describe('.gitignore and .env.example (AC-3, TD-05)', () => {
     expect(unsafeExampleEntries(exampleValues())).toEqual([]);
   });
 
-  it('AC-3: the database URLs carry a placeholder password', () => {
-    for (const name of ['DATABASE_URL', 'MIGRATE_DATABASE_URL']) expect(exampleValues().get(name)).toContain('CHANGE_ME');
+  it('AC-3, QLT-19: the database URLs have a localhost host and a password that starts with CHANGE_ME', () => {
+    for (const name of ['DATABASE_URL', 'MIGRATE_DATABASE_URL']) {
+      const url = new URL(exampleValues().get(name) ?? '');
+      expect(url.hostname, `${name} host`).toBe('localhost');
+      expect(decodeURIComponent(url.password).startsWith('CHANGE_ME'), `${name} password`).toBe(true);
+    }
   });
 });
 
@@ -76,6 +80,20 @@ describe('unsafeExampleEntries (STD-05, negative control)', () => {
     ['a different mail mode', 'SMTP_AUTH_MODE', 'password'],
     ['a real secret', 'AUTH_SECRET', 'invented-real-looking-secret-0123456789'],
     ['a real database password', 'DATABASE_URL', 'postgresql://accucut_app:invented-real-password@localhost:55432/accucut'],
+    [
+      'a real host beside a placeholder password (QLT-19)',
+      'DATABASE_URL',
+      'postgresql://accucut_app:CHANGE_ME_X@db.invented-company.example:5432/accucut',
+    ],
+    [
+      'a real host beside a placeholder password in the migration URL',
+      'MIGRATE_DATABASE_URL',
+      'postgresql://accucut_owner:CHANGE_ME_X@db.invented-company.example:5432/accucut',
+    ],
+    ['a placeholder password that is only part of the URL text', 'DATABASE_URL', 'postgresql://accucut_app:real@localhost:55432/CHANGE_ME'],
+    ['a database value that is not a URL', 'DATABASE_URL', 'CHANGE_ME_NOT_A_URL'],
+    ['a real mail host beside a placeholder (STD-21)', 'SMTP_HOST', 'smtp.invented-company.example/CHANGE_ME'],
+    ['a real mailbox user that only contains the placeholder', 'SMTP_USER', 'someone-CHANGE_ME'],
   ])('fails for %s', (_name, variable, value) => {
     const planted = new Map(template).set(variable, value);
     expect(unsafeExampleEntries(planted)).toEqual([variable]);

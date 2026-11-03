@@ -7,9 +7,8 @@
  * a new data file is always a deliberate, reviewed change to this file.
  */
 
-// `.sql` and `.yaml` are not listed on purpose: Prisma migrations are `.sql` files and the workflow and
-// Compose files are YAML, so listing them needs a rule for those paths, which is a decision for master
-// (G6 attempt 1, QLT-16 item 1, recorded in the Dev Record of AQP-27).
+// `.sql` is listed, with one path rule below for Prisma migrations (G6 attempt 2, QLT-16). `.yaml` is not:
+// the workflow and Compose files are YAML, and it stays deferred to issue #19.
 export const DATA_FILE_EXTENSIONS: ReadonlyArray<string> = [
   '.csv',
   '.tsv',
@@ -25,6 +24,7 @@ export const DATA_FILE_EXTENSIONS: ReadonlyArray<string> = [
   '.ndjson',
   '.parquet',
   '.dump',
+  '.sql',
   '.docx',
 ];
 
@@ -59,6 +59,13 @@ function hasDataExtension(path: string): boolean {
   return DATA_FILE_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
+/**
+ * The one path rule: a Prisma migration, which is generated SQL and holds structure, not data. Exactly
+ * one folder below prisma/migrations and exactly the file name migration.sql; a dump, a seed file or a
+ * second file in a migration folder is still refused.
+ */
+export const MIGRATION_PATH = /^prisma\/migrations\/[^/]+\/migration\.sql$/;
+
 /** Returns the tracked paths that are data files and are not on the allow-list. */
 export function findDisallowedDataFiles(
   trackedPaths: ReadonlyArray<string>,
@@ -67,5 +74,5 @@ export function findDisallowedDataFiles(
   const allowedPaths = new Set(allowed.map((entry) => entry.path));
   return trackedPaths
     .map((path) => path.replaceAll('\\', '/'))
-    .filter((path) => hasDataExtension(path) && !allowedPaths.has(path));
+    .filter((path) => hasDataExtension(path) && !allowedPaths.has(path) && !MIGRATION_PATH.test(path));
 }

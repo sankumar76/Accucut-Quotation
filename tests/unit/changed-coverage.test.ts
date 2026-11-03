@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   computeChangedCoverage,
   describeJoinFailure,
+  filesMissingFromReport,
   parseAddedLines,
   parseLcov,
 } from '../../scripts/lib/changed-coverage';
@@ -117,6 +118,23 @@ describe('computeChangedCoverage', () => {
   });
 });
 
+describe('filesMissingFromReport (QLT-18)', () => {
+  const added = (...files: string[]) => new Map(files.map((file) => [file, [1]]));
+
+  it('names measured changed files that the report has no entry for', () => {
+    const coverage = parseLcov('SF:src/lib/a.ts\nDA:1,1\nend_of_record');
+    expect(filesMissingFromReport(added('src/lib/a.ts', 'src/lib/b.ts', 'src/server/c.tsx'), coverage)).toEqual([
+      'src/lib/b.ts',
+      'src/server/c.tsx',
+    ]);
+  });
+
+  it('leaves out excluded, unmeasured and non-code files', () => {
+    const files = added('src/app/page.tsx', 'src/components/ui/button.tsx', 'tests/unit/a.test.ts', 'docs/a.md', 'src/lib/data.json');
+    expect(filesMissingFromReport(files, parseLcov(''))).toEqual([]);
+  });
+});
+
 describe('describeJoinFailure (QLT-06)', () => {
   const added = (...files: string[]) => new Map(files.map((file) => [file, [1]]));
 
@@ -212,6 +230,20 @@ describe('check-changed-coverage script (QLT-06, STD-07)', { timeout: 60_000 }, 
     const root = repositoryWith({ 'src/lib/types.ts': 'export type A = string;\n' });
     expect(run(root, 'SF:src/lib/types.ts\nend_of_record\n')).toMatchObject({ status: 0 });
     expect(run(root, lcov('src/lib/other.ts', 1))).toMatchObject({ status: 0 });
+  });
+
+  it('QLT-18: names a changed file that has no entry in the report, and still passes (a notice, not a failure)', () => {
+    const root = repositoryWith({ 'src/lib/a.ts': source, 'src/lib/b.ts': source });
+    const { status, output } = run(root, lcov('src/lib/a.ts', 1));
+    expect(status).toBe(0);
+    expect(output).toMatch(/src\/lib\/b\.ts/);
+    expect(output).toMatch(/no entry in the coverage report/i);
+    expect(output).not.toMatch(/src\/lib\/a\.ts.*no entry/i);
+  });
+
+  it('QLT-18: prints no notice when every measured changed file is in the report', () => {
+    const root = repositoryWith({ 'src/lib/a.ts': source, 'src/app/page.tsx': source });
+    expect(run(root, lcov('src/lib/a.ts', 1)).output).not.toMatch(/no entry in the coverage report/i);
   });
 
   it.each(['abc', '-1', '101', ''])('STD-07: fails closed on --threshold "%s"', (value) => {

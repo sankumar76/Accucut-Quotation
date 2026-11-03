@@ -26,6 +26,27 @@ describe('globToRegExp', () => {
   });
 });
 
+describe('globToRegExp refuses syntax it cannot read (QLT-18)', () => {
+  // Vitest reads these with picomatch; this hand-written parser would read them as literal characters
+  // and disagree with it, which can let a change through the changed-code check.
+  it.each(['src/**/*.stories.?(ts|tsx)', 'src/server/[ab].ts', 'src/(a|b)/**', 'src/!(lib)/**', 'src/+(a|b).ts', 'src/@(a).ts', 'src/a?.ts'])(
+    'throws on %s',
+    (glob) => {
+      expect(() => globToRegExp(glob)).toThrow(/Unsupported glob syntax/);
+    },
+  );
+
+  it('still reads the forms the coverage list uses, braces included', () => {
+    expect(() => globToRegExp('src/**/*.{ts,tsx}')).not.toThrow();
+    expect(() => globToRegExp('**/*.d.ts')).not.toThrow();
+    expect(() => globToRegExp('src/worker/main.ts')).not.toThrow();
+  });
+
+  it('every entry in the coverage list is readable', () => {
+    for (const glob of [...COVERAGE_INCLUDE, ...COVERAGE_EXCLUDE]) expect(() => globToRegExp(glob)).not.toThrow();
+  });
+});
+
 describe('isCoverageScoped', () => {
   it.each([
     ['src/lib/env.ts', true],

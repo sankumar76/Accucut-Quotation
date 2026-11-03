@@ -20,8 +20,16 @@ export const COVERAGE_EXCLUDE: ReadonlyArray<string> = [
   '**/*.d.ts',
 ];
 
+const UNSUPPORTED_SYNTAX = /[?[\]()!+@|]/;
+
 /** Turns the few glob forms used above (`**`, `*`, `{a,b}`) into a regular expression. */
 export function globToRegExp(glob: string): RegExp {
+  // Vitest reads the list with picomatch; this parser reads only the forms above. Anything else (`?`,
+  // `[a]`, `(a|b)`, `!(a)`, `+(a)`, `@(a)`) would be taken as literal characters and make the two disagree
+  // without a sign, so it stops here (QLT-18). Braces are checked after the `{a,b}` groups are removed.
+  if (UNSUPPORTED_SYNTAX.test(glob.replace(/\{[^}]*\}/g, ''))) {
+    throw new Error(`Unsupported glob syntax in coverage scope: ${glob}`);
+  }
   let source = '';
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob.charAt(index);
