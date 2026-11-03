@@ -146,6 +146,8 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
     // It was refused while the connection was still held: by the wait limit, not by the holder letting go. This is an
     // order of events, not a wall-clock bound, so a slow machine cannot make it fail (DEF-003).
     expect(holderDone).toBe(false);
-    await holder;
+    // Only let the holder finish. How it ends is not what this test checks: on a starved machine its own sleep can
+    // run past the pool's statement limit, which is the previous describe's subject.
+    await Promise.allSettled([holder]);
   });
 });
