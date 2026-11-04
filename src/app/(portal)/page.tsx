@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
 
-// Placeholder home until sign-in and the task queue arrive (STORY-01.01, STORY-03.xx).
+// Placeholder home page (signed-in only, through the portal layout). People land on /queue after sign-in; this page
+// goes when the role-specific homes arrive (STORY-01.02).
 export default function HomePage() {
   return (
     <>

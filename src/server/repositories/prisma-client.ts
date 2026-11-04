@@ -89,9 +89,32 @@ export function poolConfigFor(kind: DatabaseClientKind, connectionString: string
  * and `MIGRATE_DATABASE_URL` (the owner role) from the `migrate` step only. The caller validates the URL
  * (`src/lib/env.ts`) and closes the client with `$disconnect()`.
  *
- * Not a singleton yet: the first `app` or `worker` caller adds `getPrismaClient(kind)` with the
- * `globalThis` cache (a second pool per Next.js route bundle would exceed `max`).
+ * This builds a new client every call, for scripts and tests that own their client. The web process and the
+ * worker use `getPrismaClient`, which keeps one per kind (below).
  */
 export function createPrismaClient(kind: DatabaseClientKind, connectionString: string): PrismaClient {
   return new PrismaClient({ adapter: new PrismaPg(poolConfigFor(kind, connectionString)) });
+}
+
+/** The kinds that live for the whole life of a process and so share one client. A script closes its own. */
+export type SharedClientKind = Exclude<DatabaseClientKind, 'script'>;
+
+declare global {
+  // A `var` is the only way to declare a property of `globalThis`; `let` and `const` are not visible there.
+  var accucutPrismaClients: Map<SharedClientKind, PrismaClient> | undefined;
+}
+
+/**
+ * The one client of a long-lived process (deferred issue #18, DL-054). Next.js bundles each route separately and
+ * reloads modules in development, so a module-level client would open a second pool per route or per reload and
+ * exceed `max`. The cache lives on `globalThis`, which every bundle and every reload of the process shares. The
+ * first call decides the connection string; later calls return the same client.
+ */
+export function getPrismaClient(kind: SharedClientKind, connectionString: string): PrismaClient {
+  const cache = (globalThis.accucutPrismaClients ??= new Map());
+  const existing = cache.get(kind);
+  if (existing !== undefined) return existing;
+  const created = createPrismaClient(kind, connectionString);
+  cache.set(kind, created);
+  return created;
 }

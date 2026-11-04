@@ -189,10 +189,12 @@ jobs:
         run: npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"
 
       # ---- Stage 12: E2E (on since STORY-10.02, the first page story) -------------------------
-      # Chromium at three widths with axe (test strategy sections 2, 6, 9). Playwright starts the development
-      # server itself with invented settings (playwright.config.ts); no database is contacted. The browser download is
-      # cached by Playwright version (the lockfile); `install --with-deps` still installs the system libraries and
-      # downloads the browser only when the cache missed.
+      # Chromium at three widths with axe (test strategy sections 2, 6, 9). Playwright starts two servers
+      # (playwright.config.ts): the development server for the design-system specs and the PRODUCTION build from stage 9
+      # (`next start`) for the sign-in journey (deferred issue #17). Both use this job's throwaway database through
+      # `DATABASE_URL` (stage 10) and invented settings for everything else; the set-up project creates invented E2E
+      # users in it. The browser download is cached by Playwright version (the lockfile); `install --with-deps` still
+      # installs the system libraries and downloads the browser only when the cache missed.
       - name: "Cache the Playwright browsers"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

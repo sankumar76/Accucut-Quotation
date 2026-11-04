@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Header } from './header';
 import { Icon } from './icon';
 import { Nav, type NavGroup } from './nav';
+import { SkipLink } from './skip-link';
 import { useCloseDrawerOnDesktop } from './use-close-drawer-on-desktop';
 import { useFocusTitleAfterNavigation } from './use-focus-title-after-navigation';
 import { useStickyOffsets } from './use-sticky-offsets';
@@ -19,18 +20,6 @@ export interface AppShellProps {
   readonly bell: ReactNode;
   readonly account: ReactNode;
   readonly children: ReactNode;
-}
-
-/** The skip link: the first stop on every page, hidden until it has focus. */
-function SkipLink() {
-  return (
-    <a
-      href="#main"
-      className="absolute -top-s-7 left-s-3 z-(--z-skip-link) rounded-md bg-ink px-s-4 py-s-2 text-on-fill focus:top-s-2 focus:text-on-fill"
-    >
-      Skip to main content
-    </a>
-  );
 }
 
 /** The menu button in the top bar; it opens the drawer (shown below 1024 px only, by the header). */
