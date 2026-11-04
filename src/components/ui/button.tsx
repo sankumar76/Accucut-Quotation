@@ -10,16 +10,22 @@ import { ICON_SIZE } from '@/lib/design-tokens';
  * Looks of the one button (UX spec section 7.2): 44 px high, 16 px side padding, 14 / 600, four variants. The base
  * sets `border-transparent`; a variant that has a border sets its own colour after it and `cn` keeps the later one
  * (QLT-01). `size="icon"` is the 44 px square, `size="icon-row"` the 36 px square for dense table rows.
+ *
+ * Pressed (UX spec section 7.3.1, DEF-008): `active:` sets a fill, the text colour and the inset `shadow-pressed` for
+ * mouse, finger and pen. It is never inside the "can hover" media query that Tailwind puts around `hover:`, because a
+ * phone has no hover and the pressed look is then the only sign that a tap registered. Tailwind emits `active:` after
+ * `hover:`, so a button that is hovered and pressed shows pressed. `disabled:active:` puts the disabled look back, so a
+ * disabled or loading button shows nothing under a pointer.
  */
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-s-2 rounded-md border border-transparent text-body font-semibold leading-none whitespace-nowrap no-underline transition-colors cursor-pointer disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-2 disabled:text-ink-3 disabled:hover:bg-surface-2 disabled:hover:text-ink-3',
+  'inline-flex items-center justify-center gap-s-2 rounded-md border border-transparent text-body font-semibold leading-none whitespace-nowrap no-underline transition-colors cursor-pointer disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-2 disabled:text-ink-3 disabled:hover:bg-surface-2 disabled:hover:text-ink-3 disabled:active:bg-surface-2 disabled:active:text-ink-3 disabled:active:shadow-none',
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-on-fill hover:bg-primary-hover hover:text-on-fill',
-        secondary: 'border-border-strong bg-surface text-ink hover:bg-surface-2 hover:text-ink',
-        ghost: 'bg-transparent text-primary-ink hover:bg-primary-soft hover:text-primary-ink',
-        danger: 'bg-danger text-on-fill hover:bg-danger-ink hover:text-on-fill',
+        primary: 'bg-primary text-on-fill hover:bg-primary-hover hover:text-on-fill active:bg-primary-hover active:text-on-fill active:shadow-pressed',
+        secondary: 'border-border-strong bg-surface text-ink hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed',
+        ghost: 'bg-transparent text-primary-ink hover:bg-primary-soft hover:text-primary-ink active:bg-primary-line active:text-ink active:shadow-pressed',
+        danger: 'bg-danger text-on-fill hover:bg-danger-ink hover:text-on-fill active:bg-danger-ink active:text-on-fill active:shadow-pressed',
       },
       size: {
         default: 'h-(--control-h) px-s-4',
