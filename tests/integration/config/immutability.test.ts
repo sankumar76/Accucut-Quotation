@@ -81,10 +81,13 @@ async function waitUntilAStatementWaitsOnALock(client: Client): Promise<void> {
 describe('version 1: ensureSeedVersion (AC-6)', { timeout: 60_000 }, () => {
   let session: Session;
 
+  /** A second, empty database for the overlap test. Created here, not in the test: set-up stays out of its time limit (DEF-003). */
+  let other: Session;
+
   beforeAll(async () => {
-    session = await openSession();
+    [session, other] = await Promise.all([openSession(), openSession()]);
   });
-  afterAll(() => closeSession(session));
+  afterAll(() => Promise.all([closeSession(session), closeSession(other)]));
 
   it('AC-6: before the step has run there is no version and getCurrentVersion says so', async () => {
     expect(await versionCount(session.owner)).toBe(0);
@@ -127,7 +130,6 @@ describe('version 1: ensureSeedVersion (AC-6)', { timeout: 60_000 }, () => {
     // QLT-03: force the overlap, so the ON CONFLICT branch is what is tested. Another transaction holds
     // version 1 uncommitted; the step cannot see it (READ COMMITTED), so it tries to insert and waits on
     // the unique index. Without ON CONFLICT DO NOTHING it would fail with 23505 once the other commits.
-    const other = await openSession();
     const blocker = new Client({ connectionString: other.database.ownerUrl });
     await blocker.connect();
     try {
@@ -140,7 +142,6 @@ describe('version 1: ensureSeedVersion (AC-6)', { timeout: 60_000 }, () => {
       expect(await versionCount(other.owner)).toBe(1);
     } finally {
       await blocker.end();
-      await closeSession(other);
     }
   });
 });

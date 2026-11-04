@@ -31,6 +31,10 @@ export default defineConfig({
     globalSetup: ['./tests/support/global-setup.ts'],
     // Retries are off in unit and integration tests (test strategy section 10).
     retry: 0,
+    // Set-up runs in hooks, not in tests: creating and migrating a scratch database, or starting a process, can take
+    // well over Vitest's 10 s default on a busy machine. One hook limit for every level, set here and not per file
+    // (test strategy section 10, DL-057; DEF-003). A hook that needs more (a real `next build`) passes its own.
+    hookTimeout: 120_000,
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'lcov'],

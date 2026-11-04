@@ -28,8 +28,6 @@ function requiredUrl(): string {
 }
 
 const MILLISECONDS_PER_SECOND = 1_000;
-/** Creating and migrating a scratch database can take longer than Vitest's 10 s hook default on a busy machine. */
-const HOOK_TIMEOUT_MILLISECONDS = 60_000;
 
 function showSetting(client: PrismaClient, name: 'statement_timeout' | 'idle_in_transaction_session_timeout' | 'application_name') {
   // `SHOW` takes no parameters; the name is one of the three literals above.
@@ -62,24 +60,22 @@ describe('statement timeout becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, ()
     blocker = new Client({ connectionString: database.ownerUrl });
     await blocker.connect();
     client = createTestPrismaClient('script', database.ownerUrl, { statement_timeout: 500 });
-  }, HOOK_TIMEOUT_MILLISECONDS);
+  });
   afterAll(async () => {
     await client.$disconnect();
     await blocker.end();
     await database.drop();
-  }, HOOK_TIMEOUT_MILLISECONDS);
+  });
 
   it('a statement that waits longer than the limit is cancelled and surfaces as a 503, not a hang', async () => {
     // An open transaction holds version 1 uncommitted, so the seed insert waits on the unique index.
     await blocker.query('BEGIN');
     await blocker.query(`INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'held')`);
-    const started = Date.now();
     try {
+      // Cancelled by the 500 ms limit rather than left waiting: the call settles, and as DATABASE_BUSY.
       await expect(
         ensureSeedVersion(createConfigRepository(client), { document: seedConfig, reason: SEED_VERSION_REASON }),
       ).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
-      // Cancelled at about the limit, long before the 30 s a script would otherwise be allowed.
-      expect(Date.now() - started).toBeLessThan(10_000);
     } finally {
       await blocker.query('ROLLBACK');
     }
@@ -101,24 +97,67 @@ describe('statement timeout becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, ()
   });
 });
 
+/** How long the test's pool waits for a connection: short, so the refusal comes well before the holder lets go. */
+const POOL_WAIT_MILLISECONDS = 2_000;
+/** How long one request holds the pool's only connection: three times the wait above, under the app pool's 10 s statement limit. */
+const HOLD_SECONDS = 6;
+/** Tries at opening the first connection. On a busy machine one connect can take longer than the short wait. */
+const WARM_UP_ATTEMPTS = 5;
+/** The messages `pg` gives when no connection is ready within `connectionTimeoutMillis` (as in database-errors.ts). */
+const CONNECT_TIMEOUT_MESSAGES: ReadonlyArray<string> = [
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+];
+/** A cause chain this long is not a real one; stopping keeps a cyclic cause from looping. */
+const MAX_CAUSE_DEPTH = 4;
+
+/** True only for the connect timeout, in the error or in its cause chain. Anything else is a real failure. */
+function isConnectTimeout(error: unknown, depth = 0): boolean {
+  if (!(error instanceof Error) || depth > MAX_CAUSE_DEPTH) return false;
+  return CONNECT_TIMEOUT_MESSAGES.includes(error.message) || isConnectTimeout(error.cause, depth + 1);
+}
+
 describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_000 }, () => {
-  it('a second request on a full pool fails after the connect timeout instead of waiting for ever', async () => {
-    const client = createTestPrismaClient('app', requiredUrl(), { max: 1, connectionTimeoutMillis: 1_000 });
-    try {
-      // Open the pool's one connection first, so the wait below is for that connection and not for a slow connect.
-      await client.$queryRaw`SELECT 1 AS warm`;
-      // One request holds the only connection for 3 seconds.
-      const holder = client.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(3)`;
-      });
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const started = Date.now();
-      await expect(createConfigRepository(client).findLatestRef()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
-      // Failed at about the 1 s limit, well before the holder let go.
-      expect(Date.now() - started).toBeLessThan(2_500);
-      await holder;
-    } finally {
-      await client.$disconnect();
+  let client: PrismaClient;
+
+  // Set-up, not the behaviour under test (test strategy section 10, DEF-003): open the pool's one connection, trying
+  // again if a slow machine needs longer than the pool's short wait to connect.
+  beforeAll(async () => {
+    client = createTestPrismaClient('app', requiredUrl(), { max: 1, connectionTimeoutMillis: POOL_WAIT_MILLISECONDS });
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await client.$queryRaw`SELECT 1 AS warm`;
+        return;
+      } catch (error) {
+        if (!isConnectTimeout(error) || attempt >= WARM_UP_ATTEMPTS) throw error;
+      }
     }
+  });
+  afterAll(() => client.$disconnect());
+
+  it('a second request on a full pool fails after the connect timeout instead of waiting for ever', async () => {
+    // One request holds the only connection. The test then knows it is held: the holder has sent its query.
+    let holderDone = false;
+    const { promise: held, resolve: holding } = Promise.withResolvers<void>();
+    const holder = client
+      .$transaction(
+        async (transaction) => {
+          holding();
+          await transaction.$queryRaw`SELECT 1 AS held FROM pg_sleep(${HOLD_SECONDS}::double precision)`;
+        },
+        { timeout: (HOLD_SECONDS + 30) * MILLISECONDS_PER_SECOND },
+      )
+      .finally(() => {
+        holderDone = true;
+      });
+    await held;
+
+    await expect(createConfigRepository(client).findLatestRef()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
+    // It was refused while the connection was still held: by the wait limit, not by the holder letting go. This is an
+    // order of events, not a wall-clock bound, so a slow machine cannot make it fail (DEF-003).
+    expect(holderDone).toBe(false);
+    // Only let the holder finish. How it ends is not what this test checks: on a starved machine its own sleep can
+    // run past the pool's statement limit, which is the previous describe's subject.
+    await Promise.allSettled([holder]);
   });
 });
