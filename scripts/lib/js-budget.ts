@@ -37,7 +37,10 @@ export interface LimitEntry {
  * Per-route limits, keyed by route (`/queue`, or `not-found`). No route has an exception when STORY-10.10 merges. An
  * entry is a reviewed change to this file, and `limitTableProblems` fails it unless it names its decision.
  */
-export const ROUTE_LIMITS: Readonly<Record<string, LimitEntry>> = {};
+// NEGATIVE CONTROL (AQP-169 AC-5), never merged: /queue is about 198,229 bytes, so a limit of 150,000 must fail step 11b.
+export const ROUTE_LIMITS: Readonly<Record<string, LimitEntry>> = {
+  '/queue': { limitBytes: 150_000, decision: 'DL-999', lighthouseRun: 'negative-control-never-merged', lighthouseResult: 'missed' },
+};
 
 /** One line per entry that breaks the rules of AC-3; empty when the table is acceptable. */
 export function limitTableProblems(table: Readonly<Record<string, LimitEntry>>): string[] {
