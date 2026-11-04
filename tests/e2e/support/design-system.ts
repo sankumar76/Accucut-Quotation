@@ -58,7 +58,36 @@ export async function platformFonts(page: Page, target: Locator): Promise<Array<
   return fonts;
 }
 
+/**
+ * Waits until no finite animation or transition is running in the document (DEF-009). A colour that is half way
+ * through a CSS transition is a blend of two colours, and axe reads that blend as the colour of the text: the
+ * "Sign in" button caught while it faded from the loading grey back to red was reported as a contrast failure that
+ * the page does not have at rest. There is no retry and no timeout of its own: it waits for the browser's own
+ * `Animation.finished`, and the test's timeout is the only limit.
+ *
+ * Animations that never end (a spinner, a skeleton's shimmer: `infinite`) and paused ones are left out, because
+ * waiting for them would wait for ever; they do not change the colour of text from one moment to the next in a way
+ * that makes a scan wrong, and the reduced-motion tests cover them. New animations that start while it waits (one
+ * transition setting off another) are waited for too.
+ */
+export async function waitForAnimationsToFinish(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const endsByItself = (animation: Animation): boolean => {
+      const end = animation.effect?.getComputedTiming().endTime;
+      return end !== undefined && Number.isFinite(Number(end));
+    };
+    const isActive = (animation: Animation): boolean => animation.playState === 'running' || animation.pending;
+    for (;;) {
+      const active = document.getAnimations().filter((animation) => isActive(animation) && endsByItself(animation));
+      if (active.length === 0) return;
+      // A cancelled animation rejects `finished`; that also means it is no longer running.
+      await Promise.allSettled(active.map((animation) => animation.finished));
+    }
+  });
+}
+
 export async function expectNoAxeViolations(page: Page): Promise<void> {
+  await waitForAnimationsToFinish(page);
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
   const summary = results.violations.map((violation) => ({
     id: violation.id,
