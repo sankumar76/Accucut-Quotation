@@ -57,7 +57,7 @@ const portals: StubPortal[] = [];
 async function runAgainst(pages: Record<string, StubPage>, notFound = NOT_FOUND, limits?: Readonly<Record<string, LimitEntry>>): Promise<Scenario> {
   const portal = await startStubPortal(pages, notFound);
   portals.push(portal);
-  return { rows: await runBudgetCheck({ buildDir: build.directory, baseUrl: portal.baseUrl, credentialsFor, ...(limits === undefined ? {} : { limits }) }) };
+  return { rows: await runBudgetCheck({ buildDir: build.directory, baseUrl: portal.baseUrl, credentialsFor, limits: limits ?? {} }) };
 }
 
 const byRoute = (scenario: Scenario, route: string): RouteRow | undefined => scenario.rows.find((row) => row.route === route);

@@ -52,7 +52,7 @@ const target = (overrides: Partial<RouteTarget> = {}): RouteTarget => ({ route: 
 describe('checkTarget: a page that needs no sign-in', () => {
   it('measures it as the anonymous viewer and never signs in', async () => {
     const { fetchPage, calls } = fetcherOf({ 'anonymous /sign-in': page(200, htmlOf('a')) });
-    const row = await checkTarget(target({ route: '/sign-in', path: '/sign-in' }), fetchPage, { read });
+    const row = await checkTarget(target({ route: '/sign-in', path: '/sign-in' }), fetchPage, { read, limits: {} });
     expect(calls).toEqual(['anonymous /sign-in']);
     expect(row).toMatchObject({ route: '/sign-in', ok: true, viewer: 'anonymous', files: 1, rawBytes: FILE_A.length, limit: 200_000 });
     expect(row.headroom).toBe(200_000 - (row.gzipBytes ?? 0));
@@ -66,14 +66,14 @@ describe('checkTarget: a page that needs sign-in', () => {
       'LEAD /queue': page(200, htmlOf('a')),
       'ADMIN /queue': page(200, htmlOf('a', 'b')),
     });
-    const row = await checkTarget(target({ roles: ['LEAD', 'ADMIN'] }), fetchPage, { read });
+    const row = await checkTarget(target({ roles: ['LEAD', 'ADMIN'] }), fetchPage, { read, limits: {} });
     expect(calls).toEqual(['anonymous /queue', 'LEAD /queue', 'ADMIN /queue']);
     expect(row).toMatchObject({ ok: true, viewer: 'ADMIN', files: 2, rawBytes: FILE_A.length + FILE_B.length });
   });
 
   it('fails when a role is sent away instead of seeing the page, naming the role and the path but not the return address', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': redirect(), 'ADMIN /queue': redirect('/change-password?next=%2Fqueue&secret=1') });
-    const row = await checkTarget(target(), fetchPage, { read });
+    const row = await checkTarget(target(), fetchPage, { read, limits: {} });
     expect(row.ok).toBe(false);
     expect(row.note).toBe('ADMIN got a redirect (HTTP 307 to /change-password), not HTTP 200');
     expect(row.note).not.toContain('secret');
@@ -81,7 +81,7 @@ describe('checkTarget: a page that needs sign-in', () => {
 
   it('fails when the route needs sign-in and no role is allowed on it', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': redirect() });
-    expect(await checkTarget(target({ roles: [] }), fetchPage, { read })).toMatchObject({ ok: false, note: 'the route needs sign-in and no role is allowed on it' });
+    expect(await checkTarget(target({ roles: [] }), fetchPage, { read, limits: {} })).toMatchObject({ ok: false, note: 'the route needs sign-in and no role is allowed on it' });
   });
 });
 
@@ -92,32 +92,32 @@ describe('checkTarget: AC-2, a route that fails is named with its reason', () =>
     ['answers 204 with no content', page(204), 'anonymous got HTTP 204, not HTTP 200'],
   ])('a route that %s', async (_label, answer, note) => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': answer });
-    expect(await checkTarget(target(), fetchPage, { read })).toMatchObject({ route: '/queue', ok: false, note });
+    expect(await checkTarget(target(), fetchPage, { read, limits: {} })).toMatchObject({ route: '/queue', ok: false, note });
   });
 
   it('a route that cannot be reached', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': new Error('fetch failed') });
-    expect(await checkTarget(target(), fetchPage, { read })).toMatchObject({ ok: false, note: 'the request did not complete: fetch failed' });
+    expect(await checkTarget(target(), fetchPage, { read, limits: {} })).toMatchObject({ ok: false, note: 'the request did not complete: fetch failed' });
   });
 
   it('a route whose sign-in is refused', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': redirect(), 'ADMIN /queue': new Error('sign-in was refused: the portal answered HTTP 200 and started no session') });
-    expect(await checkTarget(target(), fetchPage, { read })).toMatchObject({ ok: false });
+    expect(await checkTarget(target(), fetchPage, { read, limits: {} })).toMatchObject({ ok: false });
   });
 
   it('a route with a script that is not in .next/static, naming the viewer and the file', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': page(200, htmlOf('a', 'missing')) });
-    const row = await checkTarget(target(), fetchPage, { read });
+    const row = await checkTarget(target(), fetchPage, { read, limits: {} });
     expect(row).toMatchObject({ ok: false });
     expect(row.note).toBe('anonymous: the script /_next/static/chunks/missing.js is not in .next/static');
   });
 
   it('a route with no request path, such as a dynamic route with no record', async () => {
     const { fetchPage, calls } = fetcherOf({});
-    const row = await checkTarget(target({ route: '/estimates/[id]', problem: 'a dynamic segment needs a record made from invented data, and none could be made' }), fetchPage, { read });
+    const row = await checkTarget(target({ route: '/estimates/[id]', problem: 'a dynamic segment needs a record made from invented data, and none could be made' }), fetchPage, { read, limits: {} });
     expect(calls).toEqual([]);
     expect(row).toMatchObject({ ok: false, route: '/estimates/[id]' });
-    expect((await checkTarget({ route: '/x', kind: 'page', roles: [] }, fetchPage, { read })).note).toBe('the route has no request path');
+    expect((await checkTarget({ route: '/x', kind: 'page', roles: [] }, fetchPage, { read, limits: {} })).note).toBe('the route has no request path');
   });
 });
 
@@ -137,12 +137,12 @@ describe('checkTarget: over the limit (the planted overrun, a negative control)'
 
   it('passes the same page against the default limit, so the failure is the lowered limit and nothing else', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': page(200, htmlOf('a', 'b')) });
-    expect(await checkTarget(target(), fetchPage, { read })).toMatchObject({ ok: true, limit: 200_000 });
+    expect(await checkTarget(target(), fetchPage, { read, limits: {} })).toMatchObject({ ok: true, limit: 200_000 });
   });
 
   it('passes a total exactly at the limit and fails one byte over', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /queue': page(200, htmlOf('a')) });
-    const total = (await checkTarget(target(), fetchPage, { read })).gzipBytes ?? 0;
+    const total = (await checkTarget(target(), fetchPage, { read, limits: {} })).gzipBytes ?? 0;
     const limitOf = (limitBytes: number): Record<string, LimitEntry> => ({ '/queue': { limitBytes, decision: 'DL-999', lighthouseRun: 'invented-run', lighthouseResult: 'missed' } });
     const at = limitOf(total);
     const under = limitOf(total - 1);
@@ -156,31 +156,31 @@ describe('checkTarget: the not-found page and a page hidden in production', () =
 
   it('measures the not-found page when the signed-in viewer gets 404', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /nfr-009-unused-path': redirect(), 'ADMIN /nfr-009-unused-path': page(404, htmlOf('a')) });
-    expect(await checkTarget(notFound(), fetchPage, { read })).toMatchObject({ route: 'not-found', ok: true, viewer: 'ADMIN', limit: 200_000 });
+    expect(await checkTarget(notFound(), fetchPage, { read, limits: {} })).toMatchObject({ route: 'not-found', ok: true, viewer: 'ADMIN', limit: 200_000 });
   });
 
   it('measures it as the anonymous viewer when no sign-in stands in front of it', async () => {
     const { fetchPage, calls } = fetcherOf({ 'anonymous /nfr-009-unused-path': page(404, htmlOf('a')) });
-    expect(await checkTarget(notFound(), fetchPage, { read })).toMatchObject({ ok: true, viewer: 'anonymous' });
+    expect(await checkTarget(notFound(), fetchPage, { read, limits: {} })).toMatchObject({ ok: true, viewer: 'anonymous' });
     expect(calls).toHaveLength(1);
   });
 
   it('fails the not-found row on any other status, 200 included', async () => {
     const { fetchPage } = fetcherOf({ 'anonymous /nfr-009-unused-path': redirect(), 'ADMIN /nfr-009-unused-path': page(200, htmlOf('a')) });
-    expect(await checkTarget(notFound(), fetchPage, { read })).toMatchObject({ ok: false, note: 'ADMIN got HTTP 200, not HTTP 404' });
+    expect(await checkTarget(notFound(), fetchPage, { read, limits: {} })).toMatchObject({ ok: false, note: 'ADMIN got HTTP 200, not HTTP 404' });
   });
 
   it('passes a hidden route that answers 404, without measuring it, and fails one that answers 200', async () => {
     const hidden: RouteTarget = { route: '/design-system', kind: 'hidden', path: '/design-system', roles: ['ADMIN'] };
     const good = fetcherOf({ 'anonymous /design-system': redirect(), 'ADMIN /design-system': page(404, htmlOf('a')) });
-    expect(await checkTarget(hidden, good.fetchPage, { read })).toEqual({
+    expect(await checkTarget(hidden, good.fetchPage, { read, limits: {} })).toEqual({
       route: '/design-system',
       kind: 'hidden',
       ok: true,
       note: 'answers 404 as required (hidden in production); not measured',
     });
     const bad = fetcherOf({ 'anonymous /design-system': redirect(), 'ADMIN /design-system': page(200, htmlOf('a')) });
-    expect(await checkTarget(hidden, bad.fetchPage, { read })).toMatchObject({ ok: false });
+    expect(await checkTarget(hidden, bad.fetchPage, { read, limits: {} })).toMatchObject({ ok: false });
   });
 });
 
@@ -190,7 +190,7 @@ describe('the table and the headline', () => {
     const rows = await checkTargets(
       [target({ route: '/sign-in', path: '/sign-in' }), target({ route: '/boom', path: '/boom' })],
       fetchPage,
-      { read },
+      { read, limits: {} },
     );
     expect(rows.map((row) => row.route)).toEqual(['/sign-in', '/boom']);
     expect(failedRows(rows).map((row) => row.route)).toEqual(['/boom']);
