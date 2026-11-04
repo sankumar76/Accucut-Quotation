@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { ENV_VARIABLE_NAMES } from '@/lib/env';
 
@@ -15,6 +15,25 @@ import { checkIgnore } from '../support/git-ignore';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
+const ENV_FILES_IGNORED = ['.env', '.env.local', '.env.production'];
+const KEYS_AND_LOGS_IGNORED = ['server.pem', 'private.key', 'certificate.p12', 'certificate.pfx', 'debug.log', 'nested/deeper/npm.log', '.DS_Store'];
+const NOT_IGNORED = ['.env.example', 'README.md', 'src/lib/env.ts', '.gitignore'];
+
+/**
+ * Every git verdict this file checks, asked once before the tests. Starting git is set-up, so it runs in the hook,
+ * under the hook limit, and the tests' own limit covers only the assertions (test strategy section 10; DEF-007).
+ * If git cannot start, the hook fails with that reason rather than a test reporting "not ignored".
+ */
+const ignored = new Map<string, boolean>();
+
+beforeAll(() => {
+  for (const path of [...ENV_FILES_IGNORED, ...KEYS_AND_LOGS_IGNORED, ...NOT_IGNORED]) ignored.set(path, checkIgnore(path).ignored);
+});
+
+function isIgnored(path: string): boolean | undefined {
+  return ignored.get(path);
+}
+
 function exampleValues(): Map<string, string> {
   const text = readFileSync(`${ROOT}.env.example`, 'utf8');
   const values = new Map<string, string>();
@@ -27,11 +46,11 @@ function exampleValues(): Map<string, string> {
 
 describe('.gitignore and .env.example (AC-3, TD-05)', () => {
   it('AC-3: git does not ignore .env.example', () => {
-    expect(checkIgnore('.env.example')).toMatchObject({ ignored: false });
+    expect(isIgnored('.env.example')).toBe(false);
   });
 
-  it.each(['.env', '.env.local', '.env.production'])('AC-3: git still ignores %s', (path) => {
-    expect(checkIgnore(path).ignored).toBe(true);
+  it.each(ENV_FILES_IGNORED)('AC-3: git still ignores %s', (path) => {
+    expect(isIgnored(path)).toBe(true);
   });
 
   it('AC-3: lists every variable of architecture section 8 "Secrets"', () => {
@@ -101,14 +120,11 @@ describe('unsafeExampleEntries (STD-05, negative control)', () => {
 });
 
 describe('.gitignore keys and logs (STD-09)', () => {
-  it.each(['server.pem', 'private.key', 'certificate.p12', 'certificate.pfx', 'debug.log', 'nested/deeper/npm.log', '.DS_Store'])(
-    'ignores %s',
-    (path) => {
-      expect(checkIgnore(path).ignored).toBe(true);
-    },
-  );
+  it.each(KEYS_AND_LOGS_IGNORED)('ignores %s', (path) => {
+    expect(isIgnored(path)).toBe(true);
+  });
 
-  it.each(['README.md', 'src/lib/env.ts', '.gitignore'])('does not ignore %s', (path) => {
-    expect(checkIgnore(path).ignored).toBe(false);
+  it.each(NOT_IGNORED.filter((path) => path !== '.env.example'))('does not ignore %s', (path) => {
+    expect(isIgnored(path)).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ALLOWED_DATA_FILES, findDisallowedDataFiles } from '../../scripts/lib/data-files';
+import { runProcess } from '../support/process';
 
 /** AC-5: the data-file check passes on the repository as it stands and fails on a planted file. */
 
@@ -29,10 +30,11 @@ function throwawayRepository(files: Record<string, string>): string {
   return directory;
 }
 
+/** Runs the check. A run that could not start throws `ProcessStartError`, never reported as the check's exit code (DEF-007). */
 function runCheck(root: string): { status: number | null; output: string } {
-  const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-data-files.ts', '--root', root], {
+  const result = runProcess(process.execPath, ['--import', 'tsx', 'scripts/check-data-files.ts', '--root', root], {
     cwd: ROOT,
-    encoding: 'utf8',
+    what: 'the data-file check',
   });
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }

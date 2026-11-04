@@ -25,6 +25,9 @@ import {
  * through it (G6 STD-13). The page itself is in `design-system.spec.ts`.
  */
 
+/** How far a measured box may exceed a token in CSS pixels: less than one device pixel, more than float noise. */
+const SUB_PIXEL_TOLERANCE = 0.5;
+
 test.describe('page frame, every width', () => {
   test('AC-4: the bell and the account menu stay in the top bar at every width', async ({ page }) => {
     await page.goto(PAGE);
@@ -104,7 +107,9 @@ test.describe('menu drawer (below 1024 px)', () => {
     const drawer = await openDrawer(page);
     await expect(drawer.getByRole('navigation', { name: 'Main' })).toBeVisible();
     const drawerWidth = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--drawer-w')));
-    expect((await drawer.boundingBox())?.width ?? 0).toBeLessThanOrEqual(drawerWidth);
+    // The box is read while the slide-in transform may still be running, so it carries floating-point noise of a few
+    // millionths of a pixel (288.0000038). Half a pixel tolerates that and still catches a drawer one pixel too wide (DEF-004).
+    expect((await drawer.boundingBox())?.width ?? 0).toBeLessThanOrEqual(drawerWidth + SUB_PIXEL_TOLERANCE);
   });
 
   test('DEF-011: the drawer opens even when the page\'s scripts arrive late, because the click waits for the page to be interactive', async ({ page }) => {
