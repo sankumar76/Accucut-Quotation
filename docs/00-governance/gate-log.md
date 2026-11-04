@@ -949,3 +949,84 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 
 **Risks registered:** none new.
 **Rationale:** The engine is verified against independent oracles, and every planted fault was caught. The one new defect is real but outside what AC-6 asked for, and unreachable until 02.01, so it binds 02.01's G7 instead of this one.
+
+---
+
+## G6 – Peer Review — AQP-168 (DEF-003 class: test reliability) — 2026-11-03
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #51 at head 395f4eb; 7 files, all test or test configuration (`vitest.config.ts`, `tests/support/scratch-database.ts`, five test files); check run "Stages 1 to 11" success (run 41669446603); Jira AQP-168 10773 (developer), 10777 (standards), 10778 (performance), 10779 (quality). **Not done:** no test run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All approve: standards (Minor 2, Info 5), quality (Minor 1, Info 4), performance (Info 3) |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | None. Quality's probes show the changed tests still fail on their bugs |
+| 3 | Major | | ✅ | None |
+| 4 | CI | | ✅ | Green; job time unchanged (1 m 59 s); every wait bounded |
+
+**Rulings**
+1. **STD-01, STD-02 and QLT-20 are fixed now, in one commit I verify** (test-only, a few lines each). STD-01: use `HOLD_SECONDS` in the `pg_sleep` call. STD-02: the warm-up retries only on the connection error it waits for and rethrows anything else, so a real fault is not retried away. QLT-20: delete the remaining under-10 s assertion in the statement-timeout test; an upper bound there is the kind of load-sensitive check this defect removes, and the lower bound and the error code still prove the timeout. **My check:** only the files named in those findings change; CI green.
+2. **Evidence under load is required, and it is the G7 evidence.** The defect is "fails under load", so a green CI run cannot show it is fixed. QA runs the two integration files and `layer-rules.test.ts` ten times in a row under the load described in the DEF-003 record, and records the result on AQP-168. All ten green passes; any failure returns it.
+3. **The QA acceptance tests in `aqp-97-config-versions.test.ts` are fixed by QA in this PR,** before G7, as a QA commit (no peer review, DL-050): poll and keep the maximum for the connection count; move set-up to `beforeEach` and connect once before the race for the 12-caller round; and replace the timing windows ("9 to 13 s", "about 5 s") with a lower bound plus a bound that fails only on a hang, as at AQP-97 (DL-057). They are in the same class, and the defect's scope is a green local suite on a machine set up by the README (DL-061). They are covered by the same ten-run evidence.
+4. **This gets a short G7.** DEF-003 and DEF-005 are QA's defects, so QA re-tests and closes them (test plan). G7 needs the ten-run evidence, the CI result, and AQP-168 and AQP-180 closed. **DEF-004 (AQP-179)** stays open until AQP-28 merges, then a small follow-up on `shell.spec.ts`; its due date stays "before sprint 1 ends".
+5. **Merge:** a code PR, so the delivery lead merges it by squash after G7; it needs no docs PR.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #51 | STD-01, STD-02, QLT-20 in one commit | Before G7 |
+| 2 | master | Same commit | Verify | Before G7 |
+| 3 | qa-engineer | PR #51 | The QA acceptance-test fixes, ruling 3 | Before G7 |
+| 4 | qa-engineer | AQP-168 | Ten consecutive runs under load, recorded; close AQP-168 and AQP-180 if green | G7 |
+| 5 | developer; qa-engineer | `shell.spec.ts` (AQP-179) | After AQP-28 merges | Before sprint 1 ends |
+
+**Risks registered:** none.
+
+**AQP-168 G6, minor-fixes commit verified — 2026-11-03 (master).** Commit fcc9fa1 on PR #51 (check run success, run 41672629287); hand-off AQP-168 10781. **Result: met.** QA may now add its acceptance-test fixes and run the ten-run evidence (DL-064).
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | One file, `tests/integration/config/database-timeouts.test.ts`; diff read in full |
+| STD-01 | ✅ | `pg_sleep(${HOLD_SECONDS}::double precision)`, a bound parameter; the literal and its comment are gone |
+| STD-02 | ✅ | The warm-up retries only when `isConnectTimeout` is true (the error or its cause chain, depth-limited); anything else is rethrown at once |
+| QLT-20 | ✅ | The under-10 s assertion is removed. A hang is still caught: an uncancelled statement never settles, so the describe's 60 s timeout fails the test |
+| CI | ✅ | Green on fcc9fa1 |
+
+**Rulings on the two points asked**
+1. **The copied timeout messages are acceptable.** A test that keeps its own expectation is independent of the code it checks, which is the right direction for a test. If `pg` changes a message, the copy stops matching, the warm-up stops retrying and the test fails loudly under load: it fails closed, never open.
+2. **The unexercised retry path is acceptable.** It is a few lines of test support, and every way it can be wrong ends in a rethrow and a red test, not a false pass. The ten runs under load will exercise it in practice; if QA's runs show the retry firing, record that on AQP-168.
+
+**AQP-168: PR #51 merged before G7, by a merge commit — recorded 2026-11-04 (master).**
+
+| Fact | Evidence |
+|------|----------|
+| Merged | PR #51 closed and merged at 2026-11-04T00:07:32Z through the shared `sankumar76` account; merge commit 83eb6de, message "Merge pull request #51 …", so an ordinary merge, not a squash. The orchestrator states it did not merge it; the shared account cannot show who did (RISK-019) |
+| Order | Before G7. G6 was CONDITIONAL GO (DL-064), and master had verified the minor-fixes commit fcc9fa1. QA's ten-run evidence and G7 had not happened |
+| Head merged | 5933605, not fcc9fa1. The three later commits (cb3faa3, 1c09b6f, 5933605) change only `tests/acceptance/aqp-97-config-versions.test.ts`: QA's own acceptance-test fixes, which DL-064 ruling 3 put in this PR with no peer review |
+| CI | "Stages 1 to 11" success on 5933605 and on 83eb6de, read by me |
+| Branch protection | Not bypassed: the required check passed, and merge commits are still allowed by the repository settings. Squash was a gate condition, not a setting |
+
+**Ruling (DL-065).** Code merges are the delivery lead's act, so this is recorded as a merge made ahead of the gate, not as an agent's breach and not as an override of a NO-GO. It changes nothing in what G7 must show: G7 is decided on QA's ten-run evidence, run on `master` at or after 83eb6de, since that is now the code. If G7 fails, the fix is a new `fix/AQP-168-…` PR on `master`; nothing is reverted unless QA finds the merged tests wrong rather than flaky. **The merge commit is accepted:** the merged commits are test-only, the secret scan passed on them, and history keeps seven small commits instead of one. That is harmless, but it is the second time squash-only has depended on the person merging (OBS-4 at AQP-27), so **master recommends the delivery lead untick "Allow merge commits"** in the repository settings, which makes squash the only method offered. Agents do not change settings.
+
+---
+
+## G7 – QA Acceptance — AQP-168 (DEF-003 class: test reliability) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. The code is already on `master` (83eb6de, DL-065)
+- **Attempt:** 1
+- **Artefacts evaluated:** QA hand-off AQP-168 10786; the merge record and DL-065 above; QA's report and the DEF-003 and DEF-007 records as described there (in docs PR #53, CI green per the hand-off). **Not done:** I did not re-run the load runs or read PR #53's files.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | The defects' expected results verified | ✱ | ✅ | Ten consecutive runs under a repeated full unit-run load on `master` 83eb6de: 153 of 153 each (also 10 of 10 on 5933605). The warm-up retry never fired. Twelve planted faults caught |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | None. Open: DEF-007 (Sev-3, new), DEF-004 (Sev-3, waits on AQP-28) |
+| 3 | Regression green | ✱ | ✅ | CI green on 83eb6de |
+| 4 | Defects closed by QA | | ✅ | DEF-003 (#24) and DEF-005 (AQP-180, #44) verified and closed |
+
+**Rulings**
+1. **CONDITIONAL GO.** The ten-run evidence asked for in DL-064 is met on the code as merged. **QA moves AQP-168 to Done** (status changes are QA's, `CLAUDE.md` section 4).
+2. **DEF-007 (AQP-182, #52) joins DEF-004 (AQP-179) in one follow-up fix,** once AQP-28 merges, **due before sprint 1 ends**. It is the same class: three unit tests whose default 5 s limit includes machine load, fixed the same way (warm-up or a set-up hook; no wall-clock bound). The Windows out-of-memory spawn failure is an environment fault, not a test design fault. Record it as type Environment, and have it reported as an error, not as a test result.
+3. **Docs PR #53 may carry master's pending governance records** (`docs/00-governance/gate-log.md` and `decision-log.md`), staged by name, because both are documentation and both must land before the next code merge. If adding them would force #53 through review again, keep them for a separate docs PR, merged before the next code PR.
