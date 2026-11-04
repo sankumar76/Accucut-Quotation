@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Tester | qa-engineer |
-| Build / commit | `ea8dc6b` (the developer's last commit) on `feat/AQP-38-sign-in`, the branch of the PR that supersedes PR #58 (see "CI and a secret-scan finding QA introduced"), plus QA's tests and this report in one commit |
+| Build / commit | `ea8dc6b` (the developer's last commit) on `feat/AQP-38-sign-in`, PR #62, which supersedes PR #58 (see "CI and a secret-scan finding QA introduced"), plus QA's tests and this report in one commit |
 | CI | Run 41845931376 on `ea8dc6b`: success on stages 1 to 12 (2,039 unit and integration tests, changed-code coverage 95.2 %, 125 E2E tests at three widths with axe). This is the regression reference |
 | Environment | Windows 11; Node v24.19.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17 from `compose.dev.yml` as a throwaway Compose project `qa38` on host port 55538 with invented passwords; Chromium (Playwright 1.64.1) against the **production build** (`next build && next start`, port 3101) and the development server (3100) |
 | Date | 2026-11-04 |
@@ -80,7 +80,7 @@ Each fault was made in `src`, the QA acceptance file was run, and the file was r
 
 QA's first commit for this report, `67daf05` on PR #58's branch `feat/AQP-38-sign-in-sign-out`, set `const SECRET = '...'` in `tests/acceptance/aqp-38-sign-in.test.ts:30` to an invented key. Its trailing digits raised its entropy, and Gitleaks' `generic-api-key` rule flagged it. CI run 41851301661 failed at stage 2. The value was a made-up test key, never a credential.
 
-**What was done (option C, the coordinator's decision: no force-push, no baseline entry).** A new branch, `feat/AQP-38-sign-in`, starts from the developer's `ea8dc6b`. QA's three files, with the reworded key, are added in **one** commit, and a new PR supersedes PR #58. A local Gitleaks 8.30.1 scan, run with `--redact` and the seven-entry baseline over that branch's full history (`--log-opts=feat/AQP-38-sign-in`), finds **0** new findings.
+**What was done (option C, the coordinator's decision: no force-push, no baseline entry).** A new branch, `feat/AQP-38-sign-in`, starts from the developer's `ea8dc6b`. QA's three files, with the reworded key, are added in **one** commit, and PR #62 supersedes PR #58. A local Gitleaks 8.30.1 scan, run with `--redact` and the seven-entry baseline over that branch's full history (`--log-opts=feat/AQP-38-sign-in`), finds **0** new findings.
 
 **What this does not fix by itself.** CI checks out with `fetch-depth: 0`, which fetches every branch, and `gitleaks git` reads every ref (README, "Secret scan and its baseline"). QA reproduced this: a scan from a checkout at `a13f194`, whose history does not contain `67daf05`, still reports it, because `origin/feat/AQP-38-sign-in-sign-out` holds it. While PR #58's branch exists on origin, stage 2 fails on the new PR, and on every other PR's next run. **The decision needed:** delete `feat/AQP-38-sign-in-sign-out` from origin (closing PR #58), which the README names as the way out ("until it is deleted or accepted"). The coordinator asked that PR #58's branch be kept for now, so QA has not deleted it.
 
@@ -113,5 +113,5 @@ Committed in one commit on `feat/AQP-38-sign-in`: `docs/07-qa/AQP-38-test-report
 ## Hand-off
 - Status: COMPLETE for the verification. CI stage 2 stays red until PR #58's branch leaves origin. The optional device check is outstanding and does not hold G7
 - Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0)
-- Jira / GitHub: summary on AQP-38, PR #58 and the new PR; no Bug created
+- Jira / GitHub: summary on AQP-38, PR #58 and PR #62; no Bug created
 - Story status: not changed by QA
