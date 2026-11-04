@@ -4,10 +4,10 @@
 |-------|-------|
 | Tester | qa-engineer |
 | Build / commit | `ea8dc6b` (the developer's last commit) on `feat/AQP-38-sign-in`, PR #62, which supersedes PR #58 (see "CI and a secret-scan finding QA introduced"), plus QA's tests and this report in one commit |
-| CI | Product code: run 41845931376 on `ea8dc6b`, success on stages 1 to 12. PR #62: run 41856930147 on `b69a50a`, success on stages 1 to 12, but stage 12 reported **1 flaky** test (the developer's axe test, DEF-009); the run on this report's head is in the PR and the Jira comment. This is the regression reference |
+| CI | **Reference: run 41858738190 on `a2b2997` (PR #62): success on stages 1 to 12, stage 2 (secret scan) green, E2E 155 passed, 0 flaky, 0 retried (11 skipped by design).** Earlier runs: 41845931376 on `ea8dc6b` (product code, green); 41856930147 on `b69a50a` (green, but 1 flaky test, DEF-009) |
 | Environment | Windows 11; Node v24.19.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17 from `compose.dev.yml` as a throwaway Compose project `qa38` on host port 55538 with invented passwords; Chromium (Playwright 1.64.1) against the **production build** (`next build && next start`, port 3101) and the development server (3100) |
 | Date | 2026-11-04 |
-| **Recommendation** | **ACCEPT.** All 8 ACs verified with evidence, and no product defect found. One observation for a real-phone check (OBS-1, the iPhone may zoom on the 14 px fields); it is not an AC and does not hold G7. **CI note:** the new PR's stage 2 stays red until PR #58's branch, which still holds QA's flagged commit, leaves origin (see below) |
+| **Recommendation** | **ACCEPT.** All 8 ACs verified with evidence, and no product defect found. Open: one Sev-3 defect of type Test (DEF-009). One observation for a real-phone check (OBS-1, the iPhone may zoom on the 14 px fields); it is not an AC and does not hold G7 |
 
 ## Summary
 
@@ -56,7 +56,7 @@ Test IDs: `[AQP-38 AC-n]` titles in `tests/acceptance/aqp-38-sign-in.test.ts` (A
 | Auth suites with QA acceptance | `npx vitest run tests/integration/auth tests/unit/auth-*.test.ts tests/unit/bootstrap-admin-service.test.ts tests/unit/prisma-singleton.test.ts tests/unit/production-routes.test.ts tests/acceptance/aqp-38-sign-in.test.ts` | 312 (17 files) | 312 | 0 | 0 |
 | E2E, production build, three widths | `npx playwright test tests/e2e/sign-in.spec.ts tests/e2e/production-routes.spec.ts tests/e2e/aqp-38-qa.spec.ts --retries=0` | 94 (set-up 1, `sign-in` 57, `production-routes` 6, QA 30) | 94 | 0 | 0 |
 | Lint, type-check | `npx eslint .`; `npx tsc --noEmit` | | exit 0, exit 0 | | |
-| Full regression | CI run 41845931376 on `ea8dc6b` (stages 1 to 12) | 2,039 + 125 E2E | all | 0 | |
+| Full regression | **CI run 41858738190 on `a2b2997` (PR #62), stages 1 to 12, the reference** | 2,081 unit, integration and acceptance (stage 11) + 155 E2E | all | 0 | 0 flaky |
 
 The PC was shared, so the full unit and integration suite was not run locally; CI is the reference, as briefed.
 
@@ -82,7 +82,7 @@ QA's first commit for this report, `67daf05` on PR #58's branch `feat/AQP-38-sig
 
 **What was done (option C, the coordinator's decision: no force-push, no baseline entry).** A new branch, `feat/AQP-38-sign-in`, starts from the developer's `ea8dc6b`. QA's three files, with the reworded key, are added in **one** commit, and PR #62 supersedes PR #58. A local Gitleaks 8.30.1 scan, run with `--redact` and the seven-entry baseline over that branch's full history (`--log-opts=feat/AQP-38-sign-in`), finds **0** new findings.
 
-**What this does not fix by itself.** CI checks out with `fetch-depth: 0`, which fetches every branch, and `gitleaks git` reads every ref (README, "Secret scan and its baseline"). QA reproduced this: a scan from a checkout at `a13f194`, whose history does not contain `67daf05`, still reports it, because `origin/feat/AQP-38-sign-in-sign-out` holds it. While PR #58's branch exists on origin, stage 2 fails on the new PR, and on every other PR's next run. **The decision needed:** delete `feat/AQP-38-sign-in-sign-out` from origin (closing PR #58), which the README names as the way out ("until it is deleted or accepted"). The coordinator asked that PR #58's branch be kept for now, so QA has not deleted it.
+**What remained, and how it was resolved.** CI checks out with `fetch-depth: 0`, which fetches every branch, and `gitleaks git` reads every ref (README, "Secret scan and its baseline"). QA reproduced this: a scan from a checkout at `a13f194`, whose history does not contain `67daf05`, still reported it through `origin/feat/AQP-38-sign-in-sign-out`. **The delivery lead chose to close PR #58 and delete its branch from origin, instead of an eighth baseline entry.** Since then stage 2 is green on PR #62: reference run 41858738190 on `a2b2997`.
 
 
 ## A defect in QA's own E2E test, found by CI and fixed
@@ -131,7 +131,7 @@ Open: Sev-1 0, Sev-2 0, Sev-3 1 (DEF-009, type Test), Sev-4 0. QA's own spec wai
 Committed in one commit on `feat/AQP-38-sign-in`: `docs/07-qa/AQP-38-test-report.md`, `tests/acceptance/aqp-38-sign-in.test.ts`, `tests/e2e/aqp-38-qa.spec.ts`.
 
 ## Hand-off
-- Status: COMPLETE for the verification. CI stage 2 stays red until PR #58's branch leaves origin. The optional device check is outstanding and does not hold G7
+- Status: COMPLETE. CI green on PR #62 (reference run 41858738190 on `a2b2997`, stage 2 green, 155 E2E passed, 0 flaky). PR #58 is closed and its branch deleted (the delivery lead's choice). The optional device check (OBS-1) does not hold G7
 - Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 1 of type Test: DEF-009, Sev-4 0)
 - Jira / GitHub: summary on AQP-38, PR #58 and PR #62; DEF-009 raised as AQP-184 and GitHub #63
 - Story status: not changed by QA
