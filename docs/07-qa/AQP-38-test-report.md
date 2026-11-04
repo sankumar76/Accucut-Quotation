@@ -7,7 +7,7 @@
 | CI | Run 41845931376 on `ea8dc6b`: success on stages 1 to 12 (2,039 unit and integration tests, changed-code coverage 95.2 %, 125 E2E tests at three widths with axe). This is the regression reference |
 | Environment | Windows 11; Node v24.19.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17 from `compose.dev.yml` as a throwaway Compose project `qa38` on host port 55538 with invented passwords; Chromium (Playwright 1.64.1) against the **production build** (`next build && next start`, port 3101) and the development server (3100) |
 | Date | 2026-11-04 |
-| **Recommendation** | **ACCEPT.** All 8 ACs verified with evidence. No defect found. One observation for a real-phone check (OBS-1, the iPhone may zoom on the 14 px fields); it is not an AC and does not hold G7 |
+| **Recommendation** | **ACCEPT for the product, on one condition.** All 8 ACs verified with evidence, and no product defect found. **Condition (QA's own fault, see "CI and a secret-scan finding QA introduced"):** CI stage 2 now fails on an invented test key in QA's commit `67daf05`, so the PR's regression is not green until the delivery lead decides how to clear it. One observation for a real-phone check (OBS-1, the iPhone may zoom on the 14 px fields); it is not an AC and does not hold G7 |
 
 ## Summary
 
@@ -76,6 +76,14 @@ Each fault was made in `src`, the QA acceptance file was run, and the file was r
 | M8 | No give-back of reservations after a fault | 1, after QA added the "fault after reservation" test (the first busy-database test failed before any reservation) |
 | M9 | `session_version` not checked per request | 1 (sign-out on every device) |
 
+## CI and a secret-scan finding QA introduced
+
+QA's commit `67daf05` set `const SECRET = '...'` in `tests/acceptance/aqp-38-sign-in.test.ts:30` to an invented key. Its trailing digits raised its entropy, and Gitleaks' `generic-api-key` rule flagged it. CI run 41851301661 failed at stage 2 ("leaks found: 1"), and stages 11 and 12 were skipped. The value was a made-up test key, never a credential, but the scan reads every branch's full history, so the finding stays while `67daf05` is reachable.
+
+- **Done:** commit `2b4a9cb` rewords the value. A local Gitleaks 8.30.1 scan of `ea8dc6b..2b4a9cb`, with `--redact` and the project baseline, shows that `2b4a9cb` adds no finding; the only one left is in `67daf05`.
+- **Not done, needs the delivery lead:** clearing `67daf05`. Either (A) authorise a force-push of `feat/AQP-38-sign-in-sign-out` that replaces QA's two commits with one clean commit (the developer's `ea8dc6b` is untouched), or (B) accept the finding as an eighth entry in `.gitleaks-baseline.json`, with `tests/unit/gitleaks-baseline.test.ts` updated, as the README procedure requires. QA recommends (A): the value was never meant to be kept, and the baseline stays at the seven documentation findings. QA did neither: a force-push and a baseline change are not QA's to make.
+- **Until then:** stage 11 (where QA's acceptance tests run) and stage 12 (where QA's E2E spec runs) have no CI run on this branch. The local runs above are the evidence. The product code's CI run 41845931376 on `ea8dc6b` is green on stages 1 to 12.
+
 ## Defects
 
 None found. Open: Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0 (for this story).
@@ -99,10 +107,10 @@ None found. Open: Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0 (for this story).
 
 ## Artefacts
 
-Committed with this report: `docs/07-qa/AQP-38-test-report.md`, `tests/acceptance/aqp-38-sign-in.test.ts`, `tests/e2e/aqp-38-qa.spec.ts`.
+Committed: `docs/07-qa/AQP-38-test-report.md`, `tests/acceptance/aqp-38-sign-in.test.ts`, `tests/e2e/aqp-38-qa.spec.ts` (`67daf05`), and the reworded key (`2b4a9cb`).
 
 ## Hand-off
-- Status: COMPLETE (the optional device check is outstanding and does not hold G7)
-- Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0)
+- Status: BLOCKED on CI stage 2 (QA's own test key in `67daf05`; the delivery lead's decision A or B is needed). The optional device check is outstanding and does not hold G7
+- Recommendation (G7): ACCEPT for the product (Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0), once CI is green again
 - Jira / GitHub: summary on AQP-38 and PR #58; no Bug created
 - Story status: not changed by QA
