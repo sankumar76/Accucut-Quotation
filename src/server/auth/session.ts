@@ -1,0 +1,89 @@
+import 'server-only';
+
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
+
+import { ForbiddenError, UnauthorizedError } from '../../lib/errors';
+import { SIGN_IN_PATH } from '../../lib/auth/return-path';
+import { systemClock } from '../../lib/time';
+import { getAuthOptions, getUserRepository } from '../composition';
+import type { UserAccount, UserRepository, UserRole } from '../repositories/user-repository';
+
+import { isWithinSession } from './session-token';
+
+/**
+ * Who is making this request (ADR-009, architecture section 8). next-auth is used narrowly behind this file
+ * (TD-02): nothing else imports `getServerSession`.
+ *
+ * The cookie says who signed in and when. It never says what they may do: the role and the active flag are read
+ * from `users` on every request, so a deactivation or a role change is effective at the next request (AC-5), and a
+ * session whose `session_version` no longer matches (sign-out raised it) or that is past 12 hours is refused.
+ */
+
+/** The signed-in person as a request sees them. No password hash, no token. */
+export interface AuthenticatedUser {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: UserRole;
+  readonly mustChangePassword: boolean;
+}
+
+export interface SessionClaims {
+  readonly userId: string;
+  readonly sessionVersion: number;
+  readonly signedAt: number;
+}
+
+/**
+ * The user for a set of claims, or null if the session must not be honoured: no such user, deactivated, a
+ * `session_version` that no longer matches, or past 12 hours from sign-in. Pure of next-auth, so tests call it
+ * directly with a repository and a clock.
+ */
+export async function resolveSessionUser(
+  claims: SessionClaims | null,
+  users: UserRepository,
+  now: Date,
+): Promise<AuthenticatedUser | null> {
+  if (claims === null || !isWithinSession(claims.signedAt, now)) return null;
+  const account: UserAccount | null = await users.findAccountById(claims.userId);
+  if (account === null || !account.isActive || account.sessionVersion !== claims.sessionVersion) return null;
+  return {
+    id: account.id,
+    name: account.name,
+    email: account.email,
+    role: account.role,
+    mustChangePassword: account.mustChangePassword,
+  };
+}
+
+/** The current user, or null when signed out. Read once per request however many components ask. */
+export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> => {
+  const session = await getServerSession(getAuthOptions());
+  const claims =
+    session?.userId !== undefined && session.sessionVersion !== undefined && session.signedAt !== undefined
+      ? { userId: session.userId, sessionVersion: session.sessionVersion, signedAt: session.signedAt }
+      : null;
+  return resolveSessionUser(claims, getUserRepository(), systemClock.now());
+});
+
+/** For route handlers and services: the current user, or an `UnauthorizedError` (401). */
+export async function requireUser(): Promise<AuthenticatedUser> {
+  const user = await getCurrentUser();
+  if (user === null) throw new UnauthorizedError();
+  return user;
+}
+
+/** For pages: the current user, or a redirect to the sign-in page. */
+export async function requireUserOrRedirect(): Promise<AuthenticatedUser> {
+  const user = await getCurrentUser();
+  if (user === null) redirect(SIGN_IN_PATH);
+  return user;
+}
+
+/** Refuses a role that is not listed with a `ForbiddenError` (403), before any lookup (CR-33). */
+export function requireRole(user: AuthenticatedUser, ...allowed: ReadonlyArray<UserRole>): AuthenticatedUser {
+  if (!allowed.includes(user.role)) throw new ForbiddenError();
+  return user;
+}
