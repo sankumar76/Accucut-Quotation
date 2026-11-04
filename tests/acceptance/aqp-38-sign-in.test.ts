@@ -27,7 +27,7 @@ import { createTestPrismaClient } from '../support/test-prisma-client';
  * stale cookies on two devices; and a larger set of open-redirect attacks. All people, e-mails and passwords are invented.
  */
 
-const SECRET = 'invented-qa-aqp-38-key-material-long-enough-0123';
+const SECRET = 'invented-qa-aqp-thirty-eight-key-material-long-enough';
 const ORIGIN = 'https://portal.example.test';
 const START = new Date('2026-11-05T03:30:00.000Z');
 const SESSION_COOKIE = '__Secure-next-auth.session-token';
