@@ -9,6 +9,7 @@ import {
   isDesktopProject,
   PAGE,
   openDrawer,
+  waitUntilMenuButtonIsLive,
   expectNoAxeViolations,
   ROW_TARGET,
   TOUCH_TARGET,
@@ -108,6 +109,8 @@ test.describe('menu drawer (below 1024 px)', () => {
 
   test('AC-4, AC-8: the menu button, the drawer and the skip link work by keyboard only', async ({ page }) => {
     await page.goto(PAGE);
+    // Focus works on the server's HTML, but Enter on the button is a click, and a click before hydration is lost (DEF-011).
+    await waitUntilMenuButtonIsLive(page);
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
 

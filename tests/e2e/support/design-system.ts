@@ -68,7 +68,37 @@ export async function expectNoAxeViolations(page: Page): Promise<void> {
   expect(summary).toEqual([]);
 }
 
+/** The menu button of the top bar; the page frame names it the same way at every width below 1024 px. */
+const OPEN_MENU_BUTTON = 'button[aria-label="Open menu"]';
+
+/**
+ * Waits until React has hydrated the element that `selector` names (DEF-011). The server sends the button as plain
+ * HTML and `goto` returns at the `load` event, which can come before React has attached its handlers: a click made
+ * in that gap is lost, with no error (the AQP-182 G7 probe: `hydratedAtClick=false`, `opened=false`). React gives every
+ * DOM node it has hydrated a `__reactProps$...` property that holds the props it was rendered with, so the signal is that
+ * the node has one and its `onClick` is a function. That is the state the click needs; no sleep, no retry, no timeout of
+ * its own (the test's timeout is the only limit).
+ *
+ * The element is looked up again on each check, so a node that React replaced is found, not a stale one.
+ */
+export async function waitUntilHydrated(page: Page, selector: string): Promise<void> {
+  await page.waitForFunction((css) => {
+    const element = document.querySelector(css);
+    if (element === null) return false;
+    const propsKey = Object.keys(element).find((key) => key.startsWith('__reactProps$'));
+    if (propsKey === undefined) return false;
+    const props: unknown = Reflect.get(element, propsKey);
+    return typeof props === 'object' && props !== null && typeof Reflect.get(props, 'onClick') === 'function';
+  }, selector);
+}
+
+/** Waits for the menu button to be live (see `waitUntilHydrated`), for a test that reaches it by keyboard. */
+export async function waitUntilMenuButtonIsLive(page: Page): Promise<void> {
+  await waitUntilHydrated(page, OPEN_MENU_BUTTON);
+}
+
 export async function openDrawer(page: Page): Promise<Locator> {
+  await waitUntilMenuButtonIsLive(page);
   await page.getByRole('button', { name: 'Open menu' }).click();
   const drawer = page.getByRole('dialog', { name: 'Menu' });
   await expect(drawer).toBeVisible();
