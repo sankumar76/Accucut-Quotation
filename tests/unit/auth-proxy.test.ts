@@ -23,9 +23,25 @@ describe('AC-4: a signed-out visitor goes to the sign-in page', () => {
     expect(response.headers.get('Location')).toBe('https://portal.example.test/sign-in?callbackUrl=%2Fqueue%2Fx');
   });
 
-  it('falls back to the address of the request when no origin is set', () => {
+  it('outside production, the address of the request stands in when no origin is set', () => {
+    vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('APP_ORIGIN', '');
     expect(proxy(request('/queue/x')).headers.get('Location')).toBe('http://localhost:3000/sign-in?callbackUrl=%2Fqueue%2Fx');
+  });
+
+  it('in production there is no fallback: a missing or malformed origin fails loudly, never trusting the Host header (STD-03)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    for (const value of ['', 'not a url', 'http://portal.example.test/with/path', 'ftp://portal.example.test']) {
+      vi.stubEnv('APP_ORIGIN', value);
+      expect(() => proxy(new NextRequest('http://evil-host.example/queue'))).toThrow('APP_ORIGIN');
+    }
+  });
+
+  it('in production the validated origin is used, whatever Host header the request carries', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('APP_ORIGIN', 'https://portal.example.test');
+    const response = proxy(new NextRequest('http://evil-host.example/queue/x', { headers: { host: 'evil-host.example' } }));
+    expect(response.headers.get('Location')).toBe('https://portal.example.test/sign-in?callbackUrl=%2Fqueue%2Fx');
   });
 
   it('redirects to the sign-in page with the requested page remembered, and says "do not index"', () => {

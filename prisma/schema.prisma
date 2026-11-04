@@ -46,13 +46,15 @@ model User {
 /// Failed sign-in counters (architecture sections 5.1 and 6 "Rate limits", NFR-003, PROPOSED values).
 /// `key_hash` is a keyed hash of an account key (the e-mail, known or not) or of an IP address, so the
 /// table never holds an address or an e-mail in clear and an unknown e-mail looks like a known one.
-/// `window_started_at` is used by the per-IP rule only (failures in a window); the account rule counts
-/// consecutive failures and ignores it.
+/// `failures` is the number of attempts reserved in the current run or window (an attempt is counted before its password is
+/// checked, and handed back by a correct password from a shared address). `window_started_at` is used by the per-IP rule
+/// only; the account rule counts a run and ignores it. The natural key `key_hash` is the primary key (decision DL-072).
 model LoginThrottle {
   keyHash         String    @id @map("key_hash")
   failures        Int       @default(0)
   windowStartedAt DateTime  @default(now()) @map("window_started_at") @db.Timestamptz(6)
   blockedUntil    DateTime? @map("blocked_until") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("login_throttles")

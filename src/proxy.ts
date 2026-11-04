@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { signInPathFor } from '@/lib/auth/return-path';
+import { loadOriginEnv } from '@/lib/env';
 
 /**
  * Sends a signed-out visitor to the sign-in page (STORY-01.01 AC-4; architecture section 8).
@@ -28,6 +29,21 @@ function hasSessionCookie(request: NextRequest): boolean {
     .some(({ name }) => SESSION_COOKIE_NAMES.some((base) => name === base || name.startsWith(`${base}.`)));
 }
 
+/**
+ * Next.js requires an absolute Location. In production it is built from the validated `APP_ORIGIN` and nothing else, so a
+ * host name this process only thinks it has (behind the reverse proxy) can never decide where a person is sent, and a
+ * missing or malformed setting fails loudly instead of quietly trusting the `Host` header (G6 STD-03). The server also
+ * refuses to start without it (`src/instrumentation.ts`). In development and tests the request's own address stands in.
+ */
+function portalOrigin(request: NextRequest): string {
+  try {
+    return loadOriginEnv().APP_ORIGIN;
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') throw error;
+    return request.url;
+  }
+}
+
 export function proxy(request: NextRequest): NextResponse {
   if (hasSessionCookie(request)) {
     const response = NextResponse.next();
@@ -35,10 +51,7 @@ export function proxy(request: NextRequest): NextResponse {
     return response;
   }
   const { pathname, search } = request.nextUrl;
-  // Next.js requires an absolute Location here. The portal's own origin comes first, so a host name this process only
-  // thinks it has (behind the reverse proxy) never decides where a person is sent; the request's own address is the fallback.
-  const origin = process.env.APP_ORIGIN || request.url;
-  const response = NextResponse.redirect(new URL(signInPathFor(`${pathname}${search}`), origin), 307);
+  const response = NextResponse.redirect(new URL(signInPathFor(`${pathname}${search}`), portalOrigin(request)), 307);
   response.headers.set('Cache-Control', NO_STORE);
   response.headers.set('X-Robots-Tag', NO_INDEX);
   return response;

@@ -17,14 +17,14 @@ import { defined } from '../support/defined';
 const SECRET = 'invented-options-test-key-material';
 const NOW = new Date('2026-11-04T09:00:00.000Z');
 
-function fakeService(overrides: Partial<AuthService> = {}): AuthService & { readonly ended: string[] } {
-  const ended: string[] = [];
+function fakeService(overrides: Partial<AuthService> = {}): AuthService & { readonly ended: Array<readonly [string, number]> } {
+  const ended: Array<readonly [string, number]> = [];
   return {
     ended,
     authenticate: () => Promise.resolve<SignInResult>({ status: 'refused', reason: 'invalid' }),
-    endAllSessions(userId) {
-      ended.push(userId);
-      return Promise.resolve();
+    endAllSessions(userId, sessionVersion) {
+      ended.push([userId, sessionVersion]);
+      return Promise.resolve(true);
     },
     ...overrides,
   };
@@ -146,8 +146,9 @@ describe('AC-4: sign-out ends every session of the person', () => {
   it('raises the session version of the user named in the token', async () => {
     const service = fakeService();
     const signOut = defined(options(service).events?.signOut, 'signOut event');
-    await signOut({ token: { sub: 'user-1', sv: 0, signedAt: 1 }, session: undefined as never });
-    expect(service.ended).toEqual(['user-1']);
+    await signOut({ token: { sub: 'user-1', sv: 3, signedAt: 1 }, session: undefined as never });
+    // It names the version the token carries, so an out-of-date token cannot end the current session (ADR-009 amendment 1).
+    expect(service.ended).toEqual([['user-1', 3]]);
   });
 
   it('does nothing for a token that is not ours', async () => {

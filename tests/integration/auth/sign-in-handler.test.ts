@@ -4,7 +4,9 @@ import { AuthHandler, type ResponseInternal } from '../../../node_modules/next-a
 import { decode } from 'next-auth/jwt';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { DatabaseBusyError } from '@/lib/errors';
 import { createFixedClock, MILLISECONDS_PER_MINUTE, type FixedClock } from '@/lib/time';
+import { withSignInStatus } from '@/server/auth/locked-response';
 import { buildAuthOptions } from '@/server/auth/options';
 import { resolveSessionUser } from '@/server/auth/resolve-session-user';
 import { createAuthService, THROTTLE_POLICY } from '@/server/services/auth-service';
@@ -236,6 +238,68 @@ describe('AC-4: sign-out', () => {
       options,
     });
     expect((await db.users.findAccountById(user.id))?.sessionVersion).toBe(0);
+  });
+});
+
+describe('AC-4 and ADR-009 amendment 1: sign-out raises only a current version (compare and increment)', () => {
+  async function signOutWith(options: Options, sessionCookie: string): Promise<ResponseInternal> {
+    const csrf = await fetchCsrf(options);
+    return AuthHandler({
+      req: {
+        action: 'signout',
+        method: 'POST',
+        origin: ORIGIN,
+        headers: {},
+        cookies: { [csrf.csrfCookieName]: csrf.csrfCookieValue, [SESSION_COOKIE]: sessionCookie },
+        body: { csrfToken: csrf.csrfToken, json: 'true' },
+      },
+      options,
+    });
+  }
+
+  it('an out-of-date token leaves the version unchanged, and the current session still works', async () => {
+    const user = await insertUser(db.users, hasher, { role: 'LEAD' });
+    const options = optionsFor(true);
+    const first = await signInWith(options, user.email, TEST_PASSWORD, freshAddress());
+    const copied = defined(first.cookies?.find((item) => item.name === SESSION_COOKIE), 'first session cookie');
+
+    // The person signs out on one device: version 0 becomes 1, and the copied cookie is dead.
+    await signOutWith(options, copied.value);
+    expect((await db.users.findAccountById(user.id))?.sessionVersion).toBe(1);
+
+    // They sign in again: a new session at version 1.
+    const second = await signInWith(options, user.email, TEST_PASSWORD, freshAddress());
+    const current = defined(second.cookies?.find((item) => item.name === SESSION_COOKIE), 'second session cookie');
+    const currentToken = defined(await decode({ token: current.value, secret: SECRET }), 'current token');
+    expect(currentToken).toMatchObject({ sv: 1 });
+
+    // Whoever holds the old copy signs out again, and again: nothing changes.
+    await signOutWith(options, copied.value);
+    await signOutWith(options, copied.value);
+    expect((await db.users.findAccountById(user.id))?.sessionVersion).toBe(1);
+    const claims = { userId: user.id, sessionVersion: 1, signedAt: START.getTime() / 1_000 };
+    expect(await resolveSessionUser(claims, db.users, clock.now())).not.toBeNull();
+  });
+});
+
+describe('QLT-34: a sign-in that could not be checked is 503, not 401', () => {
+  it('a busy database answers 503 with the generic code "unavailable" and no cause, through the same function the route uses', async () => {
+    const busy = {
+      authenticate: () => Promise.reject(new DatabaseBusyError({ cause: new Error('connect ETIMEDOUT db.internal:5432') })),
+      endAllSessions: () => Promise.resolve(false),
+    };
+    const options = buildAuthOptions({ authService: busy, clock, secret: SECRET, production: true });
+    const response = await signInWith(options, 'someone@example.test', 'a-password', freshAddress());
+    expect(response.status).toBe(401);
+    expect(errorOf(response)).toBe('unavailable');
+
+    // What the route returns: next-auth's answer as JSON, passed through withSignInStatus.
+    const asRouteResponse = new Response(JSON.stringify({ url: response.redirect }), { status: response.status ?? 200 });
+    const final = await withSignInStatus(asRouteResponse);
+    expect(final.status).toBe(503);
+    const body = JSON.stringify(await final.json());
+    expect(body).not.toContain('ETIMEDOUT');
+    expect(body).not.toContain('db.internal');
   });
 });
 

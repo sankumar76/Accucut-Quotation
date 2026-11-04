@@ -47,8 +47,13 @@ export interface UserRepository {
   hasAnyAdmin(): Promise<boolean>;
   /** Adds a user and returns its ID. A second active Admin or a used e-mail is refused by the database. */
   create(user: NewUser): Promise<string>;
-  /** Raises the user's `session_version` by one, which ends every session they have (ADR-009). */
-  raiseSessionVersion(id: string): Promise<void>;
+  /**
+   * Raises the user's `session_version` by one, which ends every session they have (ADR-009), **only if it is still
+   * `expectedVersion`**: compare and increment in one statement (ADR-009 amendment 1). A token whose version is already
+   * out of date therefore changes nothing, and a copied old cookie cannot sign the person out again and again. Returns
+   * true if the version was raised.
+   */
+  raiseSessionVersion(id: string, expectedVersion: number): Promise<boolean>;
 }
 
 export function normaliseEmail(email: string): string {
@@ -97,9 +102,13 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       });
     },
 
-    raiseSessionVersion(id) {
+    raiseSessionVersion(id, expectedVersion) {
       return withDatabaseErrors(async () => {
-        await db.user.updateMany({ where: { id }, data: { sessionVersion: { increment: 1 } } });
+        const { count } = await db.user.updateMany({
+          where: { id, sessionVersion: expectedVersion },
+          data: { sessionVersion: { increment: 1 } },
+        });
+        return count === 1;
       });
     },
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { withThrottledStatus } from '@/server/auth/locked-response';
+import { withSignInStatus } from '@/server/auth/locked-response';
 
 /** Architecture section 6: a blocked sign-in answers 429, every other refusal stays next-auth's 401. */
 
@@ -10,7 +10,7 @@ const json = (body: unknown, status: number, headers: Record<string, string> = {
 describe('a blocked sign-in answers 429', () => {
   it('changes the status and keeps the body and the headers exactly', async () => {
     const original = json({ url: 'http://localhost:3000/sign-in?error=locked' }, 401, { 'X-Test': 'kept' });
-    const result = await withThrottledStatus(original);
+    const result = await withSignInStatus(original);
     expect(result.status).toBe(429);
     expect(result.headers.get('X-Test')).toBe('kept');
     expect(result.headers.get('Content-Type')).toBe('application/json');
@@ -18,22 +18,30 @@ describe('a blocked sign-in answers 429', () => {
   });
 
   it('reads a relative address too', async () => {
-    expect((await withThrottledStatus(json({ url: '/sign-in?error=locked&provider=credentials' }, 401))).status).toBe(429);
+    expect((await withSignInStatus(json({ url: '/sign-in?error=locked&provider=credentials' }, 401))).status).toBe(429);
   });
 });
 
 describe('everything else is left alone', () => {
   it('an invalid sign-in stays 401', async () => {
-    const result = await withThrottledStatus(json({ url: 'http://localhost:3000/sign-in?error=CredentialsSignin' }, 401));
+    const result = await withSignInStatus(json({ url: 'http://localhost:3000/sign-in?error=CredentialsSignin' }, 401));
     expect(result.status).toBe(401);
   });
 
-  it('an "unavailable" sign-in stays 401', async () => {
-    expect((await withThrottledStatus(json({ url: '/sign-in?error=unavailable' }, 401))).status).toBe(401);
+  it('an "unavailable" sign-in (the database was busy or down) answers 503, the retryable status of ruling R4 (QLT-34)', async () => {
+    const result = await withSignInStatus(json({ url: '/sign-in?error=unavailable' }, 401, { 'X-Test': 'kept' }));
+    expect(result.status).toBe(503);
+    expect(result.headers.get('X-Test')).toBe('kept');
+    expect(await result.json()).toEqual({ url: '/sign-in?error=unavailable' });
+  });
+
+  it('a reason that is only a property name of an object finds no status', async () => {
+    expect((await withSignInStatus(json({ url: '/sign-in?error=constructor' }, 401))).status).toBe(401);
+    expect((await withSignInStatus(json({ url: '/sign-in?error=toString' }, 401))).status).toBe(401);
   });
 
   it('a successful sign-in stays 200, even if the address mentions the word', async () => {
-    expect((await withThrottledStatus(json({ url: '/queue?error=locked' }, 200))).status).toBe(200);
+    expect((await withSignInStatus(json({ url: '/queue?error=locked' }, 200))).status).toBe(200);
   });
 
   it.each([
@@ -43,12 +51,12 @@ describe('everything else is left alone', () => {
     ['an address that is not text', json({ url: 7 }, 401)],
     ['an address that cannot be read', json({ url: 'http://[bad' }, 401)],
   ])('%s stays 401', async (_name, response) => {
-    expect((await withThrottledStatus(response)).status).toBe(401);
+    expect((await withSignInStatus(response)).status).toBe(401);
   });
 
   it('does not use up the original body (it can be read after the check)', async () => {
     const original = json({ url: '/sign-in?error=CredentialsSignin' }, 401);
-    const result = await withThrottledStatus(original);
+    const result = await withSignInStatus(original);
     expect(await result.json()).toEqual({ url: '/sign-in?error=CredentialsSignin' });
   });
 });

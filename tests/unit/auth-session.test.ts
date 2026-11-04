@@ -65,7 +65,7 @@ describe('AC-5: the user for a set of claims', () => {
 
   it('a session version that no longer matches ends the session (sign-out, password change)', async () => {
     const { users, id } = await repositoryWithOneUser();
-    await users.raiseSessionVersion(id);
+    await users.raiseSessionVersion(id, 0);
     expect(await resolveSessionUser({ userId: id, sessionVersion: 0, signedAt: SIGNED_AT }, users, NOW)).toBeNull();
   });
 

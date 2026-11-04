@@ -68,15 +68,30 @@ describe('users', () => {
     await expect(db.owner.query(insert, ['Mixed.Case@example.test'])).rejects.toThrow(/ck_users_email_lower_case/);
   });
 
-  it('raises the session version by one each time', async () => {
+  it('raises the session version by one when it is the version the caller names (compare and increment)', async () => {
     const { id } = await insertUser(db.users, hasher);
-    await db.users.raiseSessionVersion(id);
-    await db.users.raiseSessionVersion(id);
+    expect(await db.users.raiseSessionVersion(id, 0)).toBe(true);
+    expect(await db.users.raiseSessionVersion(id, 1)).toBe(true);
     expect((await db.users.findAccountById(id))?.sessionVersion).toBe(2);
   });
 
+  it('leaves the version alone when the caller names an out-of-date one, so an old copied token cannot end the current session', async () => {
+    const { id } = await insertUser(db.users, hasher);
+    await db.users.raiseSessionVersion(id, 0);
+    expect(await db.users.raiseSessionVersion(id, 0)).toBe(false);
+    expect(await db.users.raiseSessionVersion(id, 7)).toBe(false);
+    expect((await db.users.findAccountById(id))?.sessionVersion).toBe(1);
+  });
+
+  it('many sign-outs with the same token raise the version once, however many arrive at once', async () => {
+    const { id } = await insertUser(db.users, hasher);
+    const results = await Promise.all(Array.from({ length: 10 }, () => db.users.raiseSessionVersion(id, 0)));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await db.users.findAccountById(id))?.sessionVersion).toBe(1);
+  });
+
   it('raising the version of a user who does not exist changes nothing and does not fail', async () => {
-    await expect(db.users.raiseSessionVersion('00000000-0000-4000-8000-000000000000')).resolves.toBeUndefined();
+    await expect(db.users.raiseSessionVersion('00000000-0000-4000-8000-000000000000', 0)).resolves.toBe(false);
   });
 
   it('keeps the must-change-password flag it is given', async () => {
@@ -121,36 +136,12 @@ describe('grants of the runtime role', () => {
   });
 });
 
-describe('throttle rows', () => {
-  it('a first failure creates the row with the window starting at that instant', async () => {
-    const now = new Date('2026-11-04T09:00:00.000Z');
-    expect(await db.throttles.find('first')).toBeNull();
-    expect(await db.throttles.addFailure('first', now)).toEqual({ failures: 1, windowStartedAt: now, blockedUntil: null });
-  });
-
-  it('counts every failure, even when many arrive at once', async () => {
-    const now = new Date('2026-11-04T09:00:00.000Z');
-    await db.throttles.addFailure('burst', now);
-    await Promise.all(Array.from({ length: 9 }, () => db.throttles.addFailure('burst', now)));
-    expect((await db.throttles.find('burst'))?.failures).toBe(10);
-  });
-
-  it('blocks a key until an instant, restarts its window, and clears it', async () => {
-    const start = new Date('2026-11-04T09:00:00.000Z');
-    const until = new Date('2026-11-04T09:15:00.000Z');
-    await db.throttles.addFailure('cycle', start);
-    await db.throttles.block('cycle', until);
-    expect((await db.throttles.find('cycle'))?.blockedUntil).toEqual(until);
-    const later = new Date('2026-11-04T10:00:00.000Z');
-    await db.throttles.restartWindow('cycle', later);
-    expect(await db.throttles.find('cycle')).toEqual({ failures: 1, windowStartedAt: later, blockedUntil: null });
-    await db.throttles.block('cycle', until);
-    await db.throttles.clear('cycle');
-    expect(await db.throttles.find('cycle')).toMatchObject({ failures: 0, blockedUntil: null });
-  });
-
-  it('clearing a key with no row is not an error', async () => {
-    await expect(db.throttles.clear('never-seen')).resolves.toBeUndefined();
+describe('login_throttles columns', () => {
+  it('has created_at and updated_at, filled in by the database (G6 STD-02)', async () => {
+    await db.runtime.query(`INSERT INTO login_throttles (key_hash, failures) VALUES ('created', 1)`);
+    const { rows } = await db.runtime.query(`SELECT created_at, updated_at FROM login_throttles WHERE key_hash = 'created'`);
+    expect(rows[0]?.created_at).toBeInstanceOf(Date);
+    expect(rows[0]?.updated_at).toBeInstanceOf(Date);
   });
 });
 

@@ -134,7 +134,8 @@ export function buildAuthOptions({ authService, clock, secret, production }: Aut
         const parsed = sessionTokenSchema.safeParse(token);
         if (!parsed.success) return;
         try {
-          await authService.endAllSessions(parsed.data.sub);
+          // Only the version this token carries: an out-of-date token cannot end the person's current session (ADR-009 amendment 1).
+          await authService.endAllSessions(parsed.data.sub, parsed.data.sv);
         } catch (error) {
           logger.error(
             { errorName: error instanceof Error ? error.name : 'unknown', errorCode: isAppError(error) ? error.code : undefined },

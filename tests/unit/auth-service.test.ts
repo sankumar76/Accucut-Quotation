@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createFixedClock, MILLISECONDS_PER_MINUTE, type FixedClock } from '@/lib/time';
+import { resolveSessionUser } from '@/server/auth/resolve-session-user';
 import { createAuthService, THROTTLE_POLICY, type AuthService, type SignInAttempt } from '@/server/services/auth-service';
 
 import {
@@ -269,8 +270,21 @@ describe('sign-out ends every session of the person', () => {
   it('raises their session version, which no longer matches a copied cookie', async () => {
     const s = await setup();
     const id = s.users.records[0]?.id ?? '';
-    await s.service.endAllSessions(id);
+    expect(await s.service.endAllSessions(id, 0)).toBe(true);
     expect(s.users.records[0]?.sessionVersion).toBe(1);
     expect(await s.service.authenticate(attempt(KNOWN, PASSWORD))).toMatchObject({ status: 'signed-in', sessionVersion: 1 });
+  });
+
+  it('an out-of-date token leaves the version unchanged, and the current session still works (ADR-009 amendment 1)', async () => {
+    const s = await setup();
+    const id = s.users.records[0]?.id ?? '';
+    await s.service.endAllSessions(id, 0);
+    // The old copied token (version 0) signs out again, and again.
+    expect(await s.service.endAllSessions(id, 0)).toBe(false);
+    expect(await s.service.endAllSessions(id, 0)).toBe(false);
+    expect(s.users.records[0]?.sessionVersion).toBe(1);
+    // The session made after the first sign-out (version 1) is still the current one.
+    const claims = { userId: id, sessionVersion: 1, signedAt: START.getTime() / 1_000 };
+    expect(await resolveSessionUser(claims, s.users, s.clock.now())).not.toBeNull();
   });
 });

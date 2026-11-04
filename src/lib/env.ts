@@ -109,6 +109,9 @@ export const appEnvSchema = z.intersection(
   smtpSchema,
 );
 
+/** The portal's own origin alone, for the proxy (G6 STD-03): redirects are built from it, never from a request header. */
+export const originEnvSchema = z.object({ APP_ORIGIN: z.string().refine(isOrigin) });
+
 /** Needed by anything that opens the runtime database client: the database URL alone (`getPrismaClient`, scripts). */
 export const databaseEnvSchema = z.object({ DATABASE_URL: postgresUrl });
 
@@ -122,6 +125,7 @@ export const adminBootstrapEnvSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
+export type OriginEnv = z.infer<typeof originEnvSchema>;
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type MigrateEnv = z.infer<typeof migrateEnvSchema>;
 export type AdminBootstrapEnv = z.infer<typeof adminBootstrapEnvSchema>;
@@ -171,6 +175,10 @@ export function parseEnv<Schema extends z.ZodType>(schema: Schema, source: EnvSo
 
 export function loadAppEnv(source: EnvSource = process.env): AppEnv {
   return parseEnv(appEnvSchema, source);
+}
+
+export function loadOriginEnv(source: EnvSource = process.env): OriginEnv {
+  return parseEnv(originEnvSchema, source);
 }
 
 export function loadDatabaseEnv(source: EnvSource = process.env): DatabaseEnv {

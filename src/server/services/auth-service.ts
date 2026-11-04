@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import { MILLISECONDS_PER_MINUTE, type Clock } from '../../lib/time';
 import type { PasswordHasher } from '../auth/password-hasher';
-import type { ThrottleRecord, ThrottleRepository } from '../repositories/throttle-repository';
+import type { AttemptPolicy, ReservedAttempt, ThrottleRepository } from '../repositories/throttle-repository';
 import { normaliseEmail, type UserRepository } from '../repositories/user-repository';
 
 /**
@@ -12,6 +12,12 @@ import { normaliseEmail, type UserRepository } from '../repositories/user-reposi
  * all give `invalid`, after the same work (a hash is always checked, a dummy one for an unknown e-mail). A second
  * answer, `locked`, appears when the account key or the address is blocked, and it appears for unknown e-mails
  * too, so it does not tell a real account from an invented one.
+ *
+ * **Attempts are counted before the password is checked** (G6 QLT-32). Each attempt first reserves its number on the
+ * address and on the account key; the database returns the number from the same statement that adds it, so at most
+ * `limit` attempts per key ever get as far as a password check, however many requests arrive at once. A refused
+ * attempt checks nothing. A correct password clears the account's count and gives its reservation on the address back
+ * (an office shares one address). A failed attempt keeps its reservation.
  *
  * This file holds the rules only. It knows no HTTP and no next-auth; the next-auth `authorize` callback
  * (`src/server/auth/options.ts`) calls `authenticate` and turns the answer into a response.
@@ -53,8 +59,11 @@ export interface AuthServiceDependencies {
 
 export interface AuthService {
   authenticate(attempt: SignInAttempt): Promise<SignInResult>;
-  /** Ends every session of the user (sign-out, ADR-009), by raising their `session_version`. */
-  endAllSessions(userId: string): Promise<void>;
+  /**
+   * Ends every session of the user (sign-out, ADR-009), by raising their `session_version` from `sessionVersion`, the
+   * version the signing-out token carries. A token that is already out of date raises nothing. Returns true if it did.
+   */
+  endAllSessions(userId: string, sessionVersion: number): Promise<boolean>;
 }
 
 /** A password no one has, hashed once at the first unknown e-mail, so an unknown e-mail costs the same work. */
@@ -68,39 +77,48 @@ function throttleKey(secret: string, kind: 'account' | 'ip', value: string): str
   return createHmac('sha256', secret).update(`${kind}:${value}`).digest('hex');
 }
 
-function isBlocked(record: ThrottleRecord | null, now: Date): boolean {
-  return record !== null && record.blockedUntil !== null && record.blockedUntil.getTime() > now.getTime();
-}
+const ACCOUNT_POLICY: AttemptPolicy = {
+  limit: THROTTLE_POLICY.accountFailureLimit,
+  windowMilliseconds: null,
+  blockMilliseconds: THROTTLE_POLICY.blockMilliseconds,
+};
 
-/** A block that has ended. The next failure then starts a new count instead of re-blocking at once. */
-function blockHasEnded(record: ThrottleRecord, now: Date): boolean {
-  return record.blockedUntil !== null && record.blockedUntil.getTime() <= now.getTime();
-}
-
-function windowHasRunOut(record: ThrottleRecord, now: Date): boolean {
-  return now.getTime() - record.windowStartedAt.getTime() >= THROTTLE_POLICY.ipWindowMilliseconds;
-}
+const ADDRESS_POLICY: AttemptPolicy = {
+  limit: THROTTLE_POLICY.ipFailureLimit,
+  windowMilliseconds: THROTTLE_POLICY.ipWindowMilliseconds,
+  blockMilliseconds: THROTTLE_POLICY.blockMilliseconds,
+};
 
 export function createAuthService(dependencies: AuthServiceDependencies): AuthService {
   const { users, throttles, hasher, clock, keySecret } = dependencies;
   let dummyHash: Promise<string> | undefined;
 
+  /**
+   * The hash an unknown e-mail is checked against, made once. A failed attempt is forgotten, so the next call tries
+   * again: a cached rejection would answer "unavailable" for unknown e-mails and "invalid" for known ones, which tells
+   * an outsider which e-mails have accounts (G6 QLT-33).
+   */
   function dummyPasswordHash(): Promise<string> {
-    dummyHash ??= hasher.hash(DUMMY_PASSWORD);
+    dummyHash ??= hasher.hash(DUMMY_PASSWORD).catch((error: unknown) => {
+      dummyHash = undefined;
+      throw error;
+    });
     return dummyHash;
   }
 
-  /** Adds a failure to the key and blocks it when the limit is reached. `windowed` keys count within a window. */
-  async function recordFailure(key: string, limit: number, windowed: boolean): Promise<void> {
-    const now = clock.now();
-    let record = await throttles.addFailure(key, now);
-    if (blockHasEnded(record, now) || (windowed && windowHasRunOut(record, now))) {
-      await throttles.restartWindow(key, now);
-      record = { failures: 1, windowStartedAt: now, blockedUntil: null };
-    }
-    if (record.failures >= limit && !isBlocked(record, now)) {
-      await throttles.block(key, new Date(now.getTime() + THROTTLE_POLICY.blockMilliseconds));
-    }
+  /** Checks the password for the e-mail, or a dummy hash for an unknown one, so the work does not tell the cases apart. */
+  async function passwordIsRight(email: string, password: string): Promise<{ readonly userId: string; readonly sessionVersion: number } | null> {
+    const credentials = await users.findCredentialsByEmail(email);
+    const passwordHash = credentials?.passwordHash ?? (await dummyPasswordHash());
+    const matches = await hasher.verify(passwordHash, password);
+    return credentials !== null && credentials.isActive && matches
+      ? { userId: credentials.id, sessionVersion: credentials.sessionVersion }
+      : null;
+  }
+
+  /** Gives reservations back after a fault of ours, so a server problem never counts against a person. */
+  async function releaseAll(keys: ReadonlyArray<string>): Promise<void> {
+    await Promise.allSettled(keys.map((key) => throttles.releaseAttempt(key)));
   }
 
   return {
@@ -108,31 +126,40 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       const normalisedEmail = normaliseEmail(email);
       const accountKey = throttleKey(keySecret, 'account', normalisedEmail);
       const ipKey = throttleKey(keySecret, 'ip', ipAddress ?? UNKNOWN_ADDRESS);
-
-      const [accountRecord, ipRecord] = await Promise.all([throttles.find(accountKey), throttles.find(ipKey)]);
       const now = clock.now();
-      // A blocked key is refused before the password is looked at, so a correct password during the block is
-      // refused too (AC-3).
-      if (isBlocked(accountRecord, now) || isBlocked(ipRecord, now)) return { status: 'refused', reason: 'locked' };
 
-      const credentials = await users.findCredentialsByEmail(normalisedEmail);
-      // The hash is always checked, a dummy one when there is no user, so the work does not tell the cases apart.
-      const passwordHash = credentials?.passwordHash ?? (await dummyPasswordHash());
-      const passwordMatches = await hasher.verify(passwordHash, password);
-
-      if (credentials === null || !credentials.isActive || !passwordMatches) {
-        await recordFailure(accountKey, THROTTLE_POLICY.accountFailureLimit, false);
-        await recordFailure(ipKey, THROTTLE_POLICY.ipFailureLimit, true);
-        return { status: 'refused', reason: 'invalid' };
+      // The address first: a flood from a blocked address then never touches any account's count, so it cannot lock a
+      // person out from outside. The account second; if it is over, the address gets its reservation back.
+      const address = await throttles.reserveAttempt(ipKey, ADDRESS_POLICY, now);
+      if (address.attempts > ADDRESS_POLICY.limit) return { status: 'refused', reason: 'locked' };
+      let account: ReservedAttempt;
+      try {
+        account = await throttles.reserveAttempt(accountKey, ACCOUNT_POLICY, now);
+      } catch (error) {
+        await releaseAll([ipKey]);
+        throw error;
+      }
+      if (account.attempts > ACCOUNT_POLICY.limit) {
+        await releaseAll([ipKey]);
+        return { status: 'refused', reason: 'locked' };
       }
 
-      // A correct password ends the run of failures. The per-IP count is a window, not a run, so it is left alone.
-      await throttles.clear(accountKey);
-      return { status: 'signed-in', userId: credentials.id, sessionVersion: credentials.sessionVersion };
+      let signedIn: Awaited<ReturnType<typeof passwordIsRight>>;
+      try {
+        signedIn = await passwordIsRight(normalisedEmail, password);
+      } catch (error) {
+        await releaseAll([ipKey, accountKey]);
+        throw error;
+      }
+      if (signedIn === null) return { status: 'refused', reason: 'invalid' };
+
+      // A correct password ends the run of failures on the account and gives back its place on the shared address.
+      await Promise.all([throttles.clear(accountKey), throttles.releaseAttempt(ipKey)]);
+      return { status: 'signed-in', ...signedIn };
     },
 
-    endAllSessions(userId) {
-      return users.raiseSessionVersion(userId);
+    endAllSessions(userId, sessionVersion) {
+      return users.raiseSessionVersion(userId, sessionVersion);
     },
   };
 }

@@ -1,5 +1,5 @@
 import type { PasswordHasher } from '../../src/server/auth/password-hasher';
-import type { ThrottleRecord, ThrottleRepository } from '../../src/server/repositories/throttle-repository';
+import type { AttemptPolicy, ReservedAttempt, ThrottleRepository } from '../../src/server/repositories/throttle-repository';
 import {
   normaliseEmail,
   type NewUser,
@@ -71,41 +71,56 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
     },
     hasAnyAdmin: () => Promise.resolve(records.some((record) => record.role === 'ADMIN')),
     create: (user) => Promise.resolve(add(user)),
-    raiseSessionVersion(id) {
+    raiseSessionVersion(id, expectedVersion) {
       const found = records.find((record) => record.id === id);
-      if (found !== undefined) found.sessionVersion += 1;
-      return Promise.resolve();
+      if (found === undefined || found.sessionVersion !== expectedVersion) return Promise.resolve(false);
+      found.sessionVersion += 1;
+      return Promise.resolve(true);
     },
   };
+}
+
+export interface FakeThrottleRow {
+  failures: number;
+  windowStartedAt: Date;
+  blockedUntil: Date | null;
 }
 
 export interface FakeThrottleRepository extends ThrottleRepository {
-  readonly rows: Map<string, { failures: number; windowStartedAt: Date; blockedUntil: Date | null }>;
+  readonly rows: Map<string, FakeThrottleRow>;
+}
+
+/**
+ * The same arithmetic as the SQL statement of the real repository (`reserveStatement`), written in plain code. A
+ * JavaScript function body runs to the end before another starts, so each call is atomic, as the SQL statement is; the
+ * real statement is tested against PostgreSQL in `tests/integration/auth/throttle-reservation.test.ts`.
+ */
+function reserve(row: FakeThrottleRow | undefined, policy: AttemptPolicy, now: Date): FakeThrottleRow {
+  if (row === undefined) return { failures: 1, windowStartedAt: now, blockedUntil: null };
+  const blockEnded = row.blockedUntil !== null && row.blockedUntil.getTime() <= now.getTime();
+  const windowRunOut =
+    row.blockedUntil === null &&
+    policy.windowMilliseconds !== null &&
+    row.windowStartedAt.getTime() + policy.windowMilliseconds <= now.getTime();
+  if (blockEnded || windowRunOut) return { failures: 1, windowStartedAt: now, blockedUntil: null };
+  const failures = row.failures + 1;
+  const blockedUntil =
+    row.blockedUntil === null && failures >= policy.limit ? new Date(now.getTime() + policy.blockMilliseconds) : row.blockedUntil;
+  return { failures, windowStartedAt: row.windowStartedAt, blockedUntil };
 }
 
 export function createFakeThrottleRepository(): FakeThrottleRepository {
-  const rows = new Map<string, { failures: number; windowStartedAt: Date; blockedUntil: Date | null }>();
-  const snapshot = (key: string): ThrottleRecord => {
-    const row = rows.get(key);
-    if (row === undefined) throw new Error('No such throttle row.');
-    return { ...row };
-  };
+  const rows = new Map<string, FakeThrottleRow>();
   return {
     rows,
-    find: (key) => Promise.resolve(rows.has(key) ? snapshot(key) : null),
-    addFailure(key, now) {
-      const row = rows.get(key);
-      if (row === undefined) rows.set(key, { failures: 1, windowStartedAt: now, blockedUntil: null });
-      else row.failures += 1;
-      return Promise.resolve(snapshot(key));
+    reserveAttempt(key, policy, now): Promise<ReservedAttempt> {
+      const next = reserve(rows.get(key), policy, now);
+      rows.set(key, next);
+      return Promise.resolve({ attempts: next.failures, blockedUntil: next.blockedUntil });
     },
-    restartWindow(key, now) {
-      rows.set(key, { failures: 1, windowStartedAt: now, blockedUntil: null });
-      return Promise.resolve();
-    },
-    block(key, until) {
+    releaseAttempt(key) {
       const row = rows.get(key);
-      if (row !== undefined) row.blockedUntil = until;
+      if (row !== undefined) row.failures = Math.max(row.failures - 1, 0);
       return Promise.resolve();
     },
     clear(key) {
