@@ -1,6 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
 import {
@@ -26,19 +28,28 @@ const SIZES = ['default', 'icon', 'icon-row'] as const;
 
 /** UX spec 7.3.1: [variant, pressed background token, pressed text token, the hover class it must beat]. */
 const PRESSED = [
-  ['primary', 'primary-hover', 'on-fill', 'hover:bg-primary-hover'],
+  ['primary', 'primary-pressed', 'on-fill', 'hover:bg-primary-hover'],
   ['secondary', 'border', 'ink', 'hover:bg-surface-2'],
   ['ghost', 'primary-line', 'ink', 'hover:bg-primary-soft'],
-  ['danger', 'danger-ink', 'on-fill', 'hover:bg-danger-ink'],
+  ['danger', 'danger-pressed', 'on-fill', 'hover:bg-danger-ink'],
 ] as const;
 
 const classesOf = (variant: (typeof VARIANTS)[number], size: (typeof SIZES)[number] = 'default'): string[] =>
   buttonVariants({ variant, size }).split(' ');
 
+/** The class names on the first element of some rendered markup. */
+const classesOfMarkup = (markup: string): string[] => (/ class="([^"]*)"/.exec(markup)?.[1] ?? '').split(' ').filter((name) => name !== '');
+
+const TOUCH_CALLOUT = '[-webkit-touch-callout:none]';
+
 let all: Declaration[] = [];
 
 beforeAll(async () => {
-  const candidates = VARIANTS.flatMap((variant) => SIZES.flatMap((size) => classesOf(variant, size)));
+  const candidates = [
+    ...VARIANTS.flatMap((variant) => SIZES.flatMap((size) => classesOf(variant, size))),
+    // The classes of the rendered elements, so the touch-callout class of the real `<button>` is built too.
+    ...classesOfMarkup(renderToStaticMarkup(createElement(Button, null, 'Calculate'))),
+  ];
   all = declarationsOf(await buildCss([...new Set(candidates)]));
 });
 
@@ -110,5 +121,61 @@ describe('pressed state in the built CSS, DEF-008', () => {
       expect(merged).toEqual(expect.arrayContaining(['active:shadow-pressed', 'disabled:active:shadow-none']));
     }
     expect(cn('active:shadow-pressed', 'active:shadow-none')).toBe('active:shadow-none');
+  });
+});
+
+describe('pressed shows at once and fades out; text is not selectable; a real button has no copy callout, DEF-010', () => {
+  it('primary and danger use the darker pressed colours, which are defined in the token file', () => {
+    expect(classesOf('primary')).toEqual(expect.arrayContaining(['active:bg-primary-pressed', 'active:text-on-fill']));
+    expect(classesOf('primary')).not.toContain('active:bg-primary-hover');
+    expect(classesOf('danger')).toEqual(expect.arrayContaining(['active:bg-danger-pressed', 'active:text-on-fill']));
+    expect(classesOf('danger')).not.toContain('active:bg-danger-ink');
+    expect(valueOf('active:bg-primary-pressed', 'background-color')?.value).toBe('var(--primary-pressed)');
+    expect(valueOf('active:bg-danger-pressed', 'background-color')?.value).toBe('var(--danger-pressed)');
+  });
+
+  it('every variant and size has the same timing: a 200 ms ease-out fade, none while pressed', () => {
+    for (const variant of VARIANTS) {
+      for (const size of SIZES) {
+        expect(classesOf(variant, size), `${variant} ${size}`).toEqual(
+          expect.arrayContaining(['transition-colors', 'duration-200', 'ease-out', 'active:transition-none']),
+        );
+      }
+    }
+    const fade = valueOf('duration-200', 'transition-duration');
+    expect(fade?.value).toBe('200ms');
+    const none = valueOf('active:transition-none', 'transition-property');
+    expect(none?.value).toBe('none');
+    expect(none && ruleOf(none)).toMatch(/:active$/);
+    expect(none && isInsideHoverQuery(none)).toBe(false);
+  });
+
+  it('every variant and size, link or button, sets user-select: none', () => {
+    for (const variant of VARIANTS) {
+      for (const size of SIZES) expect(classesOf(variant, size), `${variant} ${size}`).toContain('select-none');
+    }
+    const selection = declarationsOfClass(all, 'select-none');
+    expect(selection.map((declaration) => declaration.property)).toEqual(expect.arrayContaining(['user-select']));
+    expect(selection.find((declaration) => declaration.property === 'user-select')?.value).toBe('none');
+  });
+
+  it('a real <button> has -webkit-touch-callout: none in the CSS that is built; the shared class string and a link do not', () => {
+    const button = classesOfMarkup(renderToStaticMarkup(createElement(Button, { variant: 'danger' }, 'Delete')));
+    expect(button).toContain(TOUCH_CALLOUT);
+
+    const link = classesOfMarkup(renderToStaticMarkup(createElement(Button, { asChild: true }, createElement('a', { href: '/' }, 'Home'))));
+    expect(link).toContain('select-none');
+    expect(link).not.toContain(TOUCH_CALLOUT);
+    expect(buttonVariants()).not.toContain('touch-callout');
+
+    const callout = declarationsOfClass(all, TOUCH_CALLOUT);
+    expect(callout.map((declaration) => `${declaration.property}: ${declaration.value}`)).toContain('-webkit-touch-callout: none');
+  });
+
+  it('cn keeps the new classes of a rendered button', () => {
+    const merged = cn(buttonVariants({ variant: 'primary' }), TOUCH_CALLOUT).split(' ');
+    expect(merged).toEqual(
+      expect.arrayContaining(['select-none', 'duration-200', 'ease-out', 'active:transition-none', 'active:bg-primary-pressed', TOUCH_CALLOUT]),
+    );
   });
 });

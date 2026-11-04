@@ -11,6 +11,8 @@ import { PAGE, tokenColour } from './support/design-system';
 
 /** `inset 0 2px 4px rgba(23, 24, 28, 0.28)` as the browser reports it inside a computed box-shadow. */
 const PRESSED_SHADOW = 'rgba(23, 24, 28, 0.28) 0px 2px 4px 0px inset';
+/** The fade back to rest or hover on release (`duration-200`); there is no fade into pressed. */
+const FADE_OUT = '0.2s';
 /** The graphite of the pressed shadow. A computed box-shadow without it shows no visible shadow. */
 const GRAPHITE = 'rgba(23, 24, 28';
 
@@ -26,10 +28,10 @@ interface Sample {
 const buttons = (page: Page): Locator => page.getByRole('region', { name: 'Buttons', exact: true });
 
 const SAMPLES: readonly Sample[] = [
-  { name: 'primary', find: (page) => buttons(page).getByRole('button', { name: 'Calculate' }), background: '--primary-hover', text: '--on-fill' },
+  { name: 'primary', find: (page) => buttons(page).getByRole('button', { name: 'Calculate' }), background: '--primary-pressed', text: '--on-fill' },
   { name: 'secondary', find: (page) => buttons(page).getByRole('button', { name: 'Add part' }), background: '--border', text: '--ink' },
   { name: 'ghost', find: (page) => buttons(page).getByRole('button', { name: 'Cancel' }), background: '--primary-line', text: '--ink' },
-  { name: 'danger', find: (page) => buttons(page).getByRole('button', { name: 'Delete' }), background: '--danger-ink', text: '--on-fill' },
+  { name: 'danger', find: (page) => buttons(page).getByRole('button', { name: 'Delete' }), background: '--danger-pressed', text: '--on-fill' },
   { name: 'icon (44 px square, secondary)', find: (page) => buttons(page).getByRole('button', { name: 'Edit part' }), background: '--border', text: '--ink' },
   { name: 'row icon (36 px square, secondary)', find: (page) => buttons(page).getByRole('button', { name: 'Edit row' }), background: '--border', text: '--ink' },
 ];
@@ -81,18 +83,25 @@ test.describe('button pressed state, DEF-008', () => {
       const pressed = await tokenColour(page, sample.background);
       const text = await tokenColour(page, sample.text);
 
+      await expect(button).toHaveCSS('user-select', 'none');
       await expectPressedShadow(button, false);
+      await expect(button).toHaveCSS('transition-duration', FADE_OUT);
       await pointerDownOn(page, button);
       try {
         await expect(button).toHaveCSS('background-color', pressed);
         await expect(button).toHaveCSS('color', text);
         await expectPressedShadow(button, true);
+        // Pressed shows on the first frame: no transition while the pointer is down (UX 7.3.1 rule 4).
+        await expect(button).toHaveCSS('transition-property', 'none');
       } finally {
         await page.mouse.up();
       }
 
-      // Released with the pointer still over it: the fill may stay (hover), the shadow may not.
+      // Released with the pointer still over it. The fill fades out over 200 ms, so every read of it retries: it leaves the
+      // pressed colour (hover or rest), and the shadow goes.
       await expectPressedShadow(button, false);
+      await expect(button).not.toHaveCSS('background-color', pressed);
+      await expect(button).toHaveCSS('transition-duration', FADE_OUT);
     });
 
     test(`${sample.name}: the size does not change when it is pressed`, async ({ page }) => {
@@ -113,6 +122,7 @@ test.describe('button pressed state, DEF-008', () => {
     test(`${sample.name}: pointer down shows no pressed state`, async ({ page }) => {
       const button = sample.find(page);
       await expect(button).toBeDisabled();
+      await expect(button).toHaveCSS('user-select', 'none');
       const fill = await tokenColour(page, '--surface-2');
       const text = await tokenColour(page, '--ink-3');
       await pointerDownOn(page, button);
