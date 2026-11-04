@@ -31,6 +31,15 @@ async function openSignIn(page: Page, query = ''): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
 }
 
+/**
+ * Waits until no CSS transition or animation is running, so axe reads the colours a person sees at rest. After a failed
+ * sign-in the button fades from its loading look back to red (`transition-colors`), and a scan taken during the fade
+ * reads blended colours (the cause of DEF-009 in the developer's axe test).
+ */
+async function settled(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
+}
+
 /** True when the focused element draws a focus indicator: an outline, or a ring drawn as a box-shadow. */
 async function hasVisibleFocus(locator: Locator): Promise<boolean> {
   return locator.evaluate((element) => {
@@ -142,6 +151,7 @@ test.describe('[AQP-38 AC-8] keyboard and screen reader on SCR-01', () => {
     await expect(email).toHaveAttribute('aria-invalid', 'true');
     await expect(email).toHaveAccessibleDescription(/Enter your e-mail address\./);
     await expect(page.getByLabel('Password', { exact: true })).toHaveAccessibleDescription(/Enter your password\./);
+    await settled(page);
     await expectNoAxeViolations(page);
 
     await email.fill('not-an-address');
@@ -164,6 +174,7 @@ test.describe('[AQP-38 AC-3, AC-8] the locked and "could not be checked" states'
     await expect(noticeOf(page)).toHaveAttribute('role', 'alert');
     await expect(page.locator(':focus')).toContainText(LOCKED_MESSAGE);
     await expect(page.getByLabel('E-mail')).toHaveValue(email);
+    await settled(page);
     await expectNoAxeViolations(page);
   });
 
@@ -175,6 +186,7 @@ test.describe('[AQP-38 AC-3, AC-8] the locked and "could not be checked" states'
     await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
     await expect(noticeOf(page)).toContainText('We could not sign you in.');
     await expect(noticeOf(page)).not.toContainText('E-mail or password is not correct.');
+    await settled(page);
     await expectNoAxeViolations(page);
   });
 

@@ -4,7 +4,7 @@
 |-------|-------|
 | Tester | qa-engineer |
 | Build / commit | `ea8dc6b` (the developer's last commit) on `feat/AQP-38-sign-in`, PR #62, which supersedes PR #58 (see "CI and a secret-scan finding QA introduced"), plus QA's tests and this report in one commit |
-| CI | Run 41845931376 on `ea8dc6b`: success on stages 1 to 12 (2,039 unit and integration tests, changed-code coverage 95.2 %, 125 E2E tests at three widths with axe). This is the regression reference |
+| CI | Product code: run 41845931376 on `ea8dc6b`, success on stages 1 to 12. PR #62: run 41856930147 on `b69a50a`, success on stages 1 to 12, but stage 12 reported **1 flaky** test (the developer's axe test, DEF-009); the run on this report's head is in the PR and the Jira comment. This is the regression reference |
 | Environment | Windows 11; Node v24.19.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17 from `compose.dev.yml` as a throwaway Compose project `qa38` on host port 55538 with invented passwords; Chromium (Playwright 1.64.1) against the **production build** (`next build && next start`, port 3101) and the development server (3100) |
 | Date | 2026-11-04 |
 | **Recommendation** | **ACCEPT.** All 8 ACs verified with evidence, and no product defect found. One observation for a real-phone check (OBS-1, the iPhone may zoom on the 14 px fields); it is not an AC and does not hold G7. **CI note:** the new PR's stage 2 stays red until PR #58's branch, which still holds QA's flagged commit, leaves origin (see below) |
@@ -101,7 +101,13 @@ CI run 41855855735 failed stage 11 on QA's AC-2 timing test: "expected 1.83 to b
 
 ## Defects
 
-None found. Open: Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0 (for this story).
+No product defect. One new defect of type Test:
+
+| ID | Title | Severity | Status | Linked AC |
+|----|-------|----------|--------|-----------|
+| DEF-009 ([AQP-184](https://sankumar76.atlassian.net/browse/AQP-184), [#63](https://github.com/sankumar76/Accucut-Quotation/issues/63)) | The developer's axe E2E test (`sign-in.spec.ts:54`) is flaky: it scans the Sign in button while its colours are still fading after a failed sign-in (`transition-colors`), and reads blended colours as a contrast failure. Shown with a probe: mid-fade `rgb(223,63,63)` behind `rgb(242,243,243)` with 6 transitions running; at rest `rgb(222,48,48)` on white. Fix: wait for no running animation before each axe scan | Sev-3, type Test | New | AC-8 |
+
+Open: Sev-1 0, Sev-2 0, Sev-3 1 (DEF-009, type Test), Sev-4 0. QA's own spec waits for transitions to settle before each of its axe scans (91 of 91 locally, three repeats per project, no retries).
 
 ## Observations (not defects)
 
@@ -126,6 +132,6 @@ Committed in one commit on `feat/AQP-38-sign-in`: `docs/07-qa/AQP-38-test-report
 
 ## Hand-off
 - Status: COMPLETE for the verification. CI stage 2 stays red until PR #58's branch leaves origin. The optional device check is outstanding and does not hold G7
-- Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 0, Sev-4 0)
-- Jira / GitHub: summary on AQP-38, PR #58 and PR #62; no Bug created
+- Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 1 of type Test: DEF-009, Sev-4 0)
+- Jira / GitHub: summary on AQP-38, PR #58 and PR #62; DEF-009 raised as AQP-184 and GitHub #63
 - Story status: not changed by QA
