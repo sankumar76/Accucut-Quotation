@@ -1,8 +1,9 @@
-# CI pipeline: stages 1 to 11 of docs/04-architecture/test-strategy.md section 10 (STORY-10.01, AC-4).
+# CI pipeline: stages 1 to 12 of docs/04-architecture/test-strategy.md section 10 (STORY-10.01, AC-4; stage 12 on
+# since STORY-10.02), stage 13 off.
 #
-# Stages 12 (E2E) and 13 (image) are present below as DISABLED steps. They are switched on by the
-# first story that gives them something to run (STORY-10.02 / the first page story for 12, the
-# Dockerfile story STORY-10.04 for 13): change `if: ${{ false }}` to `if: ${{ true }}` there.
+# Stage 12 (E2E) is on since STORY-10.02, the first page story. Stage 13 (image) is present below as a
+# DISABLED step until the Dockerfile story STORY-10.04 gives it something to run: change
+# `if: ${{ false }}` to `if: ${{ true }}` there.
 #
 # Security rules (architecture section 8, TB-6). The repository is public, so job logs are public.
 #   - The trigger is `pull_request`, never `pull_request_target`: a pull request from a fork runs
@@ -41,6 +42,8 @@ env:
 
 jobs:
   verify:
+    # The job name is kept: it is the required status check on master. It now also runs stage 12 (E2E), so stage 12
+    # blocks merge too. Renaming the job would leave master waiting for a check that never reports.
     name: Stages 1 to 11
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -134,10 +137,21 @@ jobs:
         run: npx tsx scripts/check-licences.ts
 
       # ---- Stage 9: build --------------------------------------------------------------------
+      # The cache is keyed on the lockfile and the sources, with the lockfile alone as the fallback, so a change to
+      # one page still reuses the rest. It holds build output only (no secret, no setting). From a fork it is read-only.
+      - name: "Cache the Next.js build cache"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'next.config.ts', 'postcss.config.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - name: "Stage 9: build"
         run: |
           npx prisma generate
           npx next build
+          npx tsx scripts/check-production-routes.ts
 
       # ---- Stage 10: migrations --------------------------------------------------------------
       - name: "Stage 10: create the two database roles (throwaway passwords)"
@@ -174,10 +188,18 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"
 
-      # ---- Stage 12: E2E (DISABLED until the first page story) -------------------------------
-      # Chromium at three widths with axe and the canary scan (test strategy sections 2, 6, 9).
-      - name: "Stage 12: E2E (disabled)"
-        if: ${{ false }}
+      # ---- Stage 12: E2E (on since STORY-10.02, the first page story) -------------------------
+      # Chromium at three widths with axe (test strategy sections 2, 6, 9). Playwright starts the development
+      # server itself with invented settings (playwright.config.ts); no database is contacted. The browser download is
+      # cached by Playwright version (the lockfile); `install --with-deps` still installs the system libraries and
+      # downloads the browser only when the cache missed.
+      - name: "Cache the Playwright browsers"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: "Stage 12: E2E (Chromium at three widths, axe)"
         run: |
           npx playwright install --with-deps chromium
           npx playwright test

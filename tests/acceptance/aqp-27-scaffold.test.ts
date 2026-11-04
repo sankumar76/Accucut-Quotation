@@ -158,8 +158,16 @@ describe('[AQP-27 AC-4] the CI workflow', () => {
     expect(text).not.toContain('continue-on-error');
   });
 
-  it.each([12, 13])('[AQP-27 AC-4] stage %i exists and is switched off', (stage) => {
-    const start = code.findIndex((line) => line.includes(`name: "Stage ${stage}:`));
+  // Stage 12 was switched off by STORY-10.01 "until the first page story"; STORY-10.02 (AQP-28, AC-8) switched it
+  // on. Stage 13 stays off until the Dockerfile story (STORY-10.04).
+  it('[AQP-27 AC-4, changed by AQP-28 AC-8] stage 12 exists and is switched on: it has no `if` line', () => {
+    const start = code.findIndex((line) => line.includes('name: "Stage 12:'));
+    expect(start).toBeGreaterThan(-1);
+    expect(code[start + 1]).toMatch(/^\s*run:/);
+  });
+
+  it('[AQP-27 AC-4] stage 13 exists and is switched off', () => {
+    const start = code.findIndex((line) => line.includes('name: "Stage 13:'));
     expect(start).toBeGreaterThan(-1);
     expect(code[start + 1]).toMatch(/if: \$\{\{ false \}\}/);
   });

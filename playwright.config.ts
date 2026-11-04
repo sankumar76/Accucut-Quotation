@@ -24,6 +24,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env['CI']),
   retries: 1,
+  // Two workers on every machine: the development server compiles on demand, and more workers than that made
+  // a slow laptop exceed a test's 30 s on first requests (G6 PRF-06: set it once the runner size is fixed).
+  workers: 2,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -36,7 +39,9 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx next dev --port ${PORT}`,
-    url: `http://localhost:${PORT}`,
+    // Ready only when the heaviest page has compiled: the development server compiles a page on its first
+    // request, which took longer than a test's 30 s when three projects asked at once on a slow machine.
+    url: `http://localhost:${PORT}/design-system`,
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
     env: TEST_ENVIRONMENT,
