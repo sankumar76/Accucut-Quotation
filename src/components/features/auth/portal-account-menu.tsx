@@ -1,11 +1,11 @@
 'use client';
 
 import { KeyRound, LogOut } from 'lucide-react';
-import { signOut } from 'next-auth/react';
 import { useState } from 'react';
 
 import { AccountMenu, type AccountMenuItem, type AccountUser } from '@/components/shared/account-menu';
 import { Icon } from '@/components/shared/icon';
+import { signOutOfPortal } from '@/lib/auth/auth-client';
 import { SIGN_IN_PATH } from '@/lib/auth/return-path';
 
 /**
@@ -28,9 +28,7 @@ export function PortalAccountMenu({ user }: PortalAccountMenuProps) {
   const [failed, setFailed] = useState(false);
 
   async function endSession(): Promise<void> {
-    try {
-      await signOut({ redirect: false });
-    } catch {
+    if (!(await signOutOfPortal())) {
       setFailed(true);
       return;
     }

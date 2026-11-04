@@ -1,7 +1,6 @@
 'use client';
 
 import { Eye, EyeOff } from 'lucide-react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
@@ -11,6 +10,7 @@ import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { signInWithPassword, type SignInOutcome } from '@/lib/auth/auth-client';
 import { safeReturnPath } from '@/lib/auth/return-path';
 import { emailProblem, passwordProblem } from '@/lib/auth/sign-in-validation';
 
@@ -41,9 +41,10 @@ export interface SignInFormProps {
   readonly returnTo: string;
 }
 
-function failureFor(error: string | null | undefined): Failure {
-  if (error === LOCKED_CODE) return 'locked';
-  if (error === UNAVAILABLE_CODE) return 'unavailable';
+function failureFor(outcome: Exclude<SignInOutcome, { status: 'signed-in' }>): Failure {
+  if (outcome.status === 'failed') return 'unavailable';
+  if (outcome.error === LOCKED_CODE) return 'locked';
+  if (outcome.error === UNAVAILABLE_CODE) return 'unavailable';
   return 'invalid';
 }
 
@@ -87,17 +88,13 @@ export function SignInForm({ returnTo }: SignInFormProps) {
 
     setSubmitting(true);
     setFailure(null);
-    try {
-      const result = await signIn('credentials', { redirect: false, email: email.trim(), password });
-      if (result?.ok === true && !result.error) {
-        // Stay in the loading state until the next page replaces this one.
-        router.replace(safeReturnPath(returnTo));
-        return;
-      }
-      setFailure(result === undefined ? 'unavailable' : failureFor(result.error));
-    } catch {
-      setFailure('unavailable');
+    const outcome = await signInWithPassword(email.trim(), password);
+    if (outcome.status === 'signed-in') {
+      // Stay in the loading state until the next page replaces this one.
+      router.replace(safeReturnPath(returnTo));
+      return;
     }
+    setFailure(failureFor(outcome));
     setSubmitting(false);
   }
 
