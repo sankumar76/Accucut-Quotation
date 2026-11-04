@@ -10,10 +10,59 @@ datasource db {
   provider = "postgresql"
 }
 
+/// The three roles of the portal (architecture section 6, FR-002). Stored as a PostgreSQL enum.
+enum UserRole {
+  ADMIN
+  LEAD
+  ENGINEER
+
+  @@map("user_role")
+}
+
+/// A person who can sign in (STORY-01.01, architecture sections 5.1 and 8).
+/// `email` is stored lower-case (a CHECK constraint holds it) so the unique index is case-insensitive.
+/// A user is deactivated and never deleted, so the runtime role has no DELETE grant.
+/// `session_version` ends every session of the user when it is raised (ADR-009).
+/// The partial unique index `uq_users_single_active_admin` (one active Admin) is hand-written in the
+/// migration: Prisma cannot express a partial index.
+model User {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  email              String
+  passwordHash       String   @map("password_hash")
+  role               UserRole
+  isActive           Boolean  @default(true) @map("is_active")
+  sessionVersion     Int      @default(0) @map("session_version")
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  configVersions ConfigVersion[]
+
+  @@unique([email], map: "uq_users_email")
+  @@map("users")
+}
+
+/// Failed sign-in counters (architecture sections 5.1 and 6 "Rate limits", NFR-003, PROPOSED values).
+/// `key_hash` is a keyed hash of an account key (the e-mail, known or not) or of an IP address, so the
+/// table never holds an address or an e-mail in clear and an unknown e-mail looks like a known one.
+/// `window_started_at` is used by the per-IP rule only (failures in a window); the account rule counts
+/// consecutive failures and ignores it.
+model LoginThrottle {
+  keyHash         String    @id @map("key_hash")
+  failures        Int       @default(0)
+  windowStartedAt DateTime  @default(now()) @map("window_started_at") @db.Timestamptz(6)
+  blockedUntil    DateTime? @map("blocked_until") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("login_throttles")
+}
+
 /// One immutable version of the field registry (ADR-004, architecture sections 4.5 and 5.1).
 /// `snapshot` is the whole zod-validated configuration document. A row is never changed: a trigger
 /// refuses UPDATE and DELETE for every role, and the runtime role holds no such grant (STORY-03.01).
-/// `created_by` is null for version 1, the seed. The users story adds its foreign key to `users`.
+/// `created_by` is null for version 1, the seed. Its foreign key to `users` was added with STORY-01.01
+/// (architect ruling on AQP-97): no cascade, because users are deactivated and never deleted.
 /// There is no `updated_at`: a row never changes after it is inserted.
 model ConfigVersion {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -22,6 +71,8 @@ model ConfigVersion {
   createdBy String?  @map("created_by") @db.Uuid
   reason    String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creator User? @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_versions_created_by")
 
   @@unique([number], map: "uq_config_versions_number")
   @@map("config_versions")

@@ -109,6 +109,9 @@ export const appEnvSchema = z.intersection(
   smtpSchema,
 );
 
+/** Needed by anything that opens the runtime database client: the database URL alone (`getPrismaClient`, scripts). */
+export const databaseEnvSchema = z.object({ DATABASE_URL: postgresUrl });
+
 /** Needed by the `migrate` step only. The owner role never reaches `app` or `worker`. */
 export const migrateEnvSchema = z.object({ MIGRATE_DATABASE_URL: postgresUrl });
 
@@ -119,6 +122,7 @@ export const adminBootstrapEnvSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
+export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type MigrateEnv = z.infer<typeof migrateEnvSchema>;
 export type AdminBootstrapEnv = z.infer<typeof adminBootstrapEnvSchema>;
 
@@ -167,6 +171,10 @@ export function parseEnv<Schema extends z.ZodType>(schema: Schema, source: EnvSo
 
 export function loadAppEnv(source: EnvSource = process.env): AppEnv {
   return parseEnv(appEnvSchema, source);
+}
+
+export function loadDatabaseEnv(source: EnvSource = process.env): DatabaseEnv {
+  return parseEnv(databaseEnvSchema, source);
 }
 
 export function loadMigrateEnv(source: EnvSource = process.env): MigrateEnv {
