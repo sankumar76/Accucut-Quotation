@@ -38,6 +38,7 @@ on:
       - scripts/check-ci-time.ts
       - scripts/lib/ci-feedback-time.ts
       - scripts/ensure-measurement-user.ts
+      - scripts/lib/measurement-user.ts
 
 permissions:
   contents: read

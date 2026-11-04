@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
@@ -117,6 +118,28 @@ describe('gzip level 9 and 1 KB = 1,000 bytes (AC-1)', () => {
   it('compresses with level 9, the gzip -9 of the AQP-28 review', () => {
     expect(gzipBytes(sample)).toBe(gzipSync(sample, { level: 9 }).length);
     expect(gzipBytes(sample)).toBeLessThanOrEqual(gzipSync(sample, { level: 1 }).length);
+  });
+
+  it('is level 9 and not the default level 6: a sample that compresses to different sizes at the two levels (QLT-46)', () => {
+    // A deterministic text of invented words in a varied order, long enough that the two levels choose different matches.
+    // Its sizes at levels 6 and 9 are asserted to differ, so a sample that stopped telling them apart would fail here
+    // and not let a change of level pass unseen.
+    let seed = createHash('sha256').update('js-budget-gzip-level').digest();
+    const vocabulary = Array.from({ length: 64 }, (_, index) => {
+      seed = createHash('sha256').update(seed).digest();
+      return seed.toString('hex').slice(0, 3 + (index % 7));
+    });
+    let text = '';
+    for (let line = 0; line < 20_000; line += 1) {
+      seed = createHash('sha256').update(seed).digest();
+      text += `${vocabulary[(seed[0] ?? 0) % 64] ?? ''}${(seed[1] ?? 0) % 5 === 0 ? '(' : ' '}${vocabulary[(seed[2] ?? 0) % 64] ?? ''};\n`;
+    }
+    const buffer = Buffer.from(text);
+    const level6 = gzipSync(buffer, { level: 6 }).length;
+    const level9 = gzipSync(buffer, { level: 9 }).length;
+    expect(level9).toBeLessThan(level6);
+    expect(gzipBytes(buffer)).toBe(level9);
+    expect(gzipBytes(buffer)).not.toBe(level6);
   });
 
   it('takes a kilobyte as 1,000 bytes and the default limit as 200,000 bytes', () => {

@@ -68,7 +68,7 @@ beforeAll(async () => {
   afterStop = !(await isListening(port));
 
   failure = await startNextServer(failing, parent).catch((error: unknown) => error);
-}, 120_000);
+});
 
 afterAll(async () => {
   await running?.stop();

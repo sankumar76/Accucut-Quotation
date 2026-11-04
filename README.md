@@ -180,16 +180,25 @@ gzip level 9, adds them up (1 KB is 1,000 bytes) and writes one row per route (f
 limit, headroom) to the job summary. It exits 1 if a route is over its limit, does not answer as it should (200 for a
 page, 404 for the not-found page and for `/design-system`), or cannot be measured. Nothing is skipped silently.
 
-To run it on your computer, build first, make sure the database is migrated, and give it an invented Admin
-(throwaway database only; the password is never printed):
+To run it on your computer, build first and make sure the database is migrated. The pages that ask for sign-in need an
+Admin to sign in as, and the portal allows **one active Admin**, so there are two ways, depending on your database:
 
-```sh
-npx next build
-# bash; in PowerShell set the two variables with $env:NAME = "value"
-export MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test MEASUREMENT_ADMIN_PASSWORD=<an invented password of your choice>
-npx tsx scripts/ensure-measurement-user.ts
-npx tsx scripts/check-js-budget.ts
-```
+- **A fresh throwaway database** (for example the one from "First use", before you run `bootstrap-admin`): let the script make an
+  invented Admin. It refuses any database that is not on this machine, the Compose service `db` or the CI service `postgres`
+  (never staging), and the password is never printed.
+
+  ```sh
+  npx next build
+  # bash; in PowerShell set the two variables with $env:NAME = "value"
+  export MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test MEASUREMENT_ADMIN_PASSWORD=<an invented password of your choice>
+  npx tsx scripts/ensure-measurement-user.ts
+  npx tsx scripts/check-js-budget.ts
+  ```
+
+- **A database that already has the Admin from `bootstrap-admin`**: do not run `ensure-measurement-user.ts`. It stops with a message
+  ("another Admin already exists") because a second active Admin is not allowed. Set `MEASUREMENT_ADMIN_EMAIL` and
+  `MEASUREMENT_ADMIN_PASSWORD` to that Admin's own sign-in and run `npx tsx scripts/check-js-budget.ts`. That Admin must have
+  chosen its own password already, or the pages would send it to a password change instead of the page being measured.
 
 `--build-dir <folder>` measures a build made elsewhere (the folder that holds `.next`), and `--base-url <url>` uses a
 server that is already running. The limit is 200,000 bytes unless the one table in `scripts/lib/js-budget.ts` says

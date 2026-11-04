@@ -1,8 +1,10 @@
 /**
  * Writes the Lighthouse reference run's summary table (NFR-009; test strategy section 10.2; STORY-10.10 AC-7): the median
  * LCP and TBT of each page, the median `benchmarkIndex`, the Chromium version, and whether the run can be compared with
- * the baseline B0. Reads the `lhr-*.json` reports that `lhci collect` keeps in the two folders; does not decide pass
- * or fail (the assertions do, in `lhci assert`). B0 comes from `LIGHTHOUSE_B0`, a repository variable that is not a secret.
+ * the baseline B0. Reads the `*.report.json` files that `lhci autorun` keeps in the two folders (its filesystem target
+ * writes `<host>-<path>-<time>.report.json`, beside a manifest and the HTML). It does not judge LCP or TBT (the assertions do,
+ * in `lhci assert`), but it exits 1 when a folder holds no report or a page ended on another page (a sign-in that did not
+ * take). B0 comes from `LIGHTHOUSE_B0`, a repository variable that is not a secret.
  *
  * Usage: npx tsx scripts/summarise-lighthouse.ts --wifi <folder> --slow4g <folder>
  */

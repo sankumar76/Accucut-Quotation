@@ -68,7 +68,7 @@ beforeAll(async () => {
   healthy = await summarise(folder('wifi-ok', good()), folder('slow-ok', good()));
   signedOut = await summarise(folder('wifi-out', { 'localhost-_-2026-11-04_21-39-50.report.json': report('/', '/sign-in', 900) }), folder('slow-out', good()));
   empty = await summarise(folder('wifi-empty', { 'manifest.json': '[]' }), folder('slow-empty', good()));
-}, 120_000);
+});
 
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
