@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-import { expectNoAxeViolations, waitForAnimationsToFinish } from './support/design-system';
+import { AXE_TAGS, expectNoAxeViolations, waitForAnimationsToFinish } from './support/design-system';
 
 /**
  * DEF-009: the shared accessibility helper waits for CSS transitions to finish before axe scans. These tests use a
@@ -40,14 +40,19 @@ const PAGE = `<!doctype html>
 </body>
 </html>`;
 
-async function startTransition(page: Page): Promise<void> {
+/**
+ * Starts the transition and returns the colour the button has at that instant, read in the same browser step that
+ * starts it, so no time passes between the two (QLT-39): a slow machine cannot let the 2 seconds run out in between.
+ */
+async function startTransition(page: Page): Promise<string> {
   await page.setContent(PAGE);
-  await page.evaluate(() => {
+  return page.evaluate(() => {
     const button = document.getElementById('probe');
     if (button === null) throw new Error('The probe button is missing.');
     // Read the style first so the start colour is committed, then change it: the transition starts now.
     void getComputedStyle(button).color;
     button.classList.add('settled');
+    return getComputedStyle(button).color;
   });
 }
 
@@ -55,9 +60,9 @@ const colourOfProbe = (page: Page): Promise<string> =>
   page.evaluate(() => getComputedStyle(document.getElementById('probe') ?? document.body).color);
 
 test('DEF-009: the wait returns only after a running transition has reached its end value', async ({ page }) => {
-  await startTransition(page);
-  expect(await colourOfProbe(page)).toBe('rgb(204, 204, 204)');
-  await waitForAnimationsToFinish(page);
+  const colourAtStart = await startTransition(page);
+  expect(colourAtStart).toBe('rgb(204, 204, 204)');
+  await test.step('wait for the transition to finish', () => waitForAnimationsToFinish(page));
   expect(await colourOfProbe(page)).toBe('rgb(0, 0, 0)');
 });
 
@@ -87,7 +92,7 @@ test('DEF-009: the shared axe helper scans after the transition, so the settled 
 
 test('DEF-009 (control): a scan that does not wait does see the start colour, so the test above can fail', async ({ page }) => {
   await startTransition(page);
-  const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze();
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
   // Meaningful only if the transition is still running when the scan ends; on a machine so slow that the 2 seconds
   // passed first, there is nothing to compare, which is not a fault.
   const stillRunning = await page.evaluate(() =>
