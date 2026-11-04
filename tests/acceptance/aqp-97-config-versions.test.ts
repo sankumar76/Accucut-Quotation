@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { Client } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { DatabaseBusyError } from '../../src/lib/errors';
 import { ConfigDocumentError, parseConfigDocument } from '../../src/lib/fields/schema';
@@ -30,10 +30,15 @@ import { cloneSeedConfig, SEED_VERSION_REASON, seedConfig } from '../support/see
  * not make: statements the trigger and grant must also stop (upsert, MERGE, DDL, replication-role
  * bypass), real concurrency (12 callers, and 4 real processes), a corrupt row written by SQL, the pool
  * ceiling and the production timeouts with no override.
+ *
+ * Machine load (DEF-003, AQP-168; test strategy section 10): set-up (a scratch database, warm connections) runs in
+ * hooks, never inside a test's own time limit. Every timing assertion is a lower bound, which load can only make
+ * easier to meet, plus an upper bound that fails only on a hang, far above any loaded run.
  */
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const HOOK_TIMEOUT = 60_000;
+/** Matches the global `hookTimeout` of vitest.config.ts, so a hook here is never stricter than the rest. */
+const HOOK_TIMEOUT = 120_000;
 const INSERT_VERSION = `INSERT INTO config_versions (number, snapshot, reason) VALUES ($1, $2::jsonb, $3)`;
 
 async function connect(url: string): Promise<Client> {
@@ -70,6 +75,50 @@ async function closePair(pair: Pair | undefined): Promise<void> {
   if (pair === undefined) return;
   await Promise.all([pair.owner.end(), pair.runtime.end()]);
   await pair.database.drop();
+}
+
+/** The messages `pg` gives when a new connection is not made within `connectionTimeoutMillis`. */
+const CONNECT_TIMEOUT_MESSAGES: ReadonlyArray<string> = [
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+];
+const MAX_CAUSE_DEPTH = 4;
+const WARM_UP_ATTEMPTS = 5;
+
+function isConnectTimeout(error: unknown, depth = 0): boolean {
+  if (!(error instanceof Error) || depth > MAX_CAUSE_DEPTH) return false;
+  return CONNECT_TIMEOUT_MESSAGES.includes(error.message) || isConnectTimeout(error.cause, depth + 1);
+}
+
+/**
+ * Opens a client's first connection before a test uses it, so a race or a timing check measures the code and not a
+ * slow connect on a busy machine. Retries only a connect timeout, a bounded number of times.
+ */
+async function warm(client: PrismaClient): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await client.$queryRaw`SELECT 1 AS warm`;
+      return;
+    } catch (error) {
+      if (!isConnectTimeout(error) || attempt >= WARM_UP_ATTEMPTS) throw error;
+    }
+  }
+}
+
+const POLL_MILLISECONDS = 50;
+
+function pause(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/** Sessions of this database with this application name, as `observer` sees them (a role sees its own sessions' details only). */
+async function sessionsNamed(observer: Client, applicationName: string, onlyActive = false): Promise<number> {
+  const activeOnly = onlyActive ? ` AND state = 'active'` : '';
+  const { rows } = await observer.query<{ count: string }>(
+    `SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 AND datname = current_database()${activeOnly}`,
+    [applicationName],
+  );
+  return Number(defined(rows[0]).count);
 }
 
 function repositoryOver(client: PrismaClient) {
@@ -323,28 +372,38 @@ describe('[AQP-97 AC-6] the schema is enforced on read as well as on seed', () =
 describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
   const CALLERS = 12;
 
-  it.each([1, 2, 3])('[AQP-97 AC-6] round %i: 12 callers at once, each with its own connection pool, create version 1 exactly once', async () => {
-    const pair = await openPair();
-    const clients = Array.from({ length: CALLERS }, () => createPrismaClient('script', pair.database.ownerUrl));
-    try {
+  describe('in-process races (a fresh database and 12 warm clients per test, made in the hook)', () => {
+    let pair: Pair | undefined;
+    let clients: PrismaClient[] = [];
+
+    beforeEach(async () => {
+      pair = await openPair();
+      const database = pair.database;
+      clients = Array.from({ length: CALLERS }, () => createPrismaClient('script', database.ownerUrl));
+      // One at a time, so the warm-up itself is never a race for connections on a busy machine.
+      for (const client of clients) await warm(client);
+    }, HOOK_TIMEOUT);
+    afterEach(async () => {
+      await Promise.all(clients.map((client) => client.$disconnect()));
+      clients = [];
+      await closePair(pair);
+      pair = undefined;
+    }, HOOK_TIMEOUT);
+
+    it.each([1, 2, 3])('[AQP-97 AC-6] round %i: 12 callers at once, each with its own connection pool, create version 1 exactly once', async () => {
+      const owner = defined(pair).owner;
       const results = await Promise.all(
         clients.map((client) => ensureSeedVersion(repositoryOver(client), { document: seedConfig, reason: SEED_VERSION_REASON })),
       );
       expect(results.filter((result) => result.created)).toHaveLength(1);
       expect(results.filter((result) => !result.created)).toHaveLength(CALLERS - 1);
-      expect(await countVersions(pair.owner)).toBe(1);
-      const { rows } = await pair.owner.query('SELECT number FROM config_versions');
+      expect(await countVersions(owner)).toBe(1);
+      const { rows } = await owner.query('SELECT number FROM config_versions');
       expect(rows).toEqual([{ number: 1 }]);
-    } finally {
-      await Promise.all(clients.map((client) => client.$disconnect()));
-      await closePair(pair);
-    }
-  }, HOOK_TIMEOUT);
+    });
 
-  it('[AQP-97 AC-6] callers racing with different documents still store one version, and it is whole (one winner, not a mix)', async () => {
-    const pair = await openPair();
-    const clients = Array.from({ length: 6 }, () => createPrismaClient('script', pair.database.ownerUrl));
-    try {
+    it('[AQP-97 AC-6] callers racing with different documents still store one version, and it is whole (one winner, not a mix)', async () => {
+      const owner = defined(pair).owner;
       const documents = clients.map((_client, index) => {
         const document = cloneSeedConfig();
         defined(document.fields[1]).label = `Variant ${index}`;
@@ -354,15 +413,12 @@ describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
         clients.map((client, index) => ensureSeedVersion(repositoryOver(client), { document: defined(documents[index]), reason: `Variant ${index}` })),
       );
       expect(results.filter((result) => result.created)).toHaveLength(1);
-      const { rows } = await pair.owner.query<{ reason: string; snapshot: unknown }>('SELECT reason, snapshot FROM config_versions');
+      const { rows } = await owner.query<{ reason: string; snapshot: unknown }>('SELECT reason, snapshot FROM config_versions');
       expect(rows).toHaveLength(1);
       const winner = Number(defined(rows[0]).reason.replace('Variant ', ''));
       expect(parseConfigDocument(defined(rows[0]).snapshot)).toEqual(documents[winner]);
-    } finally {
-      await Promise.all(clients.map((client) => client.$disconnect()));
-      await closePair(pair);
-    }
-  }, HOOK_TIMEOUT);
+    });
+  });
 
   interface ProcessResult {
     readonly status: number | null;
@@ -386,9 +442,19 @@ describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
     });
   }
 
-  it('[AQP-97 AC-6] four real ensure-seed-version processes started together: all exit 0, exactly one says created, one row', async () => {
-    const pair = await openPair();
-    try {
+  describe('real processes (a fresh database per test, made in the hook)', () => {
+    let processPair: Pair | undefined;
+
+    beforeEach(async () => {
+      processPair = await openPair();
+    }, HOOK_TIMEOUT);
+    afterEach(async () => {
+      await closePair(processPair);
+      processPair = undefined;
+    }, HOOK_TIMEOUT);
+
+    it('[AQP-97 AC-6] four real ensure-seed-version processes started together: all exit 0, exactly one says created, one row', async () => {
+      const pair = defined(processPair);
       const results = await Promise.all(Array.from({ length: 4 }, () => runStepAsync({ MIGRATE_DATABASE_URL: pair.database.ownerUrl })));
       expect(results.map((result) => result.status)).toEqual([0, 0, 0, 0]);
       expect(results.filter((result) => result.stdout.includes('configuration version 1 created'))).toHaveLength(1);
@@ -398,34 +464,29 @@ describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
       expect(defined(rows[0])).toMatchObject({ number: 1, created_by: null, reason: SEED_VERSION_REASON });
       expect(parseConfigDocument(defined(rows[0]).snapshot)).toEqual(seedConfig);
       for (const result of results) expect(result.stderr).toBe('');
-    } finally {
-      await closePair(pair);
-    }
-  }, 120_000);
+    }, 120_000);
 
-  it('[AQP-97 AC-6] the step on a database that has no config_versions table (migrate did not run) exits 1, says so, and prints no password', async () => {
-    const pair = await openPair();
-    const name = `aqp_scratch_${randomBytes(6).toString('hex')}`;
-    const ownerUrl = new URL(pair.database.ownerUrl);
-    const admin = await connect(defined(process.env['MIGRATE_DATABASE_URL'], 'MIGRATE_DATABASE_URL'));
-    try {
-      await admin.query(`CREATE DATABASE "${name}"`);
-      ownerUrl.pathname = `/${name}`;
-      const result = await runStepAsync({ MIGRATE_DATABASE_URL: ownerUrl.toString() });
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('ensure-seed-version failed');
-      expect(result.stderr).not.toContain(ownerUrl.password);
-      expect(result.stdout).not.toContain('created');
-    } finally {
-      await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-      await admin.end();
-      await closePair(pair);
-    }
-  }, 120_000);
+    it('[AQP-97 AC-6] the step on a database that has no config_versions table (migrate did not run) exits 1, says so, and prints no password', async () => {
+      const pair = defined(processPair);
+      const name = `aqp_scratch_${randomBytes(6).toString('hex')}`;
+      const ownerUrl = new URL(pair.database.ownerUrl);
+      const admin = await connect(defined(process.env['MIGRATE_DATABASE_URL'], 'MIGRATE_DATABASE_URL'));
+      try {
+        await admin.query(`CREATE DATABASE "${name}"`);
+        ownerUrl.pathname = `/${name}`;
+        const result = await runStepAsync({ MIGRATE_DATABASE_URL: ownerUrl.toString() });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('ensure-seed-version failed');
+        expect(result.stderr).not.toContain(ownerUrl.password);
+        expect(result.stdout).not.toContain('created');
+      } finally {
+        await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+        await admin.end();
+      }
+    }, 120_000);
 
-  it('[AQP-97 AC-6] a wrong password exits 1 and prints neither the password nor the connection string', async () => {
-    const pair = await openPair();
-    try {
+    it('[AQP-97 AC-6] a wrong password exits 1 and prints neither the password nor the connection string', async () => {
+      const pair = defined(processPair);
       const wrong = new URL(pair.database.ownerUrl);
       wrong.password = 'wrong-password-sentinel-81c';
       const result = await runStepAsync({ MIGRATE_DATABASE_URL: wrong.toString() });
@@ -434,10 +495,8 @@ describe('[AQP-97 AC-6] ensure-seed-version under concurrency', () => {
       expect(output).not.toContain('wrong-password-sentinel-81c');
       expect(output).not.toContain(pair.database.ownerUrl);
       expect(await countVersions(pair.owner)).toBe(0);
-    } finally {
-      await closePair(pair);
-    }
-  }, 120_000);
+    }, 120_000);
+  });
 });
 
 // ---- Pool and timeouts (ruling R4) -----------------------------------------------------------------------------
@@ -480,43 +539,97 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
   }, HOOK_TIMEOUT);
   afterAll(() => closePair(pair), HOOK_TIMEOUT);
 
+  /**
+   * The most connections the client held at once while `concurrent` long queries ran. Polls the whole time and keeps
+   * the maximum, so a slow start on a busy machine cannot make one sample miss the peak (QLT-24).
+   */
   async function peakConnections(applicationName: string, concurrent: number, sleepSeconds: number, kind: 'app' | 'script'): Promise<number> {
     const url = kind === 'app' ? pair.database.runtimeUrl : pair.database.ownerUrl;
+    // A role sees the details of its own sessions only, so the count is taken as the role the client uses.
+    const observer = kind === 'app' ? pair.runtime : pair.owner;
     const client = createPrismaClient(kind, url);
     try {
+      let settled = false;
       // A Prisma query starts only when it is awaited, so each one is started here by wrapping it in a real promise.
-      const work = Array.from({ length: concurrent }, () => Promise.resolve(client.$queryRawUnsafe(`SELECT 1 AS held FROM pg_sleep(${sleepSeconds})`)));
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      // A role sees the details of its own sessions only, so the count is taken as the role the client uses.
-      const observer = kind === 'app' ? pair.runtime : pair.owner;
-      const { rows } = await observer.query<{ count: string }>(
-        `SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 AND datname = current_database()`,
-        [applicationName],
-      );
-      await Promise.all(work);
-      return Number(defined(rows[0]).count);
+      const work = Promise.all(
+        Array.from({ length: concurrent }, () => Promise.resolve(client.$queryRawUnsafe(`SELECT 1 AS held FROM pg_sleep(${sleepSeconds})`))),
+      ).finally(() => {
+        settled = true;
+      });
+      let peak = 0;
+      while (!settled) {
+        peak = Math.max(peak, await sessionsNamed(observer, applicationName));
+        await pause(POLL_MILLISECONDS);
+      }
+      await work;
+      return peak;
     } finally {
       await client.$disconnect();
     }
   }
 
+  /**
+   * Each query holds its connection this long. Short, so a request queued behind two waves of holders waits about
+   * 1 s, far inside the 5 s connect limit even on a busy machine; the poll above still sees the peak.
+   */
+  const SHORT_HOLD_SECONDS = 0.5;
+
   it('[AQP-97 R4] an app client opens no more than 10 connections however many requests arrive at once (25 sent)', async () => {
-    const peak = await peakConnections('accucut-app', 25, 1.5, 'app');
+    const peak = await peakConnections('accucut-app', 25, SHORT_HOLD_SECONDS, 'app');
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(10);
-  }, 60_000);
+  }, 120_000);
 
   it('[AQP-97 R4] a script client opens no more than 2 connections (6 sent)', async () => {
-    const peak = await peakConnections('accucut-script', 6, 1.5, 'script');
+    const peak = await peakConnections('accucut-script', 6, SHORT_HOLD_SECONDS, 'script');
     expect(peak).toBeGreaterThan(0);
     expect(peak).toBeLessThanOrEqual(2);
-  }, 60_000);
+  }, 120_000);
 
-  it('[AQP-97 R4] a statement that runs past the production limit (10 s) is cancelled and becomes DATABASE_BUSY, 503, with the driver error kept as the cause and out of the message', async () => {
+  /** Far longer than the 10 s statement limit: if the limit did not apply, the statement would end normally and the test would fail on the missing error. */
+  const LONG_SLEEP_SECONDS = 40;
+  /** Fails only on a hang: a cancelled statement, or a refused request, returns well before the long sleep would end. */
+  const HANG_BOUND_MILLISECONDS = 35_000;
+  /** Timer granularity of the client's own clock: a client-measured lower bound is checked this much short. */
+  const CLOCK_SLACK_MILLISECONDS = 50;
+  /** PostgreSQL's code for a statement cancelled (here, by `statement_timeout`). */
+  const STATEMENT_CANCELLED = '57014';
+
+  /** The SQLSTATE inside a driver error: on the error itself, or in Prisma 7's driver-adapter wrapper, down the cause chain. */
+  function sqlStateIn(error: unknown, depth = 0): unknown {
+    if (typeof error !== 'object' || error === null || depth > MAX_CAUSE_DEPTH) return undefined;
+    // Prisma's own error has a code of its own (P2010); the PostgreSQL code is inside its driver-adapter error.
+    const meta: unknown = Reflect.get(error, 'meta');
+    const adapter: unknown = typeof meta === 'object' && meta !== null ? Reflect.get(meta, 'driverAdapterError') : undefined;
+    const driver: unknown = typeof adapter === 'object' && adapter !== null ? Reflect.get(adapter, 'cause') : undefined;
+    if (typeof driver === 'object' && driver !== null) {
+      const code: unknown = Reflect.get(driver, 'originalCode') ?? Reflect.get(driver, 'code');
+      if (code !== undefined) return code;
+    }
+    const own: unknown = Reflect.get(error, 'code');
+    if (typeof own === 'string' && /^[0-9A-Z]{5}$/.test(own) && !own.startsWith('P')) return own;
+    return sqlStateIn(error instanceof Error ? error.cause : undefined, depth + 1);
+  }
+  /**
+   * The ruled limits (architecture ruling R4), written out rather than read from `POOL_SETTINGS`, so a changed
+   * constant fails these tests as well as the table test above.
+   */
+  const RULED_STATEMENT_TIMEOUT_MILLISECONDS = 10_000;
+  const RULED_CONNECT_TIMEOUT_MILLISECONDS = 5_000;
+  const RULED_APP_POOL_MAX = 10;
+
+  it('[AQP-97 R4] a statement that runs past the production limit (10 s) is cancelled no earlier than the limit and becomes DATABASE_BUSY, 503, with the driver error kept as the cause and out of the message', async () => {
     const client = createPrismaClient('app', pair.database.runtimeUrl);
     try {
+      await warm(client);
+      // "No earlier than the limit" is taken from the server, not from a stopwatch: the session that runs the
+      // statement holds the ruled 10 s, and the server says it cancelled the statement for running too long (SQLSTATE
+      // 57014). A client stopwatch is not compared with the server's timer: under heavy load the database
+      // container's clock drifts from the host's, and a 9.4 s reading was seen against a 10 s limit (QA run, AQP-168).
+      const [setting] = await client.$queryRaw<Array<{ statement_timeout: string }>>`SHOW statement_timeout`;
+      expect(setting?.statement_timeout).toBe(`${RULED_STATEMENT_TIMEOUT_MILLISECONDS / 1_000}s`);
       const started = Date.now();
-      const error = await withDatabaseErrors(() => client.$queryRaw`SELECT 1 AS held FROM pg_sleep(14)`).then(
+      const error = await withDatabaseErrors(() => client.$queryRaw`SELECT 1 AS held FROM pg_sleep(${LONG_SLEEP_SECONDS}::double precision)`).then(
         () => undefined,
         (thrown: unknown) => thrown,
       );
@@ -524,37 +637,79 @@ describe('[AQP-97 R4] the pool ceiling and the timeouts, with the production set
       expect(error).toBeInstanceOf(DatabaseBusyError);
       expect(error).toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503, message: 'The service is busy. Try again in a moment.' });
       expect(error instanceof Error && error.cause instanceof Error).toBe(true);
+      expect(sqlStateIn(error)).toBe(STATEMENT_CANCELLED);
       expect(JSON.stringify(error)).not.toContain('pg_sleep');
       expect(JSON.stringify(error)).not.toContain(new URL(pair.database.runtimeUrl).password);
-      expect(elapsed).toBeGreaterThan(9_000);
-      expect(elapsed).toBeLessThan(13_000);
+      // Fails only on a hang.
+      expect(elapsed).toBeLessThan(HANG_BOUND_MILLISECONDS);
     } finally {
       await client.$disconnect();
     }
-  }, 60_000);
+  }, 120_000);
 
-  it('[AQP-97 R4] the 11th request on a full app pool fails after about 5 s with DATABASE_BUSY, not after the holders finish', async () => {
+  it('[AQP-97 R4] the 11th request on a full app pool waits the 5 s connect limit, then fails with DATABASE_BUSY while the holders still hold', async () => {
     const client = createPrismaClient('app', pair.database.runtimeUrl);
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holders: Array<Promise<unknown>> = [];
+    let open = 0;
     try {
-      const holders = Array.from({ length: 10 }, () => Promise.resolve(client.$queryRaw`SELECT 1 AS held FROM pg_sleep(8)`));
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await warm(client);
+      // Each holder keeps one connection in an open transaction until the test releases it. The connection is idle
+      // in the transaction, so neither the statement limit nor the clock frees it early, and the pool is filled one
+      // holder at a time, each one in before the next starts, so the 11th request meets a full pool however slow the
+      // machine is. A holder whose connect times out under load is started again, a bounded number of times.
+      for (let slot = 1; slot <= RULED_APP_POOL_MAX; slot += 1) {
+        for (let attempt = 1; ; attempt += 1) {
+          let entered: () => void = () => undefined;
+          const inside = new Promise<void>((resolve) => {
+            entered = resolve;
+          });
+          const holder = client.$transaction(
+            async (transaction) => {
+              await transaction.$queryRaw`SELECT 1 AS held`;
+              open += 1;
+              entered();
+              await released;
+              open -= 1;
+            },
+            { maxWait: HANG_BOUND_MILLISECONDS, timeout: HANG_BOUND_MILLISECONDS },
+          );
+          const outcome = await Promise.race([inside.then(() => 'in' as const), holder.then(() => 'done' as const, (error: unknown) => error)]);
+          if (outcome === 'in') {
+            holders.push(holder);
+            break;
+          }
+          if (!isConnectTimeout(outcome) || attempt >= WARM_UP_ATTEMPTS) throw outcome;
+        }
+      }
+      expect(open).toBe(RULED_APP_POOL_MAX);
       const started = Date.now();
       const error = await createConfigRepository(client).findLatestRef().then(
         () => undefined,
         (thrown: unknown) => thrown,
       );
       const elapsed = Date.now() - started;
+      // Event order, not a time: every holder was still in its transaction when the request was refused.
+      expect(open).toBe(RULED_APP_POOL_MAX);
       expect(error).toBeInstanceOf(DatabaseBusyError);
       expect(error).toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
-      expect(elapsed).toBeGreaterThan(4_000);
-      expect(elapsed).toBeLessThan(7_500);
+      // Lower bound: the request waited the whole ruled connect limit; load can only make it wait longer. The upper
+      // bound fails only on a hang.
+      expect(elapsed).toBeGreaterThanOrEqual(RULED_CONNECT_TIMEOUT_MILLISECONDS - CLOCK_SLACK_MILLISECONDS);
+      expect(elapsed).toBeLessThan(HANG_BOUND_MILLISECONDS);
+      release();
       await Promise.all(holders);
       // The pool recovers: the same request now succeeds.
       await expect(createConfigRepository(client).findLatestRef()).resolves.not.toBeUndefined();
     } finally {
+      release();
+      await Promise.allSettled(holders);
       await client.$disconnect();
     }
-  }, 60_000);
+  }, 120_000);
 
   it('[AQP-97 R4] errors that are not timeouts pass through the repository wrapper unchanged', async () => {
     const client = createPrismaClient('app', pair.database.runtimeUrl);
