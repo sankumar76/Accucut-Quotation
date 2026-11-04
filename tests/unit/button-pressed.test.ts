@@ -40,7 +40,7 @@ let all: Declaration[] = [];
 beforeAll(async () => {
   const candidates = VARIANTS.flatMap((variant) => SIZES.flatMap((size) => classesOf(variant, size)));
   all = declarationsOf(await buildCss([...new Set(candidates)]));
-}, 60_000);
+});
 
 const valueOf = (className: string, property: string): Declaration | undefined =>
   declarationsOfClass(all, className).find((declaration) => declaration.property === property);
@@ -49,7 +49,7 @@ describe('pressed state in the built CSS, DEF-008', () => {
   it.each(PRESSED)('%s: active sets the pressed fill, text and inset shadow, and none of it is inside the hover query', (variant, background, text) => {
     const fill = valueOf(`active:bg-${background}`, 'background-color');
     const colour = valueOf(`active:text-${text}`, 'color');
-    const shadow = declarationsOfClass(all, 'active:shadow-pressed').find((d) => d.value.includes('--shadow-pressed'));
+    const shadow = declarationsOfClass(all, 'active:shadow-pressed').find((declaration) => declaration.value.includes('--shadow-pressed'));
 
     expect(classesOf(variant)).toEqual(expect.arrayContaining([`active:bg-${background}`, `active:text-${text}`, 'active:shadow-pressed']));
     for (const declaration of [fill, colour, shadow]) {
@@ -80,7 +80,7 @@ describe('pressed state in the built CSS, DEF-008', () => {
   it('a disabled button shows no pressed state: disabled:active resets fill, text and shadow, after every active rule', () => {
     const fill = valueOf('disabled:active:bg-surface-2', 'background-color');
     const text = valueOf('disabled:active:text-ink-3', 'color');
-    const shadow = declarationsOfClass(all, 'disabled:active:shadow-none').find((d) => d.value.includes('0 0 #0000'));
+    const shadow = declarationsOfClass(all, 'disabled:active:shadow-none').find((declaration) => declaration.value.includes('0 0 #0000'));
     expect(fill && ruleOf(fill)).toMatch(/:disabled:active$/);
     expect(fill?.value).toBe('var(--surface-2)');
     expect(text?.value).toBe('var(--ink-3)');
