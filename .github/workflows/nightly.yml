@@ -1,0 +1,219 @@
+# Nightly checks for NFR-009 (test strategy sections 10.2 and 10.3; STORY-10.10 AC-7 and AC-8).
+#
+#   lighthouse   The Lighthouse reference run on a GitHub-hosted ubuntu-24.04 runner: the production build served by
+#                `next start` with invented data, `/` measured signed in on the Wi-Fi profile (pass or fail, on the key
+#                screens as they come into being) and on the Slow 4G profile (report only), 5 runs each. The reports are
+#                kept as an artefact for 30 days and the summary table (LCP, TBT, benchmarkIndex, Chromium version) goes
+#                in the job summary. Nothing is uploaded to a public server.
+#   ci-time      The duration of the required job "Stages 1 to 11" over the first attempts of the last 20 pull-request
+#                runs: p95 over 10 minutes or median over 6 minutes fails this job.
+#
+# It never blocks a merge: it is not a required check. A failure is reported and the orchestrator raises the issue.
+#
+# Triggers: every night; by hand (`workflow_dispatch`, which GitHub allows only for a workflow on the default branch); and
+# on a pull request that changes the files that define the run (the architect's ruling on STORY-10.10 A-2, test strategy
+# 10.2 "Pull-request trigger"), so a change to the measuring setup is measured on its own pull request. The trigger is
+# `pull_request`, never `pull_request_target`.
+#
+# Security rules (architecture section 8, TB-6). The repository is public, so job logs are public.
+#   - Read-only token: `contents: read` and `actions: read`. No repository secret is used; the one variable read
+#     (LIGHTHOUSE_B0, the baseline index) is not a secret.
+#   - Every third-party action is pinned to a commit SHA.
+#   - The database exists only for the life of the job. Its passwords, the sign-in password and the session secret are
+#     generated inside the job and masked in the log.
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 1 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - .github/workflows/nightly.yml
+      - lighthouserc.cjs
+      - scripts/lighthouse-sign-in.cjs
+      - scripts/summarise-lighthouse.ts
+      - scripts/lib/lighthouse-summary.ts
+      - scripts/check-ci-time.ts
+      - scripts/lib/ci-feedback-time.ts
+      - scripts/ensure-measurement-user.ts
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # A newer run of the same ref replaces a superseded one.
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+  # Pinned tool versions, the same as ci.yml. Change them in a reviewed change, together.
+  NODE_VERSION: '22'
+  NPM_VERSION: '11.17.0'
+  LHCI_BASE_URL: http://localhost:3000
+
+jobs:
+  lighthouse:
+    name: Lighthouse reference run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    services:
+      # PostgreSQL 17, pinned by digest (same image as ci.yml and compose.dev.yml; change them together). Bootstrap
+      # superuser only; the throwaway password is for a database nobody can reach from outside the runner.
+      postgres:
+        image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-bootstrap-only
+          POSTGRES_DB: accucut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres --dbname accucut"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install
+        run: |
+          npm ci
+          npx prisma generate
+
+      - name: Create the database roles and migrate (throwaway passwords)
+        run: |
+          owner="o$(openssl rand -hex 16)"
+          app="a$(openssl rand -hex 16)"
+          echo "::add-mask::${owner}"
+          echo "::add-mask::${app}"
+          {
+            echo "MIGRATE_DATABASE_URL=postgresql://accucut_owner:${owner}@localhost:5432/accucut"
+            echo "DATABASE_URL=postgresql://accucut_app:${app}@localhost:5432/accucut"
+          } >> "${GITHUB_ENV}"
+          PGHOST=localhost PGPASSWORD=ci-bootstrap-only POSTGRES_USER=postgres POSTGRES_DB=accucut \
+            DB_OWNER_PASSWORD="${owner}" DB_APP_PASSWORD="${app}" \
+            bash docker/postgres-init/01-create-roles.sh
+          MIGRATE_DATABASE_URL="postgresql://accucut_owner:${owner}@localhost:5432/accucut" npx prisma migrate deploy
+
+      - name: Cache the Next.js build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'next.config.ts', 'postcss.config.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build
+        run: npx next build
+
+      - name: Cache the Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # The Chromium that Playwright installs is the browser Lighthouse uses (lighthouserc.cjs `chromePath`), so the browser
+      # changes only when Playwright is upgraded.
+      - name: Install the Chromium that Playwright provides
+        run: npx playwright install --with-deps chromium
+
+      - name: Make the invented Admin that the pages are measured as
+        run: |
+          password="p$(openssl rand -hex 16)"
+          echo "::add-mask::${password}"
+          {
+            echo "MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test"
+            echo "MEASUREMENT_ADMIN_PASSWORD=${password}"
+          } >> "${GITHUB_ENV}"
+          MEASUREMENT_ADMIN_EMAIL="perf-admin@example.test" MEASUREMENT_ADMIN_PASSWORD="${password}" \
+            npx tsx scripts/ensure-measurement-user.ts
+
+      - name: Start the production server
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::${secret}"
+          AUTH_SECRET="${secret}" APP_ORIGIN="${LHCI_BASE_URL}" SMTP_HOST=localhost SMTP_PORT=1025 SMTP_AUTH_MODE=none \
+            NODE_ENV=production nohup npx next start --port 3000 > "${RUNNER_TEMP}/next-start.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --silent --output /dev/null "${LHCI_BASE_URL}/sign-in"; then exit 0; fi
+            sleep 2
+          done
+          echo "The server did not answer within 2 minutes. Its output:"
+          cat "${RUNNER_TEMP}/next-start.log"
+          exit 1
+
+      # Wi-Fi first. A failed assertion on a key screen fails this step and the run; the Slow 4G step still runs.
+      - name: Lighthouse, Wi-Fi profile (pass or fail)
+        env:
+          LHCI_PROFILE: wifi
+        run: npx lhci autorun --config=lighthouserc.cjs
+
+      - name: Lighthouse, Slow 4G profile (report only)
+        if: ${{ !cancelled() }}
+        env:
+          LHCI_PROFILE: slow4g
+        run: npx lhci autorun --config=lighthouserc.cjs
+
+      # The first baseline run records the median benchmarkIndex as B0 (set the repository variable LIGHTHOUSE_B0 to it).
+      - name: Summary (LCP, TBT, benchmarkIndex, Chromium version)
+        if: ${{ !cancelled() }}
+        env:
+          LIGHTHOUSE_B0: ${{ vars.LIGHTHOUSE_B0 }}
+        run: npx tsx scripts/summarise-lighthouse.ts --wifi lighthouse-reports/wifi --slow4g lighthouse-reports/slow4g
+
+      - name: Keep the reports for 30 days
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-reports
+          path: lighthouse-reports
+          retention-days: 30
+          if-no-files-found: warn
+
+  ci-time:
+    name: CI feedback time
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install
+        run: npm ci
+
+      # p95 over 10 minutes, or median over 6 minutes, fails this step (test strategy 10.3, PROPOSED figures).
+      - name: "CI feedback time of the required job (p95 at most 10 minutes, median at most 6)"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npx tsx scripts/check-ci-time.ts
