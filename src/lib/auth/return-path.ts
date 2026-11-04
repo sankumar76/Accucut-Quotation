@@ -25,7 +25,7 @@ const PROBE_ORIGIN = 'http://return-path.invalid';
 /** Pages and routes that make no sense as a place to land after signing in. */
 const NEVER_RETURN_TO: ReadonlyArray<string> = [SIGN_IN_PATH, '/api'];
 
-// eslint-disable-next-line no-control-regex -- the point is to refuse control characters (CR, LF, tab, NUL)
+// The point is to refuse control characters (CR, LF, tab, NUL), which a header or a log line could be split on.
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 function startsAt(pathname: string, prefix: string): boolean {

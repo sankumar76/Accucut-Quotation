@@ -8,9 +8,11 @@ import { ForbiddenError, UnauthorizedError } from '../../lib/errors';
 import { SIGN_IN_PATH } from '../../lib/auth/return-path';
 import { systemClock } from '../../lib/time';
 import { getAuthOptions, getUserRepository } from '../composition';
-import type { UserAccount, UserRepository, UserRole } from '../repositories/user-repository';
+import type { UserRole } from '../repositories/user-repository';
 
-import { isWithinSession } from './session-token';
+import { resolveSessionUser, type AuthenticatedUser } from './resolve-session-user';
+
+export type { AuthenticatedUser } from './resolve-session-user';
 
 /**
  * Who is making this request (ADR-009, architecture section 8). next-auth is used narrowly behind this file
@@ -20,43 +22,6 @@ import { isWithinSession } from './session-token';
  * from `users` on every request, so a deactivation or a role change is effective at the next request (AC-5), and a
  * session whose `session_version` no longer matches (sign-out raised it) or that is past 12 hours is refused.
  */
-
-/** The signed-in person as a request sees them. No password hash, no token. */
-export interface AuthenticatedUser {
-  readonly id: string;
-  readonly name: string;
-  readonly email: string;
-  readonly role: UserRole;
-  readonly mustChangePassword: boolean;
-}
-
-export interface SessionClaims {
-  readonly userId: string;
-  readonly sessionVersion: number;
-  readonly signedAt: number;
-}
-
-/**
- * The user for a set of claims, or null if the session must not be honoured: no such user, deactivated, a
- * `session_version` that no longer matches, or past 12 hours from sign-in. Pure of next-auth, so tests call it
- * directly with a repository and a clock.
- */
-export async function resolveSessionUser(
-  claims: SessionClaims | null,
-  users: UserRepository,
-  now: Date,
-): Promise<AuthenticatedUser | null> {
-  if (claims === null || !isWithinSession(claims.signedAt, now)) return null;
-  const account: UserAccount | null = await users.findAccountById(claims.userId);
-  if (account === null || !account.isActive || account.sessionVersion !== claims.sessionVersion) return null;
-  return {
-    id: account.id,
-    name: account.name,
-    email: account.email,
-    role: account.role,
-    mustChangePassword: account.mustChangePassword,
-  };
-}
 
 /** The current user, or null when signed out. Read once per request however many components ask. */
 export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> => {

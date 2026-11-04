@@ -101,7 +101,6 @@ export type SharedClientKind = Exclude<DatabaseClientKind, 'script'>;
 
 declare global {
   // A `var` is the only way to declare a property of `globalThis`; `let` and `const` are not visible there.
-  // eslint-disable-next-line no-var
   var accucutPrismaClients: Map<SharedClientKind, PrismaClient> | undefined;
 }
 

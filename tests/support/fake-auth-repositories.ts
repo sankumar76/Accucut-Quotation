@@ -6,6 +6,7 @@ import {
   type UserAccount,
   type UserCredentials,
   type UserRepository,
+  type UserRole,
 } from '../../src/server/repositories/user-repository';
 
 /**
@@ -14,8 +15,10 @@ import {
  * PostgreSQL in `tests/integration/auth`.
  */
 
-export interface FakeUserRecord extends NewUser {
+export interface FakeUserRecord extends Omit<NewUser, 'role'> {
   readonly id: string;
+  /** Mutable, so a test can change a role the way an Admin would. */
+  role: UserRole;
   isActive: boolean;
   sessionVersion: number;
 }

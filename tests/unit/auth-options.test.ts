@@ -73,7 +73,8 @@ describe('AC-5: cookie and session settings', () => {
   it('a later request leaves the token as it is: the sign-in time does not move', async () => {
     const jwt = defined(options(fakeService()).callbacks?.jwt, 'jwt callback');
     const existing = { sub: 'user-1', sv: 3, signedAt: 5 };
-    expect(await jwt({ token: existing })).toBe(existing);
+    // A later request has a token and no `user`; next-auth's types only describe the sign-in call.
+    expect(await jwt({ token: existing } as never)).toBe(existing);
   });
 
   it('the session shows the three values and no role, e-mail or name', async () => {
@@ -90,13 +91,7 @@ describe('AC-5: cookie and session settings', () => {
 
   it('a token that is not ours gives a session with no user at all', async () => {
     const session = defined(options(fakeService()).callbacks?.session, 'session callback');
-    const result = await session({
-      session: { expires: '2026-11-04T21:00:00.000Z' },
-      token: { sub: 'user-1' },
-      user: { id: 'user-1', email: 'x@example.test', emailVerified: null },
-      newSession: undefined,
-      trigger: 'update',
-    });
+    const result = await session({ session: { expires: '2026-11-04T21:00:00.000Z' }, token: { sub: 'user-1' } } as never);
     expect(result).toEqual({ expires: '2026-11-04T21:00:00.000Z' });
   });
 });
@@ -151,20 +146,20 @@ describe('AC-4: sign-out ends every session of the person', () => {
   it('raises the session version of the user named in the token', async () => {
     const service = fakeService();
     const signOut = defined(options(service).events?.signOut, 'signOut event');
-    await signOut({ token: { sub: 'user-1', sv: 0, signedAt: 1 } });
+    await signOut({ token: { sub: 'user-1', sv: 0, signedAt: 1 }, session: undefined as never });
     expect(service.ended).toEqual(['user-1']);
   });
 
   it('does nothing for a token that is not ours', async () => {
     const service = fakeService();
-    await defined(options(service).events?.signOut, 'signOut event')({ token: { sub: 'user-1' } });
+    await defined(options(service).events?.signOut, 'signOut event')({ token: { sub: 'user-1' }, session: undefined as never });
     expect(service.ended).toEqual([]);
   });
 
   it('does not fail the sign-out when the version cannot be raised: the cookie is still cleared, and the fault is logged', async () => {
     const service = fakeService({ endAllSessions: () => Promise.reject(new Error('database down')) });
     await expect(
-      defined(options(service).events?.signOut, 'signOut event')({ token: { sub: 'user-1', sv: 0, signedAt: 1 } }),
+      defined(options(service).events?.signOut, 'signOut event')({ token: { sub: 'user-1', sv: 0, signedAt: 1 }, session: undefined as never }),
     ).resolves.toBeUndefined();
   });
 });
