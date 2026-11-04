@@ -58,6 +58,7 @@
 
   --primary: #DE3030;         /* logo red: main buttons, active markers */
   --primary-hover: #BF2626;
+  --primary-pressed: #7F1616;
   --primary-ink: #B52424;     /* red used as text or link colour */
   --primary-soft: #FDECEC;
   --primary-line: #F2B8B8;
@@ -74,6 +75,7 @@
 
   --danger: #B3261E;          /* error red, separate from the brand red */
   --danger-ink: #8F1C13;
+  --danger-pressed: #520F09;
   --danger-soft: #FCEDEB;
   --danger-line: #F0B3AD;
 
@@ -190,8 +192,12 @@ img { max-width: 100%; }
 .stat.is-primary { border-top: 4px solid var(--primary); }
 
 /* ---------- Buttons: one size, four variants (kept from the sample) ---------- */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); height: var(--control-h); padding: 0 var(--s-4); border-radius: var(--radius); border: 1px solid transparent; font: 600 var(--fs-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s, color .15s; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); height: var(--control-h); padding: 0 var(--s-4); border-radius: var(--radius); border: 1px solid transparent; font: 600 var(--fs-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; text-decoration: none; user-select: none; -webkit-user-select: none; transition: background .2s ease-out, border-color .2s ease-out, color .2s ease-out; }
 .btn:hover { text-decoration: none; }
+/* UX 7.3.1 rule 4: pressed shows on the first frame and fades out over .2s on release. */
+.btn:active, .btn.is-pressed { transition: none; }
+/* UX 7.3.1 rule 9: a real button shows no iOS copy callout; a link drawn as a button keeps its link menu. */
+button.btn { -webkit-touch-callout: none; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-hover); color: #fff; }
 .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--border-strong); }
@@ -203,10 +209,10 @@ img { max-width: 100%; }
 .btn-icon { width: var(--control-h); padding: 0; }
 .btn[disabled], .btn.is-disabled, .btn[aria-disabled="true"] { background: var(--surface-2); color: var(--ink-3); border-color: var(--border); cursor: not-allowed; }
 /* Pressed (UX 7.3.1): :active for mouse, finger and pen alike, after the hover rules so it wins; .is-pressed shows the state without holding the mouse. Colour plus an inset shadow, no movement. */
-.btn-primary:active, .btn-primary.is-pressed { background: var(--primary-hover); color: #fff; box-shadow: var(--shadow-pressed); }
+.btn-primary:active, .btn-primary.is-pressed { background: var(--primary-pressed); color: #fff; box-shadow: var(--shadow-pressed); }
 .btn-secondary:active, .btn-secondary.is-pressed { background: var(--border); color: var(--ink); box-shadow: var(--shadow-pressed); }
 .btn-ghost:active, .btn-ghost.is-pressed { background: var(--primary-line); color: var(--ink); box-shadow: var(--shadow-pressed); }
-.btn-danger:active, .btn-danger.is-pressed { background: var(--danger-ink); color: #fff; box-shadow: var(--shadow-pressed); }
+.btn-danger:active, .btn-danger.is-pressed { background: var(--danger-pressed); color: #fff; box-shadow: var(--shadow-pressed); }
 .btn[disabled]:active, .btn.is-disabled:active, .btn[aria-disabled="true"]:active { background: var(--surface-2); color: var(--ink-3); box-shadow: none; }
 .btn-block { width: 100%; }
 .btn-sm-text { font-weight: 500; }
