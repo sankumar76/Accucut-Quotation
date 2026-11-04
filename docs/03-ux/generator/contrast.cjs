@@ -37,6 +37,15 @@ const pairs=[
 ['focus ring on white','#17181C','#FFFFFF','ui 3'],
 ['focus ring white on nav','#FFFFFF','#17181C','ui 3'],
 ['brand name primary on white','#DE3030','#FFFFFF','18px bold = large 3'],
+['pressed primary: white on primary-hover','#FFFFFF','#BF2626','text 4.5'],
+['pressed primary: white at shadow edge','#FFFFFF','#902223','text 4.5'],
+['pressed secondary: ink on border','#17181C','#D9DADF','text 4.5'],
+['pressed secondary: ink at shadow edge','#17181C','#A3A4A8','text 4.5'],
+['pressed ghost: ink on primary-line','#17181C','#F2B8B8','text 4.5'],
+['pressed ghost: ink at shadow edge','#17181C','#B58B8C','text 4.5'],
+['pressed danger: white on danger-ink','#FFFFFF','#8F1C13','text 4.5'],
+['pressed danger: white at shadow edge','#FFFFFF','#6D1B16','text 4.5'],
+['NOT USED: primary-ink on primary-line','#B52424','#F2B8B8','fails 4.5 (why ghost pressed uses ink)'],
 ];
 for(const [n,f,b,req] of pairs){console.log(cr(f,b).toFixed(2).padStart(6),'  ',n.padEnd(34),f,b,req)}
 }

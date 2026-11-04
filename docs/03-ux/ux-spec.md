@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.8 (master data names and units from SPEC v1.13: Plating-rate-per-sqin makes 15 rates on SCR-11 and SCR-12, the scrap column is Material-Scrap-Rate on SCR-13, the rate-unit half of OQ-UX-07 is closed; no page count or state link changed); 0.7 (CR-32 settled: a failed sign-in keeps both fields, the password too, in SCR-01 and UJ-01; 0.6: small fixes CR-22, CR-26 and CR-29 on top of 0.5: FR-106 to FR-108 in sections 5 and 9, SCR-15 staged R1 core for the Last backup line, stale rows cleared; architecture v0.8 and SPEC v1.10: the whole-order rule with a parent showing only its own row; Warn for a row that costs 0; every calculated figure cleared on any input change; no Excel file until a calculation is current; the approved price kept until a new approval or the Admin removes it; Cancel approval and Remove price for the Admin; the rate-change notice; the optional Part Model; the Last backup line. Changes since 0.4 are in section 0.8 and the change log) |
+| Version | 0.9 (pressed state of every button variant, DEF-008 and QA OBS-6: new section 7.3.1, one non-colour token `--shadow-pressed`, no colour, page or state link added; SCR-00 section 05 shows the pressed samples); 0.8 (master data names and units from SPEC v1.13: Plating-rate-per-sqin makes 15 rates on SCR-11 and SCR-12, the scrap column is Material-Scrap-Rate on SCR-13, the rate-unit half of OQ-UX-07 is closed; no page count or state link changed); 0.7 (CR-32 settled: a failed sign-in keeps both fields, the password too, in SCR-01 and UJ-01; 0.6: small fixes CR-22, CR-26 and CR-29 on top of 0.5: FR-106 to FR-108 in sections 5 and 9, SCR-15 staged R1 core for the Last backup line, stale rows cleared; architecture v0.8 and SPEC v1.10: the whole-order rule with a parent showing only its own row; Warn for a row that costs 0; every calculated figure cleared on any input change; no Excel file until a calculation is current; the approved price kept until a new approval or the Admin removes it; Cancel approval and Remove price for the Admin; the rate-change notice; the optional Part Model; the Last backup line. Changes since 0.4 are in section 0.8 and the change log) |
 | Owner | ux-expert |
 | Status | In Review (G3, human approval) |
 | Inputs | PRD v0.10 (FR-001 to FR-108; it numbers the rate notice, Cancel approval and Remove price); SPEC v1.13 (`ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md`, §6.3, §7.1 H, §7.4, §9, §10, §11, §17, §18 D-12, D-14 to D-22 and D-24, §18.5); `docs/04-architecture/architecture.md` v0.9 sections 4.8, 4.10, 16.8 to 16.14 (UX-28 to UX-65); `docs/05-backlog/consistency-report.md` (CR-06 to CR-08, CR-10, CR-22, CR-26, CR-29); decision log DL-018 to DL-026; AQP-26 (the quantity rule, settled: the Engineer types the count for the whole order on every row and BL is the sum of every row's BG); AQP-15 comments 10511 and 10527 (Warn; Q-38 "Yes"; held, see section 0.7); AQP-1 comments 10490 (their answers, relayed), 10491 (APPROVED) and 10493; `docs/04-architecture/architecture.md` v0.3 section 16.8 (UX-28 to UX-37); gate log; project brief v0.6; stakeholder map; gate log G2 attempt 2 (conditions 5, 6, 9); `docs/04-architecture/architecture.md` v0.2 section 16 (items UX-01 to UX-27) and section 15.2; the client's `Accucut Quotation Portal UI-UX.html` (15 screens, unpacked and read); `docs/03-ux/assets/` (logo, company board) |
@@ -419,7 +419,7 @@ Release: R1 core unless noted. SCR-15 is R1 core for the Settings frame and the 
 | 07 Badges and notices | 08 Node icons | 09 States | 10 Map   |
 +--------------------------------------------------------------+
 ```
-**Components.** Card, Badge, Button, Input, Select, Alert, Skeleton, Table. **States.** Static page; no data states. **Responsive.** Cards stack; swatch grid reflows. **Accessibility.** Headings in order, every swatch states its ratio in text, all contrast pairs listed in section 7.
+**Components.** Card, Badge, Button, Input, Select, Alert, Skeleton, Table. **States.** Static page; no data states. Section 05 also shows each button variant held down (pressed, section 7.3.1). **Responsive.** Cards stack; swatch grid reflows. **Accessibility.** Headings in order, every swatch states its ratio in text, all contrast pairs listed in section 7.
 
 ### SCR-01 Sign in
 **Wireframe.**
@@ -724,13 +724,13 @@ Fonts: IBM Plex Sans, IBM Plex Mono, and Tinos Bold for the company name, **self
 **Glyph coverage (UX-13, checked with `fontkit` on the files, and in the browser).** The first set of six Latin files held none of ₹ (U+20B9), Σ (U+03A3), → (U+2192) or ← (U+2190), so those fell back to whatever the device had. Now: **₹** comes from five added files, the open-licence Latin-extended subsets of Plex Sans 400, 500, 600 and Plex Mono 400, 500 (about 76 KB), declared with `unicode-range` so a page without a ₹ does not load them; the production build keeps the same subset (architecture §11). **Σ and the arrows are inline SVG icons** with a text alternative (visually hidden "This row and everything below it", "to"), so they look the same everywhere and need no font. € $ × − — · © are in the base files. Tinos Bold carries only the ASCII name.
 
 ### 7.2 Spacing, shape, controls
-4-point scale: 4, 8, 12, 16, 24, 32, 48. Radius 4, 8, 12. **One control height: 44 px** (above WCAG 2.5.8's 24 px and PRD NFR-017's 44 px). One button: 44 px, 16 px side padding, 14 / 600; four variants (primary red, secondary outline, ghost, danger) and an icon-only square. Row-level icon buttons in dense tables are 36 px.
+4-point scale: 4, 8, 12, 16, 24, 32, 48. Radius 4, 8, 12. **One control height: 44 px** (above WCAG 2.5.8's 24 px and PRD NFR-017's 44 px). One button: 44 px, 16 px side padding, 14 / 600; four variants (primary red, secondary outline, ghost, danger) and an icon-only square. Row-level icon buttons in dense tables are 36 px. Every variant and both icon sizes have a pressed state on touch and mouse alike (section 7.3.1).
 
 ### 7.3 Colour ("Red Leads") and contrast
 | Token | Hex | Use | Contrast |
 |-------|-----|-----|----------|
 | `--primary` | #DE3030 | Main buttons, active marker, brand name, progress | White text on it **4.59:1** (AA normal); on white 4.59:1; on graphite 3.86:1 (UI 3:1) |
-| `--primary-hover` | #BF2626 | Hover and pressed | White on it 5.97:1 |
+| `--primary-hover` | #BF2626 | Primary button: hover, and pressed on every device (section 7.3.1) | White on it 5.97:1 |
 | `--primary-ink` | #B52424 | Red as text or link | 6.48:1 on white; 5.67:1 on its tint |
 | `--nav` / `--ink` | #17181C | Side menu, text, focus ring | 17.74:1 with white |
 | `--ink-2` | #4A4D57 | Secondary text | 8.43:1 on white |
@@ -743,6 +743,33 @@ Fonts: IBM Plex Sans, IBM Plex Mono, and Tinos Bold for the company name, **self
 | `--info-ink` | #333945 | Neutral notices, Submitted | 9.98:1 on its tint |
 
 The brand red passes AA for normal text only narrowly (4.59:1), so it is used for **fills with white text, large text and non-text markers**, and the darker `--primary-ink` is used wherever red is text or a link. Overdue is amber and errors are the darker error red, so red never carries two meanings at once (finding F-18). Ratios were computed from the hex values with the WCAG formula.
+
+### 7.3.1 Button states: hover, pressed, disabled (DEF-008, QA OBS-6; added in version 0.9)
+
+A phone has no hover, so the pressed state is the only sign that a tap registered (the delivery lead found this at the AC-9 phone check of AQP-28). Version 0.8 named a pressed colour for the primary button only. This section states the pressed state of every variant. **No colour was added.** One non-colour token was: `--shadow-pressed`.
+
+| Variant | Rest | Hover (only on a device that can hover) | **Pressed** (mouse, finger, pen) | Text on pressed | Contrast of that text: on the fill / at the darkest edge of the inset shadow |
+|---------|------|------|------|------|------|
+| Primary | `--primary` fill, `--on-fill` text | `--primary-hover` | `--primary-hover` fill + `--shadow-pressed` | `--on-fill` (white) | **5.97:1** / 8.61:1 |
+| Secondary | `--surface` fill, `--border-strong` edge, `--ink` text | `--surface-2` | `--border` fill + `--shadow-pressed`; the edge stays `--border-strong` | `--ink` | **12.71:1** / 7.12:1 |
+| Ghost | no fill, `--primary-ink` text | `--primary-soft`, text stays `--primary-ink` (5.67:1) | `--primary-line` fill + `--shadow-pressed` | **`--ink`**, not `--primary-ink`: red text on `--primary-line` is 3.80:1 and fails AA | **10.41:1** / 5.94:1 |
+| Danger | `--danger` fill, `--on-fill` text | `--danger-ink` | `--danger-ink` fill + `--shadow-pressed` | `--on-fill` (white) | **8.96:1** / 11.55:1 |
+| Icon-only square (44 px) and row icon button (36 px) | the variant it carries (secondary, or ghost for show and hide password) | that variant's | that variant's pressed look; the size changes nothing | that variant's | that variant's |
+
+`--shadow-pressed` is `inset 0 2px 4px rgba(23, 24, 28, 0.28)`, the graphite of `--shadow-1` and `--shadow-2` at a higher strength. The "darkest edge" figures assume the full 0.28 of graphite over the fill, which is the worst case; the shadow fades out within about 4 px of the top edge, well above the label.
+
+**Rules**
+
+1. **Pressed applies to every pointer.** It is the `:active` state and must not sit inside the "can hover" media query that the hover colours use. Hover stays limited to devices that can hover, because on a phone a hover colour would stay stuck after a tap. Where a button is both hovered and pressed, pressed wins (it comes after hover in the cascade).
+2. **Colour and shape together (WCAG 1.4.1).** Every variant also gets the inset shadow, so the change is not colour alone. For primary and danger the pressed fill equals the hover fill, because no existing token is darker in that family; for a mouse user the inset is what tells pressed from hover. On a phone the fill still changes from rest (1.30:1 for primary, 1.37:1 for danger) and the inset adds a second cue. For secondary and ghost the rest-to-hover step is only 1.16:1 and 1.14:1 against white, so pressed takes the next token down (`--border` is 1.40:1 and `--primary-line` 1.70:1 against white).
+3. **Rejected: a new `--primary-pressed` colour.** Section 7.3 and section 12 say no colour was added, the steps between red fills are only 1.3:1 whatever the value, and the inset already separates pressed from hover. Revisit only if the phone check on the real device shows the cue is too weak.
+4. **Disabled and loading buttons show no pressed state.** They keep the disabled fill, the grey text and no shadow, even when a pointer is down on them (`disabled:active` resets the colours and sets `shadow-none`, as `disabled:hover` already does). A button with `aria-busy` is disabled, so a second tap while it works shows nothing and does nothing.
+5. **Reduced motion.** Nothing moves: no scale, no shift, no animation, so the label and the layout stay put. The colour fades back over the existing 150 ms `transition-colors` after release; the project-wide reduced-motion rule removes that fade, and the button then snaps back. Pressed is still shown for as long as the pointer is down. Pressed is a state, not an animation, so reduced motion does not turn it off.
+6. **Focus is separate.** The 3 px graphite focus ring (section 8) is not replaced or hidden by pressed; a keyboard user who holds Space sees both.
+7. **Targets.** Size, padding, border width and label position do not change on press (the inset is a shadow, not a border), so the 44 px and 36 px targets and the layout are the same pressed or not.
+8. **To check on the device that found DEF-008** (iPhone, Chrome, which uses WebKit): press and hold each variant for about a second and see the pressed look; tap quickly and see a brief flash. If WebKit does not apply `:active` on touch here, that is a feasibility question for the solution-architect (a no-op `touchstart` listener is the usual remedy); the values above do not change.
+
+For the developer, the token names to use, in the order of the variants in `button.tsx`: primary `active:bg-primary-hover active:text-on-fill active:shadow-pressed`; secondary `active:bg-border active:text-ink active:shadow-pressed`; ghost `active:bg-primary-line active:text-ink active:shadow-pressed`; danger `active:bg-danger-ink active:text-on-fill active:shadow-pressed`; base `disabled:active:bg-surface-2 disabled:active:text-ink-3 disabled:active:shadow-none`. Add `--shadow-pressed` to `globals.css` next to `--shadow-1` and `--shadow-2` and expose it to Tailwind as `shadow-pressed` the way `--shadow-card` is. The mock-up applies the same values in `screens/screens.css` (`.btn-*:active`), and SCR-00 section 05 shows each variant held down.
 
 ### 7.4 Patterns added to the sample
 Column-letter tag; section card with number, range and count; stepper strip; one figure box per row; stage panels; skeleton; empty and error blocks; review bar (review only). No new colours were added for them.
@@ -767,7 +794,7 @@ Listed on SCR-00 section 10: Button, Input, Label, Select, Checkbox, Switch, Tab
 | Redundant entry | The customer is chosen once; values are kept on error; nothing is asked twice in a flow |
 | Authentication | Paste allowed; show or hide password; no puzzle or memory test; password manager attributes set |
 | Dynamic content | Polite live region for saves, copy, formula checks and totals; `alert` for blocking errors; skeleton regions use `aria-busy` |
-| Motion | `prefers-reduced-motion` turns off shimmer, spin and slide transitions |
+| Motion | `prefers-reduced-motion` turns off shimmer, spin and slide transitions. The pressed state of a button (section 7.3.1) is a static colour and inset change with no movement, so it stays on |
 | Zoom and reflow | Works at 200 percent and at 320 px width without horizontal page scroll; tables scroll inside their container only; text spacing changes do not clip |
 | Tables | Caption, `th scope`, no layout tables |
 | Language of content | English only (NFR-029) |
@@ -989,7 +1016,8 @@ Run on 2026-11-02 (version 0.5) with Google Chrome driven by `playwright-core` 1
 | WCAG 2.0, 2.1 and 2.2 A and AA rules (axe-core) | Full run on every state of every screen page at all three widths | **0 violations.** axe cannot judge focus order, the meaning of text or speech, so the manual rules in section 8 still apply |
 | **Figures** (`check-figures.cjs`) | Every number with 2 to 4 decimals on SCR-03, 05 to 10 and 16 is checked against the data model; a parent shows only its own row, so no sum of rows below is allowed on any page | Every figure comes from the model (SCR-16's ₹ 4,750.00 is invented for other estimates and reused, not new). Identities hold: BL = the sum of every row's BG = 12,629.99; BN = BL ÷ total Tool Cost 4,900.00 = 2.58; the override difference is 29.99; the constructed case (2 frames, 6 pipes, 24 lids, each lid 1, each pipe 1, nothing on the frame) gives 24 + 6 + 0 = 30; row 1.1.1 has a count of 16. Each working line on SCR-07 reproduces its result: the build throws otherwise, and it built. **No sample figure changed** from version 0.4: BL, BN, BO, the override difference and every row's BG, BJ and BK are the same |
 | **Engineer pages show no amount, rate, formula, price or Σ** | Visible text of SCR-01, 02, 03 (Engineer), 05, 23, 24, 26 in every state (outside the review notes): an amount (₹, $ or € followed by a number), BG, BL, BN, BO, BJ, BK, "Material Rate", "exchange rate", "formula", "rate", "unit production", "screen figure", "Excel row", "price" | **None**, including the two new SCR-05 states (the quantity warning names rows and says each will cost 0, with no other figure). The rupee signs on SCR-05 are unit tags on the Engineer's own inputs |
-| Contrast of every token pair | `generator/contrast.cjs` (section 7.3) | Pass; no colour was added |
+| Contrast of every token pair | `generator/contrast.cjs` (section 7.3) | Pass; no colour was added. The pressed pairs of section 7.3.1 are in the same run (lowest 5.94:1, at the darkest edge of the shadow under a ghost button) |
+| Pressed state of every button variant (version 0.9) | Ratios from `contrast.cjs`; the look from SCR-00 section 05 (each variant shown held down, and live on `:active`); the generator built to a scratch folder and compared page by page | Ratios pass. Only SCR-00 changed among the pages. **Not yet looked at on a phone:** the held-down look on the iPhone that found DEF-008 is a QA check (section 7.3.1, rule 8) |
 | Build warnings | The build prints a warning for a title over 60 characters or a description over 160 | None |
 | Looked at by eye | Screenshots at 1280 px of SCR-06 (Total cleared, Approval cancelled (Admin), Cancel approval dialog) and SCR-10 (Total cleared), and SCR-05 (Quantity warning) at 360 px | Looked right after the fixes below. **Not looked at by eye:** the other new states, SCR-07, 08 and 15, and any page at 768 px |
 | Generator reproduces the pages | Built to a scratch folder and compared file by file with `docs/03-ux/screens/` | 41 pages identical; only `screens.css`, `screens.js` and `fonts/` are not generated |
