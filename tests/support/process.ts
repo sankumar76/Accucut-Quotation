@@ -24,10 +24,33 @@ export interface ProcessOutcome {
   readonly error?: Error | undefined;
 }
 
+/** How long a test's child process may run before it is stopped, unless the call sets its own `timeout` (PRF-01). */
+export const DEFAULT_PROCESS_TIMEOUT_MILLISECONDS = 60_000;
+
+/** The `code` Node puts on the error when it stopped the child itself: past `timeout`, or past `maxBuffer`. */
+const STOPPED_BY_TIME_LIMIT = 'ETIMEDOUT';
+const STOPPED_BY_BUFFER_LIMIT = 'ENOBUFS';
+
+function errorCodeOf(error: Error): unknown {
+  return 'code' in error ? error.code : undefined;
+}
+
+/** The message for an error `spawnSync` reported: the child was stopped by a limit (QLT-28), or never started. */
+function spawnErrorMessage(error: Error, what: string): string {
+  switch (errorCodeOf(error)) {
+    case STOPPED_BY_TIME_LIMIT:
+      return `${what} did not finish within the time limit and was stopped.`;
+    case STOPPED_BY_BUFFER_LIMIT:
+      return `${what} wrote more output than the buffer holds and was stopped.`;
+    default:
+      return `${what} did not start: ${error.message}`;
+  }
+}
+
 /** Throws `ProcessStartError` unless the process ran and exited with an ordinary exit code. `what` names it in the message. */
 export function assertProcessStarted(outcome: ProcessOutcome, what: string): void {
   if (outcome.error !== undefined) {
-    throw new ProcessStartError(`${what} did not start: ${outcome.error.message}`, { cause: outcome.error });
+    throw new ProcessStartError(spawnErrorMessage(outcome.error, what), { cause: outcome.error });
   }
   if (outcome.signal !== null) throw new ProcessStartError(`${what} was ended by ${outcome.signal} before it finished.`);
   if (outcome.status === null) throw new ProcessStartError(`${what} did not report an exit status.`);
@@ -47,9 +70,12 @@ export interface RunOptions extends Omit<SpawnSyncOptionsWithStringEncoding, 'en
   readonly what: string;
 }
 
-/** `spawnSync` with text output, that throws `ProcessStartError` if the process did not run (see above). */
+/**
+ * `spawnSync` with text output, that throws `ProcessStartError` if the process did not run, or was stopped by the time
+ * or output limit (see above). The time limit is 60 s unless `timeout` is given, so a hung child cannot hang the run.
+ */
 export function runProcess(command: string, args: ReadonlyArray<string>, { what, ...options }: RunOptions): ProcessResult {
-  const result = spawnSync(command, args, { ...options, encoding: 'utf8' });
+  const result = spawnSync(command, args, { timeout: DEFAULT_PROCESS_TIMEOUT_MILLISECONDS, ...options, encoding: 'utf8' });
   assertProcessStarted(result, what);
   return { status: result.status ?? 0, stdout: result.stdout, stderr: result.stderr };
 }
