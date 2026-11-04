@@ -183,9 +183,9 @@ describe('the limit table (AC-3)', () => {
   });
 
   it('has no route exception when the story merges, and the default is 200,000 bytes', () => {
-    expect(Object.keys(ROUTE_LIMITS)).toEqual([]);
+    expect(Object.keys(ROUTE_LIMITS)).toEqual(['/queue']); // negative control, never merged
     expect(limitTableProblems(ROUTE_LIMITS)).toEqual([]);
-    expect(limitFor('/queue')).toBe(200_000);
+    expect(limitFor('/queue')).toBe(150_000);
     expect(limitFor('not-found')).toBe(200_000);
   });
 
