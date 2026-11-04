@@ -6,7 +6,7 @@
 | Severity | Sev-3 Moderate |
 | Priority | P3 |
 | Type | Product |
-| Status | New |
+| Status | Reopened: rejected at G7 on 2026-11-04. Fixed for secondary, ghost and the icon buttons; not perceptible for primary and danger (DEF-010) |
 | Found by / date | delivery lead at the AC-9 phone check (step B4), 2026-11-04; analysed by qa-engineer |
 | Build / commit | `e6053ce` on `feat/AQP-28-tokens-and-shell` (development server, `next dev -H 0.0.0.0`) |
 | Environment | iPhone 17 Pro Max, iOS 27.0.1, Google Chrome 155.0.8059.37, office Wi-Fi |
@@ -37,6 +37,6 @@ No task is blocked and every action is reachable. A person on a phone gets no si
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-04 | PR #56: `c2278c3`, `64bef0d`, `a13f194` (`active:` styles per UX spec v0.9 §7.3.1, `--shadow-pressed`) |
+| Regression test added | developer | 2026-11-04 | `tests/e2e/button-pressed.spec.ts` (45 of 45 at three widths, no retries), `tests/unit/button-pressed.test.ts` |
+| Verified | qa-engineer | 2026-11-04 | **Partly.** On the delivery lead's iPhone: secondary, ghost, both pencils, disabled and loading pass; primary (Calculate) and danger (Delete) not perceptible. Raised as DEF-010 (AQP-185, #64). Report: `docs/07-qa/AQP-183-test-report.md` |
