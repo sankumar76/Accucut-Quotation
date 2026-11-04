@@ -9,8 +9,10 @@ import { PAGE, tokenColour } from './support/design-system';
  * A disabled button shows nothing, even with the pointer down on it. The sample buttons are SCR-00 section 05.
  */
 
-/** `inset 0 2px 4px rgba(23, 24, 28, 0.28)` as the browser reports a computed box-shadow. */
+/** `inset 0 2px 4px rgba(23, 24, 28, 0.28)` as the browser reports it inside a computed box-shadow. */
 const PRESSED_SHADOW = 'rgba(23, 24, 28, 0.28) 0px 2px 4px 0px inset';
+/** The graphite of the pressed shadow. A computed box-shadow without it shows no visible shadow. */
+const GRAPHITE = 'rgba(23, 24, 28';
 
 interface Sample {
   readonly name: string;
@@ -20,7 +22,8 @@ interface Sample {
   readonly text: string;
 }
 
-const buttons = (page: Page): Locator => page.locator('#ds-buttons');
+/** SCR-00 section 05: the `<section>` is named by its heading (`aria-labelledby`), so it is the "Buttons" region. */
+const buttons = (page: Page): Locator => page.getByRole('region', { name: 'Buttons', exact: true });
 
 const SAMPLES: readonly Sample[] = [
   { name: 'primary', find: (page) => buttons(page).getByRole('button', { name: 'Calculate' }), background: '--primary-hover', text: '--on-fill' },
@@ -37,12 +40,32 @@ const DISABLED: ReadonlyArray<{ name: string; find: (page: Page) => Locator }> =
   { name: 'loading (disabled, aria-busy)', find: (page) => buttons(page).getByRole('button', { name: 'Calculating' }) },
 ];
 
+/**
+ * Tailwind's `shadow-*` utilities set `box-shadow` to a list of five layers (inset shadow, inset ring, ring offset, ring,
+ * shadow), most of them transparent zeros. So the computed value is read as text: it holds the pressed shadow, or no
+ * graphite at all (`none` when no shadow utility applies, all zeros under `shadow-none`).
+ */
+async function shadowOf(button: Locator): Promise<string> {
+  return button.evaluate((element) => getComputedStyle(element).boxShadow);
+}
+
+async function expectPressedShadow(button: Locator, pressed: boolean): Promise<void> {
+  if (pressed) await expect.poll(() => shadowOf(button)).toContain(PRESSED_SHADOW);
+  else await expect.poll(() => shadowOf(button)).not.toContain(GRAPHITE);
+}
+
 async function pointerDownOn(page: Page, button: Locator): Promise<void> {
   await button.scrollIntoViewIfNeeded();
   const box = await button.boundingBox();
   if (box === null) throw new Error('the button has no box on the page');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
+}
+
+async function sizeOf(button: Locator): Promise<{ width: number; height: number }> {
+  const box = await button.boundingBox();
+  if (box === null) throw new Error('the button has no box on the page');
+  return { width: box.width, height: box.height };
 }
 
 test.describe('button pressed state, DEF-008', () => {
@@ -52,34 +75,34 @@ test.describe('button pressed state, DEF-008', () => {
   });
 
   for (const sample of SAMPLES) {
-    test(`${sample.name}: pointer down shows the pressed fill, text and inset shadow, and release takes them away`, async ({ page }) => {
+    test(`${sample.name}: pointer down shows the pressed fill, text and inset shadow, and release takes the shadow away`, async ({ page }) => {
       const button = sample.find(page);
       await expect(button).toBeVisible();
       const pressed = await tokenColour(page, sample.background);
       const text = await tokenColour(page, sample.text);
 
-      await expect(button).toHaveCSS('box-shadow', 'none');
+      await expectPressedShadow(button, false);
       await pointerDownOn(page, button);
       try {
         await expect(button).toHaveCSS('background-color', pressed);
         await expect(button).toHaveCSS('color', text);
-        await expect(button).toHaveCSS('box-shadow', PRESSED_SHADOW);
+        await expectPressedShadow(button, true);
       } finally {
         await page.mouse.up();
       }
 
       // Released with the pointer still over it: the fill may stay (hover), the shadow may not.
-      await expect(button).toHaveCSS('box-shadow', 'none');
+      await expectPressedShadow(button, false);
     });
 
     test(`${sample.name}: the size does not change when it is pressed`, async ({ page }) => {
       const button = sample.find(page);
-      const before = await button.boundingBox();
+      await button.scrollIntoViewIfNeeded();
+      const before = await sizeOf(button);
       await pointerDownOn(page, button);
       try {
-        await expect(button).toHaveCSS('box-shadow', PRESSED_SHADOW);
-        const during = await button.boundingBox();
-        expect(during).toEqual(before);
+        await expectPressedShadow(button, true);
+        expect(await sizeOf(button)).toEqual(before);
       } finally {
         await page.mouse.up();
       }
@@ -96,7 +119,7 @@ test.describe('button pressed state, DEF-008', () => {
       try {
         await expect(button).toHaveCSS('background-color', fill);
         await expect(button).toHaveCSS('color', text);
-        await expect(button).toHaveCSS('box-shadow', 'none');
+        await expectPressedShadow(button, false);
       } finally {
         await page.mouse.up();
       }
