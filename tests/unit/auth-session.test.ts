@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next-auth', () => ({ getServerSession: mocks.getServerSession }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
+vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', () => ({
   getAuthOptions: () => ({}),

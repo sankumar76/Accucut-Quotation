@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { cache } from 'react';
 
 import { ForbiddenError, UnauthorizedError } from '../../lib/errors';
@@ -25,6 +26,9 @@ export type { AuthenticatedUser } from './resolve-session-user';
 
 /** The current user, or null when signed out. Read once per request however many components ask. */
 export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> => {
+  // Who is signed in is known only at request time. Saying so first keeps every page that asks from being prerendered at
+  // build time, where there are no settings (the build would fail on the missing environment, not render).
+  await connection();
   const session = await getServerSession(getAuthOptions());
   const claims =
     session?.userId !== undefined && session.sessionVersion !== undefined && session.signedAt !== undefined

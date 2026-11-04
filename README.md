@@ -28,11 +28,25 @@ npx prisma migrate deploy
 npx next dev
 ```
 
-Then open **http://localhost:3000/design-system** in a browser. Today that page is the design system
-(colours, type, spacing, buttons, form controls, notices and states) inside the page frame every screen will
-use: top bar, side menu, and a menu button that opens the same menu as a drawer on a narrow window. The home
-page, http://localhost:3000, links to it. Resize the window to see it at phone, tablet and desktop widths.
-The page is served only outside a production build; a production build answers "not found".
+Every page now needs a signed-in person, so create the first Admin once (after filling in `.env`, below). Put an
+e-mail address and a password of your choice in `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` in `.env`, then run:
+
+```sh
+npx tsx scripts/bootstrap-admin.ts
+```
+
+It creates one Admin who must choose a new password at first sign-in, stores only a hash of the password, and
+never prints it. It refuses, and changes nothing, if any Admin already exists. Remove the password from `.env`
+afterwards.
+
+Then open **http://localhost:3000/sign-in** in a browser and sign in. You land on the task queue ("Task queue"
+for a Lead or an Admin, "My tasks" for an Engineer; a placeholder until the task list is built). **Sign out** is in
+the account menu at the top right. Five wrong passwords for one e-mail block it for 15 minutes; the same happens
+for 30 failures from one address. The design system page, **http://localhost:3000/design-system**, is the
+colours, type, spacing, buttons, form controls, notices and states inside the page frame every screen will use
+(top bar, side menu, and a menu button that opens the same menu as a drawer on a narrow window). The home page,
+http://localhost:3000, links to it. Resize the window to see it at phone, tablet and desktop widths. The design
+system is served only outside a production build; a production build answers "not found".
 
 **Fill in `.env` first.** After copying, open `.env` in a text editor and replace every `CHANGE_ME` value. Use
 letters and digits only for the two database passwords (they go into connection addresses). For `AUTH_SECRET`,
@@ -43,8 +57,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Every value in `.env` is a local placeholder for this one computer. None of them is a real password, and `.env`
-is never committed. The design system page does not read the database; the database lines are the same ones
-every later screen needs, so you set them up once. If `next dev` stops at start with a message that names a
+is never committed. Sign-in reads the database, so the database lines must be right and `npx prisma migrate deploy`
+must have run. If `next dev` stops at start with a message that names a
 variable, that variable in `.env` is missing or still says `CHANGE_ME`; the message never prints a value.
 
 **On a phone on the same Wi-Fi.** Start the server so that it listens on the network, with
@@ -57,8 +71,7 @@ the portal and its development tools.
 **To stop.** Press Ctrl+C in the window running `npx next dev`, then `docker compose -f compose.dev.yml down`.
 That keeps the database for next time; `docker compose -f compose.dev.yml down -v` also erases it.
 
-This section grows as screens arrive (sign-in in STORY-01.01, the Dockerfile and a hosted copy in
-STORY-10.04). The next sections explain the same commands in more detail.
+This section grows as screens arrive (the Dockerfile and a hosted copy in STORY-10.04). The next sections explain the same commands in more detail.
 
 ## Set up a development machine
 
@@ -119,7 +132,8 @@ placeholder; the message names the variable and never prints a value.
 | All tests | `npx vitest run` |
 | Build | `npx prisma generate && npx next build` |
 | Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
-| End-to-end, three screen sizes | `npx playwright install chromium` once, then `npx playwright test` |
+| End-to-end, three screen sizes (needs the database above; builds and serves the production build for the sign-in spec) | `npx playwright install chromium` once, then `npx playwright test` |
+| First Admin (AC-7 of STORY-01.01) | `npx tsx scripts/bootstrap-admin.ts` (reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD`) |
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
 | Licence allow-list | `npx tsx scripts/check-licences.ts` |
 | Dependency audit | `npm audit --omit=dev --audit-level=high` |
