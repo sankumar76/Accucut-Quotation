@@ -7,13 +7,13 @@
 | CI | Run 41744449259 on master `83eb6de` (push): success. Run 41680299302 on `5933605`: success |
 | Environment | Windows 11; Node v24.19.0 (CI uses Node 22); Docker 29.8.0; PostgreSQL 17 from `compose.dev.yml` as a throwaway Compose project `qa168` on host port 55516, with invented passwords. It was removed with its volume after the runs |
 | Date | 2026-11-04 |
-| **Recommendation** | **ACCEPT.** Ten consecutive green runs under load on master (series 3), and ten on `5933605` (series 2): 20 of 20 runs, 153 of 153 tests each. The warm-up retry never fired. DEF-003 and DEF-005 are verified and closed. New: **DEF-007 (AQP-182, #52), Sev-3, type Test**: three unit tests outside DEF-003's named set timed out once in the load runs themselves. Open: Sev-1 0, Sev-2 0, Sev-3 1 (DEF-007), Sev-4 0. DEF-004 (AQP-179, #43) stays open until AQP-28 merges, as master ruled |
+| **Recommendation** | **ACCEPT.** Ten consecutive green runs under load on master (series 3), and ten on `5933605` (series 2): 20 of 20 runs, 153 of 153 tests each. The warm-up retry never fired. DEF-003 and DEF-005 are verified: #24, #44 and AQP-180 are closed, and AQP-168's Jira status is left for master's G7. New: **DEF-007 (AQP-182, #52), Sev-3, type Test**: three unit tests outside DEF-003's named set timed out once in the load runs themselves. Open: Sev-1 0, Sev-2 0, Sev-3 1 (DEF-007), Sev-4 0. DEF-004 (AQP-179, #43) stays open until AQP-28 merges, as master ruled |
 
 ## What was asked (master, Jira 10780 and 10782)
 
 1. Fix QA's load-sensitive acceptance tests in `tests/acceptance/aqp-97-config-versions.test.ts` (QLT-24, Jira 10779).
 2. Run ten consecutive green runs under the DEF-003 load, and note whether the warm-up retry fires.
-3. Close AQP-168 and AQP-180 if they pass.
+3. Close AQP-168 and AQP-180 if they pass. AQP-168 is also the item under G7, and the coordinator said not to change status, so QA closed the defect records and GitHub #24 and left the Jira status of AQP-168 to master's G7 decision.
 
 ## 1. The acceptance-test fixes (in PR #51, now on master)
 
@@ -85,7 +85,7 @@ The same run also had a test worker crash on `layer-rules.test.ts` (Windows `0xC
 
 | Defect | Re-test | Result |
 |--------|---------|--------|
-| DEF-003 ([AQP-168](https://sankumar76.atlassian.net/browse/AQP-168), [#24](https://github.com/sankumar76/Accucut-Quotation/issues/24)) | The named members (the first `layer-rules` lint, the 10 s integration hooks, the registry-index 100 ms bound, now a work count) plus the class the developer and QA fixed in PR #51, in the 20 loaded runs above | **Pass: verified, closed** |
+| DEF-003 ([AQP-168](https://sankumar76.atlassian.net/browse/AQP-168), [#24](https://github.com/sankumar76/Accucut-Quotation/issues/24)) | The named members (the first `layer-rules` lint, the 10 s integration hooks, the registry-index 100 ms bound, now a work count) plus the class the developer and QA fixed in PR #51, in the 20 loaded runs above | **Pass: verified.** Record and #24 closed; Jira AQP-168 left for master's G7 decision |
 | DEF-005 ([AQP-180](https://sankumar76.atlassian.net/browse/AQP-180), [#44](https://github.com/sankumar76/Accucut-Quotation/issues/44)) | `npx vitest run tests/unit/env.test.ts` on master, once with every setting of `env.ts` set in the shell (invented values, a complete README-style environment, no `.env` file) and once with none | **Pass: 20 of 20 both ways, verified, closed.** Control: master's test before the fix, under the same complete environment, fails 1 of 17 ("reads process.env when no source is given"), which confirms the reproduction |
 | DEF-004 ([AQP-179](https://sankumar76.atlassian.net/browse/AQP-179), [#43](https://github.com/sankumar76/Accucut-Quotation/issues/43)) | Not in scope: `shell.spec.ts` is on AQP-28's branch | Stays open until AQP-28 merges (master 10780) |
 
@@ -93,7 +93,7 @@ The same run also had a test worker crash on `layer-rules.test.ts` (Windows `0xC
 
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
-| DEF-003 (AQP-168, #24) | Layer-rules first test (and its class) times out under load | Sev-3, Test | Closed, verified |
+| DEF-003 (AQP-168, #24) | Layer-rules first test (and its class) times out under load | Sev-3, Test | Verified; #24 closed; Jira status for master |
 | DEF-005 (AQP-180, #44) | `env.test.ts` fails with a complete environment | Sev-3, Test | Closed, verified |
 | DEF-007 ([AQP-182](https://sankumar76.atlassian.net/browse/AQP-182), [#52](https://github.com/sankumar76/Accucut-Quotation/issues/52)) | Three unit tests outside DEF-003's set time out at the default 5 s under load (`env-example` git check, `server-only` source scan); a child process that cannot start is read as a result | Sev-3, Test | New |
 | DEF-004 (AQP-179, #43) | `shell.spec.ts` drawer-width tolerance | Sev-3, Test | Open, waits for AQP-28 |
@@ -112,5 +112,5 @@ Branch `docs/AQP-168-qa-report` (from `origin/master`, docs only): this report, 
 ## Hand-off
 - Status: COMPLETE
 - Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 1 new: DEF-007; DEF-004 deferred)
-- Jira / GitHub: AQP-182 and #52 created; DEF-003 (#24) and DEF-005 (AQP-180, #44) closed after verification; results on AQP-168 and PR #51
-- Story status: AQP-168 is closed as its own defect, on master's instruction (10780); no other status changed
+- Jira / GitHub: AQP-182 and #52 created; #24, #44 and AQP-180 closed after verification; results on AQP-168, PR #51 and PR #53
+- Story status: AQP-168 not changed (left for master's G7); AQP-180 moved to Done as a verified defect
