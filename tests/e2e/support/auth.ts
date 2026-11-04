@@ -6,6 +6,8 @@ import { Client } from 'pg';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 
+import { waitUntilHydrated } from './design-system';
+
 /**
  * Shared by the sign-in journey (`sign-in.spec.ts`), the set-up project (`auth.setup.ts`) and the playwright
  * configuration. This file has no tests and its name does not end in `.spec.ts`.
@@ -44,10 +46,7 @@ const UPSERT_USER = `
     SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, role = EXCLUDED.role,
         is_active = true, must_change_password = false, session_version = 0`;
 
-/**
- * Makes sure the invented users exist with the known password, in the database the servers use. The URL is judged
- * by the same guard as every test run, so this can never write to a live database. Needs a migrated database.
- */
+/** Opens a connection to the database the servers use, after the same guard as every test run (never a live database). */
 async function connectToTestDatabase(): Promise<Client> {
   const url = process.env['DATABASE_URL'];
   if (url === undefined || url === '') {
@@ -59,6 +58,10 @@ async function connectToTestDatabase(): Promise<Client> {
   return client;
 }
 
+/**
+ * Makes sure the invented users exist with the known password, in the database the servers use. The URL is judged
+ * by the same guard as every test run, so this can never write to a live database. Needs a migrated database.
+ */
 export async function ensureE2eUsers(): Promise<void> {
   const hash = await createTestHasher().hash(E2E_PASSWORD);
   const client = await connectToTestDatabase();
@@ -111,8 +114,12 @@ export async function useFreshAddress(context: BrowserContext): Promise<void> {
   await context.setExtraHTTPHeaders({ 'x-forwarded-for': `${second}, ${address}` });
 }
 
-/** Fills SCR-01 with the keyboard-free helpers and presses "Sign in". */
+/**
+ * Fills SCR-01 and presses "Sign in". It first waits for the form to be hydrated (its `onSubmit` attached): typed text
+ * and a press on the button before that are lost or become a plain form post (QLT-51, the same fault as DEF-011).
+ */
 export async function signInThroughThePage(page: Page, email: string, password: string): Promise<void> {
+  await waitUntilHydrated(page, 'form[aria-label="Sign in"]', 'onSubmit');
   await page.getByLabel('E-mail').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();

@@ -10,7 +10,7 @@ import {
   unknownEmail,
   useFreshAddress,
 } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilAccountMenuIsLive } from './support/design-system';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -137,6 +137,7 @@ test.describe('AC-1: the person lands on their role\'s home', () => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
     await expectOnQueue(page, 'Task queue');
+    await waitUntilAccountMenuIsLive(page);
     await page.getByRole('button', { name: /Account menu/ }).click();
     const menu = page.getByRole('menu');
     await expect(menu).toContainText(E2E_LEAD.name);
@@ -211,6 +212,7 @@ test.describe('AC-4: sign-out', () => {
     expect(cacheControl).toContain('private');
     expect(cacheControl).toContain('no-store');
 
+    await waitUntilAccountMenuIsLive(page);
     await page.getByRole('button', { name: /Account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/sign-in$/);
