@@ -9,7 +9,15 @@
 import { appendFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { parseBaseline, parseRun, profileMarkdown, summariseProfile, type RunFigures } from './lib/lighthouse-summary';
+import {
+  REPORT_FILE,
+  parseBaseline,
+  parseRun,
+  profileMarkdown,
+  redirectedPages,
+  summariseProfile,
+  type RunFigures,
+} from './lib/lighthouse-summary';
 
 function option(args: ReadonlyArray<string>, name: string): string {
   const value = args[args.indexOf(name) + 1];
@@ -17,34 +25,42 @@ function option(args: ReadonlyArray<string>, name: string): string {
   return value;
 }
 
-/** Every report in the folder. A file that is not a report is a failure, not something to skip. */
+/** Every report in the folder. A file that is not a report, and a folder with none, are failures, not something to skip. */
 function readRuns(folder: string): RunFigures[] {
-  return readdirSync(folder)
-    .filter((name) => /^lhr-.*\.json$/.test(name))
+  const runs = readdirSync(folder)
+    .filter((name) => REPORT_FILE.test(name))
     .sort()
     .map((name) => {
       const run = parseRun(readFileSync(join(folder, name), 'utf8'));
       if (run === undefined) throw new Error(`${name} in ${folder} is not a Lighthouse report`);
       return run;
     });
+  if (runs.length === 0) throw new Error(`${folder} holds no Lighthouse report`);
+  return runs;
 }
 
-function run(): void {
+function run(): number {
   const args = process.argv.slice(2);
   const b0 = parseBaseline(process.env['LIGHTHOUSE_B0']);
+  const wifi = summariseProfile(readRuns(option(args, '--wifi')));
+  const slow = summariseProfile(readRuns(option(args, '--slow4g')));
   const sections = [
     '### Lighthouse reference run (NFR-009)',
-    profileMarkdown('Wi-Fi profile (pass or fail)', summariseProfile(readRuns(option(args, '--wifi'))), b0),
-    profileMarkdown('Slow 4G profile (report only)', summariseProfile(readRuns(option(args, '--slow4g'))), b0),
+    profileMarkdown('Wi-Fi profile (pass or fail)', wifi, b0),
+    profileMarkdown('Slow 4G profile (report only)', slow, b0),
   ];
   const text = `${sections.join('\n\n')}\n`;
   process.stdout.write(text);
   const summaryFile = process.env['GITHUB_STEP_SUMMARY'];
   if (summaryFile !== undefined && summaryFile !== '') appendFileSync(summaryFile, text);
+  // A page that redirected was not the page measured (a sign-in that did not take): its figures are wrong, so the run fails.
+  const redirected = [...redirectedPages(wifi), ...redirectedPages(slow)];
+  if (redirected.length > 0) process.stderr.write(`Pages that ended on another page, so their figures are not their own: ${redirected.join(', ')}\n`);
+  return redirected.length === 0 ? 0 : 1;
 }
 
 try {
-  run();
+  process.exitCode = run();
 } catch (error) {
   process.stderr.write(`Lighthouse summary could not be written: ${error instanceof Error ? error.message : 'unexpected error'}\n`);
   process.exitCode = 1;

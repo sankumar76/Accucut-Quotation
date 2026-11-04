@@ -7,6 +7,8 @@ import {
   parseBaseline,
   parseRun,
   profileMarkdown,
+  REPORT_FILE,
+  redirectedPages,
   summariseProfile,
   type RunFigures,
 } from '../../scripts/lib/lighthouse-summary';
@@ -21,11 +23,11 @@ const report = (overrides: Record<string, unknown> = {}): string =>
     ...overrides,
   });
 
-const run = (overrides: Partial<RunFigures> = {}): RunFigures => ({ url: '/', lcpMs: 1_000, tbtMs: 100, benchmarkIndex: 1_000, chromium: '137.0.1.2', ...overrides });
+const run = (overrides: Partial<RunFigures> = {}): RunFigures => ({ url: '/', finalPath: '/', lcpMs: 1_000, tbtMs: 100, benchmarkIndex: 1_000, chromium: '137.0.1.2', ...overrides });
 
 describe('parseRun', () => {
   it('reads the LCP, the TBT, the benchmark index and the Chromium version, and shows the page without its port', () => {
-    expect(parseRun(report())).toEqual({ url: '/queue?a=1', lcpMs: 1800.4, tbtMs: 120, benchmarkIndex: 1500, chromium: '137.0.7151.55' });
+    expect(parseRun(report())).toEqual({ url: '/queue?a=1', finalPath: '/queue', lcpMs: 1800.4, tbtMs: 120, benchmarkIndex: 1500, chromium: '137.0.7151.55' });
   });
 
   it('falls back to the final URL, then the requested URL, and tolerates a missing user agent or audit value', () => {
@@ -47,13 +49,13 @@ describe('summariseProfile', () => {
   it('takes the median per page over its runs, in the order the pages first appear', () => {
     const summary = summariseProfile([
       run({ url: '/', lcpMs: 3_000, tbtMs: 300, benchmarkIndex: 1_000 }),
-      run({ url: '/queue', lcpMs: 1_000 }),
+      run({ url: '/queue', finalPath: '/queue', lcpMs: 1_000 }),
       run({ url: '/', lcpMs: 1_000, tbtMs: 100, benchmarkIndex: 2_000 }),
       run({ url: '/', lcpMs: 2_000, tbtMs: 200, benchmarkIndex: 3_000 }),
     ]);
     expect(summary.pages).toEqual([
-      { url: '/', runs: 3, medianLcpMs: 2_000, medianTbtMs: 200 },
-      { url: '/queue', runs: 1, medianLcpMs: 1_000, medianTbtMs: 100 },
+      { url: '/', runs: 3, medianLcpMs: 2_000, medianTbtMs: 200, redirectedTo: undefined },
+      { url: '/queue', runs: 1, medianLcpMs: 1_000, medianTbtMs: 100, redirectedTo: undefined },
     ]);
     expect(summary.medianBenchmarkIndex).toBe(1_500);
     expect(summary.chromium).toBe('137.0.1.2');
@@ -98,7 +100,7 @@ describe('profileMarkdown', () => {
   it('writes the table, the benchmark index and the Chromium version', () => {
     const text = profileMarkdown('Wi-Fi profile', summary, undefined);
     expect(text).toContain('#### Wi-Fi profile');
-    expect(text).toContain('| / | 1 | 1235 | 56 |');
+    expect(text).toContain('| / | 1 | 1235 | 56 |  |');
     expect(text).toContain('Median benchmarkIndex 1500. No B0 is set, so this is a baseline run: record 1500 as B0. Chromium 137.0.1.2.');
   });
 
@@ -113,7 +115,32 @@ describe('profileMarkdown', () => {
 
   it('shows an empty profile and a missing index plainly', () => {
     const text = profileMarkdown('Slow 4G profile', summariseProfile([]), 1_000);
-    expect(text).toContain('| (no report) | 0 | n/a | n/a |');
+    expect(text).toContain('| (no report) | 0 | n/a | n/a | |');
     expect(text).toContain('No benchmark index was reported. Chromium unknown.');
+  });
+});
+
+describe('a page that ended on another page', () => {
+  it('reads the asked-for page and the page the browser ended on from the report', () => {
+    const redirected = parseRun(report({ requestedUrl: 'http://localhost:4123/', finalDisplayedUrl: 'http://localhost:4123/sign-in?callbackUrl=%2F' }));
+    expect(redirected).toMatchObject({ url: '/', finalPath: '/sign-in' });
+  });
+
+  it('is named in the summary and in the list of pages whose figures are not their own', () => {
+    const summary = summariseProfile([run({ url: '/' }), run({ url: '/', finalPath: '/sign-in' }), run({ url: '/queue', finalPath: '/queue' })]);
+    expect(redirectedPages(summary)).toEqual(['/ (ended on /sign-in)']);
+    expect(profileMarkdown('Wi-Fi profile', summary, undefined)).toContain('| / | 2 | 1000 | 100 | NOT THIS PAGE: ended on /sign-in |');
+    expect(redirectedPages(summariseProfile([run()]))).toEqual([]);
+  });
+
+  it('compares the path and not the query, so a page that adds a query is still the page asked for', () => {
+    expect(redirectedPages(summariseProfile([run({ url: '/queue?tab=1', finalPath: '/queue' })]))).toEqual([]);
+  });
+});
+
+describe('REPORT_FILE (the files Lighthouse CI keeps)', () => {
+  it('matches the JSON report of a run and nothing else in the folder', () => {
+    expect(REPORT_FILE.test('localhost-_-2026-11-04_21-39-53.report.json')).toBe(true);
+    for (const other of ['localhost-_-2026-11-04_21-39-53.report.html', 'manifest.json', 'lhr-1793.json']) expect(REPORT_FILE.test(other), other).toBe(false);
   });
 });
