@@ -16,8 +16,10 @@ export interface AccountUser {
 
 export interface AccountMenuItem {
   readonly label: string;
-  /** Where the action goes. Without it the item is shown disabled (its page does not exist yet). */
+  /** Where the action goes. */
   readonly href?: string;
+  /** What the action does, for an item that is not a link (sign out). With neither `href` nor `onSelect` the item is shown disabled (its page does not exist yet). */
+  readonly onSelect?: () => void;
   readonly icon: ReactNode;
 }
 
@@ -61,7 +63,7 @@ export function AccountMenu({ user, items = [], note }: AccountMenuProps) {
         </DropdownMenuLabel>
         {items.map((item) =>
           item.href === undefined ? (
-            <DropdownMenuItem key={item.label} disabled>
+            <DropdownMenuItem key={item.label} disabled={item.onSelect === undefined} {...(item.onSelect === undefined ? {} : { onSelect: item.onSelect })}>
               {item.icon}
               {item.label}
             </DropdownMenuItem>

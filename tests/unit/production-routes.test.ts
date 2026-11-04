@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findExposedRoutes, HIDDEN_IN_PRODUCTION, statusFromMeta } from '../../scripts/lib/production-routes';
+import { APP_PATHS_MANIFEST, findExposedRoutes, HIDDEN_IN_PRODUCTION, statusFromMeta } from '../../scripts/lib/production-routes';
 
 /** G6 STD-05: the production 404 of /design-system is checked on the build output in CI stage 9, not only by hand. */
 
@@ -29,5 +29,24 @@ describe('production route check', () => {
   it('fails when the build output is missing or unreadable, so a change in the Next.js layout is noticed', () => {
     expect(findExposedRoutes(() => undefined)[0]).toContain('is missing');
     expect(findExposedRoutes(() => 'garbage')[0]).toContain('unreadable status');
+  });
+
+  // STORY-01.01: every page of the (portal) group asks who is signed in, so /design-system is rendered per request and
+  // the build writes no prerender record for it. tests/e2e/production-routes.spec.ts asks the production server for it.
+  describe('a route rendered per request has no prerender record', () => {
+    const manifest = JSON.stringify({ '/design-system/page': 'app/design-system/page.js', '/queue/page': 'app/queue/page.js' });
+    const withManifest = (text: string | undefined) => (path: string) => (path === APP_PATHS_MANIFEST ? text : undefined);
+
+    it('passes when the build manifest can be read, because the status is decided per request and checked end to end', () => {
+      expect(findExposedRoutes(withManifest(manifest))).toEqual([]);
+    });
+
+    it('passes when the route is not in the build at all', () => {
+      expect(findExposedRoutes(withManifest('{}'))).toEqual([]);
+    });
+
+    it.each([undefined, 'garbage', '[]', '{"a":1}'])('fails when the manifest is %s, so a change in the Next.js layout is noticed', (text) => {
+      expect(findExposedRoutes(withManifest(text))[0]).toContain('cannot be read');
+    });
   });
 });
