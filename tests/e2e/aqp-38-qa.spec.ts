@@ -232,12 +232,25 @@ test.describe('[AQP-38 AC-4, AC-6] sessions and return addresses in the browser'
   });
 
   test('[AQP-38 AC-6] signing in from a link with a hostile return address lands at home on this site', async ({ page }) => {
-    for (const hostile of ['/.//evil.example', '/%2F%2Fevil.example', 'javascript:alert(1)']) {
+    // Each hostile address and where the person must land: home, or (for an encoded one that is still a path) that
+    // path on this site, which is not found. Never another site.
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ['/.//evil.example', '/queue'],
+      ['/%2F%2Fevil.example', '/%2F%2Fevil.example'],
+      ['javascript:alert(1)', '/queue'],
+    ];
+    for (const [hostile, landing] of cases) {
       await page.context().clearCookies();
       await openSignIn(page, `?callbackUrl=${encodeURIComponent(hostile)}`);
       await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
-      await expect(page).toHaveURL(new RegExp(`^${PRODUCTION_URL}/`));
-      expect(new URL(page.url()).origin, hostile).toBe(PRODUCTION_URL);
+      // Wait for the sign-in to finish: the page must have left /sign-in. (A check that only matched this site's origin
+      // also matched the sign-in page itself, so the loop went on while the sign-in was still in flight and its late
+      // session cookie redirected the next visit to /sign-in away from the page: the CI failure on run 41852484231.)
+      await expect(page).not.toHaveURL(/\/sign-in(?:\?|$)/);
+      const landed = new URL(page.url());
+      expect(landed.origin, hostile).toBe(PRODUCTION_URL);
+      expect(landed.pathname, hostile).toBe(landing);
+      expect((await page.context().cookies()).some((cookie) => cookie.name === SESSION_COOKIE), hostile).toBe(true);
     }
   });
 });
