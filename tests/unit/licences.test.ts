@@ -64,6 +64,13 @@ describe('findLicenceViolations (AC-4 stage 8)', () => {
     expect(findLicenceViolations(lock)).toEqual([]);
   });
 
+  it('STORY-10.10 AC-6: parse-cache-control (no licence field, a BSD licence file) is a named exception with the architect\'s ruling, and only by exact name', () => {
+    const exception = LICENCE_EXCEPTIONS.find(({ name }) => name === 'parse-cache-control');
+    expect(exception?.reason).toContain('architecture v0.15 section 11');
+    expect(findLicenceViolations(lockOf({ 'parse-cache-control': undefined }))).toEqual([]);
+    expect(findLicenceViolations(lockOf({ 'parse-cache-control-extra': undefined }))).toHaveLength(1);
+  });
+
   it('an exception does not cover a similarly named package', () => {
     expect(findLicenceViolations(lockOf({ 'elkjs-extra': 'EPL-2.0', '@img/other': 'LGPL-3.0-or-later' }))).toHaveLength(2);
   });

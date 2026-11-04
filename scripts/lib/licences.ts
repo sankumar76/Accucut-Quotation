@@ -51,6 +51,11 @@ export const LICENCE_EXCEPTIONS: ReadonlyArray<LicenceException> = [
     reason:
       'No licence field, file or README statement (0.1.1, through exceljs > unzipper > binary). Checked at scaffold as architecture section 11 asked; still not stated. Legal view not verified.',
   },
+  {
+    name: 'parse-cache-control',
+    reason:
+      'No `license` field, only the legacy `licenses` field of type BSD (1.0.1, through @lhci/cli > lighthouse; development tooling only). Its LICENSE file is the BSD 3-clause text. Solution-architect ruling on STORY-10.10 AC-6 (AQP-169 comment 10738; architecture v0.15 section 11, "Licence finding").',
+  },
 ];
 
 export interface LockedPackage {
