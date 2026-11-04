@@ -1,12 +1,11 @@
 'use client';
 
-import { Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
-import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
+import { PasswordInput } from '@/components/shared/password-input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,7 +63,6 @@ export function SignInForm({ returnTo }: SignInFormProps) {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordShown, setPasswordShown] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const noticeRef = useRef<HTMLDivElement>(null);
@@ -126,28 +124,15 @@ export function SignInForm({ returnTo }: SignInFormProps) {
             </FormField>
             <FormField id="password" label="Password" {...(passwordError === null ? {} : { error: passwordError })}>
               {(control) => (
-                <div className="flex gap-s-2">
-                  <Input
-                    {...control}
-                    ref={passwordRef}
-                    name="password"
-                    type={passwordShown ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    className="shrink-0"
-                    aria-pressed={passwordShown}
-                    aria-label={passwordShown ? 'Hide password' : 'Show password'}
-                    onClick={() => setPasswordShown((shown) => !shown)}
-                  >
-                    <Icon icon={passwordShown ? EyeOff : Eye} size="large" />
-                  </Button>
-                </div>
+                <PasswordInput
+                  {...control}
+                  ref={passwordRef}
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
               )}
             </FormField>
             <Button type="submit" loading={submitting} className="w-full">
