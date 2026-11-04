@@ -2,9 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   E2E_ENGINEER,
+  disposableUser,
   E2E_LEAD,
   E2E_PASSWORD,
-  E2E_WRONG_PASSWORD_USER,
   expectOnQueue,
   signInThroughThePage,
   useFreshAddress,
@@ -25,7 +25,11 @@ test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } }
 const ERROR_TITLE = 'E-mail or password is not correct.';
 const ERROR_BODY = 'Check both and try again.';
 const LOCKED_MESSAGE = 'Too many attempts. Try again in 15 minutes, or ask the Admin to reset your password.';
+const PAGE_GUTTER = 16;
 const SESSION_COOKIE = '__Secure-next-auth.session-token';
+
+/** The notice of the form. Next.js has a live region of its own with the same role, so the role alone is ambiguous. */
+const noticeOf = (page: Page) => page.locator('[data-slot="alert"]');
 
 test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
@@ -47,11 +51,11 @@ test.describe('SCR-01 at this width (AC-8)', () => {
     }
   });
 
-  test('AC-8: axe finds no violation (WCAG 2.0, 2.1 and 2.2 A and AA), in the default state and with the error shown', async ({ page }) => {
+  test('AC-8: axe finds no violation (WCAG 2.0, 2.1 and 2.2 A and AA), in the default state and with the error shown', async ({ page }, testInfo) => {
     await openSignIn(page);
     await expectNoAxeViolations(page);
-    await signInThroughThePage(page, E2E_WRONG_PASSWORD_USER.email, 'a-wrong-password');
-    await expect(page.getByRole('alert')).toContainText(ERROR_TITLE);
+    await signInThroughThePage(page, disposableUser('axe', testInfo.project.name).email, 'a-wrong-password');
+    await expect(noticeOf(page)).toContainText(ERROR_TITLE);
     await expectNoAxeViolations(page);
   });
 
@@ -59,9 +63,10 @@ test.describe('SCR-01 at this width (AC-8)', () => {
     await openSignIn(page);
     await expect(page.getByAltText('AccuCut logo')).toBeVisible();
     if (testInfo.project.name === 'mobile') {
-      const card = await page.getByRole('form', { name: 'Sign in' }).boundingBox();
+      const card = await page.locator('[data-slot="card"]').boundingBox();
       const viewport = page.viewportSize();
-      expect((card?.width ?? 0) + 2 * 16).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 2);
+      // Full width means the card fills the screen except the 16 px page gutter on each side (UX spec: below 480 px).
+      expect((card?.width ?? 0) + 2 * PAGE_GUTTER).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 1);
     }
   });
 
@@ -156,17 +161,19 @@ test.describe('the form checks before it sends', () => {
 
 test.describe('AC-2: one message for every failure', () => {
   const cases = [
-    { name: 'a wrong password', email: E2E_WRONG_PASSWORD_USER.email, password: 'a-wrong-password' },
-    { name: 'an unknown e-mail', email: 'nobody.at.all@example.test', password: E2E_PASSWORD },
+    { name: 'a wrong password', email: (screenSize: string) => disposableUser('slip', screenSize).email, password: 'a-wrong-password' },
+    { name: 'an unknown e-mail', email: () => 'nobody.at.all@example.test', password: E2E_PASSWORD },
   ];
   for (const failure of cases) {
-    test(`${failure.name} shows the same message, keeps both fields as typed, and moves focus to the notice`, async ({ page }) => {
+    test(`${failure.name} shows the same message, keeps both fields as typed, and moves focus to the notice`, async ({ page }, testInfo) => {
+      const email = failure.email(testInfo.project.name);
       await openSignIn(page);
-      await signInThroughThePage(page, failure.email, failure.password);
-      const notice = page.getByRole('alert');
+      await signInThroughThePage(page, email, failure.password);
+      const notice = noticeOf(page);
+      await expect(notice).toHaveAttribute('role', 'alert');
       await expect(notice).toContainText(ERROR_TITLE);
       await expect(notice).toContainText(ERROR_BODY);
-      await expect(page.getByLabel('E-mail')).toHaveValue(failure.email);
+      await expect(page.getByLabel('E-mail')).toHaveValue(email);
       await expect(page.getByLabel('Password', { exact: true })).toHaveValue(failure.password);
       await expect(page.locator('div[tabindex="-1"]', { has: notice })).toBeFocused();
       await expect(page).toHaveURL(/\/sign-in$/);
@@ -180,20 +187,21 @@ test.describe('AC-3: five failures block the account', () => {
     await openSignIn(page);
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await signInThroughThePage(page, email, `wrong-password-${attempt}`);
-      await expect(page.getByRole('alert')).toContainText(ERROR_TITLE);
+      await expect(noticeOf(page)).toContainText(ERROR_TITLE);
     }
     await signInThroughThePage(page, email, 'wrong-password-6');
-    await expect(page.getByRole('alert')).toContainText(LOCKED_MESSAGE);
-    await expect(page.getByRole('alert')).not.toContainText(ERROR_TITLE);
+    await expect(noticeOf(page)).toContainText(LOCKED_MESSAGE);
+    await expect(noticeOf(page)).not.toContainText(ERROR_TITLE);
     await expect(page.getByLabel('E-mail')).toHaveValue(email);
   });
 });
 
 test.describe('AC-4: sign-out', () => {
-  test('clears the session, sends the next request to the sign-in page, and the back button shows nothing protected', async ({ page, context }) => {
+  test('clears the session, sends the next request to the sign-in page, and the back button shows nothing protected', async ({ page, context }, testInfo) => {
+    // Signing out ends every session of the person, so it is a person of its own, never the Lead the other specs use.
     await openSignIn(page);
-    await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
-    await expectOnQueue(page, 'Task queue');
+    await signInThroughThePage(page, disposableUser('sign-out', testInfo.project.name).email, E2E_PASSWORD);
+    await expectOnQueue(page, 'My tasks');
 
     const protectedResponse = await page.goto('/queue');
     const cacheControl = protectedResponse?.headers()['cache-control'] ?? '';
@@ -210,7 +218,7 @@ test.describe('AC-4: sign-out', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
 
     await page.goBack();
-    await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'My tasks' })).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
   });
 

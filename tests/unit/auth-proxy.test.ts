@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config, proxy } from '@/proxy';
 
@@ -14,21 +14,35 @@ function request(path: string, cookie?: string): NextRequest {
 }
 
 describe('AC-4: a signed-out visitor goes to the sign-in page', () => {
+  beforeEach(() => vi.stubEnv('APP_ORIGIN', 'http://localhost:3000'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('sends the visitor to the portal\x27s own origin, not to whatever host name the request carries (behind the reverse proxy)', () => {
+    vi.stubEnv('APP_ORIGIN', 'https://portal.example.test');
+    const response = proxy(new NextRequest('http://app-internal:3000/queue/x'));
+    expect(response.headers.get('Location')).toBe('https://portal.example.test/sign-in?callbackUrl=%2Fqueue%2Fx');
+  });
+
+  it('falls back to the address of the request when no origin is set', () => {
+    vi.stubEnv('APP_ORIGIN', '');
+    expect(proxy(request('/queue/x')).headers.get('Location')).toBe('http://localhost:3000/sign-in?callbackUrl=%2Fqueue%2Fx');
+  });
+
   it('redirects to the sign-in page with the requested page remembered, and says "do not index"', () => {
     const response = proxy(request('/estimates/Q-2026-0001?tab=a'));
     expect(response.status).toBe(307);
-    expect(response.headers.get('Location')).toBe('/sign-in?callbackUrl=%2Festimates%2FQ-2026-0001%3Ftab%3Da');
+    expect(response.headers.get('Location')).toBe('http://localhost:3000/sign-in?callbackUrl=%2Festimates%2FQ-2026-0001%3Ftab%3Da');
     expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   });
 
   it('sends a visitor to the home page to the bare sign-in page', () => {
-    expect(proxy(request('/queue')).headers.get('Location')).toBe('/sign-in');
+    expect(proxy(request('/queue')).headers.get('Location')).toBe('http://localhost:3000/sign-in');
   });
 
   it('never redirects to another site, whatever the path looks like', () => {
     const location = proxy(request('//evil.example/x')).headers.get('Location');
-    expect(location).toBe('/sign-in');
+    expect(location).toBe('http://localhost:3000/sign-in');
   });
 
   it('treats a cookie of another name as no session', () => {

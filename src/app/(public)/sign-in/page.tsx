@@ -24,7 +24,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   return (
     <div className="flex min-h-dvh flex-col">
       <SkipLink />
-      <header className="p-s-4 md:px-s-5">
+      {/* White like the top bar of every other page: the logo red on it is the contrast the design tokens were checked for. */}
+      <header className="border-b border-border bg-surface p-s-4 md:px-s-5">
         <BrandLockup />
       </header>
       <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-120 flex-1 flex-col gap-s-5 px-s-4 py-s-5 outline-none md:py-s-7">

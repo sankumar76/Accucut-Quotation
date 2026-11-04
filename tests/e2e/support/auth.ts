@@ -22,9 +22,27 @@ export interface E2eUser {
 
 export const E2E_LEAD: E2eUser = { name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD' };
 export const E2E_ENGINEER: E2eUser = { name: 'E2E Engineer', email: 'e2e.engineer@example.test', role: 'ENGINEER' };
-/** Used only by the wrong-password test, so its failures never touch the people other tests sign in as. */
-export const E2E_WRONG_PASSWORD_USER: E2eUser = { name: 'E2E Slip', email: 'e2e.slip@example.test', role: 'ENGINEER' };
-export const E2E_USERS: ReadonlyArray<E2eUser> = [E2E_LEAD, E2E_ENGINEER, E2E_WRONG_PASSWORD_USER];
+
+/**
+ * People a test may harm, one set per screen size (the three sizes run at the same time against one database):
+ *   slip     gets wrong passwords, which count toward the five-failure block;
+ *   axe      gets one wrong password for the accessibility check of the error state;
+ *   sign-out signs out, which ends every session of that person (so it must never be the Lead whose browser state the
+ *            other specs use).
+ * Nobody else is ever signed out or blocked.
+ */
+export const E2E_SCREEN_SIZES = ['mobile', 'tablet', 'desktop'] as const;
+export type DisposableKind = 'slip' | 'axe' | 'sign-out';
+
+export function disposableUser(kind: DisposableKind, screenSize: string): E2eUser {
+  return { name: `E2E ${kind} ${screenSize}`, email: `e2e.${kind}.${screenSize}@example.test`, role: 'ENGINEER' };
+}
+
+export const E2E_USERS: ReadonlyArray<E2eUser> = [
+  E2E_LEAD,
+  E2E_ENGINEER,
+  ...E2E_SCREEN_SIZES.flatMap((size) => (['slip', 'axe', 'sign-out'] as const).map((kind) => disposableUser(kind, size))),
+];
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -48,6 +66,8 @@ export async function ensureE2eUsers(): Promise<void> {
   await client.connect();
   try {
     for (const user of E2E_USERS) await client.query(UPSERT_USER, [user.name, user.email, hash, user.role]);
+    // Failures counted by an earlier run must not carry over into this one. Throwaway test database only (guarded above).
+    await client.query('DELETE FROM login_throttles');
   } finally {
     await client.end();
   }

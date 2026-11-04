@@ -143,6 +143,7 @@ export function SignInForm({ returnTo }: SignInFormProps) {
                   <Button
                     variant="secondary"
                     size="icon"
+                    className="shrink-0"
                     aria-pressed={passwordShown}
                     aria-label={passwordShown ? 'Hide password' : 'Show password'}
                     onClick={() => setPasswordShown((shown) => !shown)}

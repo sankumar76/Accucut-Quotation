@@ -9,6 +9,8 @@ import { DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
  * sign-in now). It also compiles the pages those specs open first, so no test pays for it (test strategy section 10).
  */
 
+const COMPILE_TIMEOUT = 120_000;
+
 setup('create the E2E users and save a signed-in Lead', async ({ page, context }) => {
   setup.setTimeout(180_000);
   await ensureE2eUsers();
@@ -16,13 +18,16 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
 
   await page.goto(`${DEVELOPMENT_URL}/sign-in`);
   await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
-  await expect(page).toHaveURL(/\/queue$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible();
+  // The first sign-in compiles the auth route and the queue page on demand, which takes far longer than a test's 5 s
+  // expectation on a slow machine; only this set-up pays for it.
+  await expect(page).toHaveURL(/\/queue$/, { timeout: COMPILE_TIMEOUT });
+  await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
 
   // Warm the pages the other specs open.
   await page.goto(`${DEVELOPMENT_URL}/design-system`);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
   await page.goto(`${DEVELOPMENT_URL}/`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
 
   await context.storageState({ path: SIGNED_IN_STATE });
 });

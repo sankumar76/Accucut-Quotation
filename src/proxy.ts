@@ -35,8 +35,10 @@ export function proxy(request: NextRequest): NextResponse {
     return response;
   }
   const { pathname, search } = request.nextUrl;
-  // A relative Location, so the redirect never depends on the host name this process thinks it has.
-  const response = new NextResponse(null, { status: 307, headers: { Location: signInPathFor(`${pathname}${search}`) } });
+  // Next.js requires an absolute Location here. The portal's own origin comes first, so a host name this process only
+  // thinks it has (behind the reverse proxy) never decides where a person is sent; the request's own address is the fallback.
+  const origin = process.env.APP_ORIGIN || request.url;
+  const response = NextResponse.redirect(new URL(signInPathFor(`${pathname}${search}`), origin), 307);
   response.headers.set('Cache-Control', NO_STORE);
   response.headers.set('X-Robots-Tag', NO_INDEX);
   return response;

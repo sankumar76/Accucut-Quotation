@@ -46,6 +46,10 @@ export default defineConfig({
   // Two workers on every machine: the development server compiles on demand, and more workers than that made
   // a slow laptop exceed a test's 30 s on first requests (G6 PRF-06: set it once the runner size is fixed).
   workers: 2,
+  // A sign-in hashes a password (about 250 ms of work) and three screen sizes run at once, so on a busy machine the
+  // default 5 s for an expectation was too tight for a page change after "Sign in" (DEF-003 family: a wait for an event,
+  // not a limit on speed; the tests assert what happened, not how fast).
+  expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${DEV_PORT}`,
