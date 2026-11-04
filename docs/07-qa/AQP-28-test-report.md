@@ -6,8 +6,9 @@
 | Build / commit | G7 run on `feat/AQP-28-tokens-and-shell` (PR #33, `sankumar76/Accucut-Quotation`). First run on `f903d48` (the G6 head). After the coordinator merged `master` into the branch (`a4b94a0`: docs PR #42 and AQP-97 / PR #32), the regression was run again on `a4b94a0`. The merge adds no change under `src/app`, `src/components`, `tests/e2e`, `package.json`, the lockfile, `next.config.ts` or the workflow |
 | CI | Run 41629593078 on `f903d48`: success. Run 41634169861 on `a4b94a0`: success, stages 1 to 12 all green, stage 13 skipped by design |
 | Environment | Windows 11 Pro; Node v24.19.0 (the project and CI use Node 22), npm 11.17.0; Docker; PostgreSQL 17 from the unchanged `compose.dev.yml` in a throwaway project `qa28g7` on host port 55428 (removed afterwards); Chromium via Playwright 1.64.1. The machine was shared with another QA run and was busy at times |
-| Date | 2026-11-03 |
-| **Recommendation** | **ACCEPT, conditional on AC-9.** AC-1 to AC-8 and AC-10 are verified with evidence. AC-9 (real phone, screen reader, Windows high contrast) is **pending the delivery lead's results**; until it is recorded it is an unverified AC and, by the story's own wording, G7 returns NO-GO. Open defects: Sev-1 0, Sev-2 0, Sev-3 2 (both type Test), Sev-4 0 |
+| Date | 2026-11-03 (automated and exploratory run); 2026-11-04 (AC-9 results recorded) |
+| **Recommendation** | **ACCEPT.** All ten ACs are verified with evidence. AC-9 was run by the delivery lead on 2026-11-04 on a real phone (iPhone, VoiceOver), with Windows Narrator and with Windows contrast themes: every step PASS. Step B4 passed with one observation (no visible tap feedback on the buttons), which QA raised as DEF-008 (Sev-3, type Product) because UX 7.3 names a pressed colour. Open defects against the story: Sev-1 0, Sev-2 0, Sev-3 2 (DEF-004 type Test, DEF-008 type Product), Sev-4 0. DEF-005 shows Done in Jira (see Defects) |
+| History | 2026-11-03: ACCEPT conditional on AC-9 (AC-9 pending). 2026-11-04: AC-9 results recorded, B4 observation assessed, recommendation final |
 
 ## Summary
 
@@ -15,7 +16,7 @@ The page and shell do what AC-1 to AC-8 say. The token file equals the UX source
 
 ## Decision for master (read this first)
 
-1. **AC-9 is not done and cannot be done by QA.** The checklist for the delivery lead is in Appendix A. QA pre-screened what a machine can show (keyboard order, focus outline, forced-colours rendering, a phone-sized browser over the Wi-Fi address) and found nothing that predicts a failure, but none of that replaces the real phone, Narrator and Windows contrast themes. Recommendation stays ACCEPT **only after** the delivery lead's results are recorded in this report and show no Sev-1 or Sev-2 finding.
+1. **AC-9 is done (2026-11-04).** The delivery lead ran the Appendix A checklist: 22 of 22 steps PASS, including the optional phone screen reader (VoiceOver). Results, devices and versions are under "AC-9 results" below. **B4 observation, assessed:** the sample buttons give no visible feedback when tapped. UX spec v0.8 section 7.3 lists `--primary-hover` for "Hover and pressed", so a pressed state is specified (for the primary button explicitly). The build sets hover colours only, which Tailwind 4 applies only on devices that can hover, and has no `active:` style. Raised as **DEF-008 (AQP-183, #54), Sev-3, type Product**: no task is blocked and every action is reachable, so it does not hold G7. The spec names no pressed colour for secondary, ghost and danger: that part is for ux-expert to settle (OBS-6).
 2. **Screen reader: Narrator, not NVDA.** The test plan (12.2) assumes NVDA with Chrome; the story says "NVDA or equivalent". The delivery lead will use Windows Narrator. I treat it as the equivalent the story allows, but it is a weaker pass (Narrator in Chrome and Edge is less used by people who rely on a screen reader). Say so if you want NVDA (a free download) as well. The story also names VoiceOver or TalkBack on the phone; the checklist carries that as an optional step. If it is not run, list it as a check not run at G8 (test plan 12.1 already expects one platform only).
 3. **Two Sev-3 defects of type Test (AQP-179 / #43, AQP-180 / #44).** Neither holds G7. DEF-004: a drawer-width assertion fails about one run in ten before Playwright's one retry hides it. DEF-005: `tests/unit/env.test.ts` fails on any computer that has a complete `.env`, which is exactly what the README tells the delivery lead to create.
 4. **Regression on this machine.** The full Vitest run fails one test in every full run here (`layer-rules.test.ts`, first case, 30 s timeout: DEF-003 class). It passes alone (67 of 67) and in CI. Not counted against G7, as instructed.
@@ -35,10 +36,10 @@ Test IDs are the developer's titles (`[AC-n]` or `AC-n:` in the title) in `tests
 | AC-6 (negative) | e2e `AC-6:` x4 titles incl. the control that proves the check can fail; QA exploratory run | BVA, EG | Pass | Reduced motion: shimmer, spinner and drawer slide/fade all report `animation-name: none`; with motion allowed they run (control test). 320 px wide with WCAG 1.4.12 text spacing: no sideways page scroll, nothing outside the top bar. QA also loaded the page at 320 x 256 (400 percent zoom): the page itself does not scroll sideways (overflow 0); the wide tables scroll inside their own focusable region ("Contrast pairs, scrollable"), which WCAG 1.4.10 allows for tables |
 | AC-7 | Developer `design-system-route.test.ts`, `production-routes.test.ts`; e2e `AC-7: all ten sections...` x3; QA production run | EP, EG | Pass | The ten h2 headings are in the required order at all three widths. Production: `npx prisma generate && npx next build` exit 0, `npx tsx scripts/check-production-routes.ts` passes. `next start` and `node .next/standalone/server.js`: `/design-system` 404; also 404 for `?x=1`, `/DESIGN-SYSTEM`, `/design-system/foo`, a `_next/data` path, and `/design-system/` (308 then 404); an RSC request (`RSC: 1` header) gets a 307 to `/design-system?_rsc`, a path with a query string, which answers 404 like the others (I did not follow the redirect itself). The production home page does not link to it (0 `href="/design-system`). The logo is served with `Cache-Control: public, max-age=86400, stale-while-revalidate=604800` |
 | AC-8 | e2e `AC-8:` x 9 titles at 360, 768 and 1366 px (overflow, axe with `wcag2a, wcag2aa, wcag21aa, wcag22aa` on the page, with the account menu open, with the drawer open, 44 px and 36 px targets, keyboard only) | EP, BVA | Pass | First run on `f903d48`: 72 tests, 60 passed, 1 flaky, 11 skipped by design (side-menu tests on the two touch projects, drawer and target-size tests on desktop). On `a4b94a0`: 59 passed, 2 flaky, 11 skipped; the two flaky are a 5 s route-change wait and a 30 s axe run that timed out on a loaded machine and passed on retry; with retries off they passed 12 of 12 on a quieter machine. The one flaky of the first run is DEF-004. Stage 12 is on and blocks merge: CI stage 12 green on both heads. No axe violation in any run |
-| AC-9 | Manual: Appendix A | | **Pending the delivery lead's results** | Not run. Pre-screen only (below): forced-colours emulation, keyboard order, a phone-sized browser over the Wi-Fi address |
+| AC-9 | Manual: Appendix A, run by the delivery lead with QA's checklist, 2026-11-04 | EP, EG | Pass (B4 with an observation, raised as DEF-008, Sev-3) | Real phone: iPhone 17 Pro Max, iOS 27.0.1, Google Chrome 155.0.8059.37, VoiceOver (B9). PC: Windows 11 Pro 25H2, OS build 26200.9711, Google Chrome 156.0.8078.80, Narrator on that build. Contrast themes: the first theme per the checklist (not separately named; the checklist suggested Night sky) and Desert (E4). All steps A5, B1 to B9, C1 to C3, D1 to D5, E1 to E4 PASS. Detail under "AC-9 results" |
 | AC-10 | Manual: clean clone | EP, EG | Pass | See "AC-10 walk-through" below |
 
-AC coverage: 9 of 10 verified; AC-9 pending.
+AC coverage: 10 of 10 verified.
 
 ## Automated Test Results
 
@@ -113,9 +114,10 @@ Limit: I ran on Node 24, on a machine where Docker and `.env` were available; th
 | ID | Title | Severity | Status | Linked AC |
 |----|-------|----------|--------|-----------|
 | DEF-004 ([AQP-179](https://sankumar76.atlassian.net/browse/AQP-179), [#43](https://github.com/sankumar76/Accucut-Quotation/issues/43)) | Drawer-width assertion in `shell.spec.ts` fails about 1 run in 10 (sub-pixel overshoot of 0.000008 px); the one retry hides it | Sev-3, type Test | New | AC-4, AC-8 |
-| DEF-005 ([AQP-180](https://sankumar76.atlassian.net/browse/AQP-180), [#44](https://github.com/sankumar76/Accucut-Quotation/issues/44)) | `tests/unit/env.test.ts` fails on a computer with a complete `.env` (the README setup) | Sev-3, type Test | New | AC-10 (regression; test from AQP-27) |
+| DEF-005 ([AQP-180](https://sankumar76.atlassian.net/browse/AQP-180), [#44](https://github.com/sankumar76/Accucut-Quotation/issues/44)) | `tests/unit/env.test.ts` fails on a computer with a complete `.env` (the README setup) | Sev-3, type Test | Jira: Done (not re-verified by QA; see below) | AC-10 (regression; test from AQP-27) |
+| DEF-008 ([AQP-183](https://sankumar76.atlassian.net/browse/AQP-183), [#54](https://github.com/sankumar76/Accucut-Quotation/issues/54)) | Buttons show no pressed state on a touch screen; UX 7.3 names `--primary-hover` as the "Hover and pressed" colour, the build has hover only (gated to hover-capable devices) and no `active:` style | Sev-3, type Product | New (2026-11-04, from AC-9 step B4) | AC-5, AC-9 |
 
-Known and not raised again: DEF-003 (AQP-168, #24), the load-sensitive timeout class. Open by severity: Sev-1 0, Sev-2 0, Sev-3 2 (plus the known DEF-003), Sev-4 0. Records are in `docs/07-qa/defects/`. Both Jira Bugs are linked to AQP-28 ("relates to") with labels `ai-delivery`, `aiid-DEF-004` or `aiid-DEF-005`, `agent-qa-engineer`, `sev-3`; both GitHub issues carry `bug`, `sev-3`, `ai-delivery`.
+Known and not raised again: DEF-003 (AQP-168, #24), the load-sensitive timeout class. **Status on 2026-11-04:** Jira shows DEF-005 (AQP-180) as Done; `tests/unit/env.test.ts` is unchanged on this branch since `90b1dd4`, and QA has not re-verified it in this update, so the record stays as written. Open against this story by severity: Sev-1 0, Sev-2 0, Sev-3 2 (DEF-004, DEF-008), Sev-4 0. Records are in `docs/07-qa/defects/`. Every Jira Bug is linked to AQP-28 ("relates to") with labels `ai-delivery`, `aiid-DEF-nnn`, `agent-qa-engineer`, `sev-3`; every GitHub issue carries `bug`, `sev-3`, `ai-delivery`.
 
 ## Observations (not defects; for the master to route)
 
@@ -126,6 +128,8 @@ Known and not raised again: DEF-003 (AQP-168, #24), the load-sensitive timeout c
 | OBS-3 | `platformFonts` in `tests/e2e/support/design-system.ts` sets a `data-probe` attribute on a below-the-fold element, which can land before hydration finishes and make the development server log a hydration warning. Cosmetic, test-only | developer, Sev-4 backlog |
 | OBS-4 | There is no `forced-colors` CSS. It is not needed so far (outline focus, real borders, text-only information), but the colour swatches vanish in a contrast theme by design. The manual check decides whether anything else matters | QA at AC-9 |
 | OBS-5 | The Playwright config fixes the port at 3100 and reuses a server already on it. Two people testing in two folders on one machine can end up testing each other's code. I used a wrapper on 3128 | developer, optional hardening (`PORT` from the environment) |
+| OBS-6 | UX 7.3 names a pressed colour only for the primary button (`--primary-hover`). Secondary, ghost, danger and icon buttons have no stated pressed state, and the mock-up has no `:active` rule. DEF-008 covers the primary; the rest needs a spec line | ux-expert: state the pressed state of every button variant in UX 7.2 or 7.3 |
+| OBS-7 | During the AC-9 session first page loads on the phone sometimes timed out: the development server took about 5 to 6 s per request on the delivery lead's PC; after warming the page on the PC it worked. This is development mode (pages compile on first request), not the production build | none for this story; the README "on a phone" paragraph could say "open the page on the PC first" (developer, optional) |
 
 ## Residual Risks / Notes
 
@@ -293,21 +297,63 @@ Stop the portal: click the terminal that runs it and press **Ctrl + C**, then ty
 
 **How QA will read the results.** Any FAIL on B1, B3, B5, C1, C3, D2 or E1 is recorded as a defect of Sev-2 (it stops a task or loses content); other FAILs are Sev-3. A step marked SKIP is "not run" and is listed at G8; a skipped B1 to B6, D or E block leaves AC-9 unverified.
 
-### AC-9 results (to be filled by QA after the session)
+### AC-9 results (recorded by QA from the delivery lead's report, 2026-11-04)
+
+Source: the delivery lead's results as reported in chat and relayed by the coordinator on 2026-11-04. QA did not sit in the session; the results are recorded as the delivery lead stated them.
+
+| Item | Answer |
+|------|--------|
+| Phone model | iPhone 17 Pro Max |
+| Phone system and version | iOS 27.0.1 |
+| Phone browser and version | Google Chrome 155.0.8059.37 (so B9 used VoiceOver) |
+| PC Windows version | Windows 11 Pro 25H2, OS build 26200.9711 |
+| PC browser and version | Google Chrome 156.0.8078.80 |
+| Narrator used | Narrator on Windows 11 Pro 25H2, build 26200.9711 |
+| Contrast themes tried | First theme per the checklist, not separately named (the checklist suggested Night sky); Desert (E4) |
+| Setup | Phone on the office Wi-Fi to the development server started with `npx next dev -H 0.0.0.0`. First loads sometimes timed out (about 5 to 6 s per request in development mode on that PC); after warming the page on the PC it worked (OBS-7) |
+
+| Step | Result | Note |
+|------|--------|------|
+| A5 | PASS | |
+| B1 | PASS | |
+| B2 | PASS | |
+| B3 | PASS | |
+| B4 | PASS, with an observation | "I can tap on each, but I don't see button getting highlighted in some way to show that I tapped on the button." The sample buttons have no action, as expected; the missing pressed feedback is raised as DEF-008 (Sev-3) |
+| B5 | PASS | |
+| B6 | PASS | |
+| B7 | PASS | |
+| B8 | PASS | |
+| B9 (optional) | PASS | VoiceOver |
+| C1 | PASS | |
+| C2 | PASS | |
+| C3 | PASS | |
+| D1 | PASS | |
+| D2 | PASS | |
+| D3 | PASS | |
+| D4 | PASS | |
+| D5 | PASS | |
+| E1 | PASS | |
+| E2 | PASS | |
+| E3 | PASS | |
+| E4 | PASS | Desert |
 
 | Part | Result | Device / software / version | Date |
 |------|--------|-----------------------------|------|
-| Phone (B) | Pending | | |
-| Keyboard (C) | Pending | | |
-| Narrator (D) | Pending | | |
-| High contrast (E) | Pending | | |
+| Phone (B) | Pass (B4 observation, DEF-008) | iPhone 17 Pro Max, iOS 27.0.1, Chrome 155.0.8059.37, VoiceOver | 2026-11-04 |
+| Keyboard (C) | Pass | Windows 11 Pro 25H2 (26200.9711), Chrome 156.0.8078.80 | 2026-11-04 |
+| Narrator (D) | Pass | Narrator, same PC and browser | 2026-11-04 |
+| High contrast (E) | Pass | First theme per checklist (not named), Desert; same PC and browser | 2026-11-04 |
+
+**Checks not run (for the G8 list, test plan 12.1):** Android with Chrome (one phone platform only, as DL-035 expects); Safari on the iPhone (Chrome on iOS uses the same WebKit engine, but Safari itself was not used); NVDA (Narrator was used as the "equivalent" the story allows; the master's view on this is still open); a low-end phone (R-5 daylight check B7 was done on a high-end phone).
 
 ## Artefacts
 
 Committed with this report: `docs/07-qa/AQP-28-test-report.md`, `docs/07-qa/defects/DEF-004-drawer-width-assertion-sub-pixel-flake.md`, `docs/07-qa/defects/DEF-005-env-test-depends-on-ambient-environment.md`. No production code, test or test-plan file was changed. `docs/07-qa/test-plan.md` (modified in the working tree by someone else) was not touched and not staged. Updates the plan still needs from QA: section 17 now has verified commands for 10.02 (Playwright projects `mobile`, `tablet`, `desktop`; the wrapper-config trick for a second tester on one machine), and section 12.2 should say Narrator is accepted as the "equivalent" if the master agrees.
 
+Added on 2026-11-04: the AC-9 results in this report and `docs/07-qa/defects/DEF-008-no-pressed-state-on-touch.md`.
+
 ## Hand-off
-- Status: COMPLETE for AC-1 to AC-8 and AC-10; AC-9 pending the delivery lead
-- Recommendation (G7): ACCEPT, conditional on AC-9 (Sev-1 0, Sev-2 0, Sev-3 2 type Test, Sev-4 0)
-- Jira / GitHub: AQP-179 and #43 (DEF-004), AQP-180 and #44 (DEF-005) opened and linked to AQP-28; summary comments on AQP-28 and PR #33
+- Status: COMPLETE (AC-9 recorded 2026-11-04)
+- Recommendation (G7): ACCEPT (Sev-1 0, Sev-2 0, Sev-3 2 open against the story: DEF-004 type Test, DEF-008 type Product; Sev-4 0)
+- Jira / GitHub: AQP-179 and #43 (DEF-004), AQP-180 and #44 (DEF-005), AQP-183 and #54 (DEF-008) linked to AQP-28; summary comments on AQP-28 and PR #33
 - Story status: not changed by QA
