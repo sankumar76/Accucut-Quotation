@@ -1030,3 +1030,31 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 1. **CONDITIONAL GO.** The ten-run evidence asked for in DL-064 is met on the code as merged. **QA moves AQP-168 to Done** (status changes are QA's, `CLAUDE.md` section 4).
 2. **DEF-007 (AQP-182, #52) joins DEF-004 (AQP-179) in one follow-up fix,** once AQP-28 merges, **due before sprint 1 ends**. It is the same class: three unit tests whose default 5 s limit includes machine load, fixed the same way (warm-up or a set-up hook; no wall-clock bound). The Windows out-of-memory spawn failure is an environment fault, not a test design fault. Record it as type Environment, and have it reported as an error, not as a test result.
 3. **Docs PR #53 may carry master's pending governance records** (`docs/00-governance/gate-log.md` and `decision-log.md`), staged by name, because both are documentation and both must land before the next code merge. If adding them would force #53 through review again, keep them for a separate docs PR, merged before the next code PR.
+
+---
+
+## G7 – QA Acceptance — AQP-28 (STORY-10.02) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none. Merging PR #33 is the delivery lead's act
+- **Attempt:** 1
+- **Artefacts evaluated:** QA hand-off AQP-28 10788 (report commit e66b0ab, CI green per the hand-off); the interim rulings above and DL-061; the session log, read by role, for the delivery lead's own words on 2026-11-04. **Not done:** I did not read the report file itself or re-run any check.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | AC-1 to AC-8 and AC-10 at G6 and in the report. **AC-9:** all 22 steps PASS, B4 with an observation. Typed by the delivery lead at 07:33:22Z ("Except B4 … all other scenarios are PASS"); devices typed at 07:30:51Z (iPhone 17 Pro Max, iOS 27.0.1, Chrome 155.0.8059.37; Windows 11 Pro, Chrome 156.0.8078.80). Phone screen reader VoiceOver; Windows screen reader Narrator; contrast theme Desert (the first theme used is not named, and one named theme meets AC-9) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | None. Open: DEF-008 (Sev-3 Product), DEF-004 (Sev-3 Test) |
+| 3 | Regression green | ✱ | ✅ | CI green on the report commit |
+| 4 | Exploratory notes, accessibility | | ✅ | AC-9 is this story's accessibility check |
+
+**Rulings**
+1. **The Narrator ruling is closed.** DL-061 accepted Narrator as "NVDA or equivalent" on 2026-11-03, before the results; it is not reopened. The Windows build number (25H2, 26200.9711) is in the report, but not in the delivery lead's own typed words, which say "Windows 11 Pro". That is enough for AC-9's "device, OS, browser and version", since the browser version is in their words.
+2. **DEF-008 (no pressed style on touch, AQP-183, #54) does not hold PR #33.** AC-5 names variants, not states. Hover works, and a tap still acts; there is just no visual feedback. But the UX spec names a pressed colour, and the shell's button is the pattern every page copies, so it is **fixed before the first story with a real action on a phone reaches G7: 01.01 sign-in (AQP-38),** not 05.09. Sign-in is a tap on a primary button on a phone. OBS-6 (pressed colours for the other variants) goes to the ux-expert first, so the fix is made once for all variants.
+3. **Checks not run** (Android, Safari on iPhone, NVDA, a low-end phone) are listed for G8, as the test plan says (QA-OQ-04; DL-035).
+
+**Before the delivery lead's merge**
+1. QA moves AQP-28 to Done.
+2. PR #33 is brought up to date with `master`. That brings in #51 (DEF-005's fix) and the AQP-97 and AQP-106 work. CI must be green on the new head, including stage 12, and that run is DEF-005's re-verification on this branch.
+3. The docs PR carrying master's pending governance records (#53, or a separate one) merges first. Architecture v0.14 is already on `master` through #42.
+4. Squash merge only; the first push run on `master` afterwards is checked.
+5. Then the DEF-004 and DEF-007 follow-up (DL-066), before sprint 1 ends.
