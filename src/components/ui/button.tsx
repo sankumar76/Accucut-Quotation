@@ -47,7 +47,7 @@ type NativeButton = ComponentProps<'button'>;
  * in `buttonVariants` because a link drawn as a button (`asChild`) keeps the link menu (open in a new tab, copy the
  * link). Chromium does not implement `-webkit-touch-callout`; only a check on an iPhone shows its effect.
  */
-const BUTTON_ONLY = '[-webkit-touch-callout:none]';
+const NO_TOUCH_CALLOUT ='[-webkit-touch-callout:none]';
 
 /**
  * `loading` and `disabled` need a real `<button>`: `asChild` renders the child (a link) with the button's look and
@@ -91,7 +91,7 @@ export function Button({ variant, size, asChild = false, loading = false, classN
       data-slot="button"
       data-size={dataSize}
       type={type ?? 'button'}
-      className={cn(classes, BUTTON_ONLY)}
+      className={cn(classes, NO_TOUCH_CALLOUT)}
       disabled={disabled === true || loading}
       aria-busy={loading || undefined}
       {...props}
