@@ -118,6 +118,12 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-04 | master | G6 AQP-184 (PR #65): NO-GO, attempt 1, no performance report (DL-032, DL-076); fix 09f8022 verified; G7 evidence for test-only defects set (DL-077). G7 AQP-183: NO-GO, QA REJECT upheld, DEF-010 to the ux-expert; touchstart and AQP-38 OBS-1 closed (DL-078) | docs/00-governance/ |
+| 2026-11-04 | master | G7 AQP-38 (PR #62, a2b2997): CONDITIONAL GO. QA moves it to Done; report CI account corrected and verified before the merge; DEF-009 before the next axe story's G6; OBS-1 a follow-up in the AQP-183 iPhone session (DL-075). PR #58 → #62 recorded with provenance (DL-074) | docs/00-governance/ |
+| 2026-11-04 | master | G6 AQP-38 conditions 1 to 4 verified at ea8dc6b; G4 condition 6 sign-out half met; may go to G7. The architect states the as-built throttle semantics in architecture section 6 before G8 | docs/00-governance/gate-log.md |
+| 2026-11-04 | master | G6 AQP-38 (PR #58): CONDITIONAL GO, attempt 1. QLT-32 upheld; compare-and-increment sign-out; all four Minors fixed now; quality and standards re-review the fix before QA (DL-071). `login_throttles` natural key recorded (DL-072). PRF-01 to #61 and AQP-169 (DL-073). RISK-020 raised to 12; RISK-021 new | docs/00-governance/ |
+| 2026-11-04 | master | G6 AQP-183 condition 2 verified (a13f194); may go to G7 | docs/00-governance/gate-log.md |
+| 2026-11-04 | master | G6 AQP-183 (DEF-008, PR #56): CONDITIONAL GO, attempt 1. PR #56 is a code PR merged by the delivery lead whatever its prefix (DL-069); STD-02 hook limit out in one commit verified by master; G7 needs the delivery lead's iPhone hold check, `touchstart` to the solution-architect only if it fails (DL-070) | docs/00-governance/ |
 | 2026-11-03 | master | G7 AQP-97: CONDITIONAL GO, attempt 1. QA files need no review; README OBS-4 fixed before the merge; observations to #40, #41, #34, #38 (DL-060) | docs/00-governance/ |
 | 2026-11-03 | master | AQP-28 STD-18/19 commit f903d48 verified; AQP-28 may go to G7. Playwright cache nets about 3 s, under the 5 s bar, so it comes out with the next CI change; the Next.js cache stays | docs/00-governance/gate-log.md |
 | 2026-11-03 | master | AQP-28 G6 conditions 1 to 3 met after re-review; STD-18 and STD-19 in one commit verified by master, then G7; interim JS budget measurement at each UI story's G6 until AQP-169 (DL-059). RISK-020 restated | docs/00-governance/ |

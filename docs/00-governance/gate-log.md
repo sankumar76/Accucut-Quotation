@@ -1058,3 +1058,353 @@ G3 conditions 8, 9 (Q-18 remainder) and 16 stay open and are not yet due. **G8 m
 3. The docs PR carrying master's pending governance records (#53, or a separate one) merges first. Architecture v0.14 is already on `master` through #42.
 4. Squash merge only; the first push run on `master` afterwards is checked.
 5. Then the DEF-004 and DEF-007 follow-up (DL-066), before sprint 1 ends.
+
+---
+
+## G6 – Peer Review — AQP-182 (test reliability 2: DEF-007, DEF-004) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #57 at head 893ef66, test-only; check run success including stage 12 (run 41802738061); Jira AQP-182 10795 (developer), 10797 (standards), 10798 (quality), 10799 (performance). **Not done:** no test run of my own. The developer could not run the loaded series locally (an out-of-memory reinstall), so CI is the only evidence so far.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All approve with comments |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | None |
+| 3 | Major | | ✅ | None |
+| 4 | CI | | ✅ | Green, stage 12 included; CI time unchanged |
+
+**Rulings**
+1. **Fixed now, in one commit I verify:**
+   - **QLT-25:** `checkIgnore` treats git's exit 128 as "not ignored", so four tests pass while git is broken. A control that fails open is the attempt-1 test for "now" (DL-047). Exit 0 and 1 are the only answers; anything else throws, with a negative-control test.
+   - **PRF-01:** `runProcess` gets a default timeout (60 s, overridable per call), so a hung child fails the test instead of holding the job for 30 minutes.
+   - **QLT-28 with it:** a timeout or `maxBuffer` kill gets its own message, distinct from "did not start", so the new timeout is readable.
+   - **STD-01:** the code row 3221225495 is 0xC0000017, a duplicate of line 24; correct the label or remove the duplicate.
+
+   **My check:** only `tests/support/` and the helper's tests change; CI green.
+2. **Info** (STD-02 to 04, QLT-26, QLT-27, PRF-02): no action. QLT-26's duplicate code row goes with STD-01.
+3. **G7 evidence set, confirmed** (DL-064 pattern):
+   - **(a)** the drawer test with `--repeat-each=15 --retries=0` at all three widths, all green, plus a planted 1 px fault that fails;
+   - **(b)** `npx vitest run tests/unit` ten times in a row under the DEF-003 load (`tsc`, `eslint`, `next build` together), all green;
+   - **(c)** the git exit-128 negative control failing as it should after QLT-25.
+
+   An out-of-memory or spawn failure on the test machine is recorded as type Environment and the run repeated. It is not counted as a pass. If the local machine cannot carry the load at all, QA says so and proposes another loaded runner before G7; the evidence is not waived.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #57 | QLT-25, PRF-01 with QLT-28, STD-01, one commit | Before G7 |
+| 2 | master | Same commit | Verify | Before G7 |
+| 3 | qa-engineer | AQP-182 | Evidence (a) to (c), recorded; close DEF-004 and DEF-007 if green | G7 |
+
+**AQP-182 G6, minor-fixes commit verified — 2026-11-04 (master).** Commit 420ba74, the PR #57 head (check run success including stage 12, run 41811921893); hand-off AQP-182 10801. **Result: met.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | Three files: `tests/support/git-ignore.ts`, `tests/support/process.ts`, `tests/unit/process-helper.test.ts`; full patch read through the GitHub API |
+| QLT-25 | ✅ | `checkIgnore` throws unless git exits 0 or 1. The test asks for a path outside the repository and expects "failed with exit code 128". Exit 0 and 1 keep their tested meaning |
+| PRF-01 | ✅ | `timeout: 60_000` is the default and is spread before `options`, so a call can override it; a 300 ms override stops a hanging child in the test |
+| QLT-28 | ✅ | ETIMEDOUT and ENOBUFS get their own messages; each test also asserts the message is not "did not start" |
+| STD-01, QLT-26 | ✅ | 3221225495 labelled 0xC0000017 STATUS_NO_MEMORY; 0xC0000142 added as its own row; a test for a process with no exit status and no signal |
+| CI | ✅ | Green on 420ba74 |
+
+**For G7.** Evidence (c), the exit-128 negative control, now exists as a unit test that is green in CI; QA confirms it behaves the same in the loaded series. Evidence (a) and (b) need a machine that is not already overloaded: this PC is running three agents' builds at once, and a dev server has crashed on a resource error. Run them when the other agents are idle, or on another loaded runner (DL-068). A failure caused by that overload is type Environment and the run is repeated; it is not a pass and not a defect of this fix.
+
+---
+
+## G6 – Peer Review — AQP-183 (DEF-008: pressed state for every button variant) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** PR #56, `docs/AQP-183-pressed-state` at head 64bef0d, base `master` 529d576; 12 files (code `button.tsx`, `globals.css`, `cn.ts`; 4 test files; 5 ux-expert files under `docs/03-ux/`). Check run "Stages 1 to 11" success on 64bef0d (run 41831621385), steps read through `gh run view`: stages 1 to 12 success, stage 12 is "E2E (Chromium at three widths, axe)", stage 13 skipped (disabled). Merge state clean. Reviews 5768535838 (standards), 5768625699 (quality), 5768823644 (performance), all COMMENT on 64bef0d (single-token); labels `review:standards-approved`, `review:quality-approved`, `review:performance-approved`. Reports `docs/06-reviews/AQP-183/standards.md`, `quality.md`, `performance.md` (main folder, uncommitted). Jira AQP-183 10793 (ux-expert), 10803 (orchestrator, G5), 10804 (developer), 10805 to 10807 (reviewers). **My own checks:** the `src/` patch read in full; `tests/unit/button-pressed.test.ts` line 43 and `vitest.config.ts` lines 34 to 37 at 64bef0d read; the E2E spec presses with `page.mouse` only (lines 61, 62). **Not done:** no test or build run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE WITH COMMENTS, quality APPROVE WITH COMMENTS, performance APPROVE; each reviewed 64bef0d |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in all three |
+| 3 | Major fixed or accepted | | ✅ | None |
+| 4 | Findings cite file:line | | ✅ | All but two PR-level items (STD-01, STD-05), which name the file |
+| 5 | CI | | ✅ | Green including stage 12; the stage 6 tokens test that failed on the first commit now passes |
+| 6 | Fix matches its source | | ✅ | The class strings in `button.tsx` equal the ux-expert's developer line (10793) and UX spec v0.9 7.3.1; `disabled:active:*` in the base covers loading, which sets `disabled` (QLT-30) |
+| 7 | Evidence for the reported cause | | ⚠️ | Nothing in CI presses by touch on WebKit, the condition DEF-008 was found under (QLT-29). Carried to G7 as condition 3 |
+| 8 | NFR-009 first-load JS of `/` | | ✅ | Developer, production bundler, test strategy 10.1 method: **194,179 B**, +272 B. Reviewer, webpack base-to-head difference: +59 B, estimate 193,966 B. The two differ in method; I take the larger, measured figure: 5,821 B (2.9 %) headroom. RISK-020 restated, score unchanged |
+
+**Rulings**
+1. **STD-01 (code on a `docs/` branch): closed by record, DL-069.** PR #56 is a code PR and is merged by the delivery lead under `MERGE_POLICY` code-human, whatever its branch prefix. The branch is not renamed: renaming an open PR's head closes it.
+2. **STD-02, first half: fixed before G7, raised from Info.** `tests/unit/button-pressed.test.ts:43` passes `60_000` to `beforeAll`, below the shared `hookTimeout` of 120 s. The repository's own `vitest.config.ts` states "One hook limit for every level, set here and not per file (test strategy section 10, DL-057; DEF-003)". A Tailwind compile on this loaded PC is the DEF-003 class (DEF-004, DEF-007 since), and a tighter limit here would bring it back. Remove the argument; rename `d` to `declaration` in the same commit (the second half). One test-only commit, verified by master within that one file (DL-047). No re-review.
+3. **QLT-29: G7 condition, DL-070.** The delivery lead's iPhone hold check is the evidence. A CDP touch case in Chromium is not required: Chromium already sets `:active` on touch, so it could not fail on the WebKit cause either. A WebKit project stays optional.
+4. **Info, no action:** STD-03 (self-referencing `@theme inline` line, the radius pattern of QLT-10; the E2E shows the shadow paints), STD-04, STD-05, QLT-30, QLT-31, PRF-01 to PRF-03. The `docs/03-ux/` files are the ux-expert's (10793) and travel with the code PR; reviewers read them for consistency only.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #56, `tests/unit/button-pressed.test.ts` only | Remove the `60_000` hook limit (line 43); rename `d` to `declaration`. One commit, CI green | Before G7 |
+| 2 | master | Same commit | Verify: one file, no limit argument, CI green | Before G7 |
+| 3 | qa-engineer, with the delivery lead | AQP-183; `docs/07-qa/AQP-183-test-report.md` | On the iPhone that found DEF-008 (Chrome, so WebKit), at `/design-system` section 05: hold each variant for about a second (Calculate, Add part, Cancel, Delete, the 44 px pencil, the 36 px row pencil) and see the pressed fill and the inset; tap each quickly and see a brief flash; tap a disabled and a loading button and see **nothing**. Results are the delivery lead's own typed words per button, not a drafted reply (DL-007). Also `npx playwright test tests/e2e/button-pressed.spec.ts --retries=0` on the three projects, 0 failures | G7 |
+| 4 | solution-architect | AQP-183; PR #56 | **Only if condition 3 fails:** decide on a passive no-op `touchstart` listener (`{ passive: true }`, in a small client component). If added, it is new production code: a re-review of that diff by all three reviewers (performance included, as `/` has 2.9 % headroom), then condition 3 is repeated (DL-051) | G7 |
+
+**Risks registered:** none new. RISK-020 restated, score unchanged (`/` at 194,179 B measured).
+**Rationale:** No Blocker, Critical or Major. The fix is exactly what UX 7.3.1 specifies and is tested against the CSS Tailwind builds. What CI cannot show is the one thing the defect was about, a pressed look on an iPhone, so that check is the G7 evidence, owned by the person who found it. The hook limit is fixed now because the repository's own rule forbids it and the class it would cause has recurred three times.
+
+**AQP-183 G6, condition 2 (STD-02 commit) verified — 2026-11-04 (master).** Commit a13f194 "test(ui): use shared hook limit in pressed-state test [AQP-183]", the PR #56 head, a fast-forward from 64bef0d (one commit ahead, its parent is 64bef0d). **Result: met.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | `gh api compare 64bef0d...a13f194`: one file, `tests/unit/button-pressed.test.ts`, +3 / −3; full patch read |
+| Hook limit removed | ✅ | Line 43 `}, 60_000);` becomes `});`, so the shared `hookTimeout` of 120 s applies (DL-057). No `_000` is left in the file at a13f194 |
+| `d` renamed | ✅ | Both `.find((d) => d.value…)` callbacks (lines 52, 83) now use `declaration`; no `d` left. Assertions unchanged, so the test proves the same thing |
+| CI | ✅ | Run 41836397047, pull_request on a13f194: success, stages 1 to 12 (stage 12 E2E), stage 13 skipped (disabled); merge state clean |
+
+**For G7.** Conditions 1 and 2 are met; PR #56 may go to G7 at a13f194. Condition 3 (the delivery lead's iPhone hold check, typed by them) and the E2E spec with `--retries=0` are the G7 evidence; condition 4 applies only if the phone check fails. No re-review: a test-only change within the named file (DL-047).
+
+---
+
+## G6 – Peer Review — AQP-38 (STORY-01.01: sign in and sign out) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #58, `feat/AQP-38-sign-in-sign-out` at head 4d9b2e2, base 529d576; 61 files, +4,226 / −80. Check run "Stages 1 to 11" success on 4d9b2e2 (run 41839712722). Steps read with `gh run view`: stages 9 to 12 success (stage 12 E2E), stage 13 skipped (disabled). Merge state clean.
+  - **Reviews:** 5769379433 (standards), 5769421142 (quality), 5769485037 (performance), all COMMENT on 4d9b2e2. Labels `review:standards-approved`, `review:quality-changes-requested`, `review:performance-approved`. Reports `docs/06-reviews/AQP-38/standards.md`, `quality.md`, `performance.md` (main folder, uncommitted).
+  - **Jira AQP-38:** 10819 (developer), 10820 (orchestrator, G5), 10821, 10822 and 10824 (reviewers), 10823 (solution-architect).
+  - **Architecture:** ADR-009 amendment 1, architecture v0.16 and test strategy v0.15 (main folder, uncommitted). GitHub #59, #60, #61.
+  - **My own checks, by reading 4d9b2e2:**
+    - `src/server/services/auth-service.ts`: the throttle `find` comes before `hasher.verify`, and `recordFailure` after it. `dummyHash ??=` keeps a rejected promise.
+    - `src/server/repositories/user-repository.ts:100-103`: `raiseSessionVersion` increments with `where: { id }` only.
+    - `src/server/auth/options.ts`: an `unavailable` error leaves next-auth as 401.
+    - `src/server/auth/locked-response.ts`: maps `locked` to 429 only.
+    - `src/proxy.ts:40`: `process.env.APP_ORIGIN || request.url`. `src/lib/env.ts` validates `APP_ORIGIN`.
+    - The migration: `login_throttles` has a `key_hash` primary key and no `created_at`.
+  - **Not done:** I ran no probe or test. QLT-32 and QLT-33 rest on reviewer-quality's scratch probes and on my reading of the code, which shows the same sequence.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE WITH COMMENTS, quality REQUEST CHANGES, performance APPROVE WITH COMMENTS; all on 4d9b2e2 |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in all three. I checked whether QLT-32 is Critical. Sequential guessing still hits the limit, the block applies once the burst ends, and argon2id caps how many checks a burst gets through. It is a Major |
+| 3 | Majors fixed or accepted | | ❌ | QLT-32 upheld; fixed in this PR (condition 1) |
+| 4 | Architect's required change | | ❌ | ADR-009 amendment 1 rule 1 makes compare and increment "Required in PR #58 before G6 closes, with one test". It is not in 4d9b2e2 (condition 2) |
+| 5 | Findings cite file:line | | ✅ | All |
+| 6 | CI | | ✅ | Green on all stages; 2,007 unit and integration tests; changed-code coverage 95.0 %; 125 E2E passed |
+| 7 | NFR-009 first-load JS (DL-059) | | ✅ | Turbopack build; both methods agree within 27 B. `/` 197,138 B, `/queue` 198,249 B, `/sign-in` 160,502 B. All under 200,000; headroom 0.9 % on `/queue`. RISK-020 raised |
+| 8 | G4 condition 6, sign-out half | | ✅ | Answered at G6 by ADR-009 amendment 1, not before G5 as set. Late but harmless: the option chosen is the one that was built. Met once condition 2 lands |
+
+**Rulings**
+1. **QLT-32 (Major) is upheld and is fixed in this PR.** AC-3's limit is a security control (NFR-003). As built, a burst of parallel attempts gets one password check per request before the first failure is recorded, and the per-address limit has the same shape. Required behaviour, whatever the mechanism:
+   - (a) One account key: at most 5 password checks can start between blocks, however many requests arrive at once. One address: at most 30 per window.
+   - (b) The decision uses a count the database returns from the same statement that changes it (for example `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`), never a read followed by a later write.
+   - (c) **A successful sign-in does not use up the per-address allowance.** The office signs in from one address, so an attempt reserved before the check is given back on success. A correct password still clears the account key.
+   - (d) The same statement closes the lost count in `restartWindow` (QLT-35).
+   - (e) Tests:
+     - A parallel unit test: 50 attempts at once on one account give at most 5 hash checks, and the rest are `locked`. The same for 31 or more on one address with distinct accounts.
+     - An integration test against PostgreSQL with parallel attempts.
+   - If (a) to (c) cannot be met with one atomic statement per key, the developer asks the solution-architect before coding further.
+2. **Compare and increment (ADR-009 amendment 1 rule 1) goes in this PR.** `raiseSessionVersion` takes the token's version and updates only `where: { id, sessionVersion }`. One test: a sign-out with an out-of-date token leaves the version unchanged, and the current session still works. Sign-out on every device (option A) stands; cookie-only is rejected. The `/design-system` check in `production-routes.spec.ts` is accepted, as the architect ruled.
+3. **All Minors are fixed now, in the same round.** The round is needed anyway for rulings 1 and 2, the re-review covers them, each is small, and three of them enforce a security or architecture rule:
+   - **STD-01 = QLT-33:** clear the cached dummy hash when it fails, or build it at start-up. Test: a hasher whose first `hash` rejects; an unknown e-mail then answers as a known one would. Reason: AC-2's own promise that unknown e-mails cannot be told apart.
+   - **QLT-34:** extend `withThrottledStatus`, or add a function beside it, so that a 401 with `error=unavailable` becomes 503 (`Retry-After` optional). Test it in the handler. Reason: architecture ruling R4, and the mapper already exists.
+   - **STD-03:** `src/proxy.ts` uses the validated `APP_ORIGIN`. The `request.url` fallback either stays only outside production or goes. Test the production case. Reason: the Host header must never choose where people are sent.
+   - **STD-02:** add `created_at` to `login_throttles`, by amending the unmerged migration or adding a new one; the drift check stays green. The `key_hash` natural primary key is **accepted and recorded** (DL-072), not changed.
+4. **Info: no change in this PR.**
+   - To #59: STD-04, STD-05, PRF-03, and QLT-35's shared `unknown` counter.
+   - To #60: PRF-04, the `clear` filter. It may be folded into ruling 1 if the new statement makes it free.
+   - No action: STD-06, STD-07 (as ruled in the ADR), STD-08, STD-09, QLT-36, PRF-02. STD-08 gets no issue because one role list belongs naturally in 01.04.
+5. **PRF-01 is not fixed in this PR (DL-073).** Every route passes. Lazy-loading the account menu and drawer changes the portal frame, which is outside this story's ACs. It goes to #61 and AQP-169 on the architect's plan (AQP-38 10823). The DL-059 rule continues: a route over 200,000 B holds that story's G6. The fix round adds no client code, so performance re-measures only if a client file changes.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #58: `auth-service.ts`, `throttle-repository.ts`, tests | QLT-32 as in ruling 1 (a) to (e) | Before G7 |
+| 2 | developer | PR #58: `user-repository.ts`, `auth-service.ts`, `options.ts`, tests | Compare and increment, with its test (ruling 2) | Before G7 |
+| 3 | developer | PR #58 | STD-01/QLT-33, QLT-34, STD-03 and STD-02, with tests (ruling 3); CI green | Before G7 |
+| 4 | reviewer-quality, reviewer-standards | PR #58, new diff only | Re-review the fix diff. Quality: 1, 2 and QLT-34. Standards: STD-01 to 03, and the security of 1 and 2. Performance only if a client file changes; otherwise it confirms the file list | Before G7; QA holds until it is done (DL-051) |
+| 5 | master | Gate log | Check 1 to 4 against this record; G7 may then start | Before G7 |
+| 6 | ux-expert | SCR-26 wording (ADR-009 amendment 1) | A second message for a session ended by a sign-out elsewhere or by a password change | Before AQP-89 reaches G5 |
+| 7 | orchestrator | Sequencing | After PR #58 merges: AQP-169 first, then #61's headroom work, before any story that adds client JavaScript to the portal frame starts. 1.8 KB of headroom will not carry one | After the merge |
+
+**Risks registered:** RISK-020 raised to P 4, score 12 (🟡). RISK-021 is new, score 8 (🟡): the per-address limit depends on the proxy header.
+**Rationale:** There is no Blocker or Critical. But under concurrency, the brute-force limit that AC-3 exists to provide does not hold, and the architect made compare and increment a condition of this gate. Both are production code, so the new diff is re-reviewed before QA. The Minors cost little in a round that happens anyway, and three of them enforce a security or architecture rule, so none is deferred.
+
+**AQP-38 G6, conditions 1 to 4 verified — 2026-11-04 (master).** Commit ea8dc6b, the PR #58 head. It is a fast-forward from 4d9b2e2: one commit ahead, with 4d9b2e2 as its parent. **Result: met.**
+- **CI:** run 41845931376, pull_request on ea8dc6b. Success on stages 1 to 12, stage 13 skipped (disabled). 2,039 tests, 95.2 % changed-code coverage, 125 E2E passed. Merge state clean.
+- **Re-reviews:** standards (Jira 10828) and quality (10829) review submissions are on ea8dc6b. All three labels are approved.
+- **My check:** I read the full source diff `4d9b2e2..ea8dc6b` with `git diff` after a fetch, and the added test names and assertions. I ran no test of my own; quality re-ran its probe (50 parallel attempts now give 5 verifies, 45 `locked`).
+
+| Condition | Result | Evidence |
+|-----------|--------|----------|
+| 1 (a), (b) QLT-32 | ✅ | `throttle-repository.ts` `reserveStatement`: one `INSERT ... ON CONFLICT (key_hash) DO UPDATE ... RETURNING failures`, with every value a bound parameter. `auth-service.ts` reserves the address and then the account before `passwordIsRight`, and refuses when `attempts > limit` |
+| 1 (c) Give-back | ✅ | Success: `clear(accountKey)` and `releaseAttempt(ipKey)`. A refusal on the account gives back the address. A fault of ours gives back both. `releaseAttempt` uses `GREATEST(failures - 1, 0)` |
+| 1 (d) QLT-35 lost count | ✅ | Restart, block end and block start are inside the same statement; `restartWindow` is gone |
+| 1 (e) Tests | ✅ | `tests/unit/auth-service-concurrency.test.ts`: 50 at once on one account give 5 checks and 45 `locked`; 45 at once on one address give 30 checks and 15 `locked`; 40 correct sign-ins from one office address are all accepted. `tests/integration/auth/throttle-reservation.test.ts` (PostgreSQL): 50 parallel reservations get exactly 1 to 50, plus the same bursts at service level |
+| 2 Compare and increment | ✅ | `user-repository.ts`: `updateMany({ where: { id, sessionVersion: expectedVersion } })` returns `count === 1`. `options.ts` passes the token's `sv`. Tests in the unit, repository and handler suites: an out-of-date token leaves the version unchanged and `resolveSessionUser` still accepts the current session; 10 sign-outs at once raise it once. **G4 condition 6, sign-out half: met** |
+| 3 STD-01/QLT-33 | ✅ | `dummyHash` is cleared in `.catch`. Test: after a failed first hash, an unknown e-mail answers `invalid` |
+| 3 QLT-34 | ✅ | `withSignInStatus` maps `locked` to 429 and `unavailable` to 503 through a `Map`, so `constructor` finds nothing. Handler test: a busy database gives 503, with no cause in the body |
+| 3 STD-03 | ✅ | `proxy.ts` `portalOrigin` uses `loadOriginEnv()`. In production a missing or bad origin throws; no Host fallback. Tests: an evil Host header yields the validated origin, and a missing origin throws `APP_ORIGIN` |
+| 3 STD-02 | ✅ | New migration `20261104120000_login_throttles_created_at`: additive, with a rollback note, citing DL-072. The schema is updated and the drift check is green. Test: `created_at` and `updated_at` are filled in |
+| 4 Re-review | ✅ | Standards: APPROVE WITH COMMENTS, STD-01 to 03 fixed, Info STD-10 to 13. Quality: APPROVE WITH COMMENTS, QLT-32 to 35 fixed, Info QLT-37 and QLT-38. Performance not re-run: no client file is in the 20-file list (server, proxy, migration and tests only); first-load JS is unchanged at `/` 197,116 B and `/queue` 198,229 B |
+
+**New Info, no change in this PR:**
+- No action: STD-10 (comment the raw SQL), STD-11, STD-13.
+- QLT-37 (a give-back can lower a later run, which is bounded) and QLT-38 (the block is set when the limit-th attempt is reserved).
+- STD-12 (a block set by a successful 30th attempt does not refuse; refusal is by count).
+- My own reading of `reserveStatement`: while an address block is set, its window does not restart by time, so an address can count for up to its block's end (at most window plus block). This only happens once 30 reservations have been reached, and it errs on the strict side.
+- These four are as-built semantics, not defects. **Follow-up, not a condition of this gate:** the solution-architect states them in architecture section 6 (NFR-003), before G8.
+
+**For G7.** PR #58 may go to G7 at ea8dc6b. QA tests AC-3 sequentially, as written, and may cite the parallel tests as added evidence.
+
+---
+
+## G7 – QA Acceptance — AQP-38 (STORY-01.01: sign in and sign out) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #62, `feat/AQP-38-sign-in` at head a2b2997, superseding PR #58 (closed 15:03:24Z, branch deleted from origin; only `feat/AQP-38-sign-in` remains, read with `git ls-remote`). Check run "Stages 1 to 11" success on a2b2997 (run 41858738190). Steps read with `gh run view`: stages 1 to 12 success, stage 2 secret scan included; stage 12 log "155 passed", "11 skipped", no flaky or retried line. Merge state clean; all three review labels approved.
+  - **Product code unchanged since G6:** `gh api compare ea8dc6b...a2b2997` shows 5 commits ahead, 0 behind, and 4 added files only: `docs/07-qa/AQP-38-test-report.md`, `docs/07-qa/defects/DEF-009-...md`, `tests/acceptance/aqp-38-sign-in.test.ts`, `tests/e2e/aqp-38-qa.spec.ts`. The product diff is the one checked at G6 (conditions 1 to 4 met at ea8dc6b). QA's own test files after G6 need no re-review (DL-048).
+  - **QA:** `docs/07-qa/AQP-38-test-report.md` at a2b2997 (recommends ACCEPT); DEF-009 record; Jira AQP-38 10831, 10832, 10833 (corrected), 10835; AQP-184, #63.
+  - **Decision provenance:** session log, read by role. The coordinator chose option C, a new branch from ea8dc6b, citing the standing rule against force-push. The force-push was not put to the delivery lead. The delivery lead was asked one question (14:58:02Z): delete the old branch and close #58, or add an 8th baseline entry. They selected "Delete it, close #58 (Recommended)" at 15:03:07Z.
+  - **Not done:** no test run of my own; I did not read the two QA test files line by line.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | Report matrix: AC-1 to AC-8 Pass, each with tests and technique. AC-3 tested one attempt at a time, to the millisecond on a controlled clock, as written; the developer's parallel tests are extra evidence. AC-7 run against a real database; the password is printed 0 times |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | Sev-1 0, Sev-2 0. DEF-009 is Sev-3, type Test (the developer's axe E2E scans mid-fade); no product defect |
+| 3 | Regression recorded and green | ✱ | ✅ | Run 41858738190 on a2b2997, stages 1 to 12, 155 E2E passed, 0 flaky, read in the log. **But the report's CI row, recommendation note and hand-off still describe b69a50a (1 flaky) and a red stage 2 with PR #58 kept.** The facts are green; the record is stale (condition 1) |
+| 4 | Exploratory notes | | ✅ | Seven named areas, including a real busy database (a table lock with a 700 ms limit gives 503, nothing counted) and two browsers for sign-out |
+| 5 | Accessibility (UI story) | | ✅ | axe 0 in five states at three widths, a keyboard-only run with no scripted focus, the skip link, and the accessibility tree. No human screen-reader session; AC-8 does not ask for one |
+| 6 | Test strength | | ✅ | 9 of 10 planted faults caught; M6 explained (a redundant guard behind the WHATWG parser) |
+| 7 | Report accuracy | | ⚠️ | QA's first 10833 said "155 passed, 0 flaky" before reading the log; corrected in the same comment and in 10835, before any gate relied on it. Same weakness as condition 1 |
+
+**Rulings**
+1. **PR #58 → PR #62, recorded (DL-074).** The new branch was the coordinator's choice, not the delivery lead's; they were not asked about a force-push. Their decision was the branch deletion, by selecting the recommended option. It stands under DL-007 (1): no price depends on it, and it changes no product code. It is irreversible only for the branch name; PR #58 with its reviews stays readable. The G6 record and condition check carry over to PR #62 unchanged, because the product diff is the same commit, ea8dc6b. The invented key is still reachable through GitHub's read-only `refs/pull/58/head`. CI fetches branches, not pull refs, so stage 2 is green; this would return only if CI began to fetch pull refs.
+2. **DEF-009 does not hold G7.** It is Sev-3, type Test, in the developer's helper. It is fixed by the developer in one small PR that waits for no running animation inside `expectNoAxeViolations`, so every axe scan settles. Due before the next story with an axe E2E reaches G6 (AQP-169 is next). A retry that hides it is not a fix. AQP-183's pressed state also uses `transition-colors`, so it is the same class.
+3. **OBS-1 (iOS may zoom on the 14 px fields) is a follow-up, not a condition.** No AC asks for it, and the 14 px size is the ux-expert's decision for every form. G7 is decided against the story's ACs. Do it in the same iPhone session as AQP-183's G7 condition 3: tap the e-mail field on `/sign-in` and say whether the page zooms. If it does, QA raises a product defect for the ux-expert covering all forms, before 01.05's G7.
+4. **QA's misreport, recorded.** Counts are read from the log before they are reported. It was caught and corrected in time; no other action.
+5. **OBS-2 to OBS-4:** as QA suggests. OBS-2 goes to the ux-expert for the UX spec, with no change in this story.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | qa-engineer | `docs/07-qa/AQP-38-test-report.md`; PR #62 description | Name run 41858738190 on a2b2997 (155 passed, 0 flaky) as the regression reference. Mark the 1-flaky run as history (DEF-009). Replace the stage 2 notes ("stays red", "coordinator asked that PR #58's branch be kept") with the outcome: PR #58 closed and its branch deleted by the delivery lead's decision, stage 2 green. Docs-only, one commit, CI green | Before the merge |
+| 2 | master | Same commit | Verify: one docs file plus the PR text, no product or test change, CI green | Before the merge |
+| 3 | developer | `tests/e2e` axe helper (DEF-009, AQP-184, #63) | Wait for animations to finish before each axe scan; no retry | Before the next story with an axe E2E reaches G6 |
+| 4 | qa-engineer, with the delivery lead | AQP-38 (OBS-1) | Zoom check on `/sign-in`, in the AQP-183 iPhone session | Follow-up, before 01.05 reaches G7 |
+| 5 | solution-architect | Architecture section 6 | As-built throttle semantics (G6 condition check) | Before G8 |
+
+QA moves AQP-38 to Done on this decision. The delivery lead merges PR #62 after condition 2 (`MERGE_POLICY` code-human); then the orchestrator starts AQP-169 (DL-073).
+
+**Risks registered:** none new. RISK-020 is unchanged at 12. PR #62 adds no client code; when AQP-183 also merges, `/` is about 197,388 B.
+**Rationale:** Every AC is shown by independent oracles, with the lock-out timed to the millisecond and the regression green at the head. The product code is the commit G6 cleared. What is wrong is the report's account of CI, which will be merged into `master` as the record, so it is corrected first. The flaky axe test and the iPhone zoom are real, but neither is an AC of this story.
+
+**AQP-38 G7, condition 1 (report correction) verified — 2026-11-04 (master).** Commit 46483e2 "docs(qa): AQP-38 report names CI run 41858738190 as the reference and records PR #58 closed (G7 condition 1)", the PR #62 head. It is a fast-forward from a2b2997 (one commit, parent a2b2997). **Result: met.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | `gh api compare a2b2997...46483e2`: only `docs/07-qa/AQP-38-test-report.md`, +5 / −5; full patch read. No product or test file |
+| Content | ✅ | CI row, recommendation, full-regression row and hand-off name run 41858738190 on a2b2997 (stage 2 green, 155 E2E, 0 flaky) as the reference. The 1-flaky run is listed as earlier. The stage 2 section now says the delivery lead chose to close PR #58 and delete its branch, instead of an eighth baseline entry; it keeps "option C, the coordinator's decision" for the new branch, which matches DL-074. No stale "stays red" or "branch kept" text is left |
+| PR #62 description | ✅ | States PR #58 closed and its branch deleted (the delivery lead's choice), and run 41858738190 as the reference |
+| CI | ✅ | Run 41860370753 on 46483e2: stages 1 to 12 success, stage 13 skipped (disabled); stage 12 log "155 passed", "11 skipped"; merge state clean |
+
+**PR #62 is ready for the delivery lead's squash merge** (`MERGE_POLICY` code-human). Open after the merge, none of which holds it: DEF-009 (developer, before AQP-169's G6), OBS-1 (AQP-183 iPhone session), and the throttle semantics in architecture section 6 (before G8). The orchestrator starts AQP-169 next (DL-073).
+
+---
+
+## G6 – Peer Review — AQP-184 (DEF-009: axe scans wait for transitions) — 2026-11-04
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #65, `fix/AQP-184-axe-wait` at head 09f8022, base 85c699f (current `master`, after PR #62's merge). Two files: `tests/e2e/support/design-system.ts` (+33 / −2) and `tests/e2e/axe-helper.spec.ts` (+105, new). Test code only. Check run "Stages 1 to 11" success on 09f8022 (run 41868171176, attempt 1). Stage 12 log: "170 passed", "11 skipped". Merge state clean. Labels: standards and quality approved; no performance label.
+  - **Reviews:** `docs/06-reviews/AQP-184/standards.md` and `quality.md` (main folder, uncommitted), both on d6a441f; Jira AQP-184 10844, 10845, 10846. **No performance report.**
+  - **My own checks:**
+    - The full PR patch, and `gh api compare d6a441f...09f8022`: one commit, parent d6a441f, two files.
+    - The stage 12 log on 09f8022: all five `axe-helper.spec.ts` tests show ✓ on mobile, tablet and desktop. The control test (line 93) **passed, not skipped**, at all three widths (QLT-41).
+  - **Not done:** no local run.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ❌ | Standards and quality only. The orchestrator ruled performance "not needed, no client code changed". DL-032 records the delivery lead's own words, "all 3 reviews ... are done", and the G6 checklist has no exception for test-only changes. AQP-182 (test-only) had all three |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in both reports |
+| 3 | Majors fixed or accepted | | ✅ | None |
+| 4 | Minors and fix commit | | ✅ | **09f8022 verified by master.** STD-01: `AXE_TAGS` is exported and the control uses it. QLT-39: `startTransition` returns the start colour from the same `evaluate` that starts the transition, so no time can pass between the two. QLT-40: the wait is a named `test.step` in `expectNoAxeViolations` and in the test. Assertions are unchanged otherwise |
+| 5 | CI | | ✅ | Green; the control ran at all three widths |
+| 6 | Helper design | | ✅ | `waitForAnimationsToFinish` waits on `Animation.finished` for running or pending finite animations, loops for chained ones, skips infinite and paused ones, and has no retry or timeout of its own (DL-057). A transition that starts after it returns is not seen (inherent, QLT-40) |
+
+**Remediation (the only one)**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | reviewer-performance | `docs/06-reviews/AQP-184/performance.md`; PR #65 COMMENT review and label | A short review at 09f8022. Confirm no client or product file. Measure CI feedback time against test strategy 10.3: stage 12 wall time before and after, and the worst case added per axe scan (the wait equals the longest running finite transition). Check the 2.1 s helper tests | Attempt 2 |
+
+If the report has no Blocker or Critical, attempt 2 is GO on this record: no other reviewer re-runs, and no new code round. **Recommendation, not a change:** if the delivery lead wants a performance review to be optional for test-only diffs, they say so and the G6 checklist is amended. Until then, three reports are required (DL-076).
+
+**G7 evidence for this test-only defect (DL-077).** I agree with the orchestrator's proposal, with these specifics:
+- **(a)** CI green on the final head, with the `axe-helper.spec.ts` control ✓ (not skipped) on all three projects, read in the log.
+- **(b)** A QA confirmation on AQP-184. Because the defect is a flaky test, this is a repeated run: `npx playwright test tests/e2e/sign-in.spec.ts --repeat-each=10 --retries=0` on the three projects against the production build, 0 failures. An environment failure on the shared PC is recorded and repeated, never counted (DL-068).
+- **(c)** QA closes DEF-009 (AQP-184, #63).
+
+No test-report file and no full QA cycle are needed. The Jira comment is the report, as at AQP-168 (DL-066).
+
+**Risks registered:** none.
+**Rationale:** The fix is right and the follow-up commit is verified. But a mandatory item fails, and the delivery lead decided in their own words that all three reviews are done. That is theirs to relax, not mine. The missing review has a real subject: every axe scan in the suite now waits.
+
+---
+
+## G7 – QA Acceptance — AQP-183 (DEF-008: pressed state) — 2026-11-04
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR:** #56, `docs/AQP-183-pressed-state`; code at a13f194 (G6 condition check); head 0a5b10d (QA report and the DEF-010 record). Behind `master` since PR #62 merged.
+  - **QA:** Jira AQP-183 10842 (REJECT); AQP-185 (DEF-010, #64); `docs/07-qa/AQP-183-test-report.md` at 0a5b10d (not read line by line).
+  - **Provenance:** the delivery lead's device results checked in the session log. "not very clear" (15:43:10Z) and "do not see brief flash" (15:52:53Z) are typed user text, with no earlier assistant draft. The OBS-1 answer "tap opened the keyboard" was typed at 16:02:53Z.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ❌ | G6 condition 3 (DL-070) is the acceptance of this defect fix. It fails for **Calculate (primary)** and **Delete (danger)**, held and tapped, in the delivery lead's own words. It passes for secondary, ghost, both pencils, disabled and loading. Calculate is the button DEF-008 named |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | DEF-010 is Sev-3. Its severity is not what holds this gate. The fix does not do what DEF-008 asked for the button DEF-008 named |
+| 3 | Regression | ✱ | ✅ | CI 41836397047 green; E2E `button-pressed.spec.ts` 45 of 45 with no retries |
+
+**Rulings**
+1. **QA's REJECT is upheld.** The code applies UX 7.3.1 as written, so the cause is the spec's values (rest to pressed contrast 1.30:1 for primary and 1.37:1 for danger, against 1.40 and 1.70 for the variants that pass). The fix starts with the ux-expert. DEF-008 stays open with DEF-010.
+2. **G6 condition 4 (the `touchstart` listener) is closed, not needed.** `:active` applies on iOS WebKit: secondary, ghost and the pencils show on the device.
+3. **OBS-1 of AQP-38 (iOS zoom) is closed.** No zoom on a 14 px field ("Length field ... tap opened the keyboard"). It was a different field from `/sign-in`'s e-mail field, but it uses the same body size, which is what the question was. No defect.
+4. **OBS-2 (a long press selects button text and shows the copy callout)** goes to the ux-expert with 1. It is not a condition here.
+
+**Remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | ux-expert | UX spec §7.3.1 | Pressed values for primary and danger that a person can see on a phone. A pressed fill clearly apart from rest, or a non-colour cue that shows on dark red. Text contrast stays at least 4.5:1. Decide OBS-2 | Before the developer starts |
+| 2 | developer | PR #56: `button.tsx`, the tokens, E2E expected values | Implement 1. Bring the branch up to date with `master` (PR #62 merged) | Attempt 2 |
+| 3 | reviewer-standards, reviewer-quality, reviewer-performance | PR #56, new diff | Re-review (production code, DL-051). **Performance re-measures first-load JS of `/` and `/queue` on the updated branch.** `/queue` was 198,229 B with 1,771 B left, and PR #56 adds about 272 B (DL-059) | Before G7 attempt 2 |
+| 4 | master | PR #56 | G6 check of 2 and 3 | Before G7 attempt 2 |
+| 5 | qa-engineer, with the delivery lead | AQP-183 | Repeat the iPhone hold and tap for **Calculate and Delete only**, in their own typed words, plus the E2E spec with `--retries=0` | G7 attempt 2 |
+
+**Risks registered:** none new. RISK-020 is watched through remediation 3.
+**Rationale:** The phone check was set at G6 as the one piece of evidence CI could not give, and it failed for the button the defect was about. A Sev-3 rating does not turn a fix that does not fix into an accepted one. The cause is design values, so the change starts with the ux-expert.
+
+### G6 – Peer Review — AQP-184 (DEF-009) — attempt 2 — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:** PR #65 at head 09f8022, unchanged since attempt 1 (`gh api pulls/65`). Check run "Stages 1 to 11" success on 09f8022. Merge state clean. Labels: all three `review:*-approved`. Performance review 5772151363 (COMMENT, on 09f8022); `docs/06-reviews/AQP-184/performance.md` (main folder, uncommitted); Jira AQP-184 10851.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards and quality (attempt 1); performance APPROVE on 09f8022 |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in all three |
+| 3 | Majors | | ✅ | None |
+| 4 | Fix commit | | ✅ | 09f8022 verified at attempt 1; head unchanged |
+| 5 | CI time (test strategy 10.3) | | ✅ | PRF-01 (Info): the wait is at most about 200 ms per scan (0 under reduced motion), about 4.5 s of wall time at most across about 45 scans, bounded by the 30 s test timeout. PRF-02 (Info): the new tests add about 10 s of wall time, by design. Stage 12 within runner noise, plus about 10 to 15 s. No JS budget effect |
+
+**Rulings.** PRF-01 and PRF-02: no action. Attempt 1's only remediation is met, so GO on that record (DL-076).
+
+**DL-076's question is closed with no new question.** The orchestrator confirms that DL-032's words ("keep the reviews as is today, so all 3 reviews") already answer it. Test-only PRs do not skip the performance review, and no checklist amendment is needed. The miss came from the brief, not from a gap in the rule.
+
+**For G7:** the DL-077 evidence. (a) CI green on the final head with the control test ✓ on all three projects; already shown on 09f8022, run 41868171176. (b) QA's `sign-in.spec.ts --repeat-each=10 --retries=0` on three projects, 0 failures, posted on AQP-184. (c) QA closes DEF-009. Merging is by the delivery lead after G7 (a test-only code PR, `MERGE_POLICY` code-human).
+
+**Risks registered:** none.

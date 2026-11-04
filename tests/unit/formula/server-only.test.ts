@@ -1,9 +1,10 @@
-import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
+
+import { runProcess, type ProcessResult } from '../../support/process';
 
 /**
  * AC-8 (CONSTRAINT-02, NFR-002): the engine is server-only, and nothing in the repository runs a string as code.
@@ -29,20 +30,16 @@ function filesUnder(directory: string, extensions: ReadonlyArray<string>): strin
   });
 }
 
-interface Run {
-  readonly status: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/** Loads the engine in a fresh Node process, with or without the `react-server` condition. */
-function loadEngine(conditions: ReadonlyArray<string>): Run {
-  const result = spawnSync(
+/**
+ * Loads the engine in a fresh Node process, with or without the `react-server` condition. A Node that never started
+ * throws `ProcessStartError`, so it cannot pass for "plain Node refused the engine" (DEF-007).
+ */
+function loadEngine(conditions: ReadonlyArray<string>): ProcessResult {
+  return runProcess(
     process.execPath,
     [...conditions.map((condition) => `--conditions=${condition}`), '--import', 'tsx', '--input-type=module', '-e', `await import(${JSON.stringify(ENTRY)}); process.stdout.write('loaded');`],
-    { cwd: ROOT, encoding: 'utf8' },
+    { cwd: ROOT, what: 'Node loading the formula engine' },
   );
-  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
 describe('every engine file is marked server-only (AC-8)', () => {
@@ -64,14 +61,15 @@ describe('every engine file is marked server-only (AC-8)', () => {
 });
 
 describe('the server-only package under plain Node and under react-server (AC-8)', () => {
-  let plain: Run;
-  let withCondition: Run;
+  let plain: ProcessResult;
+  let withCondition: ProcessResult;
 
-  // Starting Node with the TypeScript loader takes a moment: it is set-up, so it has its own hook (test strategy section 10).
+  // Starting Node with the TypeScript loader takes a moment: it is set-up, so it runs in the hook, under the hook limit
+  // set once in vitest.config.ts (test strategy section 10).
   beforeAll(() => {
     plain = loadEngine([]);
     withCondition = loadEngine(['react-server']);
-  }, 120_000);
+  });
 
   it('AC-8: loading the engine in plain Node throws the package\'s error', () => {
     expect(plain.status).not.toBe(0);
@@ -87,7 +85,16 @@ describe('the server-only package under plain Node and under react-server (AC-8)
 });
 
 describe('no code is built from a string (AC-8, CONSTRAINT-02)', () => {
-  const SEARCHED = ['src', 'scripts', 'prisma'].flatMap((directory) => filesUnder(join(ROOT, directory), ['.ts', '.tsx', '.mts', '.js', '.mjs']));
+  /**
+   * The code lines of every searched file, by path. Listing and reading the tree is set-up, so it happens once, in the
+   * hook; each test then only matches its pattern, inside the test limit (test strategy section 10; DEF-007).
+   */
+  const codeByFile = new Map<string, ReadonlyArray<string>>();
+
+  beforeAll(() => {
+    const searched = ['src', 'scripts', 'prisma'].flatMap((directory) => filesUnder(join(ROOT, directory), ['.ts', '.tsx', '.mts', '.js', '.mjs']));
+    for (const file of searched) codeByFile.set(file, codeLines(file));
+  });
 
   /** The lines of a file that are code: comment lines are left out, so a rule written in a comment does not count. */
   function codeLines(file: string): string[] {
@@ -118,8 +125,9 @@ describe('no code is built from a string (AC-8, CONSTRAINT-02)', () => {
   ];
 
   it('AC-8: the search covers the source, the scripts and the seed', () => {
-    expect(SEARCHED.length).toBeGreaterThan(40);
-    expect(SEARCHED.some((file) => file.includes(join('src', 'lib', 'formula', 'evaluator.ts')))).toBe(true);
+    const searched = [...codeByFile.keys()];
+    expect(searched.length).toBeGreaterThan(40);
+    expect(searched.some((file) => file.includes(join('src', 'lib', 'formula', 'evaluator.ts')))).toBe(true);
   });
 
   it('AC-8: the search finds each fault when one is planted (a control for the search itself)', () => {
@@ -141,7 +149,9 @@ describe('no code is built from a string (AC-8, CONSTRAINT-02)', () => {
   });
 
   it.each(FORBIDDEN)('AC-8: 0 uses of %s', (_name, pattern) => {
-    const offenders = SEARCHED.filter((file) => codeLines(file).some((line) => pattern.test(line))).map((file) => relative(ROOT, file));
+    const offenders = [...codeByFile]
+      .filter(([, lines]) => lines.some((line) => pattern.test(line)))
+      .map(([file]) => relative(ROOT, file));
     expect(offenders).toEqual([]);
   });
 });
