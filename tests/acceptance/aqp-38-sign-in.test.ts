@@ -175,41 +175,33 @@ describe('[AQP-38 AC-2] one answer for a wrong password, an unknown e-mail and a
     expect(verified.every((prefix) => prefix === '$argon2id')).toBe(true);
   });
 
-  it('[AQP-38 AC-2] with the production argon2id cost, the median times of the three failures are within 50 % of each other (stated tolerance)', async () => {
-    // Real cost (64 MiB, 3 passes). Interleaved rounds, so machine load falls on every case alike. Each round uses
-    // people of its own, so no account key nears the five-failure block, and the dummy hash is made before timing
-    // starts (once per process, at the first unknown e-mail). The tolerance is wide on purpose (test strategy section
-    // 10: no load-sensitive limit); without the dummy hash an unknown e-mail would take about 0 ms against about
-    // 350 ms, far outside it, and the verify-count test above fails on that as well.
+  it('[AQP-38 AC-2] with the production argon2id cost, every failure verifies a hash with the same parameters, so the work and the time are the same', async () => {
+    // Deterministic, not a stopwatch (test strategy section 10): an argon2id verify costs what its parameters say
+    // (memory, passes, lanes), so equal parameters mean equal work. A wall-clock comparison inside the parallel CI
+    // suite measured machine load instead (CI run 41855855735); the one-off timing measurement is in the test report.
     const realHasher = createPasswordHasher();
+    const parameters: string[] = [];
+    const recording: PasswordHasher = {
+      hash: (password) => realHasher.hash(password),
+      async verify(hash, password) {
+        parameters.push(hash.split('$').slice(1, 4).join('$'));
+        return realHasher.verify(hash, password);
+      },
+    };
     const clock = createFixedClock(START);
-    const service = createAuthService({ users: db.users, throttles: db.throttles, hasher: realHasher, clock, keySecret: SECRET });
-    await service.authenticate({ email: 'warm-up-qa-38@example.test', password: 'x', ipAddress: freshAddress() });
+    const service = createAuthService({ users: db.users, throttles: db.throttles, hasher: recording, clock, keySecret: SECRET });
+    const known = await insertUser(db.users, realHasher);
+    const deactivated = await insertUser(db.users, realHasher);
+    await db.owner.query('UPDATE users SET is_active = false WHERE id = $1', [deactivated.id]);
 
-    const ROUNDS = 7;
-    const times = { wrong: [] as number[], unknown: [] as number[], deactivated: [] as number[] };
-    for (let round = 0; round < ROUNDS; round += 1) {
-      const known = await insertUser(db.users, realHasher);
-      const deactivated = await insertUser(db.users, realHasher);
-      await db.owner.query('UPDATE users SET is_active = false WHERE id = $1', [deactivated.id]);
-      const cases = {
-        wrong: { email: known.email, password: 'a-wrong-password' },
-        unknown: { email: `nobody-timed-${round}-qa-38@example.test`, password: 'a-wrong-password' },
-        deactivated: { email: deactivated.email, password: TEST_PASSWORD },
-      } as const;
-      for (const name of ['wrong', 'unknown', 'deactivated'] as const) {
-        const started = performance.now();
-        const result = await service.authenticate({ ...cases[name], ipAddress: freshAddress() });
-        times[name].push(performance.now() - started);
-        expect(result).toEqual({ status: 'refused', reason: 'invalid' });
-      }
+    for (const attempt of [
+      { email: known.email, password: 'a-wrong-password' },
+      { email: 'nobody-costed-qa-38@example.test', password: 'a-wrong-password' },
+      { email: deactivated.email, password: TEST_PASSWORD },
+    ]) {
+      expect(await service.authenticate({ ...attempt, ipAddress: freshAddress() })).toEqual({ status: 'refused', reason: 'invalid' });
     }
-    const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0;
-    const medians = Object.values(times).map(median);
-    const slowest = Math.max(...medians);
-    const fastest = Math.min(...medians);
-    expect(fastest).toBeGreaterThan(0);
-    expect(slowest / fastest).toBeLessThan(1.5);
+    expect(parameters).toEqual(Array.from({ length: 3 }, () => 'argon2id$v=19$m=65536,t=3,p=1'));
   }, 120_000);
 });
 
