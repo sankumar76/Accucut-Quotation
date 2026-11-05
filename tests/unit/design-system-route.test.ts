@@ -12,7 +12,8 @@ import { describe, expect, it } from 'vitest';
 
 const read = (relative: string): string => readFileSync(fileURLToPath(new URL(`../../${relative}`, import.meta.url)), 'utf8');
 
-const CALL_SITES = ['src/app/(portal)/design-system/page.tsx', 'src/app/(portal)/layout.tsx', 'src/app/(portal)/page.tsx'];
+// The menu entries are built in `portal-frame-props.tsx` since AQP-188 (AC-9: one function builds the frame's props); the layout calls it.
+const CALL_SITES = ['src/app/(portal)/design-system/page.tsx', 'src/app/(portal)/portal-frame-props.tsx', 'src/app/(portal)/page.tsx'];
 
 describe('design system route, AC-7', () => {
   it('AC-7: the page answers not found when the gate says it is unavailable', () => {

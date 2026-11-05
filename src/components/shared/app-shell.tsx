@@ -2,16 +2,19 @@
 
 import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 
+import { FirstOpenFailure } from '@/components/shared/first-open-failure';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
 import { Header } from './header';
 import { Icon } from './icon';
+import type { MenuDrawerProps } from './menu-drawer';
 import { Nav, type NavGroup } from './nav';
 import { SkipLink } from './skip-link';
 import { useCloseDrawerOnDesktop } from './use-close-drawer-on-desktop';
+import { useFirstOpen, useFinishEarlyIntent, type FirstOpenControl } from './use-first-open';
 import { useFocusTitleAfterNavigation } from './use-focus-title-after-navigation';
 import { useStickyOffsets } from './use-sticky-offsets';
 
@@ -22,31 +25,43 @@ export interface AppShellProps {
   readonly children: ReactNode;
 }
 
-/** The menu button in the top bar; it opens the drawer (shown below 1024 px only, by the header). */
-function MenuButton() {
+const FAILURE_ID = 'menu-drawer-first-open-failure';
+const FAILURE_MESSAGE = 'The menu did not open. Check your connection and try again.';
+
+/** The drawer's code: a bare `import()`, so a failed request can be tried again (architecture section 10). */
+const loadMenuDrawer = () => import('./menu-drawer').then((module) => module.MenuDrawer);
+
+interface MenuButtonProps {
+  readonly open: boolean;
+  readonly first: FirstOpenControl<MenuDrawerProps>;
+  readonly buttonRef: RefObject<HTMLButtonElement | null>;
+}
+
+/**
+ * The menu button in the top bar; it opens the drawer (shown below 1024 px only, by the header). A plain button that
+ * owns the open state: the drawer's code is fetched on the first press and the button shows the pending look while it
+ * loads (UX spec 7.3.1 rule 11). It is never `loading` (that disables it); Escape must reach it and a second press must be ignored.
+ */
+function MenuButton({ open, first, buttonRef }: MenuButtonProps) {
   return (
-    <SheetTrigger asChild>
-      <Button variant="secondary" size="icon" aria-label="Open menu">
+    <div className="relative">
+      <Button
+        ref={buttonRef}
+        variant="secondary"
+        size="icon"
+        aria-label="Open menu"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-busy={first.pending || undefined}
+        aria-describedby={first.failed ? FAILURE_ID : undefined}
+        {...{ [EARLY_INTENT_ATTRIBUTE]: 'menu' }}
+        suppressHydrationWarning
+        onClick={(event) => first.activate(event.detail === 0)}
+      >
         <Icon icon={Menu} size="large" />
       </Button>
-    </SheetTrigger>
-  );
-}
-
-interface MenuDrawerProps {
-  readonly groups: ReadonlyArray<NavGroup>;
-  readonly onNavigate: (href: string) => void;
-  readonly onCloseAutoFocus: (event: Event) => void;
-}
-
-/** The side menu as a drawer: focus trapped, Escape closes, focus returns to the menu button unless a page was chosen. */
-function MenuDrawer({ groups, onNavigate, onCloseAutoFocus }: MenuDrawerProps) {
-  return (
-    <SheetContent title="Menu" closeLabel="Close menu" onDark className="bg-nav text-nav-ink" onCloseAutoFocus={onCloseAutoFocus}>
-      <div className="pt-s-7">
-        <Nav groups={groups} onNavigate={onNavigate} />
-      </div>
-    </SheetContent>
+      {first.failed ? <FirstOpenFailure id={FAILURE_ID} message={FAILURE_MESSAGE} align="left" /> : null}
+    </div>
   );
 }
 
@@ -55,17 +70,47 @@ function MenuDrawer({ groups, onNavigate, onCloseAutoFocus }: MenuDrawerProps) {
  * side menu and `main`. At 1024 px and wider the graphite side menu is persistent; below that a menu button
  * in the top bar opens it as a drawer. The bell and the account menu stay in the top bar at every width. After a
  * route change focus goes to the page's `h1`.
+ *
+ * The drawer is not in the first load (AQP-188, NFR-009): its code is fetched on the first press of the menu button,
+ * through the loader every overlay uses (`use-first-open.ts`), and stays mounted afterwards.
  */
 export function AppShell({ navGroups, bell, account, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const titleFocus = useFocusTitleAfterNavigation(usePathname());
+  const drawer = useFirstOpen<MenuDrawerProps>({ id: 'menu', load: loadMenuDrawer, onOpen: () => setMenuOpen(true) });
   useStickyOffsets();
-  useCloseDrawerOnDesktop(setMenuOpen);
+  // Widening to 1024 px or more closes the drawer, and also cancels an open that is still waiting for its code: otherwise
+  // the drawer would open over the persistent side menu when the code arrived (QLT-56, AC-5 with AC-8).
+  const { cancel: cancelDrawerOpen } = drawer;
+  const setDrawerOpen = useCallback(
+    (open: boolean): void => {
+      setMenuOpen(open);
+      if (!open) cancelDrawerOpen();
+    },
+    [cancelDrawerOpen],
+  );
+  useCloseDrawerOnDesktop(setDrawerOpen);
+  // After the controls have read the early tap (this effect runs after theirs).
+  useFinishEarlyIntent();
+
+  // Radix has no trigger to return focus to, so the button gets it back here unless a page was chosen (QLT-02).
+  const returnFocusToMenuButton = (event: Event): void => {
+    titleFocus.onCloseAutoFocus(event);
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    menuButton.current?.focus();
+  };
+  const chooseLink = (href: string): void => {
+    titleFocus.onNavigate(href);
+    setMenuOpen(false);
+  };
+  const Drawer = drawer.Overlay;
 
   return (
-    <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+    <>
       <SkipLink />
-      <Header menuButton={<MenuButton />} bell={bell} account={account} />
+      <Header menuButton={<MenuButton open={menuOpen} first={drawer} buttonRef={menuButton} />} bell={bell} account={account} />
       <div className="lg:grid lg:grid-cols-[var(--side-w)_minmax(0,1fr)]">
         <aside data-on-dark="" className="sticky top-(--topbar-h) hidden h-[calc(100vh-var(--topbar-h))] overflow-y-auto bg-nav text-nav-ink lg:block">
           <Nav groups={navGroups} />
@@ -74,14 +119,9 @@ export function AppShell({ navGroups, bell, account, children }: AppShellProps) 
           {children}
         </main>
       </div>
-      <MenuDrawer
-        groups={navGroups}
-        onCloseAutoFocus={titleFocus.onCloseAutoFocus}
-        onNavigate={(href) => {
-          titleFocus.onNavigate(href);
-          setMenuOpen(false);
-        }}
-      />
-    </Sheet>
+      {Drawer === null ? null : (
+        <Drawer groups={navGroups} open={menuOpen} onOpenChange={setMenuOpen} onNavigate={chooseLink} onCloseAutoFocus={returnFocusToMenuButton} />
+      )}
+    </>
   );
 }
