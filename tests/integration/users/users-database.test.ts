@@ -182,6 +182,15 @@ describe('AC-4: the Admin cannot lock themself out', () => {
     expect(await row(adminId)).toMatchObject({ role: 'ADMIN', is_active: true });
   });
 
+  it('refuses all three own-account changes when the ID is written in upper case (the uuid type ignores case)', async () => {
+    const before = await row(adminId);
+    const shouted = adminId.toUpperCase();
+    await expect(service.update(adminId, shouted, { isActive: false })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_DEACTIVATE_OWN_ACCOUNT' });
+    await expect(service.update(adminId, shouted, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
+    await expect(service.resetPassword(adminId, shouted, 'invented-temporary-password-9')).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_RESET_OWN_PASSWORD' });
+    expect(await row(adminId)).toMatchObject({ role: 'ADMIN', is_active: true, password_hash: before.password_hash, session_version: before.session_version });
+  });
+
   it('STD-01: refuses, with 409, to reset their own password, and the hash and session are as they were', async () => {
     const before = await row(adminId);
     await expect(service.resetPassword(adminId, adminId, 'invented-temporary-password-9')).rejects.toMatchObject({

@@ -65,5 +65,8 @@ export const updateUserBodySchema = z
 /** `POST /api/v1/users/{id}/password-reset` (AC-5). */
 export const resetPasswordBodySchema = z.strictObject({ password });
 
-/** The path parameter of `/api/v1/users/{id}`: a UUID, or the request is refused as invalid before anything is looked up. */
-export const userIdParamsSchema = z.strictObject({ id: z.uuid('Not a user ID.') });
+/**
+ * The path parameter of `/api/v1/users/{id}`: a UUID, or the request is refused as invalid before anything is looked up.
+ * It is written in lower case, the way PostgreSQL returns an ID, because the database ignores case and a string comparison must not.
+ */
+export const userIdParamsSchema = z.strictObject({ id: z.uuid('Not a user ID.').transform((id) => id.toLowerCase()) });

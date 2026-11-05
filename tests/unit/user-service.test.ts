@@ -206,6 +206,33 @@ describe('AC-4: the Admin cannot lock themself out', () => {
   });
 });
 
+describe('the own-account rules do not depend on the letter case of an ID (PostgreSQL uuid ignores it)', () => {
+  const mixed = (id: string): string => id.replace(/[a-f]/g, (digit, index: number) => (index % 2 === 0 ? digit.toUpperCase() : digit));
+
+  it.each([
+    ['upper case', (id: string) => id.toUpperCase()],
+    ['mixed case', mixed],
+  ])('refuses own deactivation, own role and own password reset when the target ID is written in %s', async (_name, spell) => {
+    const target = spell(adminId);
+    expect(target).not.toBe(adminId);
+    expect(await refusal(service.update(adminId, target, { isActive: false }))).toMatchObject({ httpStatus: 409, code: CANNOT_DEACTIVATE_OWN_ACCOUNT_CODE });
+    expect(await refusal(service.update(adminId, target, { role: 'LEAD' }))).toMatchObject({ httpStatus: 409, code: CANNOT_CHANGE_OWN_ROLE_CODE });
+    expect(await refusal(service.resetPassword(adminId, target, 'temporary-password-1'))).toMatchObject({ httpStatus: 409, code: CANNOT_RESET_OWN_PASSWORD_CODE });
+    expect(defined(users.records.find((record) => record.id === adminId))).toMatchObject({ role: 'ADMIN', isActive: true, mustChangePassword: false, sessionVersion: 0 });
+    expect(hasher.hashed).toEqual([]);
+  });
+
+  it('refuses it when the caller ID is the one written in upper case', async () => {
+    expect(await refusal(service.update(adminId.toUpperCase(), adminId, { isActive: false }))).toMatchObject({ code: CANNOT_DEACTIVATE_OWN_ACCOUNT_CODE });
+    expect(await refusal(service.resetPassword(adminId.toUpperCase(), adminId, 'temporary-password-1'))).toMatchObject({ code: CANNOT_RESET_OWN_PASSWORD_CODE });
+  });
+
+  it('still lets the Admin change someone else, however the ID is written', async () => {
+    expect((await service.update(adminId, engineerId.toUpperCase(), { name: 'Renamed Engineer' })).name).toBe('Renamed Engineer');
+    await expect(service.resetPassword(adminId, engineerId.toUpperCase(), 'temporary-password-1')).resolves.toBeUndefined();
+  });
+});
+
 describe('AC-5: resetting a password', () => {
   it('stores the new password as a hash, asks for a change at the next sign-in and ends the open sessions', async () => {
     const before = defined(users.records.find((record) => record.id === engineerId)).sessionVersion;

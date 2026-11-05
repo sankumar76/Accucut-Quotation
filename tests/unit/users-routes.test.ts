@@ -190,6 +190,14 @@ describe('POST /api/v1/users/{id}/password-reset (AC-5)', () => {
     expect(JSON.stringify(harness.users.records.find((entry) => entry.id === harness.idOf.ADMIN))).toBe(before);
   });
 
+  it('STD-01: the own-account rules hold when the ID in the address is written in upper case (the database ignores case)', async () => {
+    const own = withId(harness.idOf.ADMIN.toUpperCase());
+    expect((await RESET(request('POST', { password: SECRET_LOOKING }), own)).status).toBe(409);
+    expect((await PATCH(request('PATCH', { isActive: false }), own)).status).toBe(409);
+    expect((await PATCH(request('PATCH', { role: 'LEAD' }), own)).status).toBe(409);
+    expect(harness.users.records.find((entry) => entry.id === harness.idOf.ADMIN)).toMatchObject({ role: 'ADMIN', isActive: true });
+  });
+
   it('needs a non-empty password and does not echo what was sent', async () => {
     const empty = await RESET(request('POST', { password: '' }), withId(harness.targetId));
     expect(empty.status).toBe(422);

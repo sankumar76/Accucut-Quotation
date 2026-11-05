@@ -61,6 +61,15 @@ export interface UserService {
   resetPassword(actorId: string, targetId: string, password: string): Promise<void>;
 }
 
+/**
+ * Is the row the database returned the caller? Compared by the row's own ID and ignoring letter case, because PostgreSQL's uuid
+ * type does: an address written in capitals finds the same row, and a plain string comparison of the address with the caller's
+ * ID would let the Admin past their own-account rules (found by the automated security review of AQP-65).
+ */
+function isSamePerson(actorId: string, rowId: string): boolean {
+  return actorId.toLowerCase() === rowId.toLowerCase();
+}
+
 /** Would the person be an active Admin after the change? */
 function isActiveAdmin(state: { readonly role: UserRole; readonly isActive: boolean }): boolean {
   return state.role === 'ADMIN' && state.isActive;
@@ -104,7 +113,7 @@ export function createUserService({ users, throttles, hasher, keySecret }: UserS
       const target = await users.findAccountById(targetId);
       if (target === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
 
-      if (actorId === targetId) {
+      if (isSamePerson(actorId, target.id)) {
         if (changes.role !== undefined && changes.role !== target.role) {
           throw new ConflictError('You cannot change your own role.', { code: CANNOT_CHANGE_OWN_ROLE_CODE });
         }
@@ -116,7 +125,7 @@ export function createUserService({ users, throttles, hasher, keySecret }: UserS
       const after = { role: changes.role ?? target.role, isActive: changes.isActive ?? target.isActive };
       if (isActiveAdmin(after) && !isActiveAdmin(target) && (await users.findActiveAdmin()) !== null) throw await activeAdminExists();
 
-      const updated = await withUserRules(() => users.update(targetId, changes));
+      const updated = await withUserRules(() => users.update(target.id, changes));
       if (updated === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
       return updated;
     },
@@ -124,9 +133,10 @@ export function createUserService({ users, throttles, hasher, keySecret }: UserS
     async resetPassword(actorId, targetId, password) {
       // The Admin's own password is changed with the current one, on the account page (story 01.05), not by a reset that
       // needs no proof: a stolen session could otherwise take the account over (STD-01).
-      if (actorId === targetId) throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
-      if ((await users.findAccountById(targetId)) === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
-      const email = await users.setPassword(targetId, await hasher.hash(password));
+      const target = await users.findAccountById(targetId);
+      if (target === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
+      if (isSamePerson(actorId, target.id)) throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
+      const email = await users.setPassword(target.id, await hasher.hash(password));
       if (email === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
       // The sign-in page tells a blocked person to ask the Admin for a reset (architecture section 6, "Rate limits").
       await throttles.clear(accountThrottleKey(keySecret, email));

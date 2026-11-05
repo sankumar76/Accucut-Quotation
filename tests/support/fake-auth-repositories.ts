@@ -32,6 +32,11 @@ export interface FakeUserRepository extends UserRepository {
   readonly lookups: string[];
 }
 
+/** PostgreSQL's uuid type ignores letter case, so a lookup by ID does too (the fake must not be stricter than the database). */
+function sameUuid(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
 const ROLE_ORDER: Readonly<Record<UserRole, number>> = { ADMIN: 0, LEAD: 1, ENGINEER: 2 };
 
 function summaryOf(record: FakeUserRecord): UserSummary {
@@ -43,7 +48,8 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
   const lookups: string[] = [];
   let nextId = 1;
   const add = (user: NewUser): string => {
-    const id = `00000000-0000-4000-8000-${String(nextId).padStart(12, '0')}`;
+    // Hex letters in the ID, so a test can write it in capitals and the case rules mean something.
+    const id = `00000000-0000-4000-8000-abcdef${String(nextId).padStart(6, '0')}`;
     nextId += 1;
     records.push({ ...user, email: normaliseEmail(user.email), id, isActive: true, sessionVersion: 0 });
     return id;
@@ -72,7 +78,7 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       );
     },
     findAccountById(id): Promise<UserAccount | null> {
-      const found = records.find((record) => record.id === id);
+      const found = records.find((record) => sameUuid(record.id, id));
       return Promise.resolve(
         found === undefined
           ? null
@@ -110,11 +116,11 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       return Promise.resolve(add(user));
     },
     update(id, changes: UserChanges) {
-      const found = records.find((record) => record.id === id);
+      const found = records.find((record) => sameUuid(record.id, id));
       if (found === undefined) return Promise.resolve(null);
       const next = { name: changes.name ?? found.name, role: changes.role ?? found.role, isActive: changes.isActive ?? found.isActive };
       try {
-        refuseIfRepeated({ id, email: found.email, role: next.role, isActive: next.isActive });
+        refuseIfRepeated({ id: found.id, email: found.email, role: next.role, isActive: next.isActive });
       } catch (error) {
         return Promise.reject(error);
       }
@@ -123,14 +129,14 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       return Promise.resolve(summaryOf(found));
     },
     setPassword(id, passwordHash) {
-      const found = records.find((record) => record.id === id);
+      const found = records.find((record) => sameUuid(record.id, id));
       if (found === undefined) return Promise.resolve(null);
       Object.assign(found, { passwordHash, mustChangePassword: true });
       found.sessionVersion += 1;
       return Promise.resolve(found.email);
     },
     raiseSessionVersion(id, expectedVersion) {
-      const found = records.find((record) => record.id === id);
+      const found = records.find((record) => sameUuid(record.id, id));
       if (found === undefined || found.sessionVersion !== expectedVersion) return Promise.resolve(false);
       found.sessionVersion += 1;
       return Promise.resolve(true);
