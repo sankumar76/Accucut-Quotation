@@ -212,7 +212,7 @@ function scr24() {
 function firstOpenCard() {
   const u = L.PEOPLE.admin;
   const menu = (pending) => `<span class="btn btn-secondary btn-icon${pending ? ' is-pending' : ''}">${icon('menu', 20)}</span>`;
-  const acct = (pending) => `<details class="usermenu"><summary${pending ? ' class="is-pending"' : ''}><span class="avatar">${u.initials}</span><span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span></summary></details>`;
+  const acct = (pending) => `<details class="usermenu"><summary aria-label="Account menu, ${u.initials}, ${u.name}, ${u.role}"${pending ? ' class="is-pending"' : ''}><span class="avatar">${u.initials}</span> <span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span></summary></details>`;
   const fail = (text, side) => `<div class="fo-fail is-static fo-fail-${side}">${icon('alert', 16)}<span>${text}</span></div>`;
   const cell = (inner) => `<div class="fo-spec" inert>${inner}</div>`;
   const rows = [
@@ -250,6 +250,7 @@ function scr26() {
    ${blk('alert', 'Something went wrong on our side', 'Your work is saved up to your last save. Try again in a moment. If it keeps happening, give the Admin this reference: req-7f3a91.', `<button class="btn btn-secondary" type="button">${icon('undo', 18)} Try again</button>`, 'error500')}
    <div data-show="expired" hidden><section class="card"><div class="card-body">${emptyState({ ic: 'clock', title: 'Your session ended', text: 'Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.', action: '<a class="btn btn-primary" href="SCR-01.html#state=expired">Sign in</a>' })}</div></section></div>
    ${reviewNote('FR-007. A direct address to a page the role may not open shows "no access" (for example an Engineer opening the export). For an Engineer, an estimate address that is missing and one that belongs to another Engineer give the same "no access" page, so task numbers cannot be probed (UX-22); "not found" is for other kinds of address and for other roles. The wording never says that costs or other people\'s data exist. The error page shows a reference for the Admin and never technical detail.')}
+   ${reviewNote('Action label (UX spec version 0.12). The "no access" and "not found" button goes to the person\'s own landing page and is named as the menu names it. This mock-up is the Engineer view, so it reads "Go to my tasks". A Lead or an Admin sees "Go to the task queue" (SCR-03). The label depends on the viewer\'s role only, never on whether the address exists, so the identical content and timing of UX-22 hold.')}
   </main>`;
   return page({ id: 'SCR-26', file: 'SCR-26.html', name: 'No access, not found, error, session ended', title: 'Page not available', desc: 'This page is not available. Return to your tasks.', role: 'engineer', active: 'queue', states: ['forbidden:No access (403)', 'notfound:Not found (404)', 'error500:Server error', 'expired:Session ended'], roleLabel: 'all', release: 'R1', frs: 'FR-007, 088', body: main });
 }
