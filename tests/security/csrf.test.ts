@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { isStateChanging, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
@@ -75,6 +75,10 @@ async function loadHandler(row: RouteRow, method: HttpMethod): Promise<Handler> 
     return answer;
   };
 }
+
+beforeAll(async () => {
+  await Promise.all(Object.values(API_LOADERS).map((load) => load()));
+});
 
 beforeEach(() => {
   vi.stubEnv('APP_ORIGIN', APP_ORIGIN);

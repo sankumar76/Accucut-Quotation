@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import type { RoleName } from '@/lib/auth/roles';
@@ -117,6 +117,13 @@ async function callPage(row: RouteRow, id: string): Promise<PageOutcome> {
     throw error;
   }
 }
+
+// Importing the pages (the design-system page pulls in a great many components) can take longer than a test's limit on a
+// busy machine. The modules are loaded once, in a hook, whose limit is set for set-up work (test strategy section 10, DL-057).
+beforeAll(async () => {
+  await Promise.all([...Object.values(API_LOADERS), ...Object.values(PAGE_LOADERS)].map((load) => load()));
+  await import('@/server/http/page-access');
+});
 
 beforeEach(() => harness.signInAs(null));
 

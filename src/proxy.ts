@@ -11,6 +11,10 @@ import { loadOriginEnv } from '@/lib/env';
  * database (the lesson of the 2025 Next.js middleware bypass). A forged or stale cookie passes here and is
  * refused there.
  *
+ * An API request is never redirected: a signed-out call reaches the route, and `withRoute` answers it with 401 and a problem
+ * body (STORY-01.02 AC-4). For a request with a cookie it also records the address asked for in a request header, for the
+ * page that finds the session stale and sends the person to sign in with that address kept.
+ *
  * Every response it handles carries `Cache-Control: private, no-store`, so the browser's back button after
  * sign-out cannot show a protected page from its cache, and `X-Robots-Tag` so a crawler that is turned away does
  * not index the redirect (architecture section 8, "Indexing and sharing").
