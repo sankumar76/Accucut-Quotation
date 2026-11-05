@@ -24,6 +24,9 @@ const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800
  *   `next build` or `next start`.
  * - the logo (also the favicon) is a file in `public/`, which Next.js would serve with `max-age=0`, so every page
  *   view would ask for it again (PRF-02). It gets a day.
+ * - `experimental.authInterrupts`: lets a page call `forbidden()`, which renders `(portal)/forbidden.tsx` (SCR-26 "no
+ *   access") with status 403 (STORY-01.02 AC-4). `authorizePage` is the only caller. It is Next.js's flag for exactly this
+ *   and the version is pinned; it has no effect on the other rules (no Server Actions, ADR-010).
  * - `agentRules: false`: `next dev` would otherwise write an AGENTS.md into the working tree. This
  *   project's agent instructions are in CLAUDE.md.
  */
@@ -34,6 +37,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: ['192.168.*.*', '10.*.*.*', ...PRIVATE_172_ORIGINS],
   agentRules: false,
+  experimental: { authInterrupts: true },
   headers: () => [{ source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }] }],
 };
 

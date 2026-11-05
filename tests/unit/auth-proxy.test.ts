@@ -79,6 +79,30 @@ describe('AC-4: a visitor with a session cookie is let through, with nothing sto
   });
 });
 
+describe('STORY-01.02 AC-4: the address asked for, and API routes', () => {
+  it('forwards the address asked for to the page, replacing whatever the browser sent under that name', () => {
+    const response = proxy(
+      new NextRequest('http://localhost:3000/estimates/Q-2026-0001?tab=a', {
+        headers: { cookie: 'next-auth.session-token=abc', 'x-return-path': 'https://evil.example/' },
+      }),
+    );
+    // A forwarded request header is carried to the page as `x-middleware-request-<name>` and an override marker.
+    expect(response.headers.get('x-middleware-request-x-return-path')).toBe('/estimates/Q-2026-0001?tab=a');
+    expect(response.headers.get('x-middleware-override-headers')).toContain('x-return-path');
+  });
+
+  it('lets a signed-out API call through, so the route answers 401 with a problem body and not a page redirect', () => {
+    const response = proxy(request('/api/v1/me'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Location')).toBeNull();
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  });
+
+  it('still sends a signed-out page request to the sign-in page, also for a path that merely starts with "api"', () => {
+    expect(proxy(request('/apiary')).status).toBe(307);
+  });
+});
+
 describe('what the proxy covers', () => {
   const pattern = new RegExp(`^${config.matcher[0] ?? ''}$`);
 

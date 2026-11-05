@@ -19,10 +19,14 @@ const mocks = vi.hoisted(() => ({
     throw new Error(`NEXT_REDIRECT:${path}`);
   }),
   users: { current: undefined as unknown },
+  returnPath: { current: null as string | null },
 }));
 
 vi.mock('next-auth', () => ({ getServerSession: mocks.getServerSession }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve(new Headers(mocks.returnPath.current === null ? {} : { 'x-return-path': mocks.returnPath.current })),
+}));
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', () => ({
@@ -94,6 +98,7 @@ describe('the current user of a request', () => {
   beforeEach(() => {
     mocks.getServerSession.mockReset();
     mocks.redirect.mockClear();
+    mocks.returnPath.current = null;
   });
 
   it('is built from the three values in the session', async () => {
@@ -131,6 +136,24 @@ describe('the current user of a request', () => {
     mocks.getServerSession.mockResolvedValue(null);
     await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_REDIRECT:/sign-in');
   });
+
+  it('requireUserOrRedirect keeps the address the person asked for, as the proxy recorded it (STORY-01.02 AC-4)', async () => {
+    mocks.users.current = createFakeUserRepository();
+    mocks.getServerSession.mockResolvedValue(null);
+    mocks.returnPath.current = '/queue?tab=overdue';
+    await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_REDIRECT:/sign-in?callbackUrl=%2Fqueue%3Ftab%3Doverdue');
+  });
+
+  it.each(['https://evil.example/x', '//evil.example/x', '/api/v1/me', '/sign-in', ''])(
+    'requireUserOrRedirect ignores a recorded address that is not a page of this portal: %j',
+    async (recorded) => {
+      mocks.users.current = createFakeUserRepository();
+      mocks.getServerSession.mockResolvedValue(null);
+      mocks.returnPath.current = recorded;
+      await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_REDIRECT:/sign-in');
+      expect(mocks.redirect).toHaveBeenCalledWith('/sign-in');
+    },
+  );
 
   it('requireUserOrRedirect returns the person when signed in', async () => {
     const { users, id } = await repositoryWithOneUser();

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { signInPathFor } from '@/lib/auth/return-path';
+import { RETURN_PATH_HEADER, signInPathFor } from '@/lib/auth/return-path';
 import { loadOriginEnv } from '@/lib/env';
 
 /**
@@ -44,13 +44,22 @@ function portalOrigin(request: NextRequest): string {
   }
 }
 
+/** An API route answers for itself: `withRoute` gives a signed-out caller 401 with a problem body, not a page redirect (AC-4). */
+function isApiPath(pathname: string): boolean {
+  return pathname === '/api' || pathname.startsWith('/api/');
+}
+
 export function proxy(request: NextRequest): NextResponse {
-  if (hasSessionCookie(request)) {
-    const response = NextResponse.next();
+  const { pathname, search } = request.nextUrl;
+  if (hasSessionCookie(request) || isApiPath(pathname)) {
+    // The address asked for, for the page that finds the session stale and sends the person to sign in (AC-4). It always
+    // replaces whatever the browser sent under that name, and it is read only through `signInPathFor`.
+    const forwarded = new Headers(request.headers);
+    forwarded.set(RETURN_PATH_HEADER, `${pathname}${search}`);
+    const response = NextResponse.next({ request: { headers: forwarded } });
     response.headers.set('Cache-Control', NO_STORE);
     return response;
   }
-  const { pathname, search } = request.nextUrl;
   const response = NextResponse.redirect(new URL(signInPathFor(`${pathname}${search}`), portalOrigin(request)), 307);
   response.headers.set('Cache-Control', NO_STORE);
   response.headers.set('X-Robots-Tag', NO_INDEX);

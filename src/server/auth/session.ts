@@ -1,12 +1,13 @@
 import 'server-only';
 
 import { getServerSession } from 'next-auth';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { cache } from 'react';
 
 import { ForbiddenError, UnauthorizedError } from '../../lib/errors';
-import { SIGN_IN_PATH } from '../../lib/auth/return-path';
+import { RETURN_PATH_HEADER, SIGN_IN_PATH, signInPathFor } from '../../lib/auth/return-path';
 import { systemClock } from '../../lib/time';
 import { getAuthOptions, getUserRepository } from '../composition';
 import type { UserRole } from '../repositories/user-repository';
@@ -44,10 +45,14 @@ export async function requireUser(): Promise<AuthenticatedUser> {
   return user;
 }
 
-/** For pages: the current user, or a redirect to the sign-in page. */
+/**
+ * For pages: the current user, or a redirect to the sign-in page that remembers where the person was going (AC-4 of
+ * STORY-01.02). The address comes from the header `proxy.ts` sets on every request and goes through `signInPathFor`, so
+ * only a same-origin path is kept; a request that carries none just goes to the sign-in page.
+ */
 export async function requireUserOrRedirect(): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();
-  if (user === null) redirect(SIGN_IN_PATH);
+  if (user === null) redirect(signInPathFor((await headers()).get(RETURN_PATH_HEADER) ?? SIGN_IN_PATH));
   return user;
 }
 

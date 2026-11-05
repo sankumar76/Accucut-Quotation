@@ -16,6 +16,13 @@ export const SIGN_IN_PATH = '/sign-in';
 /** The query parameter that carries the return address. */
 export const RETURN_PARAMETER = 'callbackUrl';
 
+/**
+ * The request header in which `proxy.ts` hands the address that was asked for to the page that has to refuse a stale
+ * session. It is always set by the proxy, so a value the browser sent is replaced; and it is read only through
+ * `signInPathFor`, which keeps a same-origin relative path and nothing else (AC-4 of STORY-01.02).
+ */
+export const RETURN_PATH_HEADER = 'x-return-path';
+
 /** A return address longer than this is not a page of this portal. */
 const MAX_RETURN_LENGTH = 2_000;
 
