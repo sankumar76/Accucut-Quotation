@@ -13,6 +13,13 @@ const SCRIPT_URL = /\/_next\/static\/.*\.js(\?.*)?$/;
 /** How long a "slow" request waits. The delay is the scenario (AC-8), not a limit on speed. */
 export const SLOW_REQUEST_MILLISECONDS = 3_000;
 
+/**
+ * How long an expectation may wait for the panel of a slow request. The scenario holds the script for
+ * `SLOW_REQUEST_MILLISECONDS`, and the default expectation limit is no longer than that, so this gives it room over the delay
+ * we made. It is not a speed limit and it hides no load (test strategy section 10).
+ */
+export const SLOW_OPEN_WAIT_MILLISECONDS = SLOW_REQUEST_MILLISECONDS * 3;
+
 /** Strings that only the lazy modules contain: the drawer's close button label and the account menu's sign-out item. */
 export const DRAWER_MARKER = 'Close menu';
 export const ACCOUNT_MARKER = 'Sign out';

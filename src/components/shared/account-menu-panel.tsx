@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 import { AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -45,13 +45,23 @@ function focusFirstEnabledItem(event: Event): void {
  * assistive technology while its controls stay focusable (axe `aria-hidden-focus`).
  */
 export function AccountMenuPanel({ user, items = [], note, keyboard }: AccountMenuPanelProps) {
+  // The override is for the open that mounted the menu only (QLT-55). From then on the Radix trigger sees every key itself,
+  // so a later keyboard open focuses the first item as Radix does, and a later pointer open leaves focus on the menu.
+  const openedByKeyboard = useRef(keyboard);
+  const focusOnOpen = (event: Event): void => {
+    if (!openedByKeyboard.current) return;
+    openedByKeyboard.current = false;
+    focusFirstEnabledItem(event);
+  };
+
   return (
     <div className="relative">
       <DropdownMenu modal={false} defaultOpen>
         <DropdownMenuTrigger asChild>
           <AccountTrigger user={user} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent {...(keyboard ? { onOpenAutoFocus: focusFirstEnabledItem } : {})}>
+        {/* `onOpenAutoFocus` is a prop of Radix's menu content that its public types leave out; the content forwards it. `shell-lazy-load.spec.ts` (AC-4, QLT-55) fails if a Radix upgrade stops doing so. */}
+        <DropdownMenuContent {...{ onOpenAutoFocus: focusOnOpen }}>
           <DropdownMenuLabel>
             <span className="font-semibold text-ink">{user.name}</span>
             <span className="text-label text-ink-2">{user.email}</span>

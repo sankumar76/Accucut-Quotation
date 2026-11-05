@@ -2,7 +2,7 @@
 
 import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { FirstOpenFailure } from '@/components/shared/first-open-failure';
 import { Button } from '@/components/ui/button';
@@ -80,7 +80,17 @@ export function AppShell({ navGroups, bell, account, children }: AppShellProps) 
   const titleFocus = useFocusTitleAfterNavigation(usePathname());
   const drawer = useFirstOpen<MenuDrawerProps>({ id: 'menu', load: loadMenuDrawer, onOpen: () => setMenuOpen(true) });
   useStickyOffsets();
-  useCloseDrawerOnDesktop(setMenuOpen);
+  // Widening to 1024 px or more closes the drawer, and also cancels an open that is still waiting for its code: otherwise
+  // the drawer would open over the persistent side menu when the code arrived (QLT-56, AC-5 with AC-8).
+  const { cancel: cancelDrawerOpen } = drawer;
+  const setDrawerOpen = useCallback(
+    (open: boolean): void => {
+      setMenuOpen(open);
+      if (!open) cancelDrawerOpen();
+    },
+    [cancelDrawerOpen],
+  );
+  useCloseDrawerOnDesktop(setDrawerOpen);
   // After the controls have read the early tap (this effect runs after theirs).
   useFinishEarlyIntent();
 

@@ -45,6 +45,8 @@ export interface FirstOpenControl<Panel> {
   readonly keyboard: boolean;
   /** The control was pressed. `keyboard` is true for Enter, Space and ArrowDown. */
   readonly activate: (keyboard: boolean) => void;
+  /** Stops a pending open (the code may still arrive, and the panel then stays closed) and clears a failure. Escape does this. */
+  readonly cancel: () => void;
 }
 
 /** The control pressed last, so that pressing the other one cancels it (UX spec 7.3.1 rule 11: the last press wins). */
@@ -93,6 +95,8 @@ export function useFirstOpen<Panel>({ id, load, onOpen }: FirstOpenOptions<Panel
     [id, send],
   );
 
+  const cancel = useCallback((): void => send('cancel'), [send]);
+
   // A tap made before the page was interactive is the first activation (AC-10).
   useEffect(() => {
     const early = readEarlyIntent(window, id);
@@ -119,7 +123,7 @@ export function useFirstOpen<Panel>({ id, load, onOpen }: FirstOpenOptions<Panel
     send('dismiss');
   }, [pathname, send]);
 
-  return { Overlay: loaded?.Overlay ?? null, shown: state.shown, pending, failed, keyboard, activate };
+  return { Overlay: loaded?.Overlay ?? null, shown: state.shown, pending, failed, keyboard, activate, cancel };
 }
 
 /**
