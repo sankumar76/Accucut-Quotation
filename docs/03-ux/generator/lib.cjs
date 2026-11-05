@@ -228,26 +228,35 @@ function sidebar(role, active) {
   h += `</nav><div class="side-foot">Version 1.0<br>&copy; Accucut Lasers Pvt Ltd</div></aside>`;
   return h;
 }
+/* The two first-open failure lines, word for word from UX spec SCR-25 (version 0.11; the solution-architect's wording,
+   AQP-188 AC-8). */
+const FO_TEXT = { acct: 'The account menu did not open. Check your connection and try again.', menu: 'The menu did not open. Check your connection and try again.' };
 function topbar(role, opts = {}) {
   const u = PEOPLE[role];
   const bellHref = role === 'engineer' ? 'SCR-03-engineer.html#state=overdue' : 'SCR-03.html#state=overdue';
   const open = opts.menuOpen ? ' open' : '';
+  /* First-open controls (UX 7.3.1 rule 11, SCR-25, AQP-188): only a page that passes firstOpen gets the wrappers, the
+     busy hooks and the two failure lines, so every other page is built exactly as before. */
+  const fo = !!opts.firstOpen;
+  const failLine = (id, cls, show, text) => `<div class="fo-fail ${cls}" id="${id}" role="alert" data-show="${show}" hidden>${icon('alert', 16)}<span>${text}</span></div>`;
+  const menuBtn = `<button class="btn btn-secondary btn-icon nav-toggle" type="button" data-toggle="nav-open" aria-controls="app-side" aria-expanded="false" aria-label="Open menu"${fo ? ' aria-haspopup="dialog" data-busy-when="menupending"' : ''}>${icon('menu', 20)}</button>`;
+  const menuCtl = fo ? `<span class="fo-wrap fo-wrap-nav">${menuBtn}${failLine('fo-menu-fail', 'fo-fail-menu', 'menufailed', FO_TEXT.menu)}</span>` : menuBtn;
   return `<header class="topbar">
-  <button class="btn btn-secondary btn-icon nav-toggle" type="button" data-toggle="nav-open" aria-controls="app-side" aria-expanded="false" aria-label="Open menu">${icon('menu', 20)}</button>
+  ${menuCtl}
   <a class="brand" href="${role === 'engineer' ? 'SCR-03-engineer.html' : 'SCR-03.html'}" aria-label="Accucut Lasers, Quotation Portal, home">
     <img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo">
     <span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal</span></span>
   </a>
   <span class="spacer"></span>
   <a class="bell" href="${bellHref}" aria-label="Overdue tasks: ${u.bell}">${icon('bell', 20)}<span class="count" aria-hidden="true">${u.bell}</span></a>
-  <details class="usermenu"${open}>
-    <summary><span class="avatar" aria-hidden="true">${u.initials}</span><span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span><span class="sr-only"> account menu</span></summary>
+  ${fo ? '<span class="fo-wrap">' : ''}<details class="usermenu"${open}${fo ? ' data-open-in="default"' : ''}>
+    <summary${fo ? ' aria-haspopup="menu" data-busy-when="acctpending"' : ''}><span class="avatar" aria-hidden="true">${u.initials}</span><span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span><span class="sr-only"> account menu</span></summary>
     <div class="menu-panel" role="menu" aria-label="Account">
       <div class="menu-head"><div class="t-body t-strong">${u.name}</div><div class="t-label t-muted">${u.email}</div><div class="t-label t-muted">${u.role}</div></div>
       <a class="menu-item" role="menuitem" href="SCR-23.html">${icon('key', 18)} Change password</a>
       <a class="menu-item" role="menuitem" href="SCR-01.html">${icon('logout', 18)} Sign out</a>
     </div>
-  </details>
+  </details>${fo ? failLine('fo-acct-fail', 'fo-fail-acct', 'acctfailed', FO_TEXT.acct) + '</span>' : ''}
 </header>`;
 }
 
@@ -295,7 +304,7 @@ ${reviewBar(m)}
   if (m.noShell) inner = m.body;
   else {
     inner = `<div class="app${m.noSide ? ' no-side' : ''}">
-${topbar(m.role, { menuOpen: m.menuOpen })}
+${topbar(m.role, { menuOpen: m.menuOpen, firstOpen: m.firstOpen })}
 ${m.noSide ? '' : sidebar(m.role, m.active)}
 <div class="nav-scrim" data-scrim="nav-open"></div>
 <div class="app-main">
@@ -377,4 +386,4 @@ const PW = {
   sameUser: "The password cannot be the same as the user's e-mail address.",
 };
 
-module.exports = { PW, SIG, ARR, OUT, fs, icon, P, PEOPLE, RATES, MAT, FX, TREAT, TCOL, NODES, ITEMS, BL, TOOL, BN, sigma, descendants, children, APPROVED, OVERRIDE_REASON, shown, roundCase, isParent, get, calc, fmt, inr, usd, eur, TASKS, NOW, esc, page, badge, STATUS, notice, crumbs, pageHead, field, selectField, stIcon, skeletonRows, emptyState, reviewNote, pathLink, TIP_COPY, sidebar, topbar };
+module.exports = { PW, SIG, ARR, OUT, fs, icon, P, PEOPLE, RATES, MAT, FX, TREAT, TCOL, NODES, ITEMS, BL, TOOL, BN, sigma, descendants, children, APPROVED, OVERRIDE_REASON, shown, roundCase, isParent, get, calc, fmt, inr, usd, eur, TASKS, NOW, esc, page, badge, STATUS, notice, crumbs, pageHead, field, selectField, stIcon, skeletonRows, emptyState, reviewNote, pathLink, TIP_COPY, sidebar, topbar, FO_TEXT };

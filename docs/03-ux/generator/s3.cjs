@@ -206,6 +206,26 @@ function scr24() {
 }
 
 /* ============================ SCR-25 Navigation ============================ */
+/* The first-open states drawn as specimens (UX 7.3.1 rule 11, SCR-25, AQP-188). They are inert pictures: the live
+   top bar of the page shows the same states through the review bar. The held look is the pressed look of the
+   secondary variant (.is-pending in screens.css). */
+function firstOpenCard() {
+  const u = L.PEOPLE.admin;
+  const menu = (pending) => `<span class="btn btn-secondary btn-icon${pending ? ' is-pending' : ''}">${icon('menu', 20)}</span>`;
+  const acct = (pending) => `<details class="usermenu"><summary${pending ? ' class="is-pending"' : ''}><span class="avatar">${u.initials}</span><span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span></summary></details>`;
+  const fail = (text, side) => `<div class="fo-fail is-static fo-fail-${side}">${icon('alert', 16)}<span>${text}</span></div>`;
+  const cell = (inner) => `<div class="fo-spec" inert>${inner}</div>`;
+  const rows = [
+    ['Rest', cell(menu(false)), cell(acct(false)), 'Same face, place, accessible name and <code>aria-expanded="false"</code> as before. Pressing it starts the first open. Nothing moves when the page loads or when the code arrives.'],
+    ['First open pending', cell(menu(true)), cell(acct(true)), 'The pressed look is held from the first frame: <code>--border</code> fill, <code>--ink</code> text, the inset shadow. The control stays enabled and has <code>aria-busy="true"</code>. A second press does nothing. Escape cancels. This also covers a press made before the page was interactive.'],
+    ['First open failed', cell(menu(false) + fail(L.FO_TEXT.menu, 'menu')), cell(acct(false) + fail(L.FO_TEXT.acct, 'acct')), 'The control is back at rest and usable. One line under it, <code>role="alert"</code>, over the page content so nothing moves. It clears on the next press, Escape, a change of page or a success. Pressing again sends a new request.'],
+  ];
+  return `<section class="card" aria-labelledby="fo-h"><div class="card-head"><h2 class="t-sub" id="fo-h">Controls that load on first open</h2></div><div class="card-body stack-sm">
+    <p class="t-body t-muted">The menu button (below 1024 px) and the account trigger fetch their panel the first time they are pressed. These are the states of each control.</p>
+    <div class="table-wrap"><table class="table"><caption class="sr-only">States of the menu button and the account trigger on first open</caption><thead><tr><th scope="col">State</th><th scope="col">Menu button, below 1024 px</th><th scope="col">Account trigger</th><th scope="col">What happens</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${r[0]}</th><td>${r[1]}</td><td>${r[2]}</td><td class="fo-note">${r[3]}</td></tr>`).join('')}</tbody></table></div>
+    <p class="t-label t-muted">Failure lines, word for word: account trigger, &ldquo;${L.FO_TEXT.acct}&rdquo; Menu button, &ldquo;${L.FO_TEXT.menu}&rdquo;</p>
+  </div></section>`;
+}
 function scr25() {
   const mark = (v) => (v === true ? `<span class="badge badge-success">${icon('check', 12)} Yes</span>` : v === 'ro' ? `<span class="badge badge-info">${icon('eye', 12)} View only</span>` : v === 'own' ? `<span class="badge badge-neutral">Own tasks only</span>` : `<span class="t-muted">${icon('x', 12)} Not shown</span>`);
   const M = [['Task queue (Open, Closed, Overdue)', true, true, 'own', 'FR-034'], ['Assign task', true, true, false, 'FR-032'], ['Estimate workspace: enter inputs', true, true, 'own', 'FR-043 to 057'], ['Costs, View Cost Details, approve, unlock', true, true, false, 'FR-058 to 065'], ['Excel export', true, true, false, 'FR-070'], ['Process, Customer, Material masters', true, false, false, 'FR-012 to 018'], ['Fields and formulas', true, 'ro', false, 'FR-072 (R2)'], ['Checkpoints and versions', true, false, false, 'FR-077, 078 (R2)'], ['Users', true, false, false, 'FR-004'], ['Settings', true, false, false, 'FR-019 (R2)'], ['Audit log', true, false, false, 'FR-011'], ['About, Account', true, true, true, 'FR-010, 002']];
@@ -214,9 +234,11 @@ function scr25() {
    <section class="card"><div class="card-head"><h2 class="t-sub">What each role sees</h2></div><div class="table-wrap"><table class="table"><caption class="sr-only">Screens shown to each role</caption><thead><tr><th scope="col">Screen</th><th scope="col">Admin</th><th scope="col">Lead</th><th scope="col">Engineer</th><th scope="col">FRs</th></tr></thead><tbody>${M.map((r) => `<tr><td>${r[0]}</td><td>${mark(r[1])}</td><td>${mark(r[2])}</td><td>${mark(r[3])}</td><td class="t-muted">${r[4]}</td></tr>`).join('')}</tbody></table></div></section>
    <section class="card"><div class="card-head"><h2 class="t-sub">How it works at each size</h2></div><div class="card-body"><ul class="stack-sm">
     <li><strong>1024 px and wider:</strong> persistent graphite side menu, 248 px.</li><li><strong>768 to 1023 px (tablet):</strong> the side menu collapses; the menu button in the top bar opens it as a drawer. The bell stays visible.</li><li><strong>Up to 767 px (phone):</strong> same drawer, 288 px wide, opened from the menu button; the bell and the account menu stay in the top bar. See <a href="SCR-25-phone.html">the phone frame</a> with the drawer open.</li><li>The account menu (open on this page) shows name, e-mail and role, then Change password and Sign out.</li></ul></div></section>
+   ${firstOpenCard()}
    ${reviewNote('Resolves finding F-17: the sample turned the side menu into a scrolling top bar below 860 px; this design uses a drawer so labels stay readable and no row scrolls sideways. A bottom bar was not used because the sticky action bar already sits there on the workspace.')}
+   ${reviewNote('First-open states (UX spec version 0.11, section 7.3.1 rule 11 and SCR-25; AQP-188). The review bar switches the live top bar between the account trigger pending and failed. The menu button is hidden at 1024 px and wider, so its states show below that width: narrow the window, or open <a href="SCR-25-phone.html#state=menupending">the phone frame</a>. In the product the failure line is added when the load fails and is announced by <code>role="alert"</code>; here it is shown and hidden by the state buttons.')}
   </main>`;
-  return page({ id: 'SCR-25', file: 'SCR-25.html', name: 'Navigation and account menu', title: 'Navigation', desc: 'How the side menu and top bar adapt to each role and screen size.', role: 'admin', active: 'queue', menuOpen: true, roleLabel: 'all signed-in', release: 'R1', frs: 'FR-009, 007', body: main });
+  return page({ id: 'SCR-25', file: 'SCR-25.html', name: 'Navigation and account menu', title: 'Navigation', desc: 'How the side menu and top bar adapt to each role and screen size.', role: 'admin', active: 'queue', menuOpen: true, firstOpen: true, states: ['default:Account menu open', 'acctpending:Account trigger pending', 'acctfailed:Account trigger failed', 'menupending:Menu button pending', 'menufailed:Menu button failed'], roleLabel: 'all signed-in', release: 'R1', frs: 'FR-009, 007, 085', body: main });
 }
 
 /* ============================ SCR-26 System pages ============================ */
