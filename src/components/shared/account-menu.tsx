@@ -1,83 +1,66 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
-import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { ComponentType, KeyboardEvent, MouseEvent } from 'react';
 
-import { Icon } from '@/components/shared/icon';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { initialsOf } from '@/lib/initials';
+import { AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
+import { FirstOpenFailure } from '@/components/shared/first-open-failure';
+import { useFirstOpen } from '@/components/shared/use-first-open';
+import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
-export interface AccountUser {
-  readonly name: string;
-  readonly email: string;
-  readonly role: string;
-}
+export type { AccountUser } from '@/components/shared/account-trigger';
 
-export interface AccountMenuItem {
-  readonly label: string;
-  /** Where the action goes. */
-  readonly href?: string;
-  /** What the action does, for an item that is not a link (sign out). With neither `href` nor `onSelect` the item is shown disabled (its page does not exist yet). */
-  readonly onSelect?: () => void;
-  readonly icon: ReactNode;
+/** What the loaded panel is given. It opens itself, with focus as the way it was opened asks for. */
+export interface AccountPanelProps {
+  readonly user: AccountUser;
+  /** Opened with Enter, Space or ArrowDown: focus goes to the first enabled item. A pointer open leaves it on the menu. */
+  readonly keyboard: boolean;
 }
 
 export interface AccountMenuProps {
   readonly user: AccountUser;
-  readonly items?: ReadonlyArray<AccountMenuItem>;
-  /** One line of plain text shown under the items, for a menu that has fewer actions than it will have. */
-  readonly note?: string;
+  /** Fetches the panel on the first open: a bare `import()` of the module that holds the Radix menu and the sign-out wiring. */
+  readonly loadPanel: () => Promise<ComponentType<AccountPanelProps>>;
 }
 
+const FAILURE_ID = 'account-menu-first-open-failure';
+const FAILURE_MESSAGE = 'The account menu did not open. Check your connection and try again.';
+
 /**
- * The account menu in the top bar (SCR-25): name, e-mail and role, then the actions. On a phone only the
- * avatar and the arrow show; the full name stays in the accessible name of the button.
+ * The account menu in the top bar (SCR-25). Until it is first opened it is a plain button with the same face, role, name
+ * and `aria-haspopup="menu"` as the Radix trigger that replaces it: the menu's code (Radix `DropdownMenu`, positioning,
+ * sign-out) is not in the first load (AQP-188, NFR-009, architecture section 10). The first press fetches it and shows the
+ * pending look (`aria-busy`, UX spec 7.3.1 rule 11); when it arrives the panel opens, with its own trigger in the same
+ * place. A press before the page was interactive is kept by the early-tap script and counted here at hydration (AC-10).
  */
-export function AccountMenu({ user, items = [], note }: AccountMenuProps) {
-  // Not modal: a modal menu hides the rest of the page from assistive technology while its controls stay
-  // focusable (axe aria-hidden-focus).
+export function AccountMenu({ user, loadPanel }: AccountMenuProps) {
+  const first = useFirstOpen<AccountPanelProps>({ id: 'account', load: loadPanel });
+
+  if (first.shown && first.Overlay !== null) {
+    const Panel = first.Overlay;
+    return <Panel user={user} keyboard={first.keyboard} />;
+  }
+
+  const onClick = (event: MouseEvent<HTMLButtonElement>): void => first.activate(event.detail === 0);
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    first.activate(true);
+  };
+
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger
-        aria-label={`Account menu, ${user.name}, ${user.role}`}
-        className="flex min-h-(--control-h) cursor-pointer items-center gap-s-2 rounded-md border border-border bg-surface px-s-2 text-left hover:bg-surface-2 md:gap-s-3 md:pr-s-3"
-      >
-        <span
-          aria-hidden="true"
-          className="inline-flex h-s-6 w-s-6 shrink-0 items-center justify-center rounded-full bg-nav text-label font-semibold text-on-fill"
-        >
-          {initialsOf(user.name)}
-        </span>
-        <span aria-hidden="true" className="hidden min-w-0 md:block">
-          <span className="block truncate font-semibold text-ink">{user.name}</span>
-          <span className="block text-label text-ink-2">{user.role}</span>
-        </span>
-        <Icon icon={ChevronDown} size="small" className="shrink-0 text-ink-2" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuLabel>
-          <span className="font-semibold text-ink">{user.name}</span>
-          <span className="text-label text-ink-2">{user.email}</span>
-          <span className="text-label text-ink-2">{user.role}</span>
-        </DropdownMenuLabel>
-        {items.map((item) =>
-          item.href === undefined ? (
-            <DropdownMenuItem key={item.label} disabled={item.onSelect === undefined} {...(item.onSelect === undefined ? {} : { onSelect: item.onSelect })}>
-              {item.icon}
-              {item.label}
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem key={item.label} asChild>
-              <Link href={item.href}>
-                {item.icon}
-                {item.label}
-              </Link>
-            </DropdownMenuItem>
-          ),
-        )}
-        {note === undefined ? null : <p className="px-s-3 py-s-2 text-label text-ink-2">{note}</p>}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="relative">
+      <AccountTrigger
+        user={user}
+        {...{ [EARLY_INTENT_ATTRIBUTE]: 'account' }}
+        suppressHydrationWarning
+        aria-haspopup="menu"
+        aria-expanded={false}
+        aria-busy={first.pending || undefined}
+        aria-describedby={first.failed ? FAILURE_ID : undefined}
+        onClick={onClick}
+        onKeyDown={onKeyDown}
+      />
+      {first.failed ? <FirstOpenFailure id={FAILURE_ID} message={FAILURE_MESSAGE} align="right" /> : null}
+    </div>
   );
 }

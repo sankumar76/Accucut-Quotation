@@ -11,6 +11,9 @@ import { ICON_SIZE } from '@/lib/design-tokens';
  * sets `border-transparent`; a variant that has a border sets its own colour after it and `cn` keeps the later one
  * (QLT-01). `size="icon"` is the 44 px square, `size="icon-row"` the 36 px square for dense table rows.
  *
+ * Pending first open (UX spec 7.3.1 rule 11, AQP-188): an enabled button with `aria-busy` keeps its pressed look held, keyed to the
+ * attribute so it shows before React has run (the early tap, DEF-013). `enabled:` leaves a `loading` button (disabled) alone.
+ *
  * Pressed (UX spec section 7.3.1, DEF-008, DEF-010): `active:` sets a fill, the text colour and the inset
  * `shadow-pressed` for mouse, finger and pen. Primary and danger use the darker `-pressed` colours, because the step
  * from rest to the hover colour was too small to see on a phone. Pressed shows on the first frame
@@ -25,10 +28,10 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-on-fill hover:bg-primary-hover hover:text-on-fill active:bg-primary-pressed active:text-on-fill active:shadow-pressed',
-        secondary: 'border-border-strong bg-surface text-ink hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed',
-        ghost: 'bg-transparent text-primary-ink hover:bg-primary-soft hover:text-primary-ink active:bg-primary-line active:text-ink active:shadow-pressed',
-        danger: 'bg-danger text-on-fill hover:bg-danger-ink hover:text-on-fill active:bg-danger-pressed active:text-on-fill active:shadow-pressed',
+        primary: 'bg-primary text-on-fill hover:bg-primary-hover hover:text-on-fill active:bg-primary-pressed active:text-on-fill active:shadow-pressed enabled:aria-busy:bg-primary-pressed enabled:aria-busy:text-on-fill enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none',
+        secondary: 'border-border-strong bg-surface text-ink hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed enabled:aria-busy:bg-border enabled:aria-busy:text-ink enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none',
+        ghost: 'bg-transparent text-primary-ink hover:bg-primary-soft hover:text-primary-ink active:bg-primary-line active:text-ink active:shadow-pressed enabled:aria-busy:bg-primary-line enabled:aria-busy:text-ink enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none',
+        danger: 'bg-danger text-on-fill hover:bg-danger-ink hover:text-on-fill active:bg-danger-pressed active:text-on-fill active:shadow-pressed enabled:aria-busy:bg-danger-pressed enabled:aria-busy:text-on-fill enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none',
       },
       size: {
         default: 'h-(--control-h) px-s-4',
