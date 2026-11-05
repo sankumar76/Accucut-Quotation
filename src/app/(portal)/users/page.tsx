@@ -11,6 +11,12 @@ export const metadata: Metadata = { title: 'Users', description: 'Manage portal 
  * passwords. The page checks the role first, with its own address, before it reads anyone: a Lead or an Engineer gets SCR-26
  * "no access" with HTTP 403 and no page data (`authorizePage`, CR-33), a signed-out visitor is sent to the sign-in page.
  * The list is read on the server for the first paint; the screen then changes it through `/api/v1/users`.
+ *
+ * There is deliberately no `loading.tsx` beside this page. It would wrap the page in a Suspense boundary, so the server would
+ * begin to stream the response with status 200 before `forbidden()` runs, and a Lead or an Engineer would get the "no access"
+ * page with HTTP 200 and not 403 (found by the production-build test, TD-06, `tests/e2e/users-production.spec.ts`). The
+ * "Loading" state of SCR-14 is the list being read again after a change, which the screen marks `aria-busy` without leaving
+ * the page; the first paint already holds the list.
  */
 export default async function UsersPage() {
   const user = await authorizePage('/users');

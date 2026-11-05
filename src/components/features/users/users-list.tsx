@@ -30,6 +30,8 @@ export interface UsersListProps {
   readonly currentUserId: string;
   /** The ID of the person whose activation is being sent, so its button shows it. */
   readonly busyUserId: string | null;
+  /** The list is being read again after a change: the card says it is busy (UX spec section 6.0 "States"). */
+  readonly refreshing: boolean;
   /** The button whose dialog is still loading: it keeps its pressed look and says it is busy (UX spec 7.3.1 rule 11). */
   readonly pendingOpener: Opener | null;
   readonly onAction: (action: RowAction, user: UserRow, opener: HTMLButtonElement, byKeyboard: boolean) => void;
@@ -102,9 +104,9 @@ function RowActions({ user, currentUserId, busyUserId, pendingOpener, onAction, 
 }
 
 export function UsersList(props: UsersListProps) {
-  const { users } = props;
+  const { users, refreshing } = props;
   return (
-    <Card>
+    <Card aria-busy={refreshing || undefined}>
       <div className="hidden md:block">
         <Table regionLabel="Users, scrollable" caption="Users">
           <TableHeader>

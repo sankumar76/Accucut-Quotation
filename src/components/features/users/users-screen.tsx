@@ -55,6 +55,7 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
   const [adminNotice, setAdminNotice] = useState<{ readonly name: string | null } | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [pressed, setPressed] = useState<Opener | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const opener = useRef<Opener | null>(null);
   const refocus = useRef<Opener | null>(null);
   const first = useFirstOpen<UsersDialogsProps>({ id: 'users-dialogs', load: loadDialogs });
@@ -98,7 +99,9 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
   /** Reads the list again. The change itself is already saved, so a failure here says so and leaves the list as it was. */
   async function refresh(): Promise<void> {
     refocus.current = opener.current;
+    setRefreshing(true);
     const outcome = await listUsers();
+    setRefreshing(false);
     if (outcome.status === 'ok') {
       setUsers(outcome.value);
       return;
@@ -159,7 +162,14 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
           {notice.text}
         </Notice>
       )}
-      <UsersList users={users} currentUserId={currentUserId} busyUserId={busyUserId} pendingOpener={first.pending ? pressed : null} onAction={onRowAction} />
+      <UsersList
+        users={users}
+        currentUserId={currentUserId}
+        busyUserId={busyUserId}
+        refreshing={refreshing}
+        pendingOpener={first.pending ? pressed : null}
+        onAction={onRowAction}
+      />
       {Dialogs === null ? null : (
         <Dialogs
           open={open}
