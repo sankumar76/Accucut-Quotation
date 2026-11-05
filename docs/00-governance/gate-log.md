@@ -1875,3 +1875,130 @@ The delivery lead merges PR #71 (test code, code-human). DEF-013 (AQP-197, #69, 
 
 **Risks registered:** RISK-020 12 → 6 → 3 (P 1); RISK-022 closed.
 **Rationale:** Every evidence item set at G6 is met on code that has not changed since review. The repeat series ran with no time-outs, and the phone confirmed both the early tap and the earlier unexplained pressed-state report. The JS headroom target is met with room to spare.
+
+---
+
+## G6 – Peer Review — AQP-48 (STORY-01.02: role enforcement and navigation per role) — 2026-11-05
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #79 at head 5208f6e (b72ab88 plus docs-only `master` merge #78), base 2c941c1, 46 files. Merge state clean; all three review labels approved. CI on 5208f6e: run 42015140696, attempt 1, success.
+  - **Reviews:** `docs/06-reviews/AQP-48/standards.md`, `quality.md` and `performance.md` (main folder, uncommitted), all reviewed at 5208f6e; Jira 10941 to 10943.
+  - **Other roles:** architect, Jira 10940 (architecture v0.19 §6, TD-06, #80); ux-expert, Jira 10939 (ux-spec v0.12, SCR-26 button wording).
+  - **Story:** AQP-48 ACs read on Jira.
+  - **Not done:** no local run; I did not read the code diff myself. The rulings rest on the cited file and line references.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | Minors | | ⚠️ | STD-01, PRF-01 and QLT-62 are fixed in this PR (rulings 1 to 3) |
+| 4 | NFR-009 (stage 11b; AQP-188 floor of 190,000 B, DL-081) | | ✅ | Largest route `/queue` 166,544 B; every route under 190,000 B |
+| 5 | UX conformance | | ⚠️ | The SCR-26 button says "Go to your tasks"; ux-spec v0.12 says otherwise (ruling 4) |
+| 6 | CI | | ✅ | Green on 5208f6e |
+
+**Rulings**
+1. **STD-01 is fixed now.** `withRoute` (`src/server/http/with-route.ts:155, :161`) logs the whole error. The message, stack and cause can carry query values, such as an e-mail, from a Prisma message, and redaction by key cannot scrub message text. Coding standards §4 forbids personal data in logs, and PR #58's STD-19 policy (name and code only) already applies to sign-in. Every API route goes through this wrapper, so the leak would reach every future route.
+   - **Fix:** log `errorName` and `errorCode` only.
+   - **Test:** an error whose message contains an invented e-mail must not have the e-mail appear in the log line.
+2. **QLT-62 is fixed now.** Without `experimental.authInterrupts`, `forbidden()` throws on every role-refused page. Deleting the flag passes every test today, because all of them mock `forbidden`. A control that cannot fail is fixed at once (DL-047). Add an assertion in `next-config.test.ts`. The architect's guardrail 4 (an E2E 403 on the production build in the first story with a role-refused page) stays as the run-time proof, and tracking stays on #80 and TD-06. STD-04 is answered there.
+3. **PRF-01 is fixed now, in the same round.** The root `error.tsx` is a client component on every route's first load (+4.4 to 4.7 KB everywhere, about 23 KB on not-found). It erodes the headroom AQP-188 has just won, on every route, for a page that is almost never shown.
+   - **Fix:** a plain `<button>` in the boundary styled with the button classes, and `HomeAction` moved to a server-only module.
+   - **Check:** performance re-measures. The fix is cheap, and the round is needed anyway for rulings 1, 2 and 4.
+4. **The SCR-26 action wording follows ux-spec v0.12.** "Go to your tasks" matches neither of the spec's wordings. AC-8 asks that "for any role the 'no access' page has identical content and timing whatever page was requested". That fixes the content per role, across the pages requested, so role-aware wording is consistent with AC-8.
+   - The developer uses "Go to my tasks" for an Engineer and "Go to the task queue" for a Lead or Admin, wherever the role is read.
+   - Where the role cannot be read, it uses the spec's accepted interim wording, "Go to the task list".
+   - The E2E tests assert the strings used. This settles QLT-65.
+5. **Info items:**
+   - **STD-06** (test clock reads the real time and is fractional): fixed in the same round. It is one line, and it belongs to the DL-057 class.
+   - **QLT-63, QLT-64, QLT-66, PRF-04** go to one follow-up issue, GitHub #81.
+     - **QLT-64 matters most:** the per-route CSRF and 403 loops iterate over nothing today, which is the "0 of 0 passes" pattern. The first story that adds a state-changing route or a Lead-only data route must make those loops non-empty, and add a guard that fails when a loop has nothing to iterate.
+   - **STD-02, STD-03, STD-05, PRF-02, PRF-03:** no action.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #79 | STD-01, QLT-62, PRF-01, the SCR-26 wording (ruling 4) and STD-06, each with its test; CI green with stage 11b | Before G7 |
+| 2 | reviewer-standards, reviewer-quality, reviewer-performance | PR #79, new diff only | A narrow re-review (DL-051, DL-091): standards checks STD-01 and STD-06; quality checks QLT-62 and the wording tests; performance re-measures every route after PRF-01 | Before G7 |
+| 3 | master | Gate log | Check 1 and 2 against this record | Before G7 |
+
+**G7 evidence (full QA cycle):**
+- every AC-1 to AC-9 with evidence on the final head;
+- the role matrix and manifest-completeness tests;
+- AC-4's 403 and 404 behaviour, including invented and real IDs;
+- SCR-26 at three widths, with axe and keyboard, and the wording per role;
+- a log check: an induced API error carrying an invented e-mail leaves no e-mail in the log;
+- a planted fault: removing `authInterrupts` fails the config test;
+- regression green, including stage 11b.
+
+**Risks registered:** none new. ARCH-R2 (a leak through a new route) is the reason QLT-64's guard is tied to the first story with a state-changing route.
+**Rationale:** There is no Blocker, Critical or Major, but three Minors cannot wait: one is personal data reaching logs on every API route, one is a test that cannot fail, and one costs every route about 4.5 KB. All are small, so one round with a narrow re-review fixes them before QA starts.
+
+**AQP-48 G6 conditions (DL-093) verified — 2026-11-05 (master). Result: met; G6 is closed and the story may go to G7.**
+- **Head and CI:** 561f48e, one commit on 5208f6e (`gh api compare`), 18 files: 10 under `src/`, 8 tests. CI 42019269128 on 561f48e: success. Merge state clean; all three labels approved.
+- **Re-reviews:** standards APPROVE (Jira 10946), quality APPROVE WITH COMMENTS with no new findings (10948), performance APPROVE (10947).
+- **My own check:** the file list, plus `src/server/auth/viewer-role.ts` read in full. It reads the session role for the SCR-26 wording, returns `null` (the neutral wording) on any failure, re-throws Next's control-flow errors, and logs name and code only.
+
+| Condition | Result | Evidence |
+|-----------|--------|----------|
+| STD-01: log name and code only | ✅ | Standards 10946: no cast. Tests put an invented e-mail in the message and in the cause, and neither reaches the log (`tests/unit/http-with-route.test.ts`) |
+| QLT-62: flag asserted | ✅ | `tests/unit/next-config.test.ts`; quality's probe that removes the flag now fails |
+| PRF-01: light error boundary | ✅ met in purpose | The required change is made: a plain button (`retry-button-classes.ts`) and `HomeAction` split out. Every route is 2,121 B lighter: `/` 163,289, `/queue` 164,423, `/sign-in` 162,852. Ruling 1 covers the remainder |
+| SCR-26 wording (ux-spec v0.12) | ✅ | Quality 10948: the wording follows v0.12 for every role, all three labels go to `/queue`, and the neutral text appears when the role cannot be read; E2E and unit tests assert it |
+| STD-06: fixed clock | ✅ | `SESSION_NOW` with `Math.floor` (`tests/support/session-harness.ts`) |
+| Re-review | ✅ | All three done; quality caught 9 of 9 planted faults and 184 of 184 tests pass in the affected files |
+
+**Rulings**
+1. **PRF-01 is met; the remainder is accepted as PRF-05 (Info) and tracked on #81.**
+   - DL-093 asked for a specific change and a re-measure, and both are done. Round 1's estimate for `not-found` (136 to 140 KB) was wrong: it measures 156,332 B, about 20.8 KB over `master`'s 135,547 B. The cause is the shared page frame (brand logo with `next/link` and `next/image`) and the card (`cn`, `tailwind-merge`, lucide), and about half of that the page needs anyway.
+   - Why it is accepted: `not-found` is rarely seen, is not a key screen, and has 21.8 % headroom. Every route is under the 190,000 B floor (DL-081). Stage 11b would stop any breach.
+   - Recorded so the next frame change can recover it: #81 item 5.
+2. **Standards' note on `unstable_rethrow` (pinned Next.js) goes with STD-04 to TD-06 / #80.** It is checked at each Next.js upgrade, together with `authInterrupts`.
+
+**G7 evidence (full QA cycle; unchanged from DL-093, with the wording now fixed):**
+- AC-1 to AC-9 with evidence on the final head; the role-matrix and manifest-completeness tests.
+- AC-4: 403 with a fixed body for a Lead or Engineer on a route not listed for them, the same answer for an invented and a real ID, 401 or the redirect when signed out, and the uniform 404 for an Engineer.
+- AC-5: a foreign Origin refused and `APP_ORIGIN` accepted.
+- SCR-26 "no access", "not found" and "error" at three widths, with axe 0 and keyboard. The button text per role: Engineer "Go to my tasks", Lead and Admin "Go to the task queue", signed out or unreadable "Go to the task list"; each goes to `/queue`. The "no access" content is identical for one role whatever page was requested.
+- The log check: an API error whose message and cause carry an invented e-mail leaves no e-mail in the log.
+- A planted fault: removing `experimental.authInterrupts` fails `next-config.test.ts`.
+- Regression green, including stage 11b, with every route under 190,000 B.
+
+---
+
+## G7 – QA Acceptance — AQP-48 (STORY-01.02: role enforcement and navigation per role) — 2026-11-05
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #79 at head fb67aec, one commit on 561f48e (the G6 check) adding only `docs/07-qa/AQP-48-test-report.md` and the DEF-014 record (`gh api compare`). CI 42022565539 on fb67aec: success.
+  - **QA:** Jira AQP-48 10950; PR comment 6657431748; the DEF-014 record read in full (AQP-198, #82).
+  - **Not done:** no run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | AC-1 to AC-3: 280 of 280; role matrix 0 differences; completeness fails on planted faults. AC-4: fixed 403 bodies, the same for real and invented IDs; 401 or the same-origin redirect; uniform 404 (on a local build, with routes restricted in a scratch copy only). AC-5: by test (ruling 3). AC-6 to AC-9: SCR-26 at three widths with axe 0 (project tags) and keyboard; wording per role, with signed-out wording by unit test |
+| 2 | No open Sev-1 or Sev-2 against this story | ✱ | ✅ | DEF-014 is Sev-2 (ruling 1), but its origin is the frame's account trigger from AQP-38 and AQP-188, which this PR does not change |
+| 3 | Regression recorded and green | ✱ | ✅ | CI green; largest route `/queue` 164,423 B |
+| 4 | DL-093 G7 items | | ✅ | The log check shows the invented e-mail 0 times; the planted `authInterrupts` fault is caught |
+
+**Rulings**
+1. **DEF-014 is Sev-2, not Sev-3.**
+   - **Why Sev-2:** the test plan's scale lists "a WCAG 2.2 AA violation on a delivered screen" as Major. WCAG 2.5.3 (Label in Name, Level A) is inside NFR-018's WCAG 2.2 AA, and the account trigger is on every delivered portal page. QA's reason for Sev-3, that the code wasn't changed in this PR, is about where the defect came from, not how severe it is.
+   - **It does not hold AQP-48's G7.** The defect came from AQP-38 and AQP-188, and AQP-48 neither introduced nor changed it, so it is bound elsewhere, as with DEF-006 (DL-063). A Sev-2 found after its origin story's G7 does not reopen that story; only a Sev-1 would (test plan §7).
+   - **It is bound hard instead:** **no further story with a UI passes G7 while DEF-014 is open**, and it blocks G8.
+2. **`wcag21a` joins the axe tags.** `AXE_TAGS` leaves out a WCAG level that NFR-018 requires, so no WCAG 2.1 Level A rule has ever run in the suite. That is a control that fails open, and it affects every UI story so far. One PR fixes both:
+   - add `wcag21a` to `AXE_TAGS` (`tests/e2e/support/design-system.ts`);
+   - make the trigger's accessible name contain its visible text at every width ("EL" alone at 360 px, "EL E2E Lead Lead" at 1366 px). The ux-expert gives the wording first;
+   - QA records any other violation the wider tag set finds as its own defect, and fixes or severities follow the scale.
+   - **Owner:** developer, after the ux-expert's wording. **Due:** before the next UI story reaches G7. **Evidence:** the full E2E suite with the new tags, 0 violations.
+3. **AC-5 (CSRF on every state-changing route) is accepted by test.** No state-changing route exists yet. The loop and its guard against iterating nothing are bound to AQP-65 under QLT-64 (#81), which QA has moved there. Signed-out SCR-26 wording by unit test only: accepted, because the page renders the same component with no role.
+4. **Process slip (fb67aec pushed before a local Gitleaks scan):** recorded, no further action on this commit. The scan straight after found no leaks, CI stage 2 (full history) is green, and the slip was disclosed. **Rule (from DL-074):** on this public repository, a local Gitleaks scan runs before every push. If the binary is missing, QA or the developer does not push and reports BLOCKED. QA restores the binary now.
+
+The delivery lead merges PR #79 (squash, code-human).
+
+**Risks registered:** none new. DEF-014 and the tag gap are tracked as a defect, with the hard bind in ruling 1.
+**Rationale:** Every AC of this story is shown with independent evidence, including AC-4's role-first refusal. The accessibility defect QA found is real and more severe than filed, but it belongs to the shared frame, so it is bound to the next UI gate rather than holding a story that did not cause it. The tag gap is fixed at the same time, so the suite can see Level A rules from now on.

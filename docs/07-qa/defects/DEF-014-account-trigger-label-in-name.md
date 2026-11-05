@@ -4,10 +4,10 @@
 |-------|-------|
 | Story / AC | Found in STORY-01.02 (AQP-48) G7. Origin: the portal frame's account trigger (AQP-38 / AQP-188). NFR-018 |
 | Jira / GitHub | [AQP-198](https://sankumar76.atlassian.net/browse/AQP-198) / [#82](https://github.com/sankumar76/Accucut-Quotation/issues/82) |
-| Severity | Sev-3 Moderate |
-| Priority | P3 |
+| Severity | **Sev-2 Major** (master's ruling at AQP-48 G7, DL-094; raised from Sev-3) |
+| Priority | P2 |
 | Type | Product (accessibility) + Test (tag set) |
-| Status | New |
+| Status | Open |
 | Found by / date | qa-engineer, 2026-11-05 |
 | Build / commit | `561f48e` (PR #79). `src/components/shared/account-trigger.tsx` is not changed by that PR |
 | Environment | Production build (`next start`), Chromium (Playwright 1.64.1), @axe-core/playwright; invented users |

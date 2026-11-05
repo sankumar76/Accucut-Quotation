@@ -118,6 +118,9 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-05 | master | G7 AQP-48 (PR #79, fb67aec): GO. DEF-014 reclassified Sev-2 (origin AQP-38/188): no further UI story passes G7 while open; `wcag21a` joins the axe tags in its fix PR. Local Gitleaks before every push (DL-094) | docs/00-governance/ |
+| 2026-11-05 | master | G6 AQP-48 conditions met at 561f48e; G6 closed; PRF-01 met in purpose, not-found remainder accepted as PRF-05 on #81; may go to G7 | docs/00-governance/gate-log.md |
+| 2026-11-05 | master | G6 AQP-48 (PR #79, 5208f6e): CONDITIONAL GO. STD-01, QLT-62, PRF-01, SCR-26 wording (ux-spec v0.12) and STD-06 fixed before G7, then a narrow re-review; QLT-63/64/66 and PRF-04 to #81 (DL-093) | docs/00-governance/ |
 | 2026-11-05 | master | G7 AQP-188 (PR #75, fb96b29): GO; DEF-013 closes; DL-090 re-check passed (OBS-4 closed); RISK-020 to 3 and RISK-022 closed at GO, both restored if not merged by the sprint 1 review (DL-092). Squash merge is the delivery lead's | docs/00-governance/ |
 | 2026-11-05 | master | G6 AQP-188 (PR #75, 6030585): CONDITIONAL GO. reviewer-quality confirms QLT-55/56; the iPhone account-trigger check moves to G7 in one session with DL-090 and DEF-013; AC-10 re-run on the final head; STD-01 CSP rule to architecture §10; squash merge (DL-091). RISK-020 to 3 and RISK-022 closed on merge | docs/00-governance/ |
 | 2026-11-04 | master | G7 AQP-183 attempt 2 (PR #56): GO; DEF-008 and DEF-010 close; OBS-4 re-checked once at the next phone session; update from master with stage 11b green before the merge (DL-090) | docs/00-governance/ |
