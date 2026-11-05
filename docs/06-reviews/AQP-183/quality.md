@@ -3,11 +3,59 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | 1 |
+| Review round | 2 (DEF-010 round, `0a5b10d..0cfaf78`, merge from master ignored); round 1 below is kept for the record |
 | Base…branch | `master...docs/AQP-183-pressed-state` (PR #56) |
-| Commit reviewed | 64bef0dceabd314377849801be0057bf577c057d |
+| Commit reviewed | round 2: 0cfaf78f169ed5b0664a06a9a163296936322a10 · round 1: 64bef0dceabd314377849801be0057bf577c057d |
 | Date | 2026-11-04 |
-| **Verdict** | APPROVE WITH COMMENTS |
+| **Verdict** | **Round 2: APPROVE WITH COMMENTS** (no Blocker, Critical, Major or Minor open) · round 1: APPROVE WITH COMMENTS |
+
+## Round 2 — DEF-010 (UX spec v0.10 §7.3.1)
+
+**Summary.** The code matches UX spec v0.10 §7.3.1 (on the branch, and Jira AQP-185 comment 10849) character for character. That covers the two new tokens and their `@theme inline` entries, the new base timing and `select-none`, the primary and danger pressed strings, unchanged secondary and ghost, and `[-webkit-touch-callout:none]` on the `<button>` branch only. The recomputed contrast matches every figure in the spec. The timing mechanics give an instant press and a 200 ms fade on release. The planted-fault probe kills 9 of 10 mutants; the survivor (`active:scale-95`) is left to the E2E size check. Three Info points.
+
+| Severity (new, round 2) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 3 |
+
+**Checks run (round 2).**
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Spec against code | `git show 1a5a607` (spec v0.10), `git show 0cfaf78` (code and tests), Jira AQP-185 comment 10849 | identical strings and token values |
+| Contrast (WCAG formula from the hex values) | node one-liner | white on #7F1616 **10.35:1**, on #520F09 **14.67:1**; rest to pressed **2.25:1** for both (RGB distance 102); hover to pressed 1.74 and 1.64; ghost bar 1.70:1 and 101 |
+| Unit tests (scratch copy of 0cfaf78 via `git archive`; no working tree touched) | `npx vitest run tests/unit/button-pressed.test.ts tests/unit/cn.test.ts` | 36 of 36 passed |
+| Planted-fault probe | 10 single-line edits to `button.tsx` | 9 killed: primary pressed = hover (5 failures), danger pressed = danger-ink (4), no `active:transition-none` (2), fade 150 ms (2), no `select-none` (3), callout removed from `<button>` (1), callout moved into `buttonVariants` (1), ghost text red (2), no `ease-out` (2). Survivor: `active:scale-95` |
+| E2E | not run locally | CI run 41873955569 green, stages 1 to 12 |
+
+**Behaviour checked.**
+- **A quick tap is visible.** The active style's `transition-property` is `none`, so pressed paints on the first frame. On release, transitions take the after-change style, so the base `transition-colors duration-200 ease-out` fades back over 200 ms. The inset goes at once (`transition-colors` does not cover `box-shadow`), as rule 4 states. With reduced motion the press stays instant and the release snaps back. The flash itself is a G7 phone check (rule 10b).
+- **Callout on `<button>` only.** The `asChild` branch is unchanged and keeps its link menu; the unit test renders both and checks, and a probe moving the callout into the cva base fails it.
+- **`select-none` on every variant and size,** links included: unit test (all 12 combinations), E2E on every sample and disabled sample, and a probe.
+- **Disabled and loading** still show nothing (specificity (0,3,0)).
+
+**New findings (round 2).**
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-42 | Info | `tests/e2e/button-pressed.spec.ts` | UX 7.3.1 rules 4 and 10b | The assertions after release retry and are sound. They do not check where the fade ends ("not pressed" passes from the first blended frame), and a quick tap is shown only by the CSS mechanics, since the mouse is held down. | A wrong end colour would pass. | Optionally `toHaveCSS('background-color', hover or rest)` per project; the flash is judged on the iPhone at G7. |
+| QLT-43 | Info | `src/lib/design-tokens.ts` | UX 7.3, WCAG 1.4.3 | White on `--primary-pressed` (10.35), on `--danger-pressed` (14.67) and the 2.25:1 step are correct but asserted nowhere; `CONTRAST_PAIRS` covers the other button text pairs. | A later token edit could lower them unnoticed. | Add the two pairs to `CONTRAST_PAIRS`; optionally assert the 2.25:1 step. |
+| QLT-44 | Info | `tests/unit/button-pressed.test.ts` | Test adequacy | 9 of 10 planted faults killed; `active:scale-95` survives at unit level. | Left to the E2E size check (the bounding box includes transforms). | Optional unit check that no `active:` class sets a transform. |
+
+**Previous findings.**
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-29 | Minor | Answered by the G7 iPhone check (QA report 0a5b10d; spec rule 1: `:active` works on iOS WebKit) | Rule 10 is the evidence for this round |
+| QLT-30 | Info | Still stands | Unchanged mechanism |
+| QLT-31 | Info | Still stands | The scale survivor is now QLT-44; rule 6 rejects transforms explicitly |
+
+---
+
+## Round 1 — review of 64bef0d (kept for the record)
 
 ## Summary
 The pressed state is implemented exactly as UX spec v0.9 §7.3.1 states. The class strings match the spec's developer line, the `--shadow-pressed` value is right, and every pressed text/fill pair meets its contrast target (recomputed from the tokens). `disabled:active` wins by specificity, and loading buttons are disabled, so they are covered too. The unit test reads the CSS that Tailwind actually builds, and mutation probes show it catches 5 of 6 planted faults. The one gap is that no test presses by **touch on WebKit**, which is how the defect was found, so the iPhone check of rule 8 has to be G7 evidence.

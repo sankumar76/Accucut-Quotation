@@ -50,3 +50,65 @@ The DEF-008 fix adds `:active` styles to the four button variants and one `--sha
 
 ## Previous Findings (re-review only)
 n/a (first round).
+
+---
+
+# Round 2 — DEF-010 (head 0cfaf78, base master 85c699f, which includes AQP-38)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 |
+| Commit reviewed | 0cfaf78 (CI run 41873955569 green) |
+| Date | 2026-11-04 |
+| **Verdict** | APPROVE WITH COMMENTS |
+
+## Summary (round 2)
+The DEF-010 round (darker pressed fills, an instant press, a 200 ms fade on release, `select-none`, no iOS callout) adds about 110 bytes gzip to every route's first-load JavaScript. I verified the developer's figures with a Turbopack production build: `/queue` is now 198,360 B by my count, leaving about 1.6 KB of the 200,000 budget. It passes, but headroom on portal routes is now under 1 %, so RISK-020 is restated below. The CSS grows by 384 B gzip. The paint cost of the press and of the release fade is limited to one button and involves no layout.
+
+| Severity | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 1 |
+| Info | 2 |
+
+## Checks Run (round 2)
+| Check | Command | Result |
+|-------|---------|--------|
+| Production build (Turbopack), one build | `next build` in a throwaway detached worktree `.claude/worktrees/perf-aqp56-head` at 0cfaf78. To build there: that worktree's config only set `turbopack.root` to the repository and skipped type-checking, and its lockfile was set aside. Then `git worktree remove --force` | Built in 148 s; all portal routes and `/sign-in` dynamic |
+| First-load JS and CSS | Scratch script: `rootMainFiles` (no polyfills) plus the route's `entryJSFiles` from `page_client-reference-manifest.js`, gzip level 9 (same method as the AQP-38 review) | See the table below |
+| Baseline for the difference | My Turbopack build of 4d9b2e2 (AQP-38 review), from a worktree path of the same length. Master's changes since 4d9b2e2 are all server-side (8 files under `src/server`, `src/proxy.ts`, `src/lib/env.ts`, the auth route), so the client bundles are the same as master | `/` 197,138 B, `/queue` 198,249 B, `/sign-in` 160,502 B, CSS 7,476 B |
+| Emitted CSS | Inspected the head stylesheet | New rules: `duration-200`, `ease-out`, `select-none`, `[-webkit-touch-callout:none]`, `active:transition-none`, `active:bg-primary-pressed`, `active:bg-danger-pressed`, `shadow-pressed` (16 `:active` rules in all). No rule comes only from the docs mock-ups |
+
+**First-load JS, gzip -9 (bytes)**
+
+| Route | Developer | Mine (head) | Master (mine, 4d9b2e2) | Change | Left under 200,000 |
+|---|---|---|---|---|---|
+| `/` | 197,229 | 197,247 | 197,138 | +109 | 2,753 (1.4 %) |
+| `/queue` | 198,342 | 198,360 | 198,249 | +111 | **1,640 (0.8 %)** |
+| `/sign-in` | n/a | 160,607 | 160,502 | +105 | 39,393 |
+
+My figures are 18 B above the developer's on both routes, from the worktree path embedded in the chunks (as in the AQP-38 review), so the methods agree. The change is about +110 B on every route, which matches the developer's "+113 B over master". The CSS is 7,476 → 7,860 B gzip (+384 B; 31,605 → 34,248 B raw).
+
+## Findings (round 2)
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| PRF-04 | Minor | `src/components/ui/button.tsx:24` | NFR-009 first-load JS; RISK-020; DL-059 | +110 B on every route; `/queue` at 198,360 B (my figure) or 198,342 B (developer's), 0.8 % left | Passes. But the next portal UI story will cross 200,000 unless JavaScript is cut first. A 100-byte change now matters | Not for this PR. Before the next portal UI story, carry out the AQP-38 PRF-01 cut: load the Radix account menu and drawer only when opened (estimated 10 to 25 KB). This can't wait any longer |
+| PRF-05 | Info | `src/components/ui/button.tsx:24` | NFR-009 (TBT, INP), CLS | The press is instant (`active:transition-none`); the release fades background, text and border over 200 ms (`transition-colors duration-200 ease-out`); the inset shadow is not transitioned and drops at once | Paint only, on one 44 px button, for 200 ms after release; no layout, no CLS, no main-thread work (the compositor and paint handle a colour transition). `select-none` and `-webkit-touch-callout` cost nothing at runtime. Also lengthens the hover fade from 150 to 200 ms on every button, which is harmless | None |
+| PRF-06 | Info | `src/components/ui/button.tsx:94` | Coding standards §7 | `cn(classes, BUTTON_ONLY)` runs `tailwind-merge` a second time on every button render | `tailwind-merge` caches by input string, so after the first render of each variant this is a cache lookup (estimate: well under 10 us per button). Server-rendered buttons pay it on the server; no effect on a page's time | None. If many buttons ever render in a client list, pass `BUTTON_ONLY` into the first `cn` call instead |
+
+## NFR impact (round 2)
+| NFR | Risk | Findings |
+|-----|------|----------|
+| NFR-009 first-load JS ≤ 200,000 B per route | **Medium**: all pass; `/queue` 0.8 %, `/` 1.4 % left | PRF-04 |
+| NFR-009 LCP / TBT; INP; CLS | None: +384 B CSS; paint-only press and release | PRF-05, PRF-06 |
+
+**RISK-020 restated (for master).** `/queue` has about 1.6 KB (0.8 %) and `/` about 2.8 KB (1.4 %) of headroom after this PR (developer's figures 1,658 B and 2,771 B). Any portal UI story that adds more than about 1.6 KB of client JavaScript will breach NFR-009 on `/queue`. The likelihood should be scored higher than at AQP-38's G6. The cut in PRF-04 (also AQP-38 PRF-01) is the planned answer, and it needs an owner and a story before the next portal UI story starts. The AQP-169 budget check in CI would then catch the next breach automatically.
+
+## Previous Findings (round 1)
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| PRF-01 | Info | Superseded | Round 1 measured +59 B (webpack difference); the whole PR is now +110 B, measured with Turbopack (PRF-04) |
+| PRF-02 | Info | Holds | CSS now +384 B gzip in all; paint cost re-checked for the instant press and the release fade (PRF-05) |
+| PRF-03 | Info | Holds | The plain `.shadow-pressed` rule is still emitted (about 100 B), and the `@theme` self-reference is unchanged (reviewer-quality's area) |
