@@ -81,14 +81,15 @@ export interface FirstOpenControl {
 export function controlsOf(page: Page, projectName: string): FirstOpenControl[] {
   const account: FirstOpenControl = {
     name: 'account menu',
-    button: page.getByRole('button', { name: /^Account menu/ }),
+    button: page.locator('button[aria-label^="Account menu"]'),
     panel: page.getByRole('menu'),
     failureText: ACCOUNT_FAILURE,
     marker: ACCOUNT_MARKER,
   };
   const drawer: FirstOpenControl = {
     name: 'menu drawer',
-    button: page.getByRole('button', { name: 'Open menu' }),
+    // By attribute, not by role: while the drawer is open Radix hides the rest of the page, the button included, from the accessibility tree.
+    button: page.locator('button[aria-label="Open menu"]'),
     panel: page.getByRole('dialog', { name: 'Menu' }),
     failureText: MENU_FAILURE,
     marker: DRAWER_MARKER,
