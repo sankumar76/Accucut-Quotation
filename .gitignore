@@ -33,3 +33,8 @@ npm-debug.log*
 # --- Formula engine (STORY-03.02) ---
 # Files Next writes into the server-only build fixtures; the test removes them again.
 tests/fixtures/server-only-build/*/tsconfig.json
+
+# --- NFR-009 guards (STORY-10.10) ---
+# Lighthouse CI writes its working files and the kept reports here; the nightly workflow uploads them as an artefact.
+.lighthouseci/
+lighthouse-reports/
