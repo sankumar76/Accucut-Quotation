@@ -28,3 +28,5 @@ export const PRODUCTION_URL = `http://localhost:${PRODUCTION_PORT}`;
 export const DEVELOPMENT_URL = `http://localhost:${DEV_PORT}`;
 /** Where the set-up project saves the signed-in browser state that the other specs start from. */
 export const SIGNED_IN_STATE = 'test-results/auth/lead.json';
+/** Where the set-up project saves the signed-in Admin's browser state, for the Users spec (STORY-01.04). */
+export const ADMIN_STATE = 'test-results/auth/admin.json';

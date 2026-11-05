@@ -3,6 +3,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
 import { Client } from 'pg';
 
+import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 
@@ -19,25 +20,34 @@ export const E2E_PASSWORD = 'invented-e2e-password-for-aqp-38';
 export interface E2eUser {
   readonly name: string;
   readonly email: string;
-  readonly role: 'LEAD' | 'ENGINEER';
+  readonly role: 'ADMIN' | 'LEAD' | 'ENGINEER';
 }
 
 export const E2E_LEAD: E2eUser = { name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD' };
 export const E2E_ENGINEER: E2eUser = { name: 'E2E Engineer', email: 'e2e.engineer@example.test', role: 'ENGINEER' };
+/** The one active Admin the Users spec signs in as (STORY-01.04); `ensureE2eAdmin` makes sure it is the one. */
+export const E2E_ADMIN: E2eUser = { name: 'E2E Admin', email: 'e2e.admin@example.test', role: 'ADMIN' };
 
 /** The two people nobody harms: other specs sign in as them, and the saved browser state is the Lead's. */
 export const E2E_USERS: ReadonlyArray<E2eUser> = [E2E_LEAD, E2E_ENGINEER];
 
 /**
+ * Someone whose details only a refused request could reveal: the production-build spec of `/users` (TD-06) looks for this
+ * name and address in everything a Lead and an Engineer are sent, and must find neither.
+ */
+export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary Person', email: 'e2e.canary.person@example.test' };
+
+/**
  * What a test may do to a person it makes for itself (DL-085):
  *   slip     gets wrong passwords, which count toward the five-failure block;
  *   axe      gets one wrong password for the accessibility check of the error state;
- *   sign-out signs out, which ends every session of that person.
+ *   sign-out signs out, which ends every session of that person;
+ *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -69,6 +79,41 @@ export async function ensureE2eUsers(): Promise<void> {
     for (const user of E2E_USERS) await client.query(UPSERT_USER, [user.name, user.email, hash, user.role]);
     // Failures counted by an earlier run must not carry over into this one. Throwaway test database only (guarded above).
     await client.query('DELETE FROM login_throttles');
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Makes `E2E_ADMIN` the one active Admin, for the Users spec. The portal allows one active Admin, and this database may
+ * already have another (the performance checks' invented Admin, `bootstrap-admin`'s), so any other active Admin is
+ * deactivated first. That is a change to a person who may matter, so it runs only against a database that is thrown away
+ * (the same rule as `ensure-measurement-user`: this machine or the CI service, never staging).
+ */
+export async function ensureE2eAdmin(): Promise<void> {
+  const url = process.env['DATABASE_URL'];
+  if (url === undefined || url === '') throw new Error('DATABASE_URL is not set. Start the test database and set it as the README says.');
+  assertThrowawayDatabase(url, process.env['NODE_ENV']);
+  const hash = await createTestHasher().hash(E2E_PASSWORD);
+  const client = await connectToTestDatabase();
+  try {
+    await client.query("UPDATE users SET is_active = false, session_version = session_version + 1 WHERE role = 'ADMIN' AND is_active AND email <> $1", [E2E_ADMIN.email]);
+    await client.query(UPSERT_USER, [E2E_ADMIN.name, E2E_ADMIN.email, hash, E2E_ADMIN.role]);
+    await client.query('DELETE FROM login_throttles');
+  } finally {
+    await client.end();
+  }
+}
+
+/** Makes sure the canary person exists (an Engineer, so the one-Admin rule is not touched) and returns their ID. */
+export async function ensureCanaryUser(): Promise<string> {
+  const hash = await createTestHasher().hash(E2E_PASSWORD);
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ id: string }>(`${UPSERT_USER} RETURNING id`, [E2E_CANARY.name, E2E_CANARY.email, hash, 'ENGINEER']);
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The canary person could not be made.');
+    return id;
   } finally {
     await client.end();
   }

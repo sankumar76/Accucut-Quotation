@@ -2,7 +2,9 @@ import { vi } from 'vitest';
 
 import type { RoleName } from '../../src/lib/auth/roles';
 
-import { createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
+import { createUserService, type UserService } from '../../src/server/services/user-service';
+
+import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { defined } from './defined';
 
 /**
@@ -43,12 +45,18 @@ const PEOPLE: ReadonlyArray<{ readonly role: RoleName; readonly name: string; re
   { role: 'ADMIN', name: 'Invented Admin', email: 'invented.admin@example.test' },
   { role: 'LEAD', name: 'Invented Lead', email: 'invented.lead@example.test' },
   { role: 'ENGINEER', name: 'Invented Engineer', email: 'invented.engineer@example.test' },
+  // Nobody signs in as this person: the routes that change someone (rename, password reset) change them, so no caller is affected.
+  { role: 'ENGINEER', name: 'Invented Target', email: 'invented.target@example.test' },
 ];
 
 export interface SessionHarness {
   readonly users: FakeUserRepository;
-  /** The id of each role's person. */
+  /** The real user service over the fake repository, for the routes that call it (`getUserService` in the composition mock). */
+  readonly userService: UserService;
+  /** The id of each role's person (the first of that role). */
   readonly idOf: Readonly<Record<RoleName, string>>;
+  /** The id of a person nobody signs in as, for the routes that change someone. */
+  readonly targetId: string;
   /** Who the next request comes from; `null` for nobody. */
   signInAs(role: RoleName | null): void;
   /** The address `proxy.ts` would record for the request, or `null` for none. */
@@ -66,11 +74,19 @@ export function createSessionHarness(): SessionHarness {
   );
   const idFor = (role: RoleName): string => defined(users.records.find((record) => record.role === role)).id;
   const idOf: Readonly<Record<RoleName, string>> = { ADMIN: idFor('ADMIN'), LEAD: idFor('LEAD'), ENGINEER: idFor('ENGINEER') };
+  const targetId = defined(users.records.find((record) => record.email === 'invented.target@example.test')).id;
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
 
   return {
     users,
+    userService: createUserService({
+      users,
+      throttles: createFakeThrottleRepository(),
+      hasher: createCountingHasher(),
+      keySecret: 'invented-throttle-key-material',
+    }),
     idOf,
+    targetId,
     signInAs(role) {
       state.callerId = role === null ? null : idOf[role];
     },
