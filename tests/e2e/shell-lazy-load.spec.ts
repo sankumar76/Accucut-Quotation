@@ -99,7 +99,7 @@ for (const route of ROUTES) {
       if (account === undefined) throw new Error('the account menu control is always there');
       await expect(account.button).toHaveAttribute('aria-haspopup', 'menu');
       await expect(account.button).toHaveAttribute('aria-expanded', 'false');
-      await expect(account.button).toHaveAccessibleName(/^Account menu, .+, Lead$/);
+      await expect(account.button).toHaveAccessibleName(/^Account menu, [A-Z]{1,2}, .+, Lead$/);
       if (drawer === undefined) return;
       await expect(drawer.button).toHaveAttribute('aria-haspopup', 'dialog');
       await expect(drawer.button).toHaveAttribute('aria-expanded', 'false');
