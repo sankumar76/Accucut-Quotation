@@ -49,6 +49,10 @@ const pairs=[
 ['pressed danger: white on danger-pressed','#FFFFFF','#520F09','text 4.5'],
 ['pressed danger: white at shadow edge','#FFFFFF','#41120E','text 4.5'],
 ['pressed danger: danger-pressed against resting danger (step from rest)','#520F09','#B3261E','info: size of the step, not a WCAG pair'],
+['held account trigger (version 0.11): ink on border','#17181C','#D9DADF','text 4.5'],
+['held account trigger: ink-2 (role, arrow) on border','#4A4D57','#D9DADF','text 4.5'],
+['held account trigger: ink-2 on the top pixel row of the inset (no glyph sits there)','#4A4D57','#A3A4A8','info: not a WCAG pair'],
+['first-open failure line (version 0.11): danger-ink on danger-soft','#8F1C13','#FCEDEB','text 4.5'],
 ['NOT USED: primary-ink on primary-line','#B52424','#F2B8B8','fails 4.5 (why ghost pressed uses ink)'],
 ];
 for(const [n,f,b,req] of pairs){console.log(cr(f,b).toFixed(2).padStart(6),'  ',n.padEnd(34),f,b,req)}

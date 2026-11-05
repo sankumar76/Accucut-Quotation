@@ -16,7 +16,7 @@ const DEVICES = [
   { file: 'SCR-06-tablet.html', id: 'SCR-06', type: 'tablet', src: 'SCR-06.html', name: 'Cost review on a tablet', variants: [['Submitted', 'state=default'], ['Total cleared', 'state=cleared'], ['Approved', 'state=approved']] },
   { file: 'SCR-07-phone.html', id: 'SCR-07', type: 'phone', src: 'SCR-07.html', name: 'Cost details on a phone (stages as accordion)', variants: [['Default', 'state=default'], ['Loading', 'state=loading'], ['Error', 'state=error']] },
   { file: 'SCR-11-tablet.html', id: 'SCR-11', type: 'tablet', src: 'SCR-11.html', name: 'Process master on a tablet', variants: [['Default', 'state=default'], ['Customers differ prompt', 'state=sync']] },
-  { file: 'SCR-25-phone.html', id: 'SCR-25', type: 'phone', src: 'SCR-25.html', name: 'Navigation drawer on a phone', variants: [['Drawer open', 'state=default&drawer=nav'], ['Drawer closed', 'state=default']] },
+  { file: 'SCR-25-phone.html', id: 'SCR-25', type: 'phone', src: 'SCR-25.html', name: 'Navigation drawer on a phone', variants: [['Drawer open', 'state=default&drawer=nav'], ['Drawer closed', 'state=default'], ['Menu button pending', 'state=menupending'], ['Menu button failed', 'state=menufailed'], ['Account trigger pending', 'state=acctpending'], ['Account trigger failed', 'state=acctfailed']] },
 ];
 
 function devicePage(d) {
@@ -76,7 +76,7 @@ const GROUPS = [
     ['SCR-02', 'SCR-02.html', 'Forgot and reset password', 'Signed out', 'R2', 'FR-003', [['Link sent', 'sent'], ['New password', 'reset'], ['Password too common', 'toocommon'], ['Needs number and symbol', 'nonumsym'], ['Link used or expired', 'invalid'], ['Done', 'done']]],
     ['SCR-23', 'SCR-23.html', 'Account and change password', 'All signed in', 'R1', 'FR-002, 009', [['Errors', 'error'], ['Too long', 'toolong'], ['Needs number and symbol', 'nonumsym'], ['Same as e-mail', 'samemail'], ['Too common', 'toocommon'], ['Must change password', 'mustchange'], ['Success', 'success']]],
     ['SCR-24', 'SCR-24.html', 'About', 'All signed in', 'R1', 'FR-010', []],
-    ['SCR-25', 'SCR-25.html', 'Navigation and account menu', 'All signed in', 'R1', 'FR-007, 009', [], [['Phone, menu open', 'SCR-25-phone.html']]],
+    ['SCR-25', 'SCR-25.html', 'Navigation and account menu', 'All signed in', 'R1', 'FR-007, 009, 085', [['Account trigger pending', 'acctpending'], ['Account trigger failed', 'acctfailed'], ['Menu button pending', 'menupending'], ['Menu button failed', 'menufailed']], [['Phone, menu open', 'SCR-25-phone.html']]],
     ['SCR-26', 'SCR-26.html', 'No access, not found, error, session ended', 'All', 'R1', 'FR-007, 088', [['404', 'notfound'], ['Server error', 'error500'], ['Session ended', 'expired']]],
   ]],
   ['Work: queues and assignment', [

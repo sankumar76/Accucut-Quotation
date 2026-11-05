@@ -59,8 +59,12 @@
     doc.querySelectorAll('.rb-states button').forEach(function (b) {
       b.setAttribute('aria-pressed', b.getAttribute('data-state') === overlay ? 'true' : 'false');
     });
-    doc.querySelectorAll('[aria-busy-when]').forEach(function (el) {
-      el.setAttribute('aria-busy', el.getAttribute('aria-busy-when').split(/\s+/).indexOf(name) !== -1 ? 'true' : 'false');
+    /* A details element that is open in some states only (SCR-25: the account menu is open in its default state, closed while the first-open states are shown). */
+    doc.querySelectorAll('[data-open-in]').forEach(function (el) {
+      el.open = el.getAttribute('data-open-in').split(/\s+/).indexOf(name) !== -1;
+    });
+    doc.querySelectorAll('[data-busy-when]').forEach(function (el) {
+      el.setAttribute('aria-busy', el.getAttribute('data-busy-when').split(/\s+/).indexOf(name) !== -1 ? 'true' : 'false');
     });
   }
   function initStates() {

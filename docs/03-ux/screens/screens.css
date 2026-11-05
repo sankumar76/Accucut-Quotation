@@ -158,6 +158,28 @@ img { max-width: 100%; }
 .usermenu > summary { list-style: none; display: flex; align-items: center; gap: var(--s-3); min-height: var(--control-h); padding: 0 var(--s-3) 0 var(--s-2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; background: #fff; }
 .usermenu > summary::-webkit-details-marker { display: none; }
 .usermenu > summary:hover { background: var(--surface-2); }
+/* The account trigger is pressed like a secondary button (UX 7.3.1 rule 11, version 0.11): the fill, the inset, and no fade in. */
+.usermenu > summary:active, .usermenu > summary.is-pending, .usermenu > summary[aria-busy="true"] { background: var(--border); box-shadow: var(--shadow-pressed); transition: none; }
+
+/* ---------- First-open states (UX 7.3.1 rule 11, SCR-25; AQP-188) ----------
+   A control that opens an overlay by loading its code stays enabled and keeps its pressed look held while it waits
+   (aria-busy="true", or .is-pending in a still picture). A disabled or loading button is not matched (:enabled). */
+.btn-primary[aria-busy="true"]:enabled, .btn-primary.is-pending { background: var(--primary-pressed); color: #fff; box-shadow: var(--shadow-pressed); transition: none; }
+.btn-secondary[aria-busy="true"]:enabled, .btn-secondary.is-pending { background: var(--border); color: var(--ink); box-shadow: var(--shadow-pressed); transition: none; }
+.btn-ghost[aria-busy="true"]:enabled, .btn-ghost.is-pending { background: var(--primary-line); color: var(--ink); box-shadow: var(--shadow-pressed); transition: none; }
+.btn-danger[aria-busy="true"]:enabled, .btn-danger.is-pending { background: var(--danger-pressed); color: #fff; box-shadow: var(--shadow-pressed); transition: none; }
+.fo-wrap { position: relative; display: inline-flex; }
+.fo-wrap-nav { display: none; }
+/* The failure line sits under its control and over the page content, so it takes no room in the bar (0 px shift). */
+.fo-fail { position: absolute; top: calc(100% + var(--s-1)); z-index: 45; display: flex; align-items: flex-start; gap: var(--s-2); width: max-content; max-width: min(20rem, calc(100vw - 2rem)); padding: var(--s-2) var(--s-3); border: 1px solid var(--danger-line); border-left: 4px solid var(--danger); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger-ink); font: 400 var(--fs-body)/var(--lh-body) var(--font-sans); box-shadow: var(--shadow-2); }
+.fo-fail > .ic { flex: none; margin-top: 2px; }
+.fo-fail-menu { left: 0; }
+.fo-fail-acct { right: 0; }
+.fo-fail.is-static { position: static; box-shadow: none; }
+.fo-spec { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
+.fo-spec .fo-fail { max-width: 13rem; }
+.fo-spec .fo-fail-acct { align-self: flex-end; }
+.fo-note { min-width: 14rem; }
 .menu-panel { position: absolute; right: 0; top: calc(100% + var(--s-2)); z-index: 40; min-width: 264px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-2); padding: var(--s-2); }
 .menu-panel .menu-head { padding: var(--s-3); border-bottom: 1px solid var(--border); margin-bottom: var(--s-2); }
 .menu-item { display: flex; align-items: center; gap: var(--s-3); min-height: var(--control-h); padding: 0 var(--s-3); border-radius: var(--radius); color: var(--ink); text-decoration: none; width: 100%; background: none; border: 0; font: 500 var(--fs-body)/1 var(--font-sans); cursor: pointer; }
@@ -467,6 +489,7 @@ dl.meta dt { color: var(--ink-2); font-size: var(--fs-label); line-height: var(-
   /* Side menu collapses to a drawer; bell stays visible */
   .app { grid-template-columns: minmax(0, 1fr); }
   .btn.nav-toggle { display: inline-flex; }
+  .fo-wrap-nav { display: inline-flex; }
   .app-side { position: fixed; z-index: 45; top: var(--topbar-h); bottom: 0; left: 0; width: 288px; height: auto; transform: translateX(-102%); transition: transform .2s; box-shadow: var(--shadow-2); }
   .nav-open .app-side { transform: none; }
   .nav-open .nav-scrim { display: block; position: fixed; inset: var(--topbar-h) 0 0 0; background: rgba(23, 24, 28, .55); z-index: 44; }
