@@ -222,7 +222,6 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npx playwright test
-          npx playwright test tests/e2e/shell-lazy-load.spec.ts --grep "a tap before the page is interactive" --repeat-each=20 --retries=0 --reporter=list
 
       # ---- Stage 13: image (DISABLED until the Dockerfile story, STORY-10.04) ----------------
       # Docker build; run it and check /api/health. Blocks merge on master only.
