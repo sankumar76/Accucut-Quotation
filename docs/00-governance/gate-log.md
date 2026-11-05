@@ -1408,3 +1408,361 @@ No test-report file and no full QA cycle are needed. The Jira comment is the rep
 **For G7:** the DL-077 evidence. (a) CI green on the final head with the control test ✓ on all three projects; already shown on 09f8022, run 41868171176. (b) QA's `sign-in.spec.ts --repeat-each=10 --retries=0` on three projects, 0 failures, posted on AQP-184. (c) QA closes DEF-009. Merging is by the delivery lead after G7 (a test-only code PR, `MERGE_POLICY` code-human).
 
 **Risks registered:** none.
+
+---
+
+## G6 – Peer Review — AQP-183 (DEF-008 with DEF-010), re-check after the G7 NO-GO — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (G7 attempt 1 was NO-GO, DL-078; this is its remediation step 4)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #56, `docs/AQP-183-pressed-state` at head 0cfaf78. Commits since a13f194: 0a5b10d (QA report), d01352c (merge from `master` 85c699f), 1a5a607 (UX spec v0.10 and mock-ups), 0cfaf78 (code). Check run success on 0cfaf78 (run 41873955569): stages 1 to 12 success, stage 12 log "200 passed", "11 skipped". Merge state **behind** (docs PR #66 merged as 15cd9cb). Labels: all three approved.
+  - **Reviews:** Jira 10855 (standards), 10856 (quality), 10857 (performance); UX values from AQP-185 10849.
+  - **My own check:** `git diff 1a5a607 0cfaf78` (five files: `globals.css`, `button.tsx`, `design-tokens.ts`, the two button tests), source read in full.
+  - **Not done:** no local run; the UX spec v0.10 text was not read line by line (quality matched it character for character).
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE WITH COMMENTS, quality APPROVE WITH COMMENTS (Info only), performance APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 |
+| 3 | Majors | | ✅ | None |
+| 4 | Fix matches its source | | ✅ | `--primary-pressed` #7f1616 and `--danger-pressed` #520f09, mapped to Tailwind colours. `active:bg-primary-pressed` and `active:bg-danger-pressed` replace the hover colours. `active:transition-none` with `duration-200 ease-out`: the press shows on the first frame and fades out on release. `select-none` is in the base. `-webkit-touch-callout:none` is on a real `<button>` only, so a link drawn as a button keeps its menu. White text 10.35:1 and 14.67:1; rest-to-pressed step 2.25:1 (quality, recomputed). Planted faults 9 of 10 caught |
+| 5 | CI | | ✅ | Green on 0cfaf78, 200 E2E passed |
+| 6 | NFR-009 (DL-059) | | ✅ | `/` 197,247 B, `/queue` 198,360 B: under 200,000, but 1,640 B (0.8 %) left. RISK-020 restated, score unchanged at 12 |
+
+**Rulings**
+1. **STD-06 (Minor), fixed now.** Rename `BUTTON_ONLY` to `NO_TOUCH_CALLOUT` in `button.tsx`. The branch must be updated from `master` before G7 anyway, so the rename costs one commit and no extra wait. Behaviour does not change, so master verifies it within that one file, with no re-review (DL-047). QA's phone check then runs on the final head.
+2. **STD-01: unchanged.** PR #56 is a code PR, merged by the delivery lead whatever its prefix (DL-069).
+3. **PRF-04 (Minor): not in this PR; the #61 cut is assigned (DL-080).**
+4. **Merge order: PR #65 (DEF-009) before PR #56 (DL-079).** PR #56 lengthens every button's fade to 200 ms. Without #65's wait, the sign-in axe test's mid-fade window gets wider and DEF-009 comes back.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #56: `src/components/ui/button.tsx` | Rename `BUTTON_ONLY` to `NO_TOUCH_CALLOUT` (STD-06), one commit. Update the branch from `master` (15cd9cb or later). CI green | Before G7 attempt 2 |
+| 2 | master | Same | Verify: the rename touches only that file and is name-only; the update from `master` brings no product change into this PR's own diff; CI green | Before G7 attempt 2 |
+| 3 | qa-engineer, with the delivery lead | AQP-183; `docs/07-qa/AQP-183-test-report.md` | G7 evidence on the final head, below | G7 attempt 2 |
+
+**G7 attempt 2 evidence (all mandatory for the GO).** The delivery lead's own typed words for each item; no drafted reply (DL-007). The same iPhone that found DEF-008 and DEF-010, `/design-system` section 05, served from the final head:
+- **(a) Hold** Calculate (primary) and Delete (danger) for about a second each: the darker pressed fill is clearly visible.
+- **(b) Quick tap** Calculate and Delete: a visible brief flash.
+- **(c) Long press** (about 2 seconds) on Calculate, on Delete, on a disabled button and on a loading button: **no text selection and no copy callout or magnifier**, and the disabled and loading buttons still show no pressed state.
+- **(d)** `npx playwright test tests/e2e/button-pressed.spec.ts --retries=0` on the three projects, 0 failures; and the CI run on the final head green through stage 12.
+
+Not required: re-checking secondary, ghost or the pencils, which passed at attempt 1 and are unchanged. A failure in (a) to (c) goes back to the ux-expert, as at DL-078. Then the delivery lead merges, after PR #65.
+
+**Risks registered:** RISK-020 restated, score unchanged at 12.
+**Rationale:** No Blocker, Critical or Major. The new values are the ux-expert's, implemented exactly, with contrast that leaves no doubt. What only the phone can show is shown at G7 by the person who found the defect. The one Minor costs nothing in a branch update that has to happen anyway.
+
+---
+
+## G7 – QA Acceptance — AQP-182 (test reliability 2: DEF-004, DEF-007) — 2026-11-04
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR:** #57, `fix/AQP-182-test-reliability-2` at head 094b599. The PR diff against `master` 85c699f, read with `gh api compare`, is 10 files:
+    - tests: `tests/e2e/shell.spec.ts`, `tests/support/git-ignore.ts`, `tests/support/process.ts`, four unit test files;
+    - QA: the report and the DEF-011 and DEF-012 records.
+    - No `src/` file.
+  - **CI:** run 41879256111 on 094b599, success. Run 41868765137 on db768eb (the update from 85c699f), success. Merge state **behind** (PR #66, docs only).
+  - **QA:** `docs/07-qa/AQP-182-test-report.md` at 094b599, read in full; DEF-011 record (AQP-186, #67); DEF-012 (AQP-187, #68). G6 evidence set: DL-068.
+  - **Not done:** no test run of my own; the probe results are QA's.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every item verified with evidence | ✱ | ✅ | DEF-004 and DEF-007 have no ACs; the G6 evidence set (a) to (c) stands in. See rulings 1 to 3 for (a) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | None. DEF-011 and DEF-012 are Sev-3 |
+| 3 | Regression recorded and green | ✱ | ✅ | CI green on 094b599 and on db768eb |
+| 4 | Exploratory and controls | | ✅ | A planted 1 px drawer fault failed 6 of 6. With git broken live, the suite errors and no test passes; with the fix undone, QLT-25 fails |
+
+**Rulings**
+1. **Condition (a) is met in purpose, not in its wording, and that does not hold G7.**
+   - (a) existed to show that the DEF-004 width check is reliable and still catches a real fault. It does: 59 of 59 where the drawer opened, and the 1 px fault was caught 6 of 6.
+   - The 9 failures, 3 and 6 across the two series, are all one other cause in `openDrawer`. It happens before the width check runs.
+   - It is not overload: series 2 was on a quiet machine and failed more often. A probe shows it: a click before hydration is lost.
+   - Same treatment as DEF-006 at AQP-106 (DL-063): a real defect outside what the evidence was for gets its own record and owner instead of holding this gate.
+2. **(b) is met.** `env-example`, `server-only` and `data-files` had 0 failures in 10 loaded runs, and there was no `ProcessStartError`. The two `tokens.test.ts` time-outs are DEF-012, in a file this PR does not touch.
+3. **(c) is met.**
+4. **DEF-004 (AQP-179, #43) and DEF-007 (AQP-182, #52) close.** QA closes them on this decision.
+5. **DEF-011 is split (DL-083).**
+   - **The test part stays DEF-011:** Sev-3, type Test. `openDrawer` clicks once after `load`, so the suite fails about once in 30 to 60 drawer tests and hides evidence.
+   - **The product part is new, DEF-013:** Sev-3, type Product, origin AQP-28, raised by QA. A real person who taps "Open menu" before hydration gets nothing and must tap again. That is "a state that does not mislead about a price, every action reachable", which is Sev-3 on the test-plan scale, not Sev-4.
+   - The hydration gap grows with JavaScript size and slow phones (RISK-020, the LCP baseline), and the #61 lazy-load also changes what a first tap does. So the solution-architect decides the pattern for every client-only trigger together with the #61 story's ACs, and the ux-expert words any "not ready" state.
+6. **DEF-011 (test part) and DEF-012 are one class and one fix (DL-057).** The developer fixes both in one test-only PR:
+   - wait for the page to be interactive before the first click, with no longer time limit and no retry;
+   - read the files once in `beforeAll` in `tokens.test.ts`, under the shared hook limit.
+
+   G6 needs all three reviews (DL-032). G7 uses the DL-077 evidence: CI green, plus `shell.spec.ts -g "drawer" --repeat-each=15 --retries=0` with 0 failures, plus ten loaded `tests/unit` runs with 0 `tokens.test.ts` failures. Due before sprint 1 ends, and not after AQP-169's G7, whose evidence includes E2E runs on the same shell.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | orchestrator | PR #57 | Update from `master` (15cd9cb, docs only) through GitHub; CI green on the new head. No re-check by master unless the update brings a conflict or a non-docs change into this PR's own diff | Before the merge |
+| 2 | qa-engineer | AQP-179, AQP-182; #43, #52 | Close DEF-004 and DEF-007; move AQP-182 to Done | Now |
+| 3 | qa-engineer | New DEF-013 (Jira Bug, GitHub `bug`, `sev-3`), linked to AQP-28 and AQP-186 | The product part of ruling 5, type Product | Now |
+| 4 | developer | One test-only PR | DEF-011 (test) and DEF-012, as in ruling 6 | Before sprint 1 ends; before AQP-169's G7 |
+| 5 | solution-architect, then ux-expert | DEF-013; the #61 story's ACs | Pattern for a tap before hydration on client-only triggers (drawer, account menu), decided with the lazy-load design | Before the #61 story reaches Ready; fixed before G8 (test plan service level) |
+
+The delivery lead merges PR #57 after condition 1 (test code, `MERGE_POLICY` code-human).
+
+**Risks registered:** none new. RISK-020 is linked to DEF-013: more JavaScript means a longer window in which taps are lost.
+**Rationale:** Both defects this PR fixes are shown fixed by controls that fail when the fix is undone. The one unmet wording comes from a third defect that the evidence uncovered. It is real and now owned, and a quiet-machine probe proved it is not overload. Holding this PR for it would keep two verified fixes off `master`, and gain nothing.
+
+**AQP-183 G6 re-check, condition 2 (STD-06 rename) verified — 2026-11-04 (master).** Commit 001e521 "refactor(ui): name the button-only touch callout class NO_TOUCH_CALLOUT [AQP-183]". It is a fast-forward from 0cfaf78: one commit ahead, with 0cfaf78 as its parent. **Result: met for the rename; the branch update is still pending.**
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| File list | ✅ | `gh api compare 0cfaf78...001e521`: only `src/components/ui/button.tsx`, +2 / −2; full patch read |
+| Name only | ✅ | The declaration and its one use change from `BUTTON_ONLY` to `NO_TOUCH_CALLOUT`; the value `'[-webkit-touch-callout:none]'` is unchanged; no `BUTTON_ONLY` is left in the file at 001e521. One cosmetic slip: there is no space before `=` on the declaration. No formatter is configured and lint is green, so no action |
+| CI | ✅ | Run 41879322672 on 001e521: stages 1 to 12 success, stage 13 skipped (disabled); stage 12 "200 passed" |
+| Branch update from `master` | ⏳ | Not yet done; merge state "behind". By order (DL-079), PR #65 merges first, then the orchestrator updates PR #56 through GitHub. Master then checks that the new head's own diff against `master` is unchanged apart from the merge, and that CI is green. **G7 attempt 2 (the iPhone check) runs on that final head, not on 001e521** |
+
+---
+
+## G7 – QA Acceptance — AQP-184 (DEF-009: axe scans wait for transitions) — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA evidence:** Jira AQP-184 10880 and PR #65 comment 6642745959, both on 09f8022.
+  - **CI:** run 41868171176 on 09f8022, green, with the `axe-helper.spec.ts` control ✓ at all three widths, read at G6 attempt 1.
+  - **PR #65 now:** head 1530089 is a merge of `master` into the branch. Its diff against `master` is still the same two files, `tests/e2e/axe-helper.spec.ts` (+105) and `tests/e2e/support/design-system.ts` (+33 / −2). CI on 1530089 was in progress when this was recorded.
+  - **Defect:** #63 is closed as completed, and AQP-184 is Done.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | DL-077 (a): CI green with the control ✓ on every project | ✱ | ✅ | Run 41868171176 |
+| 2 | DL-077 (b): repeated run, no retries, 0 failures | ✱ | ✅ | 10 counted runs of `sign-in.spec.ts` on the production build at three widths, `--retries=0`: 580 passed, 0 failed, 0 flaky. `sign-in.spec.ts:54` (axe) 10 of 10 per width, with no `color-contrast` violation |
+| 3 | DL-077 (c): defect closed | ✱ | ✅ | #63 closed; AQP-184 Done |
+| 4 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **Ten separate runs replace `--repeat-each=10`, accepted as meeting DL-077 (b).** The number of executions is the same. Each run's set-up clears `login_throttles`, so each repeat starts as a real first run, the same isolation the specified form would have had if the spec were repeat-safe. Under `--repeat-each`, the AC-2 and axe tests reuse fixed accounts and reach the 5-failure lock-out from repeat 6. That is the product working as AQP-38 AC-3 requires, not a fault of this fix: 49 of the first attempt's 51 failures were that, and the run was also contaminated by another agent's servers on the same ports. Repeats 1 to 5 of the axe test passed at every width in that attempt too.
+2. **The overload runs were repeated, not counted (DL-068).** Runs 1 to 3 (set-up time-out; `DATABASE_BUSY` during two slow runs) were repeated; the 10 counted runs logged no server errors. Running on an isolated copy with moved ports changes nothing under test.
+3. **The `--repeat-each` limitation is a follow-up, not a defect.** `sign-in.spec.ts` is not repeat-safe, because it uses fixed accounts for wrong-password cases. The developer gives each repeat its own disposable account, in the DEF-011 and DEF-012 test-reliability PR (DL-083), so `--repeat-each` can be used as the flakiness check the test plan expects. Until then, separate runs are the accepted form for this spec.
+
+**Merge:** PR #65 may be merged by the delivery lead once CI is green on the updated head (1530089 or later). No further master check is needed unless the update changes this PR's own two-file diff. Then PR #56 is updated from `master`, as DL-079 orders.
+
+**Risks registered:** none.
+**Rationale:** The flaky scan's own test now passes 30 of 30 across widths with no retries, and the control shows the wait is what makes it pass. The one change of method keeps the same number of runs with clean isolation, and the failures it avoided were the lock-out doing its job.
+
+**AQP-183 G6 re-check, branch update verified — 2026-11-04 (master). Head 1a785db; G6 conditions 1 and 2 are complete.** 1a785db is a merge commit (parents 001e521 and `master` 9d924a1), made through GitHub.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| The merge brings in only `master` | ✅ | `git diff 001e521 1a785db` has the same patch-id set as `git diff 85c699f 9d924a1` (PRs #66, #57 and #65), so the merge resolved nothing by hand and added nothing of its own |
+| PR's own diff unchanged | ✅ | `gh api pulls/56/files`: the same 16 files and line counts as at 0cfaf78, with the 001e521 rename inside `button.tsx` |
+| CI | ✅ | Run 41921509846 on 1a785db: stages 1 to 12 success, stage 13 skipped (disabled); stage 12 "215 passed". It now includes PR #65's axe wait (DL-079 order kept). Merge state clean |
+
+**For G7 attempt 2:** 1a785db is the head for the delivery lead's iPhone check, items (a) to (d) of DL-079. A new commit on the branch before that check means the check runs on the new head.
+
+---
+
+## G6 – Peer Review — AQP-169 (STORY-10.10: NFR-009 guards) — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #70, `feat/AQP-169-nfr-009-guards` at head 6ae0c2f, base 9d924a1; 38 files. Merge state clean; all three review labels approved.
+    - CI run 41933808548 on 6ae0c2f: success, including stage 11b. Its log shows `/` 197,116 B, `/queue` 198,229 B (headroom 1,771), `/sign-in` 160,490 B, `not-found` 135,547 B, and `/design-system` answering 404 as required.
+    - Nightly run 41933808592 on 6ae0c2f: success.
+  - **Reviews:** `docs/06-reviews/AQP-169/standards.md`, `quality.md` and `performance.md` (main folder, uncommitted), reviewed at 51b0954 and 4ffc016. Jira AQP-169 10893 (standards), 10894 (performance), 10895 (quality), 10898 (developer, fix round).
+  - **My own check of the fix commit:** `gh api compare 4ffc016...6ae0c2f` shows one commit, parent 4ffc016, nine files. I read the full diff of the scripts, the workflow, the two hook lines and the new gzip test, and the test names in `tests/unit/measurement-user.test.ts`.
+  - **Not done:** no local run.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards and quality APPROVE WITH COMMENTS, performance APPROVE |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 |
+| 3 | Majors | | ✅ | None |
+| 4 | Minors fixed (verified by master) | | ✅ | **STD-01:** `scripts/lib/measurement-user.ts` `assertThrowawayDatabase` allows only `localhost`, `127.0.0.1`, `::1`, `db` and `postgres`, checks every libpq `host=` override, ignores `STAGING_DB_HOST`, refuses `NODE_ENV=production`, and never prints the URL; unit tests cover a staging host, an internet host, a host override and production mode. **STD-02:** the script no longer imports `tests/support`; it uses `src/` repositories and the production hasher at a small cost for this throwaway user. **STD-03:** the header now names `*.report.json`. **QLT-45:** `hasAnyAdmin` is checked first, with a message that says what to do, and nothing changes (tested). **QLT-46:** a deterministic sample whose level 6 and level 9 sizes are asserted to differ, then `gzipBytes` equals level 9 and not level 6. **STD-06 (Info) done:** both per-file `120_000` hook limits removed |
+| 5 | CI and nightly | | ✅ | Both green on 6ae0c2f |
+| 6 | Calibration (AC-4) | | ✅ | Performance: figures match its hand measurement; calibration at 6f66b97 within 3 B |
+| 7 | NFR-009 | | ✅ | All routes under 200,000 B; RISK-020's "no check" cause is closed |
+
+**Rulings**
+1. **My own check is enough for the fix commit; no re-review (DL-047).**
+   - The commit changes CI tooling and tests, not code that ships in the product: `scripts/`, one workflow path filter (it adds the new `scripts/lib/measurement-user.ts` to the nightly trigger list, so a change to it runs the nightly), the README, and tests.
+   - Each Minor's fix is specific, tested, and read in full by me.
+   - DL-051 requires a re-review when fixes add product code; this adds none.
+   - The one security-relevant piece, the database guard, is stricter than the test guard it replaces.
+2. **Residual note on STD-01, for 10.04 (deployment).** `db` and `postgres` are also likely Compose service names on a deployed host. The guard still refuses there only because `next start` runs with `NODE_ENV=production`. So 10.04 must keep `NODE_ENV=production` in every deployed container and leave dev tooling out of the image (PRF-03: `npm ci --omit=dev` or prune). The scrum-master adds both to 10.04's Dev Context. This is not a finding against this PR.
+3. **PRF-04 (empty key-screen list) is by design (AC-6) and becomes a follow-up.** The scrum-master adds "`/queue` added to `KEY_SCREENS` in `lighthouserc.cjs`, with the Wi-Fi assertions passing on the nightly" to the queue story's ACs, and the same for each later key screen (test strategy §10.4).
+4. **The remaining Info items need no action:** STD-04, STD-05, STD-07 to STD-09, QLT-47 to QLT-49, PRF-01, PRF-02. QLT-49 is already covered by keeping CI as the reference.
+5. **The developer followed the story's ACs (Lighthouse, nightly, CI time) beyond the orchestrator's narrower brief, which was right.** The Jira story is the specification (CLAUDE.md §1); a brief cannot narrow it.
+
+**G7 evidence (a full QA cycle; this is a story, not a test-only defect):**
+- **AC-1, AC-3:** the stage 11b table on the final head, with every route measured, and the limit-table unit test.
+- **AC-2, negative:** the integration test cases (a lowered limit, a non-200 answer, `not-found` on 200 fails), plus one QA probe of each kind against the real script.
+- **AC-4:** the calibration figures recorded in the PR, checked against 184.6 KB and 135.1 KB (within 1 KB).
+- **AC-5:**
+  - the negative-control run link (a lowered limit fails at 11b, never merged);
+  - the job time of this PR against the last green `master` run, with the difference under 60 s;
+  - `ci-workflow.test.ts` green.
+- **AC-6:** the configuration test, the licence check, and `allowScripts` green.
+- **AC-7:**
+  - the nightly run's artefact (30 days) and its summary table;
+  - the permissions are `contents: read` and `actions: read` only;
+  - every action is pinned to a SHA, and the log holds no secret;
+  - the 25 % rule's unit test.
+- **AC-8:** the CI-time step output (p95, median, number of runs).
+- **AC-9:** QA runs the Lighthouse job on the reference runner against `/`, signed in, on the Wi-Fi profile with 5 runs, and records the median LCP, median TBT, B0, the Chromium version and the run link. This goes to the product-manager and master for RISK-020 (falls to 6 if the targets are met, DL-058). A miss is reported, not failed.
+- **Setting B0:** `LIGHTHOUSE_B0` is a repository variable. QA records the value; an agent does not set repository settings, so the delivery lead sets it (Settings → Secrets and variables → Actions → Variables, name `LIGHTHOUSE_B0`, value the median `benchmarkIndex` from AC-9). That is due before the first key screen's G6, not before this G7.
+- **Exploratory:** the README's local path against a database that already has the bootstrap Admin gives the QLT-45 message.
+- **Regression:** CI green on the final head.
+
+**Risks registered:** none new. RISK-020 is restated: its "no check" cause is closed; headroom is still 1,771 B on `/queue` (`master`), about 1,640 B after PR #56. AC-9 decides the score.
+**Rationale:** Every Minor is fixed in a commit I read in full, and none of it ships in the product. The check measures what NFR-009 says, calibrated within 3 B. What only G7 can show is the baseline on the reference runner, and QA owns it.
+
+---
+
+## G7 – QA Acceptance — AQP-169 (STORY-10.10: NFR-009 guards) — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #70 at head 1cebaaa, one commit after 6ae0c2f (G6), adding only `docs/07-qa/AQP-169-test-report.md` (`gh api compare`). Merge state clean. CI run 41936010911 on 1cebaaa: success.
+  - **QA:** Jira AQP-169 10906; the report, read for AC-4, AC-5 and AC-9.
+  - **Nightly:** run 41933808592, attempt 2 (on 6ae0c2f). Its log summary shows `/` Wi-Fi 5 runs, median LCP 235 ms, TBT 19 ms, median `benchmarkIndex` 1994 as rounded in the summary (QA reads 1993.5 from the report files), Chromium 156.0.0.0. Slow 4G (report only): LCP 673 ms, TBT 19 ms.
+  - **Not done:** no run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | AC-1 to AC-8 pass in the report. AC-5: negative control run 41927422200 fails at 11b; the step adds about 2 s against `master` CI 41921471225. AC-9 reported as specified (not asserted) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | No defects |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 41936010911 on the final head |
+| 4 | Exploratory | | ✅ | The README's local path with an existing Admin gives the QLT-45 message |
+
+**Rulings**
+1. **AC-4 not re-run by QA: accepted.** Two independent measurements, the developer's and reviewer-performance's by a different method (10894), agree within 3 B, well inside the AC's 1 KB. A third local Turbopack build of an old commit on the shared PC would add load and no information.
+2. **`LIGHTHOUSE_B0` is a post-merge task for the delivery lead, not a merge prerequisite.** Until it is set, each nightly run reports itself as a baseline run and no "not comparable" mark is made; nothing fails and no pull request is blocked. Due before the first key screen's G6, as set at G6 (DL-086). Value: **1993.5**, QA's median from the report files. `parseBaseline` accepts a decimal. The summary's rounded 1994 would do equally well, since the rule is a 25 % band.
+3. **RISK-020 falls to 6 (P 2 × I 3), by its own pre-stated rule** ("falls to 6 once a Lighthouse run on reference hardware meets the targets for the shell", DL-058). The shell on `/` measured LCP 235 ms against 2,000 and TBT 19 ms against 200, on the Wi-Fi profile with 5 runs.
+   - **Limits, stated:** simulated throttling on a GitHub-hosted runner, not a phone; `/` only; no key screen is asserted yet (PRF-04).
+   - **What remains is headroom, not speed.** `/queue` has 1,771 B, and stage 11b now stops a breach at the pull request, so it is found early. The schedule side is RISK-022 and AQP-188.
+   - **For the product-manager:** the PRD says the 200 KB budget is reviewed after this baseline. The margin is large (LCP about 12 % of the target), so a raised limit is a legitimate question for them under AC-3's rule (a recorded decision on a Lighthouse run that met the targets). It would not replace AQP-188's floor, which DL-081 set. Master does not propose a figure.
+
+The delivery lead merges PR #70 (code-human). After the merge, AQP-188 may start (DL-080, DL-081).
+
+**Risks registered:** RISK-020 restated, 12 → 6.
+**Rationale:** Every AC is shown, the check is calibrated by two independent methods, and the baseline sits far inside the targets. B0 only labels later runs, so it is a setting to make soon, not a reason to hold the merge.
+
+---
+
+## G6 – Peer Review — AQP-186 and AQP-187 (DEF-011 test part, DEF-012) — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #71, `fix/AQP-186-187-test-timing` at head b3f38ad, base 9d924a1. Eight files, all under `tests/`. CI run 41935989250 on b3f38ad: success. The log shows the late-scripts test `shell.spec.ts:115` ✓ on mobile and tablet and skipped on desktop, which has no drawer. Labels: all three approved. The base is behind `master` 908459b (#70).
+  - **Reviews:** `docs/06-reviews/AQP-186/standards.md`, `quality.md`, `performance.md` (main folder, uncommitted), reviewed at fb472a3 and 1d9285c; Jira 10899, 10901, 10903; developer 10908.
+  - **My own check of the fix commit:** `git diff 1d9285c b3f38ad`, five test files, read in full.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards and quality APPROVE WITH COMMENTS, performance APPROVE |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 |
+| 3 | Minors fixed (verified by master, b3f38ad) | | ✅ | **STD-01:** the doc comment moves to `ensureE2eUsers`, and `connectToTestDatabase` gets its own. **QLT-51:** `waitUntilHydrated(page, selector, handler)` now takes the prop to wait for. `signInThroughThePage` waits for the form's `onSubmit`, and the new `waitUntilAccountMenuIsLive` waits for the Radix trigger's `onPointerDown` before each account-menu click (`design-system.spec.ts`, `sign-in.spec.ts` twice, `aqp-38-qa.spec.ts`). **QLT-50:** a comment names the React private-key dependency and what to re-check on a React upgrade. No retries or longer limits are added |
+| 4 | DEF-012 | | ✅ | `tokens.test.ts` reads its files once in `beforeAll` under the shared hook limit, with a guard against an empty scan (QLT-53) |
+| 5 | DL-085 follow-up | | ✅ | f17378a: a throwaway account and address per run, so `sign-in.spec.ts` is repeat-safe (QLT-54) |
+| 6 | CI | | ✅ | Green; about 2 s added (PRF-01) |
+
+**Rulings**
+1. **My own check is enough for b3f38ad; no re-review (DL-047).** It is test-only, five files, read in full, and it applies the same wait the reviewers already approved to the other first-click sites.
+2. **`aqp-38-qa.spec.ts` is QA's spec.** The developer added one wait before its account-menu click. QA confirms at G7 that the test's intent is unchanged.
+3. **QLT-50 and STD-03 (React's private key):** accepted. It fails loudly, never falsely. The product-side signal is the architect's under DEF-013.
+4. **Remaining Info items need no action:** STD-02, STD-04, STD-05, QLT-52 to QLT-54, PRF-01 to PRF-03. QLT-52's missing negative control is covered at G7 by a planted fault (below).
+
+**G7 evidence (DL-077, for test-only defects; DL-088):**
+- **(a) CI green on the final head**, after the update from `master` (908459b or later, so stage 11b runs too). The late-scripts test `shell.spec.ts:115` must be ✓ on mobile and tablet, read in the log.
+- **(b) `npx playwright test tests/e2e/shell.spec.ts --repeat-each=10 --retries=0`** at all three widths on an **unloaded** machine against the production build: **0 failures.**
+  - Every time-out is classified, as reviewer-quality advises. A **stall** is a time-out inside the hydration wait; a **lost click** is a time-out on the drawer after the click.
+  - A lost click fails the evidence.
+  - A stall on an unloaded machine also fails it, because it would mean hydration did not come.
+  - A stall during recorded load is Environment, and the run is repeated (DL-068).
+- **(c) Planted fault:** remove the `waitUntilHydrated` call from `openDrawer` and run `shell.spec.ts:115` on mobile; it must fail. Then restore it. This is QLT-52's missing control.
+- **(d) `npx playwright test tests/e2e/sign-in.spec.ts --repeat-each=10 --retries=0`** at three widths with 0 failures. This shows the spec is now repeat-safe (DL-085) and that QLT-51's form wait holds.
+- **(e) Ten loaded `npx vitest run tests/unit` runs** under the DEF-003 load (`tsc`, `eslint` and `next build` looping) with **0 `tokens.test.ts` failures**. Any other failure is classified and recorded. Environment failures are repeated, not counted.
+- **(f)** QA confirms `aqp-38-qa.spec.ts` keeps its intent, then closes DEF-011 (AQP-186, #67) and DEF-012 (AQP-187, #68). DEF-013 (Product) stays open with the solution-architect.
+
+These go as a Jira comment on AQP-186, with no test-report file. The delivery lead merges after G7 (test code, code-human).
+
+**Risks registered:** none.
+**Rationale:** Both defects are fixed at their cause, with no longer limits and no retries. The same fault is closed at every first-click site the quality review found, and the sign-in spec is now repeat-safe. G7 has to show it under repetition and with a planted fault, because these defects appear only by chance.
+
+---
+
+## G7 – QA Acceptance — AQP-186 and AQP-187 (DEF-011 test part, DEF-012) — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #71 at head 5680936, a merge of `master` 908459b into b3f38ad (`gh api compare b3f38ad...5680936`: #70 and the merge only). Still 8 files, all under `tests/`. CI run 41955225750 on 5680936: success. Merge state clean.
+  - **QA:** Jira AQP-186 comment 10912, read in full. #67 and #68 closed on 2026-11-05 03:25 to 03:26Z.
+  - **Not done:** no run of my own.
+
+| # | DL-088 item | Mandatory | Result | Evidence |
+|---|-------------|-----------|--------|----------|
+| 1 | (a) CI with the late-scripts test ✓ | ✱ | ✅ | 41955225750: stage 11b green; stage 12 172 passed, 0 flaky; `shell.spec.ts:115` ✓ on mobile and tablet |
+| 2 | (b) `shell.spec.ts` ×10, three widths, 0 lost clicks | ✱ | ✅ | 270 passed, 1 failed; lost clicks 0. Ruling 1 covers the one failure |
+| 3 | (c) Planted fault | ✱ | ✅ | With the hydration wait removed, `:115` fails at the drawer check ("not found"), which is a lost click; with it restored, it passes |
+| 4 | (d) `sign-in.spec.ts` ×10 | ✱ | ✅ | 571 passed, 0 failed, 0 flaky; the same command on 09f8022 locked out from repeat 6 |
+| 5 | (e) Ten loaded unit runs | ✱ | ✅ | 1,643 of 1,643 each; `tokens.test.ts` 64 of 64 in all ten, at an average CPU of 94 % |
+| 6 | (f) Spec intent and closure | ✱ | ✅ | `aqp-38-qa.spec.ts`: one wait plus its import, intent unchanged. DEF-011 and DEF-012 closed |
+| 7 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **The one failure in (b) is Environment, repeated, not counted.** It was at tablet `:176`, repeat 6, at the second `openDrawer`.
+   - It is neither of DL-088's two kinds. The hydration wait had passed, and `locator.click` timed out at "locator resolved", before any click was attempted. A page that does not answer an action is not a lost click, which would have failed later at the drawer check.
+   - It happened at recorded CPU 100 % with 0.78 GB of 7.8 GB free. That is the test run's own load on a PC whose memory is always tight. No other workload ran, so the machine was "unloaded" in the sense DL-088 meant.
+   - Its 10-repeat retest passed 10 of 10.
+   - DL-088's purpose was to tell a lost click (this defect) from a machine stall. There were 0 lost clicks, and (c) shows the series would have caught one. **Standard from now on:** a time-out after the hydration wait but before the click is attempted counts as a stall.
+2. **QA closing DEF-011 and DEF-012 before this decision is ratified, with nothing reversed.** DL-077 (c) and DL-088 (f) make the closure part of the G7 evidence itself, as at AQP-184. Had this decision been NO-GO, QA would have reopened them.
+3. **The repeated (e) series is accepted.** The first series failed in three files because QA's archive copy had no `.git`. That is Environment caused by the set-up, and the whole series was repeated after `git init`. Even that first series had 0 `tokens.test.ts` failures.
+
+The delivery lead merges PR #71 (test code, code-human). DEF-013 (AQP-197, #69, Product) stays open with the solution-architect and is fixed before G8.
+
+**Risks registered:** none. One observation goes into the shared-PC limit already recorded at DL-068: this PC's free memory, 0.4 to 1.4 GB of 7.8 GB with no other workload, is the main source of Environment failures in local evidence. CI remains the reference.
+**Rationale:** Every item of the evidence set is met. A planted fault shows the series catches the defect, and the one failure has a recorded cause that is not this defect. Both test defects close with their causes removed, not with retries or longer limits.
+
+---
+
+## G7 – QA Acceptance — AQP-183 (DEF-008, DEF-010: pressed state) — attempt 2 — 2026-11-04
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (attempt 1 NO-GO, DL-078)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #56 at head c4d0d65, one commit on 1a785db (cleared at the G6 re-check) adding only `docs/07-qa/AQP-183-test-report.md` (`gh api compare`). CI 41963075513 on c4d0d65: success. PR #56 is behind `master` (now 8be2b24).
+  - **QA:** Jira AQP-183 10915; the report's attempt 2 section, read for the environment and OBS-4.
+  - **Provenance:** checked in the session log by role. Every device answer is typed user text with no earlier draft: "same behavior as last time" (23:10:06Z), "yes, I did get the sign-in page first" (23:11:39Z), "looks good now" (03:34:27Z), "clearly darker color" (03:35:00Z), "brief flash when I tap" (03:35:25Z), "doesn't get selected" (03:38:16Z).
+  - **Not done:** no run of my own.
+
+| # | Check (DL-079 (a) to (d)) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | (a) Hold Calculate and Delete: clearly darker | ✱ | ✅ | Later session: "yes, it turns a clearly darker color as expected when I hold it" |
+| 2 | (b) Quick tap: brief flash | ✱ | ✅ | "yes, I see a brief flash when I tap" |
+| 3 | (c) Long press on Calculate, Delete, a disabled and a loading button: no selection or callout, no pressed look on the last two | ✱ | ✅ | "The text doesn't get selected or highlighted, as expected - No - No, it doesn't" (Approve and lock, Calculating) |
+| 4 | (d) E2E `--retries=0`, three widths; CI | ✱ | ✅ | 45 of 45 on 1a785db; CI green on 1a785db and c4d0d65 |
+| 5 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **OBS-4 does not hold G7, and no extra evidence is required before the merge.**
+   - In the first session (23:10Z) the delivery lead saw the old look on Calculate and Delete. At the same moment the PC showed the new colour from the same development server, so the server was serving the new code. They confirmed they reached the page through sign-in, which the old version did not have.
+   - The diagnostic that would have separated a stale page from a WebKit fault (hold Add part) was not answered in that session. In the later session, with no code or server change in between, everything passed. That fits a stale copy on the phone from the attempt-1 session on the same port, but it is **not confirmed**.
+   - Why GO: the acceptance check passed in their own words on the commit under test, and the E2E proves the values are applied. DEF-010 is Sev-3. And the alternative cause, `:active` sometimes not applying on iOS, would show again in normal use, where it is cheap to catch.
+2. **Follow-up, not a condition:** a one-line check at the next scheduled phone session. That is DEF-013's verification, or the first deployed build under 10.04, whichever comes first. QA opens `/design-system` (or the first real screen with a primary button) on the iPhone after a full reload and holds Calculate. If the old look appears again, DEF-010 reopens, and the solution-architect decides on G6 condition 4's passive `touchstart` listener (WebKit bug 138816), which DL-078 closed as not needed.
+3. **DEF-008 (#54) and DEF-010 (AQP-185, #64) close on this decision; QA closes both.** DEF-008 was reopened at attempt 1, and DEF-010 is its design-level cause.
+
+**Before the merge:** update PR #56 from `master` (8be2b24 or later) through GitHub, with CI green, including stage 11b. `/queue` was 198,229 B on `master`, and this PR adds about 131 B. The check now enforces the 200,000 B limit itself. No master re-check is needed unless the update changes this PR's own diff. Then the delivery lead merges (code PR, DL-069).
+
+**Risks registered:** none new.
+**Rationale:** The defect is about what a person sees when they press. The person who found it now sees it on the commit under test, and the automated test shows the values are applied. One earlier contrary report has a plausible, unconfirmed cause. It is recorded, given a cheap re-check at a session that will happen anyway, and tied to a decision path if it recurs.

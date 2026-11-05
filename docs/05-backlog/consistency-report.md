@@ -94,7 +94,7 @@ The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; 
 | NFR-006 | EPIC-10 | 10.01 secret and repository scan (enabler) |
 | NFR-007 | EPIC-01 | 01.07; 06.07, 06.08, 06.10, 06.12, 06.13 and 05.12 each carry their event |
 | NFR-008 | EPIC-03 | 03.06 |
-| NFR-009 | EPIC-10 | 10.10 (AQP-169, the NFR-009 guards; moved from 10.09 on 2026-11-03, DL-056) |
+| NFR-009 | EPIC-10 | 10.10 (AQP-169, the NFR-009 guards; moved from 10.09 on 2026-11-03, DL-056) and 10.13 (AQP-188, the first-load headroom cut, an enabler added 2026-11-04, DL-080, DL-081) |
 | NFR-010 | EPIC-10, EPIC-07 | 10.09 (load); 07.05 (export) |
 | NFR-011 | EPIC-10 | 10.09 |
 | NFR-012 | EPIC-10 | 10.09 (needs the web address, Q-18) |
@@ -127,6 +127,7 @@ The full table, the reason per story and the dependency list are in `backlog.md`
 - **Who corrected:** these are Trace-line additions only (no AC, estimate or dependency changed). The product-owner made them while writing each PO Validation, and records each in the story ("Corrections made by the product-owner"). The scrum-master should confirm them; they do not gate G4.
 - No status is changed in Jira before the master decides G4 attempt 2; only the scrum-master moves a story to Ready after it.
 - **Added 2026-11-03, after v0.4: AQP-169 (STORY-10.10, NFR-009 guards) is READY, 17 of 17 items** (Jira AQP-169, PO Validation section). It is the nineteenth sprint 01 story (stretch, first). The product-owner added two clarifications to its text (the not-found page is measured and expected to answer 404; no data or API change). Counts above (18 of 18) are as of G4 attempt 2 and are not re-stated.
+- **Added 2026-11-04, after v0.4: AQP-188 (STORY-10.13, first-load JS headroom) is READY, 17 of 17 items, on the third pass (15 of 17, then 16 of 17 twice)** (`backlog.md` section 7; CR-38, CR-39, CR-40 below). It is the twentieth sprint 01 story (committed). Checked against PRD v0.14 NFR-009 and 13.9, architecture v0.17 sections 7, 8 and 10, test strategy 10.1, UX spec sections 6, 7.3.1 and 8, the links in Jira and the defect AQP-197 (DEF-013). The 190,000 B figure, the 7,247 B and 8,360 B savings, the 200,000 B limit, the count rule (distinct script and preload URLs, gzip level 9, 1 KB = 1,000 B, inline scripts not counted), the CSP nonce, the overlay rule, the DEF-013 closing rule (AQP-188 passes G7) and the 12 links agree across all of them.
 
 ## 9. Issues
 
@@ -166,6 +167,18 @@ Rating: **Critical** blocks G4 for the stories named; **Major** weakens a Ready 
 | CR-37 | Minor | The BR item failed as found for 11 stories (section 8). Five master stories cited FR-011 and AQP-106 cited FR-027 without tracing them | product-owner (made); scrum-master (confirm) | **Closed here.** Trace lines corrected; no AC, estimate or link changed. EPIC-02 now lists BR-003 and BR-004 |
 
 Counts: Critical 0. Major open 0. Minor open 8 (CR-13, 16, 17, 18, 27, 28, 31, 33 residual).
+
+### 9.3 Issues first raised on 2026-11-04 (AQP-188)
+
+| ID | Rating | Issue | Owner | Status now |
+|----|--------|-------|-------|------------|
+| CR-38 | Minor | AQP-188's Trace line says "BR: none asserted" and lists NFR-009, FR-009, FR-085. AC-9 asserts the Engineer canary scan (BR-003) and is headed NFR-001, NFR-002. The same finding as AQP-90 (CR-37) | scrum-master (writes, DL-039); product-owner (names) | **Closed 2026-11-04** (description revision 5, read back by the product-owner): BR-003, NFR-001, NFR-002, NFR-016 to 018 in the Trace line; rule 11 and SCR-25 cited. Comment 10881 had reported a save that had failed (CONTENT_LIMIT_EXCEEDED) |
+| CR-39 | Major | **Closed on re-validation: ux-spec v0.11 (uncommitted) adds 7.3.1 rule 11 and the SCR-25 states; the docs PR lands it after PR #56.** UX spec against AQP-188 AC-8 and AC-10: section 7.3.1 rule 7 and the Loading row say a button with `aria-busy` is disabled and shows no pressed state; the ACs hold the pressed look with `aria-busy="true"` on an enabled control, and the shared `Button` disables on `loading`. The pending and failed first-open states (and the failure line) are in no UX screen. The master asked for a ux-expert step before the story reaches Ready (G7 AQP-182, condition 5) | ux-expert | Closed 2026-11-04 (ux-expert, 10883). Residual Minor: the SCR-25 mock-up pages do not draw the new states |
+| CR-40 | Minor | Test strategy 10.1 and the test plan name none of AQP-188's new checks (network log with no preload, layout-shift observer, 20 of 20 early tap with `--retries=0`), and neither says the 190,000 B figure is checked once at G6 by reviewer-performance while the limit table stays at 200,000 B | solution-architect; qa-engineer | Open. Before AQP-188 reaches G6 |
+
+| CR-41 | Major | AQP-188 AC-9 ends "The Engineer canary scan finds 0", but no canary scan exists at `master`: story 01.03 (AQP-57) builds it, 01.03 is now in the stretch after 01.02, and AQP-188 is not blocked by it (every other story that uses the scan is). The sentence cannot be verified at G7. The testing note's path `tests/security/canary-scan.spec.ts` exists nowhere. Raised by the product-owner, who passed it on the first two reads | solution-architect (wording); scrum-master (applies) | **Closed 2026-11-04** (revision 6): the solution-architect's option A (10887), a unit test of the layout props, with real test names; verified against `origin/master` 9d924a1 |
+
+Counts after the third re-validation, 2026-11-04: Critical 0. Major open 0 (CR-39 and CR-41 closed). Minor open 9 (the 8 above and CR-40; CR-38 closed).
 
 ## 10. Open inputs and what they gate
 
