@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/states';
 import { Card } from '@/components/ui/card';
 import { queueTitleFor, type RoleName } from '@/lib/auth/roles';
-import { requireUserOrRedirect } from '@/server/auth/session';
+import { authorizePage } from '@/server/http/page-access';
 
 /** SCR-03's empty-state sentences until the task list exists (STORY-04.02 replaces this page). */
 const EMPTY_TITLE: Readonly<Record<RoleName, string>> = {
@@ -21,11 +21,11 @@ const EMPTY_DESCRIPTION: Readonly<Record<RoleName, string>> = {
 
 /**
  * Every role's home after sign-in (STORY-01.01 AC-1): "My tasks" for an Engineer, "Task queue" for Lead and Admin.
- * A titled placeholder with SCR-03's empty-state text until story 04.02 builds the list. The signed-in check is the
- * portal layout's; the role is read again here only to pick the words.
+ * A titled placeholder with SCR-03's empty-state text until story 04.02 builds the list. The page checks the person and
+ * their role itself (`authorizePage`, STD-09) and does not rely on the portal layout; the role then picks the words.
  */
 export default async function QueuePage() {
-  const user = await requireUserOrRedirect();
+  const user = await authorizePage('/queue');
   return (
     <>
       <PageHeader title={queueTitleFor(user.role)} />

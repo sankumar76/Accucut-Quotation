@@ -119,6 +119,26 @@ To start again from an empty database: `docker compose -f compose.dev.yml down -
 The app refuses to start if a required variable in `.env` is missing or still a `CHANGE_ME`
 placeholder; the message names the variable and never prints a value.
 
+## Adding a page or an API route (who may open it)
+
+Every page and every API route has one row in the route manifest, `src/server/http/route-manifest.ts`: its address, its
+methods, the roles allowed (`'public'` for sign-in only), whether it is a menu entry, and whether it is `implemented` or
+`planned`. Three things read that row, so a role is never allowed in one place and refused in another: the access check,
+the menu (and `GET /api/v1/me`), and the tests.
+
+- **An API route** is declared only with `withRoute` (`src/server/http/with-route.ts`):
+  `export const GET = withRoute({ route: '/api/v1/…', method: 'GET', output: aStrictSchema, handler })`. It checks the origin
+  of a state-changing request, the session, then the role from the row, before it reads any input; its answer must fit a
+  strict schema; every failure is `application/problem+json` with a `req-…` reference.
+- **A page** starts with `const user = await authorizePage('<its address>')` (`src/server/http/page-access.ts`). The layout
+  only checks that someone is signed in. A signed-out visitor goes to sign-in and comes back; a role the row does not list
+  sees "You do not have access to this page" (HTTP 403).
+- **In the same change** add the row (set `status: 'implemented'`), the loader in `tests/support/route-loaders.ts`, and, for a
+  state-changing route, nothing more: `tests/security` calls it as an Admin, a Lead, an Engineer and a signed-out visitor,
+  compares the answers with the SPEC table, and fails a route file with no row, a handler without `withRoute` and a page
+  without `authorizePage`.
+- A route an Engineer may open is a decision: `tests/unit/http-route-manifest.test.ts` names every one.
+
 ## Checks (the same ones CI runs)
 
 | Check | Command |
@@ -173,8 +193,10 @@ never a required check.
 
 **First-load JavaScript budget (CI stage 11b, every pull request).** Each route's first load may download at most
 200,000 bytes of JavaScript, gzip. The check starts `next start` on a free port for the production build, asks for every
-page route and for the not-found page (signed in as an invented Admin where a route sends a visitor to sign-in), and
-counts the scripts each page names: `<script src>` without `nomodule`, and `<link rel="preload">` or
+implemented page of the route manifest (`src/server/http/route-manifest.ts`) and for the not-found page, and counts the
+scripts each page names. A page that sends a visitor to sign-in is requested as a role the manifest allows on it; the check
+signs in as the invented Admin, who may open every page, so today every page is measured as the Admin. A page that the
+build serves and the manifest does not list fails the check. It counts `<script src>` without `nomodule`, and `<link rel="preload">` or
 `rel="modulepreload"` with `as="script"`, each URL once. It reads those files from `.next/static`, compresses each with
 gzip level 9, adds them up (1 KB is 1,000 bytes) and writes one row per route (file count, raw bytes, gzip bytes,
 limit, headroom) to the job summary. It exits 1 if a route is over its limit, does not answer as it should (200 for a

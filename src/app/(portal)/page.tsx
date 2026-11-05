@@ -4,10 +4,12 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
+import { authorizePage } from '@/server/http/page-access';
 
-// Placeholder home page (signed-in only, through the portal layout). People land on /queue after sign-in; this page
-// goes when the role-specific homes arrive (STORY-01.02).
-export default function HomePage() {
+// Placeholder home page (signed-in only). People land on /queue after sign-in; this page goes when the role-specific homes
+// arrive. It checks the person itself and does not rely on the portal layout (STD-09).
+export default async function HomePage() {
+  await authorizePage('/');
   return (
     <>
       <PageHeader title="Accucut Quotation Portal" description="The portal is being built one screen at a time." />

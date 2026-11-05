@@ -9,6 +9,7 @@ import { BadgesNoticesSection, NodeIconsSection, StatesSection } from '@/compone
 import { SpacingSection, TypeSection } from '@/components/features/design-system/type-spacing-sections';
 import { PageHeader } from '@/components/shared/page-header';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
+import { authorizePage } from '@/server/http/page-access';
 
 const DESCRIPTION = 'Design tokens, brand, components and states used on every screen of the Accucut Quotation Portal.';
 
@@ -23,8 +24,10 @@ export const metadata: Metadata = {
  * Invented figures only. It exists in every environment except a production build, where it answers
  * "not found" (STORY-10.02, AC-7).
  */
-export default function DesignSystemPage() {
+export default async function DesignSystemPage() {
   if (!isDesignSystemAvailable()) notFound();
+  // Like every page, it checks the person and the role itself and does not rely on the portal layout (STD-09).
+  await authorizePage('/design-system');
 
   return (
     <>

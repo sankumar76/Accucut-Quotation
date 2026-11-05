@@ -33,6 +33,13 @@ describe('allowedDevOrigins (STD-04)', () => {
   });
 });
 
+describe('forbidden() for a refused page role (STORY-01.02 AC-4, QLT-62)', () => {
+  it('turns on experimental.authInterrupts, without which forbidden() shows the 500 error card and not SCR-26 with HTTP 403', () => {
+    // Deleting the flag still refuses access, so no other test notices; this one does.
+    expect(nextConfig.experimental?.authInterrupts).toBe(true);
+  });
+});
+
 describe('cache header of the logo and favicon (PRF-02)', () => {
   it('serves /accucut-logo.jpg for a day, and lets a stale copy serve while it refreshes (the URL is not versioned)', async () => {
     const rules = (await nextConfig.headers?.()) ?? [];

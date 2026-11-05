@@ -1,29 +1,56 @@
-import { House, ListChecks, Palette } from 'lucide-react';
+import {
+  Database,
+  Flag,
+  House,
+  Info,
+  ListChecks,
+  Package,
+  Palette,
+  ScrollText,
+  Settings,
+  SlidersHorizontal,
+  UserPlus,
+  Users,
+  UsersRound,
+  type LucideIcon,
+} from 'lucide-react';
 
 import type { AccountUser } from '@/components/shared/account-trigger';
 import { Icon } from '@/components/shared/icon';
 import type { NavGroup } from '@/components/shared/nav';
-import { queueTitleFor, roleLabel, type RoleName } from '@/lib/auth/roles';
+import { roleLabel, type RoleName } from '@/lib/auth/roles';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
+import { groupNavigation, navigationFor } from '@/server/http/navigation';
+import type { NavIcon } from '@/server/http/route-manifest';
+
+/** The drawing for each icon name the manifest uses. Server-side only: the menu reaches the browser as drawn markup. */
+const NAV_ICONS: Readonly<Record<NavIcon, LucideIcon>> = {
+  'list-checks': ListChecks,
+  house: House,
+  palette: Palette,
+  'user-plus': UserPlus,
+  database: Database,
+  'users-round': UsersRound,
+  package: Package,
+  sliders: SlidersHorizontal,
+  flag: Flag,
+  users: Users,
+  settings: Settings,
+  'scroll-text': ScrollText,
+  info: Info,
+};
 
 /**
- * The menu until the role-specific menus arrive (STORY-01.02, SCR-25). The task queue is the one page every
- * role lands on after signing in (STORY-01.01 AC-1). The design system is listed only where its route exists, that
- * is outside a production build.
+ * The menu for a role (STORY-01.02 AC-6, SCR-25): the route manifest's implemented rows that are menu entries and allow the
+ * role, grouped as the manifest says. An Engineer's menu holds no Admin or Lead item, not even a disabled one. The design
+ * system is listed only where its route exists, that is outside a production build.
  */
 function navGroups(role: RoleName): ReadonlyArray<NavGroup> {
-  const work: NavGroup = {
-    label: 'Work',
-    items: [
-      { label: queueTitleFor(role), href: '/queue', icon: <Icon icon={ListChecks} size="large" /> },
-      { label: 'Home', href: '/', icon: <Icon icon={House} size="large" /> },
-    ],
-  };
-  const review: NavGroup = {
-    label: 'Review',
-    items: [{ label: 'Design system', href: '/design-system', icon: <Icon icon={Palette} size="large" /> }],
-  };
-  return isDesignSystemAvailable() ? [work, review] : [work];
+  const entries = navigationFor(role, { includeHiddenInProduction: isDesignSystemAvailable() });
+  return groupNavigation(entries).map((group) => ({
+    label: group.label,
+    items: group.items.map((item) => ({ label: item.label, href: item.href, icon: <Icon icon={NAV_ICONS[item.icon]} size="large" /> })),
+  }));
 }
 
 /** The signed-in person as the page frame is told about them: the fields of `AuthenticatedUser` that the frame shows, no more. */
