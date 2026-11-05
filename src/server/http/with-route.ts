@@ -62,7 +62,7 @@ export interface RouteOptions<Output extends z.ZodType, Query extends z.ZodType,
   readonly params?: Params;
   /** The answer. Use `z.strictObject` so an unknown key is an error. */
   readonly output: Output;
-  /** Default 200. */
+  /** Default 200. With 204 the answer has no body: the output schema is `z.undefined()` and the handler returns nothing. */
   readonly status?: number;
   handler(context: HandlerContext<z.output<Query>, z.output<Body>, z.output<Params>>): z.input<Output> | Promise<z.input<Output>>;
 }
@@ -76,6 +76,7 @@ export type RouteHandler = (request: Request, context?: NextRouteContext) => Pro
 
 const NO_INPUT = z.undefined();
 const DEFAULT_STATUS = 200;
+const NO_CONTENT_STATUS = 204;
 const UNAUTHORIZED_STATUS = 401;
 
 class InputRefused extends Error {
@@ -103,6 +104,10 @@ function describeFailure(error: unknown): { readonly errorName: string; readonly
 
 function jsonResponse(body: unknown, status: number, requestId: string): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId } });
+}
+
+function noContentResponse(requestId: string): Response {
+  return new Response(null, { status: NO_CONTENT_STATUS, headers: { 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId } });
 }
 
 function queryOf(request: Request): Record<string, string> {
@@ -150,7 +155,13 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
     const result = await options.handler({ user, query, body, params, requestId, request });
     const answer = options.output.safeParse(result);
     if (!answer.success) throw new ResponseSchemaError(options.route, answer.error.issues.map((issue) => issue.path.join('.')));
-    return jsonResponse(answer.data, options.status ?? DEFAULT_STATUS, requestId);
+    const status = options.status ?? DEFAULT_STATUS;
+    if (status === NO_CONTENT_STATUS) {
+      // A 204 has no body: whatever the handler returned would be dropped, so returning anything is a mistake in the code.
+      if (answer.data !== undefined) throw new ResponseSchemaError(options.route, []);
+      return noContentResponse(requestId);
+    }
+    return jsonResponse(answer.data, status, requestId);
   }
 
   return async function handle(request, context) {

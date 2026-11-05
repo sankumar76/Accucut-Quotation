@@ -347,3 +347,31 @@ describe('errors and the shape of the answer', () => {
     expect(JSON.stringify(await problemOf(response))).not.toContain('123.45');
   });
 });
+
+describe('STORY-01.04 AC-5: an answer with no content', () => {
+  const none = z.undefined();
+
+  it('answers 204 with no body, no-store and a request ID, after the same checks as any other route', async () => {
+    const handle = withRoute({ route: '/api/v1/test-all', method: 'POST', status: 204, output: none, handler: () => undefined });
+    const response = await handle(post(undefined));
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
+  });
+
+  it('still refuses a foreign origin and a refused role before it answers', async () => {
+    const handler = vi.fn();
+    const handle = withRoute({ route: '/api/v1/test-lead/[id]', method: 'POST', status: 204, output: none, handler });
+    expect((await handle(post(undefined, { origin: 'https://evil.example' }))).status).toBe(403);
+    mocks.requireUser.mockResolvedValue(ENGINEER);
+    expect((await handle(post(undefined))).status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('a handler that returns something on a 204 route is an error, not a body that cannot be sent', async () => {
+    const handle = withRoute({ route: '/api/v1/test-all', method: 'POST', status: 204, output: z.unknown(), handler: () => ({ leaked: true }) });
+    const response = await handle(post(undefined));
+    expect(response.status).toBe(500);
+  });
+});

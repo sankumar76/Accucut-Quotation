@@ -2,11 +2,14 @@ import type { PasswordHasher } from '../../src/server/auth/password-hasher';
 import type { AttemptPolicy, ReservedAttempt, ThrottleRepository } from '../../src/server/repositories/throttle-repository';
 import {
   normaliseEmail,
+  UserConstraintError,
   type NewUser,
   type UserAccount,
+  type UserChanges,
   type UserCredentials,
   type UserRepository,
   type UserRole,
+  type UserSummary,
 } from '../../src/server/repositories/user-repository';
 
 /**
@@ -29,6 +32,12 @@ export interface FakeUserRepository extends UserRepository {
   readonly lookups: string[];
 }
 
+const ROLE_ORDER: Readonly<Record<UserRole, number>> = { ADMIN: 0, LEAD: 1, ENGINEER: 2 };
+
+function summaryOf(record: FakeUserRecord): UserSummary {
+  return { id: record.id, name: record.name, email: record.email, role: record.role, isActive: record.isActive };
+}
+
 export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): FakeUserRepository {
   const records: FakeUserRecord[] = [];
   const lookups: string[] = [];
@@ -40,6 +49,15 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
     return id;
   };
   initial.forEach(add);
+
+  /** The two rules the database keeps (`uq_users_email`, `uq_users_single_active_admin`), checked as it checks them. */
+  const refuseIfRepeated = (candidate: { readonly id: string | null; readonly email: string; readonly role: UserRole; readonly isActive: boolean }): void => {
+    const others = records.filter((record) => record.id !== candidate.id);
+    if (others.some((record) => record.email === candidate.email)) throw new UserConstraintError('email', { cause: new Error('fake') });
+    if (candidate.role === 'ADMIN' && candidate.isActive && others.some((record) => record.role === 'ADMIN' && record.isActive)) {
+      throw new UserConstraintError('single-active-admin', { cause: new Error('fake') });
+    }
+  };
 
   return {
     records,
@@ -70,7 +88,47 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       );
     },
     hasAnyAdmin: () => Promise.resolve(records.some((record) => record.role === 'ADMIN')),
-    create: (user) => Promise.resolve(add(user)),
+    list: () =>
+      Promise.resolve(
+        records
+          .map(summaryOf)
+          .sort(
+            (a, b) =>
+              Number(b.isActive) - Number(a.isActive) || ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.name.localeCompare(b.name) || a.email.localeCompare(b.email),
+          ),
+      ),
+    findActiveAdmin() {
+      const found = records.find((record) => record.role === 'ADMIN' && record.isActive);
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+    },
+    create(user) {
+      try {
+        refuseIfRepeated({ id: null, email: normaliseEmail(user.email), role: user.role, isActive: true });
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      return Promise.resolve(add(user));
+    },
+    update(id, changes: UserChanges) {
+      const found = records.find((record) => record.id === id);
+      if (found === undefined) return Promise.resolve(null);
+      const next = { name: changes.name ?? found.name, role: changes.role ?? found.role, isActive: changes.isActive ?? found.isActive };
+      try {
+        refuseIfRepeated({ id, email: found.email, role: next.role, isActive: next.isActive });
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (changes.isActive === false) found.sessionVersion += 1;
+      Object.assign(found, next);
+      return Promise.resolve(summaryOf(found));
+    },
+    setPassword(id, passwordHash) {
+      const found = records.find((record) => record.id === id);
+      if (found === undefined) return Promise.resolve(null);
+      Object.assign(found, { passwordHash, mustChangePassword: true });
+      found.sessionVersion += 1;
+      return Promise.resolve(found.email);
+    },
     raiseSessionVersion(id, expectedVersion) {
       const found = records.find((record) => record.id === id);
       if (found === undefined || found.sessionVersion !== expectedVersion) return Promise.resolve(false);
