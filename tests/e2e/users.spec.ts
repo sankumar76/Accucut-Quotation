@@ -78,7 +78,7 @@ test.describe('the list', () => {
 
   test('STD-01: the own row cannot be reset either: the control is disabled and its name says why', async ({ page }) => {
     await openUsers(page);
-    const own = rowOf(page, E2E_ADMIN.name).getByRole('button', { name: /^You cannot reset your own password here/ });
+    const own = rowOf(page, E2E_ADMIN.name).getByRole('button', { name: /^Reset password is not available for your own account/ });
     await expect(own).toBeVisible();
     await expect(own).toBeDisabled();
     await expect(rowOf(page, E2E_ADMIN.name).getByRole('button', { name: `Reset password for ${E2E_ADMIN.name}` })).toHaveCount(0);

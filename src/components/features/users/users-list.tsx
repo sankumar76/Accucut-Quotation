@@ -21,7 +21,8 @@ import { isOpener, type Opener } from './opener';
  */
 
 export const OWN_ACCOUNT_NAME = 'You cannot deactivate your own account';
-export const OWN_PASSWORD_NAME = 'You cannot reset your own password here. Use Change password in the account menu';
+// The name must contain the text the button shows ("Reset password"), WCAG 2.5.3 (axe label-content-name-mismatch).
+export const OWN_PASSWORD_NAME = 'Reset password is not available for your own account. Use Change password in the account menu';
 
 export type RowAction = 'edit' | 'reset' | 'deactivate' | 'activate';
 
