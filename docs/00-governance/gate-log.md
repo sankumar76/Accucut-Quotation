@@ -1766,3 +1766,112 @@ The delivery lead merges PR #71 (test code, code-human). DEF-013 (AQP-197, #69, 
 
 **Risks registered:** none new.
 **Rationale:** The defect is about what a person sees when they press. The person who found it now sees it on the commit under test, and the automated test shows the values are applied. One earlier contrary report has a plausible, unconfirmed cause. It is recorded, given a cheap re-check at a session that will happen anyway, and tied to a decision path if it recurs.
+
+---
+
+## G6 – Peer Review — AQP-188 (STORY-10.13: lazy account menu and drawer; DEF-013 early tap) — 2026-11-05
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #75 at head 6030585, base f5af00a, 24 files. Merge state clean; all three review labels approved.
+    - CI 41978784135 on 6030585: success. Stage 11b, read in the log: `/` 160,642 B, `/queue` 161,755 B (headroom 38,245), `/sign-in` 160,674 B, `not-found` 135,547 B.
+    - AC-10 evidence: run 41974232482 on 2b10890 (the code at 7327fd7 plus a temporary CI edit, reverted in 3142157), 20 runs per width, success.
+  - **Reviews:** `docs/06-reviews/AQP-188/*.md` (main folder, uncommitted), reviewed at 3142157; Jira 10923 to 10925; developer 10927; ux-expert glance 10926.
+  - **My own check:** `git diff 3142157 6030585`. Source: `account-menu-panel.tsx`, `app-shell.tsx`, `use-first-open.ts` (+29 / −5), read in full. Tests: the E2E spec split into `shell-lazy-load.spec.ts` and `shell-first-open.spec.ts`.
+  - **Not done:** no local run.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards and quality APPROVE WITH COMMENTS, performance APPROVE |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | Minors fixed | | ⚠️ | **STD-02:** the 447-line spec is split in two (test code, verified). **QLT-55:** the keyboard first-item focus applies to the mounting open only (`openedByKeyboard` held in a ref). **QLT-56:** closing the drawer, including on widening to 1024 px, also cancels a pending first open (new `cancel` on `useFirstOpen`). Both are product-code changes with E2E tests, so the finding owner confirms them (condition 1) |
+| 4 | AQP-188 AC-1 floor (190,000 B, DL-081) | | ✅ | `/queue` 161,755 B; every signed-in route under 190,000 B |
+| 5 | Planted faults | | ✅ | 17 of 17 caught (QLT-59) |
+| 6 | CI | | ✅ | Green, 301 E2E tests passed |
+
+**Rulings**
+1. **QLT-55 and QLT-56 changed behaviour in product code, so a narrow re-review applies (DL-051), not master's check alone.** It is narrow because the change is about 30 lines and each fix has a test:
+   - reviewer-quality confirms both fixes in `3142157..6030585`;
+   - standards and performance do not re-run. No `.github` file changed, and first-load JS moved by about 115 B.
+   - **One point for quality to look at:** `onOpenAutoFocus` is now passed by spreading an object, to get past Radix's public types. The code comment says the AC-4 E2E fails if a Radix upgrade stops forwarding it.
+2. **QLT-58 is recorded under AC-9 as not weakened.**
+   - `waitUntilAccountMenuIsLive` now waits for `onClick` on the first-load button, which is correct before the first open only.
+   - `design-system-route.test.ts` now names `portal-frame-props.tsx`, where the production gate moved. That is a relocation, not a weakened test.
+3. **STD-01 is a follow-up for the CSP story.** The early-intent inline script must be allowed by a nonce or a SHA-256 hash, **never `'unsafe-inline'`**. The solution-architect writes this into architecture §10 before any CSP work. STD-03, STD-04 and STD-05: no action.
+4. **STD-06: squash merge.** The delivery lead squash-merges, as policy already says, so the temporary CI edit (2b10890) and its revert (3142157) leave no trace on `master`. For future evidence runs, use `workflow_dispatch` or a throwaway PR, never an edit to the required workflow on a story branch.
+5. **The DoR's iPhone hold check of the account trigger moves from "before G6" to G7, together with DL-090's Calculate re-check and DEF-013's real-device tap, in one session.**
+   - Nothing in code review depended on it. Its result can only change the trigger's pressed look or callout, which is a G7-level fix.
+   - Holding G6 for a phone session would cost the delivery lead an extra session for no review value.
+   - This deviation from the DoR is recorded here.
+6. **UX-01 to UX-03 (ux-expert, minor) and the SCR-25 mock-ups in docs PR #76 do not hold G6.** The ux-expert routes the three items.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | reviewer-quality | PR #75, `3142157..6030585` | Confirm QLT-55 and QLT-56 fixed, as a COMMENT review plus Jira note. A new Blocker, Critical or Major goes back to master | Before G7 |
+| 2 | solution-architect | Architecture §10 | STD-01: the CSP allows the early-intent script by nonce or hash, never `'unsafe-inline'` | Before the CSP story reaches Ready |
+
+**G7 evidence (a full QA cycle; DL-091):**
+- **(a)** Every AC with evidence on the final head; CI green, including stage 11b, with every signed-in route ≤ 190,000 B (AC-1).
+- **(b) AC-10 again on the final head.** The 20-run evidence predates the fix round's source change. QA runs the early-tap and first-open specs with `--repeat-each=10 --retries=0` at three widths against the production build: 0 failures, each time-out classified as in DL-089. Overload is repeated, not counted.
+- **(c)** QLT-55 and QLT-56 by hand: a keyboard first open, then a pointer open (focus stays on the menu); and a slow first drawer open, then a widen to 1024 px (no drawer, focus not lost).
+- **(d) One iPhone session with the delivery lead,** answers in their own typed words:
+  - hold the account trigger: the pressed look shows, with no text selection or callout (the DoR item);
+  - after a full reload of `/design-system`, hold Calculate: the darker pressed look (DL-090);
+  - DEF-013: after a full reload of `/queue`, tap "Open menu", then (after another reload) the account trigger, as soon as each appears, three tries each. The drawer or menu opens with no second tap. This is best effort on a fast network; the E2E early-tap tests remain the main evidence.
+- **(e)** QA closes DEF-013 (AQP-197, #69) if (b) and (d) pass.
+
+**Risks registered:**
+- **RISK-020** restated: it falls from 6 to 3 (P 1) when PR #75 merges and stage 11b on `master` shows the headroom.
+- **RISK-022** restated: it closes when PR #75 merges, because both enablers in series will then be done.
+
+**Rationale:** The cut meets its target, about 38 KB of headroom against the 10 KB floor, with no Blocker, Critical or Major. The two behaviour fixes are small but are product code, so the reviewer who found them confirms them. Everything that needs a phone goes into one G7 session.
+
+**AQP-188 G6 conditions verified — 2026-11-05 (master). Result: met; G6 is closed and the story may go to G7.** The head is unchanged at 6030585.
+
+| Condition | Result | Evidence |
+|-----------|--------|----------|
+| 1 reviewer-quality confirms QLT-55 and QLT-56 | ✅ | Review 5780745896 on 6030585; Jira 10930. Both fixed, each with a test that fails on the old code; QLT-57 closed. New items are Info only: QLT-60 (the QLT-56 test's final check is sound) and QLT-61 (below) |
+| 2 STD-01 rule in architecture §10 | ✅ | Architecture v0.18 (main folder, uncommitted; line 1275 and the change log). The CSP allows `EARLY_INTENT_SCRIPT` by SHA-256 hash, never `'unsafe-inline'`. Four points for the CSP story: the hash computed in code; the rendered text equal to the constant; a header test with no `'unsafe-inline'`; AC-10 green with the policy on (Jira 10929). The scrum-master carries them into the CSP story |
+
+**QLT-61 is tracked as GitHub #77** (follow-up, ai-delivery): a typed `onOpenAutoFocus` prop on the shadcn `DropdownMenuContent` wrapper. It is due with the next change to that wrapper or before the next Radix upgrade, and holds no gate.
+**Before the merge:** PR #75 is behind `master` (PR #56 was merged as 8976997; docs PR #76 as 4bfe836). Update it through GitHub, with CI green including stage 11b, before the squash merge after G7. The G7 evidence set in DL-091 is unchanged. DL-090's Calculate re-check now runs on merged code, which is the intent.
+
+---
+
+## G7 – QA Acceptance — AQP-188 (STORY-10.13: lazy account menu and drawer; DEF-013) — 2026-11-05
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #75 at head fb96b29, merge state clean. Since G6 (6030585) there are two commits:
+    - 2e0fac6 merges `master` 4bfe836. It brings in exactly that commit's nine `docs/03-ux/` files (docs PR #76), compared file by file with `gh api`.
+    - fb96b29 adds only `docs/07-qa/AQP-188-test-report.md`.
+    - Product code is unchanged since the G6 check. CI 41995977635 on fb96b29: success.
+  - **QA:** Jira AQP-188 10932; the report.
+  - **Provenance:** the iPhone answers, checked in the session log by role, are nine typed replies between 08:29:29Z and 08:36:42Z (eight "yes", one "No"). They are answers to closed questions, so they are list-wording replies. They stand under DL-007 (1): no price depends on them, and the E2E evidence decides the same points independently.
+  - **Not done:** no run of my own.
+
+| # | DL-091 item | Mandatory | Result | Evidence |
+|---|-------------|-----------|--------|----------|
+| 1 | (a) Every AC on the final head | ✱ | ✅ | AC-1 to AC-10 pass; `/` 160,642 B, `/queue` 161,755 B, `/sign-in` +77 B; CI green with stage 11b |
+| 2 | (b) AC-10 again on the final code, ×10, no retries | ✱ | ✅ | First-open 341 of 341 and lazy-load 501 of 501, with no time-outs to classify |
+| 3 | (c) QLT-55 and QLT-56 by hand | ✱ | ✅ | Both verified |
+| 4 | (d) iPhone session | ✱ | ✅ | All 9 answers as expected. Account trigger held: darker, with no selection or callout (the DoR item). After a full reload, Calculate clearly darker (**DL-090's re-check passes; OBS-4 closed; DEF-010 stays closed**). DEF-013: "Open menu" and the account trigger each opened on the first tap, 3 of 3 |
+| 5 | (e) DEF-013 | ✱ | ✅ | Closes on this decision (AQP-197, #69) |
+| 6 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **DEF-013 (AQP-197, #69) closes, and QA closes it.** The automated early-tap tests are the main evidence. The phone taps confirm the behaviour on a real device.
+2. **DL-090's follow-up is done.** OBS-4 is closed as a stale page, because the darker look held after a full reload. The `touchstart` question stays closed.
+3. **RISK-020 lowered to 3 and RISK-022 closed now, at G7 GO, not at the merge.** Only the delivery lead's squash merge remains, CI on fb96b29 already measures the headroom, and nothing in the PR can change before the merge. **If PR #75 is not merged by the sprint 1 review, both are restored.**
+4. **The PR description restore is recorded.** PR #75's description had been overwritten with PR #76's text at 06:24 UTC. The orchestrator restored the 05:50 version and added a review-round note. A PR description is the Dev Record (CLAUDE.md §7.1), so the delivery lead should read the restored version before merging.
+
+**Merge:** the delivery lead squash-merges PR #75 (STD-06). After it, stage 11b on `master` should show `/queue` near 161,755 B.
+
+**Risks registered:** RISK-020 12 → 6 → 3 (P 1); RISK-022 closed.
+**Rationale:** Every evidence item set at G6 is met on code that has not changed since review. The repeat series ran with no time-outs, and the phone confirmed both the early tap and the earlier unexplained pressed-state report. The JS headroom target is met with room to spare.

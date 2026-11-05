@@ -118,6 +118,8 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-05 | master | G7 AQP-188 (PR #75, fb96b29): GO; DEF-013 closes; DL-090 re-check passed (OBS-4 closed); RISK-020 to 3 and RISK-022 closed at GO, both restored if not merged by the sprint 1 review (DL-092). Squash merge is the delivery lead's | docs/00-governance/ |
+| 2026-11-05 | master | G6 AQP-188 (PR #75, 6030585): CONDITIONAL GO. reviewer-quality confirms QLT-55/56; the iPhone account-trigger check moves to G7 in one session with DL-090 and DEF-013; AC-10 re-run on the final head; STD-01 CSP rule to architecture §10; squash merge (DL-091). RISK-020 to 3 and RISK-022 closed on merge | docs/00-governance/ |
 | 2026-11-04 | master | G7 AQP-183 attempt 2 (PR #56): GO; DEF-008 and DEF-010 close; OBS-4 re-checked once at the next phone session; update from master with stage 11b green before the merge (DL-090) | docs/00-governance/ |
 | 2026-11-04 | master | G7 AQP-186/187 (PR #71, 5680936): GO; one stall under load repeated and not counted; QA's early closure ratified (DL-089). DEF-013 stays open before G8 | docs/00-governance/ |
 | 2026-11-04 | master | G6 AQP-186/187 (PR #71, b3f38ad): GO, fix commit checked by master; G7 evidence set: repeated shell and sign-in specs, a planted fault, ten loaded unit runs (DL-088) | docs/00-governance/ |
