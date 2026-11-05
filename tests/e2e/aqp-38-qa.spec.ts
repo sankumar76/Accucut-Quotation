@@ -5,7 +5,7 @@ import { assertSafeDatabaseTarget } from '../support/db-guard';
 import { createTestHasher } from '../support/builders/user';
 
 import { E2E_ENGINEER, E2E_PASSWORD, expectOnQueue, signInThroughThePage, useFreshAddress } from './support/auth';
-import { expectNoAxeViolations } from './support/design-system';
+import { expectNoAxeViolations, waitUntilAccountMenuIsLive } from './support/design-system';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -216,6 +216,7 @@ test.describe('[AQP-38 AC-4, AC-6] sessions and return addresses in the browser'
       await other.goto('/queue');
       await expect(other.getByRole('heading', { level: 1, name: 'My tasks' })).toBeVisible();
 
+      await waitUntilAccountMenuIsLive(page);
       await page.getByRole('button', { name: /Account menu/ }).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();
       await expect(page).toHaveURL(/\/sign-in$/);

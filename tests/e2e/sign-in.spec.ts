@@ -1,15 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import {
   E2E_ENGINEER,
-  disposableUser,
+  createDisposableUser,
   E2E_LEAD,
   E2E_PASSWORD,
   expectOnQueue,
   signInThroughThePage,
+  unknownEmail,
   useFreshAddress,
 } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilAccountMenuIsLive } from './support/design-system';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -54,7 +55,8 @@ test.describe('SCR-01 at this width (AC-8)', () => {
   test('AC-8: axe finds no violation (WCAG 2.0, 2.1 and 2.2 A and AA), in the default state and with the error shown', async ({ page }, testInfo) => {
     await openSignIn(page);
     await expectNoAxeViolations(page);
-    await signInThroughThePage(page, disposableUser('axe', testInfo.project.name).email, 'a-wrong-password');
+    const person = await createDisposableUser('axe', testInfo);
+    await signInThroughThePage(page, person.email, 'a-wrong-password');
     await expect(noticeOf(page)).toContainText(ERROR_TITLE);
     await expectNoAxeViolations(page);
   });
@@ -135,6 +137,7 @@ test.describe('AC-1: the person lands on their role\'s home', () => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
     await expectOnQueue(page, 'Task queue');
+    await waitUntilAccountMenuIsLive(page);
     await page.getByRole('button', { name: /Account menu/ }).click();
     const menu = page.getByRole('menu');
     await expect(menu).toContainText(E2E_LEAD.name);
@@ -161,12 +164,12 @@ test.describe('the form checks before it sends', () => {
 
 test.describe('AC-2: one message for every failure', () => {
   const cases = [
-    { name: 'a wrong password', email: (screenSize: string) => disposableUser('slip', screenSize).email, password: 'a-wrong-password' },
-    { name: 'an unknown e-mail', email: () => 'nobody.at.all@example.test', password: E2E_PASSWORD },
+    { name: 'a wrong password', email: async (testInfo: TestInfo) => (await createDisposableUser('slip', testInfo)).email, password: 'a-wrong-password' },
+    { name: 'an unknown e-mail', email: (testInfo: TestInfo) => Promise.resolve(unknownEmail(testInfo)), password: E2E_PASSWORD },
   ];
   for (const failure of cases) {
     test(`${failure.name} shows the same message, keeps both fields as typed, and moves focus to the notice`, async ({ page }, testInfo) => {
-      const email = failure.email(testInfo.project.name);
+      const email = await failure.email(testInfo);
       await openSignIn(page);
       await signInThroughThePage(page, email, failure.password);
       const notice = noticeOf(page);
@@ -182,8 +185,8 @@ test.describe('AC-2: one message for every failure', () => {
 });
 
 test.describe('AC-3: five failures block the account', () => {
-  test('the sixth attempt shows the locked message, also for a correct password and also for an unknown e-mail', async ({ page }) => {
-    const email = `locked.${Date.now()}@example.test`;
+  test('the sixth attempt shows the locked message, also for a correct password and also for an unknown e-mail', async ({ page }, testInfo) => {
+    const email = unknownEmail(testInfo);
     await openSignIn(page);
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await signInThroughThePage(page, email, `wrong-password-${attempt}`);
@@ -200,7 +203,8 @@ test.describe('AC-4: sign-out', () => {
   test('clears the session, sends the next request to the sign-in page, and the back button shows nothing protected', async ({ page, context }, testInfo) => {
     // Signing out ends every session of the person, so it is a person of its own, never the Lead the other specs use.
     await openSignIn(page);
-    await signInThroughThePage(page, disposableUser('sign-out', testInfo.project.name).email, E2E_PASSWORD);
+    const person = await createDisposableUser('sign-out', testInfo);
+    await signInThroughThePage(page, person.email, E2E_PASSWORD);
     await expectOnQueue(page, 'My tasks');
 
     const protectedResponse = await page.goto('/queue');
@@ -208,6 +212,7 @@ test.describe('AC-4: sign-out', () => {
     expect(cacheControl).toContain('private');
     expect(cacheControl).toContain('no-store');
 
+    await waitUntilAccountMenuIsLive(page);
     await page.getByRole('button', { name: /Account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/sign-in$/);
