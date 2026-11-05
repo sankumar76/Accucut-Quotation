@@ -250,7 +250,7 @@ function topbar(role, opts = {}) {
   <span class="spacer"></span>
   <a class="bell" href="${bellHref}" aria-label="Overdue tasks: ${u.bell}">${icon('bell', 20)}<span class="count" aria-hidden="true">${u.bell}</span></a>
   ${fo ? '<span class="fo-wrap">' : ''}<details class="usermenu"${open}${fo ? ' data-open-in="default"' : ''}>
-    <summary${fo ? ' aria-haspopup="menu" data-busy-when="acctpending"' : ''}><span class="avatar" aria-hidden="true">${u.initials}</span><span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span><span class="sr-only"> account menu</span></summary>
+    <summary aria-label="Account menu, ${u.initials}, ${u.name}, ${u.role}"${fo ? ' aria-haspopup="menu" data-busy-when="acctpending"' : ''}><span class="avatar" aria-hidden="true">${u.initials}</span> <span class="um-text"><span class="t-body t-strong" style="display:block;line-height:16px">${u.name}</span> <span class="t-label t-muted" style="display:block">${u.role}</span></span><span class="um-chev">${icon('down', 16)}</span></summary>
     <div class="menu-panel" role="menu" aria-label="Account">
       <div class="menu-head"><div class="t-body t-strong">${u.name}</div><div class="t-label t-muted">${u.email}</div><div class="t-label t-muted">${u.role}</div></div>
       <a class="menu-item" role="menuitem" href="SCR-23.html">${icon('key', 18)} Change password</a>
