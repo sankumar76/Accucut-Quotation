@@ -94,7 +94,7 @@ The rules re-checked in v0.2 still agree (BL as the sum of BG; Warn on every 0; 
 | NFR-006 | EPIC-10 | 10.01 secret and repository scan (enabler) |
 | NFR-007 | EPIC-01 | 01.07; 06.07, 06.08, 06.10, 06.12, 06.13 and 05.12 each carry their event |
 | NFR-008 | EPIC-03 | 03.06 |
-| NFR-009 | EPIC-10 | 10.10 (AQP-169, the NFR-009 guards; moved from 10.09 on 2026-11-03, DL-056) and 10.13 (AQP-188, the first-load headroom cut, an enabler added 2026-11-04, DL-080, DL-081) |
+| NFR-009 | EPIC-10 | 10.10 (AQP-169, the NFR-009 guards; moved from 10.09 on 2026-11-03, DL-056), 10.13 (AQP-188, the first-load headroom cut, an enabler added 2026-11-04, DL-080, DL-081) and 10.14 (AQP-199, the CI feedback time cut, an enabler added 2026-11-05, DL-095, DL-097) |
 | NFR-010 | EPIC-10, EPIC-07 | 10.09 (load); 07.05 (export) |
 | NFR-011 | EPIC-10 | 10.09 |
 | NFR-012 | EPIC-10 | 10.09 (needs the web address, Q-18) |
@@ -179,6 +179,15 @@ Counts: Critical 0. Major open 0. Minor open 8 (CR-13, 16, 17, 18, 27, 28, 31, 3
 | CR-41 | Major | AQP-188 AC-9 ends "The Engineer canary scan finds 0", but no canary scan exists at `master`: story 01.03 (AQP-57) builds it, 01.03 is now in the stretch after 01.02, and AQP-188 is not blocked by it (every other story that uses the scan is). The sentence cannot be verified at G7. The testing note's path `tests/security/canary-scan.spec.ts` exists nowhere. Raised by the product-owner, who passed it on the first two reads | solution-architect (wording); scrum-master (applies) | **Closed 2026-11-04** (revision 6): the solution-architect's option A (10887), a unit test of the layout props, with real test names; verified against `origin/master` 9d924a1 |
 
 Counts after the third re-validation, 2026-11-04: Critical 0. Major open 0 (CR-39 and CR-41 closed). Minor open 9 (the 8 above and CR-40; CR-38 closed).
+
+### 9.4 Issues first raised on 2026-11-05 (AQP-199)
+
+| ID | Rating | Issue | Owner | Status now |
+|----|--------|-------|-------|------------|
+| CR-42 | Major | AQP-199 AC-7 (the "p95 over 9 minutes" line, written only until the story merges) and AC-1 ("runs made after the merge") need a merge point the nightly step can read. The story says "the mechanism is the architect's"; test strategy 10.3 and 10.5, architecture 9.2 and comment 10968 give none, and 10.3 does not describe the 9-minute line (DL-095). `ci-feedback-time.ts` has no such notion | solution-architect (mechanism, 10.3 wording); scrum-master (applies) | **Closed 2026-11-05** (revision 3, read back by the product-owner). The architect's ruling (10976, test strategy 10.3): no merge detection; the line is written whenever the p95 is over 540 s, with before-merge and after-merge wording, and the step reports the run count and the start time and head commit of the oldest and newest runs. AC-1 is read from the first report whose oldest counted run started after the merge commit |
+| CR-43 | Minor | Test strategy rows 33 and 387 and test plan R-e2e say critical journeys run at all three widths; test strategy 10.5 moves tests that read no layout to one width, including the sign-in landing (UJ-01), with no pointer from those rows. AQP-199 sub-task titles (AQP-200, 204, 205) are older than the description. AC-2 compares with the last five `master` runs, not a fixed base commit | solution-architect; qa-engineer; scrum-master | **Part closed 2026-11-05:** the sub-task titles are aligned (AQP-200, 203, 204, 205); AC-2 has a fixed baseline (first push plus 2 re-runs, then head plus 2 re-runs, no merge from `master` between); the focus question is ruled (10976, test strategy 10.5). **Still open, Minor, before AQP-199 reaches G6:** test strategy rows 33 and 387 and the test plan R-e2e carry no pointer to 10.5 (solution-architect, qa-engineer); the exact 9-minute line reads "the shard step of test strategy 10.5" in AC-7 but "of section 10.5" in test strategy 10.3, so the architect aligns 10.3 to the AC |
+
+Checked and consistent: NFR-009 (limits unchanged; the 5:00 and 7:00 targets are margin, PRD 13.10 and release plan 3.9), NFR-016 (every layout, focus, touch and axe-per-width test stays at three widths; the one-width tests are server rules and the helper), test strategy 10.5 and architecture 9.2 against the story and the real specs, the required check name against `ci-workflow.test.ts`, sprint plan v0.7 (committed 54 of 55, stretch 32, planned 86), DL-097. Counts after 2026-11-05: Critical 0. Major open 1 (CR-42, one story). Minor open 10. **After the AQP-199 re-check, 2026-11-05: Critical 0. Major open 0 (CR-42 closed). Minor open 10 (CR-43 narrowed to the two items above).**
 
 ## 10. Open inputs and what they gate
 
