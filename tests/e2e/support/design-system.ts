@@ -135,9 +135,13 @@ export async function waitUntilHydrated(page: Page, selector: string, handler = 
   );
 }
 
-/** The account menu of the top bar opens on pointer down (Radix), so that is the handler that must be there. */
+/**
+ * The account trigger of the top bar is a plain button until its first open (AQP-188), so its click handler is the one that
+ * must be there. (Once the menu has loaded, the Radix trigger opens on pointer down; a test that opens the menu again does
+ * not need this wait.)
+ */
 export async function waitUntilAccountMenuIsLive(page: Page): Promise<void> {
-  await waitUntilHydrated(page, 'button[aria-label^="Account menu"]', 'onPointerDown');
+  await waitUntilHydrated(page, 'button[aria-label^="Account menu"]', 'onClick');
 }
 
 /** Waits for the menu button to be live (see `waitUntilHydrated`), for a test that reaches it by keyboard. */
