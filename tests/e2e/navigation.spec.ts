@@ -135,6 +135,13 @@ test.describe('the system pages (AC-8, AC-9)', () => {
   ]) {
     test(`AC-8, AC-9: the card of "${variant.name}" fits every width, has an h1 and one 44 px action, and passes axe`, async ({ page }) => {
       await page.goto('/there-is-no-such-page');
+      // Change the words only after React has hydrated the card: a change made before it is undone when React takes the page
+      // over (it re-renders what the server sent). React marks every node it has hydrated with a `__reactProps$` property,
+      // the same signal `waitUntilHydrated` reads for a control (QLT-50 names the dependency on that internal).
+      await page.waitForFunction(() => {
+        const heading = document.querySelector('main h1');
+        return heading !== null && Object.keys(heading).some((key) => key.startsWith('__reactProps$'));
+      });
       await page.evaluate(({ title, text }) => {
         const heading = document.querySelector('main h1');
         const sentence = document.querySelector('main p');
