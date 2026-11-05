@@ -21,6 +21,7 @@ import { isOpener, type Opener } from './opener';
  */
 
 export const OWN_ACCOUNT_NAME = 'You cannot deactivate your own account';
+export const OWN_PASSWORD_NAME = 'You cannot reset your own password here. Use Change password in the account menu';
 
 export type RowAction = 'edit' | 'reset' | 'deactivate' | 'activate';
 
@@ -78,9 +79,16 @@ function RowActions({ user, currentUserId, busyUserId, pendingOpener, onAction, 
       <Button variant={variant} size={size} data-action="edit" aria-label={ACTION_NAMES.edit(user)} {...busyFor('edit')} onClick={press('edit')}>
         {label('Edit', Pencil)}
       </Button>
-      <Button variant={variant} size={size} data-action="reset" aria-label={ACTION_NAMES.reset(user)} {...busyFor('reset')} onClick={press('reset')}>
-        {label('Reset password', KeyRound)}
-      </Button>
+      {own ? (
+        // Disabled on screen and refused by the server (STD-01): the Admin's own password is changed with the current one.
+        <Button variant={variant} size={size} data-action="reset" disabled aria-label={OWN_PASSWORD_NAME}>
+          {label('Reset password', KeyRound)}
+        </Button>
+      ) : (
+        <Button variant={variant} size={size} data-action="reset" aria-label={ACTION_NAMES.reset(user)} {...busyFor('reset')} onClick={press('reset')}>
+          {label('Reset password', KeyRound)}
+        </Button>
+      )}
       {own ? (
         // Disabled on screen and refused by the server (AC-4). The name says why, because a disabled button can not be asked.
         <Button variant={variant} size={size} data-action="deactivate" disabled aria-label={OWN_ACCOUNT_NAME}>

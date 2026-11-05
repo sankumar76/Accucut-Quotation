@@ -99,16 +99,16 @@ export function UserFormDialog({ open, user, isOwnRow, onClose, onSaved, onAdmin
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
-        <UserForm user={user} isOwnRow={isOwnRow} onSaved={onSaved} onAdminTaken={onAdminTaken} />
+        <UserForm user={user} isOwnRow={isOwnRow} onClose={onClose} onSaved={onSaved} onAdminTaken={onAdminTaken} />
       </DialogContent>
     </Dialog>
   );
 }
 
-type FormProps = Pick<UserFormDialogProps, 'user' | 'isOwnRow' | 'onSaved' | 'onAdminTaken'>;
+type FormProps = Pick<UserFormDialogProps, 'user' | 'isOwnRow' | 'onClose' | 'onSaved' | 'onAdminTaken'>;
 
 /** The form inside the panel. It mounts when the dialog opens and goes when it closes, so every opening starts empty. */
-function UserForm({ user, isOwnRow, onSaved, onAdminTaken }: FormProps) {
+function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps) {
   const adding = user === null;
   const [values, setValues] = useState<Values>(() => initialValues(user));
   const [errors, setErrors] = useState<Errors>({});
@@ -143,7 +143,8 @@ function UserForm({ user, isOwnRow, onSaved, onAdminTaken }: FormProps) {
 
     if (!adding) {
       const changes = changesOf(user, values);
-      if (Object.keys(changes).length === 0) return onSaved(user, 'edited');
+      // Nothing changed: close with no request and no message (UX spec v0.14, SCR-14 Edit user).
+      if (Object.keys(changes).length === 0) return onClose();
       return send(updateUser(user.id, changes), 'edited');
     }
     return send(createUser({ name: values.name.trim(), email: values.email.trim(), role: values.role, password: values.password }), 'added');

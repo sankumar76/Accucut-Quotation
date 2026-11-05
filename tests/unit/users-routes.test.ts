@@ -179,6 +179,17 @@ describe('POST /api/v1/users/{id}/password-reset (AC-5)', () => {
     expect(harness.users.records.find((entry) => entry.id === harness.targetId)).toMatchObject({ mustChangePassword: true, sessionVersion: before + 1 });
   });
 
+  it('STD-01: refuses the Admin their own password with 409 CANNOT_RESET_OWN_PASSWORD, whatever the screen shows', async () => {
+    const own = harness.users.records.find((entry) => entry.id === harness.idOf.ADMIN);
+    const before = JSON.stringify(own);
+    const response = await RESET(request('POST', { password: SECRET_LOOKING }), withId(harness.idOf.ADMIN));
+    expect(response.status).toBe(409);
+    const text = await response.text();
+    expect(record.parse(JSON.parse(text))['code']).toBe('CANNOT_RESET_OWN_PASSWORD');
+    expect(text).not.toContain(SECRET_LOOKING);
+    expect(JSON.stringify(harness.users.records.find((entry) => entry.id === harness.idOf.ADMIN))).toBe(before);
+  });
+
   it('needs a non-empty password and does not echo what was sent', async () => {
     const empty = await RESET(request('POST', { password: '' }), withId(harness.targetId));
     expect(empty.status).toBe(422);

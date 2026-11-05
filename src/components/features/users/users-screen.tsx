@@ -12,7 +12,7 @@ import { ADMIN_ALREADY_ACTIVE_CODE } from '@/lib/errors';
 import { listUsers, updateUser, type UserRow } from '@/lib/users/users-client';
 
 import { findOpenerElement, isOpener, type DialogKind, type Opener } from './opener';
-import { FAILED_ACTIVATE_MESSAGE, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, FAILED_REFRESH_MESSAGE, FAILED_REFRESH_TITLE, TRY_AGAIN_BODY } from './texts';
+import { dialogFailureTitle, FAILED_ACTIVATE_MESSAGE, FAILED_DIALOGS_MESSAGE, FAILED_REFRESH_MESSAGE, FAILED_REFRESH_TITLE, TRY_AGAIN_BODY } from './texts';
 import type { UsersDialogsProps } from './users-dialogs';
 import { UsersList, type RowAction } from './users-list';
 
@@ -58,6 +58,7 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const opener = useRef<Opener | null>(null);
   const refocus = useRef<Opener | null>(null);
+  const failureNotice = useRef<HTMLDivElement>(null);
   const first = useFirstOpen<UsersDialogsProps>({ id: 'users-dialogs', load: loadDialogs });
 
   // A list that changed may have moved the button focus returned to: put focus back on it once the new list is drawn.
@@ -66,6 +67,11 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
     findOpenerElement(refocus.current)?.focus();
     refocus.current = null;
   }, [users]);
+
+  // A notice that is off-screen is brought into view; one already in view does not move (UX spec v0.14, SCR-25).
+  useEffect(() => {
+    if (first.failed) failureNotice.current?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+  }, [first.failed]);
 
   function openDialog(kind: DialogKind, person: UserRow | null, from: Opener, byKeyboard: boolean): void {
     // A second press while the first is loading does nothing (UX spec 7.3.1 rule 11): no second request, no second target.
@@ -146,9 +152,11 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
         }
       />
       {first.failed ? (
-        <Notice tone="danger" title={FAILED_DIALOGS_TITLE}>
-          {FAILED_DIALOGS_MESSAGE}
-        </Notice>
+        <div ref={failureNotice}>
+          <Notice tone="danger" title={dialogFailureTitle(open)}>
+            {FAILED_DIALOGS_MESSAGE}
+          </Notice>
+        </div>
       ) : null}
       {adminNotice === null ? null : (
         <Notice tone="danger" title={adminNotice.name === null ? 'There is already an active Admin.' : `There is already an active Admin: ${adminNotice.name}.`}>

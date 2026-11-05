@@ -1,3 +1,5 @@
+import type { DialogKind } from './opener';
+
 /**
  * The words of SCR-14 that more than one component says (UX spec section 6, "SCR-14 Users"). The sentences of the password
  * rule (10 to 128 characters, a number and a symbol; FR-098) are left out of the two hints until story 01.05 applies the
@@ -17,5 +19,11 @@ export const FAILED_ACTIVATE_MESSAGE = 'We could not activate the user.';
 export const FAILED_REFRESH_TITLE = 'We could not refresh the list.';
 export const FAILED_REFRESH_MESSAGE = 'The change was saved. Reload the page to see it.';
 export const FAILED_DIALOGS_TITLE = 'The form did not open.';
-export const FAILED_DIALOGS_MESSAGE = 'Check your connection and press the button again.';
+export const FAILED_CONFIRMATION_TITLE = 'The confirmation did not open.';
+export const FAILED_DIALOGS_MESSAGE = 'Check your connection and try again.';
 export const TRY_AGAIN_BODY = 'Check your connection and try again. Nothing was changed.';
+
+/** The title of the notice shown when the code of a dialog did not arrive: the Deactivate dialog is a confirmation, the others are forms (UX spec v0.14, SCR-25). */
+export function dialogFailureTitle(kind: DialogKind | null): string {
+  return kind === 'deactivate' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE;
+}

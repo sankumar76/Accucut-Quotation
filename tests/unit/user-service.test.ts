@@ -4,6 +4,7 @@ import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundEr
 import { accountThrottleKey } from '@/server/auth/throttle-key';
 import { UserConstraintError, type UserRepository } from '@/server/repositories/user-repository';
 import {
+  CANNOT_RESET_OWN_PASSWORD_CODE,
   CANNOT_CHANGE_OWN_ROLE_CODE,
   CANNOT_DEACTIVATE_OWN_ACCOUNT_CODE,
   createUserService,
@@ -208,7 +209,7 @@ describe('AC-4: the Admin cannot lock themself out', () => {
 describe('AC-5: resetting a password', () => {
   it('stores the new password as a hash, asks for a change at the next sign-in and ends the open sessions', async () => {
     const before = defined(users.records.find((record) => record.id === engineerId)).sessionVersion;
-    await service.resetPassword(engineerId, 'temporary-password-1');
+    await service.resetPassword(adminId, engineerId, 'temporary-password-1');
     const stored = defined(users.records.find((record) => record.id === engineerId));
     expect(stored.passwordHash).toBe('hash:temporary-password-1');
     expect(stored.mustChangePassword).toBe(true);
@@ -219,26 +220,39 @@ describe('AC-5: resetting a password', () => {
     const key = accountThrottleKey(KEY_SECRET, 'engineer@example.test');
     const blockedUntil = new Date('2026-11-05T10:00:00.000Z');
     throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil });
-    await service.resetPassword(engineerId, 'temporary-password-1');
+    await service.resetPassword(adminId, engineerId, 'temporary-password-1');
     expect(throttles.rows.get(key)).toMatchObject({ failures: 0, blockedUntil: null });
   });
 
   it('leaves everyone else blocked: only that person account key is cleared', async () => {
     const other = accountThrottleKey(KEY_SECRET, 'lead@example.test');
     throttles.rows.set(other, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') });
-    await service.resetPassword(engineerId, 'temporary-password-1');
+    await service.resetPassword(adminId, engineerId, 'temporary-password-1');
     expect(throttles.rows.get(other)?.failures).toBe(5);
   });
 
   it('answers not found for an ID nobody has, and hashes nothing', async () => {
-    const error = await refusal(service.resetPassword('00000000-0000-4000-8000-0000000000ff', 'temporary-password-1'));
+    const error = await refusal(service.resetPassword(adminId, '00000000-0000-4000-8000-0000000000ff', 'temporary-password-1'));
     expect(error).toBeInstanceOf(NotFoundError);
+    expect(hasher.hashed).toEqual([]);
+  });
+
+  it('STD-01: refuses the Admin their own password through this route, with 409, and changes nothing', async () => {
+    const before = { ...defined(users.records.find((record) => record.id === adminId)) };
+    const error = await refusal(service.resetPassword(adminId, adminId, 'temporary-password-1'));
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(error).toMatchObject({ httpStatus: 409, code: CANNOT_RESET_OWN_PASSWORD_CODE });
+    expect(defined(users.records.find((record) => record.id === adminId))).toMatchObject({
+      passwordHash: before.passwordHash,
+      mustChangePassword: before.mustChangePassword,
+      sessionVersion: before.sessionVersion,
+    });
     expect(hasher.hashed).toEqual([]);
   });
 
   it('works for a deactivated person too: they can be activated afterwards', async () => {
     await service.update(adminId, engineerId, { isActive: false });
-    await service.resetPassword(engineerId, 'temporary-password-1');
+    await service.resetPassword(adminId, engineerId, 'temporary-password-1');
     expect(defined(users.records.find((record) => record.id === engineerId)).mustChangePassword).toBe(true);
   });
 });

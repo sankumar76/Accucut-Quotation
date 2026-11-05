@@ -152,7 +152,7 @@ describe('AC-1: adding, listing, editing', () => {
 
   it('answers not found for a well-formed ID nobody has', async () => {
     await expect(service.update(adminId, '00000000-0000-4000-8000-000000000000', { name: 'Nobody' })).rejects.toBeInstanceOf(NotFoundError);
-    await expect(service.resetPassword('00000000-0000-4000-8000-000000000000', 'x1!')).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.resetPassword(adminId, '00000000-0000-4000-8000-000000000000', 'x1!')).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -180,6 +180,15 @@ describe('AC-4: the Admin cannot lock themself out', () => {
     await expect(service.update(adminId, adminId, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
     await expect(service.update(adminId, adminId, { role: 'LEAD' })).rejects.toBeInstanceOf(ConflictError);
     expect(await row(adminId)).toMatchObject({ role: 'ADMIN', is_active: true });
+  });
+
+  it('STD-01: refuses, with 409, to reset their own password, and the hash and session are as they were', async () => {
+    const before = await row(adminId);
+    await expect(service.resetPassword(adminId, adminId, 'invented-temporary-password-9')).rejects.toMatchObject({
+      httpStatus: 409,
+      code: 'CANNOT_RESET_OWN_PASSWORD',
+    });
+    expect(await row(adminId)).toMatchObject({ password_hash: before.password_hash, session_version: before.session_version, must_change_password: before.must_change_password });
   });
 });
 
@@ -226,7 +235,7 @@ describe('AC-5: resetting a password', () => {
     const blocked = await db.owner.query<{ blocked_until: Date | null }>('SELECT blocked_until FROM login_throttles WHERE key_hash = $1', [key]);
     expect(blocked.rows[0]?.blocked_until).not.toBeNull();
 
-    await service.resetPassword(person.id, 'invented-temporary-password-9');
+    await service.resetPassword(adminId, person.id, 'invented-temporary-password-9');
 
     const after = await row(person.id);
     expect(after.password_hash).not.toBe(before.password_hash);
@@ -243,7 +252,7 @@ describe('AC-5: resetting a password', () => {
     await service.create(newUser('still.blocked'));
     const other = await service.create(newUser('reset.someone.else'));
     for (let attempt = 0; attempt < 5; attempt += 1) await signIn('still.blocked@example.test', 'wrong-password');
-    await service.resetPassword(other.id, 'invented-temporary-password-9');
+    await service.resetPassword(adminId, other.id, 'invented-temporary-password-9');
     expect(await signIn('still.blocked@example.test', 'invented-first-password-1')).toEqual({ status: 'refused', reason: 'locked' });
   });
 });

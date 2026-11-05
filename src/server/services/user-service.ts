@@ -33,6 +33,7 @@ export const EMAIL_TAKEN_CODE = 'EMAIL_TAKEN';
 export const EMAIL_TAKEN_MESSAGE = 'A user with this e-mail already exists.';
 export const CANNOT_CHANGE_OWN_ROLE_CODE = 'CANNOT_CHANGE_OWN_ROLE';
 export const CANNOT_DEACTIVATE_OWN_ACCOUNT_CODE = 'CANNOT_DEACTIVATE_OWN_ACCOUNT';
+export const CANNOT_RESET_OWN_PASSWORD_CODE = 'CANNOT_RESET_OWN_PASSWORD';
 const USER_NOT_FOUND_MESSAGE = 'User not found.';
 
 export interface NewUserInput {
@@ -56,7 +57,8 @@ export interface UserService {
   create(input: NewUserInput): Promise<UserSummary>;
   /** `actorId` is the Admin making the change; `changes` has at least one field (the route's schema sees to that). */
   update(actorId: string, targetId: string, changes: UserChanges): Promise<UserSummary>;
-  resetPassword(targetId: string, password: string): Promise<void>;
+  /** `actorId` is the Admin resetting; resetting their own password is refused (409). */
+  resetPassword(actorId: string, targetId: string, password: string): Promise<void>;
 }
 
 /** Would the person be an active Admin after the change? */
@@ -119,7 +121,10 @@ export function createUserService({ users, throttles, hasher, keySecret }: UserS
       return updated;
     },
 
-    async resetPassword(targetId, password) {
+    async resetPassword(actorId, targetId, password) {
+      // The Admin's own password is changed with the current one, on the account page (story 01.05), not by a reset that
+      // needs no proof: a stolen session could otherwise take the account over (STD-01).
+      if (actorId === targetId) throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
       if ((await users.findAccountById(targetId)) === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
       const email = await users.setPassword(targetId, await hasher.hash(password));
       if (email === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);

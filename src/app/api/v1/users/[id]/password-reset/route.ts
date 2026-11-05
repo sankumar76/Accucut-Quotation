@@ -17,8 +17,8 @@ export const POST = withRoute({
   params: userIdParamsSchema,
   body: resetPasswordBodySchema,
   output: z.undefined(),
-  handler: async ({ params, body }) => {
-    await getUserService().resetPassword(params.id, body.password);
+  handler: async ({ user, params, body }) => {
+    await getUserService().resetPassword(user.id, params.id, body.password);
     return undefined;
   },
 });
