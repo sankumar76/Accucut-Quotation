@@ -9,6 +9,7 @@ import {
   REFLOW_WIDTH,
   TABLET_MIN_WIDTH,
   tokenColour,
+  waitUntilAccountMenuIsLive,
   widthOf,
 } from './support/design-system';
 
@@ -98,6 +99,7 @@ test.describe('design system page, every width', () => {
 
   test('AC-8: axe finds 0 violations with the account menu open, and Escape returns focus to its button', async ({ page }) => {
     await page.goto(PAGE);
+    await waitUntilAccountMenuIsLive(page);
     await page.getByRole('button', { name: /Account menu/ }).click();
     await expect(page.getByRole('menu')).toBeVisible();
     await expectNoAxeViolations(page);

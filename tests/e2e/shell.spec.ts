@@ -9,6 +9,7 @@ import {
   isDesktopProject,
   PAGE,
   openDrawer,
+  waitUntilMenuButtonIsLive,
   expectNoAxeViolations,
   ROW_TARGET,
   TOUCH_TARGET,
@@ -111,8 +112,25 @@ test.describe('menu drawer (below 1024 px)', () => {
     expect((await drawer.boundingBox())?.width ?? 0).toBeLessThanOrEqual(drawerWidth + SUB_PIXEL_TOLERANCE);
   });
 
+  test('DEF-011: the drawer opens even when the page\'s scripts arrive late, because the click waits for the page to be interactive', async ({ page }) => {
+    // Every script of the page arrives 1.5 s late, and the test goes on as soon as the HTML is in: the button is on
+    // screen as plain HTML and React has not hydrated it. A click made now is lost (the original fault); `openDrawer`
+    // must wait for hydration and then open the drawer. The delay is the scenario, not a limit on speed.
+    const SCRIPT_DELAY_MILLISECONDS = 1_500;
+    await page.route(/\/_next\/static\/.*\.js/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, SCRIPT_DELAY_MILLISECONDS));
+      await route.continue();
+    });
+    await page.goto(PAGE, { waitUntil: 'commit' });
+    await expect(page.getByRole('button', { name: 'Open menu' })).toBeVisible();
+    const drawer = await openDrawer(page);
+    await expect(drawer.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  });
+
   test('AC-4, AC-8: the menu button, the drawer and the skip link work by keyboard only', async ({ page }) => {
     await page.goto(PAGE);
+    // Focus works on the server's HTML, but Enter on the button is a click, and a click before hydration is lost (DEF-011).
+    await waitUntilMenuButtonIsLive(page);
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
 

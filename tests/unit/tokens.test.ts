@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { contrastRatio } from '@/lib/contrast';
 import { COLOUR_TOKENS, CONTRAST_PAIRS, type StatedContrastPair } from '@/lib/design-tokens';
@@ -104,19 +104,35 @@ describe('design tokens, AC-1', () => {
         return /\.(tsx?|css)$/.test(name) ? [path] : [];
       });
     }
-    const files = sourceFiles(join(ROOT, 'src')).filter((path) => relative(ROOT, path).replaceAll('\\', '/') !== 'src/app/globals.css');
+
+    /**
+     * Every source file outside globals.css, read once. The walk and the reads run in a hook (120 s hook limit,
+     * vitest.config.ts) and not in the tests, because on a loaded machine reading the whole tree took longer than a
+     * test's own 5 s (DEF-012, test strategy section 10). The tests only match text that is already in memory.
+     */
+    let sources: ReadonlyArray<{ readonly label: string; readonly lines: ReadonlyArray<string> }> = [];
+    beforeAll(() => {
+      sources = sourceFiles(join(ROOT, 'src'))
+        .map((path) => ({ path, label: relative(ROOT, path).replaceAll('\\', '/') }))
+        .filter(({ label }) => label !== 'src/app/globals.css')
+        .map(({ path, label }) => ({ label, lines: readFileSync(path, 'utf8').split(/\r?\n/) }));
+    });
 
     const HEX_COLOUR = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/;
     const COLOUR_FUNCTION = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(/;
     const PIXEL_FONT_SIZE = /text-\[\s*\d+(?:\.\d+)?px\s*\]|font-size\s*:\s*\d|fontSize\s*:/;
 
     function offences(pattern: RegExp): string[] {
-      return files.flatMap((path) =>
-        readFileSync(path, 'utf8')
-          .split(/\r?\n/)
-          .flatMap((text, index) => (pattern.test(text) ? [`${relative(ROOT, path).replaceAll('\\', '/')}:${index + 1}: ${text.trim()}`] : [])),
+      return sources.flatMap(({ label, lines }) =>
+        lines.flatMap((line, index) => (pattern.test(line) ? [`${label}:${index + 1}: ${line.trim()}`] : [])),
       );
     }
+
+    it('AC-1: the scan reads the source tree (so an empty scan cannot pass for a clean one)', () => {
+      expect(sources.length).toBeGreaterThan(50);
+      expect(sources.some(({ label }) => label === 'src/lib/design-tokens.ts')).toBe(true);
+      expect(sources.some(({ label }) => label === 'src/app/globals.css')).toBe(false);
+    });
 
     it('AC-1: finds 0 hex colours in src outside globals.css', () => {
       expect(offences(HEX_COLOUR)).toEqual([]);
