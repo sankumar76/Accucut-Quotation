@@ -37,7 +37,7 @@ const normalise = (text: string): string =>
     .trim();
 
 /** The text the trigger shows at this width: `innerText` leaves out what `display: none` hides (the name and role below 768 px). */
-const visibleTextOf = (trigger: Locator): Promise<string> => trigger.evaluate((element) => (element as HTMLElement).innerText);
+const visibleTextOf = (trigger: Locator): Promise<string> => trigger.evaluate((element) => (element instanceof HTMLElement ? element.innerText : ''));
 
 async function expectLabelInName(trigger: Locator, width: number): Promise<void> {
   await expect(trigger).toHaveAccessibleName(NAME_PATTERN);
