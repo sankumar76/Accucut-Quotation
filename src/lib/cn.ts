@@ -3,19 +3,21 @@ import { extendTailwindMerge } from 'tailwind-merge';
 
 /**
  * The theme's own text sizes (`text-heading`, `text-sub`, `text-body`, `text-label`) and its 4-point spacing
- * (`p-s-1` to `p-s-7`), as named in `src/app/globals.css`. `tailwind-merge` does not know custom names: without
+ * (`p-s-1` to `p-s-7`) and shadows (`shadow-card`, `shadow-overlay`, `shadow-pressed`), as named in `src/app/globals.css`. `tailwind-merge` does not know custom names: without
  * them it reads `text-body` as a colour and drops it when a colour follows (architect ruling on AQP-28, Jira
  * 10705). `tests/unit/cn.test.ts` reads the token file and fails if a name is added there and not here.
  */
 export const THEME_TEXT_SIZES = ['heading', 'sub', 'body', 'label'] as const;
 export const THEME_SPACING = ['s-1', 's-2', 's-3', 's-4', 's-5', 's-6', 's-7'] as const;
 
+export const THEME_SHADOWS = ['card', 'overlay', 'pressed'] as const;
+
 const mergeClasses = extendTailwindMerge({
   extend: {
     theme: {
       text: [...THEME_TEXT_SIZES],
       spacing: [...THEME_SPACING],
-      shadow: ['card', 'overlay'],
+      shadow: [...THEME_SHADOWS],
       animate: ['shimmer', 'sheet-in', 'sheet-out', 'fade-in', 'fade-out'],
     },
   },

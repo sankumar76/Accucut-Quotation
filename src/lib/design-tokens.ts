@@ -23,7 +23,7 @@ export interface ColourToken {
 
 export const COLOUR_TOKENS = [
   { name: '--primary', label: 'Primary (logo red)', use: 'Main buttons, active markers, brand name' },
-  { name: '--primary-hover', label: 'Primary hover', use: 'Button hover and pressed' },
+  { name: '--primary-hover', label: 'Primary hover', use: 'Primary button hover' },
   { name: '--primary-ink', label: 'Primary ink', use: 'Red used as text or a link' },
   { name: '--nav', label: 'Graphite (menu)', use: 'Side menu, focus ring, dark badge' },
   { name: '--ink', label: 'Ink', use: 'Body text' },

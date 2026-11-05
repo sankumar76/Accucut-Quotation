@@ -61,6 +61,7 @@
   --z-skip-link: 100;
   --shadow-1: 0 1px 2px rgba(23, 24, 28, 0.06), 0 1px 3px rgba(23, 24, 28, 0.06);
   --shadow-2: 0 12px 32px rgba(23, 24, 28, 0.22);
+  --shadow-pressed: inset 0 2px 4px rgba(23, 24, 28, 0.28);
 
   /* Colour: "Red Leads" */
   --bg: #f4f4f5;
@@ -78,6 +79,7 @@
 
   --primary: #de3030;
   --primary-hover: #bf2626;
+  --primary-pressed: #7f1616;
   --primary-ink: #b52424;
   --primary-soft: #fdecec;
   --primary-line: #f2b8b8;
@@ -94,6 +96,7 @@
 
   --danger: #b3261e;
   --danger-ink: #8f1c13;
+  --danger-pressed: #520f09;
   --danger-soft: #fcedeb;
   --danger-line: #f0b3ad;
 
@@ -149,6 +152,7 @@
   --color-nav-muted: var(--nav-muted);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
+  --color-primary-pressed: var(--primary-pressed);
   --color-primary-ink: var(--primary-ink);
   --color-primary-soft: var(--primary-soft);
   --color-primary-line: var(--primary-line);
@@ -162,6 +166,7 @@
   --color-success-line: var(--success-line);
   --color-danger: var(--danger);
   --color-danger-ink: var(--danger-ink);
+  --color-danger-pressed: var(--danger-pressed);
   --color-danger-soft: var(--danger-soft);
   --color-danger-line: var(--danger-line);
   --color-info-ink: var(--info-ink);
@@ -208,6 +213,9 @@
 
   --shadow-card: var(--shadow-1);
   --shadow-overlay: var(--shadow-2);
+  /* Same name as the :root token, like the radii: the unlayered :root value wins and this line only registers the
+     `shadow-pressed` utility (pressed buttons, UX spec 7.3.1). */
+  --shadow-pressed: var(--shadow-pressed);
 
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-sheet-in: sheet-in 200ms ease-out;

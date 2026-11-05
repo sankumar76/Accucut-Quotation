@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { cn, THEME_SPACING, THEME_TEXT_SIZES } from '@/lib/cn';
+import { cn, THEME_SHADOWS, THEME_SPACING, THEME_TEXT_SIZES } from '@/lib/cn';
 
 /**
  * The architect's ruling on AQP-28 (Jira 10705, item 2): `cn` is `clsx` plus `tailwind-merge`, configured with this
@@ -65,6 +65,18 @@ describe('cn is configured for every theme token', () => {
   it('registers exactly the spacing steps of the token file (the s-1 to s-7 scale)', () => {
     const scale = themeNames('spacing').filter((name) => /^s-\d+$/.test(name));
     expect([...THEME_SPACING].sort()).toEqual(scale.sort());
+  });
+
+  it('registers exactly the shadows of the token file (card, overlay, pressed; DEF-008)', () => {
+    // --shadow-1 and --shadow-2 are the raw values; the named ones (card, overlay, pressed) are the utilities.
+    const named = new Set(themeNames('shadow').filter((name) => /^[a-z]/.test(name)));
+    expect([...THEME_SHADOWS].sort()).toEqual([...named].sort());
+  });
+
+  it('DEF-008: shadow-pressed is a shadow, so it conflicts with another shadow and not with a shadow colour', () => {
+    expect(cn('shadow-card', 'shadow-pressed')).toBe('shadow-pressed');
+    expect(cn('shadow-pressed', 'shadow-none')).toBe('shadow-none');
+    expect(cn('shadow-pressed', 'shadow-ink')).toBe('shadow-pressed shadow-ink');
   });
 
   it.each(themeNames('text'))('text-%s is a size, so a colour after it does not drop it', (size) => {
