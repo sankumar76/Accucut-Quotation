@@ -210,6 +210,7 @@ describe('the entry point scripts/check-js-budget.ts', () => {
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
     expect(noCredentials.code).toBe(1);
     expect(noCredentials.output).toContain('no credentials were provided for the role ADMIN');
+    expect(noCredentials.output).toContain('/queue: the route manifest allows ADMIN, LEAD, ENGINEER on it, but the check has no sign-in for any of those roles');
     expect(`${noCredentials.output}${noCredentials.summary}${passing.output}${passing.summary}`).not.toContain(STUB_PASSWORD);
   });
 });
