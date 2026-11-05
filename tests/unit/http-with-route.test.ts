@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { ConflictError, ForbiddenError, UnauthorizedError } from '@/lib/errors';
+import { ConfigurationError, ConflictError, ForbiddenError, UnauthorizedError } from '@/lib/errors';
 import type { AuthenticatedUser } from '@/server/auth/session';
 import type { HttpMethod, RouteRow } from '@/server/http/route-manifest';
 
@@ -244,7 +244,7 @@ describe('errors and the shape of the answer', () => {
     expect(await problemOf(response)).toMatchObject({ title: 'You do not have access to this.', code: 'FORBIDDEN' });
   });
 
-  it('an unexpected failure is a generic 500 with a reference, and the log gets the cause', async () => {
+  it('an unexpected failure is a generic 500 with a reference, and the log gets the kind of failure and the request ID', async () => {
     const handle = withRoute({
       route: '/api/v1/test-all',
       method: 'GET',
@@ -259,6 +259,79 @@ describe('errors and the shape of the answer', () => {
     expect(text).not.toContain('ECONNREFUSED');
     expect(text).toMatch(/req-[0-9a-f]{8}/);
     expect(mocks.error).toHaveBeenCalledTimes(1);
+    expect(mocks.error.mock.calls[0]?.[0]).toMatchObject({ route: '/api/v1/test-all', method: 'GET', errorName: 'Error' });
+  });
+
+  describe('STD-01: the log never carries the message, the stack or the cause of an error', () => {
+    const E_MAIL = 'ada.lovelace@example.test';
+
+    /** Every string in what was logged, reading an Error the way a log line would print it: name, message, stack and cause. */
+    function everythingLogged(): string {
+      const seen = new Set<unknown>();
+      const parts: string[] = [];
+      const walk = (value: unknown): void => {
+        if (typeof value === 'string') parts.push(value);
+        if (typeof value !== 'object' || value === null || seen.has(value)) return;
+        seen.add(value);
+        if (value instanceof Error) parts.push(value.name, value.message, value.stack ?? '', 'Error instance');
+        for (const inner of Object.values(value)) walk(inner);
+        if (value instanceof Error) walk(value.cause);
+      };
+      for (const call of [...mocks.error.mock.calls, ...mocks.warn.mock.calls]) walk(call);
+      return parts.join('\n');
+    }
+
+    it('an unexpected error whose message holds an e-mail address leaves no address in the log', async () => {
+      const handle = withRoute({
+        route: '/api/v1/test-all',
+        method: 'GET',
+        output,
+        handler: () => {
+          throw new Error(`no user ${E_MAIL}`, { cause: new Error(`row for ${E_MAIL}`) });
+        },
+      });
+      expect((await handle(get())).status).toBe(500);
+      expect(mocks.error).toHaveBeenCalledTimes(1);
+      expect(everythingLogged()).not.toContain(E_MAIL);
+      expect(everythingLogged()).not.toContain('no user');
+      expect(everythingLogged()).not.toContain('Error instance');
+    });
+
+    it('a server-side application error keeps its code in the log and its message out', async () => {
+      const handle = withRoute({
+        route: '/api/v1/test-all',
+        method: 'GET',
+        output,
+        handler: () => {
+          throw new ConfigurationError(`SMTP_USER ${E_MAIL} is not valid`, { cause: new Error(E_MAIL) });
+        },
+      });
+      expect((await handle(get())).status).toBe(500);
+      expect(mocks.error.mock.calls[0]?.[0]).toMatchObject({ errorName: 'ConfigurationError', errorCode: 'CONFIGURATION_INVALID' });
+      expect(everythingLogged()).not.toContain(E_MAIL);
+      expect(everythingLogged()).not.toContain('SMTP_USER');
+    });
+
+    it('a response that does not fit its schema logs the names of the fields, not their values', async () => {
+      const handle = withRoute({ route: '/api/v1/test-all', method: 'GET', output, handler: () => ({ greeting: E_MAIL, unitCost: 1 }) });
+      expect((await handle(get())).status).toBe(500);
+      expect(mocks.error.mock.calls[0]?.[0]).toMatchObject({ errorName: 'ResponseSchemaError', schemaPaths: [''] });
+      expect(everythingLogged()).not.toContain(E_MAIL);
+    });
+
+    it('a refusal is logged with its status and code only', async () => {
+      const handle = withRoute({
+        route: '/api/v1/test-all',
+        method: 'GET',
+        output,
+        handler: () => {
+          throw new ConflictError(`${E_MAIL} changed this`, { code: 'REVISION_CONFLICT' });
+        },
+      });
+      expect((await handle(get())).status).toBe(409);
+      expect(mocks.warn.mock.calls[0]?.[0]).toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+      expect(everythingLogged()).not.toContain(E_MAIL);
+    });
   });
 
   it('never sends a field its schema does not name: an extra key is an error, not a leak (NFR-002)', async () => {

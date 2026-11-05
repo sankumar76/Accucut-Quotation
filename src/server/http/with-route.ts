@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import { loadOriginEnv } from '../../lib/env';
-import { AppError, ForbiddenError } from '../../lib/errors';
+import { AppError, ForbiddenError, isAppError } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { requireUser, type AuthenticatedUser } from '../auth/session';
 
@@ -92,6 +92,15 @@ class ResponseSchemaError extends Error {
   }
 }
 
+/**
+ * What the log may say about a failure: its class name, its application code when it has one and, for a response that
+ * did not fit its schema, the names of the fields that did not. Never the message, stack or cause (STD-01).
+ */
+function describeFailure(error: unknown): { readonly errorName: string; readonly errorCode: string | undefined; readonly schemaPaths?: ReadonlyArray<string> } {
+  const base = { errorName: error instanceof Error ? error.name : 'NonError', errorCode: isAppError(error) ? error.code : undefined };
+  return error instanceof ResponseSchemaError ? { ...base, schemaPaths: error.paths } : base;
+}
+
 function jsonResponse(body: unknown, status: number, requestId: string): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId } });
 }
@@ -152,13 +161,14 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
       if (error instanceof InputRefused) return error.response;
       if (error instanceof AppError) {
         const body = problemFromAppError(error, requestId);
-        if (body.status >= 500) logger.error({ requestId, route: options.route, method: options.method, code: error.code, err: error }, 'route failed');
+        if (body.status >= 500) logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed');
         else if (body.status === UNAUTHORIZED_STATUS) logger.debug({ requestId, route: options.route, method: options.method }, 'signed-out request');
         else logger.warn({ requestId, route: options.route, method: options.method, status: body.status, code: body.code }, 'route refused');
         return problemResponse(body);
       }
-      // The log keeps the cause; the body says only what went wrong in general and carries the reference.
-      logger.error({ requestId, route: options.route, method: options.method, err: error }, 'route failed unexpectedly');
+      // The log gets the kind of failure and the request ID, and the body only what went wrong in general. Neither carries the
+      // message, the stack or the cause: they can hold an e-mail address, a value from a query or a rate (coding standards section 4).
+      logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed unexpectedly');
       return problemResponse(internalProblem(requestId));
     }
   };

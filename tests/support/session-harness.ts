@@ -17,6 +17,24 @@ import { defined } from './defined';
  * above ordinary imports. Every name and address here is invented.
  */
 
+const MILLISECONDS_PER_SECOND = 1_000;
+
+/**
+ * The instant at which every harness session was signed in, and at which the tests that use the harness hold the system
+ * clock (`vi.useFakeTimers({ toFake: ['Date'], now: SESSION_NOW })` in `beforeAll`, see `holdSessionClock`). A session is 12
+ * hours from sign-in, so a fixed instant for both makes the result the same on every run and at any time of day (STD-06).
+ */
+export const SESSION_NOW = new Date('2026-11-05T09:00:00.000Z');
+
+/** Holds `Date` at `SESSION_NOW` until `releaseSessionClock`. Timers stay real, so nothing waits on a fake clock. */
+export function holdSessionClock(): void {
+  vi.useFakeTimers({ toFake: ['Date'], now: SESSION_NOW });
+}
+
+export function releaseSessionClock(): void {
+  vi.useRealTimers();
+}
+
 export const REDIRECT_PREFIX = 'NEXT_REDIRECT:';
 export const FORBIDDEN_SIGNAL = 'NEXT_FORBIDDEN';
 export const NOT_FOUND_SIGNAL = 'NEXT_NOT_FOUND';
@@ -60,7 +78,9 @@ export function createSessionHarness(): SessionHarness {
       state.returnPath = path;
     },
     getServerSession: vi.fn(() =>
-      Promise.resolve(state.callerId === null ? null : { expires: 'x', userId: state.callerId, sessionVersion: 0, signedAt: Date.now() / 1_000 }),
+      Promise.resolve(
+        state.callerId === null ? null : { expires: 'x', userId: state.callerId, sessionVersion: 0, signedAt: Math.floor(SESSION_NOW.getTime() / MILLISECONDS_PER_SECOND) },
+      ),
     ),
     headers: () => Promise.resolve(new Headers(state.returnPath === null ? {} : { 'x-return-path': state.returnPath })),
     redirect: (path) => {

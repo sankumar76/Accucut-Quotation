@@ -1,17 +1,16 @@
 import { Lock, Search, TriangleAlert } from 'lucide-react';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { assertNever } from '@/lib/assert-never';
-import { HOME_PATH } from '@/lib/auth/return-path';
 
 /**
  * SCR-26, the system pages (STORY-01.02 AC-8): no access, not found and server error. One component draws all three, so
  * the words and the look are in one place and a page frame, a boundary file or the design-system page can show the same
- * card. Each has one clear action. The "no access" card takes no input at all: it is the same for every role and for
+ * card. Each has one clear action, passed in: the link home is `home-action.tsx` (server only) and the retry button is the
+ * error boundary's own, so this module, which the client error boundary imports, carries neither `Button` nor `next/link`
+ * (PRF-01, NFR-009). The "no access" card takes no input at all: it is the same for every role and for
  * every page that was asked for, so it cannot show what a page holds or whether it exists (UX-22, CR-33). The error card
  * shows a reference the person can read out, and never a technical detail.
  */
@@ -26,20 +25,10 @@ export const NOT_FOUND_MENU_TEXT = 'Use the menu to find what you need.';
 export const ERROR_TITLE = 'Something went wrong on our side';
 export const ERROR_TEXT = 'Your work is saved up to your last save. Try again in a moment.';
 export const ERROR_REFERENCE_TEXT = 'If it keeps happening, give the Admin this reference:';
-export const HOME_ACTION_LABEL = 'Go to your tasks';
 
 /** The reference shown on the error page: `req-` and the digest Next.js gives the failed render, which its server log carries. */
 export function errorReference(digest: string | undefined): string {
   return `req-${digest ?? 'unknown'}`;
-}
-
-/** The one action of the "no access" and "not found" cards: back to the page every role lands on. */
-export function HomeAction() {
-  return (
-    <Button asChild>
-      <Link href={HOME_PATH}>{HOME_ACTION_LABEL}</Link>
-    </Button>
-  );
 }
 
 export interface SystemPageCardProps {

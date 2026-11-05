@@ -1,11 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import type { RoleName } from '@/lib/auth/roles';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
-import { harness, FORBIDDEN_SIGNAL, NOT_FOUND_SIGNAL, REDIRECT_PREFIX } from '../support/session-harness';
+import { harness, holdSessionClock, releaseSessionClock, SESSION_NOW, FORBIDDEN_SIGNAL, NOT_FOUND_SIGNAL, REDIRECT_PREFIX } from '../support/session-harness';
 
 /**
  * STORY-01.02 AC-2 and AC-4 (SPEC section 14.1, NFR-001, BR-003): the role matrix. Every implemented route of the
@@ -121,9 +121,12 @@ async function callPage(row: RouteRow, id: string): Promise<PageOutcome> {
 // Importing the pages (the design-system page pulls in a great many components) can take longer than a test's limit on a
 // busy machine. The modules are loaded once, in a hook, whose limit is set for set-up work (test strategy section 10, DL-057).
 beforeAll(async () => {
+  holdSessionClock();
   await Promise.all([...Object.values(API_LOADERS), ...Object.values(PAGE_LOADERS)].map((load) => load()));
   await import('@/server/http/page-access');
 });
+
+afterAll(releaseSessionClock);
 
 beforeEach(() => harness.signInAs(null));
 
@@ -215,6 +218,20 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
       } finally {
         record.isActive = true;
       }
+    }
+  });
+
+  it('a session is 12 hours from sign-in on the held clock: refused at 12 hours and a second, accepted just before (STD-06)', async () => {
+    const [row, method] = calls[0] ?? [];
+    if (row === undefined || method === undefined) throw new Error('no API route to call');
+    harness.signInAs('LEAD');
+    try {
+      vi.setSystemTime(new Date(SESSION_NOW.getTime() + 12 * 3_600_000 - 1_000));
+      expect((await callApi(row, method, 'invented-id')).status).toBe(200);
+      vi.setSystemTime(new Date(SESSION_NOW.getTime() + 12 * 3_600_000 + 1_000));
+      expect((await callApi(row, method, 'invented-id')).status).toBe(401);
+    } finally {
+      vi.setSystemTime(SESSION_NOW);
     }
   });
 

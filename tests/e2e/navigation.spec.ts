@@ -29,7 +29,9 @@ const NO_ACCESS_TEXT = 'Your role does not include this page. If you think it sh
 const ERROR_TITLE = 'Something went wrong on our side';
 const ERROR_TEXT =
   'Your work is saved up to your last save. Try again in a moment. If it keeps happening, give the Admin this reference: req-7f3a91.';
-const HOME_ACTION = 'Go to your tasks';
+/** UX spec v0.12: the button is named for the viewer's role (the Lead here, the Engineer in the Engineer's tests). */
+const LEAD_HOME_ACTION = 'Go to the task queue';
+const ENGINEER_HOME_ACTION = 'Go to my tasks';
 
 const ADMIN_AND_LEAD_ITEMS = ['Assign task', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Checkpoints', 'Users', 'Settings', 'Audit log'];
 const IMPLEMENTED_MENU = ['Home', 'Design system'];
@@ -116,7 +118,7 @@ test.describe('the system pages (AC-8, AC-9)', () => {
     const response = await page.goto('/there-is-no-such-page');
     expect(response?.status()).toBe(404);
     await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
-    const action = page.getByRole('link', { name: HOME_ACTION });
+    const action = page.getByRole('link', { name: LEAD_HOME_ACTION });
     await expect(action).toHaveAttribute('href', '/queue');
     await expectControlsLargeEnough(action);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -193,12 +195,25 @@ test.describe('the Engineer (signs in through the page)', () => {
     expect(me.navigation.map((item) => item.href)).not.toContain('/users');
   });
 
-  test('AC-8: an unknown address shows the same "not found" card to an Engineer', async ({ page }) => {
+  test('AC-8: an unknown address shows the "not found" card to an Engineer, with the button named "Go to my tasks"', async ({ page }) => {
     await signInAs(page, E2E_ENGINEER, 'My tasks');
     const response = await page.goto('/there-is-no-such-page');
     expect(response?.status()).toBe(404);
     await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
+    const action = page.getByRole('link', { name: ENGINEER_HOME_ACTION });
+    await expect(action).toHaveAttribute('href', '/queue');
+    await expect(page.getByRole('main').getByRole('link')).toHaveCount(1);
     await expectNoAxeViolations(page);
+  });
+
+  test('AC-8, UX-22: the card is the same for two different addresses, so it cannot show whether an address exists', async ({ page }) => {
+    await signInAs(page, E2E_ENGINEER, 'My tasks');
+    const textOf = async (path: string): Promise<string> => {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
+      return page.getByRole('main').innerText();
+    };
+    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/estimates/Q-2026-0001/costs/1'));
   });
 });
 

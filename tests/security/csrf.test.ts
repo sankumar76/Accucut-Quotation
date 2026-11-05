@@ -1,11 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { isStateChanging, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
 import { OWN_PROTECTION } from '../support/route-files';
 import { API_LOADERS } from '../support/route-loaders';
-import { harness } from '../support/session-harness';
+import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
  * STORY-01.02 AC-5 (NFR-003, negative): a state-changing request with a foreign `Origin` and no same-origin
@@ -77,8 +77,11 @@ async function loadHandler(row: RouteRow, method: HttpMethod): Promise<Handler> 
 }
 
 beforeAll(async () => {
+  holdSessionClock();
   await Promise.all(Object.values(API_LOADERS).map((load) => load()));
 });
+
+afterAll(releaseSessionClock);
 
 beforeEach(() => {
   vi.stubEnv('APP_ORIGIN', APP_ORIGIN);
