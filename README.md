@@ -132,6 +132,7 @@ placeholder; the message names the variable and never prints a value.
 | All tests | `npx vitest run` |
 | Build | `npx prisma generate && npx next build` |
 | Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
+| First-load JavaScript budget (CI stage 11b; needs the build and the database above; see "Performance checks") | `npx tsx scripts/check-js-budget.ts` |
 | End-to-end, three screen sizes (needs the database above; builds and serves the production build for the sign-in spec) | `npx playwright install chromium` once, then `npx playwright test` |
 | First Admin (AC-7 of STORY-01.01) | `npx tsx scripts/bootstrap-admin.ts` (reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD`) |
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
@@ -164,7 +165,57 @@ Chromium at three widths) on every pull request, in order. **Stage 12 is on sinc
 it runs inside the job named `Stages 1 to 11`, which is the required check on `master` (the name was kept so the
 check keeps reporting). Stage 13 (image) is present and disabled until the Dockerfile story, STORY-10.04. The
 Next.js build cache and the Playwright browsers are cached between runs. The workflow uses no secret and no
-production setting.
+production setting. **Stage 11b, the first-load JavaScript budget, also blocks merge** (next section). A second workflow,
+`.github/workflows/nightly.yml`, runs the Lighthouse reference run and the CI feedback-time report every night; it is
+never a required check.
+
+## Performance checks (NFR-009)
+
+**First-load JavaScript budget (CI stage 11b, every pull request).** Each route's first load may download at most
+200,000 bytes of JavaScript, gzip. The check starts `next start` on a free port for the production build, asks for every
+page route and for the not-found page (signed in as an invented Admin where a route sends a visitor to sign-in), and
+counts the scripts each page names: `<script src>` without `nomodule`, and `<link rel="preload">` or
+`rel="modulepreload"` with `as="script"`, each URL once. It reads those files from `.next/static`, compresses each with
+gzip level 9, adds them up (1 KB is 1,000 bytes) and writes one row per route (file count, raw bytes, gzip bytes,
+limit, headroom) to the job summary. It exits 1 if a route is over its limit, does not answer as it should (200 for a
+page, 404 for the not-found page and for `/design-system`), or cannot be measured. Nothing is skipped silently.
+
+To run it on your computer, build first and make sure the database is migrated. The pages that ask for sign-in need an
+Admin to sign in as, and the portal allows **one active Admin**, so there are two ways, depending on your database:
+
+- **A fresh throwaway database** (for example the one from "First use", before you run `bootstrap-admin`): let the script make an
+  invented Admin. It refuses any database that is not on this machine, the Compose service `db` or the CI service `postgres`
+  (never staging), and the password is never printed.
+
+  ```sh
+  npx next build
+  # bash; in PowerShell set the two variables with $env:NAME = "value"
+  export MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test MEASUREMENT_ADMIN_PASSWORD=<an invented password of your choice>
+  npx tsx scripts/ensure-measurement-user.ts
+  npx tsx scripts/check-js-budget.ts
+  ```
+
+- **A database that already has the Admin from `bootstrap-admin`**: do not run `ensure-measurement-user.ts`. It stops with a message
+  ("another Admin already exists") because a second active Admin is not allowed. Set `MEASUREMENT_ADMIN_EMAIL` and
+  `MEASUREMENT_ADMIN_PASSWORD` to that Admin's own sign-in and run `npx tsx scripts/check-js-budget.ts`. That Admin must have
+  chosen its own password already, or the pages would send it to a password change instead of the page being measured.
+
+`--build-dir <folder>` measures a build made elsewhere (the folder that holds `.next`), and `--base-url <url>` uses a
+server that is already running. The limit is 200,000 bytes unless the one table in `scripts/lib/js-budget.ts` says
+otherwise. An entry in that table needs a product-manager decision ID and the Lighthouse run behind it, or a unit test
+fails it. A route over its limit is fixed by loading the heavy part on first use (`next/dynamic`), not by raising the
+limit.
+
+**Lighthouse reference run and CI feedback time (nightly).** `.github/workflows/nightly.yml` builds and serves the app
+on a GitHub-hosted `ubuntu-24.04` runner, signs in as an invented Admin, and runs Lighthouse (`lighthouserc.cjs`, with
+the Chromium that Playwright installs) five times per page on the Wi-Fi profile (pass or fail, on the key screens listed
+in `KEY_SCREENS` as each is built) and on the Slow 4G profile (report only). The summary shows median LCP and TBT,
+`benchmarkIndex` and the Chromium version; the reports are kept for 30 days as the `lighthouse-reports` artefact. The
+first baseline run's median `benchmarkIndex` is **B0**: set it as the repository variable `LIGHTHOUSE_B0`; a later run more
+than 25 % away from it is marked "not comparable". The same workflow reports the p95 and the median duration of the
+required job over the last 20 pull-request runs (p95 at most 10 minutes, median at most 6). To run it before a key
+screen's review, open a pull request that touches `lighthouserc.cjs` or the workflow (it starts on its own), or, once the
+workflow is on `master`, use Actions, Nightly, Run workflow on the branch.
 
 ## Secret scan and its baseline
 

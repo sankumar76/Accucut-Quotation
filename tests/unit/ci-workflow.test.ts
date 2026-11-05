@@ -92,6 +92,28 @@ describe('CI workflow', () => {
     expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
   });
 
+  it('STORY-10.10 AC-5: step 11b runs the JS budget inside the required job, after stage 11 and before stage 12, and blocks merge', () => {
+    const budget = stepNamed('Stage 11b: JS budget');
+    expect(budget).not.toMatch(/^\s*if:/m);
+    expect(budget).not.toContain('continue-on-error');
+    expect(budget).toContain('npx tsx scripts/ensure-measurement-user.ts');
+    expect(budget).toContain('npx tsx scripts/check-js-budget.ts');
+    expect(budget.indexOf('ensure-measurement-user')).toBeLessThan(budget.indexOf('check-js-budget'));
+    expect(WORKFLOW.indexOf('Stage 11: coverage of changed code')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 11b'));
+    expect(WORKFLOW.indexOf('name: "Stage 11b')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12'));
+    // One job, so the step is inside the job named "Stages 1 to 11", the required check.
+    expect(LINES.slice(LINES.indexOf('jobs:') + 1).filter((line) => /^ {2}[\w-]+:\s*$/.test(line))).toEqual(['  verify:']);
+    expect(WORKFLOW).toContain('name: Stages 1 to 11');
+  });
+
+  it('STORY-10.10 AC-5: step 11b makes its password in the job, masks it, and uses no repository secret', () => {
+    const budget = stepNamed('Stage 11b: JS budget');
+    expect(budget).toContain('openssl rand -hex 16');
+    expect(budget.indexOf('::add-mask::')).toBeGreaterThan(budget.indexOf('openssl rand'));
+    expect(budget).not.toContain('secrets.');
+    expect(WORKFLOW).not.toMatch(/\$\{\{\s*secrets\./);
+  });
+
   it('#17 (PRF-02 of AQP-27, due with stage 12): the Next.js build cache and the Playwright browsers are cached, before the stages that use them', () => {
     const next = stepNamed('Cache the Next.js build cache');
     expect(next).toMatch(/uses: actions\/cache@[0-9a-f]{40}/);
