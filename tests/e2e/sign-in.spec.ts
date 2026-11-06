@@ -19,6 +19,10 @@ import { PRODUCTION_URL } from './support/servers';
  * of its own, as the proxy would send it, so the per-address limit never carries over between tests.
  * AC-3's 15-minute timing is proved with a controlled clock in `tests/integration/auth`; here the locked screen is
  * reached by really making six attempts.
+ *
+ * Width (test strategy section 10.5, AQP-199): the tests tagged `@one-width` check server rules (messages, the lock-out
+ * count, the session, the cookie flags, the return address) and run in the desktop project only. "SCR-01 at this
+ * width (AC-8)" and the account-menu test read layout and keep all three widths.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
@@ -117,7 +121,7 @@ test.describe('SCR-01 at this width (AC-8)', () => {
 });
 
 test.describe('AC-1: the person lands on their role\'s home', () => {
-  test('an Engineer lands on "My tasks" with the empty-state text of SCR-03', async ({ page }) => {
+  test('an Engineer lands on "My tasks" with the empty-state text of SCR-03', { tag: '@one-width' }, async ({ page }) => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
     await expectOnQueue(page, 'My tasks');
@@ -125,7 +129,7 @@ test.describe('AC-1: the person lands on their role\'s home', () => {
     await expect(page.getByText('When a Lead assigns you a task it appears here, with its folder and deadline.')).toBeVisible();
   });
 
-  test('a Lead lands on "Task queue" with the empty-state text of SCR-03', async ({ page }) => {
+  test('a Lead lands on "Task queue" with the empty-state text of SCR-03', { tag: '@one-width' }, async ({ page }) => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
     await expectOnQueue(page, 'Task queue');
@@ -147,7 +151,7 @@ test.describe('AC-1: the person lands on their role\'s home', () => {
   });
 });
 
-test.describe('the form checks before it sends', () => {
+test.describe('the form checks before it sends', { tag: '@one-width' }, () => {
   test('asks for an e-mail address and a password in the words of SCR-01', async ({ page }) => {
     await openSignIn(page);
     await page.getByRole('button', { name: 'Sign in' }).click();
@@ -162,7 +166,7 @@ test.describe('the form checks before it sends', () => {
   });
 });
 
-test.describe('AC-2: one message for every failure', () => {
+test.describe('AC-2: one message for every failure', { tag: '@one-width' }, () => {
   const cases = [
     { name: 'a wrong password', email: async (testInfo: TestInfo) => (await createDisposableUser('slip', testInfo)).email, password: 'a-wrong-password' },
     { name: 'an unknown e-mail', email: (testInfo: TestInfo) => Promise.resolve(unknownEmail(testInfo)), password: E2E_PASSWORD },
@@ -184,7 +188,7 @@ test.describe('AC-2: one message for every failure', () => {
   }
 });
 
-test.describe('AC-3: five failures block the account', () => {
+test.describe('AC-3: five failures block the account', { tag: '@one-width' }, () => {
   test('the sixth attempt shows the locked message, also for a correct password and also for an unknown e-mail', async ({ page }, testInfo) => {
     const email = unknownEmail(testInfo);
     await openSignIn(page);
@@ -199,7 +203,7 @@ test.describe('AC-3: five failures block the account', () => {
   });
 });
 
-test.describe('AC-4: sign-out', () => {
+test.describe('AC-4: sign-out', { tag: '@one-width' }, () => {
   test('clears the session, sends the next request to the sign-in page, and the back button shows nothing protected', async ({ page, context }, testInfo) => {
     // Signing out ends every session of the person, so it is a person of its own, never the Lead the other specs use.
     await openSignIn(page);
@@ -236,7 +240,7 @@ test.describe('AC-4: sign-out', () => {
   });
 });
 
-test.describe('AC-5: the session cookie in the production build', () => {
+test.describe('AC-5: the session cookie in the production build', { tag: '@one-width' }, () => {
   test('has the __Secure- prefix, HttpOnly, Secure and SameSite=Lax', async ({ page, context }) => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
@@ -246,7 +250,7 @@ test.describe('AC-5: the session cookie in the production build', () => {
   });
 });
 
-test.describe('AC-6: only a same-origin relative path is honoured as the place to go', () => {
+test.describe('AC-6: only a same-origin relative path is honoured as the place to go', { tag: '@one-width' }, () => {
   const evil = [
     ['//evil.example', 'a protocol-relative address'],
     ['https://evil.example', 'an absolute address'],

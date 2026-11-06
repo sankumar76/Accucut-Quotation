@@ -212,6 +212,12 @@ jobs:
       # `DATABASE_URL` (stage 10) and invented settings for everything else; the set-up project creates invented E2E
       # users in it. The browser download is cached by Playwright version (the lockfile); `install --with-deps` still
       # installs the system libraries and downloads the browser only when the cache missed.
+      #
+      # Stage 12 time (AQP-199, test strategy section 10.5): `playwright.config.ts` runs four workers when `CI` is set
+      # (two on a developer's machine), the set-up project warms `/`, `/queue` and `/design-system` on the development
+      # server first, and tests tagged `@one-width` (tests that read no layout, in four ruled spec files) run in the
+      # desktop project only. Everything else runs at all three widths. The command below carries no `--workers`,
+      # `--project`, `--grep` or `--shard` flag, and it stays in this one job so the required check keeps its name.
       - name: "Cache the Playwright browsers"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -220,6 +226,8 @@ jobs:
 
       - name: "Stage 12: E2E (Chromium at three widths, axe)"
         run: |
+          # The runner size goes to the log, so the four workers can be checked against it (AQP-199, test strategy 10.5).
+          echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
           npx playwright install --with-deps chromium
           npx playwright test
 

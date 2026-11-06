@@ -11,6 +11,11 @@
  *   - only a job that finished with `success` counts: a failed job stops early and a cancelled one is not a full run,
  *     so either would make the feedback time look shorter than it is;
  *   - the median of an even number of runs is the mean of the two middle values.
+ *
+ * The 9-minute line (DL-095; STORY-10.14 AC-7; test strategy section 10.3): when the p95 is over 540 seconds the report
+ * carries one fixed notice, whatever has been merged. At exactly 540 seconds there is none. It is not a breach and
+ * fails nothing. The report also says which runs it used: the count, and the start time and head commit of the oldest and
+ * the newest, so a reader can see whether it covers only runs made after a given merge (STORY-10.14 AC-1).
  */
 import { z } from 'zod';
 
@@ -20,6 +25,11 @@ export const RUNS_COUNTED = 20;
 const SECONDS_PER_MINUTE = 60;
 export const P95_LIMIT_SECONDS = 10 * SECONDS_PER_MINUTE;
 export const MEDIAN_LIMIT_SECONDS = 6 * SECONDS_PER_MINUTE;
+/** The p95 over which master's 9-minute notice is written (DL-095). Strictly over: at exactly 540 s there is no notice. */
+export const NOTICE_LIMIT_SECONDS = 9 * SECONDS_PER_MINUTE;
+/** The notice, word for word (STORY-10.14 AC-7; test strategy section 10.3). */
+export const NINE_MINUTE_NOTICE =
+  'p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due.';
 const P95 = 0.95;
 const MILLISECONDS_PER_SECOND = 1_000;
 const API_VERSION = '2022-11-28';
@@ -29,6 +39,8 @@ const API_ORIGIN = 'https://api.github.com';
 export interface JobRecord {
   readonly runId: number;
   readonly runAttempt: number;
+  /** The commit the run was made for: the head of the pull request. */
+  readonly headSha: string;
   readonly name: string;
   readonly conclusion: string | null;
   /** When the run was created; orders the runs. */
@@ -38,6 +50,14 @@ export interface JobRecord {
   readonly completedAt: string | null;
 }
 
+/** One of the runs a report used, named by when its required job started and by the commit it ran. */
+export interface RunUsed {
+  readonly runId: number;
+  /** ISO 8601, UTC. */
+  readonly startedAt: string;
+  readonly headSha: string;
+}
+
 export interface CiTimeReport {
   /** How many runs the figures are over (at most 20). */
   readonly runs: number;
@@ -45,11 +65,18 @@ export interface CiTimeReport {
   readonly medianSeconds: number | undefined;
   /** One message per breached figure; each names the figure. */
   readonly breaches: ReadonlyArray<string>;
+  /** Notices that are not breaches and fail nothing: master's 9-minute line when the p95 is over 540 s. */
+  readonly notices: ReadonlyArray<string>;
+  /** The oldest and the newest run the figures are over (by run creation), or undefined when no run qualified. */
+  readonly oldest: RunUsed | undefined;
+  readonly newest: RunUsed | undefined;
 }
 
 interface Timed {
   readonly runId: number;
   readonly runCreatedAt: number;
+  readonly startedAt: number;
+  readonly headSha: string;
   readonly seconds: number;
 }
 
@@ -68,9 +95,20 @@ function qualifying(jobs: ReadonlyArray<JobRecord>): Timed[] {
     const completed = timeOf(job.completedAt);
     const created = timeOf(job.runCreatedAt);
     if (started === undefined || completed === undefined || created === undefined || completed < started) continue;
-    timed.push({ runId: job.runId, runCreatedAt: created, seconds: (completed - started) / MILLISECONDS_PER_SECOND });
+    timed.push({
+      runId: job.runId,
+      runCreatedAt: created,
+      startedAt: started,
+      headSha: job.headSha,
+      seconds: (completed - started) / MILLISECONDS_PER_SECOND,
+    });
   }
   return timed.sort((a, b) => b.runCreatedAt - a.runCreatedAt || b.runId - a.runId).slice(0, RUNS_COUNTED);
+}
+
+function runUsed(entry: Timed | undefined): RunUsed | undefined {
+  if (entry === undefined) return undefined;
+  return { runId: entry.runId, startedAt: new Date(entry.startedAt).toISOString(), headSha: entry.headSha };
 }
 
 /** The value at rank ceil(p * n) of ascending `sorted` (nearest rank). */
@@ -95,7 +133,8 @@ export function formatDuration(seconds: number): string {
 
 /** The figures and the breaches. A p95 over 10 minutes or a median over 6 minutes is a breach (strictly over). */
 export function ciTimeReport(jobs: ReadonlyArray<JobRecord>): CiTimeReport {
-  const durations = qualifying(jobs).map((entry) => entry.seconds).sort((a, b) => a - b);
+  const used = qualifying(jobs);
+  const durations = used.map((entry) => entry.seconds).sort((a, b) => a - b);
   const p95Seconds = nearestRank(durations, P95);
   const medianSeconds = median(durations);
   const breaches: string[] = [];
@@ -105,22 +144,45 @@ export function ciTimeReport(jobs: ReadonlyArray<JobRecord>): CiTimeReport {
   if (medianSeconds !== undefined && medianSeconds > MEDIAN_LIMIT_SECONDS) {
     breaches.push(`CI feedback time: the median of "${REQUIRED_JOB_NAME}" is ${formatDuration(medianSeconds)}, over the ${MEDIAN_LIMIT_SECONDS / SECONDS_PER_MINUTE}-minute early warning (${durations.length} runs).`);
   }
-  return { runs: durations.length, p95Seconds, medianSeconds, breaches };
+  // Master's 9-minute line is written whenever the p95 is over 540 s, even over 600 s (when the breach above is also written).
+  const notices = p95Seconds !== undefined && p95Seconds > NOTICE_LIMIT_SECONDS ? [NINE_MINUTE_NOTICE] : [];
+  // `used` is newest first.
+  return { runs: durations.length, p95Seconds, medianSeconds, breaches, notices, oldest: runUsed(used.at(-1)), newest: runUsed(used[0]) };
 }
 
-/** The report as lines for the log and the job summary. Says how many runs it covers when that is fewer than 20. */
+const describeRun = (label: string, run: RunUsed): string => `${label} run ${run.runId} started ${run.startedAt}, head commit ${run.headSha}`;
+
+/**
+ * The report as lines for the log. Says how many runs it covers (and when that is fewer than 20), which runs they are (the
+ * oldest and the newest, by start time and head commit), the breaches, and then master's 9-minute notice when it applies.
+ */
 export function ciTimeLines(report: CiTimeReport): string[] {
   if (report.p95Seconds === undefined || report.medianSeconds === undefined) {
     return ['CI feedback time: no successful first-attempt run of the required job was found, so there is no figure yet.'];
   }
   const fewer = report.runs < RUNS_COUNTED ? ` (only ${report.runs} runs, fewer than the ${RUNS_COUNTED} asked for)` : ` (${report.runs} runs)`;
-  return [
+  const lines = [
     `CI feedback time of "${REQUIRED_JOB_NAME}"${fewer}: p95 ${formatDuration(report.p95Seconds)} (target at most ${P95_LIMIT_SECONDS / SECONDS_PER_MINUTE} m), median ${formatDuration(report.medianSeconds)} (early warning over ${MEDIAN_LIMIT_SECONDS / SECONDS_PER_MINUTE} m).`,
-    ...report.breaches,
   ];
+  if (report.oldest !== undefined && report.newest !== undefined) {
+    lines.push(`Runs used: ${report.runs}. ${describeRun('Oldest', report.oldest)}. ${describeRun('Newest', report.newest)}.`);
+  }
+  return [...lines, ...report.breaches, ...report.notices];
 }
 
-const runsSchema = z.object({ workflow_runs: z.array(z.object({ id: z.number(), created_at: z.string() })) });
+/**
+ * The job summary: the lines of the report as a list, except master's 9-minute notice, which is its own paragraph so the
+ * sentence is written exactly as ruled and not as a list item (STORY-10.14 AC-7).
+ */
+export function ciTimeSummary(report: CiTimeReport): string {
+  const lines = ciTimeLines(report).filter((line) => !report.notices.includes(line));
+  const notices = report.notices.map((notice) => `${notice}\n`).join('\n');
+  return `### CI feedback time (NFR-009)\n\n${lines.map((line) => `- ${line}`).join('\n')}\n${notices === '' ? '' : `\n${notices}`}`;
+}
+
+const runsSchema = z.object({
+  workflow_runs: z.array(z.object({ id: z.number(), created_at: z.string(), head_sha: z.string().regex(/^[0-9a-f]{40}$/) })),
+});
 const jobsSchema = z.object({
   jobs: z.array(z.object({ name: z.string(), conclusion: z.string().nullable(), started_at: z.string().nullable(), completed_at: z.string().nullable() })),
 });
@@ -151,6 +213,7 @@ export async function fetchJobRecords(repository: string, token: string, fetchIm
       records.push({
         runId: run.id,
         runAttempt: 1,
+        headSha: run.head_sha,
         name: job.name,
         conclusion: job.conclusion,
         runCreatedAt: run.created_at,

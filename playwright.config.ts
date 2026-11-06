@@ -24,6 +24,12 @@ import { DEV_PORT, PRODUCTION_PORT, SIGNED_IN_STATE } from './tests/e2e/support/
 if (existsSync('.env')) process.loadEnvFile('.env');
 
 const IN_CI = Boolean(process.env['CI']);
+const CI_WORKERS = 4;
+const LOCAL_WORKERS = 2;
+
+// Tests that read no layout carry this tag and run at one width, in the desktop project only (test strategy section
+// 10.5). Only four spec files may carry it; tests/unit/one-width-tag.test.ts fails if it appears anywhere else.
+const ONE_WIDTH = /@one-width/;
 
 // Invented values so the app's start-up check (src/lib/env.ts) passes. `DATABASE_URL` is the real one when it is set.
 const DATABASE_URL =
@@ -43,9 +49,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: IN_CI,
   retries: 1,
-  // Two workers on every machine: the development server compiles on demand, and more workers than that made
-  // a slow laptop exceed a test's 30 s on first requests (G6 PRF-06: set it once the runner size is fixed).
-  workers: 2,
+  // Four workers in CI (a public repository's ubuntu-latest runner has 4 vCPU and 16 GB; test strategy section 10.5,
+  // AQP-199), two everywhere else: the development server compiles on demand, and more workers than two made a slow
+  // laptop exceed a test's 30 s on first requests (G6 PRF-06). The set-up project warms the dev-server routes first.
+  // If four workers ever make a test flaky, lower this to 3; never widen a timeout.
+  workers: IN_CI ? CI_WORKERS : LOCAL_WORKERS,
   // A sign-in hashes a password (about 250 ms of work) and three screen sizes run at once, so on a busy machine the
   // default 5 s for an expectation was too tight for a page change after "Sign in" (DEF-003 family: a wait for an event,
   // not a limit on speed; the tests assert what happened, not how fast).
@@ -60,12 +68,14 @@ export default defineConfig({
     { name: 'setup', testMatch: '**/auth.setup.ts', use: { browserName: 'chromium' } },
     {
       name: 'mobile',
+      grepInvert: ONE_WIDTH,
       dependencies: ['setup'],
       testIgnore: '**/auth.setup.ts',
       use: { browserName: 'chromium', viewport: { width: 360, height: 800 }, hasTouch: true, storageState: SIGNED_IN_STATE },
     },
     {
       name: 'tablet',
+      grepInvert: ONE_WIDTH,
       dependencies: ['setup'],
       testIgnore: '**/auth.setup.ts',
       use: { browserName: 'chromium', viewport: { width: 768, height: 1024 }, hasTouch: true, storageState: SIGNED_IN_STATE },

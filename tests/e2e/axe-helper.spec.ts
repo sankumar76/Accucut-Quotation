@@ -12,6 +12,9 @@ import { AXE_TAGS, expectNoAxeViolations, waitForAnimationsToFinish } from './su
  * the end colour at the end. A scan made while the transition runs therefore always reads the start colour, so the
  * outcome does not depend on how fast the machine is, only on whether the scan waited. A slow machine can make the
  * test "pass without the wait" (the scan starts after the 2 seconds), never fail with it.
+ *
+ * The page is not responsive and the colours and timing do not change with width, so every test here is tagged
+ * `@one-width` and runs in the desktop project only (test strategy section 10.5, AQP-199).
  */
 
 const TRANSITION_MILLISECONDS = 2_000;
@@ -59,14 +62,14 @@ async function startTransition(page: Page): Promise<string> {
 const colourOfProbe = (page: Page): Promise<string> =>
   page.evaluate(() => getComputedStyle(document.getElementById('probe') ?? document.body).color);
 
-test('DEF-009: the wait returns only after a running transition has reached its end value', async ({ page }) => {
+test('DEF-009: the wait returns only after a running transition has reached its end value', { tag: '@one-width' }, async ({ page }) => {
   const colourAtStart = await startTransition(page);
   expect(colourAtStart).toBe('rgb(204, 204, 204)');
   await test.step('wait for the transition to finish', () => waitForAnimationsToFinish(page));
   expect(await colourOfProbe(page)).toBe('rgb(0, 0, 0)');
 });
 
-test('DEF-009: the wait does not wait for an animation that never ends, such as a spinner', async ({ page }) => {
+test('DEF-009: the wait does not wait for an animation that never ends, such as a spinner', { tag: '@one-width' }, async ({ page }) => {
   await startTransition(page);
   await waitForAnimationsToFinish(page);
   const spinnersStillRunning = await page.evaluate(
@@ -78,19 +81,19 @@ test('DEF-009: the wait does not wait for an animation that never ends, such as 
   expect(spinnersStillRunning).toBe(1);
 });
 
-test('DEF-009: the wait returns at once when nothing is animating', async ({ page }) => {
+test('DEF-009: the wait returns at once when nothing is animating', { tag: '@one-width' }, async ({ page }) => {
   await page.setContent('<!doctype html><html lang="en"><head><title>Still</title></head><body><main><h1>Still</h1></main></body></html>');
   await waitForAnimationsToFinish(page);
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
 });
 
-test('DEF-009: the shared axe helper scans after the transition, so the settled colours are judged, not the blend', async ({ page }) => {
+test('DEF-009: the shared axe helper scans after the transition, so the settled colours are judged, not the blend', { tag: '@one-width' }, async ({ page }) => {
   await startTransition(page);
   // Without the wait this scan reads the start colour (grey on white, contrast 1.6) and reports color-contrast.
   await expectNoAxeViolations(page);
 });
 
-test('DEF-009 (control): a scan that does not wait does see the start colour, so the test above can fail', async ({ page }) => {
+test('DEF-009 (control): a scan that does not wait does see the start colour, so the test above can fail', { tag: '@one-width' }, async ({ page }) => {
   await startTransition(page);
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
   // Meaningful only if the transition is still running when the scan ends; on a machine so slow that the 2 seconds
