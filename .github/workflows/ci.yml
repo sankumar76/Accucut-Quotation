@@ -237,7 +237,6 @@ jobs:
   # `verify` runs those once.
   e2e:
     name: "Stage 12: E2E (shard ${{ matrix.shard }} of ${{ strategy.job-total }})"
-    if: ${{ false }} # THROWAWAY control 2: the shard jobs are skipped
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
