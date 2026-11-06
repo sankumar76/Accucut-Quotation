@@ -48,6 +48,11 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     // Warm the page the Users spec opens, so no test pays for its first compile.
     await page.goto(`${DEVELOPMENT_URL}/users`);
     await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    // And the audit page and its API, for the same reason (STORY-01.07).
+    await page.goto(`${DEVELOPMENT_URL}/audit`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    const warmedApi = await page.request.get(`${DEVELOPMENT_URL}/api/v1/audit?limit=1`);
+    expect(warmedApi.status()).toBe(200);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();

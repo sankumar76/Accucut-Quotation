@@ -120,6 +120,31 @@ export async function ensureCanaryUser(): Promise<string> {
 }
 
 /**
+ * The label of an audit entry that only a refused request could reveal: the production-build spec of `/audit` (STORY-01.07 AC-7)
+ * looks for it in everything a Lead and an Engineer are sent, and must find it nowhere.
+ */
+export const E2E_AUDIT_CANARY_LABEL = 'E2E Audit Canary Entry';
+
+/**
+ * Makes sure one audit entry carries `E2E_AUDIT_CANARY_LABEL`, made by the canary person about the canary person. The audit table
+ * is append-only, so the entry is added once and stays; the runtime role may add to it (that is how the portal writes it).
+ */
+export async function ensureAuditCanaryEntry(): Promise<void> {
+  const canaryId = await ensureCanaryUser();
+  const client = await connectToTestDatabase();
+  try {
+    await client.query(
+      `INSERT INTO audit_log (actor_id, event, object_type, object_id, object_label, before, after, request_id)
+       SELECT $1::uuid, 'user.created', 'user', $1::uuid, $2, NULL, '{"role":"ENGINEER","isActive":true}'::jsonb, 'req-00000000'
+       WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE object_label = $2)`,
+      [canaryId, E2E_AUDIT_CANARY_LABEL],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Makes a person for one run of one test, with the shared invented password, and returns them. The e-mail names the
  * kind, the screen size, the repeat and the retry, plus a random part, so no two runs ever share it. The rows stay in
  * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`.
