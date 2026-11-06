@@ -12,6 +12,7 @@ import { roleLabel } from '@/lib/auth/roles';
 import type { UserRow } from '@/lib/users/users-client';
 
 import { isOpener, type Opener } from './opener';
+import { OWN_PASSWORD_NAME } from './texts';
 
 /**
  * The people of SCR-14 (STORY-01.04 AC-1, AC-4, AC-7): a table from 768 px, where it scrolls inside its own container only,
@@ -21,8 +22,6 @@ import { isOpener, type Opener } from './opener';
  */
 
 export const OWN_ACCOUNT_NAME = 'You cannot deactivate your own account';
-// The name must contain the text the button shows ("Reset password"), WCAG 2.5.3 (axe label-content-name-mismatch).
-export const OWN_PASSWORD_NAME = 'Reset password is not available for your own account. Use Change password in the account menu';
 
 export type RowAction = 'edit' | 'reset' | 'deactivate' | 'activate';
 

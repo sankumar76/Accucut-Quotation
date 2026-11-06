@@ -13,6 +13,13 @@ export const RESET_PASSWORD_HINT = 'The old password stops working straight away
 
 export const FAILED_ADD_MESSAGE = 'We could not add the user.';
 export const FAILED_EDIT_MESSAGE = 'We could not save the changes.';
+/**
+ * The accessible name of the disabled Reset button on the Admin's own row (STD-01; UX spec, ux-expert comment 11038). It starts with the
+ * text the button shows ("Reset password", WCAG 2.5.3) and ends with a full stop. DEF-016: the stop was missing; the whole
+ * sentence is held exactly by `tests/unit/users-texts.test.ts` and `tests/e2e/users.spec.ts`.
+ */
+export const OWN_PASSWORD_NAME = 'Reset password is not available for your own account. Use Change password in the account menu.';
+
 export const FAILED_RESET_MESSAGE = 'We could not set the password.';
 export const FAILED_DEACTIVATE_MESSAGE = 'We could not deactivate the user.';
 export const FAILED_ACTIVATE_MESSAGE = 'We could not activate the user.';

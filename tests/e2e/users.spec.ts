@@ -23,6 +23,8 @@ import { ADMIN_STATE } from './support/servers';
 test.use({ storageState: ADMIN_STATE });
 
 const ADMIN_TAKEN = 'There is already an active Admin. Only one Admin can be active.';
+/** UX spec (ux-expert, AQP-65 comment 11038): the name of the disabled Reset on the Admin's own row, written out here and not imported. */
+const OWN_RESET_NAME = 'Reset password is not available for your own account. Use Change password in the account menu.';
 const OWN_ROW_NAME = 'You cannot deactivate your own account';
 const FIRST_PASSWORD = 'invented-first-password-1';
 const NEW_PASSWORD = 'invented-temporary-password-2';
@@ -87,6 +89,8 @@ test.describe('the list', () => {
     const own = rowOf(page, E2E_ADMIN.name).getByRole('button', { name: /^Reset password is not available for your own account/ });
     await expect(own).toBeVisible();
     await expect(own).toBeDisabled();
+    // DEF-016: the WHOLE accessible name, exactly as the UX spec writes it, full stop included (a regex on its start let a missing stop pass).
+    await expect(own).toHaveAccessibleName(OWN_RESET_NAME);
     await expect(rowOf(page, E2E_ADMIN.name).getByRole('button', { name: `Reset password for ${E2E_ADMIN.name}` })).toHaveCount(0);
   });
 });
