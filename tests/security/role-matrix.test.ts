@@ -32,7 +32,12 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getUserService: () => shared.userService };
+  return {
+    getAuthOptions: () => ({}),
+    getUserRepository: () => shared.users,
+    getUserService: () => shared.userService,
+    getAuditService: () => shared.auditService,
+  };
 });
 
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
@@ -57,6 +62,8 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/users': ['ADMIN'],
   '/api/v1/users/[id]': ['ADMIN'],
   '/api/v1/users/[id]/password-reset': ['ADMIN'],
+  // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
+  '/api/v1/audit': ['ADMIN'],
 };
 
 /** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
@@ -89,6 +96,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/queue': 'redirect:/sign-in',
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
+  '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
 };
 
 const moduleShape = z.record(z.string(), z.unknown());
@@ -223,9 +231,10 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     // Built from the manifest and the SPEC table, and it throws when empty, so this loop cannot pass by finding nothing.
     const refused = refusedRoleCalls((path, role) => expectedRoles(path).includes(role));
 
-    it('has something to check, through the users routes: a Lead and an Engineer are refused on each of them', () => {
+    it('has something to check, through the users routes and the audit route: a Lead and an Engineer are refused on each of them', () => {
       const names = refused.map((call) => call.name);
-      for (const route of ['GET /api/v1/users', 'POST /api/v1/users', 'PATCH /api/v1/users/[id]', 'POST /api/v1/users/[id]/password-reset']) {
+      const routes = ['GET /api/v1/users', 'POST /api/v1/users', 'PATCH /api/v1/users/[id]', 'POST /api/v1/users/[id]/password-reset', 'GET /api/v1/audit'];
+      for (const route of routes) {
         expect(names, route).toEqual(expect.arrayContaining([`${route} as LEAD`, `${route} as ENGINEER`]));
       }
     });

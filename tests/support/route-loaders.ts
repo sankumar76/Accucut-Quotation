@@ -9,6 +9,7 @@ export type Loader = () => Promise<unknown>;
 
 export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/me': () => import('@/app/api/v1/me/route'),
+  '/api/v1/audit': () => import('@/app/api/v1/audit/route'),
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
   '/api/v1/users/[id]': () => import('@/app/api/v1/users/[id]/route'),
   '/api/v1/users/[id]/password-reset': () => import('@/app/api/v1/users/[id]/password-reset/route'),
@@ -19,4 +20,5 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/queue': () => import('@/app/(portal)/queue/page'),
   '/design-system': () => import('@/app/(portal)/design-system/page'),
   '/users': () => import('@/app/(portal)/users/page'),
+  '/audit': () => import('@/app/(portal)/audit/page'),
 };

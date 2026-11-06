@@ -127,6 +127,18 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/users', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/users/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/users/[id]/password-reset', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-01.07 (SCR-16). The Admin only. The API has GET and nothing else: the log has no write route (PATCH, PUT and DELETE are 405).
+  {
+    path: '/audit',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-16',
+    nav: { group: 'Administration', label: 'Audit log', order: 30, icon: 'scroll-text' },
+  },
+  { path: '/api/v1/audit', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
   {
@@ -207,16 +219,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
     stage: 'R1',
     screen: 'SCR-15',
     nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
-  },
-  {
-    path: '/audit',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-16',
-    nav: { group: 'Administration', label: 'Audit log', order: 30, icon: 'scroll-text' },
   },
 
   // ---- Planned: Help and account (every role) ------------------------------------------------------------------------
