@@ -118,6 +118,10 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-05 | master | G6 AQP-206 (DEF-015, PR #92, 71ebe79): CONDITIONAL GO. One push: STD-01, QLT-79, QLT-80, STD-04/05, `CACHE_EPOCH` plus the fallback message (PRF-03 with QLT-81); narrow re-review. Cache-store cleanup only on the delivery lead's word after the merge | docs/00-governance/gate-log.md |
+| 2026-11-05 | master | G6 AQP-65 (PR #87, 5231947): CONDITIONAL GO. Test-only push (STD-06, QLT-78) verified by master before G7; STD-08 docs to the ux-expert and architect before the sprint 1 review; QLT-64 empty-loop guard confirmed | docs/00-governance/gate-log.md |
+| 2026-11-05 | master | G7 AQP-199 (PR #86, 6f7cf1a): GO; QA moves it to Done; the merge lifts AQP-65's G6 hold; AQP-206 next. Nightly p95 15:05 recorded (stalls still in the window) | docs/00-governance/gate-log.md |
+| 2026-11-05 | master | G6 AQP-199 (PR #86, 3808560): GO on the restated ACs; AC-2 stage 12 −19.2 % (recomputed). G7 evidence set; AQP-65's hold lifts after the merge. Also DL-101 to DL-103 recorded (AQP-206 placement, §13.12, AQP-208 AC-7 wording) | docs/00-governance/ |
 | 2026-11-05 | master | DL-099 corrected: no test hung; DEF-015 re-scoped as CI infrastructure (Environment, Sev-3, an `apt-get` mirror stall in the browser install). The architect chooses a cache or pinned image; the product-manager places it; the trigger and its effects stand (DL-100) | docs/00-governance/ |
 | 2026-11-05 | master | CI-time trigger fired (p95 15 min 05 s): AQP-199 to committed, AQP-89 out; AQP-65 held at G6 until AQP-199 merges; hung stage-12 run to DEF-015 (QA) (DL-099). RISK-023 raised to 8 | docs/00-governance/ |
 | 2026-11-05 | master | G7 AQP-198 (DEF-014, PR #85): GO; DEF-014 closed, DL-094 UI hold lifted. Done only after the posted G7 decision; push only if Gitleaks exits 0 (DL-098). AQP-198 G6 closed at 646ac60; DL-096 (staging copy at G8) and DL-097 (AQP-199 scope) recorded | docs/00-governance/ |
