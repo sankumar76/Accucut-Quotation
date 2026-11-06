@@ -127,7 +127,7 @@ download_and_install() {
   if [ "${EVIDENCE_DEAD_FIRST:-0}" = "1" ]; then
     # Throwaway evidence only (AQP-216 AC-7): the runner's own mirror becomes an unroutable address (TEST-NET-1).
     while IFS= read -r file; do
-      sudo sed -i -E "s#https?://[^/ ]*ubuntu\\.com/ubuntu/?#http://192.0.2.1/ubuntu/#g" "${file}"
+      sudo sed -i -E -e "s#https?://[^/ ]*ubuntu\\.com/ubuntu/?#http://192.0.2.1/ubuntu/#g" -e "s#mirror\\+file:[^ ]+#http://192.0.2.1/ubuntu/#g" "${file}"
     done < <(source_files)
   fi
   for try in $(seq 1 "${max_tries}"); do
