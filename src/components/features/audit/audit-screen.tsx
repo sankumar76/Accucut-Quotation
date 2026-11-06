@@ -7,6 +7,7 @@ import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState, ErrorState, SKELETON_DELAY_MS, SkeletonBlock } from '@/components/shared/states';
+import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetchAuditPage, type AuditPageData } from '@/lib/audit/audit-client';
@@ -28,7 +29,6 @@ import {
   SHOW_MORE_FAILED_BODY,
   SHOW_MORE_FAILED_TITLE,
 } from './texts';
-import { useAfterDelay } from './use-after-delay';
 
 /**
  * SCR-16 "Audit log" (STORY-01.07 AC-6, AC-8): the Admin reads the record and filters it by who, event, from and to.
