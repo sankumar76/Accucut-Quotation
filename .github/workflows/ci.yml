@@ -252,9 +252,6 @@ jobs:
           path: ${{ runner.temp }}/playwright-debs
           key: ${{ steps.versions.outputs.debs_key }}
 
-      - name: "NEGATIVE CONTROL 1 (temporary, reverted): plant a corrupt package in the restored cache"
-        run: echo "not a package" > "${RUNNER_TEMP}/playwright-debs/zzz-corrupt.deb"
-
       - name: "Stage 12a: Playwright browser and system packages"
         timeout-minutes: 8
         env:
