@@ -41,7 +41,7 @@ env:
   GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
   # Part of the Playwright system-package cache key (stage 12a). Raise it by hand, in a reviewed change, to start a new
   # key when the cached entry is bad. Never changed otherwise.
-  CACHE_EPOCH: '99'
+  CACHE_EPOCH: '1'
 
 jobs:
   verify:
@@ -252,9 +252,8 @@ jobs:
           path: ${{ runner.temp }}/playwright-debs
           key: ${{ steps.versions.outputs.debs_key }}
 
-      - name: "NEGATIVE CONTROL 2 (temporary, reverted): make the apt mirror unreachable, so the system-package install fails"
-        run: |
-          printf 'Acquire::http::Proxy "http://127.0.0.1:9";\nAcquire::https::Proxy "http://127.0.0.1:9";\n' | sudo tee /etc/apt/apt.conf.d/98-ci-break > /dev/null
+      - name: "NEGATIVE CONTROL 1 (temporary, reverted): plant a corrupt package in the restored cache"
+        run: echo "not a package" > "${RUNNER_TEMP}/playwright-debs/zzz-corrupt.deb"
 
       - name: "Stage 12a: Playwright browser and system packages"
         timeout-minutes: 8
