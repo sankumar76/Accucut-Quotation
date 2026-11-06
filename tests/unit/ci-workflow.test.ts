@@ -337,6 +337,23 @@ describe('CI workflow', () => {
     expect(code).toContain('npx playwright install-deps chromium');
     expect(code).toContain('npx playwright install chromium');
     expect(code).not.toContain('--with-deps');
+    // AQP-216 AC-3 to AC-5, STD-02: the download is bounded, not the connection. The limits are READ from the script and
+    // from the workflow, so a changed limit fails here: 45 s for the update, 90 s for the download, three tries, and the
+    // 8-minute step cap above them as the last bound (three tries take 6.75 minutes at worst).
+    const limit = (pattern: RegExp, text: string): number => Number(pattern.exec(text)?.[1] ?? Number.NaN);
+    const updateLimit = limit(/^update_timeout="\$\{APT_UPDATE_TIMEOUT:-(\d+)\}"$/m, code);
+    const downloadLimit = limit(/^download_timeout="\$\{APT_DOWNLOAD_TIMEOUT:-(\d+)\}"$/m, code);
+    const tries = limit(/^max_tries=(\d+)$/m, code);
+    const stepCapMinutes = limit(/timeout-minutes: (\d+)/, stepNamed('Stage 12a: Playwright browser and system packages'));
+    expect([updateLimit, downloadLimit, tries, stepCapMinutes]).toEqual([45, 90, 3, 8]);
+    expect(tries * (updateLimit + downloadLimit)).toBeLessThan(stepCapMinutes * 60);
+    expect(code).toContain('apt-get install --download-only');
+    expect(code).toContain('apt-get install -y --no-download');
+    expect(code).toContain('fallback_mirror="archive.ubuntu.com"');
+    // QLT-95: every apt command of a try takes the try's own view, and the update fails on a dead mirror.
+    expect(code).toContain('--error-on=any');
+    expect(code).toContain('Dir::Etc::SourceList=/dev/null');
+    expect(code).toContain('Dir::State::Lists=');
     // tests/unit/playwright-system-deps.test.ts runs it against fake programs for the hit, miss and fallback paths.
   });
 
