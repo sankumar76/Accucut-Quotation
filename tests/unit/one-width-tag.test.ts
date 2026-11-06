@@ -137,14 +137,23 @@ interface ListedTest {
   readonly projects: ReadonlyArray<string>;
 }
 
+/** How long `playwright test --list` may run, for the spawn and for the hook that waits on it. */
+const LIST_TIMEOUT_MS = 90_000;
+
 function listTests(): ListedTest[] {
   const result = spawnSync(process.execPath, [PLAYWRIGHT_CLI, 'test', '--list', '--reporter=json'], {
     cwd: REPOSITORY_ROOT,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    timeout: 90_000,
+    timeout: LIST_TIMEOUT_MS,
   });
-  if (result.status !== 0) throw new Error(`playwright test --list exited with ${String(result.status)}: ${result.stderr.slice(0, 500)}`);
+  if (result.status !== 0) {
+    // A timed-out or unstartable spawn has a null status and no stderr; name the cause (STD-06).
+    const cause = result.error?.message ?? (result.signal === null ? '' : `signal ${result.signal}`);
+    throw new Error(
+      `playwright test --list exited with ${String(result.status)}${cause === '' ? '' : ` (${cause})`}: ${(result.stderr ?? '').slice(0, 500)}`,
+    );
+  }
   const parsed = z.object({ suites: z.array(suiteSchema) }).parse(JSON.parse(result.stdout));
   const found = new Map<string, { tagged: boolean; projects: string[] }>();
   const visit = (suite: ListedSuite, blocks: ReadonlyArray<string>): void => {
@@ -166,7 +175,7 @@ describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-
   let listed: ListedTest[] = [];
   beforeAll(() => {
     listed = listTests();
-  }, 90_000);
+  }, LIST_TIMEOUT_MS);
 
   it('are exactly the 35 tests ruled in test strategy section 10.5, by title', () => {
     const tagged = listed.filter((test) => test.tagged).map((test) => test.key).sort();

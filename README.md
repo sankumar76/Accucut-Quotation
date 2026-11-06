@@ -189,6 +189,26 @@ production setting. **Stage 11b, the first-load JavaScript budget, also blocks m
 `.github/workflows/nightly.yml`, runs the Lighthouse reference run and the CI feedback-time report every night; it is
 never a required check.
 
+### Playwright install cache
+
+Stage 12a (`scripts/ci/playwright-system-deps.sh`) installs the browser and the system packages it needs. The browser is
+cached by Playwright version. The system packages (`.deb` files) are cached under the key
+`playwright-debs-e<CACHE_EPOCH>-<runner image>-<Playwright version>`. On a hit they are installed with `dpkg` and no
+network. On a miss, or when the cached install fails, `apt` runs with a 20 s stall timeout and 3 retries, the step stops
+after 8 minutes, and a miss saves what it downloaded. A bad cache entry never turns a run red, but it costs the bounded
+`apt` install on every run: a cache key never changes after it is saved, and a hit is not saved again. When that happens
+the job prints a warning that names the key. There are two ways to replace the entry:
+
+- **Delete it.** A maintainer runs `gh cache delete <key>` with the key from the warning (it needs a token with
+  `actions: write`, so the pipeline cannot do it), or removes it under Actions, Caches. The next run misses and saves a
+  good entry.
+- **Start a new key.** Raise `CACHE_EPOCH` (a quoted number in the `env:` block at the top of `ci.yml`) by one, in a reviewed
+  pull request. Do this only when the entry cannot be deleted, or to retire entries on every branch at once. The old
+  entries are left to expire.
+
+Caches are scoped by ref: a pull request restores entries from its own ref or from `master`, and what it saves is visible
+to that pull request only. The entries every branch reads are written only by `push` runs on `master`.
+
 ## Performance checks (NFR-009)
 
 **First-load JavaScript budget (CI stage 11b, every pull request).** Each route's first load may download at most
