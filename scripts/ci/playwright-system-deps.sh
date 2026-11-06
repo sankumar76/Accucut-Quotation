@@ -58,11 +58,12 @@ sources_file="${sources_dir}/sources.list.d/ubuntu.sources"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The list of packages present before the install, and the apt view of the current try. Both are removed on every exit,
-# including a failed install (STD-04).
+# including a failed install (STD-04). apt runs as root and writes root-owned files into the view (lists/auxfiles), so the
+# view is removed with sudo; a cleanup problem must never turn a good install into a failed step.
 before=""
 view=""
 apt_view=()
-trap 'rm -f -- "${before}"; rm -rf -- "${view}"' EXIT
+trap 'rm -f -- "${before}"; sudo rm -rf -- "${view}" || true' EXIT
 
 mkdir -p "${cache_dir}"
 
@@ -93,7 +94,7 @@ first_mirror() {
 # at archive.ubuntu.com. The directory is readable by the `_apt` download user; apt makes its own `partial` directory
 # writable for it.
 make_view() {
-  rm -rf -- "${view}"
+  sudo rm -rf -- "${view}"
   view="$(mktemp -d)"
   chmod 755 "${view}"
   mkdir -p "${view}/sources.list.d" "${view}/lists/partial"
