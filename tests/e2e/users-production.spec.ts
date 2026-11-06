@@ -12,6 +12,9 @@ import { PRODUCTION_URL } from './support/servers';
  * server sends with it. A canary person is put in the database, and their name and address must appear nowhere in what
  * the Lead and the Engineer receive. The same people are refused by the API with the same fixed 403, for a real ID and an
  * invented one. A signed-out visitor is sent to the sign-in page.
+ *
+ * Width (test strategy section 10.5, AQP-199): every test here checks an HTTP status, a body or a redirect and reads no layout,
+ * so the whole file is tagged `@one-width` and runs in the desktop project only.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
@@ -37,7 +40,7 @@ async function signInAs(page: Page, person: E2eUser): Promise<void> {
 }
 
 for (const [label, person] of people) {
-  test.describe(`a ${label} on the production build`, () => {
+  test.describe(`a ${label} on the production build`, { tag: '@one-width' }, () => {
     test(`TD-06: /users answers HTTP 403 with the "no access" page and no page data`, async ({ page, context }) => {
       await ensureCanaryUser();
       await useFreshAddress(context);
@@ -90,7 +93,7 @@ for (const [label, person] of people) {
   });
 }
 
-test('a signed-out visitor is sent to the sign-in page and sees nothing of /users', async ({ page }) => {
+test('a signed-out visitor is sent to the sign-in page and sees nothing of /users', { tag: '@one-width' }, async ({ page }) => {
   await page.goto('/users');
   await expect(page).toHaveURL(/\/sign-in/);
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();

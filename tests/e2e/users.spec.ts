@@ -12,6 +12,12 @@ import { ADMIN_STATE } from './support/servers';
  * (36 px for the icon buttons of a table row), and the add, edit, reset and deactivate dialogs by keyboard: the
  * alert dialog starts on the safe choice, Escape closes, focus returns. Each test works on a person made for it, so the
  * three screen sizes and the retries never meet on one. The words are the UX spec's, written out here.
+ *
+ * Width (test strategy section 10.5, AQP-199): seven tests check server rules and message text and read no layout (add a
+ * person, a used e-mail, a second Admin, edit name and role, the own role, and the two disabled own-row controls). They are
+ * tagged `@one-width` and run in the desktop project only. Everything that reads layout stays at three widths: the list (scroll
+ * and axe), the 44 px targets, the keyboard test of the add dialog, the messages under the fields, and the reset and
+ * deactivate dialogs. `tests/unit/one-width-tag.test.ts` pins the exact set.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -69,14 +75,14 @@ test.describe('the list', () => {
     }
   });
 
-  test('AC-4: the own row cannot be deactivated: the control is disabled and its name says why', async ({ page }) => {
+  test('AC-4: the own row cannot be deactivated: the control is disabled and its name says why', { tag: '@one-width' }, async ({ page }) => {
     await openUsers(page);
     const own = rowOf(page, E2E_ADMIN.name).getByRole('button', { name: OWN_ROW_NAME });
     await expect(own).toBeVisible();
     await expect(own).toBeDisabled();
   });
 
-  test('STD-01: the own row cannot be reset either: the control is disabled and its name says why', async ({ page }) => {
+  test('STD-01: the own row cannot be reset either: the control is disabled and its name says why', { tag: '@one-width' }, async ({ page }) => {
     await openUsers(page);
     const own = rowOf(page, E2E_ADMIN.name).getByRole('button', { name: /^Reset password is not available for your own account/ });
     await expect(own).toBeVisible();
@@ -98,7 +104,7 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await expect(add).toBeFocused();
   });
 
-  test('adds a person, shows them in the list, and never shows the password', async ({ page }) => {
+  test('adds a person, shows them in the list, and never shows the password', { tag: '@one-width' }, async ({ page }) => {
     const suffix = randomBytes(3).toString('hex');
     const name = `E2E Added ${suffix}`;
     await openUsers(page);
@@ -129,7 +135,7 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
   });
 
-  test('refuses an e-mail that is already used, whatever its letter case', async ({ page }, testInfo) => {
+  test('refuses an e-mail that is already used, whatever its letter case', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const existing = await createDisposableUser('managed', testInfo);
     await openUsers(page);
     await pressWithKeyboard(page.getByRole('button', { name: 'Add user' }));
@@ -142,7 +148,7 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await expect(dialog).toBeVisible();
   });
 
-  test('AC-3: a second Admin is refused, the current Admin is named, and nobody is added', async ({ page }) => {
+  test('AC-3: a second Admin is refused, the current Admin is named, and nobody is added', { tag: '@one-width' }, async ({ page }) => {
     const suffix = randomBytes(3).toString('hex');
     const name = `E2E Second Admin ${suffix}`;
     await openUsers(page);
@@ -164,7 +170,7 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
 });
 
 test.describe('edit (AC-1)', () => {
-  test('changes the name and the role of a person', async ({ page }, testInfo) => {
+  test('changes the name and the role of a person', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const person = await createDisposableUser('managed', testInfo);
     await openUsers(page);
     await pressWithKeyboard(rowOf(page, person.name).getByRole('button', { name: `Edit ${person.name}` }));
@@ -181,7 +187,7 @@ test.describe('edit (AC-1)', () => {
     await expect(row).toContainText(person.email);
   });
 
-  test('AC-4: the Admin cannot change their own role: the role list is disabled and says why', async ({ page }) => {
+  test('AC-4: the Admin cannot change their own role: the role list is disabled and says why', { tag: '@one-width' }, async ({ page }) => {
     await openUsers(page);
     await pressWithKeyboard(rowOf(page, E2E_ADMIN.name).getByRole('button', { name: `Edit ${E2E_ADMIN.name}` }));
     const dialog = page.getByRole('dialog', { name: `Edit ${E2E_ADMIN.name}` });
