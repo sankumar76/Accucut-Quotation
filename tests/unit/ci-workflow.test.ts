@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -34,12 +35,38 @@ function runBlocks(): string[] {
 }
 
 function stepNamed(prefix: string): string {
-  const start = LINES.findIndex((line) => line.includes(`name: "${prefix}`));
+  const start = LINES.findIndex((line) => line.includes(`- name: "${prefix}`));
   if (start === -1) throw new Error(`No step named "${prefix}..."`);
   const rest = LINES.slice(start + 1);
-  const end = rest.findIndex((line) => /^\s*- name:/.test(line));
-  return [LINES[start] ?? '', ...(end === -1 ? rest : rest.slice(0, end))].join('\n');
+  // A step ends at the next step or at the next job's key.
+  const end = rest.findIndex((line) => /^\s*- name:/.test(line) || /^ {2}[\w-]+:\s*$/.test(line));
+  const body = end === -1 ? rest : rest.slice(0, end);
+  // The comment block above the next step or job belongs to that one.
+  while (body.length > 0 && (body.at(-1) ?? '').trimStart().startsWith('#')) body.pop();
+  return [LINES[start] ?? '', ...body].join('\n');
 }
+
+/** The ids of the jobs, in file order (a job key is a name indented two spaces under `jobs:`). */
+function jobIds(): string[] {
+  return LINES.slice(LINES.indexOf('jobs:') + 1)
+    .map((line) => /^ {2}([\w-]+):\s*$/.exec(line)?.[1])
+    .filter((id): id is string => id !== undefined);
+}
+
+/** The text of one job, from its key to the next job's key (comments between jobs belong to the job below them). */
+function jobText(id: string): string {
+  const keys = jobIds();
+  const start = LINES.findIndex((line, index) => line === `  ${id}:` && index > LINES.indexOf('jobs:'));
+  if (start === -1) throw new Error(`No job "${id}"`);
+  const next = keys[keys.indexOf(id) + 1];
+  const nextStart = next === undefined ? LINES.length : LINES.findIndex((line, index) => line === `  ${next}:` && index > start);
+  // A comment block directly above the next job's key describes that job.
+  let end = nextStart;
+  while (end > start && (LINES[end - 1] ?? '').trimStart().startsWith('#')) end -= 1;
+  return LINES.slice(start, end).join('\n');
+}
+
+const stepsOf = (job: string): string[] => job.split('\n').filter((line) => /^\s*- name:/.test(line));
 
 describe('CI workflow', () => {
   it('STD-01: no run script has a GitHub expression expanded into it', () => {
@@ -91,22 +118,135 @@ describe('CI workflow', () => {
     expect(e2e).not.toContain('playwright install');
     expect(e2e).toContain('npx playwright test');
     expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
+    // It blocks merge because the shard jobs are needed by the required check (AQP-208 AC-4, below).
+    expect(jobText('required')).toContain('needs: [verify, e2e]');
   });
 
-  it('AQP-199 AC-4: stage 12 runs the whole suite in the one required job, with no flag that narrows or reshapes it', () => {
-    const e2e = stepNamed('Stage 12: E2E');
-    // The width, worker and retry settings live in playwright.config.ts (tests/unit/one-width-tag.test.ts reads them),
-    // so a flag here would override them silently.
-    for (const flag of ['--workers', '--project', '--grep', '--shard', '--retries', '--timeout', '--max-failures', '--last-failed']) {
-      expect(e2e, flag).not.toContain(flag);
-    }
-    expect(e2e).toMatch(/^\s*npx playwright test\s*$/m);
-    expect(e2e).not.toContain('continue-on-error');
-    // One job, still named for the required check, and no job that `needs` another (a shard job would need a fan-in job).
-    expect(LINES.slice(LINES.indexOf('jobs:') + 1).filter((line) => /^ {2}[\w-]+:\s*$/.test(line))).toEqual(['  verify:']);
+  it('AQP-208 AC-4: three jobs, named as the story says; only the fan-in job has `needs`, so the first two start together', () => {
+    expect(jobIds()).toEqual(['verify', 'e2e', 'required']);
+    expect(jobText('verify')).toMatch(/^ {4}name: Stages 1 to 11b$/m);
+    expect(jobText('e2e')).toContain('    name: "Stage 12: E2E (shard ${{ matrix.shard }} of ${{ strategy.job-total }})"');
+    expect(jobText('required')).toMatch(/^ {4}name: Stages 1 to 11$/m);
+    // The required check's name appears once as a job name, and the renamed job's name is not the required one.
     expect(WORKFLOW.match(/^ {4}name: Stages 1 to 11$/gm)).toHaveLength(1);
-    expect(WORKFLOW).not.toMatch(/^\s+needs:/m);
-    expect(WORKFLOW).not.toMatch(/^\s+strategy:/m);
+    // No `needs` between `Stages 1 to 11b` and the shards: only the fan-in has one, and it needs every other job.
+    expect(WORKFLOW.match(/^\s+needs:/gm)).toHaveLength(1);
+    expect(jobText('verify')).not.toMatch(/^\s+needs:/m);
+    expect(jobText('e2e')).not.toMatch(/^\s+needs:/m);
+    expect(jobText('required')).toMatch(/^ {4}needs: \[verify, e2e\]$/m);
+  });
+
+  it('AQP-208 AC-4: the fan-in job runs always, needs success from every needed job, and cannot be skipped past', () => {
+    const required = jobText('required');
+    expect(required).toMatch(/^ {4}if: \$\{\{ always\(\) \}\}$/m);
+    expect(required).not.toContain('continue-on-error');
+    // No `success()` or `!cancelled()` shortcut: those let a skipped or cancelled needed job through.
+    expect(required).not.toMatch(/success\(\)|cancelled\(\)|failure\(\)/);
+    // The results arrive through the environment (STD-01), one per needed job, for every job in `needs`.
+    for (const id of ['verify', 'e2e']) {
+      expect(required, id).toContain(`RESULT_${id.toUpperCase()}: \${{ needs.${id}.result }}`);
+    }
+    expect(required).toContain('for variable in RESULT_VERIFY RESULT_E2E; do');
+    expect(required).toContain('[ "${result}" = "success" ]');
+    expect(required.match(/needs\.[\w-]+\.result/g)).toHaveLength(2);
+  });
+
+  // The fan-in script is run for real, in bash, with each job result: a workflow cannot be run here, but this is its logic.
+  describe('AQP-208 AC-4: the fan-in script, run in bash', () => {
+    const BASH_AVAILABLE = spawnSync('bash', ['--version']).error === undefined;
+    const script = (() => {
+      const block = runBlocks().find((candidate) => candidate.includes('RESULT_VERIFY'));
+      if (block === undefined) throw new Error('No fan-in script');
+      // Dedent the block scalar the way YAML does.
+      const lines = block.split('\n').slice(1);
+      const indent = Math.min(...lines.filter((line) => line.trim() !== '').map((line) => line.length - line.trimStart().length));
+      return lines.map((line) => line.slice(indent)).join('\n');
+    })();
+
+    function exitCodeFor(verify: string, e2e: string): { status: number | null; output: string } {
+      const result = spawnSync('bash', ['-e', '-c', script], { env: { ...process.env, RESULT_VERIFY: verify, RESULT_E2E: e2e }, encoding: 'utf8' });
+      return { status: result.status, output: `${result.stdout}${result.stderr}` };
+    }
+
+    it.skipIf(!BASH_AVAILABLE)('passes only when every needed job succeeded', () => {
+      expect(exitCodeFor('success', 'success').status).toBe(0);
+    });
+
+    it.skipIf(!BASH_AVAILABLE)('fails when any needed job failed, was cancelled or was skipped, or has no result', () => {
+      for (const bad of ['failure', 'cancelled', 'skipped', '']) {
+        expect(exitCodeFor('success', bad).status, `E2E ${bad}`).toBe(1);
+        expect(exitCodeFor(bad, 'success').status, `VERIFY ${bad}`).toBe(1);
+        expect(exitCodeFor(bad, bad).status, `both ${bad}`).toBe(1);
+      }
+    });
+
+    it.skipIf(!BASH_AVAILABLE)('names the job that did not succeed, and the result', () => {
+      const { output } = exitCodeFor('success', 'cancelled');
+      expect(output).toContain("::error::E2E finished as 'cancelled', not 'success'");
+      expect(output).toContain('VERIFY: success');
+    });
+  });
+
+  it('AQP-208 AC-4: the shards are one matrix job, every shard reports, and the command carries only --shard', () => {
+    const e2e = jobText('e2e');
+    expect(e2e).toMatch(/^ {4}strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}shard: \[[\d, ]+\]$/m);
+    const step = stepNamed('Stage 12: E2E');
+    expect(step).toContain('SHARD_INDEX: ${{ matrix.shard }}');
+    expect(step).toContain('SHARD_TOTAL: ${{ strategy.job-total }}');
+    expect(step).toMatch(/^\s*npx playwright test --shard="\$\{SHARD_INDEX\}\/\$\{SHARD_TOTAL\}"\s*$/m);
+    // The width, worker and retry settings live in playwright.config.ts (tests/unit/one-width-tag.test.ts reads them),
+    // so a flag here would override them silently. `--shard` is the one flag this step adds.
+    for (const flag of ['--workers', '--project', '--grep', '--retries', '--timeout', '--max-failures', '--last-failed']) {
+      expect(step, flag).not.toContain(flag);
+    }
+    expect(step).not.toContain('continue-on-error');
+    expect(step).not.toMatch(/^\s*if:/m);
+  });
+
+  it('AQP-208 AC-1: the shard count is one constant, the length of the matrix: consecutive shards from 1, two to start, three at most', () => {
+    const list = /^ {8}shard: \[([\d, ]+)\]$/m.exec(jobText('e2e'))?.[1];
+    const shards = (list ?? '').split(',').map((entry) => Number(entry.trim()));
+    expect(shards.length).toBeGreaterThanOrEqual(2);
+    // Beyond three shards the solution-architect proposes again (test strategy 10.5).
+    expect(shards.length).toBeLessThanOrEqual(3);
+    expect(shards).toEqual(shards.map((_, index) => index + 1));
+    // The total is read from the matrix, never written a second time.
+    expect(WORKFLOW).not.toMatch(/--shard[= ]"?\d/);
+    expect(WORKFLOW).not.toMatch(/\bSHARD_TOTAL:\s*'?\d/);
+  });
+
+  it('AQP-208 AC-6: each shard builds for itself, has its own database, migrates it, and runs stage 12a before the tests', () => {
+    const e2e = jobText('e2e');
+    const names = stepsOf(e2e).map((line) => line.replace(/^\s*- name:\s*"?/, '').replace(/"$/, ''));
+    const position = (prefix: string): number => {
+      const index = names.findIndex((name) => name.startsWith(prefix));
+      if (index === -1) throw new Error(`No step "${prefix}"`);
+      return index;
+    };
+    expect(e2e).toContain('postgres:17@sha256:');
+    expect(stepNamed('Shard: build')).toContain('npx next build');
+    expect(stepNamed('Shard: migrations')).toContain('npx prisma migrate deploy');
+    expect(position('Shard: install')).toBeLessThan(position('Shard: build'));
+    expect(position('Shard: create the two database roles')).toBeLessThan(position('Shard: migrations'));
+    expect(position('Shard: migrations')).toBeLessThan(position('Stage 12a'));
+    expect(position('Shard: build')).toBeLessThan(position('Stage 12: E2E'));
+    expect(position('Stage 12a')).toBeLessThan(position('Stage 12: E2E'));
+    // Nothing passes between jobs.
+    expect(WORKFLOW).not.toMatch(/upload-artifact|download-artifact|actions\/cache\/(save|restore)/);
+    // The throwaway passwords are made in the job and masked before use, as in `verify`.
+    const roles = stepNamed('Shard: create the two database roles');
+    expect(roles.indexOf('::add-mask::${owner}')).toBeGreaterThan(roles.indexOf('openssl rand'));
+    expect(roles).not.toContain('secrets.');
+    // `verify` no longer runs stage 12: the shards do.
+    expect(stepsOf(jobText('verify')).join('\n')).not.toContain('Stage 12');
+  });
+
+  it('AQP-208 AC-6: stages 1 to 11b are not repeated in the shards, and the shards are not repeated in `verify`', () => {
+    const e2e = jobText('e2e');
+    for (const stage of ['Stage 2', 'Stage 3', 'Stage 4', 'Stage 5', 'Stage 6', 'Stage 7', 'Stage 8', 'Stage 9', 'Stage 11']) {
+      expect(e2e, stage).not.toContain(`- name: "${stage}`);
+    }
+    expect(jobText('verify')).not.toContain('playwright test');
   });
 
   it('AQP-199 AC-6: the workflow keeps least-privilege permissions, no repository secret and no fork-exposed trigger', () => {
@@ -126,9 +266,9 @@ describe('CI workflow', () => {
     expect(budget.indexOf('ensure-measurement-user')).toBeLessThan(budget.indexOf('check-js-budget'));
     expect(WORKFLOW.indexOf('Stage 11: coverage of changed code')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 11b'));
     expect(WORKFLOW.indexOf('name: "Stage 11b')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12'));
-    // One job, so the step is inside the job named "Stages 1 to 11", the required check.
-    expect(LINES.slice(LINES.indexOf('jobs:') + 1).filter((line) => /^ {2}[\w-]+:\s*$/.test(line))).toEqual(['  verify:']);
-    expect(WORKFLOW).toContain('name: Stages 1 to 11');
+    // The step is inside the job `Stages 1 to 11b`, which the required check `Stages 1 to 11` needs (AQP-208).
+    expect(jobText('verify')).toContain('- name: "Stage 11b: JS budget');
+    expect(jobText('required')).toContain('needs: [verify, e2e]');
   });
 
   it('STORY-10.10 AC-5: step 11b makes its password in the job, masks it, and uses no repository secret', () => {
@@ -187,11 +327,12 @@ describe('CI workflow', () => {
     // The old unbounded command is gone from the whole workflow.
     expect(WORKFLOW.replace(/#.*$/gm, '')).not.toContain('--with-deps');
     expect(WORKFLOW.indexOf('Cache the Playwright system packages')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12a'));
-    expect(WORKFLOW.indexOf('name: "Stage 12a')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12: E2E'));
+    expect(WORKFLOW.indexOf('- name: "Stage 12a')).toBeLessThan(WORKFLOW.indexOf('- name: "Stage 12: E2E'));
     expect(WORKFLOW.indexOf('name: "Stage 11b')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12a'));
-    // Still the one job named for the required check.
+    // Stage 12a runs in every shard job (AQP-208 AC-6), and nowhere else.
+    expect(jobText('e2e')).toContain('- name: "Stage 12a: Playwright browser and system packages"');
+    expect(jobText('verify')).not.toContain('Stage 12a');
     expect(WORKFLOW.match(/^ {4}name: Stages 1 to 11$/gm)).toHaveLength(1);
-    expect(WORKFLOW).not.toMatch(/^\s+needs:/m);
   });
 
   it('PRF-03 / QLT-81 (AQP-206): CACHE_EPOCH is a single quoted constant in the job environment, raised by hand; there is no automatic re-save', () => {
@@ -240,10 +381,12 @@ describe('CI workflow', () => {
     expect(section).not.toMatch(/stages 12 \(end-to-end\) and 13 \(image\) are present and disabled/);
   });
 
-  it('STD-03: the job name is kept because it is the required check, and says that it now also runs stage 12', () => {
+  it('STD-03: the name `Stages 1 to 11` is kept because it is the required check, and it also decides stage 12', () => {
     expect(WORKFLOW).toContain('name: Stages 1 to 11');
     expect(WORKFLOW).toMatch(/#.*required status check.*stage 12/is);
     expect(LINES[0]).toMatch(/stages 1 to 12/i);
+    // The fan-in job's own comment says the same, so a reader of the job sees why the name must not change.
+    expect(WORKFLOW).toMatch(/Its name is the required status check on master and must not change/);
   });
 
   it('AC-5: the secret scan runs with the accepted-findings baseline and --redact', () => {

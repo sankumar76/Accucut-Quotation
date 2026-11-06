@@ -181,9 +181,14 @@ coverage measures are listed once, in `scripts/lib/coverage-scope.ts`: `src/serv
 `.github/workflows/ci.yml` runs stages 1 to 12 of the test strategy (install, secret scan,
 data-file check, lint, type-check, unit with coverage of pure code, audit, licences, build with a check that
 `/design-system` is a 404 in it, migrations, integration with combined coverage, and end-to-end with axe on
-Chromium at three widths) on every pull request, in order. **Stage 12 is on since STORY-10.02 and blocks merge:**
-it runs inside the job named `Stages 1 to 11`, which is the required check on `master` (the name was kept so the
-check keeps reporting). Stage 13 (image) is present and disabled until the Dockerfile story, STORY-10.04. The
+Chromium at three widths) on every pull request. **Stage 12 is on since STORY-10.02 and blocks merge.** Since AQP-208
+(STORY-10.15) the workflow has three kinds of job: `Stages 1 to 11b` (stages 1 to 11b, in order); a matrix of shard jobs,
+`Stage 12: E2E (shard <i> of <N>)`, each of which builds for itself, migrates its own throwaway database, runs stage 12a
+and runs its share of the E2E tests (`playwright test --shard=<i>/<N>`, four workers); and a final job named
+`Stages 1 to 11`, which waits for all of them and fails unless every one succeeded. That last job is the required check
+on `master` (the name was kept so the check keeps reporting and no repository setting changes). The first two kinds start
+together. The shard count is the length of `matrix.shard` in `ci.yml`: one line to change (test strategy 10.5).
+Stage 13 (image) is present and disabled until the Dockerfile story, STORY-10.04. The
 Next.js build cache and the Playwright browsers are cached between runs. The workflow uses no secret and no
 production setting. **Stage 11b, the first-load JavaScript budget, also blocks merge** (next section). A second workflow,
 `.github/workflows/nightly.yml`, runs the Lighthouse reference run and the CI feedback-time report every night; it is
