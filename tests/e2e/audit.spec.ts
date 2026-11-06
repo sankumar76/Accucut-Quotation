@@ -189,11 +189,18 @@ test.describe('the filters (AC-6)', () => {
       asked += 1;
       await route.continue();
     });
-    await page.getByLabel('From', { exact: true }).fill('2026-11-07');
+    // A To date alone is a real filter, and is asked for; the From date after it makes the range impossible.
     await page.getByLabel('To', { exact: true }).fill('2026-11-06');
+    await expect.poll(() => asked).toBe(1);
+    await expect(page.getByText(RANGE_MESSAGE)).toHaveCount(0);
+    await page.getByLabel('From', { exact: true }).fill('2026-11-07');
     await expect(page.getByText(RANGE_MESSAGE)).toBeVisible();
     await expect(page.getByLabel('To', { exact: true })).toHaveAttribute('aria-invalid', 'true');
-    expect(asked).toBe(0);
+    expect(asked).toBe(1);
+    // Putting it right asks again, and the message goes.
+    await page.getByLabel('From', { exact: true }).fill('2026-11-05');
+    await expect.poll(() => asked).toBe(2);
+    await expect(page.getByText(RANGE_MESSAGE)).toHaveCount(0);
   });
 });
 
@@ -300,13 +307,20 @@ test.describe('by keyboard (AC-9)', () => {
     await expect(event).toHaveValue('');
   });
 
-  test('Tab runs through Who, Event, From, To in that order', async ({ page }) => {
+  test('Tab runs from Who to Event to From; a date field is three parts (day, month, year) to the keyboard, then comes To', async ({ page }) => {
     await openAudit(page);
     await page.getByLabel('Who', { exact: true }).focus();
-    for (const label of ['Event', 'From', 'To']) {
+    for (const label of ['Event', 'From']) {
       await page.keyboard.press('Tab');
       await expect(page.getByLabel(label, { exact: true })).toBeFocused();
     }
+    // The browser's own date field keeps focus through its three parts, so a few more presses leave it for To. The parts
+    // themselves are the browser's: how they are typed into is not ours to test.
+    const to = page.getByLabel('To', { exact: true });
+    for (let press = 0; press < 6 && !(await to.evaluate((element) => element === document.activeElement)); press += 1) {
+      await page.keyboard.press('Tab');
+    }
+    await expect(to).toBeFocused();
   });
 });
 

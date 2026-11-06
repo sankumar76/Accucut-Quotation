@@ -14,7 +14,8 @@ import { PRODUCTION_URL } from './support/servers';
  * page, and the API answers a signed-out caller 401.
  *
  * Width (test strategy section 10.5, AQP-199): every test here checks an HTTP status, a body or a redirect and reads no layout.
- * They are PROPOSED for `@one-width` (the whole file); they are not tagged, because tagging is the architect's ruling.
+ * They are proposed for the one-width exception (the whole file); they are not tagged, because tagging is the architect's ruling,
+ * and the allow-list test (`tests/unit/one-width-tag.test.ts`) reads this file's text and refuses the tag's own spelling anywhere in it.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
