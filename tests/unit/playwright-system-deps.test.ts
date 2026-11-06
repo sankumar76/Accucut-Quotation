@@ -94,6 +94,8 @@ interface Outcome {
   readonly runnerSourcesAfter: ReadonlyMap<string, string>;
   /** Files the script left in its temporary directory. */
   readonly leftover: ReadonlyArray<string>;
+  /** The directories the script removed with `sudo rm` (an empty path is not listed). */
+  readonly sudoRemovals: ReadonlyArray<string>;
 }
 
 const SCENARIO_LIST = [
@@ -147,6 +149,7 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
     for (const dir of [bin, archivesDir, scratchDir, aptDir, sourcesDir]) mkdirSync(dir);
     writeFileSync(callsFile, '');
     writeFileSync(`${callsFile}.views`, '');
+    writeFileSync(`${callsFile}.sudo`, '');
     writeFileSync(join(archivesDir, 'already-on-the-image.deb'), '');
     if (scenario.noImageSources !== true) writeFileSync(join(sourcesDir, 'ubuntu.sources'), IMAGE_SOURCES);
     writeFileSync(join(sourcesDir, 'other.list'), `${OTHER_SOURCE}\n`);
@@ -166,7 +169,8 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
     ].join('\n');
     const runStep = 'case "$step" in fail) exit 100;; hang) exec sleep 30;; warn) echo "W: Failed to fetch http://mirror.example.test/InRelease  Temporary failure" >&2;; esac';
     const fakes: Record<string, string> = {
-      sudo: 'exec "$@"',
+      // `sudo rm` is logged to its own file: apt, run as root, leaves root-owned files in a view, so only `sudo rm` can remove it.
+      sudo: '[ "$1" = "rm" ] && echo "$*" >> "$CALLS.sudo"; exec "$@"',
       // `dpkg --configure -a` always works; `dpkg -i` fails when the scenario says so.
       dpkg: 'echo "dpkg $*" >> "$CALLS"; [ "$1" = "--configure" ] && exit 0; exit "${FAKE_DPKG_EXIT:-0}"',
       // The dry run exits 1 when packages are missing, as Playwright does. install-deps (the AQP-206 path) "downloads"
@@ -257,6 +261,9 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
       views,
       runnerSourcesAfter,
       leftover: readdirSync(scratchDir),
+      sudoRemovals: readFileSync(`${callsFile}.sudo`, 'utf8')
+        .split('\n')
+        .filter((line) => line.startsWith('rm -rf -- /')),
     };
   }
 
@@ -495,6 +502,16 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
     expect(aptCalls('offlineInstallFails')).toEqual(MISS_ON_IMAGE);
     expect(npxCalls('offlineInstallFails')).toEqual([DRY_RUN]);
     expect(run.cachedAfter).toEqual([]);
+  });
+
+  it('G7 round 2: every apt view is removed with sudo, because apt (root) leaves root-owned files in it that the runner user cannot remove', () => {
+    for (const name of ['miss', 'updateFailsOnce', 'everyUpdateFails', 'everyDownloadFails'] as const) {
+      const run = outcome(name);
+      // One removal for each view that a later try replaces, and one at exit for the last view.
+      expect(run.sudoRemovals.length, name).toBeGreaterThanOrEqual(run.views.length);
+    }
+    expect(outcome('miss').sudoRemovals).toHaveLength(1);
+    expect(outcome('hit').sudoRemovals, 'a hit makes no view').toEqual([]);
   });
 
   it('STD-04: no temporary file or apt view is left behind, after a good run or a failed install', () => {
