@@ -72,7 +72,11 @@ describe('the requests are strict', () => {
   });
 
   it('writes the ID in lower case, as PostgreSQL returns it, whatever case the address used', () => {
-    expect(userIdParamsSchema.parse({ id: PERSON.id.replace(/[a-f]/g, (digit) => digit.toUpperCase()) })).toEqual({ id: PERSON.id });
-    expect(userIdParamsSchema.parse({ id: 'ABCDEF01-2345-4678-89AB-CDEF01234567' })).toEqual({ id: 'abcdef01-2345-4678-89ab-cdef01234567' });
+    // Every ID below holds hex letters, so a change of case really changes the string (an ID of digits only could not fail).
+    const lower = 'abcdef01-2345-4678-89ab-cdef01234567';
+    expect(lower).not.toBe(lower.toUpperCase());
+    expect(userIdParamsSchema.parse({ id: lower.toUpperCase() })).toEqual({ id: lower });
+    expect(userIdParamsSchema.parse({ id: 'AbCdEf01-2345-4678-89aB-cDeF01234567' })).toEqual({ id: lower });
+    expect(userIdParamsSchema.parse({ id: lower })).toEqual({ id: lower });
   });
 });

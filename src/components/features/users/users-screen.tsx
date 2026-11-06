@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { Button } from '@/components/ui/button';
 import { ADMIN_ALREADY_ACTIVE_CODE } from '@/lib/errors';
+import { revealNearest } from '@/lib/ui/reveal';
 import { listUsers, updateUser, type UserRow } from '@/lib/users/users-client';
 
 import { findOpenerElement, isOpener, type DialogKind, type Opener } from './opener';
@@ -70,7 +71,7 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
 
   // A notice that is off-screen is brought into view; one already in view does not move (UX spec v0.14, SCR-25).
   useEffect(() => {
-    if (first.failed) failureNotice.current?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    if (first.failed) revealNearest(failureNotice.current);
   }, [first.failed]);
 
   function openDialog(kind: DialogKind, person: UserRow | null, from: Opener, byKeyboard: boolean): void {

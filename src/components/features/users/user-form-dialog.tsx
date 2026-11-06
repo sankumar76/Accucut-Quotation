@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { roleLabel } from '@/lib/auth/roles';
 import { ADMIN_ALREADY_ACTIVE_CODE } from '@/lib/errors';
-import { createUser, updateUser, type Refusal, type UserChanges, type UserRow } from '@/lib/users/users-client';
+import { submitEdit } from '@/lib/users/edit-submit';
+import { createUser, updateUser, type Refusal, type UserRow } from '@/lib/users/users-client';
 import {
   isUserRole,
   newPasswordProblem,
@@ -80,12 +81,6 @@ function serverErrors(refusal: Refusal): Errors {
   return found;
 }
 
-function changesOf(user: UserRow, values: Values): UserChanges {
-  const role = values.role === user.role ? undefined : values.role;
-  const name = values.name.trim() === user.name ? undefined : values.name.trim();
-  return { ...(name === undefined ? {} : { name }), ...(role === undefined ? {} : { role }) };
-}
-
 /** The errors without the one for `field`, once the person has changed that field. */
 function withoutError(errors: Errors, field: FieldName): Errors {
   return Object.fromEntries(Object.entries(errors).filter(([name]) => name !== field));
@@ -142,17 +137,20 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
     if (Object.keys(found).length > 0) return;
 
     if (!adding) {
-      const changes = changesOf(user, values);
-      // Nothing changed: close with no request and no message (UX spec v0.14, SCR-14 Edit user).
-      if (Object.keys(changes).length === 0) return onClose();
-      return send(updateUser(user.id, changes), 'edited');
+      // Nothing changed: close with no request and no message (UX spec v0.14, SCR-14 Edit user; `submitEdit` never calls `save`).
+      const result = await submitEdit(user, values, (id, changes) => {
+        setSubmitting(true);
+        return updateUser(id, changes);
+      });
+      if (result.kind === 'unchanged') return onClose();
+      return finish(result.outcome, 'edited');
     }
-    return send(createUser({ name: values.name.trim(), email: values.email.trim(), role: values.role, password: values.password }), 'added');
+    setSubmitting(true);
+    return finish(await createUser({ name: values.name.trim(), email: values.email.trim(), role: values.role, password: values.password }), 'added');
   }
 
-  async function send(request: ReturnType<typeof updateUser>, kind: 'added' | 'edited'): Promise<void> {
-    setSubmitting(true);
-    const outcome = await request;
+  /** Shows the server's answer to an add or an edit. */
+  function finish(outcome: Awaited<ReturnType<typeof updateUser>>, kind: 'added' | 'edited'): void {
     setSubmitting(false);
     if (outcome.status === 'ok') return onSaved(outcome.value, kind);
     if (outcome.status === 'failed') return setFailed(true);
