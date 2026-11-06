@@ -50,7 +50,7 @@ cache_key="${PLAYWRIGHT_DEBS_CACHE_KEY:-unknown}"
 bounds_file="${APT_BOUNDS_FILE:-/etc/apt/apt.conf.d/99-ci-bounds}"
 archives_dir="${APT_ARCHIVES_DIR:-/var/cache/apt/archives}"
 sources_dir="${APT_SOURCES_DIR:-/etc/apt}"
-update_timeout="${APT_UPDATE_TIMEOUT:-45}"
+update_timeout="${APT_UPDATE_TIMEOUT:-60}"
 download_timeout="${APT_DOWNLOAD_TIMEOUT:-90}"
 fallback_mirror="archive.ubuntu.com"
 max_tries=3
@@ -99,7 +99,7 @@ make_view() {
   chmod 755 "${view}"
   mkdir -p "${view}/sources.list.d" "${view}/lists/partial"
   if [ "$1" = fallback ]; then
-    cp -- "${sources_file}" "${view}/sources.list.d/ubuntu.sources"
+    sed -E "s#^URIs:.*#URIs: http://${fallback_mirror}/ubuntu/#" "${sources_file}" > "${view}/sources.list.d/ubuntu.sources"
   else
     cp -- "${sources_file}" "${view}/sources.list.d/ubuntu.sources"
   fi
