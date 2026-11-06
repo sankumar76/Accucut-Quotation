@@ -110,3 +110,22 @@ model AuditLog {
   @@index([actorId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_log_actor_id")
   @@map("audit_log")
 }
+
+/// One named rate of the Process Master (STORY-02.01, FR-011, FR-012; architecture sections 5.1, 5.5 and 5.6).
+/// A formula holds the rate's ID (`{{rate:<id>}}`), so renaming a rate never changes a formula. The 15 seed items of
+/// SPEC section 4.1 are inserted by the migration with fixed IDs (prisma/seed/config/seed-ids.ts) and a default value of 0:
+/// names and units are structure, the values are typed by the Admin at first use and never enter the repository (ADR-014).
+/// The unique index on `lower(name)` (names differ by more than letter case, AC-2) and the CHECK constraints (a rate is
+/// 0 or more, a name is not blank) are hand-written in the migration: Prisma cannot express them.
+/// Class Restricted: the default value never reaches an Engineer.
+model ProcessItem {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  unit         String
+  defaultValue Decimal  @default(0) @map("default_value") @db.Decimal(18, 4)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([name], map: "uq_process_items_name")
+  @@map("process_items")
+}

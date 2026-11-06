@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { formatDefaultValue, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 
 /**
@@ -65,6 +66,19 @@ const userRole = z.enum(USER_ROLE_VALUES);
 const roleState = z.strictObject({ role: userRole });
 /** A person's name, which is not a secret and is already the entry's label; the rename event keeps the old and the new one. */
 const nameState = z.strictObject({ name: z.string().min(1) });
+
+// ---- Shape of the Process Master events (SCR-16 "Master data edit") ------------------------------------------------------------
+/** A rate as the log keeps it: its name, unit and default value as decimal text ("0.47"). The ID and the name label the entry. */
+const processItemState = z.strictObject({
+  name: z.string().min(1),
+  unit: z.string().min(1),
+  defaultValue: z.string().regex(/^\d+\.\d{2,4}$/),
+});
+
+/** "Foam Cost, ₹ per sq ft, 21.50": the whole rate, so a reader sees what it was and what it is without a legend. */
+function describeProcessItem(state: z.output<typeof processItemState>): string {
+  return `${state.name}, ${unitLabel(state.unit)}, ${formatDefaultValue(state.defaultValue, state.unit)}`;
+}
 
 /** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
 const reservedShape = z.json();
@@ -134,8 +148,37 @@ export const AUDIT_EVENTS = {
     describe: () => ({ before: 'Earlier password', after: 'Temporary password set' }),
   }),
 
+  // ---- Wired in STORY-02.01: the three events of the Process Master (AC-5) ------------------------------------------------------
+  // Architecture section 8 (AQP-74 ruling): `master.edited`, and a masters story may add `master.created` and `master.deleted` under
+  // the same rule. `object_type` then names the master (`process_item`), which the caller gives (`AuditEntryInput.objectType`).
+  // Each save is one entry, whatever number of attributes it changes (AC-5). A rate's value is Restricted, and the log is
+  // Admin-only (architecture section 5.3), so the entry may keep it.
+  'master.created': defineEvent({
+    objectType: 'master',
+    category: 'master_data',
+    status: 'wired',
+    before: z.null(),
+    after: processItemState,
+    describe: (_before, after) => ({ before: 'Not added', after: describeProcessItem(after) }),
+  }),
+  'master.edited': defineEvent({
+    objectType: 'master',
+    category: 'master_data',
+    status: 'wired',
+    before: processItemState,
+    after: processItemState,
+    describe: (before, after) => ({ before: describeProcessItem(before), after: describeProcessItem(after) }),
+  }),
+  'master.deleted': defineEvent({
+    objectType: 'master',
+    category: 'master_data',
+    status: 'wired',
+    before: processItemState,
+    after: z.null(),
+    describe: (before) => ({ before: describeProcessItem(before), after: 'Deleted' }),
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
-  'master.edited': reserved('master', 'master_data'),
   'approval.approved': reserved('estimate', 'approval'),
   'approval.unlocked': reserved('estimate', 'unlock'),
   'approval.price_overridden': reserved('estimate', 'price_override'),
