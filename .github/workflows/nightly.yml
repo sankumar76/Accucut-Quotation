@@ -5,8 +5,9 @@
 #                screens as they come into being) and on the Slow 4G profile (report only), 5 runs each. The reports are
 #                kept as an artefact for 30 days and the summary table (LCP, TBT, benchmarkIndex, Chromium version) goes
 #                in the job summary. Nothing is uploaded to a public server.
-#   ci-time      The duration of the required job "Stages 1 to 11" over the first attempts of the last 20 pull-request
-#                runs: p95 over 10 minutes or median over 6 minutes fails this job.
+#   ci-time      The duration of a run, from the start of its first job to the end of the required job "Stages 1 to 11"
+#                (AQP-208), over the first attempts of the last 20 pull-request runs: p95 over 10 minutes or median over
+#                6 minutes fails this job.
 #
 # It never blocks a merge: it is not a required check. A failure is reported and the orchestrator raises the issue.
 #

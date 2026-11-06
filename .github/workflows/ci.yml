@@ -5,6 +5,16 @@
 # DISABLED step until the Dockerfile story STORY-10.04 gives it something to run: change
 # `if: ${{ false }}` to `if: ${{ true }}` there.
 #
+# Three kinds of job (AQP-208, STORY-10.15, test strategy section 10.5). The first two start together; there is no
+# `needs` between them:
+#   - `verify`, named `Stages 1 to 11b`: stages 1 to 11b, as before.
+#   - `e2e`, named `Stage 12: E2E (shard <i> of <N>)`: a matrix of shard jobs. Each shard builds for itself (nothing is
+#     passed between jobs), migrates its own throwaway database, installs the browser (stage 12a) and runs its share of
+#     the E2E tests with four workers. The shard count is the length of `matrix.shard`, the one line to change.
+#   - `required`, named `Stages 1 to 11`: the fan-in job and the ONLY job with `needs`. It is the required status check
+#     on master, so branch protection does not change. It runs even when a needed job failed and fails unless every
+#     needed job succeeded, so a failed, cancelled or skipped job cannot be merged past.
+#
 # Security rules (architecture section 8, TB-6). The repository is public, so job logs are public.
 #   - The trigger is `pull_request`, never `pull_request_target`: a pull request from a fork runs
 #     without any secret and with a read-only token.
@@ -45,9 +55,10 @@ env:
 
 jobs:
   verify:
-    # The job name is kept: it is the required status check on master. It now also runs stage 12 (E2E), so stage 12
-    # blocks merge too. Renaming the job would leave master waiting for a check that never reports.
-    name: Stages 1 to 11
+    # Renamed from `Stages 1 to 11` (AQP-208): that name now belongs to the fan-in job `required` below, which is the
+    # required status check on master and also decides stage 12, so stage 12 (E2E) still blocks merge. This job
+    # reports as `Stages 1 to 11b` and is a needed job of the fan-in.
+    name: Stages 1 to 11b
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -197,8 +208,8 @@ jobs:
       # sign-in (the user is made in the job's throwaway database, after stage 10 migrated it), reads the files each page
       # names from `.next/static`, writes one row per route to the job summary, stops the server, and exits 1 if any route is
       # over its limit, does not answer as it should, or cannot be measured. It runs after stage 11 because sign-in needs the
-      # migrated database, and before stage 12, which starts its own production server. The password is made in the job and
-      # masked; it exists only for this database. It adds well under a minute to the job.
+      # migrated database. Stage 12 runs in the shard jobs below, each with its own production server. The password is made
+      # in the job and masked; it exists only for this database. It adds well under a minute to the job.
       - name: "Stage 11b: JS budget (NFR-009, first-load JavaScript per route)"
         run: |
           password="p$(openssl rand -hex 16)"
@@ -208,28 +219,109 @@ jobs:
           npx tsx scripts/ensure-measurement-user.ts
           npx tsx scripts/check-js-budget.ts
 
-      # ---- Stage 12a and 12: E2E (on since STORY-10.02, the first page story) -----------------
-      # Chromium at three widths with axe (test strategy sections 2, 6, 9). Playwright starts two servers
-      # (playwright.config.ts): the development server for the design-system specs and the PRODUCTION build from stage 9
-      # (`next start`) for the sign-in journey (deferred issue #17). Both use this job's throwaway database through
-      # `DATABASE_URL` (stage 10) and invented settings for everything else; the set-up project creates invented E2E
-      # users in it.
-      #
-      # Stage 12a (DEF-015, AQP-206, test strategy section 10.6) installs what the browser needs, apart from the tests, so
-      # the Actions API reports install time and test time separately. `playwright install --with-deps` used to run
-      # apt-get against the runner's Ubuntu mirror on every run with no bound, and a slow mirror stalled the job for up to
-      # ten minutes. Now:
-      #   - the browser download is cached by Playwright version;
-      #   - the browser's system packages (.deb files) are cached by CACHE_EPOCH, runner image and Playwright version. On a
-      #     hit they are installed with dpkg and no network. On a miss, or if that install fails, apt runs with a 20 s
-      #     stall timeout and 3 retries, and the step stops after 8 minutes; on a miss the packages it downloaded are saved.
-      #   - a cache key is immutable and a hit is never saved again, so a bad entry is not replaced by a later run. The
-      #     fallback warning prints the key and the command that removes it (`gh cache delete <key>`, run by a maintainer),
-      #     or a commit that raises CACHE_EPOCH (top of this file) starts a new key. README, "Playwright install cache".
-      # The caches hold downloaded packages and browser files only (no secret, no setting) and use the same pinned cache
-      # action as stage 9. Caches are scoped by ref: a pull request's run restores entries from its own ref or from
-      # master, and what it saves is visible to that pull request only. The entries every branch reads are written only
-      # by `push` runs on master, that is by reviewed code.
+      # ---- Stage 13: image (DISABLED until the Dockerfile story, STORY-10.04) ----------------
+      # Docker build; run it and check /api/health. Blocks merge on master only.
+      - name: "Stage 13: image build and health check (disabled)"
+        if: ${{ false }}
+        run: echo "Enabled by STORY-10.04 together with the Dockerfile."
+
+  # ---- Stage 12: E2E, in shards (AQP-208, STORY-10.15; test strategy section 10.5) ---------------------------------
+  # One job per shard, started together with `verify` (no `needs`). The shard count is the length of `matrix.shard`: for
+  # three shards write `[1, 2, 3]`, nothing else changes (the command reads the total from `strategy.job-total`). With
+  # `fullyParallel`, `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and desktop tests
+  # is the whole suite with none twice (tests/unit/e2e-shards.test.ts). The set-up project runs once in each shard,
+  # against that shard's own database. `fail-fast` is off so every shard reports, as the single job did.
+  #
+  # Each shard repeats install, build and database set-up and passes nothing to another job. It does not repeat the
+  # secret scan, the checks of stages 3 to 8, the route check of stage 9, the drift check of stage 10 or stage 11:
+  # `verify` runs those once.
+  e2e:
+    name: "Stage 12: E2E (shard ${{ matrix.shard }} of ${{ strategy.job-total }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
+    services:
+      # The same throwaway PostgreSQL as `verify` (same image and digest; change both together). One per shard job, so
+      # shards share no data. Bootstrap superuser only; a service `env:` cannot read a generated value, so the fixed
+      # password is for a database that exists for this job and cannot be reached from outside the runner.
+      postgres:
+        image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-bootstrap-only
+          POSTGRES_DB: accucut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres --dbname accucut"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: "Shard: install (npm ci, prisma generate)"
+        run: |
+          npm ci
+          npx prisma generate
+
+      # The same cache key as `verify`'s stage 9 (the sources and the lockfile are the same). A key is saved once; a job
+      # that loses the race gets a harmless "already exists" notice.
+      - name: "Shard: cache the Next.js build cache"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'next.config.ts', 'postcss.config.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # Playwright starts `next start` on this build (playwright.config.ts), so each shard builds for itself.
+      - name: "Shard: build (next build)"
+        run: npx next build
+
+      # Throwaway passwords, made in the job and masked, as in `verify` (stage 10). They exist only for this database.
+      - name: "Shard: create the two database roles (throwaway passwords)"
+        run: |
+          owner="o$(openssl rand -hex 16)"
+          app="a$(openssl rand -hex 16)"
+          echo "::add-mask::${owner}"
+          echo "::add-mask::${app}"
+          {
+            echo "DB_OWNER_PASSWORD=${owner}"
+            echo "DB_APP_PASSWORD=${app}"
+            echo "MIGRATE_DATABASE_URL=postgresql://accucut_owner:${owner}@localhost:5432/accucut"
+            echo "DATABASE_URL=postgresql://accucut_app:${app}@localhost:5432/accucut"
+          } >> "${GITHUB_ENV}"
+          PGHOST=localhost PGPASSWORD=ci-bootstrap-only POSTGRES_USER=postgres POSTGRES_DB=accucut \
+            DB_OWNER_PASSWORD="${owner}" DB_APP_PASSWORD="${app}" \
+            bash docker/postgres-init/01-create-roles.sh
+
+      - name: "Shard: migrations on an empty database"
+        run: npx prisma migrate deploy
+
+      # Stage 12a (DEF-015, AQP-206, test strategy section 10.6), once per shard. The browser download and the browser's
+      # system packages (.deb files) are cached, and apt is bounded on a miss; the step stops after 8 minutes. Caches are
+      # scoped by ref: a pull request restores entries from its own ref or from master and saves for itself only. Both
+      # shards use the same keys; a key is saved once and a hit is never saved again. The fallback warning prints the key
+      # and the command that removes it (`gh cache delete <key>`, run by a maintainer), or a commit that raises
+      # CACHE_EPOCH (top of this file) starts a new key. README, "Playwright install cache".
       - name: "Read the Playwright and runner image versions"
         id: versions
         run: |
@@ -260,19 +352,50 @@ jobs:
           PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
         run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
 
-      # Stage 12 time (AQP-199, test strategy section 10.5): `playwright.config.ts` runs four workers when `CI` is set
-      # (two on a developer's machine), the set-up project warms `/`, `/queue` and `/design-system` on the development
-      # server first, and tests tagged `@one-width` (tests that read no layout, in four ruled spec files) run in the
-      # desktop project only. Everything else runs at all three widths. The command below carries no `--workers`,
-      # `--project`, `--grep` or `--shard` flag, and it stays in this one job so the required check keeps its name.
-      - name: "Stage 12: E2E (Chromium at three widths, axe)"
+      # Chromium at three widths with axe (test strategy sections 2, 6, 9), this shard's share. Playwright starts two
+      # servers (playwright.config.ts): the development server for the design-system specs and the PRODUCTION build from
+      # the build step above (`next start`) for the sign-in journey (deferred issue #17). Both use this shard's throwaway
+      # database through `DATABASE_URL`, and the set-up project creates the invented E2E users in it. Workers, retries and
+      # tags are in `playwright.config.ts` (four workers when `CI` is set, `retries: 1`, `@one-width` in the desktop
+      # project only; AQP-199, section 10.5), so the command carries only `--shard`.
+      - name: "Stage 12: E2E (Chromium at three widths, axe; this shard's share)"
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ strategy.job-total }}
         run: |
           # The runner size goes to the log, so the four workers can be checked against it (AQP-199, test strategy 10.5).
           echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
-          npx playwright test
+          npx playwright test --shard="${SHARD_INDEX}/${SHARD_TOTAL}"
 
-      # ---- Stage 13: image (DISABLED until the Dockerfile story, STORY-10.04) ----------------
-      # Docker build; run it and check /api/health. Blocks merge on master only.
-      - name: "Stage 13: image build and health check (disabled)"
-        if: ${{ false }}
-        run: echo "Enabled by STORY-10.04 together with the Dockerfile."
+  # ---- The required check (AQP-208, test strategy sections 10.3 and 10.5) -----------------------------------------
+  # The fan-in job. Its name is the required status check on master and must not change (the nightly CI-time step also
+  # finds the end of a run by this name). It is the only job with `needs`. `if: always()` makes it run when a needed job
+  # failed, was cancelled or was skipped: a job whose `needs` did not succeed is otherwise skipped, and a skipped
+  # required check does not block a merge. The step fails unless every needed job's result is exactly `success`. When a
+  # job is added to `needs`, add its result to the step's environment; tests/unit/ci-workflow.test.ts fails if a needed
+  # job is missing there.
+  required:
+    name: Stages 1 to 11
+    needs: [verify, e2e]
+    if: ${{ always() }}
+    # No permission at all: the job reads no repository content and calls no API, so it needs no token scope.
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every needed job to have succeeded
+        env:
+          RESULT_VERIFY: ${{ needs.verify.result }}
+          RESULT_E2E: ${{ needs.e2e.result }}
+        run: |
+          failed=0
+          for variable in RESULT_VERIFY RESULT_E2E; do
+            result="${!variable}"
+            if [ "${result}" = "success" ]; then
+              echo "${variable#RESULT_}: success"
+            else
+              echo "::error::${variable#RESULT_} finished as '${result}', not 'success'"
+              failed=1
+            fi
+          done
+          exit "${failed}"
