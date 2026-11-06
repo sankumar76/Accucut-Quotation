@@ -44,7 +44,7 @@ archives_dir="${APT_ARCHIVES_DIR:-/var/cache/apt/archives}"
 sources_dir="${APT_SOURCES_DIR:-/etc/apt}"
 update_timeout="${APT_UPDATE_TIMEOUT:-45}"
 download_timeout="${APT_DOWNLOAD_TIMEOUT:-90}"
-fallback_mirror="archive.ubuntu.com"
+fallback_mirror="${EVIDENCE_FALLBACK_MIRROR:-archive.ubuntu.com}"
 max_tries=3
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -83,7 +83,7 @@ use_fallback_mirror() {
   local file
   while IFS= read -r file; do
     sudo sed -i -E \
-      -e "s#https?://[^/ ]*ubuntu\\.com/ubuntu/?#http://${fallback_mirror}/ubuntu/#g" \
+      -e "s#https?://([^/ ]*ubuntu\\.com|192\\.0\\.2\\.1)/ubuntu/?#http://${fallback_mirror}/ubuntu/#g" \
       -e "s#mirror\\+file:[^ ]+#http://${fallback_mirror}/ubuntu/#g" \
       "${file}"
   done < <(source_files)
@@ -124,6 +124,12 @@ try_download() {
 download_and_install() {
   local try mirror mirrors=""
   mirror="$(first_mirror)"
+  if [ "${EVIDENCE_DEAD_FIRST:-0}" = "1" ]; then
+    # Throwaway evidence only (AQP-216 AC-7): the runner's own mirror becomes an unroutable address (TEST-NET-1).
+    while IFS= read -r file; do
+      sudo sed -i -E "s#https?://[^/ ]*ubuntu\\.com/ubuntu/?#http://192.0.2.1/ubuntu/#g" "${file}"
+    done < <(source_files)
+  fi
   for try in $(seq 1 "${max_tries}"); do
     if [ "${try}" -gt 1 ]; then
       mirror="${fallback_mirror}"
