@@ -74,3 +74,64 @@ All routes are below the 190,000 B target floor.
 
 ## Previous Findings (re-review only)
 n/a (first round).
+
+---
+
+# Round 2 — head 5231947 (includes master d5eb4b6, AQP-199), narrow: PRF-01
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 |
+| Commit reviewed | 5231947 (CI run 42145959641, attempts 1 to 3; developer's figures in Jira 11031) |
+| Date | 2026-11-06 |
+| **Verdict** | APPROVE |
+
+## Summary (round 2)
+With AQP-199 merged (4 workers) and the architect's one-width ruling on 12 tests, the PR adds 31 E2E instances instead of 52. Both clean attempts are under the 10-minute limit: jobs of 5 min 52 s and 8 min 15 s. **PRF-01 is fixed.**
+
+One correction to the evidence: attempt 3 (909 s) is an **apt install stall**, not a GitHub-side outlier. Its install ran about 498 s, with gaps of 83, 124, 67 and 171 s between single downloads, the DEF-015 pattern. By the 120 s rule and DL-100 it is recorded as Environment and re-run, not counted.
+
+The failed run 42144997474 on 0a8a6f0 does not matter. Every step succeeded, and the job was marked cancelled 24 minutes after its last step, on a superseded commit, and the nightly measure excludes it.
+
+| Severity | Open after round 2 |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 4 (PRF-02 to PRF-05, unchanged) |
+
+## Checks Run (round 2)
+| Check | Command | Result |
+|-------|---------|--------|
+| Attempt timings | `gh api .../runs/42145959641/attempts/{1,2,3}/jobs` | 1: job 352 s, stage 12 206 s. 2: 495 s, 291 s. 3: 909 s, 725 s. Each job started 3 s after it was created (no runner queue wait) |
+| Stage 12 split | Job logs 127661870454, 127664040871, 127667117776 (install command → `Running N tests`; Playwright summary) | Install: about 12, 20 and **498** s. Test run: 3.3, 4.6 and 3.9 m. 360 tests (339 passed, 21 skipped), 4 workers, 0 flaky. Attempt 3's install has apt gaps of 83, 124, 67 and 171 s (`azure.archive.ubuntu.com`). "502" strings occur in all three logs, so they are not a signal |
+| Master baseline | Run 42144959526 (d5eb4b6, AQP-199 merged) | Job 477 s, stage 12 261 s, 329 tests, test run 4.2 m |
+| Failed run 42144997474 | `gh api .../runs/42144997474` and its jobs and steps | Head 0a8a6f0, attempt 1. Every step `success`; stage 12 01:40:13 → 01:45:03 (job work 8 min 11 s, 363 passed). Job `cancelled`, completed at 02:09:19 |
+| Local build, tests | n/a | Not run |
+
+**Clean attempts against the limit**
+
+| | Job | Stage 12 | Under 10 min? |
+|---|---|---|---|
+| Attempt 1 | 5 min 52 s | 206 s | yes |
+| Attempt 2 | 8 min 15 s | 291 s | yes |
+| Attempt 3 | not counted (install stall) | n/a | n/a |
+
+Added stage 12 against master: about +23 s (31 instances at 1.37 tests per second, an estimate), inside the 206 to 291 s run-to-run spread.
+
+## Findings (round 2)
+No new finding.
+
+## Previous Findings (round 1)
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| PRF-01 | Major | **Fixed** | Clean jobs 5:52 and 8:15, under 10 min; 31 added instances instead of 52. Attempt 3 is to be recorded as an install stall and re-run, not counted as a GitHub-side outlier. Thread resolved |
+| PRF-02 | Info | Holds | Unchanged |
+| PRF-03 | Info | Holds | Unchanged |
+| PRF-04 | Info | Holds | Unchanged |
+| PRF-05 | Info | Holds | Unchanged |
+
+**Run 42144997474 ("failure").** All work succeeded by 01:45:04. The job's cancelled status at 02:09:19 is GitHub-side, most likely the overnight service trouble or supersession by the 5231947 push. It is not a test, a timeout or this PR's code. It is on a superseded commit, and the nightly CI-time step counts only `success` jobs, so its 32-minute recorded span does not distort the p95.
+
+**RISK-023.** Stage 12 is still dominated by apt stalls in the tail (attempt 3) and by CPU in the median. AQP-206 (cache the system packages) and the shard step remain the levers.
