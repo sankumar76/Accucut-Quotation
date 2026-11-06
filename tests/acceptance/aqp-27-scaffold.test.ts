@@ -150,20 +150,26 @@ describe('[AQP-27 AC-4] the CI workflow', () => {
     expect(text).toMatch(/^permissions:\s*\n\s+contents: read\s*$/m);
   });
 
-  it('[AQP-27 AC-4] stages 1 to 11 are present once or more, in order, and none is allowed to fail', () => {
-    const stageNumbers = [...text.matchAll(/name: "Stage (\d+):/g)].map((match) => Number(match[1]));
-    const sorted = [...stageNumbers].sort((a, b) => a - b);
-    expect(stageNumbers).toEqual(sorted);
-    expect([...new Set(stageNumbers)]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+  // AQP-208 (STORY-10.15) moved stage 12 into the shard jobs, so the stages are in order within each job: stages 1 to 11b
+  // and 13 in the first job, stage 12 in the shard job. Between them they are all present, and none may fail.
+  it('[AQP-27 AC-4, changed by AQP-208] stages 1 to 13 are present, in order within each job, and none is allowed to fail', () => {
+    const jobs = text.split(/^ {2}[\w-]+:\s*$/m).slice(1);
+    const stageNumbers = jobs.map((job) => [...job.matchAll(/- name: "Stage (\d+):/g)].map((match) => Number(match[1])));
+    for (const numbers of stageNumbers) expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
+    expect([...new Set(stageNumbers.flat())].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect(text).not.toContain('continue-on-error');
   });
 
   // Stage 12 was switched off by STORY-10.01 "until the first page story"; STORY-10.02 (AQP-28, AC-8) switched it
   // on. Stage 13 stays off until the Dockerfile story (STORY-10.04).
   it('[AQP-27 AC-4, changed by AQP-28 AC-8] stage 12 exists and is switched on: it has no `if` line', () => {
-    const start = code.findIndex((line) => line.includes('name: "Stage 12:'));
+    const start = code.findIndex((line) => line.includes('- name: "Stage 12:'));
     expect(start).toBeGreaterThan(-1);
-    expect(code[start + 1]).toMatch(/^\s*run:/);
+    // The step has an `env:` block (the shard) before its `run:`; there is no `if:` between its name and its `run:`.
+    const afterName = code.slice(start + 1);
+    const runAt = afterName.findIndex((line) => /^\s*run:/.test(line));
+    expect(runAt).toBeGreaterThan(-1);
+    expect(afterName.slice(0, runAt).join('\n')).not.toMatch(/^\s*if:/m);
   });
 
   it('[AQP-27 AC-4] stage 13 exists and is switched off', () => {

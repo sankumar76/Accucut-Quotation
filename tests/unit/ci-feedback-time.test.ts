@@ -15,35 +15,13 @@ import {
   nearestRank,
   type JobRecord,
 } from '../../scripts/lib/ci-feedback-time';
+import { iso, job, runsOf, shaOf } from '../support/ci-feedback-records';
 
 /**
  * STORY-10.10 AC-8: the CI feedback time is a pure function of job records. Invented durations only; no clock is read
- * and no API is called (the API reader is tested with a fake `fetch`).
+ * and no API is called (the API reader is tested with a fake `fetch`). The cases for a run with several jobs (AQP-208
+ * AC-7) are in ci-feedback-time-sharded.test.ts.
  */
-
-const BASE = Date.parse('2026-11-01T10:00:00Z');
-const iso = (seconds: number): string => new Date(BASE + seconds * 1_000).toISOString();
-
-/** An invented commit id for run `index`: 40 hexadecimal digits, so it passes the same check as a real one. */
-const shaOf = (index: number): string => index.toString(16).padStart(40, 'a');
-
-/** A job that waited `queue` seconds, then ran for `run` seconds. `index` orders the runs (a higher index is newer). */
-function job(index: number, run: number, overrides: Partial<JobRecord> = {}, queue = 0): JobRecord {
-  const created = index * 10_000;
-  return {
-    runId: 1_000 + index,
-    runAttempt: 1,
-    headSha: shaOf(index),
-    name: REQUIRED_JOB_NAME,
-    conclusion: 'success',
-    runCreatedAt: iso(created),
-    startedAt: iso(created + queue),
-    completedAt: iso(created + queue + run),
-    ...overrides,
-  };
-}
-
-const runsOf = (...durations: number[]): JobRecord[] => durations.map((seconds, index) => job(index, seconds));
 
 describe('nearest-rank p95 and median', () => {
   it('takes the value at rank ceil(0.95 n): the 19th of 20, the 1st of 1, the 10th of 10', () => {
@@ -175,11 +153,22 @@ describe('the 9-minute line (STORY-10.14 AC-7; DL-095)', () => {
   /** 20 runs whose p95 is `seconds` and whose median is 300 s, under the 6-minute early warning, so only the p95 is in play. */
   const withP95 = (seconds: number): JobRecord[] => runsOf(...Array.from({ length: 18 }, () => 300), seconds, seconds);
 
-  it('is the sentence master ruled, word for word, and the limit is 540 seconds', () => {
+  it('is the sentence master ruled (DL-103), word for word, and the limit is 540 seconds (AQP-208 AC-7)', () => {
     expect(NOTICE_LIMIT_SECONDS).toBe(540);
     expect(NINE_MINUTE_NOTICE).toBe(
-      'p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due.',
+      'p95 over 9 minutes (DL-095, DL-102): CI feedback is too slow; the next step is named in test strategy 10.5.',
     );
+  });
+
+  it('is written to the job summary as exactly that text at 541 seconds, and nothing of it at 540 (AQP-208 AC-7)', () => {
+    const exactLine = 'p95 over 9 minutes (DL-095, DL-102): CI feedback is too slow; the next step is named in test strategy 10.5.';
+    expect(ciTimeSummary(ciTimeReport(withP95(541)))).toContain(`\n\n${exactLine}\n`);
+    expect(ciTimeLines(ciTimeReport(withP95(541)))).toContain(exactLine);
+    const atLimit = ciTimeSummary(ciTimeReport(withP95(540)));
+    expect(atLimit).not.toContain('p95 over 9 minutes');
+    expect(atLimit).not.toContain('test strategy 10.5');
+    // The text of the AQP-199 line is gone: it named a merge that has happened.
+    expect(ciTimeSummary(ciTimeReport(withP95(541)))).not.toMatch(/before AQP-199 merges|the shard step of test strategy 10\.5 is due/);
   });
 
   it('is not written at exactly 540 seconds', () => {

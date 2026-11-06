@@ -1,9 +1,9 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { z } from 'zod';
+
+import { forEachSpec, listPlaywrightSuites } from '../support/playwright-list';
 
 /**
  * AQP-199 AC-3 (STORY-10.14; test strategy section 10.5): a test that reads no layout may be tagged `@one-width`, which
@@ -16,8 +16,6 @@ import { z } from 'zod';
 
 const TAG = '@one-width';
 const E2E_DIRECTORY = fileURLToPath(new URL('../e2e/', import.meta.url));
-const PLAYWRIGHT_CLI = fileURLToPath(new URL('../../node_modules/@playwright/test/cli.js', import.meta.url));
-const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WIDTH_PROJECTS = ['mobile', 'tablet', 'desktop'] as const;
 
 /** The seven files section 10.5 rules on. Paths are relative to `tests/e2e`, with forward slashes. */
@@ -108,28 +106,6 @@ describe('@one-width allow-list (AQP-199 AC-3)', () => {
   });
 });
 
-/** What `playwright test --list --reporter=json` prints, reduced to what this test reads. */
-interface ListedSuite {
-  readonly title: string;
-  readonly specs?: ReadonlyArray<ListedSpec> | undefined;
-  readonly suites?: ReadonlyArray<ListedSuite> | undefined;
-}
-interface ListedSpec {
-  readonly title: string;
-  readonly file: string;
-  readonly tags?: ReadonlyArray<string> | undefined;
-  readonly tests: ReadonlyArray<{ readonly projectName: string }>;
-}
-const specSchema = z.object({
-  title: z.string(),
-  file: z.string(),
-  tags: z.array(z.string()).optional(),
-  tests: z.array(z.object({ projectName: z.string() })),
-});
-const suiteSchema: z.ZodType<ListedSuite> = z.lazy(() =>
-  z.object({ title: z.string(), specs: z.array(specSchema).optional(), suites: z.array(suiteSchema).optional() }),
-);
-
 /** One test of the real suite as Playwright lists it, with the projects it runs in. */
 interface ListedTest {
   readonly key: string;
@@ -137,45 +113,25 @@ interface ListedTest {
   readonly projects: ReadonlyArray<string>;
 }
 
-/** How long `playwright test --list` may run, for the spawn and for the hook that waits on it. */
-const LIST_TIMEOUT_MS = 90_000;
-
-function listTests(): ListedTest[] {
-  const result = spawnSync(process.execPath, [PLAYWRIGHT_CLI, 'test', '--list', '--reporter=json'], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: LIST_TIMEOUT_MS,
-  });
-  if (result.status !== 0) {
-    // A timed-out or unstartable spawn has a null status and no stderr; name the cause (STD-06).
-    const cause = result.error?.message ?? (result.signal === null ? '' : `signal ${result.signal}`);
-    throw new Error(
-      `playwright test --list exited with ${String(result.status)}${cause === '' ? '' : ` (${cause})`}: ${(result.stderr ?? '').slice(0, 500)}`,
-    );
-  }
-  const parsed = z.object({ suites: z.array(suiteSchema) }).parse(JSON.parse(result.stdout));
+/** The suite as Playwright lists it (tests/support/playwright-list.ts), one entry per spec with the projects it runs in. */
+async function listTests(): Promise<ListedTest[]> {
   const found = new Map<string, { tagged: boolean; projects: string[] }>();
-  const visit = (suite: ListedSuite, blocks: ReadonlyArray<string>): void => {
-    for (const spec of suite.specs ?? []) {
-      const key = [spec.file, ...blocks, spec.title].join(' > ');
-      const entry = found.get(key) ?? { tagged: false, projects: [] };
-      entry.tagged = entry.tagged || (spec.tags ?? []).includes(TAG.slice(1));
-      entry.projects.push(...spec.tests.map((test) => test.projectName));
-      found.set(key, entry);
-    }
-    for (const child of suite.suites ?? []) visit(child, [...blocks, child.title]);
-  };
-  // The first level of suites is the file, which the key already starts with.
-  for (const file of parsed.suites) visit(file, []);
+  forEachSpec(await listPlaywrightSuites(), (spec, blocks) => {
+    const key = [spec.file, ...blocks, spec.title].join(' > ');
+    const entry = found.get(key) ?? { tagged: false, projects: [] };
+    entry.tagged = entry.tagged || (spec.tags ?? []).includes(TAG.slice(1));
+    entry.projects.push(...spec.tests.map((test) => test.projectName));
+    found.set(key, entry);
+  });
   return [...found.entries()].map(([key, entry]) => ({ key, tagged: entry.tagged, projects: entry.projects.sort() }));
 }
 
 describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-3)', () => {
   let listed: ListedTest[] = [];
-  beforeAll(() => {
-    listed = listTests();
-  }, LIST_TIMEOUT_MS);
+  // The listing is slow, so it runs once, in a hook, under the shared hook limit (vitest.config.ts, DL-057).
+  beforeAll(async () => {
+    listed = await listTests();
+  });
 
   it('are exactly the 35 tests ruled in test strategy section 10.5, by title', () => {
     const tagged = listed.filter((test) => test.tagged).map((test) => test.key).sort();
