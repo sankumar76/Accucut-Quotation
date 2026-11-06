@@ -134,8 +134,8 @@ export async function ensureAuditCanaryEntry(): Promise<void> {
   const client = await connectToTestDatabase();
   try {
     await client.query(
-      `INSERT INTO audit_log (actor_id, event, object_type, object_id, object_label, before, after, request_id)
-       SELECT $1::uuid, 'user.created', 'user', $1::uuid, $2, NULL, '{"role":"ENGINEER","isActive":true}'::jsonb, 'req-00000000'
+      `INSERT INTO audit_log (actor_id, actor_label, event, object_type, object_id, object_label, before, after, request_id)
+       SELECT $1::uuid, $2::text, 'user.created', 'user', $1::uuid, $2::text, NULL, '{"role":"ENGINEER","isActive":true}'::jsonb, 'req-00000000'
        WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE object_label = $2)`,
       [canaryId, E2E_AUDIT_CANARY_LABEL],
     );
