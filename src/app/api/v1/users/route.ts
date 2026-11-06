@@ -19,5 +19,5 @@ export const POST = withRoute({
   status: CREATED,
   body: createUserBodySchema,
   output: userSchema,
-  handler: ({ body }) => getUserService().create(body),
+  handler: ({ user, requestId, body }) => getUserService().create({ actorId: user.id, requestId }, body),
 });

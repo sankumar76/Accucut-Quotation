@@ -5,9 +5,12 @@ import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
 import { passwordHasher } from './auth/password-hasher';
+import { createAuditRepository } from './repositories/audit-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createThrottleRepository } from './repositories/throttle-repository';
+import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
+import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { createUserService, type UserService } from './services/user-service';
 
@@ -22,6 +25,7 @@ import { createUserService, type UserService } from './services/user-service';
 let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
+let auditService: AuditService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -44,12 +48,23 @@ export function getAuthService(): AuthService {
   return authService;
 }
 
-/** User management by the Admin (STORY-01.04). Shares the runtime-role client, the real hasher and the throttle table of sign-in. */
+/** The audit log: appended in a caller's transaction, read by the Admin's screen (STORY-01.07). */
+export function getAuditService(): AuditService {
+  auditService ??= createAuditService({ audit: createAuditRepository(runtimeClient()) });
+  return auditService;
+}
+
+/**
+ * User management by the Admin (STORY-01.04). Shares the runtime-role client, the real hasher and the throttle table of sign-in.
+ * Every change runs in one transaction with its audit entry (STORY-01.07).
+ */
 export function getUserService(): UserService {
   userService ??= createUserService({
     users: getUserRepository(),
     throttles: createThrottleRepository(runtimeClient()),
     hasher: passwordHasher,
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return userService;
