@@ -1,21 +1,27 @@
 /**
  * CI feedback time (NFR-009 row of the PRD; test strategy section 10.3; STORY-10.10 AC-8).
  *
- * How long the required job, `Stages 1 to 11`, takes from start to finish, excluding queue wait, over the first attempts
- * of the last 20 pull-request runs. The target is a p95 of at most 10 minutes, with an early warning when the median
- * passes 6 minutes. Both figures are PROPOSED (test strategy 10.3). The calculation is pure; the GitHub API is read
- * through an injected `fetch`. A breach never blocks a merge: the nightly step reports it.
+ * How long a run of the CI workflow takes, from the start of its first job to the end of the job named `Stages 1 to 11`,
+ * excluding queue wait, over the first attempts of the last 20 pull-request runs (AQP-208 AC-7; test strategy 10.3). Since
+ * AQP-208 a run has several jobs: `Stages 1 to 11b` and the E2E shards start together, and `Stages 1 to 11` is the fan-in
+ * job that ends last. Before it, `Stages 1 to 11` was the one job, so for such a run the start of the first job is the
+ * start of that job and runs from before and after are measured alike. The target is a p95 of at most 10 minutes, with an
+ * early warning when the median passes 6 minutes. Both figures are PROPOSED (test strategy 10.3). The calculation is pure;
+ * the GitHub API is read through an injected `fetch`. A breach never blocks a merge: the nightly step reports it.
  *
  * Choices the PROPOSED figures leave open, recorded here and in the pull request:
  *   - the p95 is the nearest-rank value (STORY-10.10 A-1): the value at rank ceil(0.95 * n) of the sorted durations;
- *   - only a job that finished with `success` counts: a failed job stops early and a cancelled one is not a full run,
- *     so either would make the feedback time look shorter than it is;
+ *   - only a run whose `Stages 1 to 11` job finished with `success` counts: a failed job stops early and a cancelled or
+ *     skipped one is not a full run, so any of them would make the feedback time look shorter than it is. The fan-in job
+ *     succeeds only when every job it needs succeeded, so this also leaves out a run in which a shard failed;
+ *   - queue wait is left out by starting at the first `started_at` (when a runner picked a job up), not at run creation;
  *   - the median of an even number of runs is the mean of the two middle values.
  *
- * The 9-minute line (DL-095; STORY-10.14 AC-7; test strategy section 10.3): when the p95 is over 540 seconds the report
- * carries one fixed notice, whatever has been merged. At exactly 540 seconds there is none. It is not a breach and
- * fails nothing. The report also says which runs it used: the count, and the start time and head commit of the oldest and
- * the newest, so a reader can see whether it covers only runs made after a given merge (STORY-10.14 AC-1).
+ * The 9-minute line (DL-095, DL-102, DL-103; STORY-10.14 AC-7, AQP-208 AC-7; test strategy section 10.3): when the p95 is
+ * over 540 seconds the report carries one fixed notice, whatever has been merged. At exactly 540 seconds there is none. It
+ * is not a breach and fails nothing. The report also says which runs it used: the count, and the start time and head
+ * commit of the oldest and the newest, so a reader can see whether it covers only runs made after a given merge
+ * (STORY-10.14 AC-1).
  */
 import { z } from 'zod';
 
@@ -27,9 +33,13 @@ export const P95_LIMIT_SECONDS = 10 * SECONDS_PER_MINUTE;
 export const MEDIAN_LIMIT_SECONDS = 6 * SECONDS_PER_MINUTE;
 /** The p95 over which master's 9-minute notice is written (DL-095). Strictly over: at exactly 540 s there is no notice. */
 export const NOTICE_LIMIT_SECONDS = 9 * SECONDS_PER_MINUTE;
-/** The notice, word for word (STORY-10.14 AC-7; test strategy section 10.3). */
+/**
+ * The notice, word for word (master, DL-103; AQP-208 AC-7; test strategy section 10.3). It states the fact and points to
+ * test strategy 10.5, which names the current next step, so it does not go stale when a step is taken. It replaces the
+ * AQP-199 wording ("before AQP-199 merges ...").
+ */
 export const NINE_MINUTE_NOTICE =
-  'p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due.';
+  'p95 over 9 minutes (DL-095, DL-102): CI feedback is too slow; the next step is named in test strategy 10.5.';
 const P95 = 0.95;
 const MILLISECONDS_PER_SECOND = 1_000;
 const API_VERSION = '2022-11-28';
@@ -86,22 +96,29 @@ function timeOf(value: string | null): number | undefined {
   return Number.isNaN(time) ? undefined : time;
 }
 
-/** First attempts of the required job that ran to success, newest run first, at most 20 runs. */
+/**
+ * First attempts of runs whose required job (the fan-in job, or the one job of an older run) ran to success, newest run
+ * first, at most 20 runs. A run lasts from the earliest start of any of its jobs to the end of the required job, so the
+ * shape of the run (one job or several) does not matter.
+ */
 function qualifying(jobs: ReadonlyArray<JobRecord>): Timed[] {
-  const timed: Timed[] = [];
+  const firstAttemptByRun = new Map<number, JobRecord[]>();
   for (const job of jobs) {
-    if (job.runAttempt !== 1 || job.name !== REQUIRED_JOB_NAME || job.conclusion !== 'success') continue;
-    const started = timeOf(job.startedAt);
-    const completed = timeOf(job.completedAt);
-    const created = timeOf(job.runCreatedAt);
-    if (started === undefined || completed === undefined || created === undefined || completed < started) continue;
-    timed.push({
-      runId: job.runId,
-      runCreatedAt: created,
-      startedAt: started,
-      headSha: job.headSha,
-      seconds: (completed - started) / MILLISECONDS_PER_SECOND,
-    });
+    if (job.runAttempt !== 1) continue;
+    firstAttemptByRun.set(job.runId, [...(firstAttemptByRun.get(job.runId) ?? []), job]);
+  }
+  const timed: Timed[] = [];
+  for (const [runId, runJobs] of firstAttemptByRun) {
+    const required = runJobs.find((job) => job.name === REQUIRED_JOB_NAME && job.conclusion === 'success');
+    if (required === undefined) continue;
+    const requiredStarted = timeOf(required.startedAt);
+    const completed = timeOf(required.completedAt);
+    const created = timeOf(required.runCreatedAt);
+    if (requiredStarted === undefined || completed === undefined || created === undefined) continue;
+    // A job that never started has no `started_at` and does not move the start; one that did start can only move it earlier.
+    const started = Math.min(requiredStarted, ...runJobs.map((job) => timeOf(job.startedAt) ?? requiredStarted));
+    if (completed < started) continue;
+    timed.push({ runId, runCreatedAt: created, startedAt: started, headSha: required.headSha, seconds: (completed - started) / MILLISECONDS_PER_SECOND });
   }
   return timed.sort((a, b) => b.runCreatedAt - a.runCreatedAt || b.runId - a.runId).slice(0, RUNS_COUNTED);
 }

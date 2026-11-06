@@ -1,11 +1,12 @@
 /**
- * Nightly step (NFR-009; test strategy section 10.3; STORY-10.10 AC-8): reads the GitHub API for the duration of the
- * required job, `Stages 1 to 11`, over the first attempts of the last 20 pull-request runs, prints the p95 and the median,
- * and exits 1 when the p95 is over 10 minutes or the median is over 6 minutes. A breach never blocks a merge: this runs
- * in the nightly workflow only. It also reports which runs it used (the count, and the start time and head commit of the
- * oldest and the newest), and writes master's 9-minute line when the p95 is over 540 s; that line fails nothing
- * (STORY-10.14 AC-7, test strategy section 10.3). Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (a token with `actions: read`, which the
- * workflow's own token has); neither is printed.
+ * Nightly step (NFR-009; test strategy section 10.3; STORY-10.10 AC-8; AQP-208 AC-7): reads the GitHub API for the
+ * duration of each run, from the start of its first job to the end of the job named `Stages 1 to 11` (the fan-in job, or
+ * the one job of a run from before AQP-208), over the first attempts of the last 20 pull-request runs, prints the p95 and
+ * the median, and exits 1 when the p95 is over 10 minutes or the median is over 6 minutes. A breach never blocks a merge:
+ * this runs in the nightly workflow only. It also reports which runs it used (the count, and the start time and head
+ * commit of the oldest and the newest), and writes master's 9-minute line when the p95 is over 540 s; that line fails
+ * nothing (DL-103, test strategy section 10.3). Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (a token with
+ * `actions: read`, which the workflow's own token has); neither is printed.
  *
  * Usage: npx tsx scripts/check-ci-time.ts
  */
