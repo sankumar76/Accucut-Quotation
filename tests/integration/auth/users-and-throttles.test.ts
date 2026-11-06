@@ -105,7 +105,11 @@ describe('one active Admin (CONSTRAINT-04; its own test is story 01.04)', () => 
     expect(await db.users.hasAnyAdmin()).toBe(false);
     await insertUser(db.users, hasher, { role: 'ADMIN' });
     expect(await db.users.hasAnyAdmin()).toBe(true);
-    await expect(db.users.create(await buildUser(hasher, { role: 'ADMIN' }))).rejects.toThrow(/uq_users_single_active_admin/);
+    // The repository names the rule the database refused (STORY-01.04); the whole path is tested in tests/integration/users.
+    await expect(db.users.create(await buildUser(hasher, { role: 'ADMIN' }))).rejects.toMatchObject({
+      name: 'UserConstraintError',
+      constraint: 'single-active-admin',
+    });
   });
 
   it('an inactive Admin does not count against the index, but still counts as "an Admin exists"', async () => {

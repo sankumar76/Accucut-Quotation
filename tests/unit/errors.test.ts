@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ActiveAdminExistsError,
   AppError,
   ConfigurationError,
   ConflictError,
+  FieldValidationError,
   ForbiddenError,
   isAppError,
   NotFoundError,
@@ -49,5 +51,30 @@ describe('AppError subclasses', () => {
     expect(isAppError(new NotFoundError())).toBe(true);
     expect(isAppError(new Error('plain'))).toBe(false);
     expect(isAppError('text')).toBe(false);
+  });
+});
+
+describe('FieldValidationError (STORY-01.04 AC-1)', () => {
+  it('is a 422 that names the fields, so a form can show each message under its own field', () => {
+    const error = new FieldValidationError([{ field: 'email', message: 'A user with this e-mail already exists.' }], { code: 'EMAIL_TAKEN' });
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(error.httpStatus).toBe(422);
+    expect(error.code).toBe('EMAIL_TAKEN');
+    expect(error.fields).toEqual([{ field: 'email', message: 'A user with this e-mail already exists.' }]);
+  });
+});
+
+describe('ActiveAdminExistsError (STORY-01.04 AC-3)', () => {
+  it('is a 409 with a fixed sentence that names the current Admin', () => {
+    const error = new ActiveAdminExistsError({ id: 'u-1', name: 'Invented Admin' });
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(error.httpStatus).toBe(409);
+    expect(error.code).toBe('ADMIN_ALREADY_ACTIVE');
+    expect(error.message).toBe('There is already an active Admin. Only one Admin can be active.');
+    expect(error.currentAdmin).toEqual({ id: 'u-1', name: 'Invented Admin' });
+  });
+
+  it('can be raised when the Admin could not be read back (a race): the sentence is the same and nobody is named', () => {
+    expect(new ActiveAdminExistsError(null).currentAdmin).toBeNull();
   });
 });

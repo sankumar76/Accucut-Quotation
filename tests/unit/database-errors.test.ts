@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DatabaseBusyError, isAppError } from '@/lib/errors';
-import { translateDatabaseError, withDatabaseErrors } from '@/server/repositories/database-errors';
+import { translateDatabaseError, uniqueViolationOf, withDatabaseErrors } from '@/server/repositories/database-errors';
 
 /**
  * Architecture ruling R4 (PRF-01): a pool timeout or a statement cancelled by PostgreSQL becomes a typed
@@ -67,5 +67,35 @@ describe('withDatabaseErrors', () => {
     await expect(withDatabaseErrors(async () => Promise.reject(prismaStatementTimeout()))).rejects.toBeInstanceOf(DatabaseBusyError);
     const other = new Error('boom');
     await expect(withDatabaseErrors(async () => Promise.reject(other))).rejects.toBe(other);
+  });
+});
+
+describe('uniqueViolationOf (STORY-01.04)', () => {
+  const prismaUnique = (constraint: unknown) =>
+    Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      meta: { driverAdapterError: { name: 'DriverAdapterError', cause: { originalCode: '23505', kind: 'UniqueConstraintViolation', constraint } } },
+    });
+
+  it.each([
+    ['Prisma names the columns of the constraint', prismaUnique({ fields: ['email'] }), ['email']],
+    ['Prisma names the columns of the partial index', prismaUnique({ fields: ['role'] }), ['role']],
+    ['Prisma names an index', prismaUnique({ index: 'uq_users_single_active_admin' }), ['uq_users_single_active_admin']],
+    ['Prisma names nothing', prismaUnique({}), []],
+    ['Prisma reports only its own code and a target', Object.assign(new Error('x'), { code: 'P2002', meta: { target: ['email'] } }), ['email']],
+    ['Prisma reports only its own code', Object.assign(new Error('x'), { code: 'P2002' }), []],
+    ['the driver names the constraint', Object.assign(new Error('duplicate key'), { code: '23505', constraint: 'uq_users_email' }), ['uq_users_email']],
+    ['the driver names nothing', Object.assign(new Error('duplicate key'), { code: '23505' }), []],
+  ])('reads %s', (_name, error, names) => {
+    expect(uniqueViolationOf(error)).toEqual(names);
+  });
+
+  it.each([
+    ['an ordinary error', new Error('boom')],
+    ['a statement timeout', prismaStatementTimeout()],
+    ['a string', 'duplicate key'],
+    ['null', null],
+  ])('says null for %s', (_name, error) => {
+    expect(uniqueViolationOf(error)).toBeNull();
   });
 });

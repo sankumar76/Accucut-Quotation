@@ -9,6 +9,7 @@ import { getPrismaClient } from './repositories/prisma-client';
 import { createThrottleRepository } from './repositories/throttle-repository';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { createUserService, type UserService } from './services/user-service';
 
 /**
  * Where the pieces are put together for the web process (a composition root). Services and repositories take
@@ -20,6 +21,7 @@ import { type AuthService, createAuthService } from './services/auth-service';
 
 let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
+let userService: UserService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -40,6 +42,17 @@ export function getAuthService(): AuthService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return authService;
+}
+
+/** User management by the Admin (STORY-01.04). Shares the runtime-role client, the real hasher and the throttle table of sign-in. */
+export function getUserService(): UserService {
+  userService ??= createUserService({
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    keySecret: loadAppEnv().AUTH_SECRET,
+  });
+  return userService;
 }
 
 /**

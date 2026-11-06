@@ -2096,3 +2096,192 @@ The delivery lead merges PR #79 (squash, code-human).
 
 **Risks registered:** none.
 **Rationale:** The Sev-2 defect is fixed and proved at every width and role by both axe and a dedicated test, and a planted fault is caught. The wider tag set is now in force for every later UI story. The two process slips caused no harm, but each weakened a control, so both rules are tightened in writing.
+
+---
+
+## G6 – Peer Review — AQP-199 (STORY-10.14: CI time) — 2026-11-05
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (judged on the ACs restated in DL-102; product-owner READY 11015)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #86 at head 3808560, 12 files: `ci.yml` (+8), `playwright.config.ts`, two `scripts/` files, five E2E specs (tags only) and three unit test files. CI 42141321692 on 3808560: success; job 332 s, stage 12 184 s, no stall. All three review labels approved. Behind `master`.
+  - **Reviews:** standards 11009 and 11023; quality 11014 and 11025; performance 11013 and 11024.
+  - **AC-2 evidence:** developer 11022.
+  - **Not done:** no run or code read of my own; I recomputed the AC-2 medians from the figures given.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE, quality APPROVE WITH COMMENTS, performance APPROVE |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major. Round-1 findings fixed: STD-01, the STD-05 description, QLT-75, QLT-76 (the 22 tests pinned through `playwright --list`, 5 of 5 planted faults caught), PRF-01 |
+| 3 | AC-2 (restated: stage 12 at least 15 % shorter, median of three) | | ✅ | Before 313, 264, 308 s → median 308 s; after 249, 254, 245 s → median 249 s; **−19.2 %**, recomputed. The same stall rule (install over 120 s) excludes stalled attempts on both sides. The job went 468 → 411 s (−12.2 %) |
+| 4 | Security of the new call | | ✅ | `playwright --list` runs through `spawnSync`, with no shell, fixed arguments and zod-validated output (standards) |
+| 5 | Required check and coverage | | ✅ | Name unchanged; the negative control (run 42073527588, PR #89, closed) failed the check; 0 flaky; runner minutes at or below before |
+| 6 | CI | | ✅ | Green |
+
+**Rulings**
+1. **AC-2 is met against its restated figure.** The 15 % was set after 20 % was measured (DL-102, recorded openly). The recomputed −19.2 % uses the same stall rule on both sides; the developer stated that rule before excluding any attempt, and it removes stalled runs from both "before" and "after", so it does not favour the result. Performance corrected its own round-1 figure (288.5 s was a mean of 2 runs), and the medians above supersede it.
+2. **Info, no action:** STD-02, STD-03, STD-04, STD-06 (a timeout message and a repeated `90_000` constant; both may go in AQP-206's PR, which touches the same file area). QLT-77: stage 12 still includes the install step, which AQP-206 splits out. PRF-02: 4 workers give about +14 % on a CPU-bound runner, and the shard step (AQP-208) is the next lever.
+3. **The AC-7 line keeps its current text in this PR.** It is replaced by DL-103's wording in AQP-208, which owns that change.
+
+**G7 evidence (full QA cycle on the restated ACs):**
+- **AC-2:** QA recomputes the before and after stage-12 medians from the run logs (42061753504 and 42070716328), applying the stated stall rule on both sides, and confirms −15 % or better. The comparison is not re-run on the updated head: `master` has added tests since, so a new "after" would not be like for like.
+- **AC-3:** the 22 `@one-width` tests listed by `playwright --list` run in `desktop` only and nowhere else are skipped. A planted `@one-width` tag in an unlisted file fails `one-width-tag.test.ts`.
+- **AC-4:** the required check is still one job named `Stages 1 to 11`; the negative-control run link; `ci-workflow.test.ts` green.
+- **AC-5:** 0 flaky on the final head with 4 workers, and no test timeout widened (diff check).
+- **AC-6:** runner minutes per run at or below before.
+- **AC-1 and AC-7:** the nightly CI-time output on the final head is recorded, with no numeric target (AC-1). The 9-minute line prints as currently worded.
+- **Regression:** CI green on the updated head, including stage 11b. A run that stalls in the install step is recorded as Environment and repeated (DL-100).
+- **Closure:** QA moves the story to Done only after master's G7 decision is posted (DL-098).
+
+**After the merge:** AQP-65's G6 hold lifts (DL-099), and AQP-206 (DEF-015) starts (DL-101).
+
+**Risks registered:** none (RISK-023 stays at 8 until AQP-206 and the nightly p95 report).
+**Rationale:** All round-1 findings are fixed. The restated AC-2 is met on a recomputed figure, with stalls excluded by a rule applied the same way to both sides. The change is CI configuration and tests guarded by their own unit tests, and it keeps coverage and the required check intact.
+
+---
+
+## G7 – QA Acceptance — AQP-199 (STORY-10.14: CI time) — 2026-11-05
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (on the ACs restated in DL-102)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #86 at head 6f7cf1a. 34e3ad0 merges `master` b240ba4 (#85, #90) into 3808560. 6f7cf1a adds the QA report. The PR's own files are the same 12 as at G6 plus the report, 13 in all. CI 42143781720 on 6f7cf1a: success, 0 flaky.
+  - **QA:** Jira 11027; PR comment 6674358274; `docs/07-qa/AQP-199-test-report.md`.
+  - **Not done:** no run of my own.
+
+| # | Check (G6 list, 11026) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | AC-2, recomputed from logs | ✱ | ✅ | Stage 12 median 308 → 249 s, −19.2 %; job 468 → 411 s, −12.2 %; one stall rule on both sides; matches the developer and both reviewers to the second |
+| 2 | AC-3 | ✱ | ✅ | All 22 `@one-width` tests ran on desktop only, none skipped; a tag planted in `shell.spec.ts` fails the allow-list test |
+| 3 | AC-4 | ✱ | ✅ | One job named `Stages 1 to 11`; negative control 42073527588 failed it; `ci-workflow.test.ts` green |
+| 4 | AC-5 | ✱ | ✅ | 0 flaky at 4 workers; no timeout widened |
+| 5 | AC-6 | ✱ | ✅ | Runner minutes 8, 7, 9 before; 7, 7, 7 after; 7 on the final head |
+| 6 | AC-1, AC-7 | ✱ | ✅ | Nightly 42142769100 recorded: p95 15:05, median 8:01 over 15 runs; the line printed exactly |
+| 7 | Regression; no open Sev-1 or Sev-2 | ✱ | ✅ | Green on 34e3ad0 and 6f7cf1a, including stage 11b; no stall; no new defects |
+
+**Rulings**
+1. **AQP-199 is accepted.** QA moves it to Done now that this decision is posted (DL-098). The delivery lead merges.
+2. **The nightly p95 of 15:05 is expected, and recorded, not acted on.** The window still holds the stalled runs; DEF-015 (AQP-206) is the fix. DL-102's fallback G6 hold is armed only after AQP-206 merges.
+3. **QA's process:** Gitleaks exited 0 before the push, which meets DL-098.
+
+**After the merge:** AQP-65's G6 hold lifts (DL-099), and AQP-206 starts in the first idle merge wait (DL-101).
+
+**Risks registered:** none (RISK-023 stays at 8 until AQP-206 and a later nightly report).
+**Rationale:** Every item set at G6 is met on a final head whose own change is unchanged since review. The key figure was recomputed independently from the logs, with the stall rule applied the same way to both sides.
+
+---
+
+## G6 – Peer Review — AQP-65 (STORY-01.04: Users) — 2026-11-05
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1. The DL-099 hold ended when AQP-199 merged.
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #87 at head 5231947, 60 files. Labels: all three approved. CI run 42145959641 on 5231947 is green on earlier attempts; attempt 4 (the clean re-run for the median of three) was in progress when this was recorded.
+  - **Reviews:** `docs/06-reviews/AQP-65/*.md` (main folder, uncommitted); Jira 10997 and 11033 (standards), 11001 and 11034 (quality), 10998 and 11032 (performance).
+  - **My own check:** `tests/support/security-loops.ts` at 5231947 read for QLT-64 (DL-093, #81 item 1). `nonEmpty` throws `EmptyLoopError` when no implemented state-changing or protected route exists, and `expectEveryCallRan` fails if a loop ran zero times or a different number of times; `tests/unit/security-loops.test.ts` tests both. This is the first story with state-changing routes, so the guard was due here, and it is met.
+  - **Not done:** no local run; the rest of the diff was not read.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE, quality APPROVE WITH COMMENTS, performance APPROVE (round 2) |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0. **Security fixes confirmed by standards:** STD-01 (an Admin resetting their own password is refused with 409 before any hash or write, and Reset is disabled on the Admin's own row); the UUID-case bypass, fixed at two layers (the schema lower-cases the ID, and the guards compare with the row the database returns), with upper and mixed case tested on PostgreSQL |
+| 3 | Quality findings | | ✅ | QLT-69, QLT-70 and QLT-72 fixed, each catching its planted fault; the 12 `@one-width` tags match the architect's ruling exactly (pinned list now 34) |
+| 4 | CI time and budget | | ✅ | Clean runs: job 352 s and 495 s, under 10 minutes; one-width cut the added stage-12 time to about +23 s. Attempt 3 (909 s) was a package-install stall of about 498 s, excluded under DL-100. Run 42144997474's "failure" was a GitHub-side cancellation after every step passed |
+| 5 | QLT-64 guard (DL-093) | | ✅ | Above |
+
+**Rulings**
+1. **STD-06 (Minor) and QLT-78 (Info) are fixed before G7 in the developer's planned single push.**
+   - STD-06: the mixed-case unit test must use an ID that contains hex letters, otherwise mixed case proves nothing.
+   - QLT-78: tests for v0.14's "no-change Edit" and "notice scrolls into view".
+   - It is test-only, so **master verifies it within the test files, with no re-review (DL-047)**, CI green.
+2. **STD-08 is recorded, and routed as documentation follow-ups.**
+   - The ux-expert adds the disabled-Reset wording to SCR-14.
+   - The architect adds the own-reset 409 to architecture §6.
+   - Both are due before the sprint 1 review. They are not G7 conditions, because the code and tests already define the behaviour; the documents must catch up.
+3. **The median-of-three clean run** is the developer's record for NFR-009, not a G6 item. Performance has approved.
+4. **The standards reviewer's correction** of their own claim about the `master` merges, and the `auth.setup.ts` conflict resolution, are accepted as reviewed.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #87, test files only | STD-06 with an ID that contains hex letters; QLT-78 tests; CI green | Before G7 |
+| 2 | master | Same push | Verify: test files only, and both items present | Before G7 |
+| 3 | ux-expert; solution-architect | SCR-14; architecture §6 | STD-08 documentation | Before the sprint 1 review |
+
+**G7 evidence (full QA cycle):**
+- Every AC of AQP-65 with evidence on the final head.
+- **Role matrix:** the `/users` page and API are Admin-only. A Lead or Engineer gets the fixed 403, the same for a real and an invented ID; a signed-out caller gets 401 or the redirect.
+- **CSRF:** the per-route loop runs over every new state-changing route (non-empty), and a foreign Origin is refused. A planted empty manifest throws `EmptyLoopError`.
+- **Own-row and single-Admin guards:**
+  - an Admin cannot reset their own password (409, no write);
+  - an Admin cannot deactivate or demote themselves;
+  - a second active Admin is refused;
+  - each with an **upper-case and a mixed-case ID containing hex letters**, so case cannot bypass a guard.
+- **SCR-14 at three widths** for the layout-reading tests: axe 0 with `wcag21a`, dialogs by keyboard (Escape and focus return), 44 px targets, the v0.14 behaviours (QLT-78).
+- **Logs:** a user-route error carrying an invented e-mail leaves no e-mail in the log.
+- **Regression:** green, including stage 11b, with every route under 190,000 B. A stalled install is Environment, repeated (DL-100).
+- **Closure:** QA moves the story to Done only after the posted G7 decision (DL-098).
+
+**Risks registered:** none.
+**Rationale:** This is the first story with state-changing and Admin-only data routes, and its security points were found and fixed in review: the self-reset, and the case bypass at two layers. The empty-loop guard DL-093 required is in place and tested. The one Minor left is a test that would not catch what it names, so it is fixed in a test-only push before QA.
+
+---
+
+## G6 – Peer Review — AQP-206 (DEF-015: browser system packages bounded and cached) — 2026-11-05
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #92 at head 71ebe79, five files: `ci.yml` (+38 / −10), `scripts/ci/playwright-system-deps.sh` (new) and three unit test files. CI 42151550488: success. Merge state clean; all three labels approved.
+  - **Reviews:** `docs/06-reviews/AQP-206/*.md` (main folder, uncommitted); Jira 11039 (standards), 11041 (performance), 11042 (quality).
+  - **Not done:** no run or code read of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | DL-101 evidence | | ✅ | Quality verified a cold-cache run, two hits and a negative control. Performance: a hit downloads no apt packages (3 to 6 s); a miss takes 16 s; a slow trickle is capped at 8 minutes, so the worst case is a red job at about 11 minutes instead of a silent stall |
+| 4 | Workflow security | | ✅ | Standards: no new action; the cache-trust model and the script are acceptable |
+| 5 | Minors | | ⚠️ | Rulings 1 to 3 |
+
+**Rulings**
+1. **Fixed before G7, in one push:**
+   - **STD-01:** the `ci.yml:224` comment must state the real protection, which is that caches are scoped by ref. A wrong comment about a security boundary invites a wrong change later.
+   - **QLT-79:** the "a failed install turns the step red" test still passes with `set -e` removed, so it cannot fail. Make the fake fail only on the system-package install, so the test fails without `set -e`.
+   - **QLT-80:** the script test timed out once in 4 runs on Windows (6.3 s against a 5 s limit). This is the DL-057 load-sensitive class. Spawn the process in `beforeAll` under the shared hook limit, or test the logic without a process. No longer per-test limit and no retry.
+   - **Cheap Info items in the same push:** STD-04 (remove the `mktemp` file) and STD-05 (the comment's count).
+2. **PRF-03 against QLT-81 (the immutable cache key).** Both reviewers are partly right, so both are adopted.
+   - **Keep the key immutable, and add a `CACHE_EPOCH` constant to it** (PRF-03's manual bump). A bad or partial entry can then be replaced deliberately by a one-line change, with no automatic re-save under a fresh key on every fallback. Automatic re-saves would add entries to a store that is already over its limit (PRF-02).
+   - **The fallback warning prints the key and the exact `gh cache delete` command** (QLT-81), and the README notes both recovery routes, which closes STD-03.
+   - If the solution-architect sees a reason against this within test strategy §10.6, they say so before the push. Otherwise it stands.
+3. **PRF-02 (the cache store is at 10.49 GB, over GitHub's 10 GB): a post-merge task, not a merge prerequisite.** Deleting caches cannot be undone, so it needs the delivery lead's approval, as you said.
+   - After the merge, the developer lists the stale entries without deleting anything: old npm caches, 10 dead browser-cache entries, and Next build caches, with sizes and last use.
+   - The orchestrator asks the delivery lead.
+   - Entries are deleted only on their word.
+   - Until then, least-recently-used eviction may drop the new package cache. The worst case is a bounded miss (16 s, cap 8 minutes), not a stall.
+4. **QLT-83:** whichever of PR #87 and PR #92 merges second updates from `master` and re-runs CI before its merge. **QLT-82 (#93) and QLT-84:** no action.
+5. **Re-review is narrow (DL-091):** quality confirms QLT-79 and QLT-80, and performance confirms the `CACHE_EPOCH` handling. Master checks STD-01, STD-04 and STD-05 and the warning text.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #92 | Rulings 1 and 2, in one push; CI green | Before G7 |
+| 2 | reviewer-quality, reviewer-performance; master | PR #92, new diff | Ruling 5 | Before G7 |
+| 3 | developer, then orchestrator | Cache list; request to the delivery lead | PRF-02: a dry list, then deletion only on the delivery lead's word | After the merge |
+
+**G7 evidence (DL-077 and DL-101):**
+- **(a)** CI green on the final head.
+- **(b)** A cold run (a new `CACHE_EPOCH`) misses, finishes within the cap, and saves.
+- **(c)** Two following runs hit with zero apt downloads, shown by run logs.
+- **(d)** The negative control: an install failure turns the step red, and the QLT-79 test now fails without `set -e`.
+- **(e)** A fallback run prints the key and the `gh cache delete` command.
+- **(f)** Job time and stage 11b unchanged or better.
+- **(g)** QA closes DEF-015 only after the posted G7 decision (DL-098).
+- After the merge, the nightly p95 is recorded against DL-102's 9:00 (expected about 8:00 to 8:20, PRF-04). If it is still over 9:00, DL-102's fallback hold arms.
+
+**Risks registered:** none new. RISK-023 is reviewed against the first nightly report after the merge.
+**Rationale:** The fix bounds the step that caused the 15-minute runs, and it was proved cold, warm and negative. Three Minors are cheap and two of them are controls that could not fail, so they are fixed before QA. The disagreement over the cache key is settled by keeping both safeguards. The irreversible cache cleanup waits for the delivery lead.

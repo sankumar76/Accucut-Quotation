@@ -1,7 +1,7 @@
 import { expect, test as setup } from '@playwright/test';
 
-import { E2E_LEAD, E2E_PASSWORD, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
-import { DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
+import { E2E_ADMIN, E2E_LEAD, E2E_PASSWORD, ensureE2eAdmin, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
+import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
 
 /**
  * The set-up project: it makes sure the invented users exist, signs the Lead in on the development server, and
@@ -33,4 +33,23 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
   }
 
   await context.storageState({ path: SIGNED_IN_STATE });
+});
+
+setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
+  setup.setTimeout(180_000);
+  await ensureE2eAdmin();
+  const context = await browser.newContext();
+  try {
+    await useFreshAddress(context);
+    const page = await context.newPage();
+    await page.goto(`${DEVELOPMENT_URL}/sign-in`);
+    await signInThroughThePage(page, E2E_ADMIN.email, E2E_PASSWORD);
+    await expect(page).toHaveURL(/\/queue$/, { timeout: COMPILE_TIMEOUT });
+    // Warm the page the Users spec opens, so no test pays for its first compile.
+    await page.goto(`${DEVELOPMENT_URL}/users`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    await context.storageState({ path: ADMIN_STATE });
+  } finally {
+    await context.close();
+  }
 });
