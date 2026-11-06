@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { AuditEntryRefusedError } from '@/server/services/audit-secrets';
+import type { UserService } from '@/server/services/user-service';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, newPerson, openAuditDatabase, userRow, type AuditDatabase } from '../../support/audit-database';
 import { createUserServiceThatFails, LATE_FAILURE } from '../../support/late-failure';
@@ -155,5 +156,97 @@ describe('DEF-017: a failure after the entry was written takes the entry and the
 
     await db.userService.resetPassword(by(), person.id, 'invented-temporary-password-2');
     expect(await eventsOf(person.id)).toEqual(kinds(['user.created', 'user.password_reset']));
+  });
+});
+
+/**
+ * The second half of DEF-017 (master, Jira 11117): the tests above fail the unit of work after the entry was written, which does
+ * not see a bypass that writes the entry in a separate transaction **after** the change was committed (the unit of work never
+ * gets as far as that write, so nothing is left behind). Here the entry of each event is refused where it is written
+ * (`'refuse-entry'`, number 1), so such a bypass has already committed the change when the refusal comes, and the test sees it.
+ * For the correct code the refusal rolls the change back whole. A bypass that commits the entry *before* the change is the known
+ * limit of this helper (tests/support/late-failure.ts) and is covered by a review rule.
+ */
+describe('DEF-017: an entry that is refused when it is written takes the change back, for every audited event', () => {
+  const refusesTheEntry = () => createUserServiceThatFails(db, { kind: 'refuse-entry', number: 1 });
+
+  /** The person as the table and the log hold them: everything a change that was not rolled back would have moved. */
+  async function stateOf(id: string) {
+    return { row: await userRow(db, id), credentials: await credentialsOf(id), kinds: await eventsOf(id) };
+  }
+
+  /** One scenario per event: a person made ready (`prepare`), the change (`run`), and the entry kinds the ordinary service leaves. */
+  const SCENARIOS: ReadonlyArray<{
+    readonly event: string;
+    readonly prepare: (id: string) => Promise<void>;
+    readonly run: (service: UserService, id: string) => Promise<unknown>;
+    readonly kindsAfter: ReadonlyArray<string>;
+  }> = [
+    {
+      event: 'user.renamed',
+      prepare: () => Promise.resolve(),
+      run: (service, id) => service.update(by(), id, { name: 'Invented Refused Renamed Two' }),
+      kindsAfter: ['user.created', 'user.renamed'],
+    },
+    {
+      event: 'user.role_changed',
+      prepare: () => Promise.resolve(),
+      run: (service, id) => service.update(by(), id, { role: 'LEAD' }),
+      kindsAfter: ['user.created', 'user.role_changed'],
+    },
+    {
+      event: 'user.deactivated',
+      prepare: () => Promise.resolve(),
+      run: (service, id) => service.update(by(), id, { isActive: false }),
+      kindsAfter: ['user.created', 'user.deactivated'],
+    },
+    {
+      event: 'user.activated',
+      // Deactivated first (through the ordinary service, so the person has the entry for it), so that activating is a change.
+      prepare: async (id) => {
+        await db.userService.update(by(), id, { isActive: false });
+      },
+      run: (service, id) => service.update(by(), id, { isActive: true }),
+      kindsAfter: ['user.created', 'user.deactivated', 'user.activated'],
+    },
+    {
+      event: 'user.password_reset',
+      // A person who has already set their own password, so a reset (which sets the flag back) would be seen.
+      prepare: async (id) => {
+        await db.owner.query('UPDATE users SET must_change_password = false WHERE id = $1', [id]);
+      },
+      run: (service, id) => service.resetPassword(by(), id, 'invented-temporary-password-2'),
+      kindsAfter: ['user.created', 'user.password_reset'],
+    },
+  ];
+
+  it('user.created: no person is left and no entry is kept', async () => {
+    const input = newPerson('refused.created', 'LEAD');
+    const entriesBefore = await entryCount(db);
+
+    await expect(refusesTheEntry().create(by(), input)).rejects.toBeInstanceOf(AuditEntryRefusedError);
+
+    expect((await db.owner.query('SELECT 1 FROM users WHERE email = $1', [input.email])).rowCount).toBe(0);
+    expect((await db.owner.query('SELECT 1 FROM audit_log WHERE object_label = $1', [input.name])).rowCount).toBe(0);
+    expect(await entryCount(db)).toBe(entriesBefore);
+
+    // Control: the same creation through the ordinary service works (the e-mail address is free) and writes its one entry.
+    const created = await db.userService.create(by(), input);
+    expect(await eventsOf(created.id)).toEqual(kinds(['user.created']));
+  });
+
+  it.each(SCENARIOS)('$event: the person and the log are exactly as they were', async ({ event, prepare, run, kindsAfter }) => {
+    const person = await db.userService.create(by(), newPerson(`refused.${event.replace('user.', '').replace('_', '.')}`));
+    await prepare(person.id);
+    const stateBefore = await stateOf(person.id);
+
+    await expect(run(refusesTheEntry(), person.id)).rejects.toBeInstanceOf(AuditEntryRefusedError);
+
+    expect(await stateOf(person.id)).toEqual(stateBefore);
+
+    // Control: the same change through the ordinary service is a real one and writes its entry.
+    await run(db.userService, person.id);
+    expect(await eventsOf(person.id)).toEqual(kinds(kindsAfter));
+    expect(await stateOf(person.id)).not.toEqual(stateBefore);
   });
 });
