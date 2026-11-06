@@ -14,6 +14,10 @@ import { PRODUCTION_URL } from './support/servers';
  * visible focus indicator at every stop, the skip link actually used, the show and hide toggle by keyboard, field
  * errors wired to their fields, the tree a screen reader reads, axe in the field-error, locked and "could not be
  * checked" states, a stale cookie on a second device, and a signed-in visitor sent a hostile return address.
+ *
+ * Width (test strategy section 10.5, AQP-199): "sessions and return addresses" (AC-4, AC-6) checks server rules and is
+ * tagged `@one-width`, so it runs in the desktop project only. The AC-8 block and the locked and "could not be checked"
+ * states read layout, focus order or run axe per width, and keep all three widths.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
@@ -199,7 +203,7 @@ test.describe('[AQP-38 AC-3, AC-8] the locked and "could not be checked" states'
   });
 });
 
-test.describe('[AQP-38 AC-4, AC-6] sessions and return addresses in the browser', () => {
+test.describe('[AQP-38 AC-4, AC-6] sessions and return addresses in the browser', { tag: '@one-width' }, () => {
   test('[AQP-38 AC-4] a copied cookie on a second device is dead after sign-out on the first: it is sent to sign in, the page renders, and it can sign in again', async ({ browser, page, context }, testInfo) => {
     const email = `qa38.stale.${testInfo.project.name}@example.test`;
     await ensureQaPerson(email);

@@ -2,14 +2,16 @@
  * Nightly step (NFR-009; test strategy section 10.3; STORY-10.10 AC-8): reads the GitHub API for the duration of the
  * required job, `Stages 1 to 11`, over the first attempts of the last 20 pull-request runs, prints the p95 and the median,
  * and exits 1 when the p95 is over 10 minutes or the median is over 6 minutes. A breach never blocks a merge: this runs
- * in the nightly workflow only. Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (a token with `actions: read`, which the
+ * in the nightly workflow only. It also reports which runs it used (the count, and the start time and head commit of the
+ * oldest and the newest), and writes master's 9-minute line when the p95 is over 540 s; that line fails nothing
+ * (STORY-10.14 AC-7, test strategy section 10.3). Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (a token with `actions: read`, which the
  * workflow's own token has); neither is printed.
  *
  * Usage: npx tsx scripts/check-ci-time.ts
  */
 import { appendFileSync } from 'node:fs';
 
-import { ciTimeLines, ciTimeReport, fetchJobRecords } from './lib/ci-feedback-time';
+import { ciTimeLines, ciTimeReport, ciTimeSummary, fetchJobRecords } from './lib/ci-feedback-time';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -23,7 +25,7 @@ async function run(): Promise<number> {
   const lines = ciTimeLines(report);
   process.stdout.write(`${lines.join('\n')}\n`);
   const summaryFile = process.env['GITHUB_STEP_SUMMARY'];
-  if (summaryFile !== undefined && summaryFile !== '') appendFileSync(summaryFile, `### CI feedback time (NFR-009)\n\n${lines.map((line) => `- ${line}`).join('\n')}\n`);
+  if (summaryFile !== undefined && summaryFile !== '') appendFileSync(summaryFile, ciTimeSummary(report));
   return report.breaches.length === 0 ? 0 : 1;
 }
 

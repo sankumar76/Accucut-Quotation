@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MEDIAN_LIMIT_SECONDS,
+  NINE_MINUTE_NOTICE,
+  NOTICE_LIMIT_SECONDS,
   P95_LIMIT_SECONDS,
   REQUIRED_JOB_NAME,
   ciTimeLines,
   ciTimeReport,
+  ciTimeSummary,
   fetchJobRecords,
   formatDuration,
   median,
@@ -21,12 +24,16 @@ import {
 const BASE = Date.parse('2026-11-01T10:00:00Z');
 const iso = (seconds: number): string => new Date(BASE + seconds * 1_000).toISOString();
 
+/** An invented commit id for run `index`: 40 hexadecimal digits, so it passes the same check as a real one. */
+const shaOf = (index: number): string => index.toString(16).padStart(40, 'a');
+
 /** A job that waited `queue` seconds, then ran for `run` seconds. `index` orders the runs (a higher index is newer). */
 function job(index: number, run: number, overrides: Partial<JobRecord> = {}, queue = 0): JobRecord {
   const created = index * 10_000;
   return {
     runId: 1_000 + index,
     runAttempt: 1,
+    headSha: shaOf(index),
     name: REQUIRED_JOB_NAME,
     conclusion: 'success',
     runCreatedAt: iso(created),
@@ -138,14 +145,134 @@ describe('ciTimeReport (AC-8)', () => {
 
   it('has no figure and no breach when no run qualifies', () => {
     const report = ciTimeReport([]);
-    expect(report).toEqual({ runs: 0, p95Seconds: undefined, medianSeconds: undefined, breaches: [] });
+    expect(report).toEqual({
+      runs: 0,
+      p95Seconds: undefined,
+      medianSeconds: undefined,
+      breaches: [],
+      notices: [],
+      oldest: undefined,
+      newest: undefined,
+    });
     expect(ciTimeLines(report)).toEqual(['CI feedback time: no successful first-attempt run of the required job was found, so there is no figure yet.']);
   });
 
-  it('writes the figures, and each breach on its own line', () => {
+  it('writes the figures, the runs used, each breach on its own line, and then the 9-minute line', () => {
     const lines = ciTimeLines(ciTimeReport(runsOf(...Array.from({ length: 20 }, () => 700))));
     expect(lines[0]).toBe('CI feedback time of "Stages 1 to 11" (20 runs): p95 11 m 40 s (target at most 10 m), median 11 m 40 s (early warning over 6 m).');
-    expect(lines).toHaveLength(3);
+    expect(lines[1]).toContain('Runs used: 20.');
+    expect(lines.slice(2, 4)).toEqual([
+      'CI feedback time: the p95 of "Stages 1 to 11" is 11 m 40 s, over the 10-minute target (20 runs).',
+      'CI feedback time: the median of "Stages 1 to 11" is 11 m 40 s, over the 6-minute early warning (20 runs).',
+    ]);
+    expect(lines[4]).toBe(NINE_MINUTE_NOTICE);
+    expect(lines).toHaveLength(5);
+  });
+});
+
+describe('the 9-minute line (STORY-10.14 AC-7; DL-095)', () => {
+  const twenty = (seconds: number): JobRecord[] => runsOf(...Array.from({ length: 20 }, () => seconds));
+  /** 20 runs whose p95 is `seconds` and whose median is 300 s, under the 6-minute early warning, so only the p95 is in play. */
+  const withP95 = (seconds: number): JobRecord[] => runsOf(...Array.from({ length: 18 }, () => 300), seconds, seconds);
+
+  it('is the sentence master ruled, word for word, and the limit is 540 seconds', () => {
+    expect(NOTICE_LIMIT_SECONDS).toBe(540);
+    expect(NINE_MINUTE_NOTICE).toBe(
+      'p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due.',
+    );
+  });
+
+  it('is not written at exactly 540 seconds', () => {
+    const report = ciTimeReport(withP95(540));
+    expect(report.p95Seconds).toBe(540);
+    expect(report.notices).toEqual([]);
+    expect(ciTimeLines(report)).not.toContain(NINE_MINUTE_NOTICE);
+    expect(ciTimeSummary(report)).not.toContain('DL-095');
+  });
+
+  it('is written at 541 seconds, as its own line in the report and its own paragraph in the summary, and fails nothing', () => {
+    const report = ciTimeReport(withP95(541));
+    expect(report.p95Seconds).toBe(541);
+    expect(report.notices).toEqual([NINE_MINUTE_NOTICE]);
+    expect(report.breaches).toEqual([]);
+    expect(ciTimeLines(report)).toContain(NINE_MINUTE_NOTICE);
+    expect(ciTimeSummary(report)).toContain(`\n\n${NINE_MINUTE_NOTICE}\n`);
+    expect(ciTimeSummary(report)).not.toContain(`- ${NINE_MINUTE_NOTICE}`);
+  });
+
+  it('keeps the failures as they were: 541 s fails nothing, 601 s fails the 10-minute target and still carries the line', () => {
+    expect(ciTimeReport(withP95(541)).breaches).toEqual([]);
+    const slow = ciTimeReport(twenty(P95_LIMIT_SECONDS + 1));
+    expect(slow.breaches).toHaveLength(2);
+    expect(slow.notices).toEqual([NINE_MINUTE_NOTICE]);
+    // The 6-minute early warning is unchanged and independent of the 9-minute line.
+    expect(ciTimeReport(twenty(MEDIAN_LIMIT_SECONDS + 1)).notices).toEqual([]);
+  });
+
+  it('is judged on the p95 only: one slow run in 20 does not write it, two do', () => {
+    expect(ciTimeReport(runsOf(...Array.from({ length: 19 }, () => 300), 900)).notices).toEqual([]);
+    expect(ciTimeReport(runsOf(...Array.from({ length: 18 }, () => 300), 541, 900)).notices).toEqual([NINE_MINUTE_NOTICE]);
+  });
+
+  it('is written from fewer than 20 runs too, and the count is stated', () => {
+    const report = ciTimeReport(runsOf(541, 541, 541));
+    expect(report.runs).toBe(3);
+    expect(report.notices).toEqual([NINE_MINUTE_NOTICE]);
+    expect(ciTimeLines(report)[0]).toContain('only 3 runs, fewer than the 20 asked for');
+    expect(ciTimeLines(report)[1]).toContain('Runs used: 3.');
+    expect(ciTimeReport(runsOf(540, 540, 540)).notices).toEqual([]);
+  });
+
+  it('leaves out a re-run attempt: a slow second attempt neither writes the line nor counts as a run', () => {
+    const jobs = [...twenty(300), job(50, 5_000, { runAttempt: 2 }), job(51, 5_000, { runAttempt: 3 })];
+    const report = ciTimeReport(jobs);
+    expect(report.runs).toBe(20);
+    expect(report.p95Seconds).toBe(300);
+    expect(report.notices).toEqual([]);
+    // Nor can a re-run be the oldest or the newest run named in the report.
+    expect([report.oldest?.headSha, report.newest?.headSha]).toEqual([shaOf(0), shaOf(19)]);
+  });
+});
+
+describe('the runs a report used (STORY-10.14 AC-7)', () => {
+  it('names the start time and head commit of the oldest and the newest run, and the count', () => {
+    const report = ciTimeReport(runsOf(150, 160, 170));
+    expect(report.oldest).toEqual({ runId: 1_000, startedAt: iso(0), headSha: shaOf(0) });
+    expect(report.newest).toEqual({ runId: 1_002, startedAt: iso(20_000), headSha: shaOf(2) });
+    const line = ciTimeLines(report)[1];
+    expect(line).toBe(
+      `Runs used: 3. Oldest run 1000 started ${iso(0)}, head commit ${shaOf(0)}. Newest run 1002 started ${iso(20_000)}, head commit ${shaOf(2)}.`,
+    );
+  });
+
+  it('is the start on a runner, not the creation of the run, so queue wait does not move it', () => {
+    const report = ciTimeReport([job(0, 120, {}, 3_000)]);
+    expect(report.oldest?.startedAt).toBe(iso(3_000));
+    expect(report.newest).toEqual(report.oldest);
+  });
+
+  it('is over the newest 20 runs only: older runs are not named, whatever order they arrive in', () => {
+    const old = Array.from({ length: 5 }, (_, index) => job(index, 5_000));
+    const recent = Array.from({ length: 20 }, (_, index) => job(100 + index, 150));
+    const report = ciTimeReport([...recent.reverse(), ...old]);
+    expect(report.oldest?.headSha).toBe(shaOf(100));
+    expect(report.newest?.headSha).toBe(shaOf(119));
+  });
+
+  it('names no run when none qualifies, and the summary says so without a runs line', () => {
+    const report = ciTimeReport([job(0, 100, { conclusion: 'failure' })]);
+    expect(report.oldest).toBeUndefined();
+    expect(report.newest).toBeUndefined();
+    expect(ciTimeSummary(report)).toBe(
+      '### CI feedback time (NFR-009)\n\n- CI feedback time: no successful first-attempt run of the required job was found, so there is no figure yet.\n',
+    );
+  });
+
+  it('writes the summary as a list of the report lines under a heading', () => {
+    const summary = ciTimeSummary(ciTimeReport(runsOf(150, 160, 170)));
+    expect(summary.startsWith('### CI feedback time (NFR-009)\n\n- CI feedback time of "Stages 1 to 11" (only 3 runs')).toBe(true);
+    expect(summary).toContain('\n- Runs used: 3. Oldest run 1000');
+    expect(summary.endsWith('\n')).toBe(true);
   });
 });
 
@@ -168,7 +295,10 @@ describe('fetchJobRecords', () => {
   it('reads the newest pull-request runs of ci.yml, then the jobs of attempt 1 of each', async () => {
     const { fetchImpl, paths, headers } = api((path) =>
       path.endsWith('/runs')
-        ? { status: 200, body: { workflow_runs: [{ id: 11, created_at: iso(100) }, { id: 12, created_at: iso(200) }] } }
+        ? {
+            status: 200,
+            body: { workflow_runs: [{ id: 11, created_at: iso(100), head_sha: shaOf(11) }, { id: 12, created_at: iso(200), head_sha: shaOf(12) }] },
+          }
         : { status: 200, body: { jobs: [{ name: REQUIRED_JOB_NAME, conclusion: 'success', started_at: iso(0), completed_at: iso(150) }] } },
     );
     const records = await fetchJobRecords('owner/repo', TOKEN, fetchImpl);
@@ -180,6 +310,16 @@ describe('fetchJobRecords', () => {
     expect(headers[0]?.get('authorization')).toBe(`Bearer ${TOKEN}`);
     expect(records.map((record) => [record.runId, record.runAttempt, record.name])).toEqual([[11, 1, REQUIRED_JOB_NAME], [12, 1, REQUIRED_JOB_NAME]]);
     expect(ciTimeReport(records).runs).toBe(2);
+    // The head commit of each run comes from the run list, so the report can name it.
+    expect(records.map((record) => record.headSha)).toEqual([shaOf(11), shaOf(12)]);
+    expect(ciTimeReport(records).newest?.headSha).toBe(shaOf(12));
+  });
+
+  it('refuses a head commit that is not 40 hexadecimal digits, because the report writes it into the job summary', async () => {
+    const body = (headSha: string) => ({ workflow_runs: [{ id: 11, created_at: iso(100), head_sha: headSha }] });
+    for (const bad of ['', 'abc123', `${shaOf(1)}\n- injected`, shaOf(1).toUpperCase()]) {
+      await expect(fetchJobRecords('owner/repo', TOKEN, api(() => ({ status: 200, body: body(bad) })).fetchImpl)).rejects.toThrow();
+    }
   });
 
   it('reports the status, and neither the token nor the response, when the API refuses', async () => {

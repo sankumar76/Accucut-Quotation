@@ -118,6 +118,10 @@
 
 | Date | Agent | Action | Artefacts |
 |------|-------|--------|-----------|
+| 2026-11-05 | master | DL-099 corrected: no test hung; DEF-015 re-scoped as CI infrastructure (Environment, Sev-3, an `apt-get` mirror stall in the browser install). The architect chooses a cache or pinned image; the product-manager places it; the trigger and its effects stand (DL-100) | docs/00-governance/ |
+| 2026-11-05 | master | CI-time trigger fired (p95 15 min 05 s): AQP-199 to committed, AQP-89 out; AQP-65 held at G6 until AQP-199 merges; hung stage-12 run to DEF-015 (QA) (DL-099). RISK-023 raised to 8 | docs/00-governance/ |
+| 2026-11-05 | master | G7 AQP-198 (DEF-014, PR #85): GO; DEF-014 closed, DL-094 UI hold lifted. Done only after the posted G7 decision; push only if Gitleaks exits 0 (DL-098). AQP-198 G6 closed at 646ac60; DL-096 (staging copy at G8) and DL-097 (AQP-199 scope) recorded | docs/00-governance/ |
+| 2026-11-05 | master | G6 AQP-198 (DEF-014, PR #85): CONDITIONAL GO. STD-01 fixed with the branch update and verified by master; PRF-02 CI time to an EPIC-10 enabler story, with a p95 > 9 min trigger (DL-095). RISK-023 new (6) | docs/00-governance/ |
 | 2026-11-05 | master | G7 AQP-48 (PR #79, fb67aec): GO. DEF-014 reclassified Sev-2 (origin AQP-38/188): no further UI story passes G7 while open; `wcag21a` joins the axe tags in its fix PR. Local Gitleaks before every push (DL-094) | docs/00-governance/ |
 | 2026-11-05 | master | G6 AQP-48 conditions met at 561f48e; G6 closed; PRF-01 met in purpose, not-found remainder accepted as PRF-05 on #81; may go to G7 | docs/00-governance/gate-log.md |
 | 2026-11-05 | master | G6 AQP-48 (PR #79, 5208f6e): CONDITIONAL GO. STD-01, QLT-62, PRF-01, SCR-26 wording (ux-spec v0.12) and STD-06 fixed before G7, then a narrow re-review; QLT-63/64/66 and PRF-04 to #81 (DL-093) | docs/00-governance/ |

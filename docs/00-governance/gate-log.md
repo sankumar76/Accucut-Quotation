@@ -2002,3 +2002,97 @@ The delivery lead merges PR #79 (squash, code-human).
 
 **Risks registered:** none new. DEF-014 and the tag gap are tracked as a defect, with the hard bind in ruling 1.
 **Rationale:** Every AC of this story is shown with independent evidence, including AC-4's role-first refusal. The accessibility defect QA found is real and more severe than filed, but it belongs to the shared frame, so it is bound to the next UI gate rather than holding a story that did not cause it. The tag gap is fixed at the same time, so the suite can see Level A rules from now on.
+
+---
+
+## G6 – Peer Review — AQP-198 (DEF-014, Sev-2: account trigger label in name; `wcag21a`) — 2026-11-05
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #85 at head 2d1e2f3. Five files: `src/components/shared/account-trigger.tsx` (+10 / −4) and four test files. CI 42032666310 on 2d1e2f3: success. All three review labels approved. The PR is behind `master`.
+  - **Reviews:** `docs/06-reviews/AQP-198/standards.md`, `quality.md` and `performance.md` (main folder, uncommitted); Jira 10960 to 10962.
+  - **Not done:** no local run; the diff was not read by me (the file list only).
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | DEF-014 fixed and the tag added | | ✅ | `wcag21a` adds exactly `label-content-name-mismatch` in axe 4.14.0. The suite with the wider tags shows no other violation (352 passed). 7 of 7 planted faults caught |
+| 4 | Minors | | ⚠️ | STD-01 is fixed before G7 (ruling 1); PRF-02 is not caused by this PR (ruling 2) |
+| 5 | CI | | ✅ | Green; runtime cost +5 B (PRF-01) |
+
+**Rulings**
+1. **STD-01 is fixed before G7.** `tests/e2e/account-trigger-name.spec.ts:40` uses `(element as HTMLElement).innerText`, a type assertion that coding standards §10 forbids. The fix is an `instanceof HTMLElement` check that throws otherwise.
+   - It is test code and one line, so it goes in the same round as the branch update from `master`.
+   - **Master verifies it within that file, with no re-review (DL-047).**
+   - STD-02 (the duplicated normalise helper) may go in the same commit; it is optional.
+2. **PRF-02 (CI time) is a follow-up enabler story, not a condition of this PR.**
+   - **Figures:** over the last 20 PR runs the median is 6 min 02 s, past test strategy §10.3's 6-minute early warning. p95 is 8 min 01 s, still under the 10-minute target the delivery lead agreed. The latest `master` run took 8 min 24 s. The growth is in stage 12 (E2E at three widths).
+   - **Owners:**
+     - the **solution-architect** chooses the approach: parallel jobs per project, more workers, or layout-independent specs at one width (any change to what runs at which width is the architect's to rule, so coverage is not lost silently);
+     - the **scrum-master** writes the enabler story now, under EPIC-10, as for STORY-10.10 (DL-056: an enabler, not scope);
+     - the **developer** builds it.
+   - **Timing:** Ready before the sprint 1 review.
+   - **Trigger (DL-095):** if the nightly CI-time step reports a **p95 over 9 minutes**, the next story that adds E2E specs cannot reach G6 until the enabler merges.
+   - **Risk:** RISK-023 is new.
+3. **QLT-67, QLT-68 and STD-02 need no action.** The missing-space case is caught by the unit tests and axe; the narrow initials regex matches the UX rule as written.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #85, `tests/e2e/account-trigger-name.spec.ts` | STD-01: an `instanceof` check instead of the assertion; update the branch from `master`; CI green | Before G7 |
+| 2 | master | Same commit | Verify: test file only, no assertion left, CI green | Before G7 |
+| 3 | scrum-master, solution-architect | New enabler story (EPIC-10) | PRF-02: the CI-time speed-up, with the approach chosen by the architect | Ready before the sprint 1 review |
+
+**G7 evidence (a full QA cycle; the defect is product-visible):**
+- The account trigger's accessible name contains its visible text at 360, 768 and 1366 px, for each role, from the axe run with `wcag21a` and from the new E2E test.
+- The full E2E suite with the new tags shows 0 violations.
+- A planted fault (the old name back) fails the test.
+- The trigger still opens the menu by pointer and keyboard (AC-4 of AQP-188 unchanged).
+- Regression green, including stage 11b.
+- QA closes DEF-014 if all pass. **No further UI story passes G7 until it does (DL-094).**
+
+**Risks registered:** RISK-023 (new, 6).
+**Rationale:** The fix is small and caught 7 of 7 planted faults. Widening the tags found nothing else, so the gap DL-094 feared was empty this time. The one Minor is a one-line rule breach in a test, verified by master. CI time is a real slope, but under the agreed target; it gets an owner and a story now, and a hard trigger before it turns into a missed target.
+
+**AQP-198 G6 condition (STD-01) verified — 2026-11-05 (master). Result: met; G6 is closed and G7 may start.**
+- **Head:** 646ac60, on d8765ca. d8765ca is GitHub's update-branch merge of `master` f698984 (docs PR #83).
+- **The STD-01 commit:** one file, `tests/e2e/account-trigger-name.spec.ts`, +1 / −1, read in full (`gh api compare d8765ca...646ac60`). `(element as HTMLElement).innerText` becomes `element instanceof HTMLElement ? element.innerText : ''`.
+  - **The `''` fallback is not vacuous.** `expectLabelInName` then requires the visible text to equal "el" or "el e2e lead lead", so a non-HTML element fails the test rather than passing it. My G6 wording said "throws otherwise"; failing at the next assertion meets the same purpose.
+- **CI:** run 42037474153 on 646ac60, success; 352 E2E passed, stage 11b unchanged.
+- **STD-02 (Info, the duplicated `normalise` helper):** not done, and accepted. The two copies run under different runners (Vitest and Playwright), and DL-095 made STD-02 optional. No follow-up issue is needed.
+- **G7** may start on the evidence set in the AQP-198 G6 record. QA verifies on the final head.
+
+---
+
+## G7 – QA Acceptance — AQP-198 (DEF-014, Sev-2: account trigger label in name; `wcag21a`) — 2026-11-05
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #85 at head 8d76040, one commit on 646ac60 (the G6 check) adding only `docs/07-qa/AQP-198-test-report.md` (`gh api compare`). CI 42063801778 on 8d76040: success. The PR now shows 87b7308, the update-branch from `master` d8cb223 (docs only), with CI running.
+  - **QA:** Jira AQP-198 10980; PR comment 6663550331. #82 closed at 16:38:50Z.
+  - **Not done:** no run of my own.
+
+| # | Check (G6 evidence, 10963) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Name contains the visible text, three widths, each role | ✱ | ✅ | 18 of 18, live, for Admin, Lead and Engineer at 360, 768 and 1366 px; axe with `wcag21a` 0 violations, menu closed and open |
+| 2 | Full suite with the new tags | ✱ | ✅ | 352 passed, 0 failed; new spec 12 of 12 locally and in CI |
+| 3 | Planted fault (the old name) fails | ✱ | ✅ | 4 unit tests and 2 E2E tests fail; the other 2 E2E tests were stuck at sign-in after the rebuild (Environment, inconclusive, not counted). With the fault removed, everything passes. Six failing tests are enough to show the fault is caught |
+| 4 | Pointer and keyboard open | ✱ | ✅ | Both open; Escape returns focus in 60 of 60 tries |
+| 5 | Regression; no open Sev-1 or Sev-2 | ✱ | ✅ | Green; stage 11b under 190,000 B; DEF-014 fixed |
+
+**Rulings**
+1. **DEF-014 (AQP-198, #82) is closed. The DL-094 hold on UI stories at G7 is lifted.**
+2. **(a) QA closing before this decision is ratified, and the wording is clarified so it does not happen again.** My G6 evidence list said "QA then closes DEF-014", which invited closing before the decision, as at DL-089. **From now on:** CLAUDE.md §4 governs, and QA moves a story or defect to Done only after master's G7 decision is posted. Where master's evidence list says "QA closes", it means after the GO. The early closure is not reversed, because the GO stands.
+3. **(b) The local Gitleaks exit code was masked by a pipe.** The scan ran before the push and its output showed no leaks; CI stage 2 is green. But a scan whose exit code does not gate the push only works if someone reads its output. This is the second slip of this kind after DL-094.
+   - **Rule (DL-098):** the push runs only if the scan exits 0. Use `gitleaks ... && git push`, or `set -o pipefail` before any pipe. A scan in a pipe without `pipefail` does not count.
+   - **Recommendation to the solution-architect and the delivery lead:** a versioned pre-push hook that runs Gitleaks, so that the rule is enforced by tooling, not memory. Not a condition.
+
+**Merge:** after the update-branch (87b7308 or later), CI green including stage 11b. The update is docs only, so master re-checks nothing unless this PR's own diff changes. Then the delivery lead squash-merges.
+
+**Risks registered:** none.
+**Rationale:** The Sev-2 defect is fixed and proved at every width and role by both axe and a dedicated test, and a planted fault is caught. The wider tag set is now in force for every later UI story. The two process slips caused no harm, but each weakened a control, so both rules are tightened in writing.

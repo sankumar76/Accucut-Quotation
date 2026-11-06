@@ -92,6 +92,30 @@ describe('CI workflow', () => {
     expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
   });
 
+  it('AQP-199 AC-4: stage 12 runs the whole suite in the one required job, with no flag that narrows or reshapes it', () => {
+    const e2e = stepNamed('Stage 12: E2E');
+    // The width, worker and retry settings live in playwright.config.ts (tests/unit/one-width-tag.test.ts reads them),
+    // so a flag here would override them silently.
+    for (const flag of ['--workers', '--project', '--grep', '--shard', '--retries', '--timeout', '--max-failures', '--last-failed']) {
+      expect(e2e, flag).not.toContain(flag);
+    }
+    expect(e2e).toMatch(/^\s*npx playwright test\s*$/m);
+    expect(e2e).not.toContain('continue-on-error');
+    // One job, still named for the required check, and no job that `needs` another (a shard job would need a fan-in job).
+    expect(LINES.slice(LINES.indexOf('jobs:') + 1).filter((line) => /^ {2}[\w-]+:\s*$/.test(line))).toEqual(['  verify:']);
+    expect(WORKFLOW.match(/^ {4}name: Stages 1 to 11$/gm)).toHaveLength(1);
+    expect(WORKFLOW).not.toMatch(/^\s+needs:/m);
+    expect(WORKFLOW).not.toMatch(/^\s+strategy:/m);
+  });
+
+  it('AQP-199 AC-6: the workflow keeps least-privilege permissions, no repository secret and no fork-exposed trigger', () => {
+    expect(WORKFLOW).toMatch(/^permissions:\n {2}contents: read$/m);
+    expect(WORKFLOW).not.toMatch(/\$\{\{\s*secrets\./);
+    const withoutComments = LINES.filter((line) => !line.trimStart().startsWith('#')).join('\n');
+    expect(withoutComments).not.toMatch(/:\s*write\b/);
+    expect(withoutComments).not.toContain('pull_request_target');
+  });
+
   it('STORY-10.10 AC-5: step 11b runs the JS budget inside the required job, after stage 11 and before stage 12, and blocks merge', () => {
     const budget = stepNamed('Stage 11b: JS budget');
     expect(budget).not.toMatch(/^\s*if:/m);

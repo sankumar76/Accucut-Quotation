@@ -10,6 +10,8 @@ import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers
  */
 
 const COMPILE_TIMEOUT = 120_000;
+/** The development-server pages the width projects open. The signed-in Lead can open all three. */
+const WARMED_ROUTES = ['/', '/queue', '/design-system'] as const;
 
 setup('create the E2E users and save a signed-in Lead', async ({ page, context }) => {
   setup.setTimeout(180_000);
@@ -23,11 +25,12 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
   await expect(page).toHaveURL(/\/queue$/, { timeout: COMPILE_TIMEOUT });
   await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
 
-  // Warm the pages the other specs open.
-  await page.goto(`${DEVELOPMENT_URL}/design-system`);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
-  await page.goto(`${DEVELOPMENT_URL}/`);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  // Warm every development-server route the specs open, once, here: with four workers in CI (test strategy section
+  // 10.5, AQP-199) several tests would otherwise ask for the same page at once and each wait for its first compile.
+  for (const route of WARMED_ROUTES) {
+    await page.goto(`${DEVELOPMENT_URL}${route}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  }
 
   await context.storageState({ path: SIGNED_IN_STATE });
 });
