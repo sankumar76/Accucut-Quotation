@@ -38,6 +38,7 @@ model User {
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   configVersions ConfigVersion[]
+  auditEntries   AuditLog[]
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -78,4 +79,32 @@ model ConfigVersion {
 
   @@unique([number], map: "uq_config_versions_number")
   @@map("config_versions")
+}
+
+/// One permanent record of who changed what and when (STORY-01.07, FR-011, NFR-007; architecture sections 5.1 and 8).
+/// Append-only: a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and the runtime role holds no such grant.
+/// An entry is written in the same transaction as the change it records (the audit service takes the caller's transaction).
+/// `object_label` is the name the object had at that moment, so a later rename does not rewrite history (AC-5).
+/// `before` and `after` are JSON and never hold a password, a hash or a token; `before` is null for a creation.
+/// `created_at` is stamped by the database at the millisecond, so application code cannot back-date an entry and the
+/// pagination cursor (time, id) survives a round trip through a JavaScript Date. There is no `updated_at`: a row never
+/// changes after it is inserted (the append-only exception to coding standards section 10, "SQL").
+/// The indexes carry the sort order of the screen, newest first; their names are those of architecture section 5.1.
+model AuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId     String   @map("actor_id") @db.Uuid
+  event       String
+  objectType  String   @map("object_type")
+  objectId    String   @map("object_id") @db.Uuid
+  objectLabel String   @map("object_label")
+  before      Json?
+  after       Json?
+  requestId   String   @map("request_id")
+  createdAt   DateTime @default(dbgenerated("date_trunc('milliseconds'::text, clock_timestamp())")) @map("created_at") @db.Timestamptz(6)
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_log_actor_id")
+
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_log_created_at")
+  @@index([actorId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_log_actor_id")
+  @@map("audit_log")
 }

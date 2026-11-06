@@ -1,5 +1,8 @@
+import { z } from 'zod';
+
 import { uniqueViolationOf, withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
+import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the people who sign in (architecture section 5.1). A user is deactivated and never deleted, so
@@ -77,25 +80,35 @@ export interface UserRepository {
   findCredentialsByEmail(email: string): Promise<UserCredentials | null>;
   /** The account with this ID, or null. */
   findAccountById(id: string): Promise<UserAccount | null>;
+  /**
+   * The account with this ID, or null, read in the caller's transaction **with its row locked** (`SELECT ... FOR UPDATE`) until
+   * the transaction ends. A change that is audited reads the state it replaces this way, so the `before` of its entry is the
+   * state the change really found and a second change to the same person waits for the first (STORY-01.07).
+   */
+  findAccountForUpdate(id: string, tx: Transaction): Promise<UserAccount | null>;
   /** True if any user at all has the Admin role, active or not. */
   hasAnyAdmin(): Promise<boolean>;
   /** Everyone, for the Users list: active people first, then by role (Admin, Lead, Engineer), then by name. */
   list(): Promise<ReadonlyArray<UserSummary>>;
   /** The one active Admin, or null. */
   findActiveAdmin(): Promise<Pick<UserSummary, 'id' | 'name'> | null>;
-  /** Adds a user and returns its ID. Throws `UserConstraintError` for a used e-mail or a second active Admin. */
-  create(user: NewUser): Promise<string>;
+  /**
+   * Adds a user and returns its ID. Throws `UserConstraintError` for a used e-mail or a second active Admin. With `tx` it runs
+   * in the caller's transaction (the audit entry is written in the same one).
+   */
+  create(user: NewUser, tx?: Transaction): Promise<string>;
   /**
    * Changes a person's name, role or active flag and returns them, or null if there is no such user. Deactivating also
    * raises `session_version`, in the same statement, so a person who is activated again must sign in again. Throws
-   * `UserConstraintError` for a second active Admin.
+   * `UserConstraintError` for a second active Admin. With `tx` it runs in the caller's transaction.
    */
-  update(id: string, changes: UserChanges): Promise<UserSummary | null>;
+  update(id: string, changes: UserChanges, tx?: Transaction): Promise<UserSummary | null>;
   /**
    * Sets the password hash, sets `must_change_password` and raises `session_version` (which ends the person's sessions),
-   * in one statement. Returns the person's e-mail address, or null if there is no such user.
+   * in one statement. Returns the person's e-mail address, or null if there is no such user. With `tx` it runs in the caller's
+   * transaction.
    */
-  setPassword(id: string, passwordHash: string): Promise<string | null>;
+  setPassword(id: string, passwordHash: string, tx?: Transaction): Promise<string | null>;
   /**
    * Raises the user's `session_version` by one, which ends every session they have (ADR-009), **only if it is still
    * `expectedVersion`**: compare and increment in one statement (ADR-009 amendment 1). A token whose version is already
@@ -113,6 +126,19 @@ export function normaliseEmail(email: string): string {
 const RECORD_NOT_FOUND = 'P2025';
 
 const SUMMARY_SELECT = { id: true, name: true, email: true, role: true, isActive: true } as const;
+
+/** The rows of the locking read, checked on the way in: a raw statement is not typed by Prisma. */
+const LOCKED_ACCOUNT_ROWS = z.array(
+  z.strictObject({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    role: z.enum(['ADMIN', 'LEAD', 'ENGINEER']),
+    isActive: z.boolean(),
+    sessionVersion: z.number().int(),
+    mustChangePassword: z.boolean(),
+  }),
+);
 
 function isRecordNotFound(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === RECORD_NOT_FOUND;
@@ -166,6 +192,20 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       );
     },
 
+    findAccountForUpdate(id, tx) {
+      return withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a person who asks for one is not found.
+        if (!z.uuid().safeParse(id).success) return null;
+        // Prisma has no row lock, so this is the one raw statement of the repository: the ID is a bound parameter.
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", name, email, role::text AS "role", is_active AS "isActive",
+                 session_version AS "sessionVersion", must_change_password AS "mustChangePassword"
+          FROM users WHERE id = ${id}::uuid FOR UPDATE`;
+        const found = LOCKED_ACCOUNT_ROWS.parse(rows)[0];
+        return found ?? null;
+      });
+    },
+
     hasAnyAdmin() {
       return withDatabaseErrors(async () => (await db.user.count({ where: { role: 'ADMIN' }, take: 1 })) > 0);
     },
@@ -183,10 +223,10 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       return withDatabaseErrors(() => db.user.findFirst({ where: { role: 'ADMIN', isActive: true }, select: { id: true, name: true } }));
     },
 
-    create(user) {
+    create(user, tx) {
       return withDatabaseErrors(() =>
         enforcingConstraints(async () => {
-          const created = await db.user.create({
+          const created = await clientFor(db, tx).user.create({
             data: { ...user, email: normaliseEmail(user.email) },
             select: { id: true },
           });
@@ -195,11 +235,11 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       );
     },
 
-    update(id, changes) {
+    update(id, changes, tx) {
       return withDatabaseErrors(() =>
         enforcingConstraints(async () => {
           try {
-            return await db.user.update({
+            return await clientFor(db, tx).user.update({
               where: { id },
               // Only the fields given are written. Deactivating ends the person's sessions for good (see the interface).
               data: {
@@ -218,10 +258,10 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       );
     },
 
-    setPassword(id, passwordHash) {
+    setPassword(id, passwordHash, tx) {
       return withDatabaseErrors(async () => {
         try {
-          const updated = await db.user.update({
+          const updated = await clientFor(db, tx).user.update({
             where: { id },
             data: { passwordHash, mustChangePassword: true, sessionVersion: { increment: 1 } },
             select: { email: true },
