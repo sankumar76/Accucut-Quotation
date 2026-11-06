@@ -92,18 +92,31 @@ const BASE_SYNTAX = [
   },
 ];
 
+// Images are `unoptimized` in this project, so `next/image` only adds client code to the first load (AQP-74 PRF-01). A plain
+// `<img>` with width, height and alt is the rule everywhere (architecture section 10). It is listed in every group below
+// as well as in the general block, because ESLint keeps one `no-restricted-imports` setting per file: a group's setting
+// replaces the general one and would otherwise lift the ban in src/.
+const NEXT_IMAGE_IMPORT = {
+  group: ['next/image', 'next/image/**'],
+  regex: `^next${SLASH}image${END}`,
+  message: 'Use a plain <img> with width, height and alt (architecture section 10)',
+};
+
 /** The two rules for one file group: static imports by glob, literal `import()` by regular expression. */
-const restrict = (entries) => ({
-  'no-restricted-imports': ['error', { patterns: entries.map(({ group, message }) => ({ group, message })) }],
-  'no-restricted-syntax': [
-    'error',
-    ...BASE_SYNTAX,
-    ...entries.map(({ regex, message }) => ({
-      selector: `ImportExpression[source.value=/${regex}/]`,
-      message: `${message} (also when loaded with import())`,
-    })),
-  ],
-});
+const restrict = (groupEntries) => {
+  const entries = [NEXT_IMAGE_IMPORT, ...groupEntries];
+  return {
+    'no-restricted-imports': ['error', { patterns: entries.map(({ group, message }) => ({ group, message })) }],
+    'no-restricted-syntax': [
+      'error',
+      ...BASE_SYNTAX,
+      ...entries.map(({ regex, message }) => ({
+        selector: `ImportExpression[source.value=/${regex}/]`,
+        message: `${message} (also when loaded with import())`,
+      })),
+    ],
+  };
+};
 
 export default defineConfig([
   globalIgnores([
@@ -131,6 +144,10 @@ export default defineConfig([
       'no-new-func': 'error',
       'no-implied-eval': 'error',
       'no-restricted-syntax': ['error', ...BASE_SYNTAX],
+      'no-restricted-imports': ['error', { patterns: [{ group: NEXT_IMAGE_IMPORT.group, message: NEXT_IMAGE_IMPORT.message }] }],
+      // Off repo-wide: the plain `<img>` is the rule, and the rule that bans it is replaced by the `next/image` ban above
+      // (architecture section 10; AQP-74 PRF-01).
+      '@next/next/no-img-element': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
     },

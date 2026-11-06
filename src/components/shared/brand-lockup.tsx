@@ -28,6 +28,7 @@ export function BrandLockup({ href, className }: BrandLockupProps) {
         width={200}
         height={200}
         fetchPriority="high"
+        decoding="async"
         className="block h-(--logo-size) w-(--logo-size) shrink-0"
       />
       <span className="min-w-0">
