@@ -71,8 +71,6 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     focusFooterAfterRender.current = false;
   }, [page]);
 
-  useEffect(() => () => inFlight.current?.abort(), []);
-
   /** Starts a request and returns its controller; any request before it is cancelled. */
   function startRequest(): AbortController {
     inFlight.current?.abort();
@@ -88,11 +86,12 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     setLoadingMore(false);
     const outcome = await fetchAuditPage(next, undefined, fetch, controller.signal);
     // A newer request took over while this one was on its way: its answer is the one to show.
-    if (outcome.status === 'cancelled' || inFlight.current !== controller) return;
+    if (inFlight.current !== controller) return;
     if (outcome.status === 'ok') {
       setPage(outcome.value);
       setStatus('ready');
     } else {
+      // A call that was cancelled and is still the current one was cancelled by nothing of ours: say so, never spin for ever.
       setStatus('error');
     }
   }
@@ -116,7 +115,7 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     setLoadingMore(true);
     setMoreFailed(false);
     const outcome = await fetchAuditPage(filters, page.nextCursor, fetch, controller.signal);
-    if (outcome.status === 'cancelled' || inFlight.current !== controller) return;
+    if (inFlight.current !== controller) return;
     setLoadingMore(false);
     if (outcome.status === 'ok') {
       focusFooterAfterRender.current = true;

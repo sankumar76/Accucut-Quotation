@@ -213,10 +213,11 @@ test.describe('states (AC-8)', () => {
       await route.continue();
     });
     await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
-    const card = page.locator('[aria-busy="true"]').first();
-    await expect(card).toBeVisible();
+    // The page's own busy marks only: the shell has others of its own (the first open of its menus).
+    const busy = page.getByRole('main').locator('[aria-busy="true"]');
+    await expect(busy.first()).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Loading the audit log' })).toBeAttached();
-    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    await expect(busy).toHaveCount(0);
     await expect(entryOf(page, person.name)).toHaveCount(1);
   });
 
@@ -295,8 +296,9 @@ test.describe('by keyboard (AC-9)', () => {
     await openAudit(page);
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
-    // Type-ahead on a closed list chooses the option that starts with the letters, as a person without a pointer does.
-    await page.keyboard.type('Approval');
+    // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
+    // first and "Approval" second; typing the letters instead depends on the pause between keys, which a busy machine stretches.)
+    await page.keyboard.press('ArrowDown');
     await expect(event).toHaveValue('approval');
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
 
