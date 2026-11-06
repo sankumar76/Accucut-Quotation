@@ -18,13 +18,14 @@ const ADMIN = '00000000-0000-4000-8000-abcdef000001';
 const LEAD = '00000000-0000-4000-8000-abcdef000002';
 const PERSON = '00000000-0000-4000-8000-abcdef000003';
 const NAMES: Readonly<Record<string, string>> = { [ADMIN]: 'Invented Admin', [LEAD]: 'Invented Lead' };
+const nameOf = (actorId: string): string => NAMES[actorId] ?? 'Invented Unknown';
 const REQUEST_ID = 'req-0a0b0c0d';
 
 let world: FakeAuditWorld;
 let service: AuditService;
 
 beforeEach(() => {
-  world = createFakeAuditWorld((actorId) => NAMES[actorId] ?? 'Invented Unknown');
+  world = createFakeAuditWorld();
   service = createAuditService({ audit: world.audit });
 });
 
@@ -32,14 +33,14 @@ beforeEach(() => {
 async function addedAt(at: string, actorId = ADMIN, label = 'Invented Person'): Promise<void> {
   world.clock.set(new Date(at));
   await world.transactions.run((tx) =>
-    service.record(tx, { event: 'user.created', actorId, requestId: REQUEST_ID, object: { id: PERSON, label }, before: null, after: { role: 'ENGINEER', isActive: true } }),
+    service.record(tx, { event: 'user.created', actorId, actorLabel: nameOf(actorId), requestId: REQUEST_ID, object: { id: PERSON, label }, before: null, after: { role: 'ENGINEER', isActive: true } }),
   );
 }
 
 async function deactivatedAt(at: string): Promise<void> {
   world.clock.set(new Date(at));
   await world.transactions.run((tx) =>
-    service.record(tx, { event: 'user.deactivated', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { isActive: true }, after: { isActive: false } }),
+    service.record(tx, { event: 'user.deactivated', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { isActive: true }, after: { isActive: false } }),
   );
 }
 
@@ -54,7 +55,7 @@ describe('AC-2: record appends in the caller\'s transaction', () => {
     world.clock.set(new Date('2026-11-05T09:00:00.000Z'));
     await expect(
       world.transactions.run(async (tx) => {
-        await service.record(tx, { event: 'user.created', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: null, after: { role: 'LEAD', isActive: true } });
+        await service.record(tx, { event: 'user.created', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: null, after: { role: 'LEAD', isActive: true } });
         throw failure;
       }),
     ).rejects.toBe(failure);
@@ -62,22 +63,22 @@ describe('AC-2: record appends in the caller\'s transaction', () => {
   });
 
   it('cannot write without a transaction: the repository refuses a handle it did not open', async () => {
-    await expect(service.record({ kind: 'database-transaction' }, { event: 'user.created', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'x' }, before: null, after: { role: 'LEAD', isActive: true } })).rejects.toThrow(
+    await expect(service.record({ kind: 'database-transaction' }, { event: 'user.created', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'x' }, before: null, after: { role: 'LEAD', isActive: true } })).rejects.toThrow(
       'did not open',
     );
   });
 
   it('keeps two entries of one transaction as two entries', async () => {
     await world.transactions.run(async (tx) => {
-      await service.record(tx, { event: 'user.role_changed', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { role: 'ENGINEER' }, after: { role: 'LEAD' } });
-      await service.record(tx, { event: 'user.deactivated', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { isActive: true }, after: { isActive: false } });
+      await service.record(tx, { event: 'user.role_changed', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { role: 'ENGINEER' }, after: { role: 'LEAD' } });
+      await service.record(tx, { event: 'user.deactivated', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { isActive: true }, after: { isActive: false } });
     });
     expect(world.audit.committed.map((row) => row.event)).toEqual(['user.role_changed', 'user.deactivated']);
   });
 });
 
 describe('AC-3 and AC-4: record refuses what does not fit its event, or holds a secret', () => {
-  const base = { actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' } } as const;
+  const base = { actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' } } as const;
 
   /**
    * The registry's types refuse an extra key at compile time, which is the point; these tests prove the same refusal at run time,
@@ -131,6 +132,13 @@ describe('AC-3 and AC-4: record refuses what does not fit its event, or holds a 
     expect(long).toMatchObject({ reason: 'shape', where: 'object.label' });
   });
 
+  it('refuses an entry that does not name its actor: an empty actor label, or one that is too long', async () => {
+    const empty = await refusalOf((tx) => service.record(tx, { ...base, actorLabel: '', event: 'user.deactivated', before: { isActive: true }, after: { isActive: false } }));
+    expect(empty).toMatchObject({ reason: 'shape', where: 'actorLabel' });
+    const long = await refusalOf((tx) => service.record(tx, { ...base, actorLabel: 'x'.repeat(201), event: 'user.deactivated', before: { isActive: true }, after: { isActive: false } }));
+    expect(long).toMatchObject({ reason: 'shape', where: 'actorLabel' });
+  });
+
   it('takes the subject of the entry from the registry, not from the caller', async () => {
     await world.transactions.run((tx) => service.record(tx, { ...base, event: 'user.deactivated', before: { isActive: true }, after: { isActive: false } }));
     expect(defined(world.audit.appended[0]).objectType).toBe('user');
@@ -174,6 +182,24 @@ describe('AC-6: list', () => {
     expect(page.total).toBe(1);
   });
 
+  it('Who is the name the actor had when they made the change: after a rename the earlier entry keeps the old name, and the filter by the person finds both', async () => {
+    const record = (at: string, name: string, label: string) => {
+      world.clock.set(new Date(at));
+      return world.transactions.run((tx) =>
+        service.record(tx, { event: 'user.created', actorId: LEAD, actorLabel: name, requestId: REQUEST_ID, object: { id: PERSON, label }, before: null, after: { role: 'ENGINEER', isActive: true } }),
+      );
+    };
+    await record('2026-11-04T10:00:00.000Z', 'Arjun Rai', 'Made Before');
+    await record('2026-11-05T10:00:00.000Z', 'Arjun Rao', 'Made After');
+    const page = await service.list({ limit: 50, who: LEAD });
+    expect(page.entries.map((entry) => [entry.objectLabel, entry.who])).toEqual([
+      ['Made After', 'Arjun Rao'],
+      ['Made Before', 'Arjun Rai'],
+      ['Third Person', 'Invented Lead'],
+    ]);
+    expect(page.total).toBe(3);
+  });
+
   it('filters by an event, by a category, and by both (both must hold)', async () => {
     expect(labels(await service.list({ limit: 50, event: 'user.deactivated' }))).toEqual(['Invented Person']);
     expect((await service.list({ limit: 50, category: 'user_change' })).total).toBe(4);
@@ -215,7 +241,7 @@ describe('AC-6: list', () => {
       for (const label of ['Same A', 'Same B', 'Same C', 'Same D']) {
         // The fake advances the clock by one millisecond for each append; setting it back keeps the four on one instant.
         world.clock.set(new Date('2026-11-06T08:59:59.999Z'));
-        await service.record(tx, { event: 'user.created', actorId: ADMIN, requestId: REQUEST_ID, object: { id: PERSON, label }, before: null, after: { role: 'LEAD', isActive: true } });
+        await service.record(tx, { event: 'user.created', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label }, before: null, after: { role: 'LEAD', isActive: true } });
       }
     });
     const seen: string[] = [];
@@ -236,10 +262,10 @@ describe('AC-6: list', () => {
 
   it('shows an entry of an event it does not know with its name and no category, and an entry it cannot read as a dash', async () => {
     await world.transactions.run((tx) =>
-      world.audit.append({ actorId: ADMIN, event: 'later.event', objectType: 'thing', objectId: PERSON, objectLabel: 'From A Newer Release', before: { a: 1 }, after: { b: 2 }, requestId: REQUEST_ID }, tx),
+      world.audit.append({ actorId: ADMIN, actorLabel: 'Invented Admin', event: 'later.event', objectType: 'thing', objectId: PERSON, objectLabel: 'From A Newer Release', before: { a: 1 }, after: { b: 2 }, requestId: REQUEST_ID }, tx),
     );
     await world.transactions.run((tx) =>
-      world.audit.append({ actorId: ADMIN, event: 'user.role_changed', objectType: 'user', objectId: PERSON, objectLabel: 'Damaged Row', before: { role: 'OWNER' }, after: null, requestId: REQUEST_ID }, tx),
+      world.audit.append({ actorId: ADMIN, actorLabel: 'Invented Admin', event: 'user.role_changed', objectType: 'user', objectId: PERSON, objectLabel: 'Damaged Row', before: { role: 'OWNER' }, after: null, requestId: REQUEST_ID }, tx),
     );
     const page = await service.list({ limit: 2 });
     expect(page.entries.map((entry) => [entry.objectLabel, entry.event, entry.category, entry.change])).toEqual([

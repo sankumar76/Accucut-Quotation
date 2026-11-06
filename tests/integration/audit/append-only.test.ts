@@ -8,8 +8,8 @@ import { insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../.
  * because an append-only table cannot be emptied afterwards. Every name is invented.
  */
 
-const INSERT = `INSERT INTO audit_log (actor_id, event, object_type, object_id, object_label, before, after, request_id)
-                VALUES ($1, 'user.created', 'user', $1, 'Invented Person', NULL, '{"role":"ENGINEER","isActive":true}'::jsonb, 'req-0a0b0c0d')
+const INSERT = `INSERT INTO audit_log (actor_id, actor_label, event, object_type, object_id, object_label, before, after, request_id)
+                VALUES ($1, 'Invented Actor', 'user.created', 'user', $1, 'Invented Person', NULL, '{"role":"ENGINEER","isActive":true}'::jsonb, 'req-0a0b0c0d')
                 RETURNING id`;
 /** PostgreSQL's code for a statement refused for lack of a privilege. */
 const PERMISSION_DENIED = '42501';
@@ -39,7 +39,7 @@ beforeAll(async () => {
   actorId = await insertPersonAsOwner(db, 'Actor');
   const { rows } = await db.owner.query<{ id: string }>(INSERT, [actorId]);
   entryId = rows[0]?.id ?? '';
-}, 120_000);
+});
 
 afterAll(async () => {
   await db.close();
@@ -118,7 +118,7 @@ describe('AC-1 and AC-3: the shape of the table', () => {
     const { rows } = await db.owner.query<{ column_name: string; is_nullable: string }>(
       `SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'audit_log' ORDER BY ordinal_position`,
     );
-    expect(rows.map((row) => row.column_name)).toEqual(['id', 'actor_id', 'event', 'object_type', 'object_id', 'object_label', 'before', 'after', 'request_id', 'created_at']);
+    expect(rows.map((row) => row.column_name)).toEqual(['id', 'actor_id', 'actor_label', 'event', 'object_type', 'object_id', 'object_label', 'before', 'after', 'request_id', 'created_at']);
     expect(Object.fromEntries(rows.filter((row) => row.is_nullable === 'YES').map((row) => [row.column_name, true]))).toEqual({ before: true, after: true });
   });
 
@@ -131,6 +131,17 @@ describe('AC-1 and AC-3: the shape of the table', () => {
   it('keeps a missing before as SQL NULL, not as the JSON text "null"', async () => {
     const { rows } = await db.owner.query<{ is_null: boolean; as_text: string | null }>('SELECT before IS NULL AS is_null, before::text AS as_text FROM audit_log WHERE id = $1', [entryId]);
     expect(rows[0]).toEqual({ is_null: true, as_text: null });
+  });
+
+  it('refuses an entry that does not say who made it by name: actor_label is NOT NULL (architecture v0.27)', async () => {
+    const refusal = await failureOf(() =>
+      db.owner.query(
+        `INSERT INTO audit_log (actor_id, event, object_type, object_id, object_label, request_id)
+         VALUES ($1, 'user.created', 'user', $1, 'Invented Person', 'req-0a0b0c0d')`,
+        [actorId],
+      ),
+    );
+    expect(refusal.message).toContain('actor_label');
   });
 
   it('refuses an entry whose actor is not a user: a foreign key, with no cascade', async () => {

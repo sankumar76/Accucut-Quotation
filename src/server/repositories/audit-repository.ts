@@ -19,6 +19,8 @@ export type JsonValue = string | number | boolean | null | { readonly [key: stri
 /** One entry to append. `before` is null for a creation; the time is stamped by the database. */
 export interface NewAuditRow {
   readonly actorId: string;
+  /** The actor's name now, kept as it is: a later rename does not change how this entry reads. */
+  readonly actorLabel: string;
   readonly event: string;
   readonly objectType: string;
   readonly objectId: string;
@@ -52,11 +54,15 @@ export interface AuditPageRequest {
   readonly after?: AuditPosition | undefined;
 }
 
-/** An entry as stored, with the name of the person who made the change. `before` and `after` are the stored JSON. */
+/**
+ * An entry as stored. `actorLabel` is the name the actor had when they made the change (never a join with their current name),
+ * and `actorId` is for the Who filter. `before` and `after` are the stored JSON.
+ */
 export interface AuditRow {
   readonly id: string;
   readonly createdAt: Date;
-  readonly actor: { readonly id: string; readonly name: string };
+  readonly actorId: string;
+  readonly actorLabel: string;
   readonly event: string;
   readonly objectType: string;
   readonly objectId: string;
@@ -101,13 +107,14 @@ function whereOf(filter: AuditRowFilter, after?: AuditPosition): Prisma.AuditLog
 const ROW_SELECT = {
   id: true,
   createdAt: true,
+  actorId: true,
+  actorLabel: true,
   event: true,
   objectType: true,
   objectId: true,
   objectLabel: true,
   before: true,
   after: true,
-  actor: { select: { id: true, name: true } },
 } as const;
 
 export function createAuditRepository(db: PrismaClient): AuditRepository {
@@ -117,6 +124,7 @@ export function createAuditRepository(db: PrismaClient): AuditRepository {
         await clientFor(db, tx).auditLog.create({
           data: {
             actorId: row.actorId,
+            actorLabel: row.actorLabel,
             event: row.event,
             objectType: row.objectType,
             objectId: row.objectId,

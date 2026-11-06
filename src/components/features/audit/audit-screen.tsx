@@ -1,6 +1,6 @@
 'use client';
 
-import { RotateCcw, ScrollText } from 'lucide-react';
+import { RotateCcw, Shield } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Icon } from '@/components/shared/icon';
@@ -31,7 +31,7 @@ import {
 import { useAfterDelay } from './use-after-delay';
 
 /**
- * SCR-16 "Audit log" (STORY-01.07 AC-6, AC-8): the Admin reads the permanent record and filters it by who, event, from and to.
+ * SCR-16 "Audit log" (STORY-01.07 AC-6, AC-8): the Admin reads the record and filters it by who, event, from and to.
  * It holds the first page the server rendered, asks `/api/v1/audit` again whenever a filter changes, and shows what the server
  * answered. It decides nothing: which entries exist, their order, their words and the total are the server's. There is no control
  * that changes an entry; the only thing to press is "Show more entries".
@@ -62,6 +62,7 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
   const [moreFailed, setMoreFailed] = useState(false);
   const inFlight = useRef<AbortController | null>(null);
   const footer = useRef<HTMLParagraphElement>(null);
+  const who = useRef<HTMLSelectElement>(null);
   const focusFooterAfterRender = useRef(false);
   const showSkeleton = useAfterDelay(status === 'loading', SKELETON_DELAY_MS);
 
@@ -109,8 +110,14 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     void load(next);
   }
 
+  /** Clear filters: all four back to none, the list read again, focus to Who (the button is gone once it has done its work). */
+  function clearFilters(): void {
+    change(NO_FILTERS);
+    who.current?.focus();
+  }
+
   async function showMore(): Promise<void> {
-    if (loadingMore || status !== 'ready' || page.nextCursor === null) return;
+    if (loadingMore || status !== 'ready' || page.nextCursor === null || rangeProblem(filters) !== null) return;
     const controller = startRequest();
     setLoadingMore(true);
     setMoreFailed(false);
@@ -144,19 +151,22 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     if (showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={LOADING_LABEL} />;
     if (page.entries.length === 0) {
       const filtered = hasActiveFilter(filters);
+      // A polite status when it appears, not an alert (ux-spec v0.16). With no filter there is nothing to clear, so no button.
       return (
-        <EmptyState
-          icon={<Icon icon={ScrollText} size="state" />}
-          title={filtered ? EMPTY_TITLE : EMPTY_UNFILTERED_TITLE}
-          description={filtered ? EMPTY_FILTERED_DESCRIPTION : EMPTY_UNFILTERED_DESCRIPTION}
-          action={
-            filtered ? (
-              <Button variant="secondary" onClick={() => change(NO_FILTERS)}>
-                {EMPTY_CLEAR_FILTERS}
-              </Button>
-            ) : undefined
-          }
-        />
+        <div role="status">
+          <EmptyState
+            icon={<Icon icon={Shield} size="state" />}
+            title={filtered ? EMPTY_TITLE : EMPTY_UNFILTERED_TITLE}
+            description={filtered ? EMPTY_FILTERED_DESCRIPTION : EMPTY_UNFILTERED_DESCRIPTION}
+            action={
+              filtered ? (
+                <Button variant="secondary" onClick={clearFilters}>
+                  {EMPTY_CLEAR_FILTERS}
+                </Button>
+              ) : undefined
+            }
+          />
+        </div>
       );
     }
     return (
@@ -185,10 +195,12 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
       <PageHeader title={AUDIT_TITLE} description={AUDIT_DESCRIPTION} />
       <Card>
         <CardContent>
-          <AuditFiltersBar people={people} filters={filters} onChange={change} />
+          <AuditFiltersBar people={people} filters={filters} onChange={change} whoRef={who} />
         </CardContent>
       </Card>
-      <Card aria-busy={status === 'loading' || undefined}>{results()}</Card>
+      {/* A range that ends before it begins is said under To and shows nothing: not the list of the filters before it, and no
+          "Show more entries" that would send the impossible range (QLT-89). */}
+      {rangeProblem(filters) === null ? <Card aria-busy={status === 'loading' || undefined}>{results()}</Card> : null}
     </>
   );
 }

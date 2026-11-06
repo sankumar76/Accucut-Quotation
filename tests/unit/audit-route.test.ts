@@ -63,8 +63,8 @@ describe('AC-6: the answer', () => {
   });
 
   it('holds what the Admin did, newest first, in words, and never the stored before and after', async () => {
-    await harness.userService.update({ actorId: harness.idOf.ADMIN, requestId: 'req-0a0b0c0d' }, harness.targetId, { role: 'LEAD' });
-    await harness.userService.update({ actorId: harness.idOf.ADMIN, requestId: 'req-0a0b0c0e' }, harness.targetId, { isActive: false });
+    await harness.userService.update({ actorId: harness.idOf.ADMIN, actorLabel: 'Invented Admin', requestId: 'req-0a0b0c0d' }, harness.targetId, { role: 'LEAD' });
+    await harness.userService.update({ actorId: harness.idOf.ADMIN, actorLabel: 'Invented Admin', requestId: 'req-0a0b0c0e' }, harness.targetId, { isActive: false });
     const body = await bodyOf(await get());
     expect(body['total']).toBe(2);
     const entries = z.array(record).parse(body['entries']);

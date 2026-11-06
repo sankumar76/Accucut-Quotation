@@ -68,6 +68,27 @@ async function changeRole(page: Page, person: Person, role: 'LEAD' | 'ENGINEER')
   expect(response.status()).toBe(200);
 }
 
+async function changeName(page: Page, person: Person, name: string): Promise<void> {
+  const response = await page.request.patch(`/api/v1/users/${person.id}`, {
+    headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+    data: { name },
+  });
+  expect(response.status()).toBe(200);
+}
+
+/** One entry of the answer of `GET /api/v1/audit`, for the tests that stand in for the server. */
+function oneEntry(id: string, label: string) {
+  return {
+    id,
+    createdAt: '2026-11-05T09:00:00.000Z',
+    who: 'Invented Admin',
+    event: 'user.created',
+    category: { id: 'user_change', label: 'User change' },
+    objectLabel: label,
+    change: { before: 'Not added', after: 'Added as Engineer' },
+  };
+}
+
 /** Today in India, as a date field writes it. */
 function todayInIst(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -105,6 +126,21 @@ test.describe('the list (AC-6, AC-9)', () => {
     await expectNoAxeViolations(page);
   });
 
+  test('AC-5, AC-6: a rename shows the new name as Object and the old name to the new one; the entry made before still has the old name', async ({ page }) => {
+    const person = await addPerson(page, 'renamed');
+    const newName = `${person.name} Two`;
+    await changeName(page, person, newName);
+    await openAudit(page);
+    const renamed = entryOf(page, newName);
+    await expect(renamed).toHaveCount(1);
+    await expect(renamed).toContainText(person.name);
+    await expect(renamed).toContainText('User change');
+    await expect(renamed).toContainText(E2E_ADMIN.name);
+    // The entry written when the person was added keeps the name they had, and does not say the new one.
+    const added = entryOf(page, 'Added as Engineer').filter({ hasText: person.name }).filter({ hasNotText: newName });
+    await expect(added).toHaveCount(1);
+  });
+
   test('AC-6: there is no control that edits or deletes an entry, anywhere', async ({ page }) => {
     await addPerson(page, 'nocontrols');
     await openAudit(page);
@@ -134,7 +170,7 @@ test.describe('the list (AC-6, AC-9)', () => {
     await expect(entryOf(page, person.name)).toHaveCount(1);
     if (wide) {
       await expect(page.getByRole('region', { name: 'Audit log, newest first, scrollable' })).toBeVisible();
-      await expect(page.getByRole('columnheader')).toHaveText([/When \(IST\)/, 'Who', 'Event', 'Object', /Before\s+to\s+after/]);
+      await expect(page.getByRole('columnheader')).toHaveText(['When', 'Who', 'Event', 'Object', /Before\s+to\s+after/]);
     }
   });
 });
@@ -156,19 +192,29 @@ test.describe('the filters (AC-6)', () => {
     await expect(page.locator('[data-entry-id]:visible')).toHaveCount(0);
   });
 
-  test('a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back', async ({ page }) => {
+  test('a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back', { tag: '@one-width' }, async ({ page }) => {
     const person = await addPerson(page, 'empty');
     await openAudit(page);
+    await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
+    await page.getByLabel('From', { exact: true }).fill('2020-01-01');
+    await page.getByLabel('To', { exact: true }).fill('2036-01-01');
     await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Approval' });
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
+    // Neither empty state shows the count line (ux-spec v0.16).
+    await expect(page.getByText(/Showing \d+ of \d+ entr/)).toHaveCount(0);
     await page.getByRole('button', { name: 'Clear filters' }).click();
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeHidden();
     await expect(entryOf(page, person.name)).toHaveCount(1);
+    // All four filters are back to none, and focus is on Who: the button that was pressed is gone.
+    await expect(page.getByLabel('Who', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Event', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('From', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('To', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('Who', { exact: true })).toBeFocused();
   });
 
-  test('From and To are whole days in IST: today includes what was just done, tomorrow does not', async ({ page }) => {
+  test('From and To are whole days in IST: today includes what was just done, tomorrow does not', { tag: '@one-width' }, async ({ page }) => {
     const person = await addPerson(page, 'days');
     await openAudit(page);
     const today = todayInIst();
@@ -182,25 +228,33 @@ test.describe('the filters (AC-6)', () => {
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
   });
 
-  test('a range that ends before it begins is said in words under To, and asks the server nothing', async ({ page }) => {
+  test('a range that ends before it begins is said in words under To, and asks the server nothing', { tag: '@one-width' }, async ({ page }) => {
     await openAudit(page);
     let asked = 0;
-    await page.route('**/api/v1/audit*', async (route) => {
+    // A stand-in for the server that always says there is more, so the earlier list has a "Show more entries" to be stale with.
+    await page.route('**/api/v1/audit*', (route) => {
       asked += 1;
-      await route.continue();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [oneEntry('10000000-0000-4000-8000-000000000001', 'Invented First')], total: 2, nextCursor: 'invented-cursor' }) });
     });
     // A To date alone is a real filter, and is asked for; the From date after it makes the range impossible.
     await page.getByLabel('To', { exact: true }).fill('2026-11-06');
     await expect.poll(() => asked).toBe(1);
     await expect(page.getByText(RANGE_MESSAGE)).toHaveCount(0);
+    await expect(page.locator('[data-entry-id]:visible')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Show more entries' })).toBeVisible();
     await page.getByLabel('From', { exact: true }).fill('2026-11-07');
     await expect(page.getByText(RANGE_MESSAGE)).toBeVisible();
     await expect(page.getByLabel('To', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+    // QLT-89: nothing of the earlier filters is left on screen, and no "Show more entries" that would send the impossible range.
+    await expect(page.locator('[data-entry-id]:visible')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Show more entries' })).toHaveCount(0);
+    await expect(page.getByText(/Showing \d+ of \d+ entr/)).toHaveCount(0);
     expect(asked).toBe(1);
-    // Putting it right asks again, and the message goes.
+    // Putting it right asks again, the list comes back, and the message goes.
     await page.getByLabel('From', { exact: true }).fill('2026-11-05');
     await expect.poll(() => asked).toBe(2);
     await expect(page.getByText(RANGE_MESSAGE)).toHaveCount(0);
+    await expect(page.locator('[data-entry-id]:visible')).toHaveCount(1);
   });
 });
 
@@ -221,7 +275,7 @@ test.describe('states (AC-8)', () => {
     await expect(entryOf(page, person.name)).toHaveCount(1);
   });
 
-  test('error: "We could not load the audit log" with "Try again", which asks again', async ({ page }) => {
+  test('error: "We could not load the audit log" with "Try again", which asks again', { tag: '@one-width' }, async ({ page }) => {
     const person = await addPerson(page, 'error');
     await openAudit(page);
     await page.route('**/api/v1/audit*', (route) => route.fulfill({ status: 500, contentType: 'application/problem+json', body: JSON.stringify({ code: 'INTERNAL_ERROR' }) }));
@@ -235,7 +289,7 @@ test.describe('states (AC-8)', () => {
     await expect(entryOf(page, person.name)).toHaveCount(1);
   });
 
-  test('error: a broken answer is an error, never an empty list', async ({ page }) => {
+  test('error: a broken answer is an error, never an empty list', { tag: '@one-width' }, async ({ page }) => {
     await openAudit(page);
     await page.route('**/api/v1/audit*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ nothing: 'here' }) }));
     await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
@@ -244,21 +298,12 @@ test.describe('states (AC-8)', () => {
   });
 
   test('"Show more entries" adds the next page, and when the last page is shown focus moves to the count', async ({ page }) => {
-    const entry = (id: string, label: string) => ({
-      id,
-      createdAt: '2026-11-05T09:00:00.000Z',
-      who: 'Invented Admin',
-      event: 'user.created',
-      category: { id: 'user_change', label: 'User change' },
-      objectLabel: label,
-      change: { before: 'Not added', after: 'Added as Engineer' },
-    });
     await openAudit(page);
     await page.route('**/api/v1/audit*', (route) => {
       const hasCursor = new URL(route.request().url()).searchParams.has('cursor');
       const body = hasCursor
-        ? { entries: [entry('10000000-0000-4000-8000-000000000003', 'Invented Third')], total: 3, nextCursor: null }
-        : { entries: [entry('10000000-0000-4000-8000-000000000001', 'Invented First'), entry('10000000-0000-4000-8000-000000000002', 'Invented Second')], total: 3, nextCursor: 'invented-cursor' };
+        ? { entries: [oneEntry('10000000-0000-4000-8000-000000000003', 'Invented Third')], total: 3, nextCursor: null }
+        : { entries: [oneEntry('10000000-0000-4000-8000-000000000001', 'Invented First'), oneEntry('10000000-0000-4000-8000-000000000002', 'Invented Second')], total: 3, nextCursor: 'invented-cursor' };
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
     await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
@@ -327,7 +372,7 @@ test.describe('by keyboard (AC-9)', () => {
 });
 
 test.describe('the log has no write route (AC-6)', () => {
-  test('PATCH, PUT, DELETE and POST on /api/v1/audit are 405 for the Admin', async ({ page }) => {
+  test('PATCH, PUT, DELETE and POST on /api/v1/audit are 405 for the Admin', { tag: '@one-width' }, async ({ page }) => {
     for (const method of ['patch', 'put', 'delete', 'post'] as const) {
       const response = await page.request[method]('/api/v1/audit', { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, data: {} });
       expect(response.status(), method).toBe(405);

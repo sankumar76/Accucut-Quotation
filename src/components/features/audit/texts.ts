@@ -5,9 +5,16 @@
 
 export const AUDIT_TITLE = 'Audit log';
 
-/** The page description, as the mock-up writes it. */
+/**
+ * The page description (ux-spec v0.16, release 1). It says what the portal does and no more: whoever has access to the server can
+ * reach the database, so the log is a record and not a control over the Admin (ARCH-R8). Task and configuration changes join the
+ * list with the Release 2 stories that write them.
+ */
 export const AUDIT_DESCRIPTION =
-  'A permanent record of approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings gone ahead on, master data, user and task changes and (from Release 2) configuration changes. Nobody can edit or delete an entry.';
+  'A record of approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings gone ahead on, master data and user changes. The portal has no way to edit or delete an entry.';
+
+/** The page's own description meta tag (ux-spec v0.16). */
+export const AUDIT_META_DESCRIPTION = 'A record of approvals, unlocks, price overrides, master data and user changes.';
 
 export const WHO_LABEL = 'Who';
 export const EVENT_LABEL = 'Event';
@@ -20,7 +27,7 @@ export const TABLE_CAPTION = 'Audit log, newest first';
 export const TABLE_REGION_LABEL = 'Audit log, newest first, scrollable';
 export const LIST_LABEL = 'Audit log entries, newest first';
 
-export const COLUMN_WHEN = 'When (IST)';
+export const COLUMN_WHEN = 'When';
 export const COLUMN_WHO = 'Who';
 export const COLUMN_EVENT = 'Event';
 export const COLUMN_OBJECT = 'Object';

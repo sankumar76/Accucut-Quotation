@@ -1,82 +1,42 @@
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
 import { accountThrottleKey } from '@/server/auth/throttle-key';
 import { UserConstraintError, type UserRepository } from '@/server/repositories/user-repository';
-import { type AuditContext, createAuditService } from '@/server/services/audit-service';
 import {
   CANNOT_RESET_OWN_PASSWORD_CODE,
   CANNOT_CHANGE_OWN_ROLE_CODE,
   CANNOT_DEACTIVATE_OWN_ACCOUNT_CODE,
-  createUserService,
   EMAIL_TAKEN_CODE,
   EMAIL_TAKEN_MESSAGE,
   type UserService,
 } from '@/server/services/user-service';
 
-import { createFakeAuditWorld, type FakeAuditWorld } from '../support/fake-audit';
-import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type CountingHasher, type FakeThrottleRepository, type FakeUserRepository } from '../support/fake-auth-repositories';
 import { defined } from '../support/defined';
+import type { CountingHasher, FakeThrottleRepository, FakeUserRepository } from '../support/fake-auth-repositories';
+import { createUserServiceFixture, KEY_SECRET, refusal, type UserServiceFixture } from '../support/user-service-fixture';
 
 /**
  * STORY-01.04 T1 and T2 (AC-1, AC-2, AC-3, AC-4, AC-5) at the level of the rules, over in-memory repositories. The same rules
- * are run against PostgreSQL, with the database's own refusal of a second Admin, in tests/integration/users.
- * STORY-01.07 T3 (AC-2, AC-3, AC-4): each change is one transaction with its audit entry, over an in-memory audit log; the same
- * entries are checked in PostgreSQL, rolled back and committed, in tests/integration/audit.
+ * are run against PostgreSQL, with the database's own refusal of a second Admin, in tests/integration/users. The audit entries of
+ * STORY-01.07 are `user-service-audit.test.ts`; both use the world of `tests/support/user-service-fixture.ts`.
  * Every name and address is invented.
  */
-
-const KEY_SECRET = 'invented-throttle-key-material';
-const REQUEST_ID = 'req-0a0b0c0d';
 
 let users: FakeUserRepository;
 let throttles: FakeThrottleRepository;
 let hasher: CountingHasher;
-let world: FakeAuditWorld;
 let service: UserService;
+let build: UserServiceFixture['build'];
+let by: UserServiceFixture['by'];
 let adminId: string;
 let leadId: string;
 let engineerId: string;
 
-/** The Admin (or whoever) making the change, on one request. */
-function by(actorId: string): AuditContext {
-  return { actorId, requestId: REQUEST_ID };
-}
-
-function build(repository: UserRepository = users): UserService {
-  return createUserService({
-    users: repository,
-    throttles,
-    hasher,
-    transactions: world.transactions,
-    audit: createAuditService({ audit: world.audit }),
-    keySecret: KEY_SECRET,
-  });
-}
-
 beforeEach(() => {
-  users = createFakeUserRepository([
-    { name: 'Invented Admin', email: 'admin@example.test', passwordHash: 'hash:x', role: 'ADMIN', mustChangePassword: false },
-    { name: 'Invented Lead', email: 'lead@example.test', passwordHash: 'hash:x', role: 'LEAD', mustChangePassword: false },
-    { name: 'Invented Engineer', email: 'engineer@example.test', passwordHash: 'hash:x', role: 'ENGINEER', mustChangePassword: false },
-  ]);
-  throttles = createFakeThrottleRepository();
-  hasher = createCountingHasher();
-  world = createFakeAuditWorld((actorId) => users.records.find((record) => record.id === actorId)?.name ?? 'Invented Unknown');
-  service = build();
-  adminId = defined(users.records.find((record) => record.role === 'ADMIN')).id;
-  leadId = defined(users.records.find((record) => record.role === 'LEAD')).id;
-  engineerId = defined(users.records.find((record) => record.role === 'ENGINEER')).id;
+  ({ users, throttles, hasher, service, build, by, adminId, leadId, engineerId } = createUserServiceFixture());
 });
-
-async function refusal(action: Promise<unknown>): Promise<unknown> {
-  return action.then(
-    () => {
-      throw new Error('expected a refusal');
-    },
-    (error: unknown) => error,
-  );
-}
 
 describe('AC-1: the list', () => {
   it('lists every person with name, e-mail, role and active flag, and nothing else', async () => {
@@ -300,133 +260,5 @@ describe('AC-5: resetting a password', () => {
     await service.update(by(adminId), engineerId, { isActive: false });
     await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
     expect(defined(users.records.find((record) => record.id === engineerId)).mustChangePassword).toBe(true);
-  });
-});
-
-describe('STORY-01.07 AC-3: each change raises its event, once, with every part, in the same transaction', () => {
-  const FIRST_PASSWORD = 'first-password-1';
-
-  it('adding a person raises user.created: who, the person and their name at the time, no before, the role and active after, the request', async () => {
-    const created = await service.create(by(adminId), { name: 'Rohan Das', email: 'rohan.das@example.test', role: 'ENGINEER', password: FIRST_PASSWORD });
-    expect(world.audit.committed).toHaveLength(1);
-    expect(world.audit.appended[0]).toEqual({
-      actorId: adminId,
-      event: 'user.created',
-      objectType: 'user',
-      objectId: created.id,
-      objectLabel: 'Rohan Das',
-      before: null,
-      after: { role: 'ENGINEER', isActive: true },
-      requestId: REQUEST_ID,
-    });
-    expect(world.audit.committed[0]).toMatchObject({ actor: { id: adminId, name: 'Invented Admin' }, createdAt: expect.any(Date) });
-  });
-
-  it('changing a role raises user.role_changed with the role before and after', async () => {
-    await service.update(by(adminId), engineerId, { role: 'LEAD' });
-    expect(world.audit.appended).toEqual([
-      expect.objectContaining({ event: 'user.role_changed', objectId: engineerId, objectLabel: 'Invented Engineer', before: { role: 'ENGINEER' }, after: { role: 'LEAD' }, actorId: adminId, requestId: REQUEST_ID }),
-    ]);
-  });
-
-  it('deactivating raises user.deactivated and activating raises user.activated', async () => {
-    await service.update(by(adminId), engineerId, { isActive: false });
-    await service.update(by(adminId), engineerId, { isActive: true });
-    expect(world.audit.appended.map((row) => [row.event, row.before, row.after])).toEqual([
-      ['user.deactivated', { isActive: true }, { isActive: false }],
-      ['user.activated', { isActive: false }, { isActive: true }],
-    ]);
-  });
-
-  it('resetting a password raises user.password_reset with whether a change was still due, before and after', async () => {
-    await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
-    expect(world.audit.appended).toEqual([
-      expect.objectContaining({ event: 'user.password_reset', objectId: engineerId, before: { mustChangePassword: false }, after: { mustChangePassword: true } }),
-    ]);
-  });
-
-  it('a request that changes the role and the active flag raises two events, one for each, in order (edge case: two events, two entries)', async () => {
-    await service.update(by(adminId), engineerId, { role: 'LEAD', isActive: false });
-    expect(world.audit.committed.map((row) => row.event)).toEqual(['user.role_changed', 'user.deactivated']);
-    expect(new Set(world.audit.committed.map((row) => row.id)).size).toBe(2);
-  });
-
-  it('changes that change nothing raise nothing: the same role, the same flag, a new name alone', async () => {
-    await service.update(by(adminId), engineerId, { role: 'ENGINEER' });
-    await service.update(by(adminId), engineerId, { isActive: true });
-    await service.update(by(adminId), engineerId, { name: 'Renamed Engineer' });
-    expect(world.audit.committed).toEqual([]);
-  });
-
-  it('a change that is refused raises nothing: a second Admin, the own role, the own account, an unknown person', async () => {
-    await refusal(service.create(by(adminId), { name: 'Second Admin', email: 'second@example.test', role: 'ADMIN', password: FIRST_PASSWORD }));
-    await refusal(service.update(by(adminId), adminId, { role: 'LEAD' }));
-    await refusal(service.update(by(adminId), adminId, { isActive: false }));
-    await refusal(service.resetPassword(by(adminId), adminId, 'temporary-password-1'));
-    await refusal(service.update(by(adminId), '00000000-0000-4000-8000-0000000000ff', { role: 'LEAD' }));
-    expect(world.audit.committed).toEqual([]);
-  });
-
-  it('a change whose entry is refused does not leave an entry behind, and the caller sees the refusal', async () => {
-    const broken = new Error('the audit write failed');
-    const failing = createUserService({
-      users,
-      throttles,
-      hasher,
-      transactions: world.transactions,
-      audit: { record: () => Promise.reject(broken), list: () => Promise.reject(broken) },
-      keySecret: KEY_SECRET,
-    });
-    expect(await refusal(failing.update(by(adminId), engineerId, { role: 'LEAD' }))).toBe(broken);
-    expect(world.audit.committed).toEqual([]);
-  });
-
-  it('does not lift a sign-in block when the reset was rolled back', async () => {
-    const failing = createUserService({
-      users,
-      throttles,
-      hasher,
-      transactions: world.transactions,
-      audit: { record: () => Promise.reject(new Error('the audit write failed')), list: () => Promise.reject(new Error('unused')) },
-      keySecret: KEY_SECRET,
-    });
-    const key = accountThrottleKey(KEY_SECRET, 'engineer@example.test');
-    throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') });
-    await refusal(failing.resetPassword(by(adminId), engineerId, 'temporary-password-1'));
-    expect(throttles.rows.get(key)?.blockedUntil).not.toBeNull();
-  });
-});
-
-describe('STORY-01.07 AC-4: an entry never holds a password, a hash or a token', () => {
-  const PASSWORD = 'first-password-1';
-
-  it('across all five events, the stored JSON holds neither the password, nor its hash, nor a key that names one', async () => {
-    const created = await service.create(by(adminId), { name: 'Rohan Das', email: 'rohan.das@example.test', role: 'ENGINEER', password: PASSWORD });
-    await service.update(by(adminId), created.id, { role: 'LEAD' });
-    await service.update(by(adminId), created.id, { isActive: false });
-    await service.update(by(adminId), created.id, { isActive: true });
-    await service.resetPassword(by(adminId), created.id, PASSWORD);
-    expect(world.audit.committed.map((row) => row.event)).toEqual(['user.created', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset']);
-    const stored = JSON.stringify(world.audit.appended);
-    expect(stored).not.toContain(PASSWORD);
-    expect(stored).not.toContain('hash:');
-    expect(stored).not.toMatch(/"(password|passwordHash|password_hash|token|hash)"/i);
-    expect(stored).not.toContain('rohan.das@example.test');
-  });
-
-  it('a name that says "password" or "hash" as plain text is recorded as it is: the check is on keys and values, not on text', async () => {
-    const created = await service.create(by(adminId), { name: 'Password Hash Tester', email: 'tester@example.test', role: 'LEAD', password: PASSWORD });
-    expect(world.audit.committed).toEqual([expect.objectContaining({ objectLabel: 'Password Hash Tester', event: 'user.created', objectId: created.id })]);
-  });
-});
-
-describe('STORY-01.07 AC-5: the label is the name at the time', () => {
-  it('a later rename leaves the earlier entries as they were and the next entry carries the new name', async () => {
-    const created = await service.create(by(adminId), { name: 'Rohan Das', email: 'rohan.das@example.test', role: 'ENGINEER', password: 'first-password-1' });
-    await service.update(by(adminId), created.id, { name: 'Rohan D. Das', role: 'LEAD' });
-    expect(world.audit.committed.map((row) => [row.event, row.objectLabel])).toEqual([
-      ['user.created', 'Rohan Das'],
-      ['user.role_changed', 'Rohan D. Das'],
-    ]);
   });
 });

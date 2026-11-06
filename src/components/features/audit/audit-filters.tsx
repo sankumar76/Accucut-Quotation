@@ -1,3 +1,5 @@
+import type { Ref } from 'react';
+
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -21,15 +23,17 @@ export interface AuditFiltersProps {
   readonly people: ReadonlyArray<AuditPerson>;
   readonly filters: AuditFilters;
   readonly onChange: (next: AuditFilters) => void;
+  /** The Who list, which takes focus when Clear filters has cleared the filters and the button has gone (ux-spec v0.16). */
+  readonly whoRef: Ref<HTMLSelectElement>;
 }
 
-export function AuditFiltersBar({ people, filters, onChange }: AuditFiltersProps) {
+export function AuditFiltersBar({ people, filters, onChange, whoRef }: AuditFiltersProps) {
   const range = rangeProblem(filters);
   return (
     <div className="grid grid-cols-1 gap-s-4 sm:grid-cols-2 lg:grid-cols-4">
       <FormField id="audit-who" label={WHO_LABEL}>
         {(control) => (
-          <NativeSelect {...control} value={filters.who} onChange={(event) => onChange({ ...filters, who: event.target.value })}>
+          <NativeSelect {...control} ref={whoRef} value={filters.who} onChange={(event) => onChange({ ...filters, who: event.target.value })}>
             <option value="">{EVERYONE}</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>

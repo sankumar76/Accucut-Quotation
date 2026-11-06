@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { FORBIDDEN_SIGNAL, harness, holdSessionClock, REDIRECT_PREFIX, releaseSessionClock } from '../support/session-harness';
 
@@ -63,6 +64,25 @@ describe('AC-7: the role is checked before the log is read', () => {
     expect(await outcomeOf()).toMatch(new RegExp(`^${REDIRECT_PREFIX}/sign-in`));
     expect(listAudit).not.toHaveBeenCalled();
     expect(listUsers).not.toHaveBeenCalled();
+  });
+
+  it('only the ID and the name of each person reach the screen, every user is there, deactivated ones too, sorted by name (architect, 11091)', async () => {
+    harness.signInAs('ADMIN');
+    const record = harness.users.records.find((candidate) => candidate.email === 'invented.engineer@example.test');
+    if (record === undefined) throw new Error('no Engineer');
+    record.isActive = false;
+    try {
+      const element: unknown = await AuditPage();
+      const props = z.object({ props: z.object({ people: z.array(z.record(z.string(), z.unknown())) }) }).parse(element).props;
+      expect(props.people.length).toBe(harness.users.records.length);
+      for (const person of props.people) expect(Object.keys(person).sort()).toEqual(['id', 'name']);
+      const names = props.people.map((person) => String(person['name']));
+      expect([...names].sort((a, b) => a.localeCompare(b))).toEqual(names);
+      expect(names).toContain('Invented Engineer');
+      expect(JSON.stringify(props.people)).not.toMatch(/example\.test|role|isActive|passwordHash/);
+    } finally {
+      record.isActive = true;
+    }
   });
 
   it('the Admin gets the page: the first page of the log is read once, with the default limit, and so are the people', async () => {

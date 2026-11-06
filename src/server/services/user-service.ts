@@ -31,11 +31,13 @@ import type { AuditContext, AuditService } from './audit-service';
  * together, so the entry exists exactly when the change does. A change that is refused for a rule, or whose entry is refused
  * (`AuditEntryRefusedError`), is rolled back whole. The state an entry calls "before" is read in the transaction with the
  * person's row locked, so it is the state the change really replaced even if a second request arrives at the same time. The
- * password is hashed before the transaction opens for a new person, and inside it for a reset, after the rules have passed.
- * Nothing in a result, an error or an entry carries a password or its hash (AC-4).
+ * password is hashed before the transaction opens, for a new person and for a reset (PRF-03), so no lock is held while argon2id
+ * works. Nothing in a result, an error or an entry carries a password or its hash (AC-4).
  *
- * What is audited: a person added (`user.created`), a role changed, a person deactivated or activated, a password reset. A
- * change of name alone is not one of the five events of the story and has no entry (raised as a question for the product-owner).
+ * What is audited, six events (AC-3): a person added (`user.created`), a name changed (`user.renamed`), a role changed, a person
+ * deactivated or activated, a password reset. Each attribute that changes on one save raises its own event, in one transaction;
+ * a save that changes nothing writes none. Every entry carries the actor's name at the time (`actorLabel`, from the signed-in
+ * user of the request) and the object's name after the change.
  */
 
 export const EMAIL_TAKEN_CODE = 'EMAIL_TAKEN';
@@ -156,9 +158,13 @@ export function createUserService({ users, throttles, hasher, transactions, audi
           const updated = await users.update(target.id, changes, tx);
           if (updated === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
 
-          // One entry for each thing that really changed, under the name the person has now. A request that sets a value to
+          // One entry for each attribute that really changed (AC-3), in the order name, role, active flag, all under the name the
+          // person has now (so a rename and a role change on one save both say the new name). A request that sets a value to
           // what it already is changes nothing and records nothing.
           const object = { id: updated.id, label: updated.name };
+          if (changes.name !== undefined && changes.name !== target.name) {
+            await audit.record(tx, { event: 'user.renamed', ...context, object, before: { name: target.name }, after: { name: updated.name } });
+          }
           if (changes.role !== undefined && changes.role !== target.role) {
             await audit.record(tx, { event: 'user.role_changed', ...context, object, before: { role: target.role }, after: { role: updated.role } });
           }
@@ -173,15 +179,21 @@ export function createUserService({ users, throttles, hasher, transactions, audi
     },
 
     async resetPassword(context, targetId, password) {
+      // The Admin's own password is changed with the current one, on the account page (story 01.05), not by a reset that
+      // needs no proof: a stolen session could otherwise take the account over (STD-01). Looked at first, outside the
+      // transaction, so a refused reset costs no hash.
+      const asked = await users.findAccountById(targetId);
+      if (asked === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
+      if (isSamePerson(context.actorId, asked.id)) {
+        throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
+      }
+      // Hashed before the transaction opens (PRF-03): argon2id takes about 350 ms, and the row lock and a pool connection
+      // must not be held for that.
+      const passwordHash = await hasher.hash(password);
       const email = await transactions.run(async (tx) => {
-        // The Admin's own password is changed with the current one, on the account page (story 01.05), not by a reset that
-        // needs no proof: a stolen session could otherwise take the account over (STD-01).
-        const target = await users.findAccountForUpdate(targetId, tx);
+        const target = await users.findAccountForUpdate(asked.id, tx);
         if (target === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
-        if (isSamePerson(context.actorId, target.id)) {
-          throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
-        }
-        const resetEmail = await users.setPassword(target.id, await hasher.hash(password), tx);
+        const resetEmail = await users.setPassword(target.id, passwordHash, tx);
         if (resetEmail === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
         await audit.record(tx, {
           event: 'user.password_reset',

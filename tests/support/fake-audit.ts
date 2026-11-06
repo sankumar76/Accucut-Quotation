@@ -38,7 +38,7 @@ interface OpenTransaction {
 }
 
 function matches(row: AuditRow, filter: AuditRowFilter): boolean {
-  if (filter.actorId !== undefined && row.actor.id !== filter.actorId) return false;
+  if (filter.actorId !== undefined && row.actorId !== filter.actorId) return false;
   if (filter.events !== undefined && !filter.events.includes(row.event)) return false;
   if (filter.createdFrom !== undefined && row.createdAt < filter.createdFrom) return false;
   if (filter.createdBefore !== undefined && row.createdAt >= filter.createdBefore) return false;
@@ -50,10 +50,9 @@ function newestFirst(a: AuditRow, b: AuditRow): number {
 }
 
 /**
- * @param nameOf the name of a person by ID, as the real repository gets it by joining `users`.
  * @param clock stamps each appended entry (the real table stamps it itself).
  */
-export function createFakeAuditWorld(nameOf: (actorId: string) => string, clock: FixedClock = createFixedClock(START)): FakeAuditWorld {
+export function createFakeAuditWorld(clock: FixedClock = createFixedClock(START)): FakeAuditWorld {
   const committed: AuditRow[] = [];
   const appended: NewAuditRow[] = [];
   const open = new Map<Transaction, OpenTransaction>();
@@ -70,7 +69,8 @@ export function createFakeAuditWorld(nameOf: (actorId: string) => string, clock:
       transaction.rows.push({
         id: `10000000-0000-4000-8000-${String(nextId).padStart(12, '0')}`,
         createdAt: clock.now(),
-        actor: { id: row.actorId, name: nameOf(row.actorId) },
+        actorId: row.actorId,
+        actorLabel: row.actorLabel,
         event: row.event,
         objectType: row.objectType,
         objectId: row.objectId,

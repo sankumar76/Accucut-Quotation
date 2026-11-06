@@ -23,7 +23,7 @@ const hasher = createTestHasher();
 const REQUEST_ID = 'req-0a0b0c0d';
 
 /** Who makes a change, on one request. Every change is audited (STORY-01.07), so the actor is a person in the database. */
-const by = (actor: string) => ({ actorId: actor, requestId: REQUEST_ID });
+const by = (actor: string) => ({ actorId: actor, actorLabel: 'Invented Actor', requestId: REQUEST_ID });
 const ADMIN_INDEX = 'uq_users_single_active_admin';
 const RACE_TIMEOUT_MILLISECONDS = 30_000;
 

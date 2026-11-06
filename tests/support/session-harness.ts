@@ -82,7 +82,7 @@ export function createSessionHarness(): SessionHarness {
   const idOf: Readonly<Record<RoleName, string>> = { ADMIN: idFor('ADMIN'), LEAD: idFor('LEAD'), ENGINEER: idFor('ENGINEER') };
   const targetId = defined(users.records.find((record) => record.email === 'invented.target@example.test')).id;
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
-  const auditWorld = createFakeAuditWorld((actorId) => users.records.find((record) => record.id === actorId)?.name ?? 'Invented Unknown');
+  const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
 
   return {

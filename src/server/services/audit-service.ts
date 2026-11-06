@@ -35,6 +35,8 @@ import { AuditEntryRefusedError, findSecretPath } from './audit-secrets';
 /** Who is making a change and on which request: what every audited method of every service needs besides its own arguments. */
 export interface AuditContext {
   readonly actorId: string;
+  /** The actor's name now, from the signed-in user of the request (`requireUser()`): no new read. Kept with the entry. */
+  readonly actorLabel: string;
   readonly requestId: string;
 }
 
@@ -42,6 +44,8 @@ export interface AuditEntryInput<E extends AuditEventName> extends AuditEventPay
   readonly event: E;
   /** Who made the change. */
   readonly actorId: string;
+  /** Their name as it is when the entry is written; a later rename does not change the entry (architecture v0.27, section 5.1). */
+  readonly actorLabel: string;
   /** The request the change came in on (`X-Request-Id`), so an entry can be found from a report of a problem. */
   readonly requestId: string;
   /** What changed. The label is its name **now**; a later rename does not change the entry (AC-5). */
@@ -66,7 +70,7 @@ export interface AuditEntryView {
   readonly id: string;
   /** UTC, ISO 8601. The screen shows it in IST with `formatIst`. */
   readonly createdAt: string;
-  /** The name of the person who made the change. */
+  /** The name the person who made the change had at the time (`actor_label`), never their current name. */
   readonly who: string;
   /** The registered event name, for example `user.created`. */
   readonly event: string;
@@ -117,6 +121,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
       const definition = AUDIT_EVENTS[entry.event];
       const label = entry.object.label;
       if (label.length === 0 || label.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'object.label');
+      if (entry.actorLabel.length === 0 || entry.actorLabel.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'actorLabel');
       const before = definition.before.safeParse(entry.before);
       if (!before.success) throw new AuditEntryRefusedError('shape', 'before');
       const after = definition.after.safeParse(entry.after);
@@ -127,6 +132,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
       await audit.append(
         {
           actorId: entry.actorId,
+          actorLabel: entry.actorLabel,
           event: entry.event,
           objectType: definition.objectType,
           objectId: entry.object.id,
@@ -150,7 +156,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
         return {
           id: row.id,
           createdAt: row.createdAt.toISOString(),
-          who: row.actor.name,
+          who: row.actorLabel,
           event: row.event,
           category: definition === undefined ? null : { id: definition.category, label: auditCategoryLabel(definition.category) ?? definition.category },
           objectLabel: row.objectLabel,

@@ -13,9 +13,9 @@ import { PRODUCTION_URL } from './support/servers';
  * two people are refused by the API with the same fixed 403 whatever the query says. A signed-out visitor is sent to the sign-in
  * page, and the API answers a signed-out caller 401.
  *
- * Width (test strategy section 10.5, AQP-199): every test here checks an HTTP status, a body or a redirect and reads no layout.
- * They are proposed for the one-width exception (the whole file); they are not tagged, because tagging is the architect's ruling,
- * and the allow-list test (`tests/unit/one-width-tag.test.ts`) reads this file's text and refuses the tag's own spelling anywhere in it.
+ * Width (test strategy section 10.5, AQP-199): every test here checks an HTTP status, a body or a redirect and reads no layout,
+ * so the whole file is tagged `@one-width` and runs in the desktop project only (architect, AQP-74 comment 11078).
+ * `tests/unit/one-width-tag.test.ts` pins the exact set.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
@@ -23,14 +23,14 @@ test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } }
 const NO_ACCESS_TITLE = 'You do not have access to this page';
 const NO_ACCESS_TEXT = 'Your role does not include this page. If you think it should, ask the Admin.';
 /** Text that only the Audit log screen holds. */
-const SCREEN_MARKERS = ['Show more entries', 'Nobody can edit or delete an entry', 'Audit log, newest first', E2E_AUDIT_CANARY_LABEL];
+const SCREEN_MARKERS = ['Show more entries', 'The portal has no way to edit or delete an entry', 'Audit log, newest first', E2E_AUDIT_CANARY_LABEL];
 
 const problem = z.object({ type: z.literal('about:blank'), title: z.string(), status: z.literal(403), code: z.literal('FORBIDDEN'), requestId: z.string().regex(/^req-[0-9a-f]{8}$/) });
 const queries = ['', '?limit=1', '?category=user_change', '?who=00000000-0000-4000-8000-000000000000', '?limit=9999&bogus=1', '?cursor=not-a-cursor'] as const;
 
 const people: ReadonlyArray<readonly [string, E2eUser]> = [
-  ['Lead', E2E_LEAD],
-  ['Engineer', E2E_ENGINEER],
+  ['a Lead', E2E_LEAD],
+  ['an Engineer', E2E_ENGINEER],
 ];
 
 /** Signs in through the page. The test has set a client address of its own first (`useFreshAddress`). */
@@ -41,7 +41,7 @@ async function signInAs(page: Page, person: E2eUser): Promise<void> {
 }
 
 for (const [label, person] of people) {
-  test.describe(`a ${label} on the production build`, () => {
+  test.describe(`${label} on the production build`, { tag: '@one-width' }, () => {
     test('/audit answers HTTP 403 with the "no access" page and no entry', async ({ page, context }) => {
       await ensureAuditCanaryEntry();
       await useFreshAddress(context);
@@ -85,7 +85,7 @@ for (const [label, person] of people) {
   });
 }
 
-test('a signed-out visitor is sent to the sign-in page and sees nothing of /audit', async ({ page }) => {
+test('a signed-out visitor is sent to the sign-in page and sees nothing of /audit', { tag: '@one-width' }, async ({ page }) => {
   await ensureAuditCanaryEntry();
   await page.goto('/audit');
   await expect(page).toHaveURL(/\/sign-in/);
@@ -93,7 +93,7 @@ test('a signed-out visitor is sent to the sign-in page and sees nothing of /audi
   expect(await page.content()).not.toContain(E2E_AUDIT_CANARY_LABEL);
 });
 
-test('a signed-out caller of GET /api/v1/audit gets 401 and no entry', async ({ request }) => {
+test('a signed-out caller of GET /api/v1/audit gets 401 and no entry', { tag: '@one-width' }, async ({ request }) => {
   await ensureAuditCanaryEntry();
   const response = await request.get('/api/v1/audit');
   expect(response.status()).toBe(401);

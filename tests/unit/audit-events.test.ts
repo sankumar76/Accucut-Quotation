@@ -13,11 +13,11 @@ import {
 
 /**
  * STORY-01.07 T2 (AC-3, assumption A-2): the registry of events. It is the one place an event name, its subject, its category,
- * the shape of what it keeps and the words it shows are written, so these tests pin what the story promises: five user events are
+ * the shape of what it keeps and the words it shows are written, so these tests pin what the story promises: six user events are
  * wired, the others are declared and unused, every event belongs to a category the filter offers, and the words are the screen's.
  */
 
-const WIRED: ReadonlyArray<AuditEventName> = ['user.created', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
+const WIRED: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
 const RESERVED: ReadonlyArray<AuditEventName> = [
   'master.edited',
   'approval.approved',
@@ -29,7 +29,7 @@ const RESERVED: ReadonlyArray<AuditEventName> = [
 ];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the five user events of the Users screen', () => {
+  it('wires exactly the six user events of the Users screen', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
@@ -59,7 +59,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
     for (const category of AUDIT_CATEGORIES) expect(eventsInCategory(category.id).length, category.id).toBeGreaterThan(0);
   });
 
-  it('puts the five user events under "User change" and the others each under their own', () => {
+  it('puts the six user events under "User change" and the others each under their own', () => {
     expect(eventsInCategory('user_change')).toEqual(WIRED);
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
@@ -89,6 +89,12 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
   it('says what was added, and as which role', () => {
     expect(describeOf('user.created', null, { role: 'ENGINEER', isActive: true })).toEqual({ before: 'Not added', after: 'Added as Engineer' });
     expect(describeOf('user.created', null, { role: 'LEAD', isActive: true })?.after).toBe('Added as Lead');
+  });
+
+  it('says the old name and the new one, with nothing in front of them (ux-spec v0.16)', () => {
+    expect(describeOf('user.renamed', { name: 'Arjun Rai' }, { name: 'Arjun Rao' })).toEqual({ before: 'Arjun Rai', after: 'Arjun Rao' });
+    expect(describeOf('user.renamed', { name: '' }, { name: 'Arjun Rao' })).toBeNull();
+    expect(describeOf('user.renamed', { name: 'Arjun Rai' }, null)).toBeNull();
   });
 
   it('says the role before and after', () => {
@@ -122,6 +128,7 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
   it('refuses an extra key on every wired event, before and after', () => {
     const valid: Record<string, readonly [unknown, unknown]> = {
       'user.created': [null, { role: 'ENGINEER', isActive: true }],
+      'user.renamed': [{ name: 'Arjun Rai' }, { name: 'Arjun Rao' }],
       'user.role_changed': [{ role: 'ENGINEER' }, { role: 'LEAD' }],
       'user.deactivated': [{ isActive: true }, { isActive: false }],
       'user.activated': [{ isActive: false }, { isActive: true }],

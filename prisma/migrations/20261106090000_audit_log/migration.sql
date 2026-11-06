@@ -12,6 +12,9 @@
 CREATE TABLE "audit_log" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "actor_id" UUID NOT NULL,
+    -- The actor's name as it was when the entry was written (architecture 5.1, v0.27), like "object_label": a rename later
+    -- does not change how an earlier entry reads. Taken from the signed-in user of the request.
+    "actor_label" TEXT NOT NULL,
     "event" TEXT NOT NULL,
     "object_type" TEXT NOT NULL,
     "object_id" UUID NOT NULL,

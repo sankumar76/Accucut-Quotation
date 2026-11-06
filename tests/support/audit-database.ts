@@ -34,7 +34,64 @@ export async function openAuditDatabase(): Promise<AuditDatabase> {
     audit,
     keySecret: KEY_SECRET,
   });
-  return { ...base, close: base.close, auditRepository, transactions, audit, userService };
+  return { ...base, auditRepository, transactions, audit, userService };
+}
+
+export const AUDIT_REQUEST_ID = 'req-0a0b0c0d';
+export const FIRST_PASSWORD = 'invented-first-password-1';
+/** The name `insertPersonAsOwner(db, 'Admin', ...)` gives the person: "Invented " and the label. */
+export const ADMIN_NAME = 'Invented Admin';
+
+/** Who is making a change, on one request: the actor, their name at the time, and the request. */
+export function contextOf(actorId: string, actorName: string = ADMIN_NAME) {
+  return { actorId, actorLabel: actorName, requestId: AUDIT_REQUEST_ID } as const;
+}
+
+/** A new person for `UserService.create`, with an invented name, e-mail address and password. */
+export function newPerson(label: string, role: 'LEAD' | 'ENGINEER' = 'ENGINEER') {
+  return { name: `Invented ${label}`, email: `${label}@example.test`, role, password: FIRST_PASSWORD } as const;
+}
+
+/** An audit row as the database holds it, with the JSON also as text (to read what was really stored). */
+export interface StoredEntry {
+  readonly event: string;
+  readonly actor_id: string;
+  readonly actor_label: string;
+  readonly object_type: string;
+  readonly object_id: string;
+  readonly object_label: string;
+  readonly before: unknown;
+  readonly after: unknown;
+  readonly before_text: string | null;
+  readonly after_text: string | null;
+  readonly request_id: string;
+  readonly created_at: Date;
+}
+
+/** The entries about one object, oldest first. */
+export async function entriesFor(db: AuthDatabase, objectId: string): Promise<ReadonlyArray<StoredEntry>> {
+  const { rows } = await db.owner.query<StoredEntry>(
+    `SELECT event, actor_id, actor_label, object_type, object_id, object_label, before, after,
+            before::text AS before_text, after::text AS after_text, request_id, created_at
+     FROM audit_log WHERE object_id = $1 ORDER BY created_at, id`,
+    [objectId],
+  );
+  return rows;
+}
+
+export async function entryCount(db: AuthDatabase): Promise<number> {
+  const { rows } = await db.owner.query<{ count: string }>('SELECT count(*) FROM audit_log');
+  return Number(rows[0]?.count);
+}
+
+export async function userRow(db: AuthDatabase, id: string) {
+  const { rows } = await db.owner.query<{ name: string; role: string; is_active: boolean; must_change_password: boolean }>(
+    'SELECT name, role, is_active, must_change_password FROM users WHERE id = $1',
+    [id],
+  );
+  const row = rows[0];
+  if (row === undefined) throw new Error('No such user row.');
+  return row;
 }
 
 /** Inserts a person as the owner (so no audit entry is made) and returns their ID. For the actor and the object of an entry. */

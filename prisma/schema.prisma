@@ -81,10 +81,11 @@ model ConfigVersion {
   @@map("config_versions")
 }
 
-/// One permanent record of who changed what and when (STORY-01.07, FR-011, NFR-007; architecture sections 5.1 and 8).
+/// One record of who changed what and when (STORY-01.07, FR-011, NFR-007; architecture sections 5.1 and 8).
 /// Append-only: a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and the runtime role holds no such grant.
 /// An entry is written in the same transaction as the change it records (the audit service takes the caller's transaction).
-/// `object_label` is the name the object had at that moment, so a later rename does not rewrite history (AC-5).
+/// `object_label` is the name the object had at that moment, so a later rename does not rewrite history (AC-5); `actor_label`
+/// is the same for the person who made the change, taken from the signed-in user of the request (architecture v0.27).
 /// `before` and `after` are JSON and never hold a password, a hash or a token; `before` is null for a creation.
 /// `created_at` is stamped by the database at the millisecond, so application code cannot back-date an entry and the
 /// pagination cursor (time, id) survives a round trip through a JavaScript Date. There is no `updated_at`: a row never
@@ -93,6 +94,7 @@ model ConfigVersion {
 model AuditLog {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   actorId     String   @map("actor_id") @db.Uuid
+  actorLabel  String   @map("actor_label")
   event       String
   objectType  String   @map("object_type")
   objectId    String   @map("object_id") @db.Uuid

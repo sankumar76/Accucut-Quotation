@@ -63,6 +63,8 @@ function defineEvent<Before extends z.ZodType, After extends z.ZodType>(
 
 const userRole = z.enum(USER_ROLE_VALUES);
 const roleState = z.strictObject({ role: userRole });
+/** A person's name, which is not a secret and is already the entry's label; the rename event keeps the old and the new one. */
+const nameState = z.strictObject({ name: z.string().min(1) });
 
 /** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
 const reservedShape = z.json();
@@ -79,7 +81,7 @@ function reserved(objectType: string, category: AuditCategoryId) {
 }
 
 export const AUDIT_EVENTS = {
-  // ---- Wired in this story: the five user events of the Users screen (STORY-01.04) -----------------------------------------
+  // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
   'user.created': defineEvent({
     objectType: 'user',
     category: 'user_change',
@@ -87,6 +89,16 @@ export const AUDIT_EVENTS = {
     before: z.null(),
     after: z.strictObject({ role: userRole, isActive: z.literal(true) }),
     describe: (_before, after) => ({ before: 'Not added', after: `Added as ${roleLabel(after.role)}` }),
+  }),
+  // A name changed on its own or with a role: one event for each attribute that changed (PM decision, AQP-74 comment 11077).
+  // The entry's Object is the name after the change; this entry says "old name to new name" (ux-spec v0.16).
+  'user.renamed': defineEvent({
+    objectType: 'user',
+    category: 'user_change',
+    status: 'wired',
+    before: nameState,
+    after: nameState,
+    describe: (before, after) => ({ before: before.name, after: after.name }),
   }),
   'user.role_changed': defineEvent({
     objectType: 'user',

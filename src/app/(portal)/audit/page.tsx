@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 
 import { AuditScreen } from '@/components/features/audit/audit-screen';
+import { AUDIT_META_DESCRIPTION } from '@/components/features/audit/texts';
 import { AUDIT_DEFAULT_LIMIT } from '@/lib/audit/categories';
 import { getAuditService, getUserService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { auditPeople } from '@/server/views/audit-people';
 
-export const metadata: Metadata = { title: 'Audit log', description: 'A permanent record of who changed what and when.' };
+export const metadata: Metadata = { title: 'Audit log', description: AUDIT_META_DESCRIPTION };
 
 /**
  * SCR-16 "Audit log" (STORY-01.07 AC-6, AC-7, AC-8): the Admin reads the record of changes and filters it. The page checks the
@@ -20,7 +22,6 @@ export const metadata: Metadata = { title: 'Audit log', description: 'A permanen
 export default async function AuditPage() {
   await authorizePage('/audit');
   const [initialPage, users] = await Promise.all([getAuditService().list({ limit: AUDIT_DEFAULT_LIMIT }), getUserService().list()]);
-  // Only the ID and the name of a person reach the browser: no e-mail address, role or flag.
-  const people = users.map(({ id, name }) => ({ id, name }));
-  return <AuditScreen initialPage={initialPage} people={people} />;
+  // Every user, deactivated ones too, sorted by name; only the ID and the name reach the browser (no e-mail address, role or flag).
+  return <AuditScreen initialPage={initialPage} people={auditPeople(users)} />;
 }
