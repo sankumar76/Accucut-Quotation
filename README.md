@@ -203,7 +203,9 @@ network. On a miss, or when the cached install fails, the script reads the packa
 `npx playwright install-deps --dry-run chromium` (`scripts/ci/playwright-deps-packages.sh`), downloads the packages with
 `apt-get install --download-only` (45 s for `apt-get update`, 90 s for the download), installs them offline and saves
 what it downloaded. It makes up to three tries; tries 2 and 3 use `archive.ubuntu.com`, and after the third the step
-fails and names the mirrors. If the dry run cannot be read, it warns and takes the older bounded install (`apt` with a
+fails and names the mirrors. Each try has a temporary apt view (a copy of the image's `ubuntu.sources` that names only that
+try's mirror, with `Signed-By` kept, and its own package-list directory), so `apt-get update --error-on=any` fails exactly
+when that mirror is dead and the runner's own apt sources and lists are never changed. If the dry run cannot be read, it warns and takes the older bounded install (`apt` with a
 20 s stall timeout and 3 retries). The step stops after 8 minutes in every case. The nightly workflow
 (`warm-playwright-cache`) runs this stage on `master` with the same keys, so every branch can restore them after a runner
 image change; `CACHE_EPOCH` in `nightly.yml` must be raised together with the one in `ci.yml`. A bad cache entry never turns a run red, but it costs the bounded

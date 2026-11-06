@@ -14,12 +14,20 @@
 # stream that is still alive. Each of up to three tries runs `apt-get update` (45 s) and then
 # `apt-get install --download-only` (90 s) under `timeout`. A download-only run changes no installed package, so it is
 # safe to stop, and a part-done download resumes. If the update fails or hits its limit, the try ends at once and the
-# download is not attempted from a mirror that has just failed. Tries 2 and 3 switch the Ubuntu sources to
-# archive.ubuntu.com (apt still checks the signed Release files). After three failed tries the step fails and names the
+# download is not attempted from a mirror that has just failed. After three failed tries the step fails and names the
 # mirrors. The step itself has `timeout-minutes: 8` as the last bound (three tries take about 6.75 minutes at worst).
 #
-# If the dry run holds no install command and no report, the script warns and takes the bounded AQP-206 path instead
-# (`playwright install-deps chromium` with a 20 s stall timeout); it does not fail.
+# One apt VIEW per try (QLT-95). The view is a temporary copy of the image's ubuntu.sources that names only the mirror of
+# this try (the runner's own on try 1, archive.ubuntu.com on tries 2 and 3; apt still checks the signed Release files, as
+# `Signed-By` is kept) and a package-list directory of its own. All three apt commands of the try (update, download-only,
+# offline install) take the same view through `-o Dir::Etc::SourceList=/dev/null -o Dir::Etc::SourceParts=... -o
+# Dir::State::Lists=...`. `apt-get update --error-on=any` then fails exactly when this mirror cannot be reached: without
+# the flag a dead mirror is only a warning and exit status 0 (seen on the runner), and with the runner's full source list a
+# transient failure of a third-party source would fail the try. The runner's own sources and package lists are never
+# touched. The downloaded .deb files still land in /var/cache/apt/archives and are cached as before.
+#
+# If the dry run holds no install command and no report, or the image has no ubuntu.sources, the script warns and takes the
+# bounded AQP-206 path instead (`playwright install-deps chromium` with a 20 s stall timeout); it does not fail.
 #
 # A cache key is immutable and a hit is never saved again, so a bad entry is not replaced by a later run. The fallback
 # warning therefore names the key and the command that deletes it; see README, "Playwright install cache".
@@ -29,11 +37,11 @@
 # Usage:   PLAYWRIGHT_DEBS_CACHE_HIT=true|false PLAYWRIGHT_DEBS_CACHE_KEY=<key> \
 #            bash scripts/ci/playwright-system-deps.sh <cache-directory>
 # Testable settings (tests/unit/playwright-system-deps.test.ts); the defaults are the runner's real values:
-#   APT_BOUNDS_FILE         where the apt settings are written   (/etc/apt/apt.conf.d/99-ci-bounds)
-#   APT_ARCHIVES_DIR        where apt keeps downloaded packages   (/var/cache/apt/archives)
-#   APT_SOURCES_DIR         where apt keeps its sources           (/etc/apt)
-#   APT_UPDATE_TIMEOUT      seconds allowed for `apt-get update`  (45)
-#   APT_DOWNLOAD_TIMEOUT    seconds allowed for the download      (90)
+#   APT_BOUNDS_FILE         where the apt settings are written    (/etc/apt/apt.conf.d/99-ci-bounds)
+#   APT_ARCHIVES_DIR        where apt keeps downloaded packages    (/var/cache/apt/archives)
+#   APT_SOURCES_DIR         where apt keeps its sources, read only (/etc/apt)
+#   APT_UPDATE_TIMEOUT      seconds allowed for `apt-get update`   (45)
+#   APT_DOWNLOAD_TIMEOUT    seconds allowed for the download       (90)
 set -euo pipefail
 
 cache_dir="${1:?usage: playwright-system-deps.sh <cache-directory>}"
@@ -46,11 +54,15 @@ update_timeout="${APT_UPDATE_TIMEOUT:-45}"
 download_timeout="${APT_DOWNLOAD_TIMEOUT:-90}"
 fallback_mirror="archive.ubuntu.com"
 max_tries=3
+sources_file="${sources_dir}/sources.list.d/ubuntu.sources"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# The list of packages present before the install. Removed on every exit, including a failed install (STD-04).
+# The list of packages present before the install, and the apt view of the current try. Both are removed on every exit,
+# including a failed install (STD-04).
 before=""
-trap 'rm -f -- "${before}"' EXIT
+view=""
+apt_view=()
+trap 'rm -f -- "${before}"; rm -rf -- "${view}"' EXIT
 
 mkdir -p "${cache_dir}"
 
@@ -60,33 +72,37 @@ install_from_cache() {
   sudo dpkg -i "${cache_dir}"/*.deb
 }
 
-# The apt source files: the classic list and the deb822 files.
-source_files() {
-  compgen -G "${sources_dir}/sources.list" || true
-  compgen -G "${sources_dir}/sources.list.d/*.sources" || true
-  compgen -G "${sources_dir}/sources.list.d/*.list" || true
-}
-
-# The host of the Ubuntu mirror the runner uses now, for the message that names the mirrors.
+# The first source of the image, for the message that names the mirrors: the host name of an http(s) address, or the value
+# as written (`mirror+file:/etc/apt/apt-mirrors.txt` on the runner image).
 first_mirror() {
-  local host=""
-  while IFS= read -r file; do
-    host="$(grep -hoE 'https?://[^/ ]*ubuntu\.com/ubuntu/?' "${file}" 2> /dev/null | head -n 1 | sed -E 's#https?://([^/]+)/.*#\1#' || true)"
-    [ -n "${host}" ] && break
-  done < <(source_files)
-  echo "${host:-the mirror of the runner image}"
+  local key value uri=""
+  while read -r key value _; do
+    if [ "${key}" = "URIs:" ]; then
+      uri="${value}"
+      break
+    fi
+  done < "${sources_file}"
+  case "${uri}" in
+    http://* | https://*) uri="${uri#*://}"; echo "${uri%%/*}" ;;
+    '') echo "the mirror of the runner image" ;;
+    *) echo "${uri}" ;;
+  esac
 }
 
-# Tries 2 and 3: point every Ubuntu source (an *ubuntu.com address that ends in /ubuntu, or the runner's mirror list) at
-# archive.ubuntu.com. Other repositories on the runner (Microsoft, GitHub, PPAs) are left alone.
-use_fallback_mirror() {
-  local file
-  while IFS= read -r file; do
-    sudo sed -i -E \
-      -e "s#https?://[^/ ]*ubuntu\\.com/ubuntu/?#http://${fallback_mirror}/ubuntu/#g" \
-      -e "s#mirror\\+file:[^ ]+#http://${fallback_mirror}/ubuntu/#g" \
-      "${file}"
-  done < <(source_files)
+# A new apt view for one try: 'image' keeps the image's own source (the runner's mirror), 'fallback' points every URIs line
+# at archive.ubuntu.com. The directory is readable by the `_apt` download user; apt makes its own `partial` directory
+# writable for it.
+make_view() {
+  rm -rf -- "${view}"
+  view="$(mktemp -d)"
+  chmod 755 "${view}"
+  mkdir -p "${view}/sources.list.d" "${view}/lists/partial"
+  if [ "$1" = fallback ]; then
+    sed -E "s#^URIs:.*#URIs: http://${fallback_mirror}/ubuntu/#" "${sources_file}" > "${view}/sources.list.d/ubuntu.sources"
+  else
+    cp -- "${sources_file}" "${view}/sources.list.d/ubuntu.sources"
+  fi
+  apt_view=(-o Dir::Etc::SourceList=/dev/null -o "Dir::Etc::SourceParts=${view}/sources.list.d" -o "Dir::State::Lists=${view}/lists")
 }
 
 # Runs the dry run and parses it. Prints the package names; fails when the output holds neither an install command nor a
@@ -97,11 +113,11 @@ list_packages() {
   printf '%s\n' "${dry_run}" | bash "${script_dir}/playwright-deps-packages.sh"
 }
 
-# One try: update, then download. Either step failing or reaching its limit ends the try; the download is not started
-# after a failed update.
+# One try: update, then download, both in this try's apt view. Either step failing or reaching its limit ends the try; the
+# download is not started after a failed update.
 try_download() {
   local started="${SECONDS}" status=0 what
-  sudo timeout "${update_timeout}" apt-get update || status=$?
+  sudo timeout "${update_timeout}" apt-get update "${apt_view[@]}" --error-on=any || status=$?
   if [ "${status}" -ne 0 ]; then
     what="failed with status ${status}"
     [ "${status}" -eq 124 ] && what="reached its ${update_timeout} s limit"
@@ -110,7 +126,7 @@ try_download() {
   fi
   echo "apt-get update took $((SECONDS - started)) s."
   started="${SECONDS}"
-  sudo timeout "${download_timeout}" apt-get install --download-only -y --no-install-recommends "$@" || status=$?
+  sudo timeout "${download_timeout}" apt-get install --download-only -y --no-install-recommends "${apt_view[@]}" "$@" || status=$?
   if [ "${status}" -ne 0 ]; then
     what="failed with status ${status}"
     [ "${status}" -eq 124 ] && what="reached its ${download_timeout} s limit"
@@ -120,19 +136,21 @@ try_download() {
   echo "The download took $((SECONDS - started)) s."
 }
 
-# Miss path, normal case: up to three bounded tries, then an offline install of what was downloaded.
+# Miss path, normal case: up to three bounded tries, then an offline install of what was downloaded, in the view of the
+# try that downloaded it.
 download_and_install() {
-  local try mirror mirrors=""
+  local try kind=image mirror mirrors=""
   mirror="$(first_mirror)"
   for try in $(seq 1 "${max_tries}"); do
     if [ "${try}" -gt 1 ]; then
       mirror="${fallback_mirror}"
-      use_fallback_mirror
+      kind=fallback
     fi
+    make_view "${kind}"
     mirrors="${mirrors:+${mirrors}, }${mirror}"
     echo "Try ${try} of ${max_tries}, mirror ${mirror}."
     if try_download "$@"; then
-      sudo apt-get install -y --no-download --no-install-recommends "$@"
+      sudo apt-get install -y --no-download --no-install-recommends "${apt_view[@]}" "$@"
       return 0
     fi
   done
@@ -140,7 +158,8 @@ download_and_install() {
   return 1
 }
 
-# Miss path, fallback: the bounded install of AQP-206, used when the dry run cannot be read.
+# Miss path, fallback: the bounded install of AQP-206, used when the dry run cannot be read or the image has no
+# ubuntu.sources to build the mirror views from.
 bounded_install_deps() {
   npx playwright install-deps chromium
 }
@@ -157,6 +176,9 @@ install_and_cache() {
   if packages="$(list_packages)"; then
     if [ -z "${packages}" ]; then
       echo "Playwright reports no missing system package; nothing to download."
+    elif [ ! -f "${sources_file}" ]; then
+      echo "::warning::${sources_file} does not exist on this image, so no mirror view can be built; taking the bounded install of the system packages instead."
+      bounded_install_deps
     else
       local names=()
       mapfile -t names <<< "${packages}"
