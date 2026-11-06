@@ -19,7 +19,7 @@ export interface AuditDatabase extends AuthDatabase {
   readonly userService: UserService;
 }
 
-const KEY_SECRET = 'invented-throttle-key-material';
+export const KEY_SECRET = 'invented-throttle-key-material';
 
 export async function openAuditDatabase(): Promise<AuditDatabase> {
   const base = await openAuthDatabase();
