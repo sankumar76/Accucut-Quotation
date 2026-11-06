@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.15 (the production check of `/design-system` moves to stage 12, `tests/e2e/production-routes.spec.ts`, and that spec is never quarantined, section 10; architecture v0.16). Earlier, 0.14 (master's rule on tests and machine load, DL-057, GitHub #24, section 10; the not-found row of the JS budget check, section 10.1; the path-limited pull-request trigger of the Lighthouse run, section 10.2, AQP-169 A-2. Earlier, 0.13: PRD NFR-009: the office Wi-Fi pass/fail profile, Slow 4G as report only, 200 KB gzip first-load JS per route, and CI feedback time, PROPOSED; AQP-1 comments 10712, 10713; GitHub #36; RISK-020; sections 2, 8 and 10. Earlier, 0.12: SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
+| Version | 0.17 (section 10.6: browser system packages cached by runner image and Playwright version, a bounded download on a miss, the browser cache kept and re-keyed, stage 12a split out; DEF-015, DL-100). Earlier, 0.16 (section 10.5: stage 12 time, four CI workers and `@one-width` for tests that read no layout, AQP-199, DL-095). Earlier, 0.15 (the production check of `/design-system` moves to stage 12, `tests/e2e/production-routes.spec.ts`, and that spec is never quarantined, section 10; architecture v0.16). Earlier, 0.14 (master's rule on tests and machine load, DL-057, GitHub #24, section 10; the not-found row of the JS budget check, section 10.1; the path-limited pull-request trigger of the Lighthouse run, section 10.2, AQP-169 A-2. Earlier, 0.13: PRD NFR-009: the office Wi-Fi pass/fail profile, Slow 4G as report only, 200 KB gzip first-load JS per route, and CI feedback time, PROPOSED; AQP-1 comments 10712, 10713; GitHub #36; RISK-020; sections 2, 8 and 10. Earlier, 0.12: SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO. Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted. Versions 0.8 and 0.9 add the tests for their later answers. For `master` to record and check at G4 |
-| Date | 2026-11-04 |
+| Date | 2026-11-05 |
 | Inputs | SPEC v1.13 §4.1, §4.3, §14, §18 D-38 to D-40, §18.5; PRD v0.11; `architecture.md` v0.14; PRD NFR-009 (AQP-1 comments 10712, 10713; GitHub #36); gate log G6 AQP-27 attempt 1 and review 5746060549 (QLT-05); DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
@@ -30,7 +30,7 @@
 | Contract | Route output schemas, strict keys | developer | zod, Vitest | `tests/integration/contract/` | Every PR |
 | Security | Role matrix, canary scan, CSRF, cookies, uploads | developer, qa-engineer | Vitest, Playwright | `tests/security/` | Every PR |
 | Acceptance | SPEC §14 items 1 to 14 | qa-engineer | Vitest, Playwright | `tests/acceptance/` | Every PR |
-| E2E | Critical journeys at all viewports | qa-engineer | Playwright 1.64 | `tests/e2e/` | Every PR (Chromium at 3 widths); nightly (full matrix) |
+| E2E | Critical journeys at all viewports | qa-engineer | Playwright 1.64 | `tests/e2e/` | Every PR (Chromium at 3 widths, except the tests tagged `@one-width` that section 10.5 rules, which run at 1366 px only); nightly (full matrix) |
 | Accessibility | WCAG 2.2 AA (PROPOSED, PRD v0.6) | qa-engineer | axe, keyboard run | `tests/e2e/a11y/` | Every PR; manual per release |
 | Performance | NFR-008 to 011 | qa-engineer | Vitest timing, k6, Lighthouse CI, JS budget check | `tests/perf/`, `scripts/check-js-budget.ts` | JS budget on every pull request; timing and Lighthouse nightly; Lighthouse before a key screen's G6; load before release |
 | Export | File fidelity | qa-engineer | ExcelJS read-back, Excel desktop | `tests/integration/export/` | Every PR; manual open per release |
@@ -384,7 +384,7 @@ No workflow exists yet; the scaffold story, STORY-10.01, adds `.github/workflows
 | 10 | Migrations | `prisma migrate deploy` on an empty database; drift check | Yes |
 | 11 | Integration, contract, security, acceptance, export, then the combined coverage gates | `npx vitest run tests/unit tests/integration tests/security tests/acceptance --coverage`; then, on a pull request, `npx tsx scripts/check-changed-coverage.ts --base "origin/${BASE_REF}"` | Yes |
 | 11b | JS budget (NFR-009) | `npx next start` on the stage 9 build, then `npx tsx scripts/check-js-budget.ts` (section 10.1) | Yes |
-| 12 | E2E | `npm run test:e2e` (Chromium, 3 widths, axe, canary scan) | Yes |
+| 12 | E2E | `npm run test:e2e` (Chromium, 3 widths, axe, canary scan; tests tagged `@one-width` run at 1366 px only, section 10.5) | Yes |
 | 13 | Image | Docker build; run and check `/api/health` | Yes, on `master` |
 | Nightly | Full browser matrix, Lighthouse on both profiles (section 10.2), 500-node timing, CI feedback time (section 10.3) | Scheduled (`.github/workflows/nightly.yml`) | Reported. A Wi-Fi Lighthouse or timing failure raises a bug; a CI-time breach raises a `tech-debt` issue |
 | Pre-release | k6, restore rehearsal, manual Excel, one real mail send, Lighthouse Wi-Fi run on the release build | Manual | G8 evidence |
@@ -451,12 +451,60 @@ The PRD sets the budget and what it counts. This section says how the check coun
 
 The nightly workflow reads the GitHub API. It measures the duration of the required job, `Stages 1 to 11`, from start to finish, excluding queue wait. It uses first attempts of the last 20 pull-request runs and reports the p95 and the median. The target is a p95 of at most 10 minutes, with an early warning when the median passes 6 minutes. Both figures are PROPOSED, for Santhosh to confirm. A breach fails that nightly step with a message, and the orchestrator raises a `tech-debt` issue. A breach never blocks a merge. The nightly workflow has `contents: read` and `actions: read` only.
 
+**The 9-minute line (DL-095; AQP-199 AC-7; ruling 2026-11-05, CR-42).** When the p95 is over 540 seconds, the step writes one line to the job summary, **whatever has been merged**: "p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due." At exactly 540 seconds it writes nothing. The step does not try to detect a merge; master and the orchestrator know whether AQP-199 is in `master`. It fails nothing, and the 10-minute and 6-minute failures above are unchanged. **The step also reports which runs it used:** the count, and the start time and head commit of the oldest and the newest. A reader can then see whether a report covers only runs made after a given merge, such as AQP-199 AC-1.
+
 ### 10.4 Who builds it, and by when
 
 - **A new enabler story**, proposed as STORY-10.10 "NFR-009 guards: JS budget check and Lighthouse reference run", for the scrum-master to write (about 3 points, my estimate). It is carved out of STORY-10.09, which keeps NFR-010 to 012 and NFR-024. It covers sections 10.1 to 10.3, `@lhci/cli`, `lighthouserc.cjs`, `nightly.yml`, the calibration and the baseline.
 - **Order:** it can start once 01.01 has given sign-in, and it uses the route manifest once 01.02 is merged. **It must be Done before 02.01 (AQP-113), the first of the five key screens, reaches G6.** It touches only `scripts/`, `.github/workflows/`, `lighthouserc.cjs` and tests, so it can run in a second stream beside 01.04 and 01.07.
 - **The baseline** is taken at that story's G7 on `/`. That is the shell AQP-28 builds, measured on the reference hardware; AQP-28's own G7 has no reference run to use (master, DL-058).
 - **Every key-screen story** (02.01 masters, 04.01 assign, 04.02 queue, the workspace stories of EPIC-05, 06.03 cost view) links an on-demand Wi-Fi run at its G6.
+
+### 10.5 Stage 12 time (AQP-199, STORY-10.14; DL-095; RISK-023; ruling 2026-11-05)
+
+Stage 12 grew from about 1.5 to between 3.6 and 5.2 minutes in two days, and the median of the required job passed 6 minutes. **The approach is two changes inside the one required job.**
+
+**1. Four workers in CI.** `workers` becomes 4 in CI and stays 2 on a developer's machine (`IN_CI ? 4 : 2`). The set-up project also warms each development-server route the specs use (`/`, `/queue`, `/design-system`) before the width projects start, so four workers do not compile the same page at once. A public repository's `ubuntu-latest` runner has 4 vCPU and 16 GB, which the developer confirms from the run log at T1. Four Chromium workers, two Next.js servers and PostgreSQL fit in that memory. CPU is the risk, and AQP-199 AC-5 is the control: if 4 workers give a flaky test, the developer tries 3 and reports. A timeout is never widened.
+
+**2. Tests that read no layout run at one width.** Such a test asserts only server behaviour (HTTP status, headers, cookies, redirects, throttle counts, message text) or the logic of a test helper. It reads no size, position, viewport, breakpoint, focus order, touch input or responsive arrangement. "Focus order" means a sequence of Tab stops, which can change with the arrangement. A check that the code moved focus to one named element, such as the notice in `sign-in.spec.ts` AC-2, reads no layout, provided that element is the same at every width. It carries the Playwright tag `@one-width`. The `mobile` and `tablet` projects set `grepInvert: /@one-width/`, and `desktop` runs everything. Nothing is deleted or skipped: each test still runs once on every pull request.
+
+| Spec | Ruling | Why |
+|------|--------|-----|
+| `production-routes.spec.ts` | Whole file at one width | HTTP 404 and a redirect |
+| `axe-helper.spec.ts` | Whole file at one width | Tests the helper's wait for transitions; colours and timing do not change with width |
+| `sign-in.spec.ts` | One width: "the form checks before it sends", AC-2, AC-3, AC-4, AC-5, AC-6, and AC-1's two landing tests. **Three widths:** "SCR-01 at this width (AC-8)" and AC-1's account-menu test | Messages, the lock-out count, the session, the cookie flags and the return address are server rules. The account menu and the AC-8 block read layout |
+| `aqp-38-qa.spec.ts` | One width: "sessions and return addresses in the browser" (AC-4, AC-6). **Three widths:** the AC-8 keyboard and screen-reader block, and the locked and "could not be checked" states (they run axe, which is stated at every width) | Server rules, against keyboard order and axe per width |
+| `scaffold-smoke`, `design-system`, `navigation`, `shell`, `shell-first-open`, `shell-lazy-load`, `button-pressed` | Three widths, no change | Breakpoints, the drawer against the side menu, focus, touch, sizes |
+
+**Guard against silent loss.** A unit test fails if `@one-width` appears in any file outside the four named above. Tagging a test in another file needs a ruling here first. AQP-199's pull request lists the tests before and after by spec and project, from `npx playwright test --list`.
+
+**Kept:** one job, still named `Stages 1 to 11`, so branch protection does not change. `retries` stays 1 and `forbidOnly` stays on. Section 10.3 measures the same job, unchanged.
+
+**Rejected for now:** a job per width, and `--shard`. Each job repeats the install, build and database set-up (about 2 minutes, an estimate), which roughly doubles the runner minutes. It also needs care with the required check.
+
+**Next step, if the nightly p95 is still over 9 minutes after this:** move stage 12 into shard jobs. Give the existing job a new name, and add a final job **named `Stages 1 to 11`** that `needs` all the others, runs with `if: always()` and fails unless all succeeded. The required check then keeps its name, and the delivery lead changes no setting. Section 10.3 would then measure from the first job's start to that final job's end.
+
+### 10.6 Browser system packages (DEF-015; DL-100; ruling 2026-11-05)
+
+**The fault.** `npx playwright install --with-deps chromium` runs `apt-get` against the runner's Ubuntu mirror on every run. The browser itself is cached already; its system packages are not. In run 42061753504 (attempt 3) the mirror served 20.5 MB at 35.9 kB/s, single packages stalled for up to 170 s, and stage 12 spent about 9.5 minutes installing, with no bound on how long that could take.
+
+**The approach: cache the system packages, bound the download on a miss, and split the step.**
+
+1. **Cache the downloaded `.deb` files** with the `actions/cache` already pinned in `ci.yml`.
+   - **Key:** the runner image (`ImageOS`, `ImageVersion`, both set on GitHub-hosted runners) plus the installed Playwright version.
+   - **On a hit,** `sudo dpkg -i` installs them with no network. On the same image version they are exactly the packages that were missing.
+   - **On a miss** (a new runner image or a Playwright update, about weekly), `npx playwright install-deps chromium` runs normally. The `.deb` files it downloaded are then copied from `/var/cache/apt/archives` into the cached directory, which the runner user owns. If `dpkg -i` fails on a hit, the step falls back to the miss path, so a bad cache costs time, never a red run.
+2. **Bound the download on a miss.** Before `install-deps`, a step writes `/etc/apt/apt.conf.d/99-ci-bounds` with `Acquire::http::Timeout "20";` and `Acquire::Retries "3";`, so a stalled package is retried after 20 s instead of waiting. The step has `timeout-minutes: 8`, so a mirror outage fails a named step quickly and a re-run is the remedy. It cannot use up the job's 30 minutes.
+3. **Keep the browser cache, re-keyed** on the Playwright version rather than the whole lockfile, so an unrelated dependency change no longer downloads the browser again. This replaces the 2026-11-03 note that the cache would come out; master superseded that note (DL-100).
+4. **Split the step** into "Stage 12a: Playwright browser and system packages" and "Stage 12: E2E", so the Actions API reports install time apart from test time. `tests/unit/ci-workflow.test.ts` follows.
+
+**Supply chain.** The `.deb` files are checked by apt's signatures when downloaded. The cache is written only by runs on this repository: a pull request's cache is visible to that branch alone, so a branch cannot plant packages for `master`. That is the same trust as the existing browser and Next.js caches. No new action and no new dependency.
+
+**Rejected:**
+- **The Playwright container image, pinned by digest.** It is a cleaner supply-chain story, but as a job container it cannot run Docker for stage 13 (STORY-10.04). Run with `docker run` for stage 12 only, it pulls about 1 GB on every run (there is no layer cache on hosted runners), brings its own Node.js version against the Node 22 pin, and needs the servers and PostgreSQL wired across host networking.
+- **A timeout alone.** It turns a slow mirror into a red run, and a re-run usually meets the same mirror. It is kept only as the bound on a miss (point 2).
+
+**Fits AQP-199's single job.** Every change is a step inside the one job named `Stages 1 to 11`, so the required check and branch protection do not change. **Estimate: 2 points.** That covers the steps and one small script (`scripts/ci/playwright-system-deps.sh`, a suggested name), the workflow test, and evidence: one miss run and two hit runs, with the times of steps 12a and 12. Expected on a hit: stage 12a in well under a minute (an estimate, not measured).
 
 ## 11. Coverage Targets
 
@@ -528,6 +576,8 @@ The seed configuration is data with no lines to measure, so its 95 % target is d
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
 | 0.3 | 2026-11-01 | SPEC v1.4 and PRD v0.6. Section 5 rewritten for every level's quantity: CE-1 is now 30 (24 lids), CE-6 246, CE-7 BN 6; CE-2 pending Q-35; CE-9 to CE-11 added; own-quantity-once test; property tests compare at 2 decimals; rule-change rehearsal retired. Added tests for cleared totals, the export markers and footer, optional reason, hidden entries, Scrap Weight, password rule, session, backup retention and watch, mail sign-in modes. Accessibility gate moves to WCAG 2.2 AA with PRD v0.6 |
+| 0.17 | 2026-11-05 | New section 10.6 (DEF-015, DL-100). The `.deb` system packages are cached by runner image and Playwright version and installed with `dpkg -i` on a hit. On a miss, apt is bounded (20 s timeout, 3 retries) and the step has `timeout-minutes: 8`. The browser cache is kept, keyed on the Playwright version, replacing the 2026-11-03 removal note. Stage 12a is split from stage 12. The container image and a timeout alone are rejected. One job, name unchanged; 2 points |
+| 0.16 | 2026-11-05 | CR-43: section 10.3 quotes the AC-7 line exactly ("the shard step of test strategy 10.5"); the section 2 E2E row and the stage 12 row point to the `@one-width` exceptions of section 10.5. Section 10.3: the 9-minute line is written whenever the p95 is over 540 s, with no merge detection, and the step reports the oldest and newest runs it used (CR-42). Section 10.5: "focus order" defined; a programmatic focus move to one element reads no layout. New section 10.5 (AQP-199, DL-095, RISK-023). Stage 12 runs with 4 workers in CI, with dev-server routes warmed in set-up. Tests that read no layout are tagged `@one-width` and run in `desktop` only; the per-spec ruling covers four files, guarded by a unit test. One required job, name unchanged; section 10.3 unchanged. Shard jobs with a fan-in job named `Stages 1 to 11` are the next step if the p95 stays over 9 minutes |
 | 0.15 | 2026-11-04 | Ruling on AQP-38 (PR #58; architecture v0.16). Section 10: the production check of `/design-system` moves to stage 12, `tests/e2e/production-routes.spec.ts`, with stage 9 kept for a wrong prerendered status or an unreadable build. That spec joins the canary and role-matrix tests as never quarantined |
 | 0.14 | 2026-11-03 | Section 10: master's rule that tests do not depend on machine load (DL-057, GitHub #24): heavy set-up in its own hook, the hook timeout set once in `vitest.config.ts`, no wall-clock limit in a unit test, and CI as the reference run. Section 10.1: the not-found page is measured at an unused path, must answer 404 and is the row `not-found` (product-owner, AQP-169). Section 10.2: the path-limited `pull_request` trigger of `nightly.yml` (AQP-169 A-2). Section 10.4: the baseline at STORY-10.10's G7 (DL-058) |
 | 0.13 | 2026-11-03 | PRD NFR-009 (AQP-1 comments 10712, 10713; GitHub #36; RISK-020). Section 8: the office Wi-Fi pass/fail profile, Slow 4G as report only, the median of 5 runs, and three NFR-009 rows. Section 2: the JS budget on every pull request. Section 10: step 11b (the JS budget), nightly and pre-release rows, and new sections 10.1 (JS budget check, with its calibration on `6f66b97`), 10.2 (the Lighthouse reference run: hardware, browser, settings, assertions, `benchmarkIndex`), 10.3 (CI feedback time, PROPOSED) and 10.4 (who builds it: proposed STORY-10.10, done before 02.01 reaches G6) |

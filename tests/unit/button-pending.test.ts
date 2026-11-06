@@ -82,9 +82,37 @@ describe('the held pressed look of a pending first open (rule 11)', () => {
     expect(active && isInsideHoverQuery(active)).toBe(false);
   });
 
-  it('the account trigger keeps its accessible name and is a button that submits nothing', () => {
+  it('the account trigger is a button that submits nothing, named "Account menu, <initials>, <name>, <role>" (DEF-014)', () => {
     const markup = renderToStaticMarkup(createElement(AccountTrigger, { user: { name: 'Invented Person', email: 'a@example.test', role: 'Lead' } }));
-    expect(markup).toContain('aria-label="Account menu, Invented Person, Lead"');
+    expect(markup).toContain('aria-label="Account menu, IP, Invented Person, Lead"');
     expect(markup).toContain('type="button"');
+  });
+
+  describe('DEF-014: the account trigger name contains the visible text (WCAG 2.5.3)', () => {
+    const textOf = (markup: string): string => markup.replace(/<[^>]*>/g, '');
+    const labelOf = (markup: string): string => /aria-label="([^"]*)"/.exec(markup)?.[1] ?? '';
+    // The comparison WCAG 2.5.3 and axe make: case and punctuation do not count, runs of space are one space.
+    const normalise = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    const render = (name: string, role: string): string =>
+      renderToStaticMarkup(createElement(AccountTrigger, { user: { name, email: 'a@example.test', role } }));
+
+    it.each([
+      ['Invented Person', 'Lead', 'IP'],
+      ['Mono', 'Admin', 'M'],
+      ['Ada Byron King', 'Engineer', 'AK'],
+    ])('%j, %s: initials, name and role are separated by spaces and the name contains them in order', (name, role, initials) => {
+      const markup = render(name, role);
+      expect(labelOf(markup)).toBe(`Account menu, ${initials}, ${name}, ${role}`);
+      // Without real spaces between the elements the text reads "IPInvented PersonLead" (axe label-content-name-mismatch).
+      const visible = normalise(textOf(markup));
+      expect(visible).toBe(normalise(`${initials} ${name} ${role}`));
+      expect(normalise(labelOf(markup))).toContain(visible);
+    });
+
+    it('puts a space between the avatar and the name, and between the name and the role', () => {
+      const markup = render('Invented Person', 'Lead');
+      expect(markup).toMatch(/IP<\/span> <span[^>]*>/);
+      expect(markup).toContain('Invented Person</span> <span');
+    });
   });
 });

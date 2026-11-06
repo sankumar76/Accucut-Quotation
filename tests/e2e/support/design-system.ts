@@ -19,8 +19,11 @@ export const DRAWER_TAB_PRESSES = 6;
 /** Shift+Tab presses from the bottom of the page, each checked against the sticky top bar. */
 export const FOCUS_SCAN_PRESSES = 14;
 
-/** The rules every scan in the suite uses (NFR-016 to 018: WCAG 2.0, 2.1 and 2.2, levels A and AA). */
-export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
+/**
+ * The rules every scan in the suite uses (NFR-016 to 018: WCAG 2.0, 2.1 and 2.2, levels A and AA). `wcag21a` is the WCAG 2.1
+ * Level A rules; without it no 2.1 Level A rule ran, which hid the Label in Name failure of DEF-014.
+ */
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 /** The desktop project is the only one at 1024 px or wider (playwright.config.ts). */
 export const isDesktopProject = (projectName: string): boolean => projectName === 'desktop';
