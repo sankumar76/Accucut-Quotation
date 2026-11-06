@@ -67,7 +67,7 @@ env:
   LHCI_BASE_URL: http://localhost:3000
   # Part of the Playwright system-package cache key (stage 12a). It must equal CACHE_EPOCH in ci.yml, or the warm-up job
   # saves a key that CI never looks for; tests/unit/nightly-workflow.test.ts compares the two. Raise both together.
-  CACHE_EPOCH: '7'
+  CACHE_EPOCH: '6'
 
 jobs:
   lighthouse:

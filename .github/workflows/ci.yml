@@ -51,7 +51,7 @@ env:
   GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
   # Part of the Playwright system-package cache key (stage 12a). Raise it by hand, in a reviewed change, to start a new
   # key when the cached entry is bad. Never changed otherwise.
-  CACHE_EPOCH: '8'
+  CACHE_EPOCH: '6'
 
 jobs:
   verify:
@@ -350,7 +350,6 @@ jobs:
           PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
           PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
           PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
-          EVIDENCE_DEAD_FIRST: '1'
         run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
 
       # Chromium at three widths with axe (test strategy sections 2, 6, 9), this shard's share. Playwright starts two

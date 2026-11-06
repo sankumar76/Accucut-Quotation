@@ -99,11 +99,9 @@ make_view() {
   chmod 755 "${view}"
   mkdir -p "${view}/sources.list.d" "${view}/lists/partial"
   if [ "$1" = fallback ]; then
-    sed -E "s#^URIs:.*#URIs: http://${fallback_mirror}/ubuntu/#" "${sources_file}" > "${view}/sources.list.d/ubuntu.sources"
+    cp -- "${sources_file}" "${view}/sources.list.d/ubuntu.sources"
   else
     cp -- "${sources_file}" "${view}/sources.list.d/ubuntu.sources"
-    # THROWAWAY EVIDENCE ONLY (AQP-216 G7, DL-105): the runner's own mirror becomes an unroutable address (TEST-NET-1).
-    if [ "${EVIDENCE_DEAD_FIRST:-0}" = "1" ]; then sed -i -E "s#^URIs:.*#URIs: http://192.0.2.1/ubuntu/#" "${view}/sources.list.d/ubuntu.sources"; fi
   fi
   apt_view=(-o Dir::Etc::SourceList=/dev/null -o "Dir::Etc::SourceParts=${view}/sources.list.d" -o "Dir::State::Lists=${view}/lists")
 }
