@@ -1,7 +1,6 @@
-import { createHmac } from 'node:crypto';
-
 import { MILLISECONDS_PER_MINUTE, type Clock } from '../../lib/time';
 import type { PasswordHasher } from '../auth/password-hasher';
+import { throttleKey } from '../auth/throttle-key';
 import type { AttemptPolicy, ReservedAttempt, ThrottleRepository } from '../repositories/throttle-repository';
 import { normaliseEmail, type UserRepository } from '../repositories/user-repository';
 
@@ -71,11 +70,6 @@ const DUMMY_PASSWORD = 'dummy-password-for-unknown-accounts';
 
 /** Used when the proxy gave no address: all such attempts share one counter rather than none. */
 const UNKNOWN_ADDRESS = 'unknown';
-
-/** A keyed hash, so a leaked table does not reveal e-mails or addresses and cannot be rebuilt without the secret. */
-function throttleKey(secret: string, kind: 'account' | 'ip', value: string): string {
-  return createHmac('sha256', secret).update(`${kind}:${value}`).digest('hex');
-}
 
 const ACCOUNT_POLICY: AttemptPolicy = {
   limit: THROTTLE_POLICY.accountFailureLimit,

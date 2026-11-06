@@ -4,7 +4,9 @@ import { z } from 'zod';
 import type { RoleName } from '@/lib/auth/roles';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
+import { validCallFor, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
+import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
 import { harness, holdSessionClock, releaseSessionClock, SESSION_NOW, FORBIDDEN_SIGNAL, NOT_FOUND_SIGNAL, REDIRECT_PREFIX } from '../support/session-harness';
 
 /**
@@ -30,7 +32,7 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getUserService: () => shared.userService };
 });
 
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
@@ -51,6 +53,10 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/settings': ['ADMIN'], // Settings
   '/audit': ['ADMIN'], // Audit log
   '/about': ['ADMIN', 'LEAD', 'ENGINEER'], // About: all
+  // The API behind the Users screen (SPEC section 9: Users is the Admin's; architecture section 6 rows "Users" and "Reset user password").
+  '/api/v1/users': ['ADMIN'],
+  '/api/v1/users/[id]': ['ADMIN'],
+  '/api/v1/users/[id]/password-reset': ['ADMIN'],
 };
 
 /** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
@@ -82,20 +88,39 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/': 'redirect:/sign-in?callbackUrl=%2F',
   '/queue': 'redirect:/sign-in',
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
+  '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
 };
 
 const moduleShape = z.record(z.string(), z.unknown());
 
-async function callApi(row: RouteRow, method: HttpMethod, id: string): Promise<Response> {
+/** A call to the route: the ID goes into the path, and a body, when given, is sent as JSON. */
+async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unknown): Promise<Response> {
   const loader = API_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const handler = moduleShape.parse(await loader())[method];
   if (typeof handler !== 'function') throw new Error(`${row.path} exports no ${method}`);
   const { url, params } = fill(row.path, id);
-  const request = new Request(`https://portal.example.test${url}`, { method, headers: { origin: 'https://portal.example.test' } });
+  // A GET or HEAD request cannot carry a body.
+  const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
+  const request = new Request(`https://portal.example.test${url}`, {
+    method,
+    headers: { origin: 'https://portal.example.test', ...(hasBody ? { 'content-type': 'application/json' } : {}) },
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
+  });
   const answer: unknown = await handler(request, { params: Promise.resolve(params) });
   if (!(answer instanceof Response)) throw new Error(`${row.path} ${method} did not answer with a Response`);
   return answer;
+}
+
+/** The valid call for a route (an ID that exists, a body that passes), which the role it lists gets through. */
+function validCall(row: RouteRow, method: HttpMethod): ValidCall {
+  return validCallFor(method, row.path, { targetId: harness.targetId });
+}
+
+/** Calls the route with its valid ID and body. A refused role gets this call too: nothing about it may change the answer. */
+function callValid(row: RouteRow, method: HttpMethod): Promise<Response> {
+  const call = validCall(row, method);
+  return callApi(row, method, call.id, call.body);
 }
 
 type PageOutcome = 'renders' | 'forbidden' | 'not-found' | `redirect:${string}`;
@@ -128,7 +153,11 @@ beforeAll(async () => {
 
 afterAll(releaseSessionClock);
 
-beforeEach(() => harness.signInAs(null));
+// A state-changing request is checked against the portal's own origin first, so the origin it came from is set.
+beforeEach(() => {
+  vi.stubEnv('APP_ORIGIN', 'https://portal.example.test');
+  harness.signInAs(null);
+});
 
 describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
   it('has a row for every screen of the SPEC table, a row for every infrastructure route, and no other', () => {
@@ -167,7 +196,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
 
   it.each(calls.map(([row, method]) => [`${method} ${row.path}`, row, method] as const))('%s: signed out gets 401 and a problem body', async (_name, row, method) => {
     harness.signInAs(null);
-    const response = await callApi(row, method, 'invented-id');
+    const response = await callValid(row, method);
     expect(response.status).toBe(401);
     expect(response.headers.get('Content-Type')).toBe('application/problem+json');
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
@@ -177,10 +206,10 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     '%s',
     async (_name, row, method, role) => {
       harness.signInAs(role);
-      const response = await callApi(row, method, 'invented-id');
+      const response = await callValid(row, method);
       expect(response.headers.get('Cache-Control')).toBe('private, no-store');
       if (expectedRoles(row.path).includes(role)) {
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(validCall(row, method).status);
       } else {
         expect(response.status).toBe(403);
         const { requestId, ...fixed } = z.record(z.string(), z.unknown()).parse(await response.json());
@@ -190,21 +219,45 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     },
   );
 
-  it('a refused role gets the same 403 for an invented ID and a real one, whatever was asked for', async () => {
-    for (const [row, method] of calls) {
-      for (const role of ROLES.filter((candidate) => !expectedRoles(row.path).includes(candidate))) {
+  describe(`QLT-64: the "${SAME_403_LOOP}" loop`, () => {
+    // Built from the manifest and the SPEC table, and it throws when empty, so this loop cannot pass by finding nothing.
+    const refused = refusedRoleCalls((path, role) => expectedRoles(path).includes(role));
+
+    it('has something to check, through the users routes: a Lead and an Engineer are refused on each of them', () => {
+      const names = refused.map((call) => call.name);
+      for (const route of ['GET /api/v1/users', 'POST /api/v1/users', 'PATCH /api/v1/users/[id]', 'POST /api/v1/users/[id]/password-reset']) {
+        expect(names, route).toEqual(expect.arrayContaining([`${route} as LEAD`, `${route} as ENGINEER`]));
+      }
+    });
+
+    it('a refused role gets the same 403 for an invented ID and a real one, whatever was asked for', async () => {
+      let ran = 0;
+      for (const { row, method, role } of refused) {
         harness.signInAs(role);
+        const valid = validCall(row, method);
         const answers = await Promise.all(
-          ['00000000-0000-4000-8000-000000000000', harness.idOf.ADMIN, 'Q-2026-0001'].map(async (id) => {
-            const response = await callApi(row, method, id);
+          ['00000000-0000-4000-8000-000000000000', harness.idOf.ADMIN, 'Q-2026-0001', valid.id].map(async (id) => {
+            const response = await callApi(row, method, id, valid.body);
             const { requestId, ...fixed } = z.record(z.string(), z.unknown()).parse(await response.json());
             expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
             return { status: response.status, fixed };
           }),
         );
-        expect(new Set(answers.map((answer) => JSON.stringify(answer))).size).toBe(1);
+        expect(new Set(answers.map((answer) => JSON.stringify(answer))).size, `${method} ${row.path} as ${role}`).toBe(1);
+        expect(answers[0]?.status).toBe(403);
+        ran += 1;
       }
-    }
+      expectEveryCallRan(SAME_403_LOOP, ran, refused.length);
+    });
+
+    it('is the same 403 with no body at all, and with a body that would not pass validation: the role is checked first', async () => {
+      for (const { row, method, role } of refused) {
+        harness.signInAs(role);
+        const bare = await callApi(row, method, 'invented-id');
+        const invalid = await callApi(row, method, 'invented-id', { unexpected: 'field' });
+        expect([bare.status, invalid.status], `${method} ${row.path} as ${role}`).toEqual([403, 403]);
+      }
+    });
   });
 
   it('a person deactivated mid-session is refused at the next request (401), whatever their role', async () => {
@@ -214,7 +267,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
       if (record === undefined) throw new Error('no such person');
       record.isActive = false;
       try {
-        for (const [row, method] of calls) expect((await callApi(row, method, 'invented-id')).status).toBe(401);
+        for (const [row, method] of calls) expect((await callValid(row, method)).status).toBe(401);
       } finally {
         record.isActive = true;
       }
@@ -222,14 +275,15 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
   });
 
   it('a session is 12 hours from sign-in on the held clock: refused at 12 hours and a second, accepted just before (STD-06)', async () => {
-    const [row, method] = calls[0] ?? [];
-    if (row === undefined || method === undefined) throw new Error('no API route to call');
+    const call = calls.find(([row]) => expectedRoles(row.path).includes('LEAD'));
+    if (call === undefined) throw new Error('no API route a Lead may call');
+    const [row, method] = call;
     harness.signInAs('LEAD');
     try {
       vi.setSystemTime(new Date(SESSION_NOW.getTime() + 12 * 3_600_000 - 1_000));
-      expect((await callApi(row, method, 'invented-id')).status).toBe(200);
+      expect((await callValid(row, method)).status).toBe(validCall(row, method).status);
       vi.setSystemTime(new Date(SESSION_NOW.getTime() + 12 * 3_600_000 + 1_000));
-      expect((await callApi(row, method, 'invented-id')).status).toBe(401);
+      expect((await callValid(row, method)).status).toBe(401);
     } finally {
       vi.setSystemTime(SESSION_NOW);
     }
@@ -242,11 +296,11 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     try {
       for (const [row, method] of calls) {
         record.role = 'ENGINEER';
-        const before = (await callApi(row, method, 'invented-id')).status;
+        const before = (await callValid(row, method)).status;
         record.role = 'LEAD';
-        const after = (await callApi(row, method, 'invented-id')).status;
-        expect(before).toBe(expectedRoles(row.path).includes('ENGINEER') ? 200 : 403);
-        expect(after).toBe(expectedRoles(row.path).includes('LEAD') ? 200 : 403);
+        const after = (await callValid(row, method)).status;
+        expect(before).toBe(expectedRoles(row.path).includes('ENGINEER') ? validCall(row, method).status : 403);
+        expect(after).toBe(expectedRoles(row.path).includes('LEAD') ? validCall(row, method).status : 403);
       }
     } finally {
       record.role = 'ENGINEER';

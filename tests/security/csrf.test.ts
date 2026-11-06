@@ -5,6 +5,7 @@ import { isStateChanging, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from 
 
 import { OWN_PROTECTION } from '../support/route-files';
 import { API_LOADERS } from '../support/route-loaders';
+import { CSRF_LOOP, expectEveryCallRan, stateChangingCalls } from '../support/security-loops';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
@@ -13,9 +14,12 @@ import { harness, holdSessionClock, releaseSessionClock } from '../support/sessi
  * route uses Server Actions. The routes come from the manifest, so the first POST route a later story adds is held to this
  * with no edit here (it needs its loader in `tests/support/route-loaders.ts`, as for the role matrix).
  *
- * No implemented route changes state yet except next-auth's own sign-in and sign-out, which protect themselves with their
- * own CSRF token. So that the loop cannot pass by finding nothing, a control route is added to the manifest for this file
- * alone and the same checks run against it through the real `withRoute`.
+ * The first routes that change state are the users routes of STORY-01.04 (`POST /users`, `PATCH /users/{id}`,
+ * `POST /users/{id}/password-reset`), which make the loop non-empty; next-auth's own sign-in and sign-out protect themselves
+ * with their own CSRF token. A loop over an empty list passes without checking anything (QLT-64, GitHub #81), so the list is
+ * built by `stateChangingCalls`, which throws when it is empty, and the loop counts its iterations. A control route is also
+ * added to the manifest for this file alone, so the methods the real routes do not use (PUT, DELETE) are checked through the
+ * real `withRoute` too.
  */
 
 const APP_ORIGIN = 'https://portal.example.test';
@@ -39,7 +43,7 @@ vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof im
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getUserService: () => shared.userService };
 });
 vi.mock('@/server/http/route-manifest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/server/http/route-manifest')>();
@@ -54,6 +58,9 @@ const { withRoute } = await import('@/server/http/with-route');
 
 const emptyAnswer = z.strictObject({ done: z.literal(true) });
 
+// Built from the manifest, and `stateChangingCalls` throws when it finds no state-changing route, so this file fails to load
+// instead of passing with nothing to check (QLT-64). The users routes (STORY-01.04) are the first that change state.
+const csrfCalls = stateChangingCalls();
 const stateChangingRoutes = ROUTE_MANIFEST.filter(
   (row) => row.kind === 'api' && row.status === 'implemented' && row.roles !== 'public' && row.methods.some((method) => isStateChanging(method)),
 );
@@ -89,9 +96,25 @@ beforeEach(() => {
 });
 
 describe('AC-5: every state-changing route of the manifest', () => {
-  const calls = stateChangingRoutes.flatMap((row) =>
-    row.methods.filter((method) => isStateChanging(method)).map((method) => [`${method} ${row.path}`, row, method] as const),
-  );
+  const calls = csrfCalls.map((call) => [call.name, call.row, call.method] as const);
+
+  it('has something to check, and the users routes are in it (QLT-64)', () => {
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.map(([name]) => name)).toEqual(
+      expect.arrayContaining(['POST /api/v1/users', 'PATCH /api/v1/users/[id]', 'POST /api/v1/users/[id]/password-reset']),
+    );
+  });
+
+  it('runs its checks once for every call: the loops below are not skipped', async () => {
+    let ran = 0;
+    for (const [, row, method] of calls) {
+      const handler = await loadHandler(row, method);
+      const answer = await handler(request(method, { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }), { params: Promise.resolve({}) });
+      expect(answer.status).toBe(403);
+      ran += 1;
+    }
+    expectEveryCallRan(CSRF_LOOP, ran, calls.length);
+  });
 
   it.each(calls)('%s refuses a foreign Origin, even from a signed-in Admin', async (_name, row, method) => {
     const handler = await loadHandler(row, method);
@@ -112,7 +135,16 @@ describe('AC-5: every state-changing route of the manifest', () => {
     expect(code).not.toBe('ORIGIN_REFUSED');
   });
 
-  it('knows which implemented routes change state: none yet except the ones that protect themselves', () => {
+  it('a refused foreign request reaches nothing: no user is added, renamed or reset (nothing was written)', async () => {
+    const before = JSON.stringify(harness.users.records);
+    for (const [, row, method] of calls) {
+      const handler = await loadHandler(row, method);
+      await handler(request(method, { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }), { params: Promise.resolve({ id: harness.targetId }) });
+    }
+    expect(JSON.stringify(harness.users.records)).toBe(before);
+  });
+
+  it('knows which implemented routes change state: the ones above, and the ones that protect themselves', () => {
     const own = ROUTE_MANIFEST.filter((row) => Object.hasOwn(OWN_PROTECTION, row.path));
     expect(own.every((row) => row.roles === 'public')).toBe(true);
     // A route that changes state and is neither on this list nor in the loop above would be a hole.

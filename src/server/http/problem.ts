@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { AppError, DatabaseBusyError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
+import { ActiveAdminExistsError, AppError, DatabaseBusyError, FieldValidationError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
 
 /**
  * The error answer of every API route (architecture section 6, "Error model"): `application/problem+json`
@@ -33,6 +33,8 @@ export interface Problem {
   readonly code: string;
   readonly requestId: string;
   readonly errors?: ReadonlyArray<ProblemDetail>;
+  /** Extension member of a second-Admin refusal (RFC 9457): who holds the one place. Present only on that 409. */
+  readonly currentAdmin?: { readonly id: string; readonly name: string };
 }
 
 /** Fixed words for the refusals, so a role refusal reads the same for every route and every ID asked for (CR-33). */
@@ -88,6 +90,11 @@ export function validationProblem(error: z.ZodError, requestId: string): Problem
 export function problemFromAppError(error: AppError, requestId: string): Problem {
   if (error instanceof UnauthorizedError) return unauthorizedProblem(requestId);
   if (error instanceof ForbiddenError && error.code === FORBIDDEN_CODE) return forbiddenProblem(requestId);
+  if (error instanceof FieldValidationError) return problem(error.httpStatus, error.code, VALIDATION_TITLE, requestId, error.fields);
+  if (error instanceof ActiveAdminExistsError) {
+    const base = problem(error.httpStatus, error.code, error.message, requestId);
+    return error.currentAdmin === null ? base : { ...base, currentAdmin: error.currentAdmin };
+  }
   if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError)) {
     return problem(error.httpStatus, error.code, INTERNAL_TITLE, requestId);
   }

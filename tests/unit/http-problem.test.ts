@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { ConfigurationError, ConflictError, DatabaseBusyError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/lib/errors';
+import {
+  ActiveAdminExistsError,
+  ConfigurationError,
+  ConflictError,
+  DatabaseBusyError,
+  FieldValidationError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/lib/errors';
 import {
   forbiddenProblem,
   FORBIDDEN_CODE,
@@ -72,6 +82,34 @@ describe('the problem of an application error', () => {
 
   it('a busy database is a 503 with its own safe message', () => {
     expect(problemFromAppError(new DatabaseBusyError(), ID)).toMatchObject({ status: 503, code: 'DATABASE_BUSY', title: 'The service is busy. Try again in a moment.' });
+  });
+
+  it('a field error is a 422 with the fields named and the title of every other validation failure (STORY-01.04 AC-1)', () => {
+    const body = problemFromAppError(new FieldValidationError([{ field: 'email', message: 'A user with this e-mail already exists.' }], { code: 'EMAIL_TAKEN' }), ID);
+    expect(body).toEqual({
+      type: 'about:blank',
+      title: 'Check the values and try again.',
+      status: 422,
+      code: 'EMAIL_TAKEN',
+      requestId: ID,
+      errors: [{ field: 'email', message: 'A user with this e-mail already exists.' }],
+    });
+  });
+
+  it('a second Admin is a 409 with the fixed sentence as its title and the current Admin named (STORY-01.04 AC-3)', () => {
+    const body = problemFromAppError(new ActiveAdminExistsError({ id: 'u-1', name: 'Invented Admin' }), ID);
+    expect(body).toEqual({
+      type: 'about:blank',
+      title: 'There is already an active Admin. Only one Admin can be active.',
+      status: 409,
+      code: 'ADMIN_ALREADY_ACTIVE',
+      requestId: ID,
+      currentAdmin: { id: 'u-1', name: 'Invented Admin' },
+    });
+  });
+
+  it('a second Admin whose current Admin could not be read back names nobody and omits the member', () => {
+    expect(problemFromAppError(new ActiveAdminExistsError(null), ID)).not.toHaveProperty('currentAdmin');
   });
 
   it('never carries the cause of an error', () => {

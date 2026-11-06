@@ -30,6 +30,19 @@ export class ValidationError extends AppError {
   }
 }
 
+/** One message for one field of a form, as the API returns it (`errors` in the problem body). */
+export interface FieldProblem {
+  readonly field: string;
+  readonly message: string;
+}
+
+/** A 422 that names the fields at fault, so a form shows each message under its own field. Messages are safe to show. */
+export class FieldValidationError extends ValidationError {
+  constructor(readonly fields: ReadonlyArray<FieldProblem>, options: AppErrorOptions = {}) {
+    super(fields.map((entry) => entry.message).join(' '), options);
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message = 'Sign in to continue.', options: AppErrorOptions = {}) {
     super(options.code ?? 'UNAUTHORIZED', 401, message, options.cause);
@@ -51,6 +64,19 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {
     super(options.code ?? 'CONFLICT', 409, message, options.cause);
+  }
+}
+
+/** The one Admin the portal allows is already active (STORY-01.04 AC-3, CONSTRAINT-04). */
+export const ADMIN_ALREADY_ACTIVE_CODE = 'ADMIN_ALREADY_ACTIVE';
+
+/**
+ * A second active Admin was asked for. The sentence is fixed; the current Admin is named in `currentAdmin` so the page can
+ * say who it is (SCR-14). It is null when the Admin could not be read back, which only a race between two requests causes.
+ */
+export class ActiveAdminExistsError extends ConflictError {
+  constructor(readonly currentAdmin: { readonly id: string; readonly name: string } | null) {
+    super('There is already an active Admin. Only one Admin can be active.', { code: ADMIN_ALREADY_ACTIVE_CODE });
   }
 }
 

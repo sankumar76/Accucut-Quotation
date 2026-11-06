@@ -113,6 +113,20 @@ const ROWS: ReadonlyArray<RouteRow> = [
     hiddenInProduction: true,
   },
   { path: '/api/v1/me', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-01.04 (SCR-14). The Admin only; the address `/users` and the three API paths are as architecture section 6 plans them.
+  {
+    path: '/users',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-14',
+    nav: { group: 'Administration', label: 'Users', order: 10, icon: 'users' },
+  },
+  { path: '/api/v1/users', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/users/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/users/[id]/password-reset', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
   {
@@ -184,16 +198,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
 
   // ---- Planned: Administration (Admin) -------------------------------------------------------------------------------
-  {
-    path: '/users',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-14',
-    nav: { group: 'Administration', label: 'Users', order: 10, icon: 'users' },
-  },
   {
     path: '/settings',
     kind: 'page',

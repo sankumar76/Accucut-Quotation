@@ -40,6 +40,40 @@ function isBusyError(error: unknown, depth = 0): boolean {
   return isBusyError(error['cause'], depth + 1);
 }
 
+/** PostgreSQL's error code for a unique constraint or unique index that refused a row. */
+const UNIQUE_VIOLATION = '23505';
+
+/** Prisma's own code for the same refusal, when a driver adapter did not carry the PostgreSQL code through. */
+const PRISMA_UNIQUE_VIOLATION = 'P2002';
+
+function stringsOf(value: unknown): ReadonlyArray<string> {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/**
+ * What a unique constraint or unique index named when it refused a row: the column names (Prisma's driver adapter
+ * reads them from the error's detail line), or the constraint's own name. `null` when the error is not a unique violation.
+ * The partial index that allows one active Admin names its column `role`, and the e-mail constraint names `email`,
+ * so a repository can tell the two apart without reading a message.
+ */
+export function uniqueViolationOf(error: unknown): ReadonlyArray<string> | null {
+  if (!isRecord(error)) return null;
+  const adapterError = isRecord(error['meta']) ? error['meta']['driverAdapterError'] : undefined;
+  const driverCause = isRecord(adapterError) ? adapterError['cause'] : undefined;
+  if (isRecord(driverCause) && (driverCause['originalCode'] === UNIQUE_VIOLATION || driverCause['kind'] === 'UniqueConstraintViolation')) {
+    const constraint = driverCause['constraint'];
+    if (isRecord(constraint)) {
+      const names = [...stringsOf(constraint['fields']), ...stringsOf([constraint['index']])];
+      if (names.length > 0) return names;
+    }
+    return [];
+  }
+  if (error['code'] === PRISMA_UNIQUE_VIOLATION) return isRecord(error['meta']) ? stringsOf(error['meta']['target']) : [];
+  // A raw `pg` error: it names the constraint or index.
+  if (error['code'] === UNIQUE_VIOLATION) return typeof error['constraint'] === 'string' ? [error['constraint']] : [];
+  return null;
+}
+
 /** `DatabaseBusyError` (with the original as its cause) for a timeout; the same value for anything else. */
 export function translateDatabaseError(error: unknown): unknown {
   return isBusyError(error) ? new DatabaseBusyError({ cause: error }) : error;
