@@ -159,7 +159,8 @@ describe('CI workflow', () => {
     // The version is read from the installed package, before any cache step uses it.
     const versions = stepNamed('Read the Playwright and runner image versions');
     expect(versions).toContain("require('@playwright/test/package.json').version");
-    expect(versions).toContain('${ImageOS}-${ImageVersion}');
+    // The system-package key: the manual epoch, the runner image and the Playwright version.
+    expect(versions).toContain('debs_key=playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}');
     expect(WORKFLOW.indexOf('Read the Playwright and runner image versions')).toBeLessThan(WORKFLOW.indexOf('name: "Cache the Playwright browsers'));
   });
 
@@ -168,8 +169,8 @@ describe('CI workflow', () => {
     expect(debs).toMatch(/uses: actions\/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/);
     expect(debs).toContain('id: debs');
     expect(debs).toContain('path: ${{ runner.temp }}/playwright-debs');
-    expect(debs).toContain('key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}');
-    // No new action: every `uses:` in the workflow is one of the four already pinned before this change.
+    expect(debs).toContain('key: ${{ steps.versions.outputs.debs_key }}');
+    // No new action: every `uses:` in the workflow is one of the three already pinned before this change.
     const actions = new Set(LINES.filter((line) => /^\s*(?:- )?uses:/.test(line)).map((line) => line.replace(/^\s*(?:- )?uses:\s*/, '').split('@')[0]));
     expect([...actions].sort()).toEqual(['actions/cache', 'actions/checkout', 'actions/setup-node']);
   });
@@ -178,6 +179,8 @@ describe('CI workflow', () => {
     const install = stepNamed('Stage 12a: Playwright browser and system packages');
     expect(install).toContain('timeout-minutes: 8');
     expect(install).toContain('PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}');
+    // The fallback warning prints this key (PRF-03 / QLT-81), so it is the same value the cache step used.
+    expect(install).toContain('PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}');
     expect(install).toContain('bash scripts/ci/playwright-system-deps.sh');
     expect(install).not.toMatch(/^\s*if:/m);
     expect(install).not.toContain('continue-on-error');
@@ -189,6 +192,23 @@ describe('CI workflow', () => {
     // Still the one job named for the required check.
     expect(WORKFLOW.match(/^ {4}name: Stages 1 to 11$/gm)).toHaveLength(1);
     expect(WORKFLOW).not.toMatch(/^\s+needs:/m);
+  });
+
+  it('PRF-03 / QLT-81 (AQP-206): CACHE_EPOCH is a single quoted constant in the job environment, raised by hand; there is no automatic re-save', () => {
+    const epochs = LINES.filter((line) => /^\s*CACHE_EPOCH:/.test(line));
+    expect(epochs).toHaveLength(1);
+    expect(epochs[0]).toMatch(/^ {2}CACHE_EPOCH: '\d+'$/);
+    expect(WORKFLOW.indexOf('CACHE_EPOCH:')).toBeLessThan(WORKFLOW.indexOf('jobs:'));
+    // Not saved a second time under another key: the cache action is used as one step, never split into save steps.
+    expect(WORKFLOW).not.toMatch(/actions\/cache\/(save|restore)/);
+  });
+
+  it('PRF-03 / QLT-81 (AQP-206): the README documents both ways to replace a bad system-package cache entry', () => {
+    const readme = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
+    const section = readme.slice(readme.indexOf('### Playwright install cache'), readme.indexOf('## Performance checks'));
+    expect(section).toContain('gh cache delete');
+    expect(section).toContain('CACHE_EPOCH');
+    expect(section).toContain('actions: write');
   });
 
   it('DEF-015 (AQP-206): the script bounds apt on a miss and falls back to it when the cached install fails', () => {

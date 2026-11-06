@@ -39,6 +39,9 @@ env:
   NPM_VERSION: '11.17.0'
   GITLEAKS_VERSION: '8.30.1'
   GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+  # Part of the Playwright system-package cache key (stage 12a). Raise it by hand, in a reviewed change, to start a new
+  # key when the cached entry is bad. Never changed otherwise.
+  CACHE_EPOCH: '1'
 
 jobs:
   verify:
@@ -138,7 +141,7 @@ jobs:
 
       # ---- Stage 9: build --------------------------------------------------------------------
       # The cache is keyed on the lockfile and the sources, with the lockfile alone as the fallback, so a change to
-      # one page still reuses the rest. It holds build output only (no secret, no setting). From a fork it is read-only.
+      # one page still reuses the rest. It holds build output only (no secret, no setting), and a pull request's entries are visible to that pull request only.
       - name: "Cache the Next.js build cache"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -217,16 +220,24 @@ jobs:
       # apt-get against the runner's Ubuntu mirror on every run with no bound, and a slow mirror stalled the job for up to
       # ten minutes. Now:
       #   - the browser download is cached by Playwright version;
-      #   - the browser's system packages (.deb files) are cached by runner image and Playwright version. On a hit they are
-      #     installed with dpkg and no network. On a miss, or if that install fails, apt runs with a 20 s stall timeout and
-      #     3 retries, and the step stops after 8 minutes; the packages it downloaded are saved to the cache.
-      # The caches hold downloaded packages and browser files only (no secret, no setting), use the same pinned cache
-      # action as stage 9, and are written only by runs in this repository (a fork's pull request can read, not write).
+      #   - the browser's system packages (.deb files) are cached by CACHE_EPOCH, runner image and Playwright version. On a
+      #     hit they are installed with dpkg and no network. On a miss, or if that install fails, apt runs with a 20 s
+      #     stall timeout and 3 retries, and the step stops after 8 minutes; on a miss the packages it downloaded are saved.
+      #   - a cache key is immutable and a hit is never saved again, so a bad entry is not replaced by a later run. The
+      #     fallback warning prints the key and the command that removes it (`gh cache delete <key>`, run by a maintainer),
+      #     or a commit that raises CACHE_EPOCH (top of this file) starts a new key. README, "Playwright install cache".
+      # The caches hold downloaded packages and browser files only (no secret, no setting) and use the same pinned cache
+      # action as stage 9. Caches are scoped by ref: a pull request's run restores entries from its own ref or from
+      # master, and what it saves is visible to that pull request only. The entries every branch reads are written only
+      # by `push` runs on master, that is by reviewed code.
       - name: "Read the Playwright and runner image versions"
         id: versions
         run: |
-          echo "playwright=$(node --print "require('@playwright/test/package.json').version")" >> "${GITHUB_OUTPUT}"
-          echo "image=${ImageOS}-${ImageVersion}" >> "${GITHUB_OUTPUT}"
+          playwright="$(node --print "require('@playwright/test/package.json').version")"
+          {
+            echo "playwright=${playwright}"
+            echo "debs_key=playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: "Cache the Playwright browsers"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -239,12 +250,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/playwright-debs
-          key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}
+          key: ${{ steps.versions.outputs.debs_key }}
 
       - name: "Stage 12a: Playwright browser and system packages"
         timeout-minutes: 8
         env:
           PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+          PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
           PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
         run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
 
