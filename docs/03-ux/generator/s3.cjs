@@ -140,15 +140,16 @@ function scr15() {
 }
 
 /* ============================ SCR-16 Audit log ============================ */
-const AUD = [
+const AUD_RAW = [
   ['05 Nov 2026, 14:35', 'Meera Iyer', 'Price removed', 'Q-2026-0291', `Price ${L.inr(4750)} removed from the estimate. The audit log keeps it`, false],
   ['05 Nov 2026, 14:30', 'Meera Iyer', 'Approval cancelled', 'Q-2026-0291', `Approved at ${L.inr(4750)} → Cancelled. Reason: the customer withdrew the order`, false],
   ['05 Nov 2026, 11:20', 'Kiran Bose', 'Approval', 'Q-2026-0318', `Not approved → Approved at ${L.inr(L.APPROVED)}`, false],
   ['05 Nov 2026, 11:20', 'Kiran Bose', 'Price override', 'Q-2026-0318', `Calculated ${L.inr(L.BL)} → Approved ${L.inr(L.APPROVED)}. Reason: ${L.OVERRIDE_REASON}`, false],
   ['04 Nov 2026, 16:05', 'Sunita Pillai', 'Unlock', 'Q-2026-0299', 'Approved → Draft. Reason: customer revised the housing', false],
   ['04 Nov 2026, 15:20', 'Divya Shah', 'Quantity warning', 'Q-2026-0314', 'Went ahead after a warning for 0 in QTY per Assy on 2 rows: 2.2 Support arm, 2.3 Spacer', false],
+  ['04 Nov 2026, 10:20', 'Meera Iyer', 'User change', 'Arjun Rao', 'Arjun Rai → Arjun Rao', false],
   ['04 Nov 2026, 10:05', 'Meera Iyer', 'User change', 'Divya Shah', 'Active → Deactivated', false],
-  ['04 Nov 2026, 09:30', 'Sunita Pillai', 'Task change', 'Q-2026-0314', 'Engineer Priya Nair → Divya Shah; deadline 03 Nov 2026, 17:00 → 04 Nov 2026, 12:00', false],
+  ['04 Nov 2026, 09:30', 'Sunita Pillai', 'Task change', 'Q-2026-0314', 'Engineer Priya Nair → Divya Shah; deadline 03 Nov 2026, 17:00 IST → 04 Nov 2026, 12:00 IST', false],
   ['03 Nov 2026, 14:10', 'Sunita Pillai', 'Price override', 'Q-2026-0299', 'Calculated ₹ 4,812.40 → Approved ₹ 4,750.00. No reason given', false],
   ['03 Nov 2026, 14:10', 'Sunita Pillai', 'Approval', 'Q-2026-0299', 'Not approved → Approved at ₹ 4,750.00', false],
   ['03 Nov 2026, 09:40', 'Meera Iyer', 'Master data edit', 'Process master, Cutting-Rate-per-Sec', '0.47 → 0.52', false],
@@ -156,25 +157,28 @@ const AUD = [
   ['02 Nov 2026, 11:30', 'Meera Iyer', 'Checkpoint revert', 'Checkpoint "Before AY insert"', 'Version 8 → Version 9 (from version 7)', true],
   ['01 Nov 2026, 17:30', 'Meera Iyer', 'Formula edit', 'Column AL, Cutting Cost', 'P * Cutting-Rate-per-Sec → P * Cutting-Rate-per-Sec * 1', true],
 ];
+const AUD = AUD_RAW.map((r) => [r[0] + ' IST', ...r.slice(1)]);
 const arrows = (s) => s.split(' → ').join(' ' + L.ARR + ' ');
 function scr16() {
   const tr = (a) => `<tr><td class="nowrap t-num">${a[0]}</td><td>${a[1]}</td><td>${a[5] ? badge('brand', a[2], 'sliders') : badge('neutral', a[2])}</td><td>${a[3]}</td><td>${arrows(a[4])}</td></tr>`;
   const cardsOf = (list) => list.slice(0, 3).map((a) => `<article class="card task-card"><div class="row-nowrap"><span class="t-strong">${a[2]}</span><span class="spacer"></span><span class="t-label t-muted">${a[0]}</span></div><div class="t-body">${a[3]}</div><div class="t-body t-muted">${arrows(a[4])}</div><div class="t-label t-muted">${a[1]}</div></article>`).join('');
   const cfg = AUD.filter((a) => a[5]);
-  const table = (list) => `<div class="table-wrap hide-mobile"><table class="table"><caption class="sr-only">Audit log, newest first</caption><thead><tr><th scope="col">When (IST)</th><th scope="col">Who</th><th scope="col">Event</th><th scope="col">Object</th><th scope="col">Before ${L.ARR} after</th></tr></thead><tbody>${list.map(tr).join('')}</tbody></table></div><div class="stack show-mobile" style="padding:var(--s-4)">${cardsOf(list)}</div>`;
+  const table = (list) => `<div class="table-wrap hide-mobile"><table class="table"><caption class="sr-only">Audit log, newest first</caption><thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Event</th><th scope="col">Object</th><th scope="col">Before ${L.ARR} after</th></tr></thead><tbody>${list.map(tr).join('')}</tbody></table></div><div class="stack show-mobile" style="padding:var(--s-4)">${cardsOf(list)}</div>`;
   const main = `<main class="page" id="main">
-   ${pageHead({ title: 'Audit log', sub: 'A permanent record of approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings gone ahead on, master data, user and task changes and (from Release 2) configuration changes. Nobody can edit or delete an entry.' })}
+   ${pageHead({ title: 'Audit log', sub: 'A record of approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings gone ahead on, master data and user changes and, from Release 2, task and configuration changes. The portal has no way to edit or delete an entry.' })}
    <section class="card"><div class="card-body stack"><div class="row" style="align-items:flex-end">
      <div class="field" style="flex:1 1 180px"><label class="field-label" for="a-user">Who</label><select class="select" id="a-user"><option>Everyone</option><option>Divya Shah</option><option>Kiran Bose</option><option>Meera Iyer</option><option>Sunita Pillai</option></select></div>
      <div class="field" style="flex:1 1 200px"><label class="field-label" for="a-type">Event</label><select class="select" id="a-type"><option>All events</option><option>Approval</option><option>Unlock</option><option>Price override</option><option>Approval cancelled</option><option>Price removed</option><option>Quantity warning</option><option>Master data edit</option><option>User change</option><option>Task change (Release 2)</option><option>Configuration change (Release 2)</option></select></div>
      <div class="field" style="flex:1 1 150px"><label class="field-label" for="a-from">From</label><input class="input" id="a-from" type="date"></div><div class="field" style="flex:1 1 150px"><label class="field-label" for="a-to">To</label><input class="input" id="a-to" type="date"></div></div></div>
     <div data-show="default"> ${table(AUD)}<div class="card-foot"><span class="t-label t-muted">Showing ${AUD.length} of ${AUD.length} entries, newest first</span></div></div>
     <div data-show="config" hidden>${table(cfg)}<div class="card-foot"><span class="t-label t-muted">Showing ${cfg.length} configuration entries (field, formula and revert changes). A revert shows the version it made and the version it copied.</span></div></div>
+    <div data-show="none" hidden>${emptyState({ ic: 'shield', title: 'No entries yet', text: 'Changes to users, masters and approvals are recorded here as they happen.' })}</div>
     <div data-show="empty" hidden>${emptyState({ ic: 'shield', title: 'No entries match', text: 'Try a wider date range or another event type.', action: '<button class="btn btn-secondary" type="button">Clear filters</button>' })}</div>
     ${loadingBlock(6, 5)}${errorBlock('the audit log')}</section>
+   ${reviewNote('Version 0.16 (AQP-74). Every time is written with IST, in the table and on the phone cards ("06 Nov 2026, 17:00 IST"). The description says what the portal does, not more: it has no way to edit or delete an entry, and someone with access to the server could (ARCH-R8). "No entries yet" is the log with no filter set and nothing recorded; "No entries match" is a filter that finds nothing, and only that one has Clear filters. The Release 1 build lists only the event kinds that exist in Release 1: Task change and Configuration change are labelled Release 2 here and join the filter with their stories.')}
    ${reviewNote('Admin only. Entries have no edit or delete control, anywhere. The "Configuration" filter shows Release 2 events (FR-079); Release 1 lists approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings (the event is calculation.warning_acknowledged) and master data edits (FR-011, FR-104), and the portal also records user changes and, from Release 2, task reassignments (FR-006, FR-040) and configuration changes. Lead edits to inputs are not logged in this design (OQ-ARCH-07). SPEC §9 lists no audit screen; this one is added to make FR-011 and FR-079 usable.')}
   </main>`;
-  return page({ id: 'SCR-16', file: 'SCR-16.html', name: 'Audit log and change history', title: 'Audit log', desc: 'A permanent record of approvals, unlocks, price overrides and configuration changes.', role: 'admin', active: 'audit', states: ['default:All events', 'config:Configuration (R2)', 'empty', 'loading', 'error'], roleLabel: 'Admin', release: 'R1; user and config events R2', frs: 'FR-011, 079, 104, 107, 108', body: main });
+  return page({ id: 'SCR-16', file: 'SCR-16.html', name: 'Audit log and change history', title: 'Audit log', desc: 'A record of approvals, unlocks, price overrides, master data and user changes.', role: 'admin', active: 'audit', states: ['default:All events', 'config:Configuration (R2)', 'empty:No entries match', 'none:No entries yet', 'loading', 'error'], roleLabel: 'Admin', release: 'R1; user and config events R2', frs: 'FR-011, 079, 104, 107, 108', body: main });
 }
 
 /* ============================ SCR-23 Account ============================ */

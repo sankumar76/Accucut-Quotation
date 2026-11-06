@@ -67,3 +67,25 @@ The browser cache is keyed on the Playwright version. Stage 12 runs only the tes
 
 ## Previous Findings (re-review only)
 n/a (first quality review of this PR).
+
+---
+
+## Round 2: re-review of 71ebe79..a330eb0 (DL-091)
+
+| Field | Value |
+|-------|-------|
+| Commit reviewed | a330eb071c9fb162f071add3660ba8711020dc40; its tree equals 762f1ea (checked with `git diff --quiet`), and the two temporary negative-control commits are reverted |
+| Scope | My own items QLT-79, QLT-80 and QLT-81; Jira 11047; PR comment 6676728434 |
+| CI | 42160587281 green |
+| **Verdict** | APPROVE WITH COMMENTS. New findings: Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 0 |
+
+**Previous findings**
+
+| ID | Prior severity | Status | Evidence |
+|----|----------------|--------|----------|
+| QLT-79 | Minor | **Fixed** | The fake `npx` fails only `install-deps`, and the test asserts that the browser install is not reached. Planted `set -euo` → `set -uo`: exactly one test fails, "QLT-79: … the step fails and the browser install is not reached" (1 failed, 30 passed with `ci-workflow.test.ts`) |
+| QLT-80 | Minor | **Fixed** | The scenarios run once in `beforeAll` (120 s hook limit), and the tests read the outcomes. Four local Windows runs: 8 of 8 passed each time, in 20.1, 7.9, 6.9 and 5.2 s |
+| QLT-81 | Info | **Fixed** | The warning names `cache key <key>` and `gh cache delete <key>`, or "raise CACHE_EPOCH in ci.yml". `CACHE_EPOCH: '1'` is part of the key (`playwright-debs-e<epoch>-<image>-<version>`). The README "Playwright install cache" section covers both routes (delete by a maintainer, or raise the epoch in a reviewed PR) and the ref scoping. Planted faults: a warning without the key fails the QLT-81 test; a key without the epoch fails the workflow test |
+| QLT-82, QLT-83, QLT-84 | Info | Unchanged | Not in scope for this round |
+
+**Spot check of 762f1ea:** the temporary list is cleaned up on every exit (`trap … EXIT`; STD-04 test), and the workflow comments are corrected on cache scoping. No issue found.

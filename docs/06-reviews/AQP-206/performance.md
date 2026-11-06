@@ -77,3 +77,65 @@ Two Minor findings concern how often the miss path will run. The repository's ca
 
 ## Previous Findings (re-review only)
 n/a (first round).
+
+---
+
+# Round 2 — head a330eb0 (same tree as 762f1ea; CI run 42160587281), narrow: PRF-03 epoch handling, PRF-02 prune list (DL-091)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 |
+| Commit reviewed | a330eb0 |
+| Date | 2026-11-06 |
+| **Verdict** | APPROVE |
+
+## Summary (round 2)
+PRF-03 is fixed with the manual-epoch option. The key is `playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}`, with `CACHE_EPOCH: '1'` in the job env. There is no automatic re-save, and a fallback prints the key, the `gh cache delete` command and the epoch advice. I verified every run the developer cited. Timings are unchanged within the spread, a hit downloads nothing, and an unreachable mirror fails fast and red. For PRF-02, the prune list below frees about 7.0 GB now and about 9.6 GB in all.
+
+| Severity | Open after round 2 |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 2 (PRF-01, PRF-04); PRF-02 stays a post-merge action |
+
+## Checks Run (round 2)
+| Check | Command | Result |
+|-------|---------|--------|
+| Diff since round 1 | `git diff 71ebe79 a330eb0 -- .github scripts` | `CACHE_EPOCH: '1'` (job env); `debs_key` from the versions step; the key passed to 12a; fallback warning with the key and the delete command; `trap` cleanup of the temp file; comments on cache scoping |
+| Runs | `gh api .../attempts/{n}/jobs` and job logs for 42154546800 (1 to 3), 42159562776, 42160257283, 42160587281 | See table |
+| Cache list | `caches.txt` in the scratchpad (snapshot before the e1 entries), PR states from `gh pr list --state all` | Open PRs: #26, #27, #28, #87, #92 |
+
+| Run | Head | Job | 12a | 12 | apt `Get:` | Log |
+|---|---|---|---|---|---|---|
+| 42154546800 a1 | 762f1ea | 365 s | 9 s | 187 s | 27 | `Cache not found … e1-…`; `Cache saved with key: playwright-debs-e1-ubuntu26-20261101.186.1-1.64.1` |
+| a2 | 762f1ea | 378 s | 3 s | 205 s | 0 | restored e1 |
+| a3 | 762f1ea | 445 s | 3 s | 245 s | 0 | restored e1 |
+| 42159562776 | 85cdf25 | 377 s | 9 s | 190 s | 18 | warning with the key and `gh cache delete` / raise CACHE_EPOCH |
+| 42160257283 (control) | 785e4df | 150 s | 5 s, failure | skipped | 0 | key e99 not found; unreachable proxy; exit code 1 |
+| 42160587281 | a330eb0 | 445 s | 3 s | 250 s | 0 | restored e1 |
+
+Medians of the five green runs: job 378 s, 12a + 12 208 s. Stage 11b is identical in all runs. The control covers the *unreachable* mirror; a slow trickle is still stopped only by the 8-minute step (PRF-01). After the merge, master's first push run misses once on e1 (the PR's entry is PR-scoped), about 9 s on a healthy mirror.
+
+## PRF-02: prune list for the delivery lead (snapshot: 67 entries, 10,495 MB)
+Rule: an entry is visible only to its own ref and to master. A current run restores only a key with the current lockfile hash (`665576d2…`), and among `restore-keys` matches it takes the newest.
+
+| # | Entries to delete | When safe | Count | Frees | How |
+|---|---|---|---|---|---|
+| 1 | Every entry of the **closed** PR refs #16, 25, 33, 45, 56, 58, 62, 70, 71, 72, 73, 74, 75, 79, 85 (nextjs about 1,533 MB, node-cache about 2,578 MB, old browser key about 1,465 MB) | Now | 39 | about 5,576 MB | `gh cache delete --all --ref refs/pull/<n>/merge` per PR |
+| 2 | **master** entries with an **old lockfile hash**: node-cache `4a6a338c…`, `6a70f1cd…`, `ea8b6061…`; nextjs `4a6a338c…` (×2); `playwright-Linux-4a6a338c…` | Now | 6 | about 1,146 MB | `gh cache delete <key> --ref refs/heads/master` |
+| 3 | **master** nextjs entries with the current lockfile but **older than the newest** (last used 2026-11-06 00:57, 2026-11-05 12:14, 08:49, 03:57) | Now | 4 | about 274 MB | as row 2 |
+| 4 | **master** `playwright-Linux-665576d2…` (old browser key, current lockfile) | After #92 merges and #87 is merged or rebased onto the new `ci.yml` | 1 | about 293 MB | as row 2 |
+| 5 | Stale **open** PRs #26, #27, #28 (old lockfiles) | Only if closed as abandoned | 11 | about 2,337 MB | as row 1 |
+| keep | #87 and #92 entries (524 MB); master's newest nextjs (76 MB) and node-cache (271 MB) | n/a | 6 | n/a | n/a |
+
+Rows 1 to 3 total 49 entries and about 7.0 GB, taking the store to about 3.5 GB. With rows 4 and 5, about 0.9 GB remains, plus the new e1 entries. Entries unused for 7 days expire by themselves, so rows 1 to 3 would also go by about 2026-11-10 to 13. Deleting them now removes the eviction pressure on `playwright-debs-e1`.
+
+## Previous Findings (round 1)
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| PRF-01 | Info | Holds | The bound is unchanged; the control shows the fast-fail path |
+| PRF-02 | Minor | Converted to a post-merge action | Prune list above; thread resolved with the list |
+| PRF-03 | Minor | **Fixed** | Epoch key, no automatic re-save, actionable warning; thread resolved |
+| PRF-04 | Info | Holds | Expected nightly p95 about 8:00 to 8:20 once about 20 post-merge runs exist |
