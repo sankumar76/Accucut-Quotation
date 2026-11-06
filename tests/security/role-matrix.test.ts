@@ -37,6 +37,7 @@ vi.mock('@/server/composition', async () => {
     getUserRepository: () => shared.users,
     getUserService: () => shared.userService,
     getAuditService: () => shared.auditService,
+    getMastersService: () => shared.mastersService,
   };
 });
 
@@ -64,6 +65,9 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/users/[id]/password-reset': ['ADMIN'],
   // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
   '/api/v1/audit': ['ADMIN'],
+  // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
+  '/api/v1/process-items': ['ADMIN'],
+  '/api/v1/process-items/[id]': ['ADMIN'],
 };
 
 /** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
@@ -97,6 +101,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
+  '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
 };
 
 const moduleShape = z.record(z.string(), z.unknown());
@@ -231,9 +236,19 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     // Built from the manifest and the SPEC table, and it throws when empty, so this loop cannot pass by finding nothing.
     const refused = refusedRoleCalls((path, role) => expectedRoles(path).includes(role));
 
-    it('has something to check, through the users routes and the audit route: a Lead and an Engineer are refused on each of them', () => {
+    it('has something to check, through the users routes, the audit route and the Process master routes: a Lead and an Engineer are refused on each of them', () => {
       const names = refused.map((call) => call.name);
-      const routes = ['GET /api/v1/users', 'POST /api/v1/users', 'PATCH /api/v1/users/[id]', 'POST /api/v1/users/[id]/password-reset', 'GET /api/v1/audit'];
+      const routes = [
+        'GET /api/v1/users',
+        'POST /api/v1/users',
+        'PATCH /api/v1/users/[id]',
+        'POST /api/v1/users/[id]/password-reset',
+        'GET /api/v1/audit',
+        'GET /api/v1/process-items',
+        'POST /api/v1/process-items',
+        'PATCH /api/v1/process-items/[id]',
+        'DELETE /api/v1/process-items/[id]',
+      ];
       for (const route of routes) {
         expect(names, route).toEqual(expect.arrayContaining([`${route} as LEAD`, `${route} as ENGINEER`]));
       }

@@ -23,6 +23,9 @@ export interface CallContext {
   readonly targetId: string;
 }
 
+/** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
+const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
+
 const DEFAULT_CALL: ValidCall = { id: 'invented-id', status: 200 };
 
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
@@ -39,6 +42,15 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: context.targetId, body: { name: 'Invented Renamed Engineer' }, status: 200 };
     case 'POST /api/v1/users/[id]/password-reset':
       return { id: context.targetId, body: { password: 'invented-temporary-password-1' }, status: 204 };
+    // STORY-02.01: the Process Master routes. The ID is a seed rate no formula uses (so the delete can answer 204) and the body is invented.
+    case 'GET /api/v1/process-items':
+      return DEFAULT_CALL;
+    case 'POST /api/v1/process-items':
+      return { id: 'invented-id', body: { name: 'Invented-rate-per-sqin', unit: 'per sq in', defaultValue: '1.37' }, status: 201 };
+    case 'PATCH /api/v1/process-items/[id]':
+      return { id: PLATING_ITEM_ID, body: { defaultValue: '2.37' }, status: 200 };
+    case 'DELETE /api/v1/process-items/[id]':
+      return { id: PLATING_ITEM_ID, status: 204 };
     default:
       return DEFAULT_CALL;
   }
