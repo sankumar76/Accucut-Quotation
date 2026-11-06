@@ -51,7 +51,7 @@ env:
   GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
   # Part of the Playwright system-package cache key (stage 12a). Raise it by hand, in a reviewed change, to start a new
   # key when the cached entry is bad. Never changed otherwise.
-  CACHE_EPOCH: '1'
+  CACHE_EPOCH: '2'
 
 jobs:
   verify:
