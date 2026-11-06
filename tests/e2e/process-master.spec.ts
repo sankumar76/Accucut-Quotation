@@ -17,7 +17,7 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * Names and numbers are invented (`n.37`, ADR-014).
  *
  * Width (test strategy section 10.5, AQP-199): the tests that check server rules and message text read no layout (adding a rate and
- * its refusals, editing, searching). They are proposed for `@one-width` in the hand-off of AQP-113 and are NOT tagged here: the
+ * its refusals, editing, searching). They are proposed for the one-width tag in the hand-off of AQP-113 and are NOT tagged here: the
  * architect rules on the list, and `tests/unit/one-width-tag.test.ts` pins it.
  */
 
