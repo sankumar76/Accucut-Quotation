@@ -378,6 +378,8 @@ jobs:
     name: Stages 1 to 11
     needs: [verify, e2e]
     if: ${{ always() }}
+    # No permission at all: the job reads no repository content and calls no API, so it needs no token scope.
+    permissions: {}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

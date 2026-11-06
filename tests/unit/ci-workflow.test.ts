@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -151,40 +150,14 @@ describe('CI workflow', () => {
     expect(required.match(/needs\.[\w-]+\.result/g)).toHaveLength(2);
   });
 
-  // The fan-in script is run for real, in bash, with each job result: a workflow cannot be run here, but this is its logic.
-  describe('AQP-208 AC-4: the fan-in script, run in bash', () => {
-    const BASH_AVAILABLE = spawnSync('bash', ['--version']).error === undefined;
-    const script = (() => {
-      const block = runBlocks().find((candidate) => candidate.includes('RESULT_VERIFY'));
-      if (block === undefined) throw new Error('No fan-in script');
-      // Dedent the block scalar the way YAML does.
-      const lines = block.split('\n').slice(1);
-      const indent = Math.min(...lines.filter((line) => line.trim() !== '').map((line) => line.length - line.trimStart().length));
-      return lines.map((line) => line.slice(indent)).join('\n');
-    })();
+  // The script of the fan-in step is run in bash, with each combination of results, in tests/unit/ci-fan-in.test.ts.
 
-    function exitCodeFor(verify: string, e2e: string): { status: number | null; output: string } {
-      const result = spawnSync('bash', ['-e', '-c', script], { env: { ...process.env, RESULT_VERIFY: verify, RESULT_E2E: e2e }, encoding: 'utf8' });
-      return { status: result.status, output: `${result.stdout}${result.stderr}` };
-    }
-
-    it.skipIf(!BASH_AVAILABLE)('passes only when every needed job succeeded', () => {
-      expect(exitCodeFor('success', 'success').status).toBe(0);
-    });
-
-    it.skipIf(!BASH_AVAILABLE)('fails when any needed job failed, was cancelled or was skipped, or has no result', () => {
-      for (const bad of ['failure', 'cancelled', 'skipped', '']) {
-        expect(exitCodeFor('success', bad).status, `E2E ${bad}`).toBe(1);
-        expect(exitCodeFor(bad, 'success').status, `VERIFY ${bad}`).toBe(1);
-        expect(exitCodeFor(bad, bad).status, `both ${bad}`).toBe(1);
-      }
-    });
-
-    it.skipIf(!BASH_AVAILABLE)('names the job that did not succeed, and the result', () => {
-      const { output } = exitCodeFor('success', 'cancelled');
-      expect(output).toContain("::error::E2E finished as 'cancelled', not 'success'");
-      expect(output).toContain('VERIFY: success');
-    });
+  it('AQP-208 STD-04: the fan-in job holds no permission at all, because it reads no repository content and calls no API', () => {
+    const required = jobText('required');
+    expect(required).toMatch(/^ {4}permissions: \{\}$/m);
+    // No checkout, no action and no token in that job: only its own script runs.
+    expect(required).not.toMatch(/^\s*uses:/m);
+    expect(required).not.toMatch(/GITHUB_TOKEN|:\s*(read|write)\b/);
   });
 
   it('AQP-208 AC-4: the shards are one matrix job, every shard reports, and the command carries only --shard', () => {
