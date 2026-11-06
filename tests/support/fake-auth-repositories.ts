@@ -93,6 +93,10 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
             },
       );
     },
+    // No lock to take in memory: the fake only has to answer the way the locking read does.
+    findAccountForUpdate(id): Promise<UserAccount | null> {
+      return this.findAccountById(id);
+    },
     hasAnyAdmin: () => Promise.resolve(records.some((record) => record.role === 'ADMIN')),
     list: () =>
       Promise.resolve(

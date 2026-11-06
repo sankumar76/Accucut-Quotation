@@ -12,5 +12,5 @@ export const PATCH = withRoute({
   params: userIdParamsSchema,
   body: updateUserBodySchema,
   output: userSchema,
-  handler: ({ user, params, body }) => getUserService().update(user.id, params.id, body),
+  handler: ({ user, requestId, params, body }) => getUserService().update({ actorId: user.id, actorLabel: user.name, requestId }, params.id, body),
 });

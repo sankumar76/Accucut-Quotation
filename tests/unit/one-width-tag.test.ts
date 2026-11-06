@@ -8,8 +8,8 @@ import { forEachSpec, listPlaywrightSuites } from '../support/playwright-list';
 /**
  * AQP-199 AC-3 (STORY-10.14; test strategy section 10.5): a test that reads no layout may be tagged `@one-width`, which
  * runs it in the desktop project only. The tag hides a test from the mobile and tablet projects, so it is allowed in
- * exactly seven spec files, ruled one by one in section 10.5 (four from AQP-199, two from AQP-65, one from its G7), and on exactly the 35 tests
- * pinned below. Tagging a test anywhere else, or tagging another test in one of the seven files (for example inside a block that the ruling keeps at
+ * exactly nine spec files, ruled one by one in section 10.5 (four from AQP-199, two from AQP-65, one from its G7, two from AQP-74), and on exactly the 47 tests
+ * pinned below. Tagging a test anywhere else, or tagging another test in one of the nine files (for example inside a block that the ruling keeps at
  * three widths), fails here until the ruling and this list are both changed. The E2E suite cannot run in a unit test, so
  * this reads the text of the specs and of the Playwright configuration, and asks Playwright itself to list the tests.
  */
@@ -18,7 +18,7 @@ const TAG = '@one-width';
 const E2E_DIRECTORY = fileURLToPath(new URL('../e2e/', import.meta.url));
 const WIDTH_PROJECTS = ['mobile', 'tablet', 'desktop'] as const;
 
-/** The seven files section 10.5 rules on. Paths are relative to `tests/e2e`, with forward slashes. */
+/** The nine files section 10.5 rules on. Paths are relative to `tests/e2e`, with forward slashes. */
 const RULED_FILES: ReadonlyArray<string> = [
   'aqp-38-qa.spec.ts',
   'axe-helper.spec.ts',
@@ -27,10 +27,12 @@ const RULED_FILES: ReadonlyArray<string> = [
   'users-production.spec.ts',
   'users.spec.ts',
   'aqp-65-qa.spec.ts',
+  'audit-production.spec.ts',
+  'audit.spec.ts',
 ];
 
 /**
- * The 35 tests ruled to run at one width, as `file > blocks > title`: 22 from AQP-199, 12 from AQP-65 and 1 from its G7 (all of
+ * The 47 tests ruled to run at one width, as `file > blocks > title`: 22 from AQP-199, 12 from AQP-65, 1 from its G7 and 12 from AQP-74 (all of
  * users-production.spec.ts, and seven in users.spec.ts). Everything else keeps three widths, in particular
  * "SCR-01 at this width (AC-8)" and the account-menu test in sign-in.spec.ts, the AC-8 keyboard and screen-reader
  * block and the locked and "could not be checked" states in aqp-38-qa.spec.ts, and in users.spec.ts the list (scroll and
@@ -75,6 +77,21 @@ const ONE_WIDTH_TESTS: ReadonlyArray<string> = [
   'users.spec.ts > edit (AC-1) > AC-4: the Admin cannot change their own role: the role list is disabled and says why',
   // AQP-65 G7: QA's no-change Edit check reads no layout (architect, Jira 11046; test strategy v0.20 section 10.5).
   'aqp-65-qa.spec.ts > [AQP-65 AC-1] edit with no change closes the dialog and sends no request',
+  // AQP-74 (STORY-01.07; architect, Jira 11078; test strategy v0.22 section 10.5): the production-build refusals in full, and six
+  // tests of audit.spec.ts whose subject is a rule that the table and the cards do not change. The two "Show more entries" tests
+  // stay at three widths: they are about how each representation adds and keeps entries.
+  'audit-production.spec.ts > a Lead on the production build > /audit answers HTTP 403 with the "no access" page and no entry',
+  'audit-production.spec.ts > a Lead on the production build > GET /api/v1/audit is the same fixed 403 whatever the query says, and sends no entry',
+  'audit-production.spec.ts > an Engineer on the production build > /audit answers HTTP 403 with the "no access" page and no entry',
+  'audit-production.spec.ts > an Engineer on the production build > GET /api/v1/audit is the same fixed 403 whatever the query says, and sends no entry',
+  'audit-production.spec.ts > a signed-out visitor is sent to the sign-in page and sees nothing of /audit',
+  'audit-production.spec.ts > a signed-out caller of GET /api/v1/audit gets 401 and no entry',
+  'audit.spec.ts > the log has no write route (AC-6) > PATCH, PUT, DELETE and POST on /api/v1/audit are 405 for the Admin',
+  'audit.spec.ts > the filters (AC-6) > a range that ends before it begins is said in words under To, and asks the server nothing',
+  'audit.spec.ts > the filters (AC-6) > From and To are whole days in IST: today includes what was just done, tomorrow does not',
+  'audit.spec.ts > the filters (AC-6) > a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back',
+  'audit.spec.ts > states (AC-8) > error: "We could not load the audit log" with "Try again", which asks again',
+  'audit.spec.ts > states (AC-8) > error: a broken answer is an error, never an empty list',
 ];
 
 // A Windows checkout with Git's default autocrlf writes CRLF; the checks below expect LF (DEF-002).
@@ -92,7 +109,7 @@ describe('@one-width allow-list (AQP-199 AC-3)', () => {
     for (const file of RULED_FILES) expect(E2E_FILES).toContain(file);
   });
 
-  it('appears in no file of tests/e2e except the seven ruled in test strategy section 10.5', () => {
+  it('appears in no file of tests/e2e except the nine ruled in test strategy section 10.5', () => {
     const tagged = E2E_FILES.filter((file) => read(`${E2E_DIRECTORY}${file}`).includes(TAG));
     expect(tagged.filter((file) => !RULED_FILES.includes(file))).toEqual([]);
   });
@@ -133,10 +150,10 @@ describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-
     listed = await listTests();
   });
 
-  it('are exactly the 35 tests ruled in test strategy section 10.5, by title', () => {
+  it('are exactly the 47 tests ruled in test strategy section 10.5, by title', () => {
     const tagged = listed.filter((test) => test.tagged).map((test) => test.key).sort();
     expect(tagged).toEqual([...ONE_WIDTH_TESTS].sort());
-    expect(ONE_WIDTH_TESTS).toHaveLength(35);
+    expect(ONE_WIDTH_TESTS).toHaveLength(47);
   });
 
   it('run in the desktop project only, and every other test runs in all three width projects', () => {

@@ -2,9 +2,11 @@ import { vi } from 'vitest';
 
 import type { RoleName } from '../../src/lib/auth/roles';
 
+import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
+import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { defined } from './defined';
 
 /**
@@ -53,6 +55,10 @@ export interface SessionHarness {
   readonly users: FakeUserRepository;
   /** The real user service over the fake repository, for the routes that call it (`getUserService` in the composition mock). */
   readonly userService: UserService;
+  /** The real audit service over in-memory storage, for the routes that call it (`getAuditService` in the composition mock). */
+  readonly auditService: AuditService;
+  /** The in-memory audit storage behind `auditService` and `userService`: what was recorded, and the clock that stamps it. */
+  readonly auditWorld: FakeAuditWorld;
   /** The id of each role's person (the first of that role). */
   readonly idOf: Readonly<Record<RoleName, string>>;
   /** The id of a person nobody signs in as, for the routes that change someone. */
@@ -76,13 +82,19 @@ export function createSessionHarness(): SessionHarness {
   const idOf: Readonly<Record<RoleName, string>> = { ADMIN: idFor('ADMIN'), LEAD: idFor('LEAD'), ENGINEER: idFor('ENGINEER') };
   const targetId = defined(users.records.find((record) => record.email === 'invented.target@example.test')).id;
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
+  const auditWorld = createFakeAuditWorld();
+  const auditService = createAuditService({ audit: auditWorld.audit });
 
   return {
     users,
+    auditService,
+    auditWorld,
     userService: createUserService({
       users,
       throttles: createFakeThrottleRepository(),
       hasher: createCountingHasher(),
+      transactions: auditWorld.transactions,
+      audit: auditService,
       keySecret: 'invented-throttle-key-material',
     }),
     idOf,

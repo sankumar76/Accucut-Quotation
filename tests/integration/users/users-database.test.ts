@@ -4,10 +4,10 @@ import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundEr
 import { accountThrottleKey } from '@/server/auth/throttle-key';
 import { resolveSessionUser } from '@/server/auth/resolve-session-user';
 import { createAuthService, type AuthService } from '@/server/services/auth-service';
-import { createUserService, type UserService } from '@/server/services/user-service';
+import type { UserService } from '@/server/services/user-service';
 import { systemClock } from '@/lib/time';
 
-import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
+import { insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { createTestHasher } from '../../support/builders/user';
 import { defined } from '../../support/defined';
 
@@ -20,10 +20,15 @@ import { defined } from '../../support/defined';
 
 const KEY_SECRET = 'invented-throttle-key-material';
 const hasher = createTestHasher();
+const REQUEST_ID = 'req-0a0b0c0d';
+
+/** Who makes a change, on one request. Every change is audited (STORY-01.07), so the actor is a person in the database. */
+const by = (actor: string) => ({ actorId: actor, actorLabel: 'Invented Actor', requestId: REQUEST_ID });
 const ADMIN_INDEX = 'uq_users_single_active_admin';
 const RACE_TIMEOUT_MILLISECONDS = 30_000;
 
-let db: AuthDatabase;
+let db: AuditDatabase;
+let actorId: string;
 let service: UserService;
 let auth: AuthService;
 let adminId: string;
@@ -50,8 +55,10 @@ async function signIn(email: string, password: string) {
 }
 
 beforeAll(async () => {
-  db = await openAuthDatabase();
-  service = createUserService({ users: db.users, throttles: db.throttles, hasher, keySecret: KEY_SECRET });
+  db = await openAuditDatabase();
+  // Whoever makes a change is a person in the database (an audit entry names them); this one is never an Admin, so the race for the one Admin place is untouched.
+  actorId = await insertPersonAsOwner(db, 'Actor', 'LEAD');
+  service = db.userService;
   auth = createAuthService({ users: db.users, throttles: db.throttles, hasher, clock: systemClock, keySecret: KEY_SECRET });
   // The first query opens the pool's connections; doing it here keeps that cost out of the first test's time limit.
   await db.users.list();
@@ -64,7 +71,7 @@ afterAll(async () => {
 describe('AC-3: two requests at once cannot make two Admins (the index decides)', () => {
   it('lets exactly one of several simultaneous Admin creations win, and tells the others who did', async () => {
     const attempts = await Promise.allSettled(
-      ['race.one', 'race.two', 'race.three', 'race.four'].map((label) => service.create(newUser(label, 'ADMIN'))),
+      ['race.one', 'race.two', 'race.three', 'race.four'].map((label) => service.create(by(actorId), newUser(label, 'ADMIN'))),
     );
     const winners = attempts.filter((attempt) => attempt.status === 'fulfilled');
     const losers = attempts.flatMap((attempt) => (attempt.status === 'rejected' ? [attempt.reason as unknown] : []));
@@ -94,7 +101,7 @@ describe('AC-3: the database itself refuses a second active Admin, whatever the 
   });
 
   it('direct SQL: promoting a user to Admin, or activating an inactive Admin, fails the same way', async () => {
-    const lead = await service.create(newUser('promote.me', 'LEAD'));
+    const lead = await service.create(by(actorId), newUser('promote.me', 'LEAD'));
     await expect(db.owner.query("UPDATE users SET role = 'ADMIN' WHERE id = $1", [lead.id])).rejects.toThrow(ADMIN_INDEX);
     await db.owner.query(insert, ['inactive.admin@example.test', false]);
     await expect(db.owner.query("UPDATE users SET is_active = true WHERE email = 'inactive.admin@example.test'")).rejects.toThrow(ADMIN_INDEX);
@@ -109,7 +116,7 @@ describe('AC-3: the database itself refuses a second active Admin, whatever the 
 
 describe('AC-1: adding, listing, editing', () => {
   it('adds a person: the password is an argon2id hash and only that, the e-mail is stored lower case, and a new password is required at the first sign-in', async () => {
-    const created = await service.create({ ...newUser('rohan.das'), email: 'Rohan.Das@Example.TEST' });
+    const created = await service.create(by(actorId), { ...newUser('rohan.das'), email: 'Rohan.Das@Example.TEST' });
     expect(created).toEqual({ id: expect.any(String), name: 'Invented rohan.das', email: 'rohan.das@example.test', role: 'ENGINEER', isActive: true });
     expect(Object.keys(created).sort()).toEqual(['email', 'id', 'isActive', 'name', 'role']);
     const stored = await row(created.id);
@@ -120,8 +127,8 @@ describe('AC-1: adding, listing, editing', () => {
   });
 
   it('refuses an e-mail that differs from an existing one only in letter case: "A user with this e-mail already exists."', async () => {
-    await service.create(newUser('case.test'));
-    const error = await service.create({ ...newUser('case.test.other'), email: 'CASE.TEST@example.test' }).then(
+    await service.create(by(actorId), newUser('case.test'));
+    const error = await service.create(by(actorId), { ...newUser('case.test.other'), email: 'CASE.TEST@example.test' }).then(
       () => null,
       (reason: unknown) => reason,
     );
@@ -130,9 +137,9 @@ describe('AC-1: adding, listing, editing', () => {
   });
 
   it('lists everyone, active first, then Admin, Lead, Engineer, by name, with no hash or session field', async () => {
-    const lead = await service.create(newUser('b.lead', 'LEAD'));
-    const gone = await service.create(newUser('a.gone'));
-    await service.update(adminId, gone.id, { isActive: false });
+    const lead = await service.create(by(actorId), newUser('b.lead', 'LEAD'));
+    const gone = await service.create(by(actorId), newUser('a.gone'));
+    await service.update(by(adminId), gone.id, { isActive: false });
     const list = await service.list();
     const names = list.map((entry) => entry.name);
     expect(names.indexOf('Invented b.lead')).toBeGreaterThan(names.indexOf(defined(list.find((entry) => entry.role === 'ADMIN' && entry.isActive)).name));
@@ -144,56 +151,56 @@ describe('AC-1: adding, listing, editing', () => {
   });
 
   it('edits the name and the role of another person', async () => {
-    const person = await service.create(newUser('edit.me'));
-    const changed = await service.update(adminId, person.id, { name: 'Edited Name', role: 'LEAD' });
+    const person = await service.create(by(actorId), newUser('edit.me'));
+    const changed = await service.update(by(adminId), person.id, { name: 'Edited Name', role: 'LEAD' });
     expect(changed).toEqual({ ...person, name: 'Edited Name', role: 'LEAD' });
     expect(await row(person.id)).toMatchObject({ name: 'Edited Name', role: 'LEAD' });
   });
 
   it('answers not found for a well-formed ID nobody has', async () => {
-    await expect(service.update(adminId, '00000000-0000-4000-8000-000000000000', { name: 'Nobody' })).rejects.toBeInstanceOf(NotFoundError);
-    await expect(service.resetPassword(adminId, '00000000-0000-4000-8000-000000000000', 'x1!')).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.update(by(adminId), '00000000-0000-4000-8000-000000000000', { name: 'Nobody' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.resetPassword(by(adminId), '00000000-0000-4000-8000-000000000000', 'x1!')).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
 describe('AC-3: through the service', () => {
   it('refuses a second Admin on create, promotion and activation, names the current Admin, and changes nothing', async () => {
     const name = defined(await db.users.findActiveAdmin()).name;
-    const createError = await service.create(newUser('second.admin', 'ADMIN')).then(() => null, (reason: unknown) => reason);
+    const createError = await service.create(by(actorId), newUser('second.admin', 'ADMIN')).then(() => null, (reason: unknown) => reason);
     expect(createError).toBeInstanceOf(ActiveAdminExistsError);
     expect(createError).toMatchObject({ message: 'There is already an active Admin. Only one Admin can be active.', currentAdmin: { id: adminId, name } });
 
-    const engineer = await service.create(newUser('promote.engineer'));
-    await expect(service.update(adminId, engineer.id, { role: 'ADMIN' })).rejects.toBeInstanceOf(ActiveAdminExistsError);
+    const engineer = await service.create(by(actorId), newUser('promote.engineer'));
+    await expect(service.update(by(adminId), engineer.id, { role: 'ADMIN' })).rejects.toBeInstanceOf(ActiveAdminExistsError);
     expect((await row(engineer.id)).role).toBe('ENGINEER');
 
     const { rows } = await db.owner.query<{ id: string }>("SELECT id FROM users WHERE email = 'inactive.admin@example.test'");
     const inactiveAdminId = defined(rows[0]).id;
-    await expect(service.update(adminId, inactiveAdminId, { isActive: true })).rejects.toBeInstanceOf(ActiveAdminExistsError);
+    await expect(service.update(by(adminId), inactiveAdminId, { isActive: true })).rejects.toBeInstanceOf(ActiveAdminExistsError);
     expect((await row(inactiveAdminId)).is_active).toBe(false);
   });
 });
 
 describe('AC-4: the Admin cannot lock themself out', () => {
   it('refuses, with 409, to deactivate their own account or change their own role, and the row stays as it was', async () => {
-    await expect(service.update(adminId, adminId, { isActive: false })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_DEACTIVATE_OWN_ACCOUNT' });
-    await expect(service.update(adminId, adminId, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
-    await expect(service.update(adminId, adminId, { role: 'LEAD' })).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.update(by(adminId), adminId, { isActive: false })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_DEACTIVATE_OWN_ACCOUNT' });
+    await expect(service.update(by(adminId), adminId, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
+    await expect(service.update(by(adminId), adminId, { role: 'LEAD' })).rejects.toBeInstanceOf(ConflictError);
     expect(await row(adminId)).toMatchObject({ role: 'ADMIN', is_active: true });
   });
 
   it('refuses all three own-account changes when the ID is written in upper case (the uuid type ignores case)', async () => {
     const before = await row(adminId);
     const shouted = adminId.toUpperCase();
-    await expect(service.update(adminId, shouted, { isActive: false })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_DEACTIVATE_OWN_ACCOUNT' });
-    await expect(service.update(adminId, shouted, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
-    await expect(service.resetPassword(adminId, shouted, 'invented-temporary-password-9')).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_RESET_OWN_PASSWORD' });
+    await expect(service.update(by(adminId), shouted, { isActive: false })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_DEACTIVATE_OWN_ACCOUNT' });
+    await expect(service.update(by(adminId), shouted, { role: 'LEAD' })).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_CHANGE_OWN_ROLE' });
+    await expect(service.resetPassword(by(adminId), shouted, 'invented-temporary-password-9')).rejects.toMatchObject({ httpStatus: 409, code: 'CANNOT_RESET_OWN_PASSWORD' });
     expect(await row(adminId)).toMatchObject({ role: 'ADMIN', is_active: true, password_hash: before.password_hash, session_version: before.session_version });
   });
 
   it('STD-01: refuses, with 409, to reset their own password, and the hash and session are as they were', async () => {
     const before = await row(adminId);
-    await expect(service.resetPassword(adminId, adminId, 'invented-temporary-password-9')).rejects.toMatchObject({
+    await expect(service.resetPassword(by(adminId), adminId, 'invented-temporary-password-9')).rejects.toMatchObject({
       httpStatus: 409,
       code: 'CANNOT_RESET_OWN_PASSWORD',
     });
@@ -203,37 +210,37 @@ describe('AC-4: the Admin cannot lock themself out', () => {
 
 describe('AC-2: a deactivated person, and a role that changed, at the next request', () => {
   it('a deactivated person cannot sign in (the same answer as a wrong password) and an open session is refused at the next request', async () => {
-    const person = await service.create(newUser('leaver'));
+    const person = await service.create(by(actorId), newUser('leaver'));
     const signedIn = await signIn('leaver@example.test', 'invented-first-password-1');
     expect(signedIn.status).toBe('signed-in');
     const claims = signedIn.status === 'signed-in' ? { userId: signedIn.userId, sessionVersion: signedIn.sessionVersion, signedAt: Math.floor(Date.now() / 1000) } : null;
     expect((await resolveSessionUser(claims, db.users, new Date()))?.id).toBe(person.id);
 
-    await service.update(adminId, person.id, { isActive: false });
+    await service.update(by(adminId), person.id, { isActive: false });
     expect(await resolveSessionUser(claims, db.users, new Date())).toBeNull();
     expect(await signIn('leaver@example.test', 'invented-first-password-1')).toEqual({ status: 'refused', reason: 'invalid' });
     expect(await signIn('leaver@example.test', 'a-wrong-password')).toEqual({ status: 'refused', reason: 'invalid' });
 
     // Activated again: the old session does not come back (it was ended), a new sign-in works.
-    await service.update(adminId, person.id, { isActive: true });
+    await service.update(by(adminId), person.id, { isActive: true });
     expect(await resolveSessionUser(claims, db.users, new Date())).toBeNull();
     expect((await signIn('leaver@example.test', 'invented-first-password-1')).status).toBe('signed-in');
   });
 
   it('a role change is read at the next request, from the database, not from the session', async () => {
-    const person = await service.create(newUser('promoted'));
+    const person = await service.create(by(actorId), newUser('promoted'));
     const signedIn = defined(await signIn('promoted@example.test', 'invented-first-password-1'));
     if (signedIn.status !== 'signed-in') throw new Error('expected a sign-in');
     const claims = { userId: signedIn.userId, sessionVersion: signedIn.sessionVersion, signedAt: Math.floor(Date.now() / 1000) };
     expect((await resolveSessionUser(claims, db.users, new Date()))?.role).toBe('ENGINEER');
-    await service.update(adminId, person.id, { role: 'LEAD' });
+    await service.update(by(adminId), person.id, { role: 'LEAD' });
     expect((await resolveSessionUser(claims, db.users, new Date()))?.role).toBe('LEAD');
   });
 });
 
 describe('AC-5: resetting a password', () => {
   it('stores the new hash, asks for a change, ends the old session, lifts the sign-in block and lets the new password in', async () => {
-    const person = await service.create(newUser('blocked.person'));
+    const person = await service.create(by(actorId), newUser('blocked.person'));
     await db.owner.query('UPDATE users SET must_change_password = false WHERE id = $1', [person.id]);
     const before = await row(person.id);
 
@@ -244,7 +251,7 @@ describe('AC-5: resetting a password', () => {
     const blocked = await db.owner.query<{ blocked_until: Date | null }>('SELECT blocked_until FROM login_throttles WHERE key_hash = $1', [key]);
     expect(blocked.rows[0]?.blocked_until).not.toBeNull();
 
-    await service.resetPassword(adminId, person.id, 'invented-temporary-password-9');
+    await service.resetPassword(by(adminId), person.id, 'invented-temporary-password-9');
 
     const after = await row(person.id);
     expect(after.password_hash).not.toBe(before.password_hash);
@@ -258,10 +265,10 @@ describe('AC-5: resetting a password', () => {
   });
 
   it('leaves every other person blocked', async () => {
-    await service.create(newUser('still.blocked'));
-    const other = await service.create(newUser('reset.someone.else'));
+    await service.create(by(actorId), newUser('still.blocked'));
+    const other = await service.create(by(actorId), newUser('reset.someone.else'));
     for (let attempt = 0; attempt < 5; attempt += 1) await signIn('still.blocked@example.test', 'wrong-password');
-    await service.resetPassword(adminId, other.id, 'invented-temporary-password-9');
+    await service.resetPassword(by(adminId), other.id, 'invented-temporary-password-9');
     expect(await signIn('still.blocked@example.test', 'invented-first-password-1')).toEqual({ status: 'refused', reason: 'locked' });
   });
 });
