@@ -205,30 +205,58 @@ jobs:
           npx tsx scripts/ensure-measurement-user.ts
           npx tsx scripts/check-js-budget.ts
 
-      # ---- Stage 12: E2E (on since STORY-10.02, the first page story) -------------------------
+      # ---- Stage 12a and 12: E2E (on since STORY-10.02, the first page story) -----------------
       # Chromium at three widths with axe (test strategy sections 2, 6, 9). Playwright starts two servers
       # (playwright.config.ts): the development server for the design-system specs and the PRODUCTION build from stage 9
       # (`next start`) for the sign-in journey (deferred issue #17). Both use this job's throwaway database through
       # `DATABASE_URL` (stage 10) and invented settings for everything else; the set-up project creates invented E2E
-      # users in it. The browser download is cached by Playwright version (the lockfile); `install --with-deps` still
-      # installs the system libraries and downloads the browser only when the cache missed.
+      # users in it.
       #
+      # Stage 12a (DEF-015, AQP-206, test strategy section 10.6) installs what the browser needs, apart from the tests, so
+      # the Actions API reports install time and test time separately. `playwright install --with-deps` used to run
+      # apt-get against the runner's Ubuntu mirror on every run with no bound, and a slow mirror stalled the job for up to
+      # ten minutes. Now:
+      #   - the browser download is cached by Playwright version;
+      #   - the browser's system packages (.deb files) are cached by runner image and Playwright version. On a hit they are
+      #     installed with dpkg and no network. On a miss, or if that install fails, apt runs with a 20 s stall timeout and
+      #     3 retries, and the step stops after 8 minutes; the packages it downloaded are saved to the cache.
+      # The caches hold downloaded packages and browser files only (no secret, no setting), use the same pinned cache
+      # action as stage 9, and are written only by runs in this repository (a fork's pull request can read, not write).
+      - name: "Read the Playwright and runner image versions"
+        id: versions
+        run: |
+          echo "playwright=$(node --print "require('@playwright/test/package.json').version")" >> "${GITHUB_OUTPUT}"
+          echo "image=${ImageOS}-${ImageVersion}" >> "${GITHUB_OUTPUT}"
+
+      - name: "Cache the Playwright browsers"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}
+
+      - name: "Cache the Playwright system packages"
+        id: debs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/playwright-debs
+          key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}
+
+      - name: "Stage 12a: Playwright browser and system packages"
+        timeout-minutes: 8
+        env:
+          PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+          PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
+        run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
+
       # Stage 12 time (AQP-199, test strategy section 10.5): `playwright.config.ts` runs four workers when `CI` is set
       # (two on a developer's machine), the set-up project warms `/`, `/queue` and `/design-system` on the development
       # server first, and tests tagged `@one-width` (tests that read no layout, in four ruled spec files) run in the
       # desktop project only. Everything else runs at all three widths. The command below carries no `--workers`,
       # `--project`, `--grep` or `--shard` flag, and it stays in this one job so the required check keeps its name.
-      - name: "Cache the Playwright browsers"
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
       - name: "Stage 12: E2E (Chromium at three widths, axe)"
         run: |
           # The runner size goes to the log, so the four workers can be checked against it (AQP-199, test strategy 10.5).
           echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
-          npx playwright install --with-deps chromium
           npx playwright test
 
       # ---- Stage 13: image (DISABLED until the Dockerfile story, STORY-10.04) ----------------

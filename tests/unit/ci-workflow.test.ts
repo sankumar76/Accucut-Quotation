@@ -87,7 +87,8 @@ describe('CI workflow', () => {
   it('STORY-10.02 AC-8: stage 12 (E2E) is switched on and blocks merge, and stage 13 is still off', () => {
     const e2e = stepNamed('Stage 12: E2E');
     expect(e2e).not.toMatch(/^\s*if:/m);
-    expect(e2e).toContain('npx playwright install --with-deps chromium');
+    // The install moved to stage 12a (AQP-206), so stage 12 is the tests and nothing else.
+    expect(e2e).not.toContain('playwright install');
     expect(e2e).toContain('npx playwright test');
     expect(stepNamed('Stage 13: image')).toContain('if: ${{ false }}');
   });
@@ -148,8 +149,61 @@ describe('CI workflow', () => {
     const browsers = stepNamed('Cache the Playwright browsers');
     expect(browsers).toMatch(/uses: actions\/cache@[0-9a-f]{40}/);
     expect(browsers).toContain('path: ~/.cache/ms-playwright');
-    expect(browsers).toContain("hashFiles('package-lock.json')");
-    expect(WORKFLOW.indexOf('Cache the Playwright browsers')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12: E2E'));
+    expect(WORKFLOW.indexOf('Cache the Playwright browsers')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12a'));
+  });
+
+  it('DEF-015 (AQP-206): the browser cache is keyed on the Playwright version, not on the whole lockfile', () => {
+    const browsers = stepNamed('Cache the Playwright browsers');
+    expect(browsers).toContain('key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}');
+    expect(browsers).not.toContain('hashFiles');
+    // The version is read from the installed package, before any cache step uses it.
+    const versions = stepNamed('Read the Playwright and runner image versions');
+    expect(versions).toContain("require('@playwright/test/package.json').version");
+    expect(versions).toContain('${ImageOS}-${ImageVersion}');
+    expect(WORKFLOW.indexOf('Read the Playwright and runner image versions')).toBeLessThan(WORKFLOW.indexOf('name: "Cache the Playwright browsers'));
+  });
+
+  it('DEF-015 (AQP-206): the system packages are cached by runner image and Playwright version, with the same pinned cache action', () => {
+    const debs = stepNamed('Cache the Playwright system packages');
+    expect(debs).toMatch(/uses: actions\/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9/);
+    expect(debs).toContain('id: debs');
+    expect(debs).toContain('path: ${{ runner.temp }}/playwright-debs');
+    expect(debs).toContain('key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}');
+    // No new action: every `uses:` in the workflow is one of the four already pinned before this change.
+    const actions = new Set(LINES.filter((line) => /^\s*(?:- )?uses:/.test(line)).map((line) => line.replace(/^\s*(?:- )?uses:\s*/, '').split('@')[0]));
+    expect([...actions].sort()).toEqual(['actions/cache', 'actions/checkout', 'actions/setup-node']);
+  });
+
+  it('DEF-015 (AQP-206): stage 12a installs the browser and system packages in its own bounded step, before stage 12', () => {
+    const install = stepNamed('Stage 12a: Playwright browser and system packages');
+    expect(install).toContain('timeout-minutes: 8');
+    expect(install).toContain('PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}');
+    expect(install).toContain('bash scripts/ci/playwright-system-deps.sh');
+    expect(install).not.toMatch(/^\s*if:/m);
+    expect(install).not.toContain('continue-on-error');
+    // The old unbounded command is gone from the whole workflow.
+    expect(WORKFLOW.replace(/#.*$/gm, '')).not.toContain('--with-deps');
+    expect(WORKFLOW.indexOf('Cache the Playwright system packages')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12a'));
+    expect(WORKFLOW.indexOf('name: "Stage 12a')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12: E2E'));
+    expect(WORKFLOW.indexOf('name: "Stage 11b')).toBeLessThan(WORKFLOW.indexOf('name: "Stage 12a'));
+    // Still the one job named for the required check.
+    expect(WORKFLOW.match(/^ {4}name: Stages 1 to 11$/gm)).toHaveLength(1);
+    expect(WORKFLOW).not.toMatch(/^\s+needs:/m);
+  });
+
+  it('DEF-015 (AQP-206): the script bounds apt on a miss and falls back to it when the cached install fails', () => {
+    const script = readFileSync(fileURLToPath(new URL('../../scripts/ci/playwright-system-deps.sh', import.meta.url)), 'utf8');
+    const code = script
+      .split(/\r?\n/)
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+    expect(code).toContain('Acquire::http::Timeout "20";');
+    expect(code).toContain('Acquire::Retries "3";');
+    expect(code).toContain('sudo dpkg -i');
+    expect(code).toContain('npx playwright install-deps chromium');
+    expect(code).toContain('npx playwright install chromium');
+    expect(code).not.toContain('--with-deps');
+    // tests/unit/playwright-system-deps.test.ts runs it against fake programs for the hit, miss and fallback paths.
   });
 
   it('STD-05: stage 9 checks the build output, so /design-system is shown to be a 404 in production on every run', () => {
