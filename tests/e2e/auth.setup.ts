@@ -58,6 +58,14 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
     expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/users`)).status()).toBe(200);
     expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/users/00000000-0000-4000-8000-000000000000`, { headers, data: { role: 'LEAD' } })).status()).toBe(404);
+    // And the Process master page and its API, for the same reason (STORY-02.01). The page reads the field registry, so CI makes
+    // configuration version 1 before the tests (the shard step), as a real install does after its migrations.
+    await page.goto(`${DEVELOPMENT_URL}/masters/process`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/process-items`)).status()).toBe(200);
+    // A change to nobody (an ID no rate has) is answered 404 and writes nothing, which compiles the route of one rate too.
+    expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/process-items/00000000-0000-4000-8000-000000000000`, { headers, data: { defaultValue: '1.37' } })).status()).toBe(404);
+    expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/process-items`, { headers, data: {} })).status()).toBe(422);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();
