@@ -104,6 +104,7 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
       inFlight.current?.abort();
       inFlight.current = null;
       setStatus('ready');
+      setLoadingMore(false);
       return;
     }
     void load(next);
@@ -125,8 +126,60 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
     }
   }
 
-  const filtered = hasActiveFilter(filters);
-  const loading = status === 'loading';
+  /** What the results card shows: the error, the skeleton once 300 ms have passed, the empty state, or the entries. */
+  function results() {
+    if (status === 'error') {
+      return (
+        <ErrorState
+          title={ERROR_TITLE}
+          focusOnMount
+          action={
+            <Button onClick={() => void load(filters)}>
+              <Icon icon={RotateCcw} />
+              {ERROR_RETRY}
+            </Button>
+          }
+        />
+      );
+    }
+    if (showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={LOADING_LABEL} />;
+    if (page.entries.length === 0) {
+      const filtered = hasActiveFilter(filters);
+      return (
+        <EmptyState
+          icon={<Icon icon={ScrollText} size="state" />}
+          title={filtered ? EMPTY_TITLE : EMPTY_UNFILTERED_TITLE}
+          description={filtered ? EMPTY_FILTERED_DESCRIPTION : EMPTY_UNFILTERED_DESCRIPTION}
+          action={
+            filtered ? (
+              <Button variant="secondary" onClick={() => change(NO_FILTERS)}>
+                {EMPTY_CLEAR_FILTERS}
+              </Button>
+            ) : undefined
+          }
+        />
+      );
+    }
+    return (
+      <>
+        {moreFailed ? (
+          <div className="p-s-4 pb-0">
+            <Notice tone="danger" title={SHOW_MORE_FAILED_TITLE}>
+              {SHOW_MORE_FAILED_BODY}
+            </Notice>
+          </div>
+        ) : null}
+        <AuditList
+          entries={page.entries}
+          total={page.total}
+          hasMore={page.nextCursor !== null}
+          loadingMore={loadingMore}
+          onShowMore={() => void showMore()}
+          footerRef={footer}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -136,53 +189,7 @@ export function AuditScreen({ initialPage, people }: AuditScreenProps) {
           <AuditFiltersBar people={people} filters={filters} onChange={change} />
         </CardContent>
       </Card>
-      <Card aria-busy={loading || undefined}>
-        {status === 'error' ? (
-          <ErrorState
-            title={ERROR_TITLE}
-            focusOnMount
-            action={
-              <Button onClick={() => void load(filters)}>
-                <Icon icon={RotateCcw} />
-                {ERROR_RETRY}
-              </Button>
-            }
-          />
-        ) : showSkeleton ? (
-          <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={LOADING_LABEL} />
-        ) : page.entries.length === 0 ? (
-          <EmptyState
-            icon={<Icon icon={ScrollText} size="state" />}
-            title={filtered ? EMPTY_TITLE : EMPTY_UNFILTERED_TITLE}
-            description={filtered ? EMPTY_FILTERED_DESCRIPTION : EMPTY_UNFILTERED_DESCRIPTION}
-            action={
-              filtered ? (
-                <Button variant="secondary" onClick={() => change(NO_FILTERS)}>
-                  {EMPTY_CLEAR_FILTERS}
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <>
-            {moreFailed ? (
-              <div className="p-s-4 pb-0">
-                <Notice tone="danger" title={SHOW_MORE_FAILED_TITLE}>
-                  {SHOW_MORE_FAILED_BODY}
-                </Notice>
-              </div>
-            ) : null}
-            <AuditList
-              entries={page.entries}
-              total={page.total}
-              hasMore={page.nextCursor !== null}
-              loadingMore={loadingMore}
-              onShowMore={() => void showMore()}
-              footerRef={footer}
-            />
-          </>
-        )}
-      </Card>
+      <Card aria-busy={status === 'loading' || undefined}>{results()}</Card>
     </>
   );
 }
