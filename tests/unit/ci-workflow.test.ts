@@ -337,6 +337,15 @@ describe('CI workflow', () => {
     expect(code).toContain('npx playwright install-deps chromium');
     expect(code).toContain('npx playwright install chromium');
     expect(code).not.toContain('--with-deps');
+    // AQP-216 AC-3 to AC-5: the download is bounded, not the connection (45 s update, 90 s download, three tries), with the
+    // 8-minute step cap above them as the last bound.
+    expect(code).toContain('update_timeout="${APT_UPDATE_TIMEOUT:-45}"');
+    expect(code).toContain('download_timeout="${APT_DOWNLOAD_TIMEOUT:-90}"');
+    expect(code).toContain('max_tries=3');
+    expect(code).toContain('apt-get install --download-only');
+    expect(code).toContain('apt-get install -y --no-download');
+    expect(code).toContain('fallback_mirror="archive.ubuntu.com"');
+    expect(3 * (45 + 90)).toBeLessThan(8 * 60);
     // tests/unit/playwright-system-deps.test.ts runs it against fake programs for the hit, miss and fallback paths.
   });
 

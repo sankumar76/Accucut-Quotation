@@ -199,8 +199,14 @@ never a required check.
 Stage 12a (`scripts/ci/playwright-system-deps.sh`) installs the browser and the system packages it needs. The browser is
 cached by Playwright version. The system packages (`.deb` files) are cached under the key
 `playwright-debs-e<CACHE_EPOCH>-<runner image>-<Playwright version>`. On a hit they are installed with `dpkg` and no
-network. On a miss, or when the cached install fails, `apt` runs with a 20 s stall timeout and 3 retries, the step stops
-after 8 minutes, and a miss saves what it downloaded. A bad cache entry never turns a run red, but it costs the bounded
+network. On a miss, or when the cached install fails, the script reads the package list from
+`npx playwright install-deps --dry-run chromium` (`scripts/ci/playwright-deps-packages.sh`), downloads the packages with
+`apt-get install --download-only` (45 s for `apt-get update`, 90 s for the download), installs them offline and saves
+what it downloaded. It makes up to three tries; tries 2 and 3 use `archive.ubuntu.com`, and after the third the step
+fails and names the mirrors. If the dry run cannot be read, it warns and takes the older bounded install (`apt` with a
+20 s stall timeout and 3 retries). The step stops after 8 minutes in every case. The nightly workflow
+(`warm-playwright-cache`) runs this stage on `master` with the same keys, so every branch can restore them after a runner
+image change; `CACHE_EPOCH` in `nightly.yml` must be raised together with the one in `ci.yml`. A bad cache entry never turns a run red, but it costs the bounded
 `apt` install on every run: a cache key never changes after it is saved, and a hit is not saved again. When that happens
 the job prints a warning that names the key. There are two ways to replace the entry:
 

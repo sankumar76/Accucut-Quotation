@@ -8,6 +8,12 @@
 #   ci-time      The duration of a run, from the start of its first job to the end of the required job "Stages 1 to 11"
 #                (AQP-208), over the first attempts of the last 20 pull-request runs: p95 over 10 minutes or median over
 #                6 minutes fails this job.
+#   warm-playwright-cache
+#                Stage 12a of ci.yml and nothing else (AQP-216, STORY-10.16, test strategy 10.6): it saves the Playwright
+#                browser and system-package caches under the same keys as CI, on the same runner label as the CI jobs
+#                that run stage 12a. A scheduled run belongs to master, so what it saves is readable from every branch;
+#                a pull request's own save is visible to that pull request only. Without it, after a runner-image change
+#                every pull request would miss in each shard until a merge to master saved the new key.
 #
 # It never blocks a merge: it is not a required check. A failure is reported and the orchestrator raises the issue.
 #
@@ -40,6 +46,8 @@ on:
       - scripts/lib/ci-feedback-time.ts
       - scripts/ensure-measurement-user.ts
       - scripts/lib/measurement-user.ts
+      - scripts/ci/playwright-system-deps.sh
+      - scripts/ci/playwright-deps-packages.sh
 
 permissions:
   contents: read
@@ -57,6 +65,9 @@ env:
   NODE_VERSION: '22'
   NPM_VERSION: '11.17.0'
   LHCI_BASE_URL: http://localhost:3000
+  # Part of the Playwright system-package cache key (stage 12a). It must equal CACHE_EPOCH in ci.yml, or the warm-up job
+  # saves a key that CI never looks for; tests/unit/nightly-workflow.test.ts compares the two. Raise both together.
+  CACHE_EPOCH: '1'
 
 jobs:
   lighthouse:
@@ -127,16 +138,40 @@ jobs:
       - name: Build
         run: npx next build
 
-      - name: Cache the Playwright browsers
+      # The Chromium that Playwright installs is the browser Lighthouse uses (lighthouserc.cjs `chromePath`), so the browser
+      # changes only when Playwright is upgraded. The browser and its system packages are installed by the bounded script
+      # of CI stage 12a, with the same cache steps and key formula as ci.yml (AQP-216, closes #93). This job stays on
+      # ubuntu-24.04, its reference image, so the system-package key holds that image and is its own unless CI's
+      # `ubuntu-latest` is the same image.
+      - name: "Read the Playwright and runner image versions"
+        id: versions
+        run: |
+          playwright="$(node --print "require('@playwright/test/package.json').version")"
+          {
+            echo "playwright=${playwright}"
+            echo "debs_key=playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: "Cache the Playwright browsers"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}
 
-      # The Chromium that Playwright installs is the browser Lighthouse uses (lighthouserc.cjs `chromePath`), so the browser
-      # changes only when Playwright is upgraded.
-      - name: Install the Chromium that Playwright provides
-        run: npx playwright install --with-deps chromium
+      - name: "Cache the Playwright system packages"
+        id: debs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/playwright-debs
+          key: ${{ steps.versions.outputs.debs_key }}
+
+      - name: Install the Chromium that Playwright provides (stage 12a)
+        timeout-minutes: 8
+        env:
+          PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+          PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
+          PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
+        run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
 
       - name: Make the invented Admin that the pages are measured as
         run: |
@@ -219,3 +254,64 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npx tsx scripts/check-ci-time.ts
+
+  # Stage 12a of ci.yml and nothing else (AQP-216, STORY-10.16, AC-1). A scheduled run belongs to master, so the keys it
+  # saves are readable from every branch; a pull request's own save is visible to that pull request only. Without this job
+  # a new runner image makes every pull request miss in each shard until a merge to master saves the new key.
+  #
+  # It runs on the label of the CI jobs that run stage 12a (`ubuntu-latest`, ci.yml job `e2e`), not on the reference image
+  # of the other jobs here: the key holds the image version, and a key warmed on another image is never hit. The steps,
+  # the key formula and the script are the same as ci.yml; tests/unit/nightly-workflow.test.ts compares them.
+  warm-playwright-cache:
+    name: Warm the Playwright cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      # Playwright itself is needed: its dry run lists the system packages and it installs the browser.
+      - name: Install
+        run: npm ci
+
+      - name: "Read the Playwright and runner image versions"
+        id: versions
+        run: |
+          playwright="$(node --print "require('@playwright/test/package.json').version")"
+          {
+            echo "playwright=${playwright}"
+            echo "debs_key=playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: "Cache the Playwright browsers"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}
+
+      - name: "Cache the Playwright system packages"
+        id: debs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/playwright-debs
+          key: ${{ steps.versions.outputs.debs_key }}
+
+      - name: "Stage 12a: Playwright browser and system packages"
+        timeout-minutes: 8
+        env:
+          PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+          PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
+          PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
+        run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
