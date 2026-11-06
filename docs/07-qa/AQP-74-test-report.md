@@ -8,7 +8,8 @@
 | Environment | **Local, targeted only.** Windows 11, Node 22, in an isolated `git archive` copy of `7e0f287` (no shared worktree, no `git merge`), with a throwaway Postgres 17 database (Compose `qa74`, port 55674, removed). The PC was out of memory and its temp volume was full during this cycle, so no local E2E and no dev server were run, and some planted faults were run only in part (see below). Invented data only |
 | Date | 2026-11-06 |
 | Evidence list | master's G6 GO, Jira 11106; story description per scrum-master 11089 and PO READY 11093; one-width pins per architect 11078 |
-| **Recommendation** | **ACCEPT the product, with QA-F1 (test adequacy) for master's ruling.** Every AC is met. One G7 evidence item is only partly met: a planted bypass of the single transaction **is caught for the role-change entry, but not for the activation entry, and for the rename entry only incidentally** (a lock-wait timeout in the self-rename test). The code itself writes every entry in the caller's transaction. Only the tests fall short |
+| **Recommendation (attempt 2, `c5e4e41`)** | **ACCEPT.** All twelve planted transaction bypasses (six events × inside / sibling-after) fail a test, so DEF-017 is verified. QLT-92's strings are shown live on an empty log, and the live log check is clean. See "Attempt 2" at the end |
+| Recommendation (attempt 1, `7e0f287`) | **ACCEPT the product, with QA-F1 (test adequacy) for master's ruling.** Every AC is met. One G7 evidence item is only partly met: a planted bypass of the single transaction **is caught for the role-change entry, but not for the activation entry, and for the rename entry only incidentally** (a lock-wait timeout in the self-rename test). The code itself writes every entry in the caller's transaction. Only the tests fall short |
 
 ## Summary
 
@@ -103,3 +104,59 @@ None raised as a defect. **QA-F1 is a test-adequacy finding for master** (propos
 - **Resources:** this cycle ran with the PC out of memory and, at one point, 0 MB free on the temp volume. QA stopped and removed its database; no server was left running. The unrun plants (deactivate, create, reset; `FOR UPDATE`) and the live log check are listed above as not done. They are not claimed.
 - **Migration:** it must not be edited after merge (master, 11106).
 - **PRF-07 (Info):** `/sign-in` is 166,296 B, about +3 KB on `master`, and under the 190,000 B floor.
+
+---
+
+## Attempt 2 (G7 re-run on `c5e4e41`, after master's NO-GO DL-107 and DEF-017)
+
+| Field | Value |
+|-------|-------|
+| Build / commit | `c5e4e41` (PR #97). The product code is unchanged since `7e0f287`; the DEF-017 tests were added (`tests/integration/audit/audit-atomicity.test.ts`, `tests/support/late-failure.ts`; master verified in 11120) |
+| CI | Run 42228339693 on `c5e4e41`: green on all four jobs. Stage 6 2218 / 2218; stage 11 3084 / 3084 (`audit-atomicity.test.ts` 13 / 13); E2E 204 + 186 passed, 0 failed, 0 flaky; 11b all 7 rows within the limit (`/audit` 171,801 B); required path 293 s |
+| Environment | A fresh `git archive` copy of `c5e4e41` with its own `npm ci`, one throwaway Postgres 17 at a time, and one test file at a time (`--no-file-parallelism`). **Interruptions, recorded:** an earlier scratch copy lost files while in use (its `node_modules/.bin`, then its root files); it was replaced by a fresh copy, and the first planting run was repeated from the start. One integration test failed once with several database files running in parallel; it passed alone (18 / 18) and in the sequential baseline, so it is Environment and not counted |
+| Evidence list | master 11106, 11112 (DL-107), 11117 and 11120 |
+| **Recommendation** | **ACCEPT; close DEF-017 after the posted G7** |
+
+### The twelve planted bypasses (11117 / 11120)
+
+**Baseline** on the clean copy, sequential: `tests/integration/audit tests/integration/users tests/unit/user-service tests/unit/user-service-audit.test.ts tests/unit/audit` gives **260 / 260 passed** (16 files).
+
+**Method:** for each event, one plant at a time in `src/server/services/user-service.ts`. Each was generated from the clean original by a script, never committed, and checked restored before the next plant.
+- **(a) inside:** the event's `await audit.record(tx, …)` becomes `await transactions.run((own) => audit.record(own, …))`, a separate transaction inside the change's unit of work.
+- **(b) sibling-after:** the entry is queued, then written by `transactions.run((own) => audit.record(own, …))` **after** the change's transaction has committed.
+
+The same five test paths were run after each plant.
+
+| Event | (a) inside | (b) sibling-after |
+|---|---|---|
+| `user.created` | **1 failed**: `audit-atomicity` "a failure after the entry was written takes the entry and the change back … user.created" | **2 failed**: `audit-atomicity` "an entry that is refused when it is written takes the change back … user.created"; `audit-database` "a creation whose entry is refused leaves no person behind" |
+| `user.renamed` | **3 failed**: `audit-atomicity` (failure after the entry, user.renamed, two cases); `audit-database` "a self-rename …" | **7 failed**: `user-service-audit` AC-3 and AC-5 (3), `audit-atomicity` (refused entry, user.renamed), and others |
+| `user.role_changed` | **4 failed**: `user-service-audit` AC-3 and AC-5 (3); `audit-atomicity` (failure after the entry) | **5 failed**: `user-service-audit` AC-3; `audit-atomicity` (refused entry, user.role_changed; failure after, user.renamed); `audit-database` AC-2 |
+| `user.deactivated` | **2 failed**: `user-service-audit` AC-3; `audit-atomicity` (failure after the entry, user.deactivated) | **1 failed**: `audit-atomicity` (refused entry, user.deactivated) |
+| `user.activated` | **1 failed**: `audit-atomicity` (failure after the entry, user.activated) | **1 failed**: `audit-atomicity` (refused entry, user.activated) |
+| `user.password_reset` | **1 failed**: `audit-atomicity` (failure after the entry, user.password_reset) | **2 failed**: `audit-atomicity` (refused entry, user.password_reset); `audit-database` "a password reset whose entry is refused leaves the old password in place" |
+
+**Result: 12 of 12 plants caught. Each is caught by its own event's DEF-017 test:**
+- the inside form by "a failure after the entry was written …";
+- the sibling-after form by "an entry that is refused when it is written …".
+
+**Restore:** after every plant the file was byte-identical to the original, and the copy ended clean (equal to `c5e4e41`, line endings aside).
+
+**Attempt 1's gaps are closed:** activation is now caught, and rename is caught by assertions, not by a timeout. **The sibling-before form remains a stated limit** (11117), covered by the review rule in architecture v0.29 §6.
+
+### The rest of 11106 on the final head
+
+The product code is unchanged since attempt 1, so attempt 1's results stand: append-only, `user.renamed`, `actor_label` and the Who filter, the people list and the 403, From after To, PRF-03, the lint plants and the 12 pins. They are re-confirmed by CI 42228339693 and the 260-test baseline.
+
+**Items not finished at attempt 1:**
+
+| Item | Attempt 2 result |
+|---|---|
+| Deactivate, create and reset bypasses | Caught (table above) |
+| **QLT-92**: "No entries yet", the page description, the meta text | **Live**, on a fresh, empty database (`audit_log` count 0), `/audit` as the invented Admin on the dev server of `c5e4e41`: "No entries yet" **present**; "Changes to users, masters and approvals are recorded here as they happen." **exact**; the page description "A record of approvals, unlocks, price overrides, cancelled approvals, removed prices, quantity warnings gone ahead on, master data and user changes. The portal has no way to edit or delete an entry." **exact**; `<meta name="description">` = "A record of approvals, unlocks, price overrides, master data and user changes." **exact**; **no "Showing N of M" line and no button** in the empty state. After one change (an invented user added), the empty state is gone, the "Showing" line appears and the entry reads "Added as Engineer". **The test gap stays:** no automated test asserts "No entries yet", its text or the meta text (only the description is asserted once). Recorded as QLT-92 (Info), not a defect |
+| **Live log check** | The same server received an added user, a duplicate in other letter case (422 `EMAIL_TAKEN`), an invalid address (422), and `GET /api/v1/audit` with an e-mail in `who` and in `from` (422 each). All addresses were invented. **The application's log has none of them:** the refusal line is `{"route":"/api/v1/users","method":"POST","status":422,"code":"EMAIL_TAKEN","msg":"route refused"}`. **Observation (dev only, no defect):** the Next.js development server's own request line prints the URL with its query string (`GET /api/v1/audit?who=…@example.test 422 in 981ms`), so a query-string value appears in the **dev** console. The production server (`next start`) prints no request lines; its log held only the application's JSON lines in the AQP-48 and AQP-65 probes |
+| `FOR UPDATE` plant | Not re-run. The lock test passes in the 260-test baseline and in CI; reviewer-quality caught that plant 5 of 5 (11105) |
+
+### Clean-up
+
+The dev server is stopped. The databases `qa74b` and `qa74c` and their volumes are removed. No container of QA's is running.
