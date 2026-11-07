@@ -15,7 +15,9 @@ import { tokenize } from './tokenizer';
  * grow to reach them. `OH Profit %` is safe: it begins with a column's letters, but `Profit` is not an operand,
  * so the whole text cannot be read any other way.
  *
- * Messages state the rule and never repeat the name.
+ * The rule holds for the whole set of names, not for the new name alone (`rateSetIssues`): adding `Cost` and `Waste` after
+ * `Cost-Waste` exists would make the stored formula `{{rate:Cost}}-{{rate:Waste}}` come back from display form as the compound rate
+ * just the same. Messages state the rule and never repeat a name.
  */
 
 /** Longest rate name accepted. */
@@ -85,4 +87,24 @@ export function rateNameIssues(name: string, otherNames: ReadonlyArray<string> =
   }
   if (otherNames.includes(name)) return [issue('RATE_NAME_DUPLICATE', 'Another rate already has this name.')];
   return [];
+}
+
+/** Said once for each name that the set makes readable as something else. It names no rate (STD-05 of the rule above). */
+const SET_AMBIGUOUS_MESSAGE =
+  'This set of names would make a rate name read as column letters, numbers, operators or other rate names: a formula would take it for those.';
+
+/**
+ * The problems of a whole set of rate names read together (DEF-006, QLT-01 of the G6 of AQP-113): a name that reads as other names in
+ * the set and an operator, whichever of them was added first. `rateNameIssues` judges one new name against the others; this judges
+ * every name against the rest, so it also finds an *existing* name that a new one has made ambiguous. Run it on the set a change
+ * would leave (`[...others, newName]`) before the change is made. It reports a name once, with `RATE_SET_AMBIGUOUS`; shape,
+ * operand and duplicate problems of one name stay with `rateNameIssues`. The cost is one reading of each name against the other
+ * names, that is about n squared name matches for n rates.
+ */
+export function rateSetIssues(names: ReadonlyArray<string>): FormulaIssue[] {
+  return names.flatMap((name, index) => {
+    if (invalidShape(name) !== undefined) return [];
+    const others = names.filter((_, position) => position !== index);
+    return readsAsFormulaText(name, others) ? [issue('RATE_SET_AMBIGUOUS', SET_AMBIGUOUS_MESSAGE)] : [];
+  });
 }
