@@ -1,7 +1,7 @@
 /**
  * The words of SCR-11 "Process master" that more than one component says (UX spec section 6, "SCR-11 Process master"; the mock-up
- * `docs/03-ux/screens/SCR-11.html`). The messages under the fields are in `src/lib/masters/process-items.ts`, where the server's
- * schemas read them too.
+ * `docs/03-ux/screens/SCR-11.html`; ux-spec v0.17 for the two notices of a rate deleted elsewhere). The messages under the fields
+ * are in `src/lib/masters/process-items.ts`, where the server's schemas read them too.
  */
 
 export const PROCESS_TITLE = 'Process master';
@@ -32,21 +32,45 @@ export const FAILED_CONFIRMATION_TITLE = 'The confirmation did not open.';
 export const FAILED_DIALOGS_MESSAGE = 'Check your connection and try again.';
 
 export const BLOCKED_TITLE = 'This rate is used by a formula';
-export const BLOCKED_ADVICE = 'Change those formulas first.';
-export const BLOCKED_LINK = 'Go to Fields and formulas';
 export const BLOCKED_CLOSE = 'Close';
 
 export const DELETE_KEEP = 'Keep rate';
 export const DELETE_CONFIRM = 'Delete rate';
 
-/** Where the formulas are changed (route manifest: Fields and formulas, SCR-17). */
-export const FIELDS_AND_FORMULAS_PATH = '/config/fields';
+/** A notice under the page header (the slot of "Saved"): replaced by the next one, cleared by the next press of a button. */
+export interface PageNotice {
+  readonly tone: 'success' | 'warn' | 'info';
+  /** The bold line, when there is one. */
+  readonly title?: string;
+  readonly text: string;
+}
 
 /** The sentence under the page header after a change; the audit log keeps the detail (SCR-11 "Saved"). */
-export const savedNotice = (name: string, what: 'added' | 'saved' | 'deleted'): string =>
-  what === 'saved' ? `${name} saved. The change is in the audit log.` : `${name} was ${what}. The change is in the audit log.`;
+export const savedNotice = (name: string, what: 'added' | 'saved' | 'deleted'): PageNotice => ({
+  tone: 'success',
+  text: what === 'saved' ? `${name} saved. The change is in the audit log.` : `${name} was ${what}. The change is in the audit log.`,
+});
+
+/**
+ * A rate that was deleted elsewhere while its dialog was open (ux-spec v0.17, QLT-06): nothing failed and nothing is at risk, so
+ * these are not alerts. `name` is the rate's name as it was when the dialog opened.
+ */
+export const goneNotice = (name: string, what: 'edit' | 'delete'): PageNotice =>
+  what === 'edit'
+    ? {
+        tone: 'warn',
+        title: `${name} no longer exists.`,
+        text: 'It was deleted after you opened this list, so your changes were not saved. If you still need it, press Add rate.',
+      }
+    : { tone: 'info', title: `${name} was already deleted.`, text: 'It was deleted after you opened this list, so there was nothing to delete.' };
 
 export const deleteTitle = (name: string): string => `Delete ${name}?`;
 export const deleteDescription = (name: string): string =>
   `${name} is removed from the Process master. Estimates that are already calculated keep their figures. You cannot undo this here.`;
-export const blockedSentence = (name: string): string => `${name} cannot be deleted while a formula uses it`;
+
+/**
+ * The sentence of the refusal to delete a rate a formula uses, for Release 1 (ux-spec v0.17, ruled by the product-owner on AC-4):
+ * the formulas cannot be changed until Release 2, so there is nothing to link to. The story that delivers SCR-17 adds the link.
+ */
+export const blockedSentence = (name: string): string =>
+  `${name} cannot be deleted while a formula uses it. Formulas cannot be changed until Release 2, so this rate stays on the list.`;

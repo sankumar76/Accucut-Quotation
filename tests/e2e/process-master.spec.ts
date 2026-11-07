@@ -16,9 +16,8 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * the refusal test opens the dialog of a rate a formula uses and closes it. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014).
  *
- * Width (test strategy section 10.5, AQP-199): the tests that check server rules and message text read no layout (adding a rate and
- * its refusals, editing, searching). They are proposed for the one-width tag in the hand-off of AQP-113 and are NOT tagged here: the
- * architect rules on the list, and `tests/unit/one-width-tag.test.ts` pins it.
+ * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-199) and pinned by
+ * `tests/unit/one-width-tag.test.ts`; none of them is tagged until it is ruled.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -27,6 +26,7 @@ test.use({ storageState: ADMIN_STATE });
 const NAME_TAKEN = 'A rate with this name already exists.';
 const VALUE_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
 const BLOCKED_TITLE = 'This rate is used by a formula';
+const BLOCKED_SENTENCE = 'Cutting-Rate-per-Sec cannot be deleted while a formula uses it. Formulas cannot be changed until Release 2, so this rate stays on the list.';
 /** A seed rate that a seed formula uses (Cutting Cost, AL), and the one that no formula uses. */
 const USED_RATE = 'Cutting-Rate-per-Sec';
 const UNUSED_RATE = 'Plating-rate-per-sqin';
@@ -213,23 +213,76 @@ test.describe('delete a rate (AC-4, AC-5, AC-7)', () => {
     await expect(alert).toBeHidden();
     await expect(rowOf(page, name)).toHaveCount(0);
     await expect(page.getByRole('status').filter({ hasText: `${name} was deleted. The change is in the audit log.` })).toBeVisible();
+    // The button that opened the dialog went with its row, so focus goes to the page heading, not to the top of the page (ux-spec v0.17).
+    await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeFocused();
   });
 
-  test('a rate a formula uses cannot be deleted: the dialog names the formulas, links to the fields, has no axe violations, and the rate stays', async ({ page }) => {
+  test('a rate a formula uses cannot be deleted: the dialog names the formulas as text, has Close as its only button and no link, has no axe violations, and the rate stays', async ({ page }) => {
     await openProcessMaster(page);
     const opener = rowOf(page, USED_RATE).getByRole('button', { name: `Delete ${USED_RATE}` });
     await pressWithKeyboard(opener);
     const alert = page.getByRole('alertdialog', { name: BLOCKED_TITLE });
     await expect(alert).toBeVisible();
-    await expect(alert).toContainText(`${USED_RATE} cannot be deleted while a formula uses it`);
+    await expect(alert).toContainText(BLOCKED_SENTENCE);
     await expect(alert.getByRole('row', { name: /AL.*Cutting Cost/ })).toBeVisible();
-    await expect(alert.getByRole('link', { name: 'Go to Fields and formulas' })).toHaveAttribute('href', '/config/fields');
+    // Release 1: formulas cannot be changed, so there is nothing to link to (ux-spec v0.17; the product-owner, AC-4).
+    await expect(alert.getByRole('link')).toHaveCount(0);
+    await expect(alert.getByRole('button')).toHaveCount(1);
     await expect(alert.getByRole('button', { name: 'Close' })).toBeFocused();
     await expectNoAxeViolations(page);
     await page.keyboard.press('Escape');
     await expect(alert).toBeHidden();
     await expect(opener).toBeFocused();
     await expect(rowOf(page, USED_RATE)).toBeVisible();
+  });
+});
+
+test.describe('a rate deleted elsewhere while its dialog is open (QLT-06, ux-spec v0.17)', () => {
+  /** The dialog is closed, one status says what happened (no alert), the row is gone and the heading has focus. */
+  async function expectGone(page: Page, name: string, bold: string, sentence: string): Promise<void> {
+    const notice = page.getByRole('status').filter({ hasText: bold });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText(sentence);
+    // Inside the page: Next.js has its own route announcer, which is an alert outside main.
+    await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(rowOf(page, name)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeFocused();
+  }
+
+  /** Someone else deletes the rate after the list was read. */
+  async function deleteElsewhere(page: Page, name: string): Promise<void> {
+    const list = await page.request.get(`${DEVELOPMENT_URL}/api/v1/process-items`);
+    const items = ((await list.json()) as { processItems: Array<{ id: string; name: string }> }).processItems;
+    const id = items.find((item) => item.name === name)?.id ?? '';
+    const response = await page.request.delete(`${DEVELOPMENT_URL}/api/v1/process-items/${id}`, { headers: { origin: DEVELOPMENT_URL } });
+    expect(response.status()).toBe(204);
+  }
+
+  test('Edit, then Save: the dialog closes with no error in it, the warning names the rate, the list is read again and focus is on the heading', async ({ page }, testInfo) => {
+    const name = await makeRate(page, testInfo);
+    await openProcessMaster(page);
+    await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
+    const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+    await dialog.getByLabel('Default value').fill('5.37');
+    await deleteElsewhere(page, name);
+    const listRead = page.waitForRequest((request) => request.method() === 'GET' && request.url().endsWith('/api/v1/process-items'));
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await listRead;
+    await expectGone(page, name, `${name} no longer exists.`, 'It was deleted after you opened this list, so your changes were not saved. If you still need it, press Add rate.');
+  });
+
+  test('Delete, then Delete rate: the dialog closes, the information names the rate, the list is read again and focus is on the heading', async ({ page }, testInfo) => {
+    const name = await makeRate(page, testInfo);
+    await openProcessMaster(page);
+    await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Delete ${name}` }));
+    const alert = page.getByRole('alertdialog', { name: `Delete ${name}?` });
+    await deleteElsewhere(page, name);
+    const listRead = page.waitForRequest((request) => request.method() === 'GET' && request.url().endsWith('/api/v1/process-items'));
+    await alert.getByRole('button', { name: 'Delete rate' }).click();
+    await listRead;
+    await expectGone(page, name, `${name} was already deleted.`, 'It was deleted after you opened this list, so there was nothing to delete.');
   });
 });
 
@@ -248,6 +301,41 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
     await expect(rowOf(page, 'Foam Cost')).toBeVisible();
+  });
+
+  test('shows the skeleton after 300 ms while the list is read again, with the card busy, and the list when it arrives', async ({ page }, testInfo) => {
+    const name = await makeRate(page, testInfo);
+    await openProcessMaster(page);
+    await page.route('**/api/v1/process-items', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      // A slow answer: longer than the 300 ms before a skeleton appears (UX spec section 6.0 "States").
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return route.continue();
+    });
+    await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
+    const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+    await dialog.getByLabel('Default value').fill('4.37');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Loading the rates' })).toBeAttached();
+    await expect(page.locator('main [aria-busy="true"]').first()).toBeAttached();
+    await expect(rowOf(page, name)).toContainText('4.37');
+    await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
+  });
+
+  test('shows "No rates yet" with Add rate visible when there is no rate, and Add rate still opens its dialog', async ({ page }, testInfo) => {
+    const name = await makeRate(page, testInfo);
+    await openProcessMaster(page);
+    await page.route('**/api/v1/process-items', async (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ processItems: [] }) }) : route.continue(),
+    );
+    await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
+    const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+    await dialog.getByLabel('Default value').fill('4.37');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'No rates yet' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add rate' })).toBeVisible();
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add rate' }));
+    await expect(page.getByRole('dialog', { name: 'Add rate' })).toBeVisible();
   });
 
   test('shows the error state with "Try again" when the list cannot be read after a change, and Try again reads it', async ({ page }, testInfo) => {

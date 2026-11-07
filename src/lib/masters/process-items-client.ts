@@ -16,7 +16,7 @@ export interface ProcessItemRow {
   readonly id: string;
   readonly name: string;
   readonly unit: string;
-  /** Decimal text, for example "0.47". */
+  /** Decimal text, for example "1.37". */
   readonly defaultValue: string;
   readonly usedBy: ReadonlyArray<FormulaUseRow>;
 }
@@ -28,9 +28,9 @@ export interface ProcessItemInput {
 }
 
 export interface ProcessItemChangesInput {
-  readonly name?: string;
-  readonly unit?: string;
-  readonly defaultValue?: string;
+  readonly name?: string | undefined;
+  readonly unit?: string | undefined;
+  readonly defaultValue?: string | undefined;
 }
 
 const PROCESS_ITEMS_PATH = '/api/v1/process-items';
@@ -65,7 +65,8 @@ export function formulasOf(refusal: Refusal): ReadonlyArray<FormulaUseRow> {
   return toFormulaUses(refusal.body['usedBy']) ?? [];
 }
 
-const DONE = (): true => true;
+/** The reading of an answer that has no body (a 204): there is nothing to read, and it worked. */
+const readNothing = (): true => true;
 
 /** `GET /api/v1/process-items`. */
 export function listProcessItems(doFetch: Fetch = fetch): Promise<Outcome<ReadonlyArray<ProcessItemRow>>> {
@@ -89,5 +90,5 @@ export function updateProcessItem(id: string, changes: ProcessItemChangesInput, 
 
 /** `DELETE /api/v1/process-items/{id}`. The answer is 204; a 409 carries the formulas that use the rate (`formulasOf`). */
 export function deleteProcessItem(id: string, doFetch: Fetch = fetch): Promise<Outcome<true>> {
-  return sendJson(doFetch, `${PROCESS_ITEMS_PATH}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: ACCEPT_JSON }, DONE);
+  return sendJson(doFetch, `${PROCESS_ITEMS_PATH}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: ACCEPT_JSON }, readNothing);
 }

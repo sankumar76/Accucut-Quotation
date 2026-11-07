@@ -31,6 +31,7 @@ export const ACCEPT_JSON = { Accept: 'application/json' } as const;
 const SERVER_FAULT = 500;
 const NO_CONTENT = 204;
 
+/** Is this value an object whose keys can be read? (JSON from the server is checked with it, field by field.) */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

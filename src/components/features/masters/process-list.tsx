@@ -70,55 +70,70 @@ function RowActions({ item, pendingOpener, onAction, compact }: ProcessListProps
   );
 }
 
+/** The table from 768 px: it scrolls inside its own container only. */
+function ProcessTable(props: ProcessListProps) {
+  return (
+    <Table regionLabel="Process master rates, scrollable" caption="Process master rates">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Rate name</TableHead>
+          <TableHead>Unit</TableHead>
+          <TableHead className="text-right">Default value</TableHead>
+          <TableHead>Used in</TableHead>
+          <TableHead className="text-right">
+            <span className="sr-only">Actions</span>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {props.items.map((item) => (
+          <TableRow key={item.id} data-item-id={item.id}>
+            <TableCell className="font-semibold text-ink">{item.name}</TableCell>
+            <TableCell className="text-ink-2">{unitLabel(item.unit)}</TableCell>
+            <TableCell className="text-right tabular-nums">{formatDefaultValue(item.defaultValue, item.unit)}</TableCell>
+            <TableCell>
+              <UsedIn item={item} />
+            </TableCell>
+            <TableCell>
+              <RowActions {...props} item={item} compact />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/** A card for each rate below 768 px. */
+function ProcessCards(props: ProcessListProps) {
+  return (
+    <ul aria-label="Process master rates" className="flex flex-col">
+      {props.items.map((item) => (
+        <li key={item.id} data-item-id={item.id} className="flex flex-col gap-s-3 border-b border-border p-s-4 last:border-b-0">
+          <div className="flex flex-wrap items-center justify-between gap-s-2">
+            <span className="min-w-0 font-semibold break-words text-ink">{item.name}</span>
+            <UsedIn item={item} />
+          </div>
+          <div className="flex flex-wrap items-baseline gap-s-2">
+            <span className="text-sub font-semibold tabular-nums text-ink">{formatDefaultValue(item.defaultValue, item.unit)}</span>
+            {item.unit === PERCENT_UNIT ? null : <span className="text-label text-ink-2">{unitLabel(item.unit)}</span>}
+          </div>
+          <RowActions {...props} item={item} compact={false} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function ProcessList(props: ProcessListProps) {
-  const { items } = props;
   return (
     <>
       <div className="hidden md:block">
-        <Table regionLabel="Process master rates, scrollable" caption="Process master rates">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Rate name</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Default value</TableHead>
-              <TableHead>Used in</TableHead>
-              <TableHead className="text-right">
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.id} data-item-id={item.id}>
-                <TableCell className="font-semibold text-ink">{item.name}</TableCell>
-                <TableCell className="text-ink-2">{unitLabel(item.unit)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatDefaultValue(item.defaultValue, item.unit)}</TableCell>
-                <TableCell>
-                  <UsedIn item={item} />
-                </TableCell>
-                <TableCell>
-                  <RowActions {...props} item={item} compact />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ProcessTable {...props} />
       </div>
-      <ul aria-label="Process master rates" className="flex flex-col md:hidden">
-        {items.map((item) => (
-          <li key={item.id} data-item-id={item.id} className="flex flex-col gap-s-3 border-b border-border p-s-4 last:border-b-0">
-            <div className="flex flex-wrap items-center justify-between gap-s-2">
-              <span className="min-w-0 font-semibold break-words text-ink">{item.name}</span>
-              <UsedIn item={item} />
-            </div>
-            <div className="flex flex-wrap items-baseline gap-s-2">
-              <span className="text-sub font-semibold tabular-nums text-ink">{formatDefaultValue(item.defaultValue, item.unit)}</span>
-              {item.unit === PERCENT_UNIT ? null : <span className="text-label text-ink-2">{unitLabel(item.unit)}</span>}
-            </div>
-            <RowActions {...props} item={item} compact={false} />
-          </li>
-        ))}
-      </ul>
+      <div className="md:hidden">
+        <ProcessCards {...props} />
+      </div>
     </>
   );
 }

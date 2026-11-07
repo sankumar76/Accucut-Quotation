@@ -5,7 +5,7 @@ import type { FormulaUseRow, ProcessItemRow } from '@/lib/masters/process-items-
 import { BlockedDialog, DeleteDialog } from './process-delete-dialogs';
 import { ProcessFormDialog } from './process-form-dialog';
 import type { DialogKind } from './process-opener';
-import { savedNotice } from './process-texts';
+import { savedNotice, type PageNotice } from './process-texts';
 
 /**
  * The dialogs of SCR-11 as one module, so the page fetches them together the first time one is opened and keeps them mounted
@@ -22,13 +22,15 @@ export interface ProcessDialogsProps {
   /** The formulas the refusal lists. */
   readonly blockedBy: ReadonlyArray<FormulaUseRow>;
   readonly onClose: () => void;
-  /** Called after the server accepted a change, with the sentence to show. */
-  readonly onSaved: (text: string) => void;
+  /** Called after the server accepted a change, with the notice to show. */
+  readonly onSaved: (notice: PageNotice) => void;
   readonly onBlocked: (formulas: ReadonlyArray<FormulaUseRow>) => void;
+  /** Called when the server said the rate no longer exists (a 404 on a save or a delete). */
+  readonly onGone: (item: ProcessItemRow, what: 'edit' | 'delete') => void;
   readonly onCloseAutoFocus: (event: Event) => void;
 }
 
-export function ProcessDialogs({ open, target, formItem, blockedBy, onClose, onSaved, onBlocked, onCloseAutoFocus }: ProcessDialogsProps) {
+export function ProcessDialogs({ open, target, formItem, blockedBy, onClose, onSaved, onBlocked, onGone, onCloseAutoFocus }: ProcessDialogsProps) {
   return (
     <>
       <ProcessFormDialog
@@ -36,6 +38,7 @@ export function ProcessDialogs({ open, target, formItem, blockedBy, onClose, onS
         item={formItem}
         onClose={onClose}
         onSaved={(saved, kind) => onSaved(savedNotice(saved.name, kind === 'added' ? 'added' : 'saved'))}
+        onGone={(item) => onGone(item, 'edit')}
         onCloseAutoFocus={onCloseAutoFocus}
       />
       <DeleteDialog
@@ -44,6 +47,7 @@ export function ProcessDialogs({ open, target, formItem, blockedBy, onClose, onS
         onClose={onClose}
         onDeleted={(item) => onSaved(savedNotice(item.name, 'deleted'))}
         onBlocked={onBlocked}
+        onGone={(item) => onGone(item, 'delete')}
         onCloseAutoFocus={onCloseAutoFocus}
       />
       <BlockedDialog open={open === 'blocked'} item={target} formulas={blockedBy} onClose={onClose} onCloseAutoFocus={onCloseAutoFocus} />
