@@ -306,10 +306,15 @@ test.describe('search and states (AC-1, AC-8)', () => {
   test('shows the skeleton after 300 ms while the list is read again, with the card busy, and the list when it arrives', async ({ page }, testInfo) => {
     const name = await makeRate(page, testInfo);
     await openProcessMaster(page);
+    // A slow answer, held until the test lets it go (QLT-16): the skeleton shows after 300 ms of waiting (UX spec section 6.0 "States"),
+    // and the test asserts it while the answer is held, so nothing depends on a fixed delay.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     await page.route('**/api/v1/process-items', async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
-      // A slow answer: longer than the 300 ms before a skeleton appears (UX spec section 6.0 "States").
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await held;
       return route.continue();
     });
     await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
@@ -318,6 +323,7 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Loading the rates' })).toBeAttached();
     await expect(page.locator('main [aria-busy="true"]').first()).toBeAttached();
+    release();
     await expect(rowOf(page, name)).toContainText('4.37');
     await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
   });

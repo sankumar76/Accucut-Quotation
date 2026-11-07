@@ -102,7 +102,7 @@ function useReadAgain(list: List, opener: Dialogs['opener']) {
 }
 
 /** The presses that open a dialog, and the return of focus when it closes. */
-function useOpeners(dialogs: Dialogs, setNotice: SetNotice) {
+function openersFor(dialogs: Dialogs, setNotice: SetNotice) {
   function onRowAction(action: RowAction, item: ProcessItemRow, button: HTMLButtonElement, byKeyboard: boolean): void {
     // A rate a formula uses cannot be deleted: the refusal opens at once, from the list the page already holds (AC-4).
     const kind: DialogKind = action === 'delete' && item.usedBy.length > 0 ? 'blocked' : action;
@@ -123,7 +123,7 @@ function useOpeners(dialogs: Dialogs, setNotice: SetNotice) {
 }
 
 /** What the server's answer to a dialog does to the screen. */
-function useOutcomes(dialogs: Dialogs, setNotice: SetNotice, readAgain: (returnFocus: boolean) => Promise<void>) {
+function outcomesFor(dialogs: Dialogs, setNotice: SetNotice, readAgain: (returnFocus: boolean) => Promise<void>) {
   /** A change was saved: close, say so, read the list again. */
   async function onSaved(saved: PageNotice): Promise<void> {
     dialogs.setOpen(null);
@@ -155,7 +155,7 @@ export function useProcessMaster(initialItems: ReadonlyArray<ProcessItemRow>) {
   const dialogs = useDialogs();
   const [notice, setNotice] = useState<PageNotice | null>(null);
   const readAgain = useReadAgain(list, dialogs.opener);
-  return { list, dialogs, notice, readAgain, ...useOpeners(dialogs, setNotice), ...useOutcomes(dialogs, setNotice, readAgain) };
+  return { list, dialogs, notice, readAgain, ...openersFor(dialogs, setNotice), ...outcomesFor(dialogs, setNotice, readAgain) };
 }
 
 export type ProcessMaster = ReturnType<typeof useProcessMaster>;

@@ -4,6 +4,12 @@
  * are in `src/lib/masters/process-items.ts`, where the server's schemas read them too.
  */
 
+/**
+ * The class that lets a long rate name wrap inside a dialog title, a description or a notice (ux-spec v0.17: "long names wrap"). It
+ * is one string so that the rule is written once; Tailwind finds the class in this file.
+ */
+export const BREAK_LONG_NAMES = '[overflow-wrap:anywhere]';
+
 export const PROCESS_TITLE = 'Process master';
 export const PROCESS_DESCRIPTION = 'Default rates. Every customer starts with these values and can have its own.';
 export const ADD_RATE = 'Add rate';

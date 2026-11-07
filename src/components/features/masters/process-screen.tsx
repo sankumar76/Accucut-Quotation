@@ -17,6 +17,7 @@ import { isOpener } from './process-opener';
 import { ProcessResults } from './process-results';
 import {
   ADD_RATE,
+  BREAK_LONG_NAMES,
   FAILED_CONFIRMATION_TITLE,
   FAILED_DIALOGS_MESSAGE,
   FAILED_DIALOGS_TITLE,
@@ -74,7 +75,7 @@ function DialogsFailed({ confirmation }: { readonly confirmation: boolean }) {
 /** The notice under the header. The warning and the information are statuses, not alerts: nothing failed (ux-spec v0.17). */
 function PageNoticeView({ notice }: { readonly notice: PageNotice }) {
   return (
-    <Notice tone={notice.tone} role="status" className="[overflow-wrap:anywhere]" {...(notice.title === undefined ? {} : { title: notice.title })}>
+    <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
       {notice.text}
     </Notice>
   );

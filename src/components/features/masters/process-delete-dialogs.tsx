@@ -20,6 +20,7 @@ import { deleteProcessItem, formulasOf, type FormulaUseRow, type ProcessItemRow 
 
 import {
   BLOCKED_CLOSE,
+  BREAK_LONG_NAMES,
   BLOCKED_TITLE,
   blockedSentence,
   deleteDescription,
@@ -77,7 +78,7 @@ function DeleteBody({ item, request }: { readonly item: ProcessItemRow; readonly
     <>
       <AlertDialogHeader>
         <AlertDialogTitle>{deleteTitle(item.name)}</AlertDialogTitle>
-        <AlertDialogDescription className="[overflow-wrap:anywhere]">{deleteDescription(item.name)}</AlertDialogDescription>
+        <AlertDialogDescription className={BREAK_LONG_NAMES}>{deleteDescription(item.name)}</AlertDialogDescription>
       </AlertDialogHeader>
       {request.failed ? (
         <Notice tone="danger" title={FAILED_DELETE_MESSAGE}>
@@ -157,7 +158,7 @@ export function BlockedDialog({ open, item, formulas, onClose, onCloseAutoFocus 
           <>
             <AlertDialogHeader>
               <AlertDialogTitle>{BLOCKED_TITLE}</AlertDialogTitle>
-              <AlertDialogDescription className="[overflow-wrap:anywhere]">{blockedSentence(item.name)}</AlertDialogDescription>
+              <AlertDialogDescription className={BREAK_LONG_NAMES}>{blockedSentence(item.name)}</AlertDialogDescription>
             </AlertDialogHeader>
             <FormulaTable name={item.name} formulas={formulas} />
             <AlertDialogFooter>
