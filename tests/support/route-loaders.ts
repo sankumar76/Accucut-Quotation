@@ -13,6 +13,8 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
   '/api/v1/users/[id]': () => import('@/app/api/v1/users/[id]/route'),
   '/api/v1/users/[id]/password-reset': () => import('@/app/api/v1/users/[id]/password-reset/route'),
+  '/api/v1/process-items': () => import('@/app/api/v1/process-items/route'),
+  '/api/v1/process-items/[id]': () => import('@/app/api/v1/process-items/[id]/route'),
 };
 
 export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
@@ -21,4 +23,5 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/design-system': () => import('@/app/(portal)/design-system/page'),
   '/users': () => import('@/app/(portal)/users/page'),
   '/audit': () => import('@/app/(portal)/audit/page'),
+  '/masters/process': () => import('@/app/(portal)/masters/process/page'),
 };

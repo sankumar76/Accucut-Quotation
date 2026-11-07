@@ -3,10 +3,13 @@ import { vi } from 'vitest';
 import type { RoleName } from '../../src/lib/auth/roles';
 
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
+import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
+import { seedConfig } from './seed-config';
 import { defined } from './defined';
 
 /**
@@ -57,6 +60,10 @@ export interface SessionHarness {
   readonly userService: UserService;
   /** The real audit service over in-memory storage, for the routes that call it (`getAuditService` in the composition mock). */
   readonly auditService: AuditService;
+  /** The Process Master over in-memory rates (the 15 seed items) and the seed registry, for the routes that call it (`getMastersService` in the composition mock). */
+  readonly mastersService: MastersService;
+  /** The in-memory rates behind `mastersService`: a test sets values in them to look for in what a refused caller is sent. */
+  readonly masters: FakeMasterRepository;
   /** The in-memory audit storage behind `auditService` and `userService`: what was recorded, and the clock that stamps it. */
   readonly auditWorld: FakeAuditWorld;
   /** The id of each role's person (the first of that role). */
@@ -84,11 +91,19 @@ export function createSessionHarness(): SessionHarness {
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
   const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
+  const masters = createFakeMasterRepository();
 
   return {
     users,
     auditService,
     auditWorld,
+    masters,
+    mastersService: createMastersService({
+      masters,
+      transactions: auditWorld.transactions,
+      audit: auditService,
+      currentConfiguration: () => Promise.resolve(seedConfig),
+    }),
     userService: createUserService({
       users,
       throttles: createFakeThrottleRepository(),

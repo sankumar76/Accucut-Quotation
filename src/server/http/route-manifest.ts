@@ -139,6 +139,19 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Administration', label: 'Audit log', order: 30, icon: 'scroll-text' },
   },
   { path: '/api/v1/audit', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-02.01 (SCR-11). The Admin only (BR-004). The default-change routes (`/process-items/{id}/default-change`) are story 02.08's.
+  {
+    path: '/masters/process',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-11',
+    nav: { group: 'Masters', label: 'Process master', order: 10, icon: 'database' },
+  },
+  { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
   {
@@ -156,16 +169,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
-  {
-    path: '/masters/process',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-11',
-    nav: { group: 'Masters', label: 'Process master', order: 10, icon: 'database' },
-  },
   {
     path: '/masters/customers',
     kind: 'page',

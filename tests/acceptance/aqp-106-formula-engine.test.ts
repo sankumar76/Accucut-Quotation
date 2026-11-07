@@ -555,24 +555,23 @@ describe('[AQP-106 AC-6] internal form and display form', () => {
     }
   });
 
-  // DEF-006 reproduction (characterisation). It pins today's defective behaviour so CI stays green and the defect is
-  // visible; the fix of DEF-006 changes the last two expectations to: the name is refused, and the round trip is exact.
-  it('[AQP-106 AC-6, QLT-05] DEF-006 reproduction: a rate name built from two other rate names and a minus sign is accepted, and a stored formula then changes meaning in a round trip', () => {
-    // "Cost-Waste" reads as Cost - Waste while those rates exist. If it is accepted, a formula stored as
-    // {{rate:Cost}}-{{rate:Waste}} is shown as "Cost-Waste" and saved back as the new rate: a different price, no error.
+  // DEF-006 (GitHub #49), fixed in STORY-02.01 (AQP-113). It was a characterisation test that pinned the defect so CI stayed green;
+  // it now states the rule: a name that reads as other rate names and an operator is refused, so the third rate never exists
+  // and a stored formula keeps its meaning in a round trip.
+  it('[AQP-106 AC-6, QLT-05] DEF-006: a rate name built from two other rate names and a minus sign is refused, and the stored formula round-trips exactly', () => {
     const rates = [
       { id: RATE_FOAM, name: 'Cost' },
       { id: RATE_FOAM_COST, name: 'Waste' },
     ];
-    const issues = rateNameIssues('Cost-Waste', rates.map((rate) => rate.name));
-    const added = [...rates, { id: RATE_SHARE, name: 'Cost-Waste' }];
+    // "Cost-Waste" reads as Cost - Waste while those rates exist, so it must never become a rate.
+    expect(rateNameIssues('Cost-Waste', rates.map((rate) => rate.name)).map((issue) => issue.code)).toEqual(['RATE_NAME_IS_COLUMN_LETTER']);
+    // With the third rate refused, the stored formula is shown and read back as the same text.
+    const context = { fieldIds: FIELD_IDS, rates };
     const stored = `{{rate:${RATE_FOAM}}}-{{rate:${RATE_FOAM_COST}}}`;
-    const roundTrip = toInternalForm(toDisplayForm(stored, { fieldIds: FIELD_IDS, rates: added }), { fieldIds: FIELD_IDS, rates: added });
-    expect(toDisplayForm(stored, { fieldIds: FIELD_IDS, rates: added })).toBe('Cost-Waste');
-    expect(issues).toEqual([]); // DEF-006: expected RATE_NAME_IS_COLUMN_LETTER or similar
-    expect(roundTrip).toBe(`{{rate:${RATE_SHARE}}}`); // DEF-006: expected the stored text back unchanged
+    expect(toDisplayForm(stored, context)).toBe('Cost-Waste');
+    expect(toInternalForm(toDisplayForm(stored, context), context)).toBe(stored);
     // The same with a column: "AB-Waste" reads as AB - Waste.
-    expect(rateNameIssues('AB-Waste', ['Waste'])).toEqual([]); // DEF-006
+    expect(rateNameIssues('AB-Waste', ['Waste']).map((issue) => issue.code)).toEqual(['RATE_NAME_IS_COLUMN_LETTER']);
   });
 });
 

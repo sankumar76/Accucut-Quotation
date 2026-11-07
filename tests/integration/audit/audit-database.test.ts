@@ -139,9 +139,9 @@ describe('AC-2: the entry and the change are one transaction', () => {
   });
 });
 
-describe('AC-3: one test per event type (the six wired events of the registry)', () => {
+describe('AC-3: one test per event type (the wired events of the registry: six user events, and the three of the Process Master from STORY-02.01)', () => {
   /** One scenario for each wired event. The test below fails if the registry wires an event this table has no scenario for. */
-  const SCENARIOS: Readonly<Record<string, () => Promise<{ readonly objectId: string; readonly label: string; readonly before: unknown; readonly after: unknown }>>> = {
+  const SCENARIOS: Readonly<Record<string, () => Promise<{ readonly objectId: string; readonly label: string; readonly before: unknown; readonly after: unknown; readonly objectType?: string }>>> = {
     'user.created': async () => {
       const created = await db.userService.create(by(), newPerson('event.created', 'LEAD'));
       return { objectId: created.id, label: 'Invented event.created', before: null, after: { role: 'LEAD', isActive: true } };
@@ -172,6 +172,27 @@ describe('AC-3: one test per event type (the six wired events of the registry)',
       await db.userService.resetPassword(by(), person.id, 'invented-temporary-password-2');
       return { objectId: person.id, label: 'Invented event.reset', before: { mustChangePassword: true }, after: { mustChangePassword: true } };
     },
+    // STORY-02.01: the three events of the Process Master. The object type is the master the caller names, not the registry's generic one.
+    'master.created': async () => {
+      const created = await db.mastersService.createProcessItem(by(), { name: 'Event-created-rate', unit: 'per kg', defaultValue: '1.37' });
+      return { objectId: created.id, label: 'Event-created-rate', before: null, after: { name: 'Event-created-rate', unit: 'per kg', defaultValue: '1.37' }, objectType: 'process_item' };
+    },
+    'master.edited': async () => {
+      const created = await db.mastersService.createProcessItem(by(), { name: 'Event-edited-rate', unit: 'per kg', defaultValue: '1.37' });
+      await db.mastersService.updateProcessItem(by(), created.id, { defaultValue: '2.37' });
+      return {
+        objectId: created.id,
+        label: 'Event-edited-rate',
+        before: { name: 'Event-edited-rate', unit: 'per kg', defaultValue: '1.37' },
+        after: { name: 'Event-edited-rate', unit: 'per kg', defaultValue: '2.37' },
+        objectType: 'process_item',
+      };
+    },
+    'master.deleted': async () => {
+      const created = await db.mastersService.createProcessItem(by(), { name: 'Event-deleted-rate', unit: 'per kg', defaultValue: '1.37' });
+      await db.mastersService.deleteProcessItem(by(), created.id);
+      return { objectId: created.id, label: 'Event-deleted-rate', before: { name: 'Event-deleted-rate', unit: 'per kg', defaultValue: '1.37' }, after: null, objectType: 'process_item' };
+    },
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {
@@ -180,7 +201,7 @@ describe('AC-3: one test per event type (the six wired events of the registry)',
 
   it.each(Object.keys(SCENARIOS))('%s creates exactly one entry of its kind, with every part, committed with the change', async (event) => {
     const scenario = defined(SCENARIOS[event]);
-    const { objectId, label, before, after } = await scenario();
+    const { objectId, label, before, after, objectType } = await scenario();
     const mine = (await entriesFor(db, objectId)).filter((entry) => entry.event === event);
     expect(mine).toHaveLength(1);
     const entry = defined(mine[0]);
@@ -188,7 +209,7 @@ describe('AC-3: one test per event type (the six wired events of the registry)',
     expect(entry).toMatchObject({
       actor_id: adminId,
       actor_label: ADMIN_NAME,
-      object_type: defined(definition).objectType,
+      object_type: objectType ?? defined(definition).objectType,
       object_id: objectId,
       object_label: label,
       before,
@@ -209,7 +230,9 @@ describe('AC-3: one test per event type (the six wired events of the registry)',
   it('a request that changes the role and deactivates raises two entries in one transaction', async () => {
     const person = await db.userService.create(by(), newPerson('two.events'));
     await db.userService.update(by(), person.id, { role: 'LEAD', isActive: false });
-    expect((await entriesFor(db, person.id)).map((entry) => entry.event)).toEqual(['user.created', 'user.role_changed', 'user.deactivated']);
+    // The set, not the sequence: the entries of one transaction can share a millisecond, and then the log's order (time, then a random ID)
+    // is not their order of writing (found by CI on the AQP-113 branch; the DEF-017 tests compare sets for the same reason).
+    expect((await entriesFor(db, person.id)).map((entry) => entry.event).sort()).toEqual(['user.created', 'user.deactivated', 'user.role_changed']);
     expect(await userRow(db, person.id)).toMatchObject({ role: 'LEAD', is_active: false });
   });
 
@@ -226,7 +249,8 @@ describe('AC-3: one test per event type (the six wired events of the registry)',
     const person = await db.userService.create(by(), newPerson('name.and.role'));
     await db.userService.update(by(), person.id, { name: 'Invented Both Changed', role: 'LEAD' });
     const afterBoth = await entriesFor(db, person.id);
-    expect(afterBoth.map((entry) => [entry.event, entry.object_label])).toEqual([
+    // Two entries of one transaction can share a millisecond; the set is what the story promises, so the pairs are compared by event name.
+    expect(afterBoth.map((entry) => [entry.event, entry.object_label]).sort(([a], [b]) => String(a).localeCompare(String(b)))).toEqual([
       ['user.created', 'Invented name.and.role'],
       ['user.renamed', 'Invented Both Changed'],
       ['user.role_changed', 'Invented Both Changed'],

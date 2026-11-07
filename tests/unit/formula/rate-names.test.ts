@@ -104,3 +104,58 @@ describe('rate names that cannot be formula text at all', () => {
     }
   });
 });
+
+describe('DEF-006 (GitHub #49): a name that reads as other rate names and an operator', () => {
+  const CONTEXT_RATES = [
+    { id: '00000000-0000-4000-8000-0aaa00000001', name: 'Cost' },
+    { id: '00000000-0000-4000-8000-0aaa00000002', name: 'Waste' },
+  ];
+
+  it.each([
+    ['two rates and a minus sign', 'Cost-Waste', ['Cost', 'Waste']],
+    ['two rates and a minus sign, with spaces', 'Cost - Waste', ['Cost', 'Waste']],
+    ['a column, a minus sign and a rate', 'AB-Waste', ['Waste']],
+    ['a rate and a number', 'Cost 2', ['Cost']],
+    ['a rate and a column', 'Cost AB', ['Cost']],
+    ['the same rate twice', 'Cost Cost', ['Cost']],
+    ['a longer rate and a number (the longest name wins, as in a formula)', 'Cost-Waste-2', ['Cost', 'Cost-Waste']],
+    ['two names with a space and a percent sign', 'Foam Cost-Transport %', ['Foam Cost', 'Transport %']],
+  ])('refuses %s ("%s")', (_what, name, others) => {
+    expect(codes(name, others)).toEqual(['RATE_NAME_IS_COLUMN_LETTER']);
+  });
+
+  it.each([
+    ["a name that begins with another rate's name and goes on with words", 'Cost basis', ['Cost']],
+    ["a name that contains another rate's name inside a longer word", 'Costly', ['Cost']],
+    ['a name with a hyphen and a word that is no rate', 'Cost-Handling', ['Cost']],
+    ['a name that differs from another rate only in letter case (the formula engine matches exactly)', 'cost', ['Cost']],
+  ])('still accepts %s ("%s")', (_what, name, others) => {
+    expect(codes(name, others)).toEqual([]);
+  });
+
+  it("leaves a name that is exactly another rate's to the duplicate check, in its own words", () => {
+    expect(codes('Cost', ['Cost', 'Waste'])).toEqual(['RATE_NAME_DUPLICATE']);
+    expect(codes('Cost-Waste', ['Cost-Waste', 'Cost', 'Waste'])).toEqual(['RATE_NAME_DUPLICATE']);
+  });
+
+  it('accepts every seed name against the other 14 and against the same names plus a rate the Admin added', () => {
+    const extra = ['Buffing-rate-per-sqin'];
+    for (const item of SEED_PROCESS_ITEMS) {
+      const others = [...SEED_PROCESS_ITEMS.filter((other) => other.id !== item.id).map((other) => other.name), ...extra];
+      expect(codes(item.name, others), item.name).toEqual([]);
+    }
+  });
+
+  it('the stored formula survives the round trip because the refused name never becomes a rate', () => {
+    const context: ReferenceContext = { fieldIds: FIELD_IDS, rates: CONTEXT_RATES };
+    const stored = `{{rate:${CONTEXT_RATES[0]?.id}}}-{{rate:${CONTEXT_RATES[1]?.id}}}`;
+    expect(codes('Cost-Waste', CONTEXT_RATES.map((rate) => rate.name))).toEqual(['RATE_NAME_IS_COLUMN_LETTER']);
+    expect(toInternalForm('Cost-Waste', context)).toBe(stored);
+  });
+
+  it("STD-05: the message does not repeat the name or another rate's name", () => {
+    const [issue] = rateNameIssues('Wombat-Aardvark', ['Wombat', 'Aardvark']);
+    expect(issue?.message).toBeDefined();
+    expect(issue?.message).not.toMatch(/Wombat|Aardvark/);
+  });
+});

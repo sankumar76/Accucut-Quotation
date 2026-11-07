@@ -189,6 +189,12 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
+      # Configuration version 1, the field registry, as the `migrate` step of a real install does it right after the migrations
+      # (architecture section 5.6). The Process master page (STORY-02.01) reads the current version to say which formulas use a
+      # rate, so stage 11b, which opens it, needs one. It holds structure, never master data (ADR-014).
+      - name: "Stage 10: configuration version 1 (the field registry)"
+        run: node --conditions=react-server --import tsx scripts/ensure-seed-version.ts
+
       # ---- Stage 11: integration, contract, security, acceptance, then the combined coverage gates
       # Every Vitest level runs in one run with the full coverage scope (scripts/lib/coverage-scope.ts), so a
       # service tested only by an integration test counts as covered. The whole-package threshold is decided
@@ -315,6 +321,11 @@ jobs:
 
       - name: "Shard: migrations on an empty database"
         run: npx prisma migrate deploy
+
+      # Configuration version 1, as the `migrate` step of a real install does it after the migrations (architecture section 5.6): the
+      # Process master page reads it to say which formulas use a rate (STORY-02.01).
+      - name: "Shard: configuration version 1 (the field registry)"
+        run: node --conditions=react-server --import tsx scripts/ensure-seed-version.ts
 
       # Stage 12a (DEF-015, AQP-206, test strategy section 10.6), once per shard. The browser download and the browser's
       # system packages (.deb files) are cached, and apt is bounded on a miss; the step stops after 8 minutes. Caches are

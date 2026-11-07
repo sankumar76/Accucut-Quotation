@@ -2,7 +2,16 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { ActiveAdminExistsError, AppError, DatabaseBusyError, FieldValidationError, ForbiddenError, UnauthorizedError } from '../../lib/errors';
+import {
+  ActiveAdminExistsError,
+  AppError,
+  DatabaseBusyError,
+  FieldValidationError,
+  ForbiddenError,
+  ProcessItemInUseError,
+  UnauthorizedError,
+  type FormulaUse,
+} from '../../lib/errors';
 
 /**
  * The error answer of every API route (architecture section 6, "Error model"): `application/problem+json`
@@ -35,6 +44,8 @@ export interface Problem {
   readonly errors?: ReadonlyArray<ProblemDetail>;
   /** Extension member of a second-Admin refusal (RFC 9457): who holds the one place. Present only on that 409. */
   readonly currentAdmin?: { readonly id: string; readonly name: string };
+  /** Extension member of the refusal to delete a rate a formula uses (STORY-02.01 AC-4): each formula's column letter and label. */
+  readonly usedBy?: ReadonlyArray<FormulaUse>;
 }
 
 /** Fixed words for the refusals, so a role refusal reads the same for every route and every ID asked for (CR-33). */
@@ -94,6 +105,9 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
   if (error instanceof ActiveAdminExistsError) {
     const base = problem(error.httpStatus, error.code, error.message, requestId);
     return error.currentAdmin === null ? base : { ...base, currentAdmin: error.currentAdmin };
+  }
+  if (error instanceof ProcessItemInUseError) {
+    return { ...problem(error.httpStatus, error.code, error.message, requestId), usedBy: error.usedBy.map(({ letter, label }) => ({ letter, label })) };
   }
   if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError)) {
     return problem(error.httpStatus, error.code, INTERNAL_TITLE, requestId);

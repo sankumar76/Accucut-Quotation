@@ -6,12 +6,16 @@ import { systemClock } from '../lib/time';
 import { buildAuthOptions } from './auth/options';
 import { passwordHasher } from './auth/password-hasher';
 import { createAuditRepository } from './repositories/audit-repository';
+import { createConfigRepository } from './repositories/config-repository';
+import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { getCurrentVersion } from './services/config-service';
+import { createMastersService, type MastersService } from './services/masters-service';
 import { createUserService, type UserService } from './services/user-service';
 
 /**
@@ -26,6 +30,7 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let auditService: AuditService | undefined;
+let mastersService: MastersService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -68,6 +73,23 @@ export function getUserService(): UserService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return userService;
+}
+
+/**
+ * The Process Master (STORY-02.01). Every change runs in one transaction with its audit entry (STORY-01.07). The formulas that use
+ * a rate are read from the current configuration version, which the process caches per version (`getCurrentVersion`).
+ */
+export function getMastersService(): MastersService {
+  if (mastersService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    mastersService = createMastersService({
+      masters: createMasterRepository(runtimeClient()),
+      transactions: createTransactionRunner(runtimeClient()),
+      audit: getAuditService(),
+      currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
+    });
+  }
+  return mastersService;
 }
 
 /**
