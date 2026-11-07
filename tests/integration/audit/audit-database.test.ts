@@ -230,7 +230,9 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
   it('a request that changes the role and deactivates raises two entries in one transaction', async () => {
     const person = await db.userService.create(by(), newPerson('two.events'));
     await db.userService.update(by(), person.id, { role: 'LEAD', isActive: false });
-    expect((await entriesFor(db, person.id)).map((entry) => entry.event)).toEqual(['user.created', 'user.role_changed', 'user.deactivated']);
+    // The set, not the sequence: the entries of one transaction can share a millisecond, and then the log's order (time, then a random ID)
+    // is not their order of writing (found by CI on the AQP-113 branch; the DEF-017 tests compare sets for the same reason).
+    expect((await entriesFor(db, person.id)).map((entry) => entry.event).sort()).toEqual(['user.created', 'user.deactivated', 'user.role_changed']);
     expect(await userRow(db, person.id)).toMatchObject({ role: 'LEAD', is_active: false });
   });
 
