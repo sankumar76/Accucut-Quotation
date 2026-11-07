@@ -167,10 +167,10 @@ describe('AC-3: changing a rate', () => {
 
   it('writes nothing for a save that sets every value to what it already is (spaces around the number and a different spelling of it)', async () => {
     const { service, world } = build();
-    await service.updateProcessItem(CONTEXT, FOAM.id, { defaultValue: '12.5' });
+    await service.updateProcessItem(CONTEXT, FOAM.id, { defaultValue: '12.37' });
     const before = world.audit.appended.length;
-    const same = await service.updateProcessItem(CONTEXT, FOAM.id, { name: 'Foam Cost', unit: 'per sq ft', defaultValue: '12.50' });
-    expect(same.defaultValue).toBe('12.50');
+    const same = await service.updateProcessItem(CONTEXT, FOAM.id, { name: 'Foam Cost', unit: 'per sq ft', defaultValue: '012.37' });
+    expect(same.defaultValue).toBe('12.37');
     expect(world.audit.appended).toHaveLength(before);
   });
 

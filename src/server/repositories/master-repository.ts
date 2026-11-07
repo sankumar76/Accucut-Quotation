@@ -118,7 +118,7 @@ async function enforcingConstraints<T>(write: () => Promise<T>): Promise<T> {
 }
 
 /** Builds the repository over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
-// Over 40 lines on purpose (coding standards section 1): one object of seven repository methods, each under 20 lines.
+// Over 40 lines on purpose (coding standards section 1): one object of seven repository methods, each about 20 lines or fewer.
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     listProcessItems() {

@@ -45,6 +45,8 @@ export const DEFAULT_VALUE_PATTERN = /^\d{1,12}(?:\.\d{1,2})?$/;
 export const NAME_REQUIRED_MESSAGE = 'Enter a name.';
 export const NAME_TOO_LONG_MESSAGE = `Use ${PROCESS_ITEM_NAME_MAX_LENGTH} characters or fewer.`;
 export const NAME_TAKEN_MESSAGE = 'A rate with this name already exists.';
+/** Said when a name would change how a formula that is already stored reads back from display form (DEF-006, QLT-15). It names no rate and no formula. */
+export const ROUND_TRIP_MESSAGE = 'This name would change how an existing formula reads, so it cannot be used.';
 export const UNIT_REQUIRED_MESSAGE = 'Choose a unit.';
 export const DEFAULT_VALUE_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
 export const NOTHING_TO_CHANGE_MESSAGE = 'Change at least one of name, unit or default value.';

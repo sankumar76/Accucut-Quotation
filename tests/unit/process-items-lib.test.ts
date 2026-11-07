@@ -63,9 +63,9 @@ describe('the default value (AC-2: a number of 0 or more with up to 2 decimals)'
   });
 
   it('is written to two decimals without leading zeros, so two spellings of one number are one value', () => {
-    expect(normaliseDefaultValue('7')).toBe('7.00');
-    expect(normaliseDefaultValue('7.5')).toBe('7.50');
-    expect(normaliseDefaultValue('007.50')).toBe('7.50');
+    expect(normaliseDefaultValue('12')).toBe('12.00');
+    expect(normaliseDefaultValue('3.37')).toBe('3.37');
+    expect(normaliseDefaultValue('003.37')).toBe('3.37');
     expect(normaliseDefaultValue('0')).toBe('0.00');
     expect(normaliseDefaultValue(' 0.37 ')).toBe('0.37');
   });

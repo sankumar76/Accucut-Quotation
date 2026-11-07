@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { NAME_REFUSED_CODE, NotFoundError } from '@/lib/errors';
 import { rateSetIssues } from '@/lib/formula';
+import { ROUND_TRIP_MESSAGE } from '@/lib/masters/process-items';
 
 import { contextOf, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
+import { configurationWithFormula, rateRef } from '../../support/formula-config';
 import { SEED_PROCESS_ITEMS } from '../../support/seed-config';
 import { refusal } from '../../support/user-service-fixture';
 
@@ -130,6 +132,49 @@ describe('a delete and an update of one rate at once (QLT-03)', () => {
     expect(remove?.status).toBe('fulfilled');
     if (update?.status === 'rejected') expect(update.reason).toBeInstanceOf(NotFoundError);
     expect(await allNames()).not.toContain(`Du${round}-Rate`);
+  });
+});
+
+describe('a stored formula A-B that a name would change (QLT-15)', () => {
+  /** The configuration holds `Pa - Qb-Rc`; the two sets of the quality reviewer are set (a) Pa-Qb-Rc and set (b) Pa-Qb with Rc. */
+  async function serviceWithFormula() {
+    const a = await add('Pa');
+    const b = await add('Qb-Rc');
+    return db.buildMastersService({ configuration: configurationWithFormula(`${rateRef(a.id)}-${rateRef(b.id)}`) });
+  }
+
+  const roundTripRefusal = { code: NAME_REFUSED_CODE, fields: [{ field: 'name', message: ROUND_TRIP_MESSAGE }] };
+
+  it('set (b) by add: Rc is accepted, then Pa-Qb is refused at the step that breaks the formula, with no row and no entry', async () => {
+    const service = await serviceWithFormula();
+    await service.createProcessItem(by(), { name: 'Rc', ...NEW_RATE });
+    const entries = await entryCount(db);
+    expect(await refusal(service.createProcessItem(by(), { name: 'Pa-Qb', ...NEW_RATE }))).toMatchObject(roundTripRefusal);
+    expect(await allNames()).not.toContain('Pa-Qb');
+    expect(await entryCount(db)).toBe(entries);
+  });
+
+  it('set (a) by add: Pa-Qb is refused, and so is Pa-Qb-Rc', async () => {
+    const service = db.buildMastersService({ configuration: configurationWithFormula(`${rateRef(await idOf('Pa'))}-${rateRef(await idOf('Qb-Rc'))}`) });
+    expect(await refusal(service.createProcessItem(by(), { name: 'Pa-Qb', ...NEW_RATE }))).toMatchObject(roundTripRefusal);
+    expect(await refusal(service.createProcessItem(by(), { name: 'Pa-Qb-Rc', ...NEW_RATE }))).toMatchObject({ code: NAME_REFUSED_CODE });
+    expect(await allNames()).not.toContain('Pa-Qb-Rc');
+  });
+
+  it('by rename: a rate renamed into Pa-Qb or Pa-Qb-Rc is refused and keeps its name; a harmless new name is accepted', async () => {
+    const service = db.buildMastersService({ configuration: configurationWithFormula(`${rateRef(await idOf('Pa'))}-${rateRef(await idOf('Qb-Rc'))}`) });
+    const other = await add('Zz-Rate');
+    const entries = await entryCount(db);
+    expect(await refusal(service.updateProcessItem(by(), other.id, { name: 'Pa-Qb' }))).toMatchObject(roundTripRefusal);
+    expect(await refusal(service.updateProcessItem(by(), other.id, { name: 'Pa-Qb-Rc' }))).toMatchObject({ code: NAME_REFUSED_CODE });
+    expect(await allNames()).toContain('Zz-Rate');
+    expect(await entryCount(db)).toBe(entries);
+    await service.updateProcessItem(by(), other.id, { name: 'Zz-Rate-2' });
+    expect(await allNames()).toContain('Zz-Rate-2');
+  });
+
+  it('the seed configuration accepts the same names: with no stored formula that they break, they are decided by the guards as before', async () => {
+    expect((await add('Pa-Qb-Seed')).name).toBe('Pa-Qb-Seed');
   });
 });
 

@@ -1,14 +1,7 @@
-import {
-  FieldValidationError,
-  NAME_REFUSED_CODE,
-  NAME_TAKEN_CODE,
-  NotFoundError,
-  ProcessItemInUseError,
-  type FormulaUse,
-} from '../../lib/errors';
-import type { ConfigDocument } from '../../lib/fields/schema';
+import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseError, type FormulaUse } from '../../lib/errors';
 import { rateUsesOf } from '../../lib/fields/rate-usage';
-import { rateNameIssues, rateSetIssues } from '../../lib/formula';
+import type { ConfigDocument } from '../../lib/fields/schema';
+import type { RateReference } from '../../lib/formula';
 import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
 import {
   MasterConstraintError,
@@ -20,6 +13,7 @@ import {
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
+import { assertNameUsable } from './rate-name-rules';
 
 /**
  * The Process Master (STORY-02.01; FR-011, FR-012; architecture sections 4.1, 5.1 and 6): the Admin adds, changes and deletes
@@ -27,9 +21,10 @@ import type { AuditContext, AuditService } from './audit-service';
  * holds the rules that stay true whoever asks:
  *
  *   - **A name is unique ignoring letter case** (AC-2), and **safe in a formula**: it cannot read as column letters, numbers,
- *     operators or other rate names, and it cannot make another rate's name read that way (DEF-006, QLT-01). The whole set of
- *     names that a change would leave is judged (`rateSetIssues`), so the order in which rates are added or renamed does not matter.
- *     A name that is not changed is not judged again, so editing a rate's unit or value is never blocked by its own name.
+ *     operators or other rate names, and it must not change how a stored formula reads back from display form (DEF-006, QLT-01,
+ *     QLT-15). Those rules are `rate-name-rules.ts`: the whole set of names a change would leave is judged, and every formula of the
+ *     current configuration must still round-trip, so the order in which rates are added or renamed does not matter. A name that is
+ *     not changed is not judged again, so editing a rate's unit or value is never blocked by its own name.
  *   - **A rate a formula uses cannot be deleted** (AC-4): the answer is a 409 that lists the formulas, and nothing changes. The
  *     formulas are read from the current configuration version, where a rate is `{{rate:<id>}}`.
  *   - **A rename never breaks a formula** (AC-3), because a formula holds the ID.
@@ -81,38 +76,21 @@ function entryFor(context: AuditContext, item: ProcessItemRecord) {
   return { ...context, objectType: PROCESS_ITEM_OBJECT_TYPE, object: { id: item.id, label: item.name } };
 }
 
-function nameRefusal(message: string, code: string): FieldValidationError {
-  return new FieldValidationError([{ field: 'name', message }], { code });
-}
-
-/**
- * Why a name cannot be used, or nothing. `otherNames` are the names of the **other** rates. Letter case is ignored first (AC-2,
- * in the Admin's words), then the formula engine's rule for what a formula could read another way: the name itself, and then the
- * whole set the change would leave, so an existing name that the new one makes ambiguous is found too (DEF-006, QLT-01).
- */
-function assertNameUsable(name: string, otherNames: ReadonlyArray<string>): void {
-  const lower = name.toLowerCase();
-  if (otherNames.some((other) => other.toLowerCase() === lower)) throw nameRefusal(NAME_TAKEN_MESSAGE, NAME_TAKEN_CODE);
-  const [issue] = [...rateNameIssues(name, otherNames), ...rateSetIssues([...otherNames, name])];
-  if (issue !== undefined) throw nameRefusal(issue.message, NAME_REFUSED_CODE);
+function nameTaken(): FieldValidationError {
+  return new FieldValidationError([{ field: 'name', message: NAME_TAKEN_MESSAGE }], { code: NAME_TAKEN_CODE });
 }
 
 // Over 40 lines on purpose (coding standards section 1): a factory whose parts are small named functions of 10 to 15 lines each.
 export function createMastersService({ masters, transactions, audit, currentConfiguration }: MastersServiceDependencies): MastersService {
-  /** The formulas that use each rate, from the current configuration. */
-  async function usesByRate(): Promise<ReadonlyMap<string, ReadonlyArray<FormulaUse>>> {
-    return rateUsesOf(await currentConfiguration());
-  }
-
   const withUses = (item: ProcessItemRecord, uses: ReadonlyMap<string, ReadonlyArray<FormulaUse>>): ProcessItemView => ({
     ...item,
     usedBy: uses.get(item.id.toLowerCase()) ?? [],
   });
 
-  /** The names of the other rates, read in the transaction after the table lock. */
-  async function namesOtherThan(excludedId: string | null, tx: Transaction): Promise<ReadonlyArray<string>> {
+  /** The other rates (their IDs and names), read in the transaction after the table lock. */
+  async function ratesOtherThan(excludedId: string | null, tx: Transaction): Promise<ReadonlyArray<RateReference>> {
     const all = await masters.listProcessItemNames(tx);
-    return all.filter((other) => excludedId === null || other.id.toLowerCase() !== excludedId.toLowerCase()).map((other) => other.name);
+    return all.filter((other) => excludedId === null || other.id.toLowerCase() !== excludedId.toLowerCase());
   }
 
   /** Runs a write and gives the database's rule for names its words. Any other failure passes on untouched. */
@@ -120,37 +98,43 @@ export function createMastersService({ masters, transactions, audit, currentConf
     try {
       return await write();
     } catch (error) {
-      if (error instanceof MasterConstraintError) throw nameRefusal(NAME_TAKEN_MESSAGE, NAME_TAKEN_CODE);
+      if (error instanceof MasterConstraintError) throw nameTaken();
       throw error;
     }
   }
 
-  async function addInTransaction(tx: Transaction, context: AuditContext, item: NewProcessItem): Promise<ProcessItemRecord> {
+  async function addInTransaction(tx: Transaction, context: AuditContext, item: NewProcessItem, document: ConfigDocument): Promise<ProcessItemRecord> {
     await masters.lockProcessItems(tx);
-    assertNameUsable(item.name, await namesOtherThan(null, tx));
+    assertNameUsable({ name: item.name, others: await ratesOtherThan(null, tx), renamed: null, document });
     const record = await masters.createProcessItem(item, tx);
     await audit.record(tx, { event: 'master.created', ...entryFor(context, record), before: null, after: auditState(record) });
     return record;
   }
 
-  async function changeInTransaction(tx: Transaction, context: AuditContext, id: string, wanted: ProcessItemChanges): Promise<ProcessItemRecord> {
+  async function changeInTransaction(
+    tx: Transaction,
+    context: AuditContext,
+    id: string,
+    wanted: ProcessItemChanges,
+    document: ConfigDocument,
+  ): Promise<ProcessItemRecord> {
     await masters.lockProcessItems(tx);
     const before = await masters.findProcessItemForUpdate(id, tx);
     if (before === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     const next = changesFrom(before, wanted);
     if (Object.keys(next).length === 0) return before;
-    if (next.name !== undefined) assertNameUsable(next.name, await namesOtherThan(before.id, tx));
+    if (next.name !== undefined) assertNameUsable({ name: next.name, others: await ratesOtherThan(before.id, tx), renamed: before, document });
     const after = await masters.updateProcessItem(before.id, next, tx);
     if (after === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     await audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
     return after;
   }
 
-  async function removeInTransaction(tx: Transaction, context: AuditContext, id: string, uses: ReadonlyMap<string, ReadonlyArray<FormulaUse>>): Promise<void> {
+  async function removeInTransaction(tx: Transaction, context: AuditContext, id: string, document: ConfigDocument): Promise<void> {
     await masters.lockProcessItems(tx);
     const before = await masters.findProcessItemForUpdate(id, tx);
     if (before === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-    const usedBy = uses.get(before.id.toLowerCase()) ?? [];
+    const usedBy = rateUsesOf(document).get(before.id.toLowerCase()) ?? [];
     if (usedBy.length > 0) throw new ProcessItemInUseError(before.name, usedBy);
     if (!(await masters.deleteProcessItem(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
     await audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
@@ -158,26 +142,27 @@ export function createMastersService({ masters, transactions, audit, currentConf
 
   return {
     async listProcessItems() {
-      const [items, uses] = await Promise.all([masters.listProcessItems(), usesByRate()]);
+      const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);
+      const uses = rateUsesOf(document);
       return items.map((item) => withUses(item, uses));
     },
 
     async createProcessItem(context, input) {
       const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDefaultValue(input.defaultValue) };
-      const uses = await usesByRate();
-      const created = await withNameRule(() => transactions.run((tx) => addInTransaction(tx, context, item)));
-      return withUses(created, uses);
+      const document = await currentConfiguration();
+      const created = await withNameRule(() => transactions.run((tx) => addInTransaction(tx, context, item, document)));
+      return withUses(created, rateUsesOf(document));
     },
 
     async updateProcessItem(context, id, changes) {
-      const uses = await usesByRate();
-      const updated = await withNameRule(() => transactions.run((tx) => changeInTransaction(tx, context, id, changes)));
-      return withUses(updated, uses);
+      const document = await currentConfiguration();
+      const updated = await withNameRule(() => transactions.run((tx) => changeInTransaction(tx, context, id, changes, document)));
+      return withUses(updated, rateUsesOf(document));
     },
 
     async deleteProcessItem(context, id) {
-      const uses = await usesByRate();
-      await transactions.run((tx) => removeInTransaction(tx, context, id, uses));
+      const document = await currentConfiguration();
+      await transactions.run((tx) => removeInTransaction(tx, context, id, document));
     },
   };
 }

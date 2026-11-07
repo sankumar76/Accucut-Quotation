@@ -90,7 +90,7 @@ export function rateNameIssues(name: string, otherNames: ReadonlyArray<string> =
 }
 
 /** Said once for each name that the set makes readable as something else. It names no rate (STD-05 of the rule above). */
-const SET_AMBIGUOUS_MESSAGE =
+export const RATE_SET_AMBIGUOUS_MESSAGE =
   'This set of names would make a rate name read as column letters, numbers, operators or other rate names: a formula would take it for those.';
 
 /**
@@ -102,9 +102,17 @@ const SET_AMBIGUOUS_MESSAGE =
  * names, that is about n squared name matches for n rates.
  */
 export function rateSetIssues(names: ReadonlyArray<string>): FormulaIssue[] {
-  return names.flatMap((name, index) => {
-    if (invalidShape(name) !== undefined) return [];
-    const others = names.filter((_, position) => position !== index);
-    return readsAsFormulaText(name, others) ? [issue('RATE_SET_AMBIGUOUS', SET_AMBIGUOUS_MESSAGE)] : [];
+  return ambiguousRateNames(names).map(() => issue('RATE_SET_AMBIGUOUS', RATE_SET_AMBIGUOUS_MESSAGE));
+}
+
+/**
+ * The names of a set that read as other names in it and an operator (the names `rateSetIssues` reports, which it does not give). A
+ * change is judged by what it *introduces*: the names that are ambiguous after it and were not before, so a set that was already
+ * unsafe does not refuse every later change (QLT-17).
+ */
+export function ambiguousRateNames(names: ReadonlyArray<string>): string[] {
+  return names.filter((name, index) => {
+    if (invalidShape(name) !== undefined) return false;
+    return readsAsFormulaText(name, names.filter((_, position) => position !== index));
   });
 }
