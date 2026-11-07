@@ -68,14 +68,14 @@ const roleState = z.strictObject({ role: userRole });
 const nameState = z.strictObject({ name: z.string().min(1) });
 
 // ---- Shape of the Process Master events (SCR-16 "Master data edit") ------------------------------------------------------------
-/** A rate as the log keeps it: its name, unit and default value as decimal text ("0.47"). The ID and the name label the entry. */
+/** A rate as the log keeps it: its name, unit and default value as decimal text ("0.37"). The ID and the name label the entry. */
 const processItemState = z.strictObject({
   name: z.string().min(1),
   unit: z.string().min(1),
   defaultValue: z.string().regex(/^\d+\.\d{2,4}$/),
 });
 
-/** "Foam Cost, ₹ per sq ft, 21.50": the whole rate, so a reader sees what it was and what it is without a legend. */
+/** "Foam Cost, ₹ per sq ft, 21.37": the whole rate, so a reader sees what it was and what it is without a legend. */
 function describeProcessItem(state: z.output<typeof processItemState>): string {
   return `${state.name}, ${unitLabel(state.unit)}, ${formatDefaultValue(state.defaultValue, state.unit)}`;
 }

@@ -8,7 +8,7 @@ import { clientFor, type Transaction } from './transaction';
  * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01); the
  * stories for customers, materials, exchange rates and treatments add their methods here.
  *
- * A rate's default value is carried as **decimal text** ("0.47"), never as a JavaScript number (coding standards section 10,
+ * A rate's default value is carried as **decimal text** ("0.37"), never as a JavaScript number (coding standards section 10,
  * "Money and rates"): the column is `Decimal(18,4)`, and the text keeps at least two decimals and drops zeros beyond them.
  *
  * Two rules belong to the database and not to the code that calls it (AC-2): a name is unique ignoring letter case
@@ -25,7 +25,7 @@ export interface ProcessItemRecord {
   readonly name: string;
   /** One of `PROCESS_UNITS` (`src/lib/masters/process-items.ts`), as the seed items hold it. */
   readonly unit: string;
-  /** Decimal text with at least two decimals, for example "0.47". Restricted: never sent to an Engineer. */
+  /** Decimal text with at least two decimals, for example "0.37". Restricted: never sent to an Engineer. */
   readonly defaultValue: string;
 }
 
@@ -89,7 +89,7 @@ function isRecordNotFound(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === RECORD_NOT_FOUND;
 }
 
-/** "0.4700" is "0.47" and "12.5000" is "12.50": at least two decimals, and no zero beyond them. */
+/** "0.3700" is "0.37" and "21.3700" is "21.37": at least two decimals, and no zero beyond them. */
 export function trimDecimalText(text: string): string {
   const [whole = '0', fraction = ''] = text.split('.');
   const kept = fraction.replace(/0+$/, '').padEnd(SHOWN_DECIMALS, '0');
@@ -117,6 +117,8 @@ async function enforcingConstraints<T>(write: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Builds the repository over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
+// Over 40 lines on purpose (coding standards section 1): one object of seven repository methods, each under 20 lines.
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     listProcessItems() {

@@ -80,6 +80,12 @@ export class ActiveAdminExistsError extends ConflictError {
   }
 }
 
+/** A rate name that another rate already has, ignoring letter case (STORY-02.01 AC-2): said under the name field. */
+export const NAME_TAKEN_CODE = 'NAME_TAKEN';
+
+/** A rate name a formula could read as something else, alone or in the set of names (DEF-006, `rateNameIssues`, `rateSetIssues`). */
+export const NAME_REFUSED_CODE = 'RATE_NAME_REFUSED';
+
 /** A rate was deleted that a formula of the current configuration uses (STORY-02.01 AC-4). */
 export const PROCESS_ITEM_IN_USE_CODE = 'PROCESS_ITEM_IN_USE';
 

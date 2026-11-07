@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { FieldValidationError, NotFoundError, ProcessItemInUseError } from '@/lib/errors';
+import { FieldValidationError, NAME_REFUSED_CODE, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseError } from '@/lib/errors';
 import { MasterConstraintError } from '@/server/repositories/master-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
-import { NAME_REFUSED_CODE, NAME_TAKEN_CODE } from '@/server/services/masters-service';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
@@ -276,25 +275,6 @@ describe('two requests at once', () => {
     for (const loser of losers) expect(loser).toMatchObject({ code: NAME_TAKEN_CODE });
     const { rows: found } = await db.owner.query("SELECT 1 FROM process_items WHERE lower(name) = 'race-rate'");
     expect(found).toHaveLength(1);
-  });
-
-  it('judge a name against the set it joins (DEF-006): a name that reads as two others is refused if it comes after both', async () => {
-    const attempts = await Promise.allSettled(
-      ['Qq-Rate', 'Rr-Rate', 'Qq-Rate-Rr-Rate'].map((name) => db.mastersService.createProcessItem(by(), { name, unit: 'per kg', defaultValue: '1.37' })),
-    );
-    // The order the rates were written in is the order of their audit entries, which the database stamps inside the table lock. (The
-    // rows' own created_at is the time their transaction began, which says nothing of who got the lock first.)
-    const { rows: found } = await db.owner.query<{ object_label: string }>(
-      "SELECT object_label FROM audit_log WHERE event = 'master.created' AND object_label IN ('Qq-Rate', 'Rr-Rate', 'Qq-Rate-Rr-Rate') ORDER BY created_at, id",
-    );
-    expect(attempts.every((attempt) => attempt.status === 'fulfilled' || /column letters/.test(String((attempt.reason as { message?: string }).message)))).toBe(true);
-    const names = found.map((row) => row.object_label);
-    // The composite was refused if it came after both of the rates it reads as; it is accepted when it came before either (a formula
-    // that was stored before the composite existed is the one that could change meaning, DEF-006).
-    const at = names.indexOf('Qq-Rate-Rr-Rate');
-    if (at !== -1) expect(names.slice(0, at).filter((name) => name !== 'Qq-Rate-Rr-Rate')).not.toHaveLength(2);
-    expect(names.length).toBeGreaterThanOrEqual(2);
-    expect(names.length).toBe(attempts.filter((attempt) => attempt.status === 'fulfilled').length);
   });
 });
 

@@ -25,7 +25,12 @@ export interface AuditDatabase extends AuthDatabase {
   /** The Process Master as the web process wires it, over the runtime role and the seed registry (STORY-02.01). */
   readonly mastersService: MastersService;
   /** The same service over a transaction runner or a registry of the test's choosing (a failing runner, a registry that uses a rate twice). */
-  buildMastersService(options?: { readonly transactions?: TransactionRunner; readonly configuration?: ConfigDocument }): MastersService;
+  buildMastersService(options?: {
+    readonly transactions?: TransactionRunner;
+    readonly configuration?: ConfigDocument;
+    /** Replaces the reading of the configuration, for a test of a read that fails. */
+    readonly readConfiguration?: () => Promise<ConfigDocument>;
+  }): MastersService;
 }
 
 export const KEY_SECRET = 'invented-throttle-key-material';
@@ -44,12 +49,12 @@ export async function openAuditDatabase(): Promise<AuditDatabase> {
     keySecret: KEY_SECRET,
   });
   const masterRepository = createMasterRepository(base.prisma);
-  const buildMastersService = (options: { readonly transactions?: TransactionRunner; readonly configuration?: ConfigDocument } = {}): MastersService =>
+  const buildMastersService: AuditDatabase['buildMastersService'] = (options = {}) =>
     createMastersService({
       masters: masterRepository,
       transactions: options.transactions ?? transactions,
       audit,
-      currentConfiguration: () => Promise.resolve(options.configuration ?? seedConfig),
+      currentConfiguration: options.readConfiguration ?? (() => Promise.resolve(options.configuration ?? seedConfig)),
     });
   return { ...base, auditRepository, transactions, audit, userService, masterRepository, mastersService: buildMastersService(), buildMastersService };
 }

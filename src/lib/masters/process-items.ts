@@ -13,6 +13,7 @@
 export const PROCESS_UNITS = ['per second', 'per stroke', 'per hole', 'per kg', 'per sq ft', 'per sq in', '%'] as const;
 export type ProcessUnit = (typeof PROCESS_UNITS)[number];
 
+/** Is this text one of the units a rate may have? */
 export function isProcessUnit(value: string): value is ProcessUnit {
   return PROCESS_UNITS.some((unit) => unit === value);
 }
@@ -21,9 +22,14 @@ export function isProcessUnit(value: string): value is ProcessUnit {
 export const PERCENT_UNIT: ProcessUnit = '%';
 const RUPEE = '₹';
 
+/** The sign beside a value: "%" for a percentage rate, the rupee sign for any other (the one place this rule is written). */
+export function valueSymbol(unit: string): string {
+  return unit === PERCENT_UNIT ? PERCENT_UNIT : RUPEE;
+}
+
 /** How a unit reads on the screen and in the audit log: "₹ per second", and "%" as it is. */
 export function unitLabel(unit: string): string {
-  return unit === PERCENT_UNIT ? unit : `${RUPEE} ${unit}`;
+  return unit === PERCENT_UNIT ? unit : `${valueSymbol(unit)} ${unit}`;
 }
 
 /** The longest rate name. The formula engine states the same limit (`MAX_RATE_NAME_LENGTH`); a test keeps the two equal. */
@@ -59,7 +65,7 @@ export function defaultValueProblem(value: string): string | null {
 }
 
 /**
- * A typed default value as the stored text: no leading zeros, and two decimals ("7.5" is "7.50", "007" is "7.00"). Two spellings of
+ * A typed default value as the stored text: no leading zeros, and two decimals ("003.37" is "3.37"). Two spellings of
  * one number therefore compare equal. The text must already satisfy `DEFAULT_VALUE_PATTERN`.
  */
 export function normaliseDefaultValue(value: string): string {
@@ -70,4 +76,32 @@ export function normaliseDefaultValue(value: string): string {
 /** A default value as the table shows it: the number, and a percentage sign for a rate whose unit is "%". */
 export function formatDefaultValue(value: string, unit: string): string {
   return unit === PERCENT_UNIT ? `${value} %` : value;
+}
+
+/** What a rate holds. */
+export interface ProcessItemValues {
+  readonly name: string;
+  readonly unit: string;
+  readonly defaultValue: string;
+}
+
+/** The part of it a request asks to set. */
+export interface ProcessItemFields {
+  readonly name?: string | undefined;
+  readonly unit?: string | undefined;
+  readonly defaultValue?: string | undefined;
+}
+
+/**
+ * What really changes when `wanted` is applied to a rate: only a field that is given and differs (the name compared as written, so a
+ * change of letter case counts; the value compared as stored text, so "3.37" and "03.37" are one value). An empty result is a save
+ * that changes nothing, which writes no entry on the server and sends no request from the screen. The one rule of both.
+ */
+export function changesFrom(before: ProcessItemValues, wanted: ProcessItemFields): ProcessItemFields {
+  const defaultValue = wanted.defaultValue === undefined ? undefined : normaliseDefaultValue(wanted.defaultValue);
+  return {
+    ...(wanted.name !== undefined && wanted.name !== before.name ? { name: wanted.name } : {}),
+    ...(wanted.unit !== undefined && wanted.unit !== before.unit ? { unit: wanted.unit } : {}),
+    ...(defaultValue !== undefined && defaultValue !== before.defaultValue ? { defaultValue } : {}),
+  };
 }
