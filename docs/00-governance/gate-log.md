@@ -2285,3 +2285,563 @@ The delivery lead merges PR #79 (squash, code-human).
 
 **Risks registered:** none new. RISK-023 is reviewed against the first nightly report after the merge.
 **Rationale:** The fix bounds the step that caused the 15-minute runs, and it was proved cold, warm and negative. Three Minors are cheap and two of them are controls that could not fail, so they are fixed before QA. The disagreement over the cache key is settled by keeping both safeguards. The irreversible cache cleanup waits for the delivery lead.
+
+**AQP-65 G6 condition (the test push, DL-047) verified — 2026-11-05 (master). Result: met; G6 is closed and G7 may start.**
+- **Head and CI:** 3e2a695, one commit on 5231947, six files. CI 42154016256: success. Merge state clean.
+- **My own check:** the full `src/` diff (`git diff 5231947 3e2a695 -- src/`), read in full.
+  - The push also touches product code. `changesOf` moved out of `user-form-dialog.tsx` into `src/lib/users/edit-submit.ts` (`editChanges`, `submitEdit`), and the `scrollIntoView` call into `src/lib/ui/reveal.ts` (`revealNearest` with `REVEAL_OPTIONS`).
+  - Read side by side, **the behaviour is unchanged.**
+    - With no change, the dialog closes without a request and without setting "submitting".
+    - With a change, "submitting" is set just before the request (inside the `save` callback), and the outcome is shown as before.
+    - Create sets "submitting" explicitly.
+    - The options stay `{ block: 'nearest', behavior: 'auto' }`.
+  - **This is an extraction for testability, not new behaviour**, so master's check stands in for a re-review (DL-047). It is unlike DL-091, where the fix changed behaviour.
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| STD-06 | ✅ | `users-schemas.test.ts` uses IDs with hex letters in lower, upper and mixed case; with the schema's lower-casing removed, 1 test fails |
+| QLT-78 (a): no-change Edit | ✅ | `tests/unit/users-edit-submit.test.ts`: a spy shows no request for no change or whitespace only; a planted "always send the name" fails 4 of 8 |
+| QLT-78 (b): notice reveal | ✅ | The options are pinned; planted `smooth` and `center` each fail 2 of 8 |
+| CI time (PRF-01, corrected) | ✅ | Attempts 3 and 4 were apt stalls and are excluded (DL-100); the clean median of attempts 1, 2 and 5 is a 5:52 job and a 3:26 stage 12 |
+
+**Ruling on the untested wiring.** Vitest has no DOM, so two lines are not unit-tested: the dialog closing on `unchanged`, and the effect calling `revealNearest`. **QA covers them at G7 with E2E, in QA's own spec; the developer adds nothing now.**
+- **"Edit with no change closes the dialog and sends no request":** one width. It reads no layout, so it gets the `@one-width` tag, which the architect adds to the allow-list ruling first, or else it runs at three widths.
+- **"A failure notice off-screen is scrolled into view":** three widths, because scrolling depends on the viewport, and the default in test strategy §10.5 applies.
+- This is cheaper than a developer round, and it covers what the unit tests cannot.
+
+**G7 evidence: the list in 11035 stands, plus the two wiring tests above.** Every AC; the role matrix; the CSRF loop non-empty, with a planted empty manifest that fails; the own-row and single-Admin guards with upper- and mixed-case hex IDs; SCR-14 at three widths with axe (`wcag21a`), keyboard and 44 px; the log check; regression with stage 11b; Done only after the posted G7 (DL-098). QLT-83: if PR #92 merges first, this PR updates from `master` and re-runs CI before its merge.
+
+*Addendum (master, same day), on ux-expert AQP-65 11038:*
+- **The self-reset API question** is answered by STD-01's fix (409 before any hash or write), so the disabled Reset button is backed by the server.
+- **ux-spec v0.15 adds a visible reason line under the buttons on phone cards.** It is not required for AQP-65's G7: it points to Change password, which arrives in 01.05, so **AQP-81 adds it**, and the scrum-master notes it there.
+- **AQP-65's G7 checks the own-row Reset button's accessible name exactly as the ux-expert gave it:** "Reset password is not available for your own account. Use Change password in the account menu."
+
+**AQP-206 G6 conditions verified — 2026-11-05 (master). Result: met; G6 is closed and G7 may start.**
+- **Head and CI:** a330eb0. **Its tree is identical to the fix push 762f1ea** (`be5af21…` for both; `git rev-parse <commit>^{tree}`). The two temporary negative-control commits (85cdf25, 785e4df) are reverted exactly (8647c38, a330eb0). CI 42160587281 on a330eb0: success.
+- **Re-reviews:** quality APPROVE with no findings (11049): QLT-79 removing `set -e` fails exactly one test; QLT-80 4 of 4 green on Windows. Performance APPROVE (11048): PRF-03, the key carries `playwright-debs-e<CACHE_EPOCH>-…` with no automatic re-save; job median 378 s; 12a plus 12 median 208 s; stage 11b identical.
+- **My own check:** `git diff 71ebe79 a330eb0` for `ci.yml`, the script and `ci-workflow.test.ts`.
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| STD-01: the cache-trust comment | ✅ | `ci.yml` now says that caches are scoped by ref: a PR's run restores from its own ref or `master`, its saves are visible to that PR only, and the shared entries are written only by `push` runs on `master`. The same correction is made to the stage 9 comment |
+| STD-04: the `mktemp` leak | ✅ | `before` is declared at the top, with `trap 'rm -f -- "${before}"' EXIT`, so it is removed on every exit, including a failed install |
+| STD-05: the comment count | ✅ | "four" → "three" in `tests/unit/ci-workflow.test.ts` |
+| Warning text (QLT-81 with PRF-03) | ✅ | The fallback warning names the cache key and the command `gh cache delete <key>`. `CACHE_EPOCH: '1'` is at the top of `ci.yml`, commented to be raised only in a reviewed change. README, "Playwright install cache" |
+
+**Process note: a repeat of STD-06 from AQP-188 (DL-091 ruling 4).** The negative controls were again run as temporary commits on the story branch that edit the required workflow, then reverted. No harm: the trees match and a squash merge leaves no trace. **But the DL-091 rule was "use `workflow_dispatch` or a throwaway PR for evidence runs", and it was not followed.**
+- **The delivery lead must squash-merge PR #92.**
+- **The orchestrator tells the developer that the next evidence run on a story branch is a finding.**
+
+**G7 evidence (the AQP-206 G6 record, confirmed):**
+- **(a)** CI green on the final head.
+- **(b)** Cold run on the new key: 42154546800 attempt 1, a miss, 12a 9 s, saved.
+- **(c)** Two hits: attempts 2 and 3, 12a 3 s, 0 apt `Get:` lines.
+- **(d)** Negative control: 42160257283, an unreachable proxy makes 12a fail in 5 s and the job red; plus the QLT-79 test.
+- **(e)** Fallback: 42159562776 prints the key and the delete command.
+- **(f)** Time and stage 11b unchanged.
+- **(g)** QA closes DEF-015 only after the posted G7 decision.
+
+QA reads each run log for itself rather than relying on the developer's summary. The nightly p95 after the merge is recorded against DL-102's 9:00.
+
+**PRF-02:** the cache-store cleanup waits for the delivery lead's word. Rows 1 to 3 (about 7 GB) are proposed now; row 4 waits until after the merge.
+
+---
+
+## G7 – QA Acceptance — AQP-65 (STORY-01.04: Users) — 2026-11-06
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #87 at head 9d231fd, which adds four QA files on 3e2a695 (the G6 check): the report, the DEF-016 record, `tests/e2e/aqp-65-qa.spec.ts`, and the allow-list in `tests/unit/one-width-tag.test.ts` (`gh api compare`). CI 42161601204 on 9d231fd: success, 343 passed, 0 flaky, no stall.
+  - **QA:** Jira 11051; PR comment 6676884897; `docs/07-qa/AQP-65-test-report.md`.
+  - **Not done:** no run of my own.
+
+| # | Check (11035, 11045) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC with evidence | ✱ | ✅ | All met; integration 18 of 18 on PostgreSQL, including direct-SQL refusal of a second Admin |
+| 2 | Role matrix | ✱ | ✅ | A Lead or Engineer gets 403 and the no-access page; all six users API calls give the same fixed 403 for real and invented IDs; signed out gets the redirect or 401 |
+| 3 | CSRF loop and guard | ✱ | ✅ | Runs over the new routes; a planted "planned" manifest throws `EmptyLoopError` |
+| 4 | Own-row and single-Admin guards | ✱ | ✅ | Own reset, deactivate and demote give 409 for lower, upper and mixed-case IDs, with the row unchanged; a second Admin is refused on create, promote and reactivate |
+| 5 | SCR-14 at three widths | ✱ | ✅ | Axe with `wcag21a` 0; no sideways scroll; own-row Reset 44 px on the card and 36 px in the table |
+| 6 | Wiring tests (11045) | ✱ | ✅ | (a) a no-change Edit makes 0 write requests (one width); (b) the notice scrolls into view at three widths; each fails with its planted fault |
+| 7 | Log check; regression | ✱ | ✅ | 0 e-mails in the log; CI green, including stage 11b (`/users` 170,909 B, under 190,000) |
+| 8 | No open Sev-1 or Sev-2 | ✱ | ✅ | DEF-016 is Sev-4 |
+
+**Rulings**
+1. **DEF-016 (AQP-215, #95, Sev-4) is fixed before the merge, in this PR, not forward.** The own-row Reset accessible name lacks the final full stop of the ux-expert's agreed wording (11038), and the existing E2E checks only the prefix.
+   - The test plan sends a Sev-4 to the backlog, but here a fix-forward costs another PR and another merge by the delivery lead, for one character.
+   - The fix is one commit: the full stop, plus an **exact-match** assertion on the whole name, so the next drift fails.
+   - **Master verifies it** (DL-047): one string and one assertion, CI green. No re-review and no further QA run beyond that test.
+   - QA closes DEF-016 after the check is posted.
+2. **The `@one-width` tag on QA's no-change Edit test needs the solution-architect's confirmation before the merge.** Test strategy §10.5 makes the architect the only one who adds to the allow-list, and 11045 made this test's one width depend on that ruling. QA added it, and the test reads no layout, so a one-line confirmation on AQP-65 is enough. If the architect declines, the tag comes out and the test runs at three widths.
+3. **QLT-83:** if PR #92 merges first, PR #87 is updated from `master` and CI re-run before its merge.
+
+**Before the merge:** the DEF-016 commit verified by master; the architect's one-line confirmation; CI green. Then the delivery lead squash-merges. QA moves AQP-65 to Done once this decision is posted (DL-098).
+
+**Risks registered:** none.
+**Rationale:** Every evidence item set at G6 is met, including the guards with case variants, the empty-loop guard, and the wiring tests QA added. The one defect is cosmetic and a single character, so it is fixed now rather than costing the delivery lead another merge.
+
+*Correction (master, same record):* ruling 2 above (the architect's confirmation of QA's `@one-width` tag) is **already met**. The solution-architect ruled one width for that exact test, file and title in AQP-65 comment 11046, before QA added it (test strategy v0.20 §10.5). The only pre-merge item left is the DEF-016 commit, verified by master, plus QLT-83 if #92 merges first. The PR #87 comment still lists the confirmation; this record and Jira 11054 are authoritative.
+
+---
+
+## G7 – QA Acceptance — AQP-206 (DEF-015: browser system packages bounded and cached) — 2026-11-06
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #92 at head d409aa1, which adds only `docs/07-qa/AQP-206-test-report.md` on a330eb0 (`gh api compare`). CI 42163105380 on d409aa1: success, a cache hit.
+  - **QA:** Jira 11055; PR comment 6677102151. QA read each run log themselves, as 11050 asked.
+  - **Not done:** no run of my own.
+
+| # | Check (11050) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | (a) Final head green | ✱ | ✅ | 42160587281 on a330eb0: a cache hit, 12a 3 s, 0 apt `Get:` lines, 308 E2E passed. The tree equals 762f1ea, so the temporary commits are fully reverted. 42163105380 on d409aa1 is also green, also a hit |
+| 2 | (b) Cold run saves | ✱ | ✅ | 42154546800 attempt 1: a miss, apt fetched 21.9 MB, 9 packages cached, key saved |
+| 3 | (c) Two hits | ✱ | ✅ | Attempts 2 and 3: 3 s each, 0 apt lines, not re-saved |
+| 4 | (d) Negative control | ✱ | ✅ | 42160257283, an unreachable mirror: 12a fails in 5 s, stage 12 skipped, job red. Locally, removing `set -e` fails exactly the QLT-79 test (1 of 8) |
+| 5 | (e) Fallback message | ✱ | ✅ | 42159562776: the warning names the key and `gh cache delete <key>`, or `CACHE_EPOCH`; the fallback is bounded and the run green |
+| 6 | (f) Time and budget | ✱ | ✅ | Job median 378 s and 12a plus 12 median 208 s, against `master` 396 and 477 s and 217 and 261 s; stage 11b identical |
+| 7 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **DEF-015 (AQP-206) is accepted. QA closes it now that this decision is posted (DL-098).**
+2. **The first `master` run after the merge misses once, by design,** and saves the entry every branch then reads. It is not a regression. The orchestrator notes its time so the nightly window reads clearly.
+3. **After the merge:**
+   - the nightly p95 is recorded against DL-102's 9:00. If it is still over 9:00, DL-102's fallback G6 hold arms;
+   - RISK-023 is reviewed at that report;
+   - PRF-02 row 4 (`master`'s old playwright-Linux entry) may be deleted once #92 and #87 have merged, under the delivery lead's earlier word (DL-104), limited to that entry.
+4. **Merge:** update from `master`, CI green, then the delivery lead **squash-merges** (DL-091; a330eb0's history holds temporary commits). Whichever of #87 and #92 merges second updates and re-runs first (QLT-83).
+
+**Risks registered:** none (RISK-023 is reviewed at the first nightly report after the merge).
+**Rationale:** The defect is a stall in an unbounded network step. The fix is proved cold, warm, negative and on fallback, each read from the run logs by QA, and it costs nothing in job time.
+
+**AQP-65 DEF-016 commit verified — 2026-11-06 (master; DL-104 ruling 1). Result: met. QA may close DEF-016 (AQP-215, #95) and move AQP-65 to Done.**
+- **Head and CI:** b742efa, one commit on 9d231fd, four files. CI 42163418172: success.
+- **My own check:** the full patch, read through the GitHub API.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| The name matches 11038 exactly | ✅ | `OWN_PASSWORD_NAME` in `src/components/features/users/texts.ts` is "Reset password is not available for your own account. Use Change password in the account menu.", identical to the ux-expert's wording, full stop included. `users-list.tsx` imports it; that line is the only product change |
+| Exact-match tests | ✅ | `tests/unit/users-texts.test.ts`: `toBe` on the whole sentence, plus a starts-with check for WCAG 2.5.3. `tests/e2e/users.spec.ts`: `toHaveAccessibleName` with the sentence **written out, not imported**, so a change to the constant also fails the E2E |
+| Planted fault | ✅ | Removing the full stop fails the unit test (developer, 11056) |
+| CI | ✅ | Green |
+
+**Merge:** the delivery lead squash-merges PR #87. If #92 merges first, #87 updates from `master` and re-runs CI first (QLT-83).
+
+---
+
+## G6 – Peer Review — AQP-208 (STORY-10.15: CI shard step) — 2026-11-06
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and checks:** PR #96 at head 9c725e1, nine files (`ci.yml` +160 / −39, `nightly.yml`, README, two `scripts/` files, four test files). On 9c725e1, `Stages 1 to 11b`, both shard jobs and the fan-in `Stages 1 to 11` succeeded.
+  - **The non-required "CI feedback time" check failed.** I read its log (run 42173161019): over 16 runs, p95 was 8 min 59 s and the median 6 min 22 s, over the 6-minute early warning. Those are the old single-job runs this PR replaces. The check is report-only, so this is expected and is not held against the PR. **It is also the first reading after AQP-206: p95 8:59 is under DL-102's 9:00, so DL-102's fallback hold does not arm.**
+  - **Branch history:** no temporary commits on the branch. The negative controls ran on throwaway PR #98, as DL-091 requires.
+  - **Reviews:** `docs/06-reviews/AQP-208/*.md` (main folder, uncommitted); Jira 11068 (standards), 11069 (performance), 11070 (quality); developer 11066.
+  - **Not done:** no code read of my own beyond the file list.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | AC-2 (required path ≤ 6:00) | | ✅ | Recomputed by quality and performance from the API: median 503 s → 285 s (4:45, −43 %). One "before" attempt hit the 12a 8-minute cap and was repeated (DL-100). 5 green runs, 0 flaky |
+| 4 | AC-3 coverage | | ✅ | The union across shards is 362 tests, none missing or duplicated; setup runs per shard; planted faults caught |
+| 5 | AC-4 required check | | ✅ | Three negative controls on PR #98 (failed, skipped, cancelled): `Stages 1 to 11` failed each time, and the logs name the cause; `if: always()` with success-only is correct; fan-in faults caught |
+| 6 | AC-6 runner minutes | | ✅ | 1.36× raw and 1.56× billed, under the 2× guard |
+| 7 | AC-7 line | | ✅ | DL-103's wording, word for word and pinned; the multi-job measure is tested |
+
+**Rulings**
+1. **Fixed before G7, in one push, verified by master (DL-047; tests plus one workflow line):**
+   - **STD-01:** replace the `as` cast at `e2e-shards.test.ts:49` with the zod parser through a `tests/support` helper.
+   - **STD-02:** move the slow `playwright --list` calls into `beforeAll` under the shared hook limit, and remove the widened 120 s per-test limits (§10; DL-057).
+   - **QLT-85:** the fan-in test spawns bash 12 times in one test and timed out 3 of 3 times on Windows. Apply the QLT-80 fix: spawn in `beforeAll`, or test the logic without processes. No longer limit, no retry.
+   - **STD-03:** split `ci-feedback-time.test.ts` (447 lines) under the 400-line limit.
+   - **QLT-86 (raised from Info):** the shard-coverage test is a guard and failed 2 of 15 local probes with no captured cause. A guard that fails by chance gets ignored. Log Playwright's stderr on failure in the same push. STD-02 may remove the cause; G7 shows it.
+   - **The optional `permissions: {}` on the fan-in job:** take it. Least privilege costs one line.
+2. **PRF-03 (#99) stays a follow-up, not this PR.**
+   - **Owner:** the solution-architect chooses between warming the keys on `master` from the nightly run and bounding slow downloads; the developer builds it.
+   - **Due:** before the sprint 1 review, the same family as DL-101.
+   - **Why not here:** the cost of the miss is bounded (12a caps at 8 minutes; usually about 16 s), the window lasts only until the next `master` push saves the new key, and folding it in would change what AC-2 measures.
+   - RISK-023 records it.
+3. **QLT-87 (shard imbalance, 167 s against 107 s):** no action now. The solution-architect revisits it before any third shard (DL-102 pre-authorisation). The postgres-copies test: optional, no.
+
+**G7 evidence (full QA cycle):**
+- **AC-2:** QA recomputes the required-path median from the API (first job's start to the fan-in's end), before against after, with a capped run repeated. Target ≤ 6:00.
+- **AC-3:** the union is 362 tests, none missing or duplicated; a planted fault in `e2e-shards.test.ts` fails.
+- **AC-4:** the three negative-control runs on PR #98, by link, each showing `Stages 1 to 11` red with its cause.
+- **AC-6:** runner minutes under 2×.
+- **AC-7:** the line exact.
+- **QLT-86:** the shard-coverage test run 20 times locally with no failure, or each failure classified from the captured stderr.
+- **QLT-85 and STD-02:** the fixed tests green on Windows, 4 of 4.
+- **Regression:** green on the final head.
+- **Evidence runs** use `workflow_dispatch` or a throwaway PR only (DL-091).
+- **Closure:** Done only after the posted G7 (DL-098).
+
+**Risks registered:** RISK-023 restated (below).
+**Rationale:** The shard step meets its target with margin, −43 % to 4:45, and keeps coverage and the required check intact. That was proved by three kinds of negative control on a throwaway PR, which was the process DL-091 asked for. The Minors are test hygiene in the DL-057 class, and a guard that flakes, so they are fixed before QA in one push that master checks.
+
+**AQP-208 G6 conditions verified — 2026-11-06 (master). Result: met; G6 is closed and G7 may start.**
+- **Head and CI:** 47722b1, one commit on 9c725e1, nine files: `ci.yml` +2 and the rest tests or `tests/support`. CI 42196055291: success, with a required path of 272 s. Developer notes: 11090 and PR comment 6681872433.
+- **My own check:** the file list; the `ci.yml` diff (only `permissions: {}` on the fan-in, with its comment); `e2e-shards.test.ts` and `tests/support/playwright-list.ts` at 47722b1, read for the hook, the cast and the failure detail.
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| STD-01: the cast | ✅ | No `as` cast; a shared zod parser in `tests/support/playwright-list.ts`, used by `e2e-shards.test.ts` and `one-width-tag.test.ts` |
+| STD-02: listings in a hook | ✅ | The listings run once in `beforeAll` (line 46) under the shared hook limit; the per-test timeouts are gone |
+| QLT-85: bash spawns | ✅ | `tests/unit/ci-fan-in.test.ts` runs the script once per combination in `beforeAll`; no limit raised, no retry; Windows 4 of 4 on the light files |
+| STD-03: file size | ✅ | 326 lines, with the sharded cases in a 109-line file and fixtures in `tests/support/ci-feedback-records.ts` |
+| QLT-86: failure detail | ✅ | A failed listing reports its exit status, signal, timeout flag and the tails of stderr and stdout (lines 59 to 86) |
+| `permissions: {}` | ✅ | On the fan-in job, with a test |
+
+**Ruling on the 20 local runs (18 passed, 2 failed): the classifications meet the evidence rule, and the sequential-listings change is not required now.**
+1. **Run 11 is Environment.** The host suspended for 96 minutes mid-run, and the hook timer fired on the clock jump. Not counted (DL-068).
+2. **Run 14 is classified Environment-probable and recorded as such.** A listing hung and was killed at 100 s with empty output. At the same minute, a Git Bash on the host failed to fork with `0xC000012D` (a commit-limit failure: the host ran out of memory). The new capture did its job: it shows a killed process with no output, not a test fault. The cause is not proven, so it is recorded as probable, not certain.
+3. **Why not take the sequential change now.** The three listings run in parallel (`Promise.all`, line 47), each with a 100 s limit inside the shared 120 s hook. Run one after another, they could approach the hook limit under load, which would trade a rare suspected memory hang for the DL-057 time-limit class. That choice needs a measured hook time, not a guess.
+4. **Trigger:** if at G7, or in any CI run, a listing fails with empty output and no host event to explain it, it becomes a Test defect. The developer then chooses sequential listings or a lower peak, with the hook time measured before and after. Never a retry.
+
+**G7 evidence (the 11071 list, confirmed):**
+- AC-2 recomputed by QA from the API;
+- AC-3 with a planted fault;
+- the three PR #98 negative-control links (AC-4);
+- AC-6 and AC-7;
+- **QA's own 20-run series of the shard-coverage test on the final head**, each failure classified from the captured output, with Environment failures repeated, not counted;
+- the fixed tests 4 of 4 on Windows;
+- regression green;
+- evidence runs only by `workflow_dispatch` or a throwaway PR;
+- Done only after the posted G7.
+
+---
+
+## G6 – Peer Review — AQP-74 — scope of the fix push, ruled during the DL-106 hold — 2026-11-06
+
+- **Status:** no G6 decision yet. It stays held until PR #96 (AQP-208) merges (DL-106). This record rules the scope of one fix push on PR #97 (head 3aa50db), so that the wait is used.
+- **Inputs:** `docs/06-reviews/AQP-74/standards.md`; quality, Jira 11095; performance, 11083 (REQUEST CHANGES); PM 11077; architect 11078, 11087, 11091; ux-expert 11084; product-owner READY 11093.
+
+**Rulings**
+1. **PRF-01 (Major) is fixed in this PR.** This PR causes it: `/sign-in` grows to 182,039 B (+18.8 KB) and `not-found` to 166,053 B (+9.5 KB), because the bundler duplicates `next/image` and `next/link` when `BrandLockup` is pulled in through the root error page, `not-found` and sign-in. That leaves 7,961 B under DL-081's 190,000 B floor. A Major is fixed or explicitly accepted, and accepting a 19 KB regression that has a cheap cure would spend the headroom AQP-188 paid for.
+   - **Fix:** a plain `<img>` with explicit `width`, `height` and the existing `alt` in `BrandLockup`, which is the only `next/image` user, and images are unoptimised. Slimming the root error page is optional.
+   - **Constraint:** if `@next/next/no-img-element` fires, there is **no inline `eslint-disable`**. The solution-architect rules a file-scoped override in the ESLint config, with its reason, or another cure.
+   - **Proof:** performance re-measures every route, and the target is to return close to the pre-PR figures.
+2. **All Minors are fixed in this push.** They are small, and the round happens anyway:
+   - **STD-01:** the two `as` casts in `audit-database.test.ts` (coding standards §10).
+   - **STD-02:** remove the per-file 120 s `beforeAll` limit and the 30 s per-test limit (DL-057).
+   - **STD-03:** split `user-service.test.ts` (432 lines) under 400.
+   - **QLT-88:** the `FOR UPDATE` test caught the lock's removal only 2 times in 5, so it is a control that fails by chance. Replace it with a deterministic test: a second transaction holds the lock, and the test shows the first one waits.
+   - **QLT-89 (product behaviour):** when From is after To, the screen must not keep the old list or offer "Show more" that leads to a false error. The behaviour follows ux-spec v0.16, and a test covers it.
+   - **PRF-03:** hash the reset password before the transaction, so no row lock is held for about 350 ms during argon2id.
+3. **The already-decided changes go in the same push:**
+   - `user.renamed` (PM 11077, AC-3);
+   - `actor_label`, with the Who filter by `actor_id` and the people list rendered on the server (architect 11087 and 11091; AC-1, AC-6);
+   - ux-spec v0.16 strings and empty states (11084; AC-6, AC-8);
+   - the 12 `@one-width` pins, with the "a Engineer" title fixed (11078);
+   - the stale `user-service` comment;
+   - AQP-84.
+4. **Re-review: all three reviewers, on the new diff only (DL-051), not narrowly.** The push adds product behaviour (a new audit event, a new column and filter, server rendering, screen states) as well as the fixes.
+   - **Standards:** STD-01 to 03, plus the security of `actor_label` and the server-rendered list (no personal data beyond what the spec shows; the role check first).
+   - **Quality:** QLT-88 and QLT-89, plus the new ACs' tests, with planted faults.
+   - **Performance:** PRF-01 and PRF-03, re-measuring every route.
+5. **Then G6, once PR #96 has merged:** master checks the push against this record, with the three re-reviews and CI green.
+
+**Risks registered:** none. RISK-020 stays at 3 if PRF-01's cut lands; otherwise it is restated at G6.
+
+---
+
+## G7 – QA Acceptance — AQP-208 (STORY-10.15: CI shard step) — 2026-11-06
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #96 at head 4cb7fff, which adds only `docs/07-qa/AQP-208-test-report.md` on 47722b1 (`gh api compare`). CI 42198996118: success on all four jobs. The merge state "unstable" comes from the non-required CI-feedback-time report on the old window (DL-106), not from a required check.
+  - **QA:** Jira 11097; PR comment 6682271674.
+  - **Not done:** no run of my own.
+
+| # | Check (11071, 11092) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | AC-2 recomputed from the API | ✱ | ✅ | Before 507, 499, 503 s (median 503); after 291, 238, 285 s (median 285); −43 %, against the 6:00 target; the capped "before" attempt repeated (DL-100) |
+| 2 | AC-3 | ✱ | ✅ | Union 362, none missing or duplicated; setup per shard; planted "missing" and "duplicate" faults each fail `e2e-shards.test.ts` |
+| 3 | AC-4 | ✱ | ✅ | All three PR #98 controls turned `Stages 1 to 11` red, and each log names the cause |
+| 4 | AC-5 / AC-6 / AC-7 | ✱ | ✅ | 5 runs, 0 flaky; minutes 1.36× raw and 1.56× billed; the line exact, pinned and seen live |
+| 5 | QA's 20-run series | ✱ | ✅ | 20 of 20 on the final head; the Test-defect trigger set in the G6 condition check did not fire |
+| 6 | Windows; regression | ✱ | ✅ | Fixed files 4 of 4; CI green; stage 11b all 6 routes within the limit |
+| 7 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **AQP-208 is accepted. QA moves it to Done now that this decision is posted (DL-098).** The delivery lead squash-merges PR #96.
+2. **The merge lifts DL-106's hold on AQP-74.** AQP-74's G6 then proceeds on its fix push and re-reviews (the scope ruling above), and AQP-216 is unblocked.
+3. **RISK-023:** it falls to 6 when a nightly window after the merge shows a median ≤ 6:00 and a p95 ≤ 7:00 (DL-102). The orchestrator reports the first such window. STORY-10.16 (DL-105) follows.
+
+**Risks registered:** none.
+**Rationale:** The shard step cuts the required path by 43 % with coverage and the required check intact. This was proved by recomputed timings, planted coverage faults, three kinds of negative control on a throwaway PR, and a 20-of-20 series of the guard that had flaked.
+
+---
+
+## G6 – Peer Review — AQP-74 (audit log) — decision — 2026-11-06
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1. The DL-106 hold lifted when AQP-208 merged. Judged against the fix-push scope ruled earlier (gate log, AQP-74 fix-push scope; Jira 11096).
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #97 at head 7e0f287, which is c365f00 plus the lint commit from architect ruling 11102. Merge state clean, base 4c12103. CI 42206449038: success on all four jobs.
+  - **Re-reviews:** round 2, of the full new diff: standards 11104, quality 11105, performance 11103.
+  - **My own check:** the lint commit (`gh api compare c365f00...7e0f287`, two files, read in full).
+  - **Not done:** no local run.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE (3 Info), quality APPROVE WITH COMMENTS (1 Info), performance APPROVE (5 Info) |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0. PRF-01 (Major) is fixed |
+| 3 | Scope ruling met | | ✅ | **PRF-01:** `/sign-in` 166,285 B, 23,715 B under the floor, and every other route below `master`. **PRF-03:** the hash happens before the transaction. **STD-01, 02, 03** fixed. **QLT-88:** deterministic, as removing the lock fails 5 of 5. **QLT-89** fixed. The decided changes are present: `user.renamed`, `actor_label` (from `requireUser` only), the people list as `{id, name}` after the Admin check, the v0.16 strings, the 12 pins, and AQP-84. Quality caught each of these with planted faults |
+| 4 | **Lint commit (STD-10, checked by master)** | | ✅ | `eslint.config.mjs`: `NEXT_IMAGE_IMPORT` is banned as an **error** through `no-restricted-imports`, and through `no-restricted-syntax` for `import()`. It is added to **every file group** as well as the general block, because a group's setting replaces the general one. `@next/next/no-img-element` is off repo-wide, with a comment citing architecture §10 and PRF-01. There is no inline `eslint-disable`. `brand-lockup.tsx` gains `decoding="async"`. This matches the architect's ruling (11102, architecture v0.28 §10) and replaces the rule with a stronger one rather than switching a rule off |
+| 5 | CI time | | ✅ | Required path 4:27, against `master`'s 4:48 |
+
+**Rulings**
+1. **G6 is GO, with no conditions.** Every item in the scope ruling is met, and the lint change is sound.
+2. **Info, no action:**
+   - **PRF-07:** `/sign-in` is still 2,998 B above `master`, with ample headroom.
+   - **QLT-92:** "No entries yet", the description and the meta text have no test. G7 covers them.
+   - The rest of the standards and performance Info items need no action.
+3. **Standing rule recorded (standards):** the migration edited in this PR was never merged, so editing it was acceptable. **Once merged, it is never edited again**; a later change is a new migration.
+
+**G7 evidence (full QA cycle):**
+- Every AC with evidence on the final head.
+- **The audit trail:**
+  - each audited change and its audit row are written in one transaction, and a planted bypass fails;
+  - the runtime role cannot UPDATE or DELETE audit rows;
+  - `user.renamed` is written with a strict payload and no secrets.
+- **`actor_label`:** it comes from the session only, and the Who filter works by `actor_id`. The people list is `{id, name}`, served only after the Admin check. A Lead or Engineer gets the fixed 403.
+- **The From and To behaviour (QLT-89):** From after To shows no stale list and no false "Show more".
+- **The v0.16 strings and empty states**, including "No entries yet", the description and the meta text (QLT-92), checked against ux-spec v0.16.
+- **The lock test:** QA confirms that removing the lock fails it.
+- **PRF-03:** the reset hash happens before the transaction.
+- **Lint:** a planted `import Image from 'next/image'` (static and `import()`) fails `eslint` in `src/` and in a group file, and a plain `<img>` passes.
+- **The 12 `@one-width` pins** match the architect's list.
+- **The audit screen at three widths:** axe with `wcag21a` 0, keyboard, 44 px.
+- **A log check:** no e-mails in the log.
+- **Regression:** green, including stage 11b, every route under 190,000 B.
+- **Closure:** Done only after the posted G7 (DL-098). Evidence runs only by `workflow_dispatch` or a throwaway PR (DL-091).
+
+**Risks registered:** none (RISK-020 stays at 3).
+**Rationale:** The one Major is fixed at its cause, and the size budget is better than `master` on every route but one. The lock test is now deterministic, and the lint change strengthens the rule rather than switching it off. All the decided product changes passed a full re-review with planted faults.
+
+---
+
+## G7 – QA Acceptance — AQP-74 (audit log) — 2026-11-06
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #97 at head 2843d13, which adds only `docs/07-qa/AQP-74-test-report.md` on 7e0f287 (`gh api compare`). CI 42224314965: success on all four jobs.
+  - **QA:** Jira 11111; PR comment 6685852514.
+  - **My own check:** `git grep` at 2843d13 finds no `logger` call in the audit services, the audit repositories, the audit API routes or `user-service.ts`.
+  - **Not done:** no run of my own.
+
+| # | Check (11106) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | **Audit atomicity, with a planted bypass** | ✱ | ❌ | QA-F1 (below) |
+| 2 | Append-only | ✱ | ✅ | The runtime role is denied UPDATE, DELETE and TRUNCATE; the trigger refuses even the owner |
+| 3 | `user.renamed`, `actor_label`, Who filter, people list, 403 | ✱ | ✅ | Integration 64 of 64; the fixed 403 in CI |
+| 4 | From after To, lock test, PRF-03 | ✱ | ✅ | All hold. The planted lock fault was not re-run (low memory); QLT-88's 5 of 5 at G6 stands |
+| 5 | Lint ban | ✱ | ✅ | A `next/image` import is an error, both static and dynamic; a plain `<img>` passes |
+| 6 | 12 pins; v0.16 strings | ✱ | ✅ | The pins match exactly; the strings are verbatim in the source. QLT-92's three untested strings are checked by reading |
+| 7 | Log check | ✱ | ✅ | Static, accepted (ruling 3) |
+| 8 | Layout at three widths; regression | ✱ | ✅ | CI; `/audit` 171,801 B |
+
+**Rulings**
+1. **QA-F1 is upheld, and the atomicity evidence is not met.** QA moved one audit entry into its own transaction in a scratch copy, so that the entry would survive a rollback of the user change:
+   - **role change:** caught by 3 unit tests;
+   - **activation: not caught at all**, with 64 integration and 183 unit tests green;
+   - **rename:** caught only by accident (a self-rename lock timeout); an ordinary rename passes everything;
+   - **deactivate, create and reset:** not checked, because the disk was full.
+
+   Atomicity of the audit trail is this story's core promise. A control that passes while it is broken fails open (the AQP-27 and DL-093 pattern), so it cannot be accepted as evidence. This also corrects quality's round-1 claim that "planted bypasses fail the integration tests": that was true for some events, not all. **The product code is not shown to be wrong. The tests cannot show that it is right.**
+2. **QA-F1 is recorded as a defect: type Test, Sev-3.** QA raises it (DEF-017), linked to AQP-74. It holds this gate because a mandatory evidence item is unmet, not because of its severity. **It is fixed in this PR before the merge, not as a follow-up**, because a merged audit trail whose atomicity is untested for some events is the risk this story exists to remove.
+3. **The static log check is accepted.** Master's own `git grep` finds no `logger` call in the audit services, repositories or routes, or in `user-service.ts`. Every route logs only through `withRoute`, whose name-and-code-only logging is tested with an invented e-mail in the message and the cause (AQP-48, STD-01). A live check is welcome at attempt 2 if the disk allows, but it is not required.
+
+**Remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #97, tests only | **For every audited event (create, rename, role change, activate, deactivate, password reset), one integration test where a step fails *after* the audit entry is written, inside the same unit of work**, and asserts there is no audit entry and no change. Example: a name-plus-role save where the second entry is refused, then no rename entry. One shared helper, no retries, no longer limits | Attempt 2 |
+| 2 | master | Same push | Verify: tests only, all six events covered (DL-047) | Attempt 2 |
+| 3 | qa-engineer | AQP-74; DEF-017 | **A planted bypass per event**, six in all, each moving that event's audit write into its own transaction, each failing at least one test. Then close DEF-017 after the posted G7 | Attempt 2 |
+
+**Also:** the low memory and disk space on the shared PC limited the evidence (the planted lock fault, the live log check, three events). The orchestrator has asked the delivery lead for a disk clean-up; attempt 2 needs at least enough space for the six planted bypasses.
+
+**Risks registered:** none new.
+**Rationale:** The append-only design, the access rules and the screen pass. But the one property an audit log exists for, that an entry exists exactly when the change happened, is tested for one event in six with any certainty. That is fixed with tests before the merge, not trusted.
+
+---
+
+## G6 – Peer Review — AQP-216 (STORY-10.16: cache warm-up and bounded install) — 2026-11-06
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #100 at head 7bda9e0, eight files: `nightly.yml` +102 / −6, README, two scripts under `scripts/ci/`, four unit test files. CI 42204070612: success. The merge state "unstable" comes from the non-required CI-time report. No temporary commits are on the branch: the evidence ran on throwaway PR #101, closed unmerged, as DL-105 and DL-091 require.
+  - **Labels:** the PR carries only the three review labels. Its `ai-delivery` and `feature` labels are missing, which the playbook requires (§2.2); the orchestrator adds them.
+  - **Reviews:** `docs/06-reviews/AQP-216/*.md` (main folder, uncommitted); Jira 11110 (standards), 11113 (quality), 11109 (performance).
+  - **Not done:** no code read or run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | All APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0, and no Major |
+| 3 | Security | | ✅ | The nightly workflow is acceptable; apt signatures still apply on the fallback mirror; the parser rejects names that look like options; cache trust is rooted in `master`; the required check is unchanged |
+| 4 | Evidence quality | | ✅ | Quality read the evidence logs, which match, and caught 14 of 15 planted faults. Performance verified everything from the API. A natural stall in run 42205780147 showed the 90 s limit working live, with recovery in 118 s |
+| 5 | Minors | | ⚠️ | Ruling 1 |
+
+**Rulings**
+1. **Fixed before G7, in one push:**
+   - **STD-01:** remove the six `as` casts in `playwright-system-deps.test.ts` and `playwright-deps-packages.test.ts` (coding standards §10).
+   - **STD-02:** `ci-workflow.test.ts:348` compares constants (`3*(45+90) < 480`), so it can never fail. It must read the limits from the script and the workflows, so that a change to either is checked.
+   - **QLT-93:** the line that rewrites the runner's `mirror+file:` sources to `archive.ubuntu.com` has no test. Deleting it passes everything, yet it is what makes the fallback work on the real runner. Add a test that fails when that rewrite is removed.
+
+   Those three are test code, so **master verifies them (DL-047)**.
+2. **QLT-95 (`apt-get update --error-on=any`) goes to the solution-architect for a ruling before the push.** On the real runner a dead mirror's `update` exits 0, which bears directly on whether the fallback triggers. The flag might also turn harmless warnings red. If the architect adopts it, it goes in the same push with a test, and **reviewer-quality confirms that one script change narrowly (DL-091)**.
+3. **Info, no action:** the optional `timeout --kill-after=10` (the developer's choice), QLT-94 and QLT-96.
+4. **RISK-023:** lowered when the orchestrator reports the first full sharded nightly window. Performance recommends about 4. Until then it stays at 8.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #100 | STD-01, STD-02 and QLT-93 tests, plus QLT-95 if the architect adopts it; CI green | Before G7 |
+| 2 | solution-architect | AQP-216 | QLT-95 ruling | Before the push |
+| 3 | master; reviewer-quality (only if QLT-95 is adopted) | Same push | Verify | Before G7 |
+| 4 | orchestrator | PR #100 | Add the `ai-delivery` and `feature` labels | Now |
+
+**G7 evidence (DL-105, with its three additions):**
+- **(a)** A branch run saves under the warmed key, then a run hits it.
+- **(b)** An unreachable-mirror control stays within the bound and fails or falls back as designed.
+- **(c)** The planted faults: removing the sources rewrite fails a test (QLT-93); changing a limit in the script or a workflow fails the STD-02 test.
+- **(d)** Regression green on the final head, including stage 11b.
+- **(e)** The `master`-scope proof is recorded after the merge without holding Done (DL-105): the first nightly warm-up, and the next PR run that restores from that `master` key. If it fails, QA raises a Sev-3 defect against STORY-10.16, to be fixed before G8.
+- **(f)** Evidence runs only on a throwaway PR or by `workflow_dispatch`.
+- **(g)** Done only after the posted G7.
+- **Local-heavy runs wait until the delivery lead has cleared disk space.**
+
+**Risks registered:** none (RISK-023 stays at 8 until the first sharded window).
+**Rationale:** The design is sound and its evidence was taken the right way this time, on a throwaway PR. Two of the tests cannot fail on what they claim to check: one compares constants, and the other leaves the line that makes the fallback work untested. Those controls fail open, so they are fixed before QA in a push that master checks.
+
+**AQP-74 DEF-017 test push checked — 2026-11-06 (master; DL-107 remediation 2). Result: sound for the main bypass form; one addition is required before QA attempt 2.**
+- **Head and CI:** 6d53a86, one commit on 2843d13, three test files only: `tests/integration/audit/audit-atomicity.test.ts` (+159), `tests/support/late-failure.ts` (+67), and a one-line change in `tests/support/audit-database.ts`. CI 42226719888: success, with the new file 7 of 7.
+- **My own check:** `late-failure.ts` read in full, the test titles and modes, and the transaction shape of every event in `src/server/services/user-service.ts` at 6d53a86. Each event's change and its `audit.record(tx, …)` share one `transactions.run`, so the product is atomic as written.
+
+**How the helper catches a bypass, by form:**
+- **Mode `after-the-last-step`:** the wrapper throws after the work of every *outermost* `transactions.run`, and a nested run (depth > 0) goes through.
+  - **A bypass that writes the entry in its own transaction *inside* the change's unit of work** (a nested run on another connection, the natural form, and QA's attempt-1 plant) commits before the outer failure, so the entry survives and the test fails. **Caught.**
+  - **A bypass that writes the entry in a sibling transaction *after* the change:** the change's run throws first, the entry is never written, and "no entry, no change" passes. **Not caught by this mode.**
+  - **A sibling transaction *before* the change:** the wrapper also throws on that run, because it is outermost, so the entry is rolled back. **Not caught**, and masked by the wrapper itself.
+- **Mode `refuse-entry`**, used today only in the name-plus-role test: if the entry is refused in a sibling transaction after a committed change, the change persists, so "no change" fails. **That catches the sibling-after form.**
+- The paired positive check (the same change through the ordinary service gives exactly one entry) correctly stops "no entry" from passing on a change that never happened.
+
+**Ruling**
+1. **The design is accepted for the nested form, and one addition is required before QA attempt 2:** for each of the six events, a second test in **`refuse-entry` mode** (refuse that event's entry), asserting no change and no entry. Six small tests on the same helper. That covers the sibling-after form. **Test-only; master verifies (DL-047).**
+2. **The sibling-before form is a stated limit, not a requirement.** An entry committed *before* its change in a separate transaction cannot be told apart, by any later failure, from an entry that should be there, without changing the product. The helper's comment states this limit. A code-review rule covers it instead: `audit.record` is always called with the transaction of the change it records. The solution-architect adds that sentence to architecture §6 with the audit design.
+3. **The developer's self-check is not required before QA. QA's attempt-2 plants are the evidence**, and they become **twelve**: for each of the six events, (a) the entry moved into its own transaction **inside** the change's unit of work (the attempt-1 form), and (b) the entry moved into a sibling transaction **after** the change. Each plant must fail at least one test. That avoids running the same Docker-heavy series twice on a nearly full disk, and it waits for the clean-up.
+
+**AQP-74 DEF-017 follow-up push verified — 2026-11-06 (master; ruling in 11117). Result: met. QA may run G7 attempt 2 with the twelve plants once disk space is clear.**
+- **Head and CI:** c5e4e41, one commit on 6d53a86, two test files: `audit-atomicity.test.ts` (+93) and `tests/support/late-failure.ts` (+8 / −1). CI 42228339693: success; the atomicity file passes 13 of 13.
+- **My own check:** the new block at c5e4e41 and the helper diff.
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| A `refuse-entry` test per event | ✅ | A new `describe` uses `refusesTheEntry` (`kind: 'refuse-entry', number: 1`, a fresh failing service per test, so the entry refused is the event's own). It covers `user.created` explicitly, and `user.renamed`, `role_changed`, `deactivated`, `activated` and `password_reset` through `it.each(SCENARIOS)`, where each scenario prepares the person through the ordinary service. Six events: 7 + 6 = 13 tests |
+| Assertions | ✅ | The person and the log are exactly as before (`kindsAfter` compared sorted), then the same change through the ordinary service gives both the entry and the real change, so the test cannot pass trivially |
+| Stated limit | ✅ | The helper comment names the before-the-change sibling form, and why neither mode can catch it, and cites 11117 |
+| Review rule | ✅ | Architecture v0.29 §6 (architect 11118), with static checks to follow in GH #104 |
+
+**QA G7 attempt 2:** the full 11106 list as before, plus **twelve plants**: for each of the six events, (a) the entry moved into its own transaction inside the change's unit of work, and (b) the entry moved into a sibling transaction after the change. Each must fail at least one test. DEF-017 is closed only after the posted G7 decision. The run waits for the disk clean-up.
+
+**AQP-216 G6 conditions verified — 2026-11-06 (master; 11114). Result: met; G6 is closed and G7 may start.**
+- **Head and runs:** ebd83be, two commits on 7bda9e0 (ab1d6a2, ebd83be), five files: README, `scripts/ci/playwright-system-deps.sh`, and three unit test files. CI 42234917024 and Nightly 42234917054 on ebd83be: success. Labels: `ai-delivery` and `feature` are now present. Throwaway PR #105 is closed unmerged, and there are no evidence commits on the story branch.
+- **Re-review:** quality's narrow round 2 (11122) APPROVEs QLT-93 and QLT-95. A dead mirror's update fails with status 100 after 17 s, and try 2 on `archive.ubuntu.com` succeeds; isolation and signatures are confirmed; 10 of 10 planted faults are caught.
+- **My own check:** the script diff for ebd83be and the key lines at ebd83be.
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| STD-01 | ✅ | The six casts are replaced by an `as const` list and a `Map` (developer 11121; quality's round 2) |
+| STD-02 | ✅ | `ci-workflow.test.ts` reads 45 s, 90 s and 3 tries from the script, and 8 minutes from `ci.yml`, expecting `[45, 90, 3, 8]`. Changing 45 to 60 on #105 (42234600018) fails exactly that test |
+| QLT-93 | ✅ | Each try gets its own apt view, with `Signed-By` kept and `/etc/apt` sources read only (lines 22 to 52). Removing the rewrite fails 6 script tests (42233860764) |
+| QLT-95 (adopted per architect 11115) | ✅ | `apt-get update … --error-on=any` on the update only (line 121) |
+| A real defect found by the evidence | ✅ | apt runs as root and leaves root-owned files in the view, so the plain `rm -rf` failed after a good install. Now `sudo rm -rf -- "${view}"`, with `|| true` in the EXIT trap (line 66), so a cleanup problem cannot turn a good install red; a regression test covers it. Quality's round 2 confirms the sudo cleanup is safely scoped |
+| `--kill-after` | n/a | Optional, and not taken: three tries already use 405 of the 480 s cap |
+
+**Ruling on the local secret scan (DL-098):**
+- `gitleaks git` was refused by the worktree guard, so the developer ran `gitleaks dir` (8.30.1, its SHA checked against `ci.yml`) on the changed paths, and it found nothing. **For this push it is accepted**, because CI stage 2's full-history scan on ebd83be is green and covers both commits.
+- **The rule stands, clarified:** `gitleaks dir` scans only the final tree, so with two or more commits a secret added in one commit and removed in the next would pass. When `gitleaks git` is unavailable, either push a single commit, or scan each commit's tree with `gitleaks dir`. Otherwise do not push; report BLOCKED. The solution-architect may add a worktree-safe form of `gitleaks git` (for example, a `--log-opts` range) to the README.
+
+**G7 evidence (DL-105, the 11114 list, confirmed):**
+- **(a)** Save then hit: 42230394633 (a 21 / 20 s save), then 42231271036 (6 / 3 s, no download).
+- **(b)** Dead-mirror control: 42232188426 and 42233000524. Try 1's update fails with status 100 after 16 to 17 s, try 2 completes, and 12a takes 40 to 54 s, within the bound.
+- **(c)** Planted faults: the rewrite removed fails (42233860764); a limit changed fails STD-02 (42234600018).
+- **(d)** Regression green on the head, including stage 11b, with 12a at 3 s on a hit.
+- **(e)** The `master`-scope proof is recorded after the merge without holding Done: the first nightly warm-up, then the next PR run restoring from the `master` key.
+- **(f)** Evidence only on a throwaway PR or by `workflow_dispatch`.
+- **(g)** Done only after the posted G7.
+
+QA reads each run log itself.
+
+---
+
+## G7 – QA Acceptance — AQP-216 (STORY-10.16: cache warm-up and bounded install) — 2026-11-06
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #100 at head 80fab66, which adds only `docs/07-qa/AQP-216-test-report.md` on ebd83be (`gh api compare`). It was pushed as a single commit after `gitleaks git` exited 0, which meets DL-098 and DL-108. CI 42239381940: success on all four jobs.
+  - **QA:** Jira 11124; PR comment 6688048994. QA read every log through the API.
+  - **Not done:** no run of my own.
+
+| # | Check (11114, 11123) | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | (a) Save, then hit | ✱ | ✅ | 42230394633 missed in both shards within the bounds and cached 9 packages. The key was saved by the Nightly warm-up on the same commit (42230394560), and the shards' own saves lost that race harmlessly. 42231271036 then hit in both shards with no download (6 s and 3 s) |
+| 2 | (b) Dead-mirror control | ✱ | ✅ | In every shard that missed, try 1's update failed with status 100 after 16 to 17 s, with nothing downloaded; try 2 on `archive.ubuntu.com` succeeded; 12a 40 to 54 s against a 4-minute bound. Both control runs were red only at the unit stage, by design: each changed only `ci.yml`, and the nightly-parity test caught that |
+| 3 | (c) Planted faults | ✱ | ✅ | The rewrite removed fails 6 script tests; the limit changed fails exactly the STD-02 test |
+| 4 | (d) Regression | ✱ | ✅ | Green on the head: 2071 unit and 2864 stage-11 tests, E2E 0 failures, both shards and the Nightly warm-up hit, 11b within the limit |
+| 5 | (f) Evidence location | ✱ | ✅ | Throwaway PRs #101 and #105 are closed and unmerged; all four commits on PR #100 are feature or fix commits |
+| 6 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **AQP-216 is accepted. QA moves it to Done now that this decision is posted (DL-098).** The delivery lead squash-merges.
+2. **(e) The `master`-scope proof is recorded after the merge without holding Done (DL-105):** the first nightly warm-up on `master`, then the next PR run restoring from that `master` key. If it fails, QA raises a Sev-3 defect against STORY-10.16, to be fixed before G8.
+3. **RISK-023** is lowered when the orchestrator reports the first full sharded nightly window (performance recommends about 4).
+
+**Risks registered:** none.
+**Rationale:** The warm-up and the bounded fallback are proved by save then hit, by a real dead-mirror control that falls back within the bound, and by planted faults that fail the tests they should. The evidence stayed off the story branch, and the final push was scanned as the rule requires.
+
+---
+
+## G7 – QA Acceptance — AQP-74 (audit log) — attempt 2 — 2026-11-07
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (attempt 1 NO-GO, DL-107)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #97 at head 1a4cdae, which adds only the attempt-2 section of `docs/07-qa/AQP-74-test-report.md` on c5e4e41 (`gh api compare`). It was pushed as a single commit after `gitleaks git` exited 0 (DL-108). CI 42259699913: success. Product code is unchanged since the attempt-1 evidence, so those results stand.
+  - **QA:** Jira 11128; PR comment 6690919453.
+  - **Not done:** no run of my own.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | **Audit atomicity: twelve planted bypasses (11117, 11120)** | ✱ | ✅ | For each of the six events: *inside* (the entry in its own transaction inside the change) fails that event's late-failure test, and *sibling-after* (a separate transaction after the change) fails that event's `refuse-entry` test. **12 of 12 caught.** Activation and rename, the attempt-1 gaps, are now caught by real assertions. Clean baseline 260 of 260; the file was restored after every plant. The "before" form stays the stated limit, covered by the architecture v0.29 §6 review rule |
+| 2 | QLT-92 strings | ✱ | ✅ | Live, on an empty database: "No entries yet", its text, the page description and the meta all match exactly; no "Showing N of M" and no button. Only the description has an automated test, so QLT-92 stays Info |
+| 3 | Live log check | ✱ | ✅ | Invented e-mails sent through refused users and audit requests never reach the application log. The production server prints no request lines |
+| 4 | Rest of the 11106 list | ✱ | ✅ | Stands from attempt 1 (append-only, events, `actor_label`, Who filter, people list, 403, From/To, lock, PRF-03, lint ban, pins, three widths); `/audit` 171,801 B |
+| 5 | No open Sev-1 or Sev-2 | ✱ | ✅ | None |
+
+**Rulings**
+1. **DEF-017 is closed. QA closes it, and moves AQP-74 to Done, now that this decision is posted (DL-098).**
+2. **The one failure under parallel database files is Environment**, repeated and not counted (DL-068). It passed alone and in the sequential baseline, and CI is green. The disk clean-up during the run had deleted QA's scratch folders, and QA reinstalled and re-ran all twelve plants from scratch, which is the right handling. **If the same test fails on CI**, it becomes a Test defect.
+3. **The development server prints request URLs with their query strings.** This is development-only and not a defect: the production server prints no request lines, and the Who filter goes by `actor_id`, not by e-mail. Noted for 10.04, so that the deployed image runs `next start` (production) only, in line with DL-086.
+4. **Merge:** AQP-216 has merged, so PR #97 updates from `master` through GitHub and waits for green CI, including stage 11b. Master re-checks only if the update changes this PR's own diff. Then the delivery lead squash-merges.
+
+**Risks registered:** none.
+**Rationale:** The gap that failed attempt 1 is closed with evidence of the right kind: two bypass forms per event, each caught by an assertion built for it. The one form that cannot be caught is stated, and covered by a written review rule.
