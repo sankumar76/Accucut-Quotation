@@ -208,8 +208,8 @@ describe('AC-4, AC-5: deleting a rate', () => {
     await db.mastersService.deleteProcessItem(by(), PLATING.id);
     expect((await rows()).some((row) => row.id === PLATING.id)).toBe(false);
     const entries = await entriesFor(db, PLATING.id);
-    expect(entries.map((entry) => entry.event)).toEqual(['master.edited', 'master.deleted']);
-    expect(entries[1]).toMatchObject({ object_label: 'Plating-rate-per-sqin', before: { name: 'Plating-rate-per-sqin', unit: 'per sq in', defaultValue: '1.37' }, after: null });
+    expect(entries.map((entry) => entry.event).sort()).toEqual(['master.deleted', 'master.edited']);
+    expect(entries.find((entry) => entry.event === 'master.deleted')).toMatchObject({ object_label: 'Plating-rate-per-sqin', before: { name: 'Plating-rate-per-sqin', unit: 'per sq in', defaultValue: '1.37' }, after: null });
   });
 
   it('says not found for a rate that is gone', async () => {

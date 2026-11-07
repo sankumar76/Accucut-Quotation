@@ -249,7 +249,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     const person = await db.userService.create(by(), newPerson('name.and.role'));
     await db.userService.update(by(), person.id, { name: 'Invented Both Changed', role: 'LEAD' });
     const afterBoth = await entriesFor(db, person.id);
-    expect(afterBoth.map((entry) => [entry.event, entry.object_label])).toEqual([
+    // Two entries of one transaction can share a millisecond; the set is what the story promises, so the pairs are compared by event name.
+    expect(afterBoth.map((entry) => [entry.event, entry.object_label]).sort(([a], [b]) => String(a).localeCompare(String(b)))).toEqual([
       ['user.created', 'Invented name.and.role'],
       ['user.renamed', 'Invented Both Changed'],
       ['user.role_changed', 'Invented Both Changed'],
