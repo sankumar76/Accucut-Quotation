@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AuthenticatedUser } from '@/server/auth/resolve-session-user';
-import { buildMe } from '@/server/views/me-view';
-import { meResponseSchema } from '@/server/views/schemas/me';
+import { buildMe } from '@/server/views/engineer-me';
+import { meResponseSchema } from '@/server/views/schemas';
 
 /**
  * STORY-01.02 AC-7 (BR-003): `GET /api/v1/me` returns the name, e-mail, role, navigation and overdue count, through a

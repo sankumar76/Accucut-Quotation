@@ -69,13 +69,31 @@ const PRESENTATION_IMPORTS = [
   PRISMA_IMPORT,
 ];
 
-// Cost repositories (ADR-008 layer 2). A later story that adds one more cost repository adds its
-// file-name prefix here.
+// Cost repositories and the services that read them (ADR-008 layer 2; STORY-01.03 AC-1). Everything Restricted lives in
+// `calculations`, `calculation_rows`, `approvals` and the masters, so an Engineer view may not import the repository of any of
+// them: calculation-, approval-, master- (the Process Master's rates), material-, exchange- (the exchange rate), customer-rate
+// (a customer's rates), cost- and rate-. Masters reach an Engineer only through `/options/*`, which return IDs and names
+// (architecture section 6). A later story that adds one more cost repository adds its file-name prefix here, and
+// `tests/security/engineer-import-rule.test.ts` plants a fault against each prefix and against each real repository file.
 const ENGINEER_VIEW_IMPORTS = [
   {
-    group: ['**/repositories/calculation-*', '**/repositories/cost-*', '**/repositories/rate-*'],
-    regex: `${SLASH}repositories${SLASH}(calculation|cost|rate)-`,
+    group: [
+      '**/repositories/calculation-*',
+      '**/repositories/approval-*',
+      '**/repositories/cost-*',
+      '**/repositories/rate-*',
+      '**/repositories/master-*',
+      '**/repositories/material-*',
+      '**/repositories/exchange-*',
+      '**/repositories/customer-rate*',
+    ],
+    regex: `${SLASH}repositories${SLASH}(calculation-|approval-|cost-|rate-|master-|material-|exchange-|customer-rate)`,
     message: 'Engineer views must not import a cost repository (ADR-008, NFR-002).',
+  },
+  {
+    group: ['**/services/masters-service', '**/services/calculation-*', '**/services/approval-*'],
+    regex: `${SLASH}services${SLASH}(masters-service|calculation-|approval-)`,
+    message: 'Engineer views must not import a service that reads rates, calculations or approvals (ADR-008, NFR-002).',
   },
   FORMULA_IMPORT,
   PRISMA_IMPORT,

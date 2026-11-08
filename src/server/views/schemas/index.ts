@@ -1,0 +1,13 @@
+/**
+ * The response and request contracts of the API, in one place (architecture section 6, "Contract testing"; ADR-008 layer 3).
+ * The zod schemas here are the contract: a handler parses its own answer with one of them, as `z.strictObject`, so a key
+ * the schema does not name is an error and never reaches a client.
+ *
+ * A route an Engineer may call has exactly ONE response schema, whoever calls it, with no cost, rate or formula field in it
+ * (architecture section 6, "One route, one schema"). Lead and Admin figures come from separate routes that an Engineer cannot
+ * call. `tests/security/strict-schema.test.ts` walks the route manifest and holds every Engineer-reachable route to this.
+ */
+export * from './audit';
+export * from './me';
+export * from './process-items';
+export * from './users';
