@@ -22,6 +22,9 @@ const SHARD_COUNT = MATRIX.split(',').filter((entry) => entry.trim() !== '').len
 
 const WIDTHS = ['mobile', 'tablet', 'desktop'];
 
+/** How far a shard's width-test count may be from the mean over the shards: 10 % (AQP-227 AC-2). */
+const BALANCE_TOLERANCE = 0.1;
+
 /**
  * One entry per test and project: `project | file:line | describe titles > title`. The describe titles are part of the key
  * because a spec file may declare the same test once per route in a loop (`shell-lazy-load.spec.ts`), at one line. A
@@ -75,5 +78,20 @@ describe('AQP-208 AC-3: the shards together run every E2E test once', () => {
     const setup = setupTests(whole);
     expect(setup.length).toBeGreaterThan(0);
     for (const shard of shards) expect(setupTests(shard)).toEqual(setup);
+  });
+
+  // AQP-227 AC-2 (test strategy 10.5, "Three shards"). Playwright divides the listed tests, with `fullyParallel`, into groups of
+  // near-equal count, so each shard is within a test or two of the mean. A split per file (for example if `fullyParallel` were
+  // switched off) would leave a shard with far more or far fewer, and this fails. It counts tests, not time: the time spread
+  // between shards is reported in the pull request and is not a pass line.
+  it('each shard holds a number of mobile, tablet and desktop tests within 10 % of the mean over the shards', () => {
+    const counts = shards.map((shard) => widthTests(shard).length);
+    const mean = counts.reduce((sum, count) => sum + count, 0) / counts.length;
+    expect(mean).toBeGreaterThan(0);
+    counts.forEach((count, index) => {
+      expect(Math.abs(count - mean) / mean, `shard ${index + 1} of ${counts.length} has ${count} tests, the mean is ${mean.toFixed(1)}`).toBeLessThanOrEqual(
+        BALANCE_TOLERANCE,
+      );
+    });
   });
 });
