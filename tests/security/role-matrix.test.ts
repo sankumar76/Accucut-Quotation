@@ -73,8 +73,11 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
 /** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
 const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/account/password'];
 
-/** Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints). */
-const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]'];
+/**
+ * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
+ * the negative control of the confidentiality scan, which answers 404 everywhere except under NODE_ENV=test and is in no role's list).
+ */
+const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/test-only/leak'];
 
 function expectedRoles(path: string): ReadonlyArray<RoleName> {
   return SPEC_ACCESS[path] ?? ROLES;
@@ -185,7 +188,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
     expect(differences).toEqual([]);
   });
 
-  it('keeps the public routes to sign-in and next-auth, and nothing else', () => {
+  it('keeps the public routes to sign-in, next-auth and the test-only negative control, and nothing else', () => {
     expect(ROUTE_MANIFEST.filter((row) => row.roles === 'public').map((row) => row.path).sort()).toEqual([...PUBLIC_ROUTES].sort());
   });
 

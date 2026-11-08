@@ -57,6 +57,19 @@ describe('the shape of the manifest', () => {
     expect(Object.isFrozen(roles)).toBe(true);
   });
 
+  it('has one test-only row, the negative control of the confidentiality scan: public, GET only, no menu entry (STORY-01.03 AC-4, assumption A-2)', () => {
+    const testOnly = ROUTE_MANIFEST.filter((row) => row.testOnly === true);
+    expect(testOnly.map((row) => row.path)).toEqual(['/api/test-only/leak']);
+    for (const row of testOnly) {
+      expect(row.roles).toBe('public');
+      expect(row.methods).toEqual(['GET']);
+      expect(row.kind).toBe('api');
+      expect(row.nav).toBeUndefined();
+    }
+    // Being public it is in no role's list, so the Engineer-reachable set below never holds it and the scan never treats it as one.
+    expect(ROUTE_MANIFEST.filter((row) => row.roles !== 'public' && row.testOnly === true)).toEqual([]);
+  });
+
   it('hides only the design-system page in production, the same page the production-build checks expect to answer 404', () => {
     const hidden = ROUTE_MANIFEST.filter((row) => row.hiddenInProduction === true).map((row) => row.path);
     expect(hidden).toEqual(['/design-system']);

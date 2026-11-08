@@ -1,4 +1,4 @@
-import type { HttpMethod } from '../../src/server/http/route-manifest';
+import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
 /**
  * What a **valid, allowed** call to each implemented API route looks like, so the role matrix can show that the role the
@@ -26,7 +26,37 @@ export interface CallContext {
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
-const DEFAULT_CALL: ValidCall = { id: 'invented-id', status: 200 };
+/** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
+export const NO_RECIPE_ID = 'invented-id';
+
+const DEFAULT_CALL: ValidCall = { id: NO_RECIPE_ID, status: 200 };
+
+const DYNAMIC_SEGMENT = /\[[^\]]+\]/;
+
+/**
+ * Why a route's recipe cannot be trusted, or `null` when it can (STORY-01.03 AC-6, QLT-02, QLT-08). A path with a dynamic segment
+ * whose valid call still carries `NO_RECIPE_ID` has no real-value recipe: the scan would open it with an ID that exists for no one and
+ * see only a 404 or "no access", and a real ID and an invented one would be the same ID. The scan and the CR-33 loops fail on it, so
+ * the story that adds the route adds its recipe here, in the same change (the pull-request checklist says so).
+ */
+export function recipeProblem(path: string, id: string): string | null {
+  return DYNAMIC_SEGMENT.test(path) && id === NO_RECIPE_ID ? `add a real-value recipe for ${path} to tests/support/route-calls.ts (AC-6)` : null;
+}
+
+/**
+ * The address of a page for the scan. A page with a fixed address is that address. A page with a dynamic segment needs a recipe that
+ * names a record the signed-in person really owns (`context.ownerId`), so the scan sees the page with its data and not "no access";
+ * there is none yet, because no such page is implemented (`/estimates/[code]` arrives with story 05.x). Throws when there is none.
+ */
+export function validPageAddress(path: string, context: { readonly ownerId: string }): string {
+  if (!DYNAMIC_SEGMENT.test(path)) return path;
+  const recipe = PAGE_RECIPES[path];
+  if (recipe === undefined) throw new Error(recipeProblem(path, NO_RECIPE_ID) ?? `add a real-value recipe for ${path}`);
+  return recipe(context);
+}
+
+/** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. Empty until one is implemented. */
+const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {};
 
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
@@ -34,7 +64,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return DEFAULT_CALL;
     case 'POST /api/v1/users':
       return {
-        id: 'invented-id',
+        id: NO_RECIPE_ID,
         body: { name: 'Invented New Person', email: 'invented.new.person@example.test', role: 'ENGINEER', password: 'invented-first-password-1' },
         status: 201,
       };
@@ -46,7 +76,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'GET /api/v1/process-items':
       return DEFAULT_CALL;
     case 'POST /api/v1/process-items':
-      return { id: 'invented-id', body: { name: 'Invented-rate-per-sqin', unit: 'per sq in', defaultValue: '1.37' }, status: 201 };
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-rate-per-sqin', unit: 'per sq in', defaultValue: '1.37' }, status: 201 };
     case 'PATCH /api/v1/process-items/[id]':
       return { id: PLATING_ITEM_ID, body: { defaultValue: '2.37' }, status: 200 };
     case 'DELETE /api/v1/process-items/[id]':
@@ -54,4 +84,30 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     default:
       return DEFAULT_CALL;
   }
+}
+
+/**
+ * Every implemented route of a manifest that has a dynamic segment and no real-value recipe, one line each (QLT-02, QLT-08). Empty means
+ * every dynamic route the scan and the CR-33 loops open has a record that really exists. A story that implements such a route adds its
+ * recipe in the same change, or this list names it and `tests/security/route-recipes.test.ts` fails.
+ */
+export function rowsWithoutRecipe(manifest: ReadonlyArray<RouteRow>, context: CallContext): string[] {
+  const implemented = manifest.filter((row) => row.status === 'implemented' && row.roles !== 'public' && row.path.includes('['));
+  return implemented.flatMap((row) => {
+    if (row.kind === 'page') {
+      if (row.hiddenInProduction === true) return [];
+      try {
+        validPageAddress(row.path, { ownerId: context.targetId });
+        return [];
+      } catch (error) {
+        return [`page ${row.path}: ${error instanceof Error ? error.message : 'no recipe'}`];
+      }
+    }
+    return row.methods
+      .filter((method) => method !== 'HEAD')
+      .flatMap((method) => {
+        const problem = recipeProblem(row.path, validCallFor(method, row.path, context).id);
+        return problem === null ? [] : [`${method} ${row.path}: ${problem}`];
+      });
+  });
 }

@@ -72,6 +72,12 @@ export interface RouteRow {
   readonly nav?: NavMeta;
   /** A review page that a production build answers "not found" for (`/design-system`). */
   readonly hiddenInProduction?: true;
+  /**
+   * A route that exists only when `NODE_ENV` is `test` and answers 404 everywhere else (STORY-01.03 AC-4: the negative control
+   * of the confidentiality scan). It is public, so it is in no role's list; the scan iterates the roles' rows and so never
+   * counts it as an Engineer route. At most one row carries it (`tests/unit/http-route-manifest.test.ts`).
+   */
+  readonly testOnly?: true;
 }
 
 const ALL_ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
@@ -152,6 +158,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
+  // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
+  { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
   {

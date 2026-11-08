@@ -47,6 +47,7 @@ Screens: SCR-… · States required: … · Accessibility notes: …
 
 ## Testing Notes
 Test levels, test data, edge cases, mocks/stubs allowed, coverage target.
+- **Cost confidentiality checklist (STORY-01.03 AC-6; sprint plan cross-cutting rule 3):** ☐ every new Restricted value (rate, price, specific gravity, scrap rate, exchange rate, formula text, calculated output) is added to `tests/support/canary-masters.ts` with its loader; ☐ every new route or page is in the route manifest, and a dynamic one has a real-value recipe in `tests/support/route-calls.ts`; ☐ the canary scan still finds 0. Write "none added" if the story adds neither.
 
 ## Dependencies · Risks · Assumptions
 

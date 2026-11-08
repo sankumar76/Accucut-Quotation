@@ -2,8 +2,11 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import { expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
 import { Client } from 'pg';
+import { z } from 'zod';
 
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
+import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
+import { displayFormOf } from '../../support/formula-display';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 
@@ -42,12 +45,13 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *   slip     gets wrong passwords, which count toward the five-failure block;
  *   axe      gets one wrong password for the accessibility check of the error state;
  *   sign-out signs out, which ends every session of that person;
- *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04.
+ *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04;
+ *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -149,18 +153,66 @@ export async function ensureAuditCanaryEntry(): Promise<void> {
  * kind, the screen size, the repeat and the retry, plus a random part, so no two runs ever share it. The rows stay in
  * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`.
  */
-export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo): Promise<E2eUser> {
+export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo): Promise<E2eUser & { readonly id: string }> {
   const part = randomBytes(3).toString('hex');
   const label = `${kind}.${testInfo.project.name}.r${testInfo.repeatEachIndex}.t${testInfo.retry}.${part}`;
   const user: E2eUser = { name: `E2E ${label}`, email: `e2e.${label}@example.test`, role: 'ENGINEER' };
   const hash = await createTestHasher().hash(E2E_PASSWORD);
   const client = await connectToTestDatabase();
   try {
-    await client.query(UPSERT_USER, [user.name, user.email, hash, user.role]);
+    const { rows } = await client.query<{ id: string }>(`${UPSERT_USER} RETURNING id`, [user.name, user.email, hash, user.role]);
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The disposable person could not be made.');
+    // The ID goes with the person so a scan can open the record that person really owns (STORY-01.03 AC-6, QLT-02).
+    return { ...user, id };
   } finally {
     await client.end();
   }
-  return user;
+}
+
+/**
+ * Puts the Process Master canary rates (STORY-02.01's name and values, `tests/support/process-master-canary.ts`) into the database
+ * the servers use, so the confidentiality scan has Restricted values to look for. They are three new rates, never the 15 seed rows
+ * that other specs read, and the statement is repeatable and safe when three screen sizes run it at once (`ON CONFLICT DO NOTHING`,
+ * then an update to the same value). A rate is not secret: the values are invented and this database is thrown away (guarded above).
+ */
+export async function ensureCanaryProcessRates(): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    for (const rate of PROCESS_CANARY_RATES) {
+      const insert = 'INSERT INTO process_items (name, unit, default_value) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING';
+      await client.query(insert, [rate.name, rate.unit, rate.value]);
+      await client.query('UPDATE process_items SET default_value = $2 WHERE lower(name) = lower($1)', [rate.name, rate.value]);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+const snapshotShape = z.looseObject({
+  fields: z.array(z.looseObject({ id: z.string(), position: z.number().int(), formula: z.string().nullish() })),
+});
+
+/**
+ * Every stored formula of the newest configuration version, in its internal form AND in the display form a careless view would print
+ * (QLT-05), so the scan can look for the text itself. The Process master page reads that version, so the E2E database already has one
+ * (CI makes version 1 before the tests). The display form needs the rates' names, which are read from the Process Master.
+ */
+export async function readFormulaTexts(): Promise<ReadonlyArray<string>> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const rates = await client.query<{ id: string; name: string }>('SELECT id, name FROM process_items');
+    const snapshot = snapshotShape.parse(rows[0]?.snapshot);
+    const context = {
+      positionOf: new Map(snapshot.fields.map((field) => [field.id, field.position])),
+      rateNameOf: new Map(rates.rows.map((rate) => [rate.id, rate.name])),
+    };
+    const internal = snapshot.fields.flatMap((field) => (typeof field.formula === 'string' && field.formula.length > 0 ? [field.formula] : []));
+    return [...internal, ...internal.map((text) => displayFormOf(text, context))];
+  } finally {
+    await client.end();
+  }
 }
 
 /**

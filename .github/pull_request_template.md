@@ -42,6 +42,7 @@
 - [ ] Coding standards followed; no secrets, debug code or untracked TODOs
 - [ ] Docs / config updated where behaviour changed
 - [ ] Migrations reversible and tested (if any)
+- [ ] Cost confidentiality (STORY-01.03 AC-6): every new Restricted value is in `tests/support/canary-masters.ts` with its loader; every new route or page is in the route manifest, with a real-value recipe in `tests/support/route-calls.ts` for a dynamic segment; the canary scan still finds 0 (or: "none added")
 
 ### Gates
 - [ ] G5 Code complete (orchestrator)

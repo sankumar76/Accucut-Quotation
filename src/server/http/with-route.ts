@@ -72,7 +72,15 @@ export interface NextRouteContext {
   readonly params: Promise<Readonly<Record<string, string | string[] | undefined>>>;
 }
 
-export type RouteHandler = (request: Request, context?: NextRouteContext) => Promise<Response>;
+/**
+ * What `withRoute` returns: the handler Next.js calls, and the one schema its answer is parsed with. The schema is exposed
+ * so the tests can hold every route an Engineer may call to "exactly one strict response schema" by reading the handler
+ * itself, with no list to keep in step (STORY-01.03 AC-2, AC-6).
+ */
+export interface RouteHandler {
+  (request: Request, context?: NextRouteContext): Promise<Response>;
+  readonly responseSchema: z.ZodType;
+}
 
 const NO_INPUT = z.undefined();
 const DEFAULT_STATUS = 200;
@@ -164,7 +172,7 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
     return jsonResponse(answer.data, status, requestId);
   }
 
-  return async function handle(request, context) {
+  async function handle(request: Request, context?: NextRouteContext): Promise<Response> {
     const requestId = newRequestId();
     try {
       return await run(request, context, requestId);
@@ -182,5 +190,7 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
       logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed unexpectedly');
       return problemResponse(internalProblem(requestId));
     }
-  };
+  }
+
+  return Object.assign(handle, { responseSchema: options.output });
 }

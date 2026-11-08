@@ -27,6 +27,8 @@ const ROUTE_GROUP = /^\(.+\)$/;
  */
 export const OWN_PROTECTION: Readonly<Record<string, string>> = {
   '/api/auth/[...nextauth]': 'next-auth: its own CSRF token and its own refusals',
+  // STORY-01.03 AC-4: no session, no input, no data of its own: it returns an invented sentinel under NODE_ENV=test and 404 elsewhere.
+  '/api/test-only/leak': 'negative control of the confidentiality scan: public, test-only, one invented sentinel (src/lib/negative-control-gate.ts)',
 };
 
 export function patternOf(file: string): string {

@@ -363,6 +363,12 @@ jobs:
           PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
         run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
 
+      # The cost-confidentiality scan (STORY-01.03, ADR-008 layer 5, test strategy section 6) is part of this command and needs no step of its own:
+      # `tests/e2e/canary-scan.spec.ts` is in the list of every shard, at all three widths, and blocks the merge through the `required` job
+      # below. It is NEVER quarantined (test strategy section 10, flaky-test policy): `tests/unit/canary-scan-gate.test.ts` fails the build if
+      # a test of the scan is skipped, if this command is narrowed by a path, `--grep` or `--project`, or if the scan leaves the Playwright list.
+      # Its Vitest parts (`tests/security`: the role matrix, the import rule, the strict schemas, the scanner and its negative control) run in stage 11.
+      #
       # Chromium at three widths with axe (test strategy sections 2, 6, 9), this shard's share. Playwright starts two
       # servers (playwright.config.ts): the development server for the design-system specs and the PRODUCTION build from
       # the build step above (`next start`) for the sign-in journey (deferred issue #17). Both use this shard's throwaway

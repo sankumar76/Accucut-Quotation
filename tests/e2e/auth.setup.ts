@@ -1,7 +1,10 @@
 import { expect, test as setup } from '@playwright/test';
 
-import { E2E_ADMIN, E2E_LEAD, E2E_PASSWORD, ensureE2eAdmin, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
-import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
+import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
+
+import { E2E_ADMIN, E2E_ENGINEER, E2E_LEAD, E2E_PASSWORD, ensureE2eAdmin, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
+import { fillPath } from './support/canary-scan';
+import { ADMIN_STATE, DEVELOPMENT_URL, PRODUCTION_URL, SIGNED_IN_STATE } from './support/servers';
 
 /**
  * The set-up project: it makes sure the invented users exist, signs the Lead in on the development server, and
@@ -10,11 +13,13 @@ import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers
  */
 
 const COMPILE_TIMEOUT = 120_000;
+/** The set-up tests compile pages and hash passwords on a cold machine; they are allowed longer than a test (test strategy section 10). */
+const SETUP_TIMEOUT = 180_000;
 /** The development-server pages the width projects open. The signed-in Lead can open all three. */
 const WARMED_ROUTES = ['/', '/queue', '/design-system'] as const;
 
 setup('create the E2E users and save a signed-in Lead', async ({ page, context }) => {
-  setup.setTimeout(180_000);
+  setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eUsers();
   await useFreshAddress(context);
 
@@ -35,8 +40,39 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
   await context.storageState({ path: SIGNED_IN_STATE });
 });
 
+/**
+ * Warms the PRODUCTION server (STORY-01.03): `next start` loads a route's module on its first request, and a page's module is loaded
+ * even to answer "no access", so the first request of each route is slower than the rest. The confidentiality scan opens every page and
+ * calls every API route, so it would pay for all of them inside a test's 30 s on a cold server. An Engineer asks for each implemented page and
+ * route of the manifest once, here, as the sign-in spec's person would; a page or route this person may not open is answered 403 and still
+ * loaded. Only GET is used, so nothing is changed. The manifest is the list, so a new route is warmed with no edit.
+ */
+setup('warm the production server: every page and API route once, as an Engineer', async ({ browser }) => {
+  setup.setTimeout(SETUP_TIMEOUT);
+  await ensureE2eUsers();
+  const context = await browser.newContext({ baseURL: PRODUCTION_URL });
+  try {
+    await useFreshAddress(context);
+    const page = await context.newPage();
+    await page.goto(`${PRODUCTION_URL}/sign-in`);
+    await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
+    await expect(page).toHaveURL(/\/queue$/, { timeout: COMPILE_TIMEOUT });
+    for (const row of ROUTE_MANIFEST.filter((entry) => entry.status === 'implemented' && entry.roles !== 'public')) {
+      const path = fillPath(row.path, 'warm-up');
+      if (row.kind === 'page') {
+        expect((await page.goto(path))?.status(), path).toBeLessThan(500);
+      } else {
+        expect((await page.request.get(path)).status(), path).toBeLessThan(500);
+      }
+    }
+    expect((await page.request.get('/api/test-only/leak')).status()).toBe(404);
+  } finally {
+    await context.close();
+  }
+});
+
 setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
-  setup.setTimeout(180_000);
+  setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eAdmin();
   const context = await browser.newContext();
   try {
