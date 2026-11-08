@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 
 import { defineConfig } from '@playwright/test';
 
+import { NEGATIVE_CONTROL_ENV_NAME } from './src/lib/negative-control-gate';
+import { NEGATIVE_CONTROL_SENTINEL } from './tests/support/canary-masters';
 import { DEV_PORT, PRODUCTION_PORT, SIGNED_IN_STATE } from './tests/e2e/support/servers';
 
 /**
@@ -41,6 +43,10 @@ const serverEnvironment = (port: number) => ({
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
   SMTP_AUTH_MODE: 'none',
+  // The sentinel of the scan's negative control (STORY-01.03 AC-4). `/api/test-only/leak` serves it only under NODE_ENV=test, which no
+  // Next.js server has (`next dev` is development, `next start` is production), so both servers answer 404. It is set anyway: the spec
+  // then shows that the build, not the lack of a sentinel, is what keeps the route absent.
+  [NEGATIVE_CONTROL_ENV_NAME]: NEGATIVE_CONTROL_SENTINEL,
 });
 
 export default defineConfig({

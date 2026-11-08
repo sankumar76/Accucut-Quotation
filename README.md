@@ -146,7 +146,26 @@ the menu (and `GET /api/v1/me`), and the tests.
   state-changing route, nothing more: `tests/security` calls it as an Admin, a Lead, an Engineer and a signed-out visitor,
   compares the answers with the SPEC table, and fails a route file with no row, a handler without `withRoute` and a page
   without `authorizePage`.
-- A route an Engineer may open is a decision: `tests/unit/http-route-manifest.test.ts` names every one.
+- A route an Engineer may open is a decision: `tests/unit/http-route-manifest.test.ts` names every one. Its answer is parsed with
+  one strict schema from `src/server/views/schemas`, whoever calls it, and an Engineer view (`src/server/views/engineer-*.ts`) imports no
+  cost repository and no formula engine (lint). The scan below covers the route with no edit.
+
+## Cost confidentiality scan (NFR-002, SPEC section 14.1)
+
+An Engineer must never be sent a rate, a calculated value or a formula. `tests/e2e/canary-scan.spec.ts` proves it on every pull request
+(CI stage 12; it is never quarantined). It signs in as an Engineer on the production build, opens every page and calls every API route that the
+route manifest lists for an Engineer, and looks in everything that came back (HTML, RSC payloads, JSON, headers, and the JavaScript chunks the
+pages load) for the invented sentinels of `tests/support/canary-masters.ts`, in plain digits, Indian grouping and two decimals, and for rate names,
+`{{f:`, `{{rate:`, `{{mat:` and the stored formula text. It also calls every Lead and Admin route as an Engineer (403 with the fixed body, no data) and
+shows that it can fail: the Admin is sent the canary rates by the same routes and the scan finds them, a planted leak is reported, and
+`/api/test-only/leak` is absent from the production build. Run it with `npx playwright test canary-scan` (needs the database above).
+
+- **A story that adds an Engineer route** adds its manifest row and nothing to the scan. **A story that adds a Restricted table** adds its
+  sentinels to `canaryMasters` and a loader that writes them into its table, in the same change.
+- **The canary estimate** (`tests/support/canary-estimate-builder.ts`) types a value into every input field and is chosen so that no output
+  equals a typed value, which an Engineer is allowed to see. A new input field fails `tests/security/canary-estimate-builder.test.ts` until it is added.
+- `NODE_ENV=test` belongs to Vitest alone: `next dev` forces `development` and `next start` forces `production`. So the negative-control route is
+  exercised in process (`tests/security/scanner.test.ts`) and shown absent from the server (the scan spec).
 
 ## Checks (the same ones CI runs)
 
@@ -163,6 +182,7 @@ the menu (and `GET /api/v1/me`), and the tests.
 | Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
 | First-load JavaScript budget (CI stage 11b; needs the build and the database above; see "Performance checks") | `npx tsx scripts/check-js-budget.ts` |
 | End-to-end, three screen sizes (needs the database above; builds and serves the production build for the sign-in spec) | `npx playwright install chromium` once, then `npx playwright test` |
+| Cost confidentiality scan (CI stage 12; see "Cost confidentiality scan") | `npx playwright test canary-scan`; its Vitest parts are in `tests/security` (`npx vitest run tests/security`) |
 | First Admin (AC-7 of STORY-01.01) | `npx tsx scripts/bootstrap-admin.ts` (reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD`) |
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
 | Licence allow-list | `npx tsx scripts/check-licences.ts` |
