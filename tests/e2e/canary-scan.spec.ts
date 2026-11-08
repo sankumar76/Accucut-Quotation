@@ -1,9 +1,11 @@
 import { readdirSync } from 'node:fs';
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
+import { MATERIAL_CANARIES } from '../support/material-master-canary';
 import { defined } from '../support/defined';
 import { cacheControlProblems, describeFinding, fixedForbiddenProblem, isBuiltFile, maskRequestId, scanResponses } from '../support/scanner';
 
@@ -11,6 +13,7 @@ import {
   createDisposableUser,
   E2E_ADMIN,
   E2E_PASSWORD,
+  ensureCanaryMaterials,
   ensureCanaryProcessRates,
   ensureCanaryUser,
   readFormulaTexts,
@@ -56,6 +59,9 @@ import { PRODUCTION_URL } from './support/servers';
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
 
+/** The answer of `GET /api/v1/options/materials`, read loosely on purpose: the test counts the keys, so a leaked key must survive the parse. */
+const optionsBody = z.object({ options: z.array(z.record(z.string(), z.unknown())) });
+
 const INVENTED_ID = '00000000-0000-4000-8000-0000000000fe';
 const INVENTED_PAGE_VALUE = 'invented-code';
 const NO_ACCESS_TITLE = 'You do not have access to this page';
@@ -81,6 +87,7 @@ async function prepare(
   testInfo: TestInfo,
 ): Promise<{ readonly forbidden: ReturnType<typeof forbiddenStrings>; readonly engineer: Awaited<ReturnType<typeof createDisposableUser>> }> {
   await ensureCanaryProcessRates();
+  await ensureCanaryMaterials();
   return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
 }
 
@@ -160,6 +167,7 @@ test('AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 
 
 test('AC-3, AC-4 (control with real data): the same scan finds the canary rates in what the Admin is sent', async ({ page, context }) => {
   await ensureCanaryProcessRates();
+  await ensureCanaryMaterials();
   const forbidden = forbiddenStrings(await readFormulaTexts());
   const recorder = new ScanRecorder();
   await recorder.attach(context);
@@ -175,6 +183,53 @@ test('AC-3, AC-4 (control with real data): the same scan finds the canary rates 
   for (const rate of PROCESS_CANARY_RATES) expect(found.has(rate.value), `the scan finds the value of ${rate.name}`).toBe(true);
   expect(found.has(defined(PROCESS_CANARY_RATES[0]).name), 'the scan finds the canary name').toBe(true);
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+test('AC-6 (control with real data, STORY-02.03): the same scan finds the canary materials\' price, specific gravity and scrap rate in what the Admin is sent', async ({
+  page,
+  context,
+}) => {
+  await ensureCanaryMaterials();
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, E2E_ADMIN);
+
+  await callInBrowser(recorder, page, 'GET /api/v1/materials (API, Admin)', '/api/v1/materials');
+  await recorder.recordNavigation('GET /masters/materials (page, Admin)', await page.goto('/masters/materials'));
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  const found = new Set(scanResponses(recorder.responses, forbidden).map((finding) => finding.found));
+  for (const material of MATERIAL_CANARIES) {
+    for (const value of [material.pricePerKg, material.specificGravity, material.scrapRate]) {
+      expect(found.has(value), `the scan finds ${value} of ${material.materialInDrawing}`).toBe(true);
+    }
+  }
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+test('AC-4, AC-6 (STORY-02.03): the options list an Engineer is sent names the canary materials, carries no rate of any kind, and holds no number of them in any form', async ({
+  page,
+  context,
+}, testInfo) => {
+  await ensureCanaryMaterials();
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const engineer = await createDisposableUser('scan', testInfo);
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  const answer = await callInBrowser(recorder, page, 'GET /api/v1/options/materials (API, Engineer)', '/api/v1/options/materials');
+  expect(answer.status).toBe(200);
+  const options = optionsBody.parse(JSON.parse(answer.body ?? '{}')).options;
+  const ours = options.filter((option) => MATERIAL_CANARIES.some((material) => material.id === option['id']));
+  expect(ours.map((option) => option['name']).sort()).toEqual(MATERIAL_CANARIES.map((material) => material.materialInDrawing).sort());
+  for (const option of ours) expect(Object.keys(option).sort(), 'no rate of any kind').toEqual(['id', 'materialConsidered', 'name']);
+  await recorder.settled();
+  expect(sentences(recorder, forbidden)).toEqual([]);
 });
 
 test('AC-4 (negative control): a sentinel planted in a header and in an RSC payload is reported in each place', async ({ page, context }) => {

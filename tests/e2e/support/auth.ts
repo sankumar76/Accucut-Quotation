@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
 import { displayFormOf } from '../../support/formula-display';
+import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 
@@ -183,6 +184,29 @@ export async function ensureCanaryProcessRates(): Promise<void> {
       const insert = 'INSERT INTO process_items (name, unit, default_value) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING';
       await client.query(insert, [rate.name, rate.unit, rate.value]);
       await client.query('UPDATE process_items SET default_value = $2 WHERE lower(name) = lower($1)', [rate.name, rate.value]);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Puts the Material Master canary materials (STORY-02.03's names, IDs and numbers, `tests/support/material-master-canary.ts`) into the
+ * database the servers use, so the confidentiality scan has a price, a specific gravity and a Material-Scrap-Rate to look for, and the
+ * recipe for `PATCH /api/v1/materials/{id}` names a material that exists. They have fixed IDs, so the statement is repeatable and safe when
+ * three screen sizes run it at once (`ON CONFLICT (id) DO UPDATE` to the same values). The numbers are invented and this database is
+ * thrown away (guarded above).
+ */
+export async function ensureCanaryMaterials(): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const upsert = `INSERT INTO materials (id, material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate)
+      VALUES ($1::uuid, $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO UPDATE SET material_considered = EXCLUDED.material_considered, price_per_kg = EXCLUDED.price_per_kg,
+        specific_gravity = EXCLUDED.specific_gravity, scrap_rate = EXCLUDED.scrap_rate`;
+    for (const material of MATERIAL_CANARIES) {
+      const { id, materialInDrawing, materialConsidered, pricePerKg, specificGravity, scrapRate } = material;
+      await client.query(upsert, [id, materialInDrawing, materialConsidered, pricePerKg, specificGravity, scrapRate]);
     }
   } finally {
     await client.end();

@@ -102,6 +102,13 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     // A change to nobody (an ID no rate has) is answered 404 and writes nothing, which compiles the route of one rate too.
     expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/process-items/00000000-0000-4000-8000-000000000000`, { headers, data: { defaultValue: '1.37' } })).status()).toBe(404);
     expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/process-items`, { headers, data: {} })).status()).toBe(422);
+    // And the Materials page and its three routes (STORY-02.03): nothing is stored (an empty body is 422, an ID no material has is 404).
+    await page.goto(`${DEVELOPMENT_URL}/masters/materials`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/materials`)).status()).toBe(200);
+    expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/materials`, { headers, data: {} })).status()).toBe(422);
+    expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/materials/00000000-0000-4000-8000-000000000000`, { headers, data: { scrapRate: '1.00' } })).status()).toBe(404);
+    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`)).status()).toBe(200);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();
