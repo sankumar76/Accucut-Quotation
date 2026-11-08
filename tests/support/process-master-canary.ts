@@ -3,9 +3,11 @@
  * section 4): distinctive Process Master numbers and a name that no other test uses, so that finding one in what an Engineer was
  * sent can only mean a rate leaked. They follow the invented pattern `n.37` (ADR-014); none is a rate of Accucut's.
  *
- * The scan of story 01.03 (`canaryMasters`, AQP-57) takes these values from here when it lands: it owns the file that lists every
- * master's canary, and this file is what 02.01 contributes to it. Until then `tests/security/process-master-confidential.test.ts`
- * looks for them in every answer a Lead or an Engineer gets from the Process master's routes and pages.
+ * This file is the single definition of these values. The scan of STORY-01.03 (AQP-57) imports them: `canaryMasters`
+ * (`tests/support/canary-masters.ts`) takes the values and the name from here, and writes them into the Process Master of the E2E
+ * database (`tests/e2e/canary-scan.spec.ts`). The interim check that STORY-02.01 shipped before the scan existed
+ * (`process-master-confidential.test.ts`) was folded into `tests/security/engineer-refused-before-lookup.test.ts`, which holds the
+ * same assertions for every route of the manifest, and into the scan.
  */
 
 export const PROCESS_MASTER_CANARY_NAME = 'Canary-Process-Rate-per-Mark';
