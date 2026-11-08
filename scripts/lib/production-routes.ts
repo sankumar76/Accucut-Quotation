@@ -82,6 +82,11 @@ const GATE_WINDOW = 800;
  * destructured, bracketed or computed read is left in place by the bundler and shows up here. The files given are the `.js` files
  * of the server build (not the source maps, which carry the source). Fails closed: if no file reads the variable, the check cannot
  * judge the route and says so.
+ *
+ * Its limits (STD-18), stated so nobody reads more into it: it is a text check. It cannot see a key built at run time (`"NODE_"+"ENV"`
+ * leaves no `NODE_ENV` text), and it looks only within `GATE_WINDOW` characters of the variable's name, so a run-time read in another
+ * module is outside it. The unit test on the gate's source form (`tests/unit/production-routes.test.ts`) covers both for the gate file
+ * itself, by requiring the dot-access default there.
  */
 export function findNegativeControlGateProblems(files: ReadonlyArray<BuiltFile>, variableName: string): string[] {
   const holders = files.filter((file) => file.text.includes(variableName));

@@ -9,7 +9,7 @@
  *     compiled chunk reads `function(e="production"){return"test"===e}()`.) That only holds while the read stays a dot-access
  *     default: a destructured, bracketed or computed read is not replaced and would make the gate depend on the environment.
  *     `scripts/check-production-routes.ts` (CI stage 9) fails the build if the compiled route reads `NODE_ENV` at run time, and
- *     `tests/security/scanner.test.ts` pins the source form;
+ *     `tests/unit/production-routes.test.ts` pins the source form;
  *   - the sentinel is not in the source. It is read from the environment of the test run (`CANARY_NEGATIVE_CONTROL`), so a build
  *     holds nothing that a scan of its output could find, and a server started without it answers 404 even under test.
  *

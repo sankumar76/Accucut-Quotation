@@ -96,6 +96,12 @@ const ENGINEER_VIEW_IMPORTS = [
     message: 'Engineer views may import only the services on the allow-list: the others read rates, audit entries, formulas or approvals (ADR-008, NFR-002).',
   },
   {
+    // The directory itself, which would be an `index` barrel if one were ever added (STD-19): no such file exists, and none is allowed.
+    staticRegex: '(^|/)(repositories|services)/?$',
+    regex: `(^|${SLASH})(repositories|services)${SLASH}?$`,
+    message: 'Engineer views may not import the data layer\'s directory (a barrel); import a file on the allow-list instead (ADR-008, NFR-002).',
+  },
+  {
     group: ['**/composition'],
     regex: `(^|${SLASH})composition${END}`,
     message: 'Engineer views receive their data; they do not reach the service container (ADR-008 layer 2).',

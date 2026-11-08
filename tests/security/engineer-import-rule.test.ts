@@ -85,6 +85,10 @@ const FUTURE_IMPORTS: ReadonlyArray<string> = [
 
 /** The service container, and the barrel that re-exports the Admin schemas. */
 const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
+  '@/server/repositories',
+  '@/server/services',
+  '../repositories',
+  '../services/',
   '@/server/composition',
   '../composition',
   '../../server/composition',

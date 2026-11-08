@@ -80,7 +80,10 @@ describe('the gate of the test-only route in the build output (STD-02)', () => {
   it.each([
     ['a bracketed read', 'function(e=process.env["NODE_ENV"]){return"test"===e}()?process.env.CANARY_NEGATIVE_CONTROL:void 0'],
     ['a destructured read', 'let{NODE_ENV:n}=process.env;return"test"===n?process.env.CANARY_NEGATIVE_CONTROL:void 0'],
-    ['a computed read', 'let k="NODE_"+"ENV";const n=process.env[k]; /* NODE_ENV */ return"test"===n?process.env.CANARY_NEGATIVE_CONTROL:void 0'],
+    [
+      'a read through a variable named NODE_ENV',
+      'let NODE_ENV_KEY="NODE_ENV";const n=process.env[NODE_ENV_KEY];return"test"===n?process.env.CANARY_NEGATIVE_CONTROL:void 0',
+    ],
   ])('fails on %s (a planted fault), naming the file', (_name, text) => {
     const problems = findNegativeControlGateProblems(file(text), VARIABLE);
     expect(problems).toHaveLength(1);
