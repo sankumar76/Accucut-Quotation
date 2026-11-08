@@ -1,4 +1,4 @@
-import { expect, test as setup } from '@playwright/test';
+import { expect, test as setup, type Page } from '@playwright/test';
 
 import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
 
@@ -71,6 +71,31 @@ setup('warm the production server: every page and API route once, as an Engineer
   }
 });
 
+const NOBODY = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * The Process master page and its API, compiled for the same reason (STORY-02.01). The page reads the field registry, so CI makes
+ * configuration version 1 before the tests (the shard step), as a real install does after its migrations. A change to nobody (an ID no
+ * rate has) is answered 404 and writes nothing, which compiles the route of one rate too.
+ */
+async function warmProcessRoutes(page: Page, headers: Record<string, string>): Promise<void> {
+  await page.goto(`${DEVELOPMENT_URL}/masters/process`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/process-items`)).status()).toBe(200);
+  expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/process-items/${NOBODY}`, { headers, data: { defaultValue: '1.37' } })).status()).toBe(404);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/process-items`, { headers, data: {} })).status()).toBe(422);
+}
+
+/** The Materials page and its three routes (STORY-02.03): nothing is stored (an empty body is 422, an ID no material has is 404). */
+async function warmMaterialsRoutes(page: Page, headers: Record<string, string>): Promise<void> {
+  await page.goto(`${DEVELOPMENT_URL}/masters/materials`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/materials`)).status()).toBe(200);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/materials`, { headers, data: {} })).status()).toBe(422);
+  expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/materials/${NOBODY}`, { headers, data: { scrapRate: '1.37' } })).status()).toBe(404);
+  expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`)).status()).toBe(200);
+}
+
 setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
   setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eAdmin();
@@ -94,21 +119,8 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
     expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/users`)).status()).toBe(200);
     expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/users/00000000-0000-4000-8000-000000000000`, { headers, data: { role: 'LEAD' } })).status()).toBe(404);
-    // And the Process master page and its API, for the same reason (STORY-02.01). The page reads the field registry, so CI makes
-    // configuration version 1 before the tests (the shard step), as a real install does after its migrations.
-    await page.goto(`${DEVELOPMENT_URL}/masters/process`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
-    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/process-items`)).status()).toBe(200);
-    // A change to nobody (an ID no rate has) is answered 404 and writes nothing, which compiles the route of one rate too.
-    expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/process-items/00000000-0000-4000-8000-000000000000`, { headers, data: { defaultValue: '1.37' } })).status()).toBe(404);
-    expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/process-items`, { headers, data: {} })).status()).toBe(422);
-    // And the Materials page and its three routes (STORY-02.03): nothing is stored (an empty body is 422, an ID no material has is 404).
-    await page.goto(`${DEVELOPMENT_URL}/masters/materials`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
-    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/materials`)).status()).toBe(200);
-    expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/materials`, { headers, data: {} })).status()).toBe(422);
-    expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/materials/00000000-0000-4000-8000-000000000000`, { headers, data: { scrapRate: '1.00' } })).status()).toBe(404);
-    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`)).status()).toBe(200);
+    await warmProcessRoutes(page, headers);
+    await warmMaterialsRoutes(page, headers);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();

@@ -68,8 +68,7 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],
-  // The API behind the Materials tab of SCR-13 (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Materials", CR-33).
-  '/api/v1/materials': ['ADMIN'],
+  '/api/v1/materials': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
   '/api/v1/materials/[id]': ['ADMIN'],
 };
 
