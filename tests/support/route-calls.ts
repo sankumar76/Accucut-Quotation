@@ -1,5 +1,7 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
+import { MATERIAL_RECIPE_ID } from './material-master-canary';
+
 /**
  * What a **valid, allowed** call to each implemented API route looks like, so the role matrix can show that the role the
  * route lists gets through (a route with a body and an ID cannot answer 200 to an empty call). A story that adds a route
@@ -81,6 +83,18 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: PLATING_ITEM_ID, body: { defaultValue: '2.37' }, status: 200 };
     case 'DELETE /api/v1/process-items/[id]':
       return { id: PLATING_ITEM_ID, status: 204 };
+    // STORY-02.03: the Material Master routes. The ID is a canary material (`material-master-canary.ts`), which every database the scan reads
+    // holds; the bodies are invented. `GET /api/v1/options/materials` has no ID or body: the default call is its valid call.
+    case 'GET /api/v1/materials':
+      return DEFAULT_CALL;
+    case 'POST /api/v1/materials':
+      return {
+        id: NO_RECIPE_ID,
+        body: { materialInDrawing: 'Invented-sheet-grade-Z', materialConsidered: 'Invented alloy', pricePerKg: '58.37', specificGravity: '7.85', scrapRate: '22.37' },
+        status: 201,
+      };
+    case 'PATCH /api/v1/materials/[id]':
+      return { id: MATERIAL_RECIPE_ID, body: { scrapRate: '23.37' }, status: 200 };
     default:
       return DEFAULT_CALL;
   }

@@ -68,10 +68,14 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],
+  // The API behind the Materials tab of SCR-13 (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Materials", CR-33).
+  '/api/v1/materials': ['ADMIN'],
+  '/api/v1/materials/[id]': ['ADMIN'],
 };
 
 /** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/account/password'];
+// `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options").
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
@@ -105,6 +109,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
+  '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
 };
 
 const moduleShape = z.record(z.string(), z.unknown());
@@ -193,7 +198,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
   });
 
   it('gives an Engineer none of the Lead or Admin screens (BR-003)', () => {
-    for (const path of ['/assign', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/process', '/config/fields', '/users', '/settings', '/audit']) {
+    for (const path of ['/assign', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/process', '/masters/materials', '/config/fields', '/users', '/settings', '/audit']) {
       const row = ROUTE_MANIFEST.find((entry) => entry.path === path);
       expect(row !== undefined && allowsRole(row, 'ENGINEER'), path).toBe(false);
     }

@@ -158,6 +158,22 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is
+  // story 02.07's. `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
+  // Considered, and no rate of any kind, so the cost scan covers it as an Engineer route. The nav entry is the page's, from the planned row.
+  {
+    path: '/masters/materials',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-13',
+    nav: { group: 'Masters', label: 'Materials and lists', order: 30, icon: 'package' },
+  },
+  { path: '/api/v1/materials', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
@@ -187,16 +203,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
     stage: 'R1',
     screen: 'SCR-12',
     nav: { group: 'Masters', label: 'Customers', order: 20, icon: 'users-round' },
-  },
-  {
-    path: '/masters/materials',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-13',
-    nav: { group: 'Masters', label: 'Materials and lists', order: 30, icon: 'package' },
   },
 
   // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------
