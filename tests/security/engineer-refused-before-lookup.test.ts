@@ -5,9 +5,9 @@ import type { RoleName } from '@/lib/auth/roles';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
 import { forbiddenStrings, PROCESS_CANARY_RATES, SEED_RATE_SENTINELS } from '../support/canary-masters';
-import { validCallFor } from '../support/route-calls';
+import { recipeProblem, validCallFor } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
-import { fixedForbiddenProblem, headersText, scanResponse, type RecordedResponse } from '../support/scanner';
+import { fixedForbiddenProblem, headersText, maskRequestId, scanResponse, type RecordedResponse } from '../support/scanner';
 import { nonEmpty } from '../support/security-loops';
 import { FORBIDDEN_SIGNAL, harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
@@ -55,7 +55,9 @@ function refusedApiCalls(): ReadonlyArray<{ readonly name: string; readonly row:
   const calls = ROUTE_MANIFEST.filter((row) => row.kind === 'api' && row.status === 'implemented' && row.roles !== 'public').flatMap((row) =>
     row.methods
       .filter((method) => method !== 'HEAD')
-      .flatMap((method) => REFUSED_ROLES.filter((role) => !allowsRole(row, role)).map((role) => ({ name: `${method} ${row.path} as ${role}`, row, method, role }))),
+      .flatMap((method) =>
+        REFUSED_ROLES.filter((role) => !allowsRole(row, role)).map((role) => ({ name: `${method} ${row.path} as ${role}`, row, method, role })),
+      ),
   );
   return nonEmpty('API calls a Lead or an Engineer is refused', calls);
 }
@@ -92,7 +94,8 @@ function watchLookups(): () => string[] {
   const spies: Array<readonly [string, ReturnType<typeof vi.spyOn>]> = [];
   const watch = (label: string, repository: object, allowed: ReadonlyArray<string> = []): void => {
     for (const [name, member] of Object.entries(repository)) {
-      if (typeof member === 'function' && !allowed.includes(name)) spies.push([`${label}.${name}`, vi.spyOn(repository as Record<string, never>, name as never)]);
+      if (typeof member === 'function' && !allowed.includes(name))
+        spies.push([`${label}.${name}`, vi.spyOn(repository as Record<string, never>, name as never)]);
     }
   };
   watch('masters', harness.masters);
@@ -136,15 +139,18 @@ describe('AC-5: a refused role gets the fixed 403 and nothing is looked up first
     harness.signInAs(role);
     const lookups = watchLookups();
     const real = validCallFor(method, row.path, { targetId: harness.targetId });
-    const answers = [await callApi(row, method, real.id, real.body), await callApi(row, method, INVENTED_ID, real.body)];
+    // A dynamic row needs a real-value recipe, or "a real ID and an invented one" would be two invented IDs (QLT-08).
+    expect(recipeProblem(row.path, real.id), row.path).toBeNull();
+    const ids = row.path.includes('[') ? [real.id, INVENTED_ID] : [real.id];
+    const answers = [];
+    for (const id of ids) answers.push(await callApi(row, method, id, real.body));
     for (const answer of answers) {
       expect(fixedForbiddenProblem(answer), answer.label).toBeNull();
       expect(answer.headers['cache-control']).toBe('private, no-store');
       expect(scanResponse(answer, FORBIDDEN), answer.label).toEqual([]);
     }
     // The same answer for a real ID and an invented one, apart from the request ID: a refusal shows nothing about the record.
-    const [first, second] = answers.map((answer) => (answer.body ?? '').replace(/req-[0-9a-f]{8}/, 'req-'));
-    expect(first).toBe(second);
+    if (answers.length === 2) expect(maskRequestId(answers[0]?.body ?? '')).toBe(maskRequestId(answers[1]?.body ?? ''));
     expect(lookups()).toEqual([]);
   });
 

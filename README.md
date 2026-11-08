@@ -147,8 +147,10 @@ the menu (and `GET /api/v1/me`), and the tests.
   compares the answers with the SPEC table, and fails a route file with no row, a handler without `withRoute` and a page
   without `authorizePage`.
 - A route an Engineer may open is a decision: `tests/unit/http-route-manifest.test.ts` names every one. Its answer is parsed with
-  one strict schema from `src/server/views/schemas`, whoever calls it, and an Engineer view (`src/server/views/engineer-*.ts`) imports no
-  cost repository and no formula engine (lint). The scan below covers the route with no edit.
+  one strict schema from `src/server/views/schemas`, whoever calls it, and an Engineer view (`src/server/views/engineer-*.ts`) may import only
+  the repositories and services on the allow-list in `eslint.config.mjs` (everything else is refused, files that do not exist yet included),
+  never `@/server/composition` or the schemas barrel, and no formula engine (lint). The scan below covers the route with no edit; a route or page
+  with a dynamic segment also needs a real-value recipe in `tests/support/route-calls.ts`, so the scan opens a record that really exists.
 
 ## Cost confidentiality scan (NFR-002, SPEC section 14.1)
 
@@ -164,8 +166,14 @@ shows that it can fail: the Admin is sent the canary rates by the same routes an
   sentinels to `canaryMasters` and a loader that writes them into its table, in the same change.
 - **The canary estimate** (`tests/support/canary-estimate-builder.ts`) types a value into every input field and is chosen so that no output
   equals a typed value, which an Engineer is allowed to see. A new input field fails `tests/security/canary-estimate-builder.test.ts` until it is added.
-- `NODE_ENV=test` belongs to Vitest alone: `next dev` forces `development` and `next start` forces `production`. So the negative-control route is
-  exercised in process (`tests/security/scanner.test.ts`) and shown absent from the server (the scan spec).
+- `NODE_ENV=test` belongs to Vitest alone, and the reason is the bundler: Next.js replaces the dot-access `process.env.NODE_ENV` at build time, so
+  the negative-control route's gate is a constant in every server bundle, whatever the runtime environment says. The route is exercised in process
+  (`tests/security/scanner.test.ts`), shown absent from the production server (the scan spec, with its sentinel supplied), and the build is checked
+  after `next build` (`scripts/check-production-routes.ts`, CI stage 9): it fails if the compiled route reads `NODE_ENV` at run time. Keep the read a
+  dot-access default. The sentinel comes from the environment variable `CANARY_NEGATIVE_CONTROL`, which only the test servers set; it is deliberately
+  not in `src/lib/env.ts` or `.env.example`, because it must never fail a start-up check.
+- **Responses the browser fetches** (fetch, XHR, RSC prefetch) are recorded by interception, so the scan reads the body the page really received;
+  a response type that cannot be intercepted would be named in the pull request, never skipped silently.
 
 ## Checks (the same ones CI runs)
 

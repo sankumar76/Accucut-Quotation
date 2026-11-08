@@ -40,12 +40,13 @@ const sentinels = (kind: RestrictedKind, label: string, values: ReadonlyArray<st
  * The Process Master canary rates, by name. The first is the name that STORY-02.01 defines; the other two are the same name
  * with a suffix, so a search for the name finds all three.
  */
-export const PROCESS_CANARY_RATES: ReadonlyArray<{ readonly name: string; readonly unit: string; readonly value: string }> =
-  PROCESS_MASTER_CANARY_VALUES.map((value, index) => ({
+export const PROCESS_CANARY_RATES: ReadonlyArray<{ readonly name: string; readonly unit: string; readonly value: string }> = PROCESS_MASTER_CANARY_VALUES.map(
+  (value, index) => ({
     name: index === 0 ? PROCESS_MASTER_CANARY_NAME : `${PROCESS_MASTER_CANARY_NAME}-${String.fromCharCode('A'.charCodeAt(0) + index)}`,
     unit: 'per kg',
     value,
-  }));
+  }),
+);
 
 /**
  * A sentinel for each of the 15 seed Process Master rates (test strategy section 6: "all 15 seed items,
@@ -139,8 +140,29 @@ export function variantsOf(value: string): ReadonlyArray<{ readonly text: string
     { text: indianGrouping(twoDecimals), form: 'Indian grouping' },
     { text: westernGrouping(twoDecimals), form: 'grouping of three' },
   ];
+  return uniqueBy(candidates, (candidate) => candidate.text);
+}
+
+/** The first of each kind, in order. A named helper so the filter does not hide a side effect inside a predicate (STD-08 e). */
+function uniqueBy<T>(list: ReadonlyArray<T>, keyOf: (item: T) => string): T[] {
   const seen = new Set<string>();
-  return candidates.filter((candidate) => (seen.has(candidate.text) ? false : Boolean(seen.add(candidate.text))));
+  const kept: T[] = [];
+  for (const item of list) {
+    const key = keyOf(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(item);
+  }
+  return kept;
+}
+
+/**
+ * Is this stored formula text worth looking for? An internal form that refers to something (`{{...}}`) is, and so is a display form of
+ * more than one token (`AL + AM`, `P * Cutting-Rate-per-Sec`). A constant such as the Rejection's `0`, or a lone operand, is no secret and
+ * would match any digit or letter (QLT-05).
+ */
+function isWorthFinding(text: string): boolean {
+  return text.includes('{{') || /\s/.test(text.trim());
 }
 
 /** What the negative control must be found by: its sentinel in the same forms as any other. */
@@ -150,18 +172,23 @@ export function negativeControlForbidden(): ReadonlyArray<ForbiddenString> {
 
 /**
  * Everything an Engineer must never be sent (test strategy section 6, "Forbidden list"): each sentinel in each form, the
- * rate and operand names, the formula markers, and any formula text the caller passes (the scan reads the stored registry).
+ * rate and operand names, the formula markers, and any formula text the caller passes (the scan reads the stored registry, in its
+ * internal form and in the display form a careless view would print: `displayFormOf` in `tests/support/formula-display.ts`).
  * The Process Master's own canary strings are included verbatim, so what STORY-02.01 forbids is forbidden here too.
  */
-export function forbiddenStrings(formulaTexts: ReadonlyArray<string> = [], masters: ReadonlyArray<CanarySentinel> = canaryMasters): ReadonlyArray<ForbiddenString> {
+export function forbiddenStrings(
+  formulaTexts: ReadonlyArray<string> = [],
+  masters: ReadonlyArray<CanarySentinel> = canaryMasters,
+): ReadonlyArray<ForbiddenString> {
   const list: ForbiddenString[] = [
     ...masters.flatMap((sentinel) => variantsOf(sentinel.value).map(({ text, form }) => ({ text, reason: `${sentinel.label} (${form})` }))),
     ...PROCESS_MASTER_CANARIES.map((text) => ({ text, reason: 'Process Master canary (STORY-02.01)' })),
     ...RATE_AND_OPERAND_NAMES.map((text) => ({ text, reason: 'rate or operand name' })),
     ...FORMULA_MARKERS.map((text) => ({ text, reason: 'formula marker' })),
-    // Only a formula that refers to something is worth finding. A constant such as the Rejection's `0` is no secret and would match any digit.
-    ...formulaTexts.filter((text) => text.includes(FORMULA_MARKERS[0] ?? '{{')).map((text) => ({ text, reason: 'formula text' })),
+    ...formulaTexts.filter(isWorthFinding).map((text) => ({ text, reason: 'formula text' })),
   ];
-  const seen = new Set<string>();
-  return list.filter((entry) => entry.text.length > 0 && (seen.has(entry.text) ? false : Boolean(seen.add(entry.text))));
+  return uniqueBy(
+    list.filter((entry) => entry.text.length > 0),
+    (entry) => entry.text,
+  );
 }

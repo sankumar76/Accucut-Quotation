@@ -1,5 +1,7 @@
 import { Decimal } from 'decimal.js';
 
+import { variantsOf } from './canary-masters';
+
 /**
  * The canary estimate builder (STORY-01.03 T7, AC-7; test strategy section 6, "Typed values are allowed").
  *
@@ -78,9 +80,20 @@ function asDecimal(text: string | null | undefined): Decimal | null {
   return new Decimal(text.trim());
 }
 
+/** An output shorter than this in every printed form is too short to be a sentinel: it would match inside any number (QLT-07). */
+const MIN_PRINTED_LENGTH = 4;
+
+/** Every way a figure can be printed: as given, to two decimals, in Indian grouping and in groups of three. */
+function printedForms(text: string): string[] {
+  return [text, ...variantsOf(text).map((form) => form.text)];
+}
+
 /**
- * The outputs that equal a typed value, by number (`2.50` equals `2.5`). Text and empty values are skipped: a word is no figure.
- * The rule of AC-7 holds when the list is empty. A later story that calculates the canary estimate passes its outputs here.
+ * The outputs that would raise a false alarm against a typed value, compared the way the scan matches (QLT-07, AC-7). The scan forbids an
+ * output in every printed form and finds it as a SUBSTRING, so an output collides with a typed value when any printed form of the output
+ * is, or sits inside, any printed form of the typed value: `2.50` equals `2.5`, `1234.499` prints as `1234.50` like the typed `1234.5`, and
+ * `34.50` is inside `1234.50`. Text and empty values are skipped: a word is no figure. The rule of AC-7 holds when the list is empty. A later
+ * story that calculates the canary estimate passes its outputs here.
  */
 export function findOutputsEqualToInputs(
   inputs: Readonly<Record<string, string>>,
@@ -88,12 +101,15 @@ export function findOutputsEqualToInputs(
 ): ReadonlyArray<InputOutputCollision> {
   const typed = Object.entries(inputs).flatMap(([inputKey, text]) => {
     const value = asDecimal(text);
-    return value === null ? [] : [{ inputKey, value }];
+    return value === null ? [] : [{ inputKey, forms: printedForms(text.trim()) }];
   });
   return Object.entries(outputs).flatMap(([outputKey, text]) => {
     const output = asDecimal(text);
     if (output === null) return [];
-    return typed.filter((entry) => entry.value.equals(output)).map((entry) => ({ outputKey, inputKey: entry.inputKey, value: output.toFixed() }));
+    const searched = printedForms(output.toFixed()).filter((form) => form.length >= MIN_PRINTED_LENGTH);
+    return typed
+      .filter((entry) => searched.some((form) => entry.forms.some((typedForm) => typedForm.includes(form))))
+      .map((entry) => ({ outputKey, inputKey: entry.inputKey, value: output.toFixed() }));
   });
 }
 

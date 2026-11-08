@@ -27,7 +27,28 @@ const SECURITY_DIRECTORY = fileURLToPath(new URL('../security/', import.meta.url
 const SECURITY_FILES = readdirSync(SECURITY_DIRECTORY).filter((name) => name.endsWith('.test.ts'));
 
 /** Every way a test is switched off or narrowed to one run, in Playwright and in Vitest. */
-const QUARANTINE_MARKERS = /\b(?:test|it|describe)\s*\.\s*(?:skip|fixme|fail|slow|only|todo|skipIf|runIf)\b|\b(?:xit|xtest|xdescribe|fit|fdescribe)\s*\(|\.skip\s*\(|\.todo\s*\(/;
+const QUARANTINE_MARKERS =
+  /\b(?:test|it|describe)\s*\.\s*(?:skip|fixme|fail|slow|only|todo|skipIf|runIf)\b|\b(?:xit|xtest|xdescribe|fit|fdescribe)\s*\(|\.skip\s*\(|\.todo\s*\(/;
+
+/**
+ * Ways a scan test can leave before it asserts, which no quarantine marker shows (QLT-10; the planted F14 was
+ * `if (process.env.CI) return;` at the top of a test): a read of the environment and a `return` with no value. A `return` with a value
+ * is a function's answer and is allowed.
+ */
+function earlyExits(text: string): string[] {
+  return [/process\.env/.test(text) ? 'a read of the environment: process.env' : '', /\breturn\s*;/.test(text) ? 'a bare return' : ''].filter(
+    (found) => found !== '',
+  );
+}
+
+/** The titles of the tests in a spec whose body holds no `expect(`: a test that cannot fail. */
+function testsWithoutAssertions(text: string): string[] {
+  return text
+    .split(/^test\(/m)
+    .slice(1)
+    .filter((body) => !body.includes('expect('))
+    .map((body) => /^('[^']*'|"[^"]*"|`[^`]*`)/.exec(body)?.[1] ?? 'a test');
+}
 
 const WIDTHS = ['mobile', 'tablet', 'desktop'];
 
@@ -44,10 +65,37 @@ describe('the scan is not quarantined (AC-8)', () => {
   });
 
   it('the marker pattern can fail: it matches each way of switching a test off', () => {
-    for (const text of ["test.skip('x', () => {})", "test.fixme(true)", "test.fail()", 'test.slow()', "it.only('x', f)", 'describe.skip(', "it.todo('x')", 'xit(', "it.skipIf(true)('x', f)"]) {
+    for (const text of [
+      "test.skip('x', () => {})",
+      'test.fixme(true)',
+      'test.fail()',
+      'test.slow()',
+      "it.only('x', f)",
+      'describe.skip(',
+      "it.todo('x')",
+      'xit(',
+      "it.skipIf(true)('x', f)",
+    ]) {
       expect(QUARANTINE_MARKERS.test(text), text).toBe(true);
     }
     expect(QUARANTINE_MARKERS.test("test('a normal test', async () => {})")).toBe(false);
+  });
+
+  it('the scan spec has no early exit: no bare return, no read of the environment, and every test asserts (QLT-10)', () => {
+    expect(earlyExits(SCAN_SPEC)).toEqual([]);
+    expect(testsWithoutAssertions(SCAN_SPEC)).toEqual([]);
+    // The Engineer scan test must really run the procedure and judge what it saw, not just open a page.
+    const engineerScan = SCAN_SPEC.split(/^test\(/m).find((body) => body.startsWith("'AC-3: an Engineer")) ?? '';
+    expect(engineerScan).toContain('scanAsEngineer(');
+    expect(engineerScan).toContain('expectScanSawEnough(');
+  });
+
+  it('the early-exit check can fail: it names each way of leaving a scan test before it asserts (the planted F14)', () => {
+    const planted = "test('AC-3: x', async ({ page }) => {\n  if (process.env.CI) return;\n  await page.goto('/');\n  expect(1).toBe(1);\n});\n";
+    expect(earlyExits(planted)).toEqual(['a read of the environment: process.env', 'a bare return']);
+    expect(earlyExits("test('x', async () => {\n  if (isCi) {\n    return;\n  }\n});\n")).toEqual(['a bare return']);
+    expect(earlyExits('const plant = () => {\n  return `${body}`;\n};\n')).toEqual([]);
+    expect(testsWithoutAssertions("test('a', async () => {\n  await go();\n});\ntest('b', async () => {\n  expect(1).toBe(1);\n});\n")).toEqual(["'a'"]);
   });
 
   it('the Playwright configuration does not ignore the scan and does not turn retries up', () => {
@@ -78,8 +126,15 @@ describe('the scan is in the Playwright list at three widths (AC-8)', () => {
     tests = [...found].map(([title, projects]) => ({ title, projects }));
   });
 
-  it('lists the five tests of the scan', () => {
-    expect(tests.map((test) => test.title.split(':')[0]).sort()).toEqual(['AC-3', 'AC-3, AC-4 (control with real data)', 'AC-4', 'AC-4 (negative control)', 'AC-5']);
+  it('lists the six tests of the scan: the Engineer scan, the refusals, the real-data control, two planted-leak controls, the absent route', () => {
+    expect(tests.map((test) => test.title.split(':')[0]).sort()).toEqual([
+      'AC-3',
+      'AC-3, AC-4 (control with real data)',
+      'AC-4',
+      'AC-4 (negative control)',
+      'AC-4 (negative control)',
+      'AC-5',
+    ]);
   });
 
   it('runs every one of them in the mobile, tablet and desktop projects (a width is never skipped)', () => {

@@ -48,7 +48,7 @@ describe('canaryMasters (AC-3)', () => {
     for (const sentinel of canaryMasters) expect(Number(sentinel.value), sentinel.label).toBeGreaterThanOrEqual(100);
   });
 
-  it('takes the Process Master values from STORY-02.01\'s one definition, not a second copy (AQP-57 comment 11141)', () => {
+  it("takes the Process Master values from STORY-02.01's one definition, not a second copy (AQP-57 comment 11141)", () => {
     const processValues = canaryMasters.filter((sentinel) => sentinel.kind === 'process-rate').map((sentinel) => sentinel.value);
     expect(processValues).toEqual(expect.arrayContaining([...PROCESS_MASTER_CANARY_VALUES]));
     // The name and values of that file are all forbidden here, verbatim.
@@ -106,7 +106,9 @@ describe('the forbidden list (AC-3)', () => {
   });
 
   it('holds the formula text it is given, and no empty string and no repeat', () => {
-    const withFormula = forbiddenStrings(['{{f:aaaaaaaa-0000-4000-8000-000000000001}}*{{rate:bbbbbbbb-0000-4000-8000-000000000002}}']).map((entry) => entry.text);
+    const withFormula = forbiddenStrings(['{{f:aaaaaaaa-0000-4000-8000-000000000001}}*{{rate:bbbbbbbb-0000-4000-8000-000000000002}}']).map(
+      (entry) => entry.text,
+    );
     expect(withFormula).toContain('{{f:aaaaaaaa-0000-4000-8000-000000000001}}*{{rate:bbbbbbbb-0000-4000-8000-000000000002}}');
     expect(withFormula).not.toContain('');
     expect(new Set(withFormula).size).toBe(withFormula.length);

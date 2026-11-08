@@ -19,8 +19,10 @@ export interface RecordedResponse {
   readonly status: number;
   /** Header names in lower case. */
   readonly headers: Readonly<Record<string, string>>;
-  /** The text of the body, or `null` for a body that is not text (an image, a font). */
+  /** The text of the body, or `null` for a body that is not text (an image, a font) or one that was not read. */
   readonly body: string | null;
+  /** True when the request carried the session cookie (a signed-in person's request). Held to `private, no-store` (QLT-09). */
+  readonly carriedSession?: boolean | undefined;
 }
 
 export type FindingPlace = 'body' | 'decoded RSC payload' | 'headers' | 'url';
@@ -99,35 +101,6 @@ export function staticFileUrls(text: string, origin: string): string[] {
   return [...urls];
 }
 
-/** A route pattern of the manifest as a regular expression: `[id]` is one segment, `[...rest]` is anything below. */
-function patternToRegExp(pattern: string): RegExp {
-  const source = pattern
-    .split('/')
-    .map((segment) => {
-      if (/^\[\.\.\..+\]$/.test(segment)) return '.*';
-      if (/^\[.+\]$/.test(segment)) return '[^/]+';
-      return segment.replace(/[.*+?^${}()|\\]/g, '\\$&');
-    })
-    .join('/');
-  return new RegExp(`^${source}/?$`);
-}
-
-/** The rows of the manifest this scan needs: a path and who may open it. */
-export interface ScanRoute {
-  readonly path: string;
-  readonly roles: 'public' | ReadonlyArray<string>;
-}
-
-/**
- * Does this response answer a route or page that needs a session? True when its path matches a manifest row whose roles are
- * not `public`. A built file under `/_next/`, an asset in `public/` and the sign-in and next-auth routes match no such row,
- * so they are not held to `private, no-store` (a built file is public and immutable by design).
- */
-export function answersProtectedRoute(url: string, routes: ReadonlyArray<ScanRoute>): boolean {
-  const { pathname } = new URL(url);
-  return routes.some((route) => route.roles !== 'public' && patternToRegExp(route.path).test(pathname));
-}
-
 /** The directives of a `Cache-Control` value, lower case. */
 export function cacheDirectives(value: string | undefined): string[] {
   return (value ?? '')
@@ -142,10 +115,18 @@ export function isPrivateNoStore(value: string | undefined): boolean {
   return directives.includes('private') && directives.includes('no-store');
 }
 
-/** The responses to a protected route or page that do not say `private, no-store`, one line each (AC-5). */
-export function cacheControlProblems(responses: ReadonlyArray<RecordedResponse>, routes: ReadonlyArray<ScanRoute>): string[] {
+/** A file of the build: public and immutable by design, so it is the one thing exempt from `private, no-store` (QLT-09). */
+export const isBuiltFile = (pathname: string): boolean => pathname.startsWith('/_next/static/');
+
+/**
+ * The responses to a request that carried the session and do not say `private, no-store`, one line each (AC-5, ADR-008 layer 4,
+ * QLT-09). It holds EVERY such response, public routes included (next-auth's session route carries the signed-in person), except
+ * the paths `isExempt` names. The exemption is a parameter so a run states what it exempts: the build's files, and the files of
+ * `public/`, which are public by design and carry no session data.
+ */
+export function cacheControlProblems(responses: ReadonlyArray<RecordedResponse>, isExempt: (pathname: string) => boolean = isBuiltFile): string[] {
   return responses
-    .filter((response) => answersProtectedRoute(response.url, routes))
+    .filter((response) => response.carriedSession === true && !isExempt(new URL(response.url).pathname))
     .filter((response) => !isPrivateNoStore(response.headers['cache-control']))
     .map((response) => `${response.label}: Cache-Control is "${response.headers['cache-control'] ?? '(none)'}", not private, no-store`);
 }
@@ -165,7 +146,13 @@ export function withoutRequestId(text: string): { readonly fixed: Record<string,
   }
 }
 
-const REQUEST_ID_FORM = /^req-[0-9a-f]{8}$/;
+/** The form of a request ID (`req-` and eight hex digits). */
+export const REQUEST_ID_FORM = /^req-[0-9a-f]{8}$/;
+
+/** A body with its request ID replaced, so two refusals can be compared word for word. */
+export function maskRequestId(text: string): string {
+  return text.replace(/req-[0-9a-f]{8}/, 'req-');
+}
 
 /** Why a response is not the fixed 403 of a refused role, or `null` when it is. */
 export function fixedForbiddenProblem(response: RecordedResponse): string | null {

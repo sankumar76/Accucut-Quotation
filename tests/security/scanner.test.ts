@@ -3,26 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GET as leakRoute } from '@/app/api/test-only/leak/route';
 import { isNegativeControlEnabled, NEGATIVE_CONTROL_ENV_NAME, negativeControlSentinel } from '@/lib/negative-control-gate';
 
+import { canaryMasters, forbiddenStrings, indianGrouping, NEGATIVE_CONTROL_SENTINEL, negativeControlForbidden } from '../support/canary-masters';
 import {
-  canaryMasters,
-  forbiddenStrings,
-  indianGrouping,
-  NEGATIVE_CONTROL_SENTINEL,
-  negativeControlForbidden,
-} from '../support/canary-masters';
-import {
-  answersProtectedRoute,
   cacheControlProblems,
   decodeFlightPayload,
   describeFinding,
   fixedForbiddenProblem,
   headersText,
   isPrivateNoStore,
+  maskRequestId,
   scanResponse,
   scanResponses,
   staticFileUrls,
   type RecordedResponse,
-  type ScanRoute,
 } from '../support/scanner';
 
 /**
@@ -37,7 +30,14 @@ const SENTINEL = canaryMasters.find((entry) => entry.kind === 'material-price' &
 const FORBIDDEN = forbiddenStrings();
 
 function response(overrides: Partial<RecordedResponse> = {}): RecordedResponse {
-  return { label: 'GET /queue (document)', url: 'https://portal.example.test/queue', status: 200, headers: { 'content-type': 'text/html' }, body: '<html><body>Task queue</body></html>', ...overrides };
+  return {
+    label: 'GET /queue (document)',
+    url: 'https://portal.example.test/queue',
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+    body: '<html><body>Task queue</body></html>',
+    ...overrides,
+  };
 }
 
 /** What was found, once each: a page's payload is in its body and again in its decoded form, and that is one leak. */
@@ -87,7 +87,9 @@ describe('the scanner finds a planted leak (AC-3, AC-4)', () => {
 
   it('in an RSC payload split across two pushes, which the raw page does not hold in one piece', () => {
     const half = Math.floor(SENTINEL.length / 2);
-    const page = `<script>self.__next_f.push([1,"{\\"rate\\":\\"${SENTINEL.slice(0, half)}"])</script><script>self.__next_f.push([1,"${SENTINEL.slice(half)}\\"}"])</script>`;
+    const page =
+      `<script>self.__next_f.push([1,"{\\"rate\\":\\"${SENTINEL.slice(0, half)}"])</script>` +
+      `<script>self.__next_f.push([1,"${SENTINEL.slice(half)}\\"}"])</script>`;
     expect(page).not.toContain(SENTINEL);
     const findings = scanResponse(response({ body: page }), FORBIDDEN);
     expect(findings.map((finding) => [finding.place, finding.found])).toEqual([['decoded RSC payload', SENTINEL]]);
@@ -101,13 +103,20 @@ describe('the scanner finds a planted leak (AC-3, AC-4)', () => {
 
   it('in a JavaScript chunk, as a number and as a rate name', () => {
     const chunk = (body: string): RecordedResponse =>
-      response({ label: 'GET /_next/static/chunks/0abc.js (script)', url: 'https://portal.example.test/_next/static/chunks/0abc.js', headers: { 'content-type': 'text/javascript' }, body });
+      response({
+        label: 'GET /_next/static/chunks/0abc.js (script)',
+        url: 'https://portal.example.test/_next/static/chunks/0abc.js',
+        headers: { 'content-type': 'text/javascript' },
+        body,
+      });
     expect(found(chunk(`const r=${SENTINEL};`))).toEqual([SENTINEL]);
     expect(found(chunk('const names=["Cutting-Rate-per-Sec"];'))).toEqual(['Cutting-Rate-per-Sec']);
   });
 
   it('as a formula marker and as a formula operand name', () => {
-    expect(found(response({ body: '{"formula":"{{f:00000000-0000-4000-8000-0fff00000001}} * {{rate:x}}"}' }))).toEqual(expect.arrayContaining(['{{f:', '{{rate:']));
+    expect(found(response({ body: '{"formula":"{{f:00000000-0000-4000-8000-0fff00000001}} * {{rate:x}}"}' }))).toEqual(
+      expect.arrayContaining(['{{f:', '{{rate:']),
+    );
     expect(found(response({ body: 'Material-Specific-Gravity' }))).toEqual(['Material-Specific-Gravity']);
   });
 
@@ -148,7 +157,7 @@ describe('the negative control: a route that leaks one sentinel, which the scann
     };
   }
 
-  it('runs under NODE_ENV=test, which is Vitest\'s', () => {
+  it("runs under NODE_ENV=test, which is Vitest's", () => {
     expect(process.env.NODE_ENV).toBe('test');
     expect(isNegativeControlEnabled()).toBe(true);
   });
@@ -190,11 +199,13 @@ describe('the negative control: a route that leaks one sentinel, which the scann
   });
 });
 
-describe('the static files a page names (AC-3: the JS chunks the Engineer\'s pages load)', () => {
+describe("the static files a page names (AC-3: the JS chunks the Engineer's pages load)", () => {
   const origin = 'https://portal.example.test';
 
   it('finds script tags, preloads and the chunk lists inside a flight payload, once each, as absolute URLs', () => {
-    const html = '<link rel="preload" href="/_next/static/chunks/0a1b.js" as="script"/><script src="/_next/static/chunks/0a1b.js" async=""></script><script src="/_next/static/chunks/turbopack-9z.js"></script>';
+    const html =
+      '<link rel="preload" href="/_next/static/chunks/0a1b.js" as="script"/>' +
+      '<script src="/_next/static/chunks/0a1b.js" async=""></script><script src="/_next/static/chunks/turbopack-9z.js"></script>';
     const flight = '1:I[1234,["static/chunks/0c2d.js","static/chunks/0a1b.js"],"default"]';
     expect(staticFileUrls(`${html}${flight}`, origin).sort()).toEqual(
       [`${origin}/_next/static/chunks/0a1b.js`, `${origin}/_next/static/chunks/0c2d.js`, `${origin}/_next/static/chunks/turbopack-9z.js`].sort(),
@@ -209,22 +220,6 @@ describe('the static files a page names (AC-3: the JS chunks the Engineer\'s pag
 });
 
 describe('Cache-Control on every authenticated response (AC-5)', () => {
-  const routes: ReadonlyArray<ScanRoute> = [
-    { path: '/queue', roles: ['ADMIN', 'LEAD', 'ENGINEER'] },
-    { path: '/api/v1/process-items/[id]', roles: ['ADMIN'] },
-    { path: '/sign-in', roles: 'public' },
-    { path: '/api/auth/[...nextauth]', roles: 'public' },
-  ];
-
-  it('knows which paths answer a protected route, with dynamic segments and catch-alls', () => {
-    expect(answersProtectedRoute('https://x.test/queue?tab=overdue', routes)).toBe(true);
-    expect(answersProtectedRoute('https://x.test/api/v1/process-items/abc', routes)).toBe(true);
-    expect(answersProtectedRoute('https://x.test/api/v1/process-items/abc/def', routes)).toBe(false);
-    expect(answersProtectedRoute('https://x.test/sign-in', routes)).toBe(false);
-    expect(answersProtectedRoute('https://x.test/api/auth/session', routes)).toBe(false);
-    expect(answersProtectedRoute('https://x.test/_next/static/chunks/a.js', routes)).toBe(false);
-  });
-
   it('wants private and no-store both', () => {
     expect(isPrivateNoStore('private, no-store')).toBe(true);
     expect(isPrivateNoStore('private, no-cache, no-store, max-age=0, must-revalidate')).toBe(true);
@@ -234,21 +229,55 @@ describe('Cache-Control on every authenticated response (AC-5)', () => {
     expect(isPrivateNoStore(undefined)).toBe(false);
   });
 
-  it('lists a protected response without it and ignores a built file', () => {
-    const ok = response({ headers: { 'cache-control': 'private, no-store' } });
-    const missing = response({ label: 'GET /queue (document)', headers: {} });
-    const wrong = response({ label: 'GET /api/v1/process-items/abc (fetch)', url: 'https://portal.example.test/api/v1/process-items/abc', headers: { 'cache-control': 'public, max-age=60' } });
-    const asset = response({ url: 'https://portal.example.test/_next/static/chunks/a.js', headers: { 'cache-control': 'public, max-age=31536000, immutable' } });
-    expect(cacheControlProblems([ok, missing, wrong, asset], routes)).toEqual([
+  const signedIn = (overrides: Partial<RecordedResponse>): RecordedResponse => response({ carriedSession: true, ...overrides });
+
+  it('holds every response to a request that carried the session, public routes included (QLT-09), and ignores a built file', () => {
+    const ok = signedIn({ headers: { 'cache-control': 'private, no-store' } });
+    const missing = signedIn({ label: 'GET /queue (document)', headers: {} });
+    const wrong = signedIn({
+      label: 'GET /api/v1/x/abc (fetch)',
+      url: 'https://portal.example.test/api/v1/x/abc',
+      headers: { 'cache-control': 'public, max-age=60' },
+    });
+    // next-auth's session route is a `public` row of the manifest and carries the signed-in person: it is held too.
+    const session = signedIn({
+      label: 'GET /api/auth/session (fetch)',
+      url: 'https://portal.example.test/api/auth/session',
+      headers: { 'cache-control': 'no-cache' },
+    });
+    const asset = signedIn({
+      url: 'https://portal.example.test/_next/static/chunks/a.js',
+      headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+    });
+    expect(cacheControlProblems([ok, missing, wrong, session, asset])).toEqual([
       'GET /queue (document): Cache-Control is "(none)", not private, no-store',
-      'GET /api/v1/process-items/abc (fetch): Cache-Control is "public, max-age=60", not private, no-store',
+      'GET /api/v1/x/abc (fetch): Cache-Control is "public, max-age=60", not private, no-store',
+      'GET /api/auth/session (fetch): Cache-Control is "no-cache", not private, no-store',
     ]);
+  });
+
+  it('does not hold a response to a request that carried no session, and takes the exemptions it is given', () => {
+    const signedOut = response({ headers: { 'cache-control': 'no-cache' } });
+    expect(cacheControlProblems([signedOut])).toEqual([]);
+    const logo = signedIn({ url: 'https://portal.example.test/accucut-logo.jpg', headers: { 'cache-control': 'public, max-age=86400' } });
+    expect(cacheControlProblems([logo])).toHaveLength(1);
+    expect(cacheControlProblems([logo], (pathname) => pathname === '/accucut-logo.jpg')).toEqual([]);
+  });
+});
+
+describe('two refusals compared word for word', () => {
+  it('masks only the request ID', () => {
+    expect(maskRequestId('{"code":"FORBIDDEN","requestId":"req-7f3a91c2"}')).toBe('{"code":"FORBIDDEN","requestId":"req-"}');
+    expect(maskRequestId('{"code":"FORBIDDEN","requestId":"req-00000000"}')).toBe(maskRequestId('{"code":"FORBIDDEN","requestId":"req-ffffffff"}'));
+    expect(maskRequestId('{"code":"OTHER","requestId":"req-00000000"}')).not.toBe(maskRequestId('{"code":"FORBIDDEN","requestId":"req-00000000"}'));
   });
 });
 
 describe('the fixed 403 of a refused role (AC-5, architecture section 6, CR-33)', () => {
-  const fixed = (overrides: Partial<RecordedResponse> = {}, body: unknown = { type: 'about:blank', title: 'You do not have access to this.', status: 403, code: 'FORBIDDEN', requestId: 'req-7f3a91c2' }): RecordedResponse =>
-    response({ status: 403, headers: { 'content-type': 'application/problem+json' }, body: JSON.stringify(body), ...overrides });
+  const fixed = (
+    overrides: Partial<RecordedResponse> = {},
+    body: unknown = { type: 'about:blank', title: 'You do not have access to this.', status: 403, code: 'FORBIDDEN', requestId: 'req-7f3a91c2' },
+  ): RecordedResponse => response({ status: 403, headers: { 'content-type': 'application/problem+json' }, body: JSON.stringify(body), ...overrides });
 
   it('accepts the fixed body with a request ID', () => {
     expect(fixedForbiddenProblem(fixed())).toBeNull();
@@ -258,7 +287,11 @@ describe('the fixed 403 of a refused role (AC-5, architecture section 6, CR-33)'
     ['another status', fixed({ status: 404 }), 'status 404, not 403'],
     ['the wrong media type', fixed({ headers: { 'content-type': 'application/json' } }), 'not application/problem+json'],
     ['a body that is not JSON', fixed({ body: '<html>' }), 'not a JSON object'],
-    ['an extra key', fixed({}, { type: 'about:blank', title: 'You do not have access to this.', status: 403, code: 'FORBIDDEN', requestId: 'req-7f3a91c2', errors: [] }), 'not the fixed 403 body'],
+    [
+      'an extra key',
+      fixed({}, { type: 'about:blank', title: 'You do not have access to this.', status: 403, code: 'FORBIDDEN', requestId: 'req-7f3a91c2', errors: [] }),
+      'not the fixed 403 body',
+    ],
     ['other words', fixed({}, { type: 'about:blank', title: 'Nope', status: 403, code: 'FORBIDDEN', requestId: 'req-7f3a91c2' }), 'not the fixed 403 body'],
     ['no request ID', fixed({}, { type: 'about:blank', title: 'You do not have access to this.', status: 403, code: 'FORBIDDEN' }), 'request ID is missing'],
   ])('refuses %s', (_name, candidate, reason) => {

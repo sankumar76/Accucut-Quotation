@@ -13,11 +13,13 @@ import { ADMIN_STATE, DEVELOPMENT_URL, PRODUCTION_URL, SIGNED_IN_STATE } from '.
  */
 
 const COMPILE_TIMEOUT = 120_000;
+/** The set-up tests compile pages and hash passwords on a cold machine; they are allowed longer than a test (test strategy section 10). */
+const SETUP_TIMEOUT = 180_000;
 /** The development-server pages the width projects open. The signed-in Lead can open all three. */
 const WARMED_ROUTES = ['/', '/queue', '/design-system'] as const;
 
 setup('create the E2E users and save a signed-in Lead', async ({ page, context }) => {
-  setup.setTimeout(180_000);
+  setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eUsers();
   await useFreshAddress(context);
 
@@ -46,7 +48,7 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
  * loaded. Only GET is used, so nothing is changed. The manifest is the list, so a new route is warmed with no edit.
  */
 setup('warm the production server: every page and API route once, as an Engineer', async ({ browser }) => {
-  setup.setTimeout(180_000);
+  setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eUsers();
   const context = await browser.newContext({ baseURL: PRODUCTION_URL });
   try {
@@ -70,7 +72,7 @@ setup('warm the production server: every page and API route once, as an Engineer
 });
 
 setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
-  setup.setTimeout(180_000);
+  setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eAdmin();
   const context = await browser.newContext();
   try {

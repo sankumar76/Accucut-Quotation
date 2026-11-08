@@ -102,7 +102,9 @@ describe('the canary estimate builder (AC-7)', () => {
   });
 
   it('can fail: an estimate with only Machining Cost set makes the process total equal it, and the rule says so', () => {
-    const zeros = Object.fromEntries(Object.keys(canaryEstimateInputs()).map((key) => [key, numeric(canaryEstimateInputs()[key]) === null ? canaryEstimateInputs()[key] ?? '' : '0']));
+    const zeros = Object.fromEntries(
+      Object.keys(canaryEstimateInputs()).map((key) => [key, numeric(canaryEstimateInputs()[key]) === null ? (canaryEstimateInputs()[key] ?? '') : '0']),
+    );
     const onlyMachining = { ...zeros, 'machining-cost': '1234.5' };
     const outputs = calculate(onlyMachining);
     const collisions = findOutputsEqualToInputs(onlyMachining, outputs);
@@ -112,5 +114,21 @@ describe('the canary estimate builder (AC-7)', () => {
 
   it('compares numbers, not text: 2.50 equals 2.5, and a word equals nothing', () => {
     expect(findOutputsEqualToInputs({ a: '2.5', b: 'text' }, { x: '2.50', y: 'text', z: null })).toEqual([{ outputKey: 'x', inputKey: 'a', value: '2.5' }]);
+  });
+
+  it('compares the printed forms, as the scan matches them (QLT-07): an output that prints like a typed value, or sits inside one', () => {
+    // 1234.499 prints to two decimals as 1234.50, which is the typed 1234.5.
+    expect(findOutputsEqualToInputs({ machining: '1234.5' }, { total: '1234.499' })).toEqual([
+      { outputKey: 'total', inputKey: 'machining', value: '1234.499' },
+    ]);
+    // 34.50 is found inside 1234.50 by a substring search.
+    expect(findOutputsEqualToInputs({ machining: '1234.5' }, { total: '34.5' })).toHaveLength(1);
+    // A typed value printed in Indian grouping (45,67,890.75) is found by an output of the same digits.
+    expect(findOutputsEqualToInputs({ tool: '4567890.75' }, { total: '4567890.75' })).toHaveLength(1);
+    expect(findOutputsEqualToInputs({ tool: '4567890.75' }, { total: '4567890.76' })).toEqual([]);
+  });
+
+  it('does not count an output too short to be a sentinel, which would match inside any number', () => {
+    expect(findOutputsEqualToInputs({ cutting: '960.5' }, { rejection: '0', one: '1' })).toEqual([]);
   });
 });

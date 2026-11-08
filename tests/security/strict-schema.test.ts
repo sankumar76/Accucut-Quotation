@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { z } from 'zod';
 
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
-import { withRoute } from '@/server/http/with-route';
+import { withRoute, type RouteHandler } from '@/server/http/with-route';
 import { meResponseSchema } from '@/server/views/schemas';
 
 import { validCallFor } from '../support/route-calls';
@@ -43,7 +43,8 @@ vi.mock('@/server/composition', async () => {
 const ORIGIN = 'https://portal.example.test';
 const PLANTED_KEY = 'plantedCostField';
 
-type SchemaHandler = ((request: Request, context?: { params: Promise<Record<string, string>> }) => Promise<Response>) & { readonly responseSchema: z.ZodType };
+/** What `withRoute` returns: the handler, and the one schema its answer is parsed with. */
+type SchemaHandler = RouteHandler;
 
 const routeHandler = z.custom<SchemaHandler>((value) => typeof value === 'function' && 'responseSchema' in value, 'a route handler made by withRoute');
 const moduleShape = z.record(z.string(), z.unknown());
@@ -77,13 +78,32 @@ async function callAsEngineer(row: RouteRow, method: HttpMethod): Promise<Respon
   return (await handlerFor(row, method))(request, { params: Promise.resolve(params) });
 }
 
-/** Every object node of a JSON Schema that does not forbid other keys: the places where an unknown key would be let through. */
+/** The keys of a JSON Schema node whose value is itself a schema, or a list of schemas, or a map of name to schema. */
+const SCHEMA_KEYS = ['items', 'additionalProperties', 'not', 'if', 'then', 'else'] as const;
+const SCHEMA_LIST_KEYS = ['prefixItems', 'anyOf', 'oneOf', 'allOf'] as const;
+const SCHEMA_MAP_KEYS = ['properties', '$defs', 'definitions'] as const;
+
+/**
+ * Every place in a JSON Schema where an unknown key would be let through (QLT-06): an object that does not say `additionalProperties:
+ * false`, a record included (its extra keys are free), and an empty schema `{}` (`z.unknown()` and `z.any()` accept anything). Only
+ * nodes in schema position are judged, so an empty `properties` map of a strict object is not mistaken for an empty schema.
+ */
 function openObjects(node: unknown, path = '#'): string[] {
-  if (Array.isArray(node)) return node.flatMap((child, index) => openObjects(child, `${path}/${index}`));
-  if (typeof node !== 'object' || node === null) return [];
+  if (typeof node !== 'object' || node === null || Array.isArray(node)) return [];
   const record = z.record(z.string(), z.unknown()).parse(node);
-  const own = record['type'] === 'object' && record['properties'] !== undefined && record['additionalProperties'] !== false ? [path] : [];
-  return [...own, ...Object.entries(record).flatMap(([key, child]) => openObjects(child, `${path}/${key}`))];
+  const own = Object.keys(record).length === 0 || (record['type'] === 'object' && record['additionalProperties'] !== false) ? [path] : [];
+  const single = SCHEMA_KEYS.flatMap((key) => (key in record ? openObjects(record[key], `${path}/${key}`) : []));
+  const lists = SCHEMA_LIST_KEYS.flatMap((key) => {
+    const list = record[key];
+    return Array.isArray(list) ? list.flatMap((child, index) => openObjects(child, `${path}/${key}/${index}`)) : [];
+  });
+  const maps = SCHEMA_MAP_KEYS.flatMap((key) => {
+    const map = record[key];
+    return typeof map === 'object' && map !== null && !Array.isArray(map)
+      ? Object.entries(map).flatMap(([name, child]) => openObjects(child, `${path}/${key}/${name}`))
+      : [];
+  });
+  return [...own, ...single, ...lists, ...maps];
 }
 
 /** A copy of a JSON value with an extra key planted in the object at `path`, or `undefined` when there is no such object. */
@@ -170,10 +190,28 @@ describe('the wrapper fails closed (AC-2: an unknown key raises an error)', () =
     expect(Object.keys(meResponseSchema.shape).sort()).toEqual(['email', 'name', 'navigation', 'overdueCount', 'role']);
   });
 
+  const jsonOf = (schema: z.ZodType) => z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' });
+
   it('the walker can fail: a plain z.object has an open object, a strictObject has none', () => {
-    const open = z.toJSONSchema(z.object({ inner: z.object({ a: z.string() }) }), { io: 'input', unrepresentable: 'any' });
-    expect(openObjects(open)).toEqual(['#', '#/properties/inner']);
-    const closed = z.toJSONSchema(z.strictObject({ inner: z.strictObject({ a: z.string() }) }), { io: 'input', unrepresentable: 'any' });
-    expect(openObjects(closed)).toEqual([]);
+    expect(openObjects(jsonOf(z.object({ inner: z.object({ a: z.string() }) })))).toEqual(['#', '#/properties/inner']);
+    expect(openObjects(jsonOf(z.strictObject({ inner: z.strictObject({ a: z.string() }) })))).toEqual([]);
+  });
+
+  it('the walker can fail on a record and on an unconstrained value inside a strict schema (QLT-06)', () => {
+    // A strict object that carries a record lets any key through at that place, and z.unknown() / z.any() accept any value.
+    expect(openObjects(jsonOf(z.strictObject({ extras: z.record(z.string(), z.string()).optional() })))).toEqual(['#/properties/extras']);
+    expect(openObjects(jsonOf(z.strictObject({ extras: z.unknown() })))).toEqual(['#/properties/extras']);
+    expect(openObjects(jsonOf(z.strictObject({ extras: z.any() })))).toEqual(['#/properties/extras']);
+    expect(openObjects(jsonOf(z.strictObject({ rows: z.array(z.record(z.string(), z.number())) })))).toEqual(['#/properties/rows/items']);
+    expect(openObjects(jsonOf(z.record(z.string(), z.string())))).toEqual(['#']);
+  });
+
+  it('the walker does not mistake the empty properties of a strict object, or plain values, for an open schema', () => {
+    expect(openObjects(jsonOf(z.strictObject({})))).toEqual([]);
+    expect(
+      openObjects(
+        jsonOf(z.strictObject({ n: z.number().int().nonnegative(), s: z.enum(['A', 'B']), l: z.array(z.string()), u: z.union([z.string(), z.null()]) })),
+      ),
+    ).toEqual([]);
   });
 });

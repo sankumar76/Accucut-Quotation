@@ -1,17 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
+import { readdirSync } from 'node:fs';
 
-import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+
+import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
 import { defined } from '../support/defined';
-import {
-  cacheControlProblems,
-  decodeFlightPayload,
-  describeFinding,
-  fixedForbiddenProblem,
-  scanResponse,
-  scanResponses,
-  type RecordedResponse,
-} from '../support/scanner';
+import { cacheControlProblems, describeFinding, fixedForbiddenProblem, isBuiltFile, maskRequestId, scanResponses } from '../support/scanner';
 
 import {
   createDisposableUser,
@@ -24,7 +18,17 @@ import {
   useFreshAddress,
   type E2eUser,
 } from './support/auth';
-import { callInBrowser, engineerApiCalls, engineerPages, fetchReferencedFiles, fillPath, refusedApiCalls, refusedPages, ScanRecorder, validCall } from './support/canary-scan';
+import {
+  callInBrowser,
+  expectScanSawEnough,
+  fillPath,
+  refusedApiCalls,
+  refusedPages,
+  ScanRecorder,
+  scanAsEngineer,
+  validCall,
+  type Plant,
+} from './support/canary-scan';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -32,135 +36,135 @@ import { PRODUCTION_URL } from './support/servers';
  * scan, on the PRODUCTION build (`next start`, the artefact that ships) and a real database.
  *
  * `canaryMasters` gives every Restricted value an invented sentinel, and the three Process Master canary rates of STORY-02.01 are put in the
- * database. An Engineer signs in through the sign-in page, opens every page the manifest lists for them, calls every API route the manifest
- * lists for them directly, and the scan looks in everything they were sent, for each sentinel as plain digits, in Indian grouping and in
- * two-decimal form, for rate names, `{{f:`, `{{rate:`, `{{mat:` and the stored formula text: HTML, RSC flight payloads (also fetched with
- * `RSC: 1`), JSON, headers, and the JavaScript chunks the pages load or name. Typed values are not on the list (FR-008).
+ * database. An Engineer signs in through the sign-in page, and `scanAsEngineer` opens every page the manifest lists for them (each with a
+ * real-value recipe, status 200 and the address asked for), calls every API route the manifest lists for them (each with its recipe's status),
+ * records the body of every response the browser fetches, and fetches the scripts the pages name. The scan looks in all of it for each sentinel
+ * as plain digits, in Indian grouping and in two-decimal form, for rate names, `{{f:`, `{{rate:`, `{{mat:` and the stored formula text in its
+ * internal and display forms: HTML, RSC flight payloads, JSON, headers and JavaScript chunks. Typed values are not on the list (FR-008).
  *
  * The pages and routes come from the route manifest, so a story that opens a route to an Engineer, or adds a Lead or Admin route, is covered with
- * no change here (AC-6); its own tasks add its Restricted values to `canaryMasters`. The scan is the stage 12 gate of every pull request and is
- * never quarantined (test strategy section 10, flaky-test policy; AC-8).
+ * no change here (AC-6); its own tasks add its Restricted values to `canaryMasters` and its recipes to `tests/support/route-calls.ts`. The scan is
+ * the stage 12 gate of every pull request and is never quarantined (test strategy section 10, flaky-test policy; AC-8).
  *
  * Controls, because a green scan is only worth something if it can go red: the Admin is sent the canary rates by the same routes and the same scan
- * finds them (real data); a sentinel planted in a header, an RSC payload and a script is reported in each place; `/api/test-only/leak` is absent.
+ * finds them (real data); a sentinel planted in a header and an RSC payload, and one planted in a script chunk and in a response the browser fetches
+ * (through the very helper the Engineer scan uses), are each reported; `/api/test-only/leak` is absent from the production build.
  *
- * Width: nothing here reads layout (an HTTP status, a header, a body, a script), so these tests are candidates for the one-width tag of test strategy section 10.5; they carry no tag
- * until test strategy section 10.5 rules on them (AQP-57 hand-off).
+ * Width: nothing here reads layout (an HTTP status, a header, a body, a script), so these tests are candidates for the one-width tag of test
+ * strategy section 10.5; they carry no tag until that section rules on them.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
 
 const INVENTED_ID = '00000000-0000-4000-8000-0000000000fe';
 const INVENTED_PAGE_VALUE = 'invented-code';
+const NO_ACCESS_TITLE = 'You do not have access to this page';
 
-/** Signs in through the page. The test has set a client address of its own first (`useFreshAddress`), so no other test's failures count against it. */
-async function signIn(page: Page, person: E2eUser): Promise<void> {
+/** Files of `public/` are public by design and carry no session data, so they may be cached; the build's files are exempt too (QLT-09). */
+const PUBLIC_FILES: ReadonlyArray<string> = readdirSync('public').map((name) => `/${name}`);
+const isExempt = (pathname: string): boolean => isBuiltFile(pathname) || PUBLIC_FILES.includes(pathname);
+
+/** Signs in through the page. The test has set a client address of its own first (`useFreshAddress`), so no other test's failures count against it.
+ * */
+async function signIn(page: Page, recorder: ScanRecorder, person: E2eUser): Promise<void> {
   await page.goto('/sign-in');
   await signInThroughThePage(page, person.email, E2E_PASSWORD);
   await expect(page).toHaveURL(/\/queue$/);
+  recorder.markSignedIn();
 }
 
-const sentenceOf = (findings: ReadonlyArray<ReturnType<typeof scanResponse>[number]>): string[] => findings.map(describeFinding);
+const sentences = (recorder: ScanRecorder, forbidden: ReturnType<typeof forbiddenStrings>): string[] =>
+  scanResponses(recorder.responses, forbidden).map(describeFinding);
+
+/** The forbidden list for this database (its stored formulas included) and a person of this test's own, with the canary rates in place. */
+async function prepare(
+  testInfo: TestInfo,
+): Promise<{ readonly forbidden: ReturnType<typeof forbiddenStrings>; readonly engineer: Awaited<ReturnType<typeof createDisposableUser>> }> {
+  await ensureCanaryProcessRates();
+  return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
+}
 
 test('AC-3: an Engineer is sent no Restricted value, name or formula by any page, payload, header or script', async ({ page, context }, testInfo) => {
-  await ensureCanaryProcessRates();
-  const forbidden = forbiddenStrings(await readFormulaTexts());
-  const engineer = await createDisposableUser('scan', testInfo);
+  const { forbidden, engineer } = await prepare(testInfo);
   const recorder = new ScanRecorder();
-  recorder.attach(context);
+  await recorder.attach(context);
   await useFreshAddress(context);
-  await signIn(page, engineer);
+  await signIn(page, recorder, engineer);
 
-  // The journeys that exist: every page the manifest lists for an Engineer, as a person opens it and as a client navigation fetches it.
-  const pages = engineerPages();
-  for (const row of pages) {
-    const path = fillPath(row.path, INVENTED_PAGE_VALUE);
-    const document = await recorder.recordNavigation(`GET ${path} (page)`, await page.goto(path));
-    if (row.hiddenInProduction === true) expect(document.status, `${path} is a review page, absent from the production build`).toBe(404);
-    expect(document.status, path).toBeLessThan(500);
-    const payload = await callInBrowser(recorder, page, `GET ${path} (RSC)`, path, { method: 'GET', headers: { RSC: '1' } });
-    expect(payload.status, `${path} as an RSC request`).toBeLessThan(500);
-  }
+  const scan = await scanAsEngineer(page, recorder, engineer);
 
-  // Every API route the manifest lists for an Engineer, called directly, with the valid call of the role matrix.
-  const calls = engineerApiCalls();
-  for (const call of calls) {
-    const { id, body } = validCall(call, INVENTED_ID);
-    const path = fillPath(call.row.path, id);
-    const answer = await callInBrowser(recorder, page, `${call.method} ${path} (API)`, path, { method: call.method, ...(call.method === 'GET' ? {} : { body }) });
-    expect(answer.status, call.name).toBeLessThan(500);
-  }
-
-  // The scripts and style sheets the pages load, and the ones their payloads name (a lazily loaded chunk is one the pages load).
-  await page.waitForLoadState('networkidle');
-  await recorder.settled();
-  const referenced = await fetchReferencedFiles(recorder, page, PRODUCTION_URL);
-  await recorder.settled();
-
-  // Not vacuous: the scan really saw pages, payloads, JSON and scripts, and the canary rates are in the database it ran against.
-  const withType = (type: RegExp): RecordedResponse[] => recorder.responses.filter((response) => type.test(response.headers['content-type'] ?? ''));
-  expect(withType(/text\/html/).length).toBeGreaterThanOrEqual(pages.length);
-  expect(withType(/text\/x-component/).length).toBeGreaterThanOrEqual(pages.length);
-  expect(withType(/application\/json/).length).toBeGreaterThanOrEqual(calls.length);
-  const scripts = recorder.responses.filter((response) => response.url.includes('/_next/static/chunks/') && /javascript/.test(response.headers['content-type'] ?? ''));
-  expect(scripts.length, `scripts scanned (${referenced} of them fetched from the names in pages and payloads)`).toBeGreaterThan(0);
-  const queuePage = recorder.responses.find((response) => response.label === 'GET /queue (page)');
-  expect(decodeFlightPayload(queuePage?.body ?? '').length, 'the queue page carries an RSC flight payload').toBeGreaterThan(0);
-  for (const row of pages) expect(recorder.withLabelContaining(`GET ${fillPath(row.path, INVENTED_PAGE_VALUE)} (page)`).length, row.path).toBeGreaterThan(0);
-
-  expect(sentenceOf(scanResponses(recorder.responses, forbidden))).toEqual([]);
-  // AC-5: `private, no-store` on every response that answers a protected route or page.
-  expect(cacheControlProblems(recorder.responses, ROUTE_MANIFEST)).toEqual([]);
+  testInfo.annotations.push({
+    type: 'scan',
+    description: `${scan.durationMs} ms: ${scan.pages} pages, ${scan.calls} calls, ${scan.referenced} build files fetched`,
+  });
+  expectScanSawEnough(recorder, scan);
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  // AC-5: `private, no-store` on every response to a request that carried the session (build files and `public/` excepted).
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
 });
 
-test('AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 with no data, for a real ID and an invented one', async ({ page, context }, testInfo) => {
-  await ensureCanaryProcessRates();
-  const forbidden = forbiddenStrings(await readFormulaTexts());
-  const realPersonId = await ensureCanaryUser();
-  const engineer = await createDisposableUser('scan', testInfo);
-  const recorder = new ScanRecorder();
-  recorder.attach(context);
-  await useFreshAddress(context);
-  await signIn(page, engineer);
-
-  const calls = refusedApiCalls();
-  const withoutRequestId = (answer: RecordedResponse | undefined): string => defined(answer, 'answer').body?.replace(/req-[0-9a-f]{8}/, 'req-') ?? '';
-  for (const call of calls) {
+/** Calls every Lead and Admin route as the signed-in Engineer, for a real ID and, where the path has one, an invented one. */
+async function callRefusedRoutes(page: Page, recorder: ScanRecorder, realPersonId: string): Promise<void> {
+  for (const call of refusedApiCalls()) {
     const real = validCall(call, realPersonId);
-    const answers: RecordedResponse[] = [];
-    for (const id of [real.id, INVENTED_ID]) {
+    const ids = call.row.path.includes('[') ? [real.id, INVENTED_ID] : [real.id];
+    const answers = [];
+    for (const id of ids) {
       const path = fillPath(call.row.path, id);
-      answers.push(await callInBrowser(recorder, page, `${call.method} ${path} (API)`, path, { method: call.method, ...(call.method === 'GET' ? {} : { body: real.body }) }));
+      answers.push(
+        await callInBrowser(recorder, page, `${call.method} ${path} (API)`, path, {
+          method: call.method,
+          ...(call.method === 'GET' ? {} : { body: real.body }),
+        }),
+      );
     }
     for (const answer of answers) {
       expect(fixedForbiddenProblem(answer), call.name).toBeNull();
       expect(answer.headers['cache-control'], `${call.name}: Cache-Control`).toBe('private, no-store');
     }
     // The role check runs first, before any lookup: a person who exists and one who does not are told exactly the same.
-    expect(withoutRequestId(answers[0]), call.name).toBe(withoutRequestId(answers[1]));
+    if (answers.length === 2) expect(maskRequestId(defined(answers[0]).body ?? ''), call.name).toBe(maskRequestId(defined(answers[1]).body ?? ''));
   }
+}
 
-  // The pages: HTTP 403 and the "no access" page (SCR-26), with nothing of the page behind it.
+/** Opens every page that does not list an Engineer: HTTP 403 and the "no access" page (SCR-26), with nothing of the page behind it. */
+async function visitRefusedPages(page: Page, recorder: ScanRecorder): Promise<void> {
   for (const row of refusedPages()) {
     const path = fillPath(row.path, INVENTED_PAGE_VALUE);
     const document = await recorder.recordNavigation(`GET ${path} (page)`, await page.goto(path));
     expect(document.status, `${path} as an Engineer`).toBe(403);
-    await expect(page.getByRole('heading', { level: 1, name: 'You do not have access to this page' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: NO_ACCESS_TITLE })).toBeVisible();
   }
+}
+
+test('AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 with no data, for a real ID and an invented one', async ({
+  page,
+  context,
+}, testInfo) => {
+  const { forbidden, engineer } = await prepare(testInfo);
+  const realPersonId = await ensureCanaryUser();
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  await callRefusedRoutes(page, recorder, realPersonId);
+  await visitRefusedPages(page, recorder);
 
   await page.waitForLoadState('networkidle');
   await recorder.settled();
-  expect(sentenceOf(scanResponses(recorder.responses, forbidden))).toEqual([]);
-  expect(cacheControlProblems(recorder.responses, ROUTE_MANIFEST)).toEqual([]);
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
 });
 
 test('AC-3, AC-4 (control with real data): the same scan finds the canary rates in what the Admin is sent', async ({ page, context }) => {
   await ensureCanaryProcessRates();
   const forbidden = forbiddenStrings(await readFormulaTexts());
   const recorder = new ScanRecorder();
-  recorder.attach(context);
+  await recorder.attach(context);
   await useFreshAddress(context);
-  await signIn(page, E2E_ADMIN);
+  await signIn(page, recorder, E2E_ADMIN);
 
   await callInBrowser(recorder, page, 'GET /api/v1/process-items (API, Admin)', '/api/v1/process-items');
   await recorder.recordNavigation('GET /masters/process (page, Admin)', await page.goto('/masters/process'));
@@ -170,36 +174,28 @@ test('AC-3, AC-4 (control with real data): the same scan finds the canary rates 
   const found = new Set(scanResponses(recorder.responses, forbidden).map((finding) => finding.found));
   for (const rate of PROCESS_CANARY_RATES) expect(found.has(rate.value), `the scan finds the value of ${rate.name}`).toBe(true);
   expect(found.has(defined(PROCESS_CANARY_RATES[0]).name), 'the scan finds the canary name').toBe(true);
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
 });
 
-test('AC-4 (negative control): a sentinel planted in a header, an RSC payload and a script is reported in each place', async ({ page, context }) => {
+test('AC-4 (negative control): a sentinel planted in a header and in an RSC payload is reported in each place', async ({ page, context }) => {
   const material = defined(canaryMasters.find((sentinel) => sentinel.kind === 'material-price')).value;
   const customer = defined(canaryMasters.find((sentinel) => sentinel.kind === 'customer-rate')).value;
-  const rateName = 'Cutting-Rate-per-Sec';
   const forbidden = forbiddenStrings();
-  // The planted script is served by the test, not the server, so only the browser's copy holds it: this recorder reads script bodies too.
-  const recorder = new ScanRecorder(true);
-  recorder.attach(context);
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
 
   // A clean pass first: nothing is found in the page as it is, so what is found after is what was planted.
   await recorder.recordNavigation('GET /sign-in (page)', await page.goto('/sign-in'));
   await page.waitForLoadState('networkidle');
   await recorder.settled();
-  expect(sentenceOf(scanResponses(recorder.responses, forbidden))).toEqual([]);
-  recorder.responses.length = 0;
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  recorder.reset();
 
-  let planted = false;
   await context.route('**/sign-in', async (route) => {
     const original = await route.fetch();
     const flight = JSON.stringify(`0:{"rate":"${customer}"}\n`);
     const body = (await original.text()).replace('</body>', `<script>self.__next_f.push([1,${flight}])</script></body>`);
     await route.fulfill({ response: original, body, headers: { ...original.headers(), 'x-planted-rate': material } });
-  });
-  await context.route('**/_next/static/chunks/*.js', async (route) => {
-    const original = await route.fetch();
-    if (planted) return route.fulfill({ response: original });
-    planted = true;
-    return route.fulfill({ response: original, body: `${await original.text()}\n;/* ${rateName} */` });
   });
   await recorder.recordNavigation('GET /sign-in (page, planted)', await page.goto('/sign-in'));
   await page.waitForLoadState('networkidle');
@@ -207,10 +203,42 @@ test('AC-4 (negative control): a sentinel planted in a header, an RSC payload an
 
   const findings = scanResponses(recorder.responses, forbidden).map((finding) => `${finding.place} | ${finding.found}`);
   expect(findings).toEqual(expect.arrayContaining([`headers | ${material}`, `decoded RSC payload | ${customer}`]));
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+test('AC-4 (negative control): a sentinel planted in a script chunk and in a response the browser fetches is found by the Engineer scan itself', async ({
+  page,
+  context,
+}, testInfo) => {
+  const customer = defined(canaryMasters.find((sentinel) => sentinel.kind === 'customer-rate')).value;
+  const rateName = defined(SEED_PROCESS_ITEMS[0]).name;
+  let chunkPlanted = false;
+  const plant: Plant = ({ url }, body) => {
+    if (url.includes('/_next/static/chunks/') && !chunkPlanted) {
+      chunkPlanted = true;
+      return `${body}\n;/* ${rateName} */`;
+    }
+    return new URL(url).pathname === '/api/v1/me' ? `${body} ${customer}` : body;
+  };
+  const { forbidden, engineer } = await prepare(testInfo);
+  const recorder = new ScanRecorder(plant);
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  const scan = await scanAsEngineer(page, recorder, engineer);
+
+  expect(chunkPlanted, 'the crawl fetched a chunk through the browser, so it could be planted').toBe(true);
+  expect(scan.referenced).toBeGreaterThan(0);
+  const findings = scanResponses(recorder.responses, forbidden);
   expect(
-    scanResponses(recorder.responses.filter((response) => response.url.includes('/_next/static/chunks/')), forbidden).map((finding) => finding.found),
-    'the rate name planted in a script chunk',
-  ).toContain(rateName);
+    findings.some((finding) => finding.label.includes('/_next/static/chunks/') && finding.found === rateName),
+    'the rate name planted in a chunk',
+  ).toBe(true);
+  expect(
+    findings.some((finding) => finding.label.includes('/api/v1/me') && finding.found === customer),
+    'the sentinel planted in a fetched response',
+  ).toBe(true);
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {
