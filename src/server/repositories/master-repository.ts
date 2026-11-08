@@ -48,7 +48,7 @@ export interface ProcessItemChanges {
   readonly defaultValue?: string | undefined;
 }
 
-/** A material as the Admin keeps it: the three numbers are decimal text with at least two decimals, for example "7.85". Restricted. */
+/** A material as the Admin keeps it: the three numbers are decimal text with at least two decimals, for example "7.37". Restricted. */
 export interface MaterialRecord {
   readonly id: string;
   readonly materialInDrawing: string;
@@ -286,7 +286,7 @@ function createMaterialMethods(db: PrismaClient): Pick<MasterRepository, Materia
 type MaterialMethodName = 'listMaterials' | 'listMaterialOptions' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
 
 /** Builds the repository over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
-// Over 40 lines on purpose (coding standards section 1): one object of seven repository methods, each about 20 lines or fewer.
+// Over 40 lines on purpose (coding standards section 1): one object of the seven Process Master methods, each about 20 lines or fewer, plus a spread of the material methods (`createMaterialMethods`).
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     ...createMaterialMethods(db),

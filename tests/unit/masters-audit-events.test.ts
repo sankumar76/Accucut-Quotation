@@ -17,7 +17,7 @@ const PERCENT = { name: 'OH Profit %', unit: '%', defaultValue: '11.37' };
 const ACTOR = { actorId: '00000000-0000-4000-8000-abcdef000001', actorLabel: 'Invented Admin', requestId: 'req-0a0b0c0d' } as const;
 const OBJECT = { id: '00000000-0000-4000-8000-000400000011', label: 'Foam Cost' } as const;
 
-const wordsOf = (name: AuditEventName, before: unknown, after: unknown) => AUDIT_EVENTS[name].describeStored(before, after);
+const wordsOf = (name: AuditEventName, before: unknown, after: unknown) => AUDIT_EVENTS[name].describeStored(before, after, 'process_item');
 
 describe('master.created / master.edited / master.deleted (AC-5)', () => {
   it('are wired, in the "Master data edit" category, and belong to the generic master subject', () => {

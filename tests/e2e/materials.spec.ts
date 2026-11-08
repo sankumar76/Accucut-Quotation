@@ -13,7 +13,7 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  *
  * Each test works on materials it makes for itself through the API (an invented name with the screen size, the repeat, the retry and a
  * random part), so the three screen sizes and the retries never meet on one material. The words are the UX spec's, written out here.
- * Names and numbers are invented (`n.37`, ADR-014).
+ * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format (three decimals, zero, a sign).
  *
  * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-199) and pinned by
  * `tests/unit/one-width-tag.test.ts`; none of them is tagged until it is ruled. Proposed for the ruling: "refuses a name another material
@@ -30,7 +30,7 @@ const NUMBER_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
 const TITLE = 'Materials and lists';
 
 /** A material the test makes. */
-const MATERIAL = { materialConsidered: 'Invented mild steel', pricePerKg: '58.37', specificGravity: '7.85', scrapRate: '22.37' } as const;
+const MATERIAL = { materialConsidered: 'Invented mild steel', pricePerKg: '58.37', specificGravity: '7.37', scrapRate: '22.37' } as const;
 
 /** The row (table) or card (phone) of a material: whichever of the two is shown. */
 function rowOf(page: Page, name: string): Locator {
@@ -84,7 +84,7 @@ test.describe('the tab shell and the list (AC-1, AC-7)', () => {
     const row = rowOf(page, name);
     await expect(row).toContainText('Invented mild steel');
     await expect(row).toContainText('58.37');
-    await expect(row).toContainText('7.85');
+    await expect(row).toContainText('7.37');
     await expect(row).toContainText('22.37');
     if ((page.viewportSize()?.width ?? 0) >= 768) {
       const headers = page.getByRole('columnheader');
@@ -96,6 +96,16 @@ test.describe('the tab shell and the list (AC-1, AC-7)', () => {
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+  });
+
+  test('the page description and the description meta name only the tabs that exist: with one tab, neither says "exchange" or "treatment" (ux-spec v0.18)', async ({ page }) => {
+    await openMaterials(page);
+    await expect(page.getByRole('tab')).toHaveCount(1);
+    const description = page.locator('main h1 + p');
+    await expect(description).toHaveText('Material prices, specific gravity and scrap rates.');
+    const meta = page.locator('meta[name="description"]');
+    await expect(meta).toHaveAttribute('content', 'Manage the materials used in estimates.');
+    for (const text of [await description.innerText(), (await meta.getAttribute('content')) ?? '']) expect(text).not.toMatch(/exchange|treatment/i);
   });
 
   test('AC-7: controls are at least 44 px, and the icon button of a table row at least 36 px', async ({ page }, testInfo) => {
@@ -141,15 +151,15 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     await pressWithKeyboard(page.getByRole('button', { name: 'Add material' }));
     const dialog = page.getByRole('dialog', { name: 'Add material' });
     await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
-    await typeAndTab(page, [name, 'Invented stainless', '214.5', '7.9', '95']);
+    await typeAndTab(page, [name, 'Invented stainless', '214.37', '7.37', '95.37']);
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: `${name} was added. The change is in the audit log.` })).toBeVisible();
     const row = rowOf(page, name);
     await expect(row).toContainText('Invented stainless');
-    await expect(row).toContainText('214.50');
-    await expect(row).toContainText('7.90');
-    await expect(row).toContainText('95.00');
+    await expect(row).toContainText('214.37');
+    await expect(row).toContainText('7.37');
+    await expect(row).toContainText('95.37');
     await expect(page.getByRole('button', { name: 'Add material' })).toBeFocused();
   });
 
@@ -159,7 +169,7 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     const dialog = page.getByRole('dialog', { name: 'Add material' });
     await dialog.getByLabel('Price per kg').fill('58.123');
     await dialog.getByRole('button', { name: 'Add material' }).click();
-    await expect(dialog.getByText('Enter a name.')).toBeVisible();
+    await expect(dialog.getByText('Enter the Material in Drawing.')).toBeVisible();
     await expect(dialog.getByText('Enter the Material Considered.')).toBeVisible();
     await expect(dialog.getByText(NUMBER_MESSAGE)).toHaveCount(2);
     await expect(dialog.getByText('Enter a number above 0, with up to 2 decimals.')).toBeVisible();
@@ -175,9 +185,9 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     const dialog = page.getByRole('dialog', { name: 'Add material' });
     await dialog.getByLabel('Material in Drawing').fill(name);
     await dialog.getByLabel('Material Considered').fill('Invented brass');
-    await dialog.getByLabel('Price per kg').fill('58');
+    await dialog.getByLabel('Price per kg').fill('58.37');
     await dialog.getByLabel('Specific gravity').fill('0');
-    await dialog.getByLabel('Material-Scrap-Rate (per kg)').fill('22');
+    await dialog.getByLabel('Material-Scrap-Rate (per kg)').fill('22.37');
     await dialog.getByRole('button', { name: 'Add material' }).click();
     const gravity = dialog.getByLabel('Specific gravity');
     await expect(dialog.getByText(GRAVITY_ABOVE_ZERO)).toBeVisible();
@@ -221,12 +231,12 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
     await pressWithKeyboard(edit);
     const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
     await expect(dialog.getByLabel('Material in Drawing')).toHaveValue(name);
-    await expect(dialog.getByLabel('Specific gravity')).toHaveValue('7.85');
-    await dialog.getByLabel('Material-Scrap-Rate (per kg)').fill('30.5');
+    await expect(dialog.getByLabel('Specific gravity')).toHaveValue('7.37');
+    await dialog.getByLabel('Material-Scrap-Rate (per kg)').fill('30.37');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: `${name} saved. The change is in the audit log.` })).toBeVisible();
-    await expect(rowOf(page, name)).toContainText('30.50');
+    await expect(rowOf(page, name)).toContainText('30.37');
     await expect(rowOf(page, name).getByRole('button', { name: `Edit ${name}` })).toBeFocused();
   });
 
@@ -254,7 +264,7 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
     await expect(dialog.getByText(GRAVITY_ABOVE_ZERO)).toBeVisible();
     await expect(dialog.getByLabel('Specific gravity')).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(rowOf(page, name)).toContainText('7.85');
+    await expect(rowOf(page, name)).toContainText('7.37');
   });
 });
 
@@ -276,6 +286,14 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
     await expect(rowOf(page, name)).toBeVisible();
+  });
+
+  test('a long search text with no spaces wraps inside the "No material matches" title and does not widen the page (ux-spec v0.18)', async ({ page }) => {
+    await openMaterials(page);
+    await page.getByLabel('Search materials').fill('x'.repeat(120));
+    await expect(page.getByRole('status').filter({ hasText: 'No material matches' })).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 
   test('shows the skeleton after 300 ms while the list is read again, with the panel busy, and the list when it arrives', async ({ page }, testInfo) => {
@@ -315,7 +333,7 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     const empty = page.getByRole('status').filter({ hasText: 'No materials yet' });
     await expect(empty).toBeVisible();
-    await expect(empty).toContainText('Add the first material. The estimate form offers only the materials on this list.');
+    await expect(empty).toContainText("Add the first material. A part's Material in Drawing is chosen from this list.");
     await expect(page.getByRole('button', { name: 'Add material' })).toBeVisible();
     await pressWithKeyboard(page.getByRole('button', { name: 'Add material' }));
     await expect(page.getByRole('dialog', { name: 'Add material' })).toBeVisible();

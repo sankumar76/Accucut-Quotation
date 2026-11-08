@@ -8,7 +8,7 @@ import { harness, holdSessionClock, releaseSessionClock } from '../support/sessi
  * STORY-02.03 T3 (AC-2 to AC-5), through the real `withRoute`, the real session and the real masters service over in-memory storage: what
  * each body must look like, what each refusal says, that a specific gravity of 0 or below is refused with 422 on `POST` and on `PATCH`
  * (UX-37, FR-015), that `/options/materials` carries no rate of any kind, and that a strict schema keeps anything else out. Who may call is
- * `tests/security`. Every name and number is invented (`n.37`, ADR-014).
+ * `tests/security`. Every name and number is invented (`n.37`, ADR-014), except inputs that test the format.
  */
 
 vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/session-harness')).harness.getServerSession }));
@@ -47,8 +47,8 @@ const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 const added = {
   materialInDrawing: '  Invented-plate-grade-Q ',
   materialConsidered: ' Invented alloy ',
-  pricePerKg: ' 58.5 ',
-  specificGravity: '7.85',
+  pricePerKg: ' 58.3 ',
+  specificGravity: '7.37',
   scrapRate: '22.37',
 };
 
@@ -92,8 +92,8 @@ describe('POST /api/v1/materials (AC-2, AC-3, AC-5)', () => {
       id: expect.any(String),
       materialInDrawing: 'Invented-plate-grade-Q',
       materialConsidered: 'Invented alloy',
-      pricePerKg: '58.50',
-      specificGravity: '7.85',
+      pricePerKg: '58.30',
+      specificGravity: '7.37',
       scrapRate: '22.37',
     });
     const entries = harness.auditWorld.audit.committed.slice(before);
@@ -107,18 +107,18 @@ describe('POST /api/v1/materials (AC-2, AC-3, AC-5)', () => {
   });
 
   it.each([
-    ['a blank name', { materialInDrawing: '   ' }, 'materialInDrawing', 'Enter a name.'],
+    ['a blank name', { materialInDrawing: '   ' }, 'materialInDrawing', 'Enter the Material in Drawing.'],
     ['a name over 100 characters', { materialInDrawing: 'x'.repeat(101) }, 'materialInDrawing', 'Use 100 characters or fewer.'],
     ['a blank Material Considered', { materialConsidered: '' }, 'materialConsidered', 'Enter the Material Considered.'],
     ['a negative price', { pricePerKg: '-1' }, 'pricePerKg', 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a price with three decimals', { pricePerKg: '58.123' }, 'pricePerKg', 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a scrap rate with three decimals', { scrapRate: '1.234' }, 'scrapRate', 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a negative scrap rate', { scrapRate: '-0.01' }, 'scrapRate', 'Enter a number, 0 or more, with up to 2 decimals.'],
-    ['a JSON number for a price (a price is decimal text)', { pricePerKg: 58.5 }, 'pricePerKg', 'Enter a number, 0 or more, with up to 2 decimals.'],
+    ['a JSON number for a price (a price is decimal text)', { pricePerKg: 58.37 }, 'pricePerKg', 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a specific gravity of 0 (UX-37)', { specificGravity: '0' }, 'specificGravity', 'Enter a value above 0.'],
     ['a specific gravity of 0.00', { specificGravity: '0.00' }, 'specificGravity', 'Enter a value above 0.'],
     ['a negative specific gravity', { specificGravity: '-2' }, 'specificGravity', 'Enter a value above 0.'],
-    ['a specific gravity with three decimals', { specificGravity: '7.855' }, 'specificGravity', 'Enter a number above 0, with up to 2 decimals.'],
+    ['a specific gravity with three decimals', { specificGravity: '7.375' }, 'specificGravity', 'Enter a number above 0, with up to 2 decimals.'],
     ['a specific gravity that is not a number', { specificGravity: 'heavy' }, 'specificGravity', 'Enter a number above 0, with up to 2 decimals.'],
   ])('refuses %s with 422, names the field, and stores nothing', async (_what, change, field, message) => {
     const entries = harness.auditWorld.audit.committed.length;
@@ -152,12 +152,12 @@ describe('POST /api/v1/materials (AC-2, AC-3, AC-5)', () => {
 describe('PATCH /api/v1/materials/{id} (AC-2, AC-3, AC-5)', () => {
   it('changes any of the fields: 200, the ID stays, one master.edited entry with the material before and after', async () => {
     const before = harness.auditWorld.audit.committed.length;
-    const response = await PATCH(request('PATCH', { scrapRate: '24.5', materialConsidered: ' Invented considered ' }), withId(ALPHA));
+    const response = await PATCH(request('PATCH', { scrapRate: '24.37', materialConsidered: ' Invented considered ' }), withId(ALPHA));
     expect(response.status).toBe(200);
-    expect(record.parse(await response.json())).toMatchObject({ id: ALPHA, scrapRate: '24.50', materialConsidered: 'Invented considered', specificGravity: '737.37' });
+    expect(record.parse(await response.json())).toMatchObject({ id: ALPHA, scrapRate: '24.37', materialConsidered: 'Invented considered', specificGravity: '737.37' });
     const entries = harness.auditWorld.audit.committed.slice(before);
     expect(entries.map((row) => [row.event, row.objectType])).toEqual([['master.edited', 'material']]);
-    expect(entries[0]).toMatchObject({ before: expect.objectContaining({ scrapRate: '717.37' }), after: expect.objectContaining({ scrapRate: '24.50' }) });
+    expect(entries[0]).toMatchObject({ before: expect.objectContaining({ scrapRate: '717.37' }), after: expect.objectContaining({ scrapRate: '24.37' }) });
   });
 
   it('writes no entry for a save that changes nothing', async () => {
@@ -172,7 +172,7 @@ describe('PATCH /api/v1/materials/{id} (AC-2, AC-3, AC-5)', () => {
     ['a negative specific gravity', { specificGravity: '-0.5' }, 'specificGravity', 'Enter a value above 0.'],
     ['a negative price', { pricePerKg: '-3' }, 'pricePerKg', 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a scrap rate with three decimals', { scrapRate: '2.345' }, 'scrapRate', 'Enter a number, 0 or more, with up to 2 decimals.'],
-    ['a blank name', { materialInDrawing: ' ' }, 'materialInDrawing', 'Enter a name.'],
+    ['a blank name', { materialInDrawing: ' ' }, 'materialInDrawing', 'Enter the Material in Drawing.'],
   ])('refuses %s with 422, names the field, and changes nothing (UX-37)', async (_what, change, field, message) => {
     const entries = harness.auditWorld.audit.committed.length;
     const response = await PATCH(request('PATCH', change), withId(ALPHA));
@@ -191,8 +191,8 @@ describe('PATCH /api/v1/materials/{id} (AC-2, AC-3, AC-5)', () => {
   });
 
   it('answers 404 for an ID no material has and 422 for one that is not a UUID; an empty body and an unknown key are 422', async () => {
-    expect((await PATCH(request('PATCH', { scrapRate: '1.00' }), withId(UNKNOWN_ID))).status).toBe(404);
-    expect((await PATCH(request('PATCH', { scrapRate: '1.00' }), withId('not-an-id'))).status).toBe(422);
+    expect((await PATCH(request('PATCH', { scrapRate: '1.37' }), withId(UNKNOWN_ID))).status).toBe(404);
+    expect((await PATCH(request('PATCH', { scrapRate: '1.37' }), withId('not-an-id'))).status).toBe(422);
     expect((await PATCH(request('PATCH', {}), withId(ALPHA))).status).toBe(422);
     expect((await PATCH(request('PATCH', { isHidden: true }), withId(ALPHA))).status).toBe(422);
   });

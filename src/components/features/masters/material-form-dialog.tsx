@@ -17,6 +17,7 @@ import {
   type FieldErrors,
 } from '@/lib/masters/material-form';
 import { createMaterial, updateMaterial, type MaterialRow } from '@/lib/masters/materials-client';
+import { RUPEE } from '@/lib/masters/process-items';
 import {
   MATERIAL_FIELD_LABELS,
   MATERIAL_FIELD_NAMES,
@@ -155,10 +156,10 @@ function MaterialFields({ form }: { readonly form: MaterialFormState }) {
       <MaterialField form={form} field="materialInDrawing" />
       <MaterialField form={form} field="materialConsidered" />
       <div className="grid gap-s-4 sm:grid-cols-2">
-        <MaterialField form={form} field="pricePerKg" unit="₹" />
+        <MaterialField form={form} field="pricePerKg" unit={RUPEE} />
         <MaterialField form={form} field="specificGravity" hint={SPECIFIC_GRAVITY_HINT} />
       </div>
-      <MaterialField form={form} field="scrapRate" unit="₹" />
+      <MaterialField form={form} field="scrapRate" unit={RUPEE} />
     </>
   );
 }

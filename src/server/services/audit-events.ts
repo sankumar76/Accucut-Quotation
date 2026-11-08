@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
-import { formatDefaultValue, unitLabel } from '../../lib/masters/process-items';
+import { formatDefaultValue, RUPEE, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 
 /**
@@ -38,12 +38,13 @@ interface EventDefinition<Before extends z.ZodType, After extends z.ZodType> {
   readonly status: 'wired' | 'reserved';
   readonly before: Before;
   readonly after: After;
-  describe(before: z.output<Before>, after: z.output<After>): AuditChangeText;
+  /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
+  describe(before: z.output<Before>, after: z.output<After>, objectType: string): AuditChangeText;
 }
 
 interface RegisteredEvent<Before extends z.ZodType, After extends z.ZodType> extends EventDefinition<Before, After> {
   /** The words for stored JSON, or null if the stored values do not fit the schemas (they are then shown as `NO_DETAIL`). */
-  describeStored(before: unknown, after: unknown): AuditChangeText | null;
+  describeStored(before: unknown, after: unknown, objectType?: string): AuditChangeText | null;
 }
 
 function defineEvent<Before extends z.ZodType, After extends z.ZodType>(
@@ -51,10 +52,10 @@ function defineEvent<Before extends z.ZodType, After extends z.ZodType>(
 ): RegisteredEvent<Before, After> {
   return {
     ...definition,
-    describeStored(before, after) {
+    describeStored(before, after, objectType) {
       const parsedBefore = definition.before.safeParse(before);
       const parsedAfter = definition.after.safeParse(after);
-      return parsedBefore.success && parsedAfter.success ? definition.describe(parsedBefore.data, parsedAfter.data) : null;
+      return parsedBefore.success && parsedAfter.success ? definition.describe(parsedBefore.data, parsedAfter.data, objectType ?? definition.objectType) : null;
     },
   };
 }
@@ -82,7 +83,7 @@ function describeProcessItem(state: z.output<typeof processItemState>): string {
 }
 
 // ---- Shape of the Material Master events (SCR-16 "Master data edit"; STORY-02.03) ----------------------------------------------
-/** A decimal as the log keeps it: text with two to four decimals ("7.85"). */
+/** A decimal as the log keeps it: text with two to four decimals ("7.37"). */
 const decimalText = z.string().regex(/^\d+\.\d{2,4}$/);
 
 /** A material as the log keeps it: its name, Material Considered, and the three numbers. The ID and the name label the entry. */
@@ -94,25 +95,44 @@ const materialState = z.strictObject({
   scrapRate: decimalText,
 });
 
-/** "MS sheet, Mild steel, Price per kg ₹ 58.00, Specific gravity 7.85, Material-Scrap-Rate (per kg) ₹ 22.00": the whole material. */
+/** "Invented sheet, Invented steel, Price per kg ₹ 58.37, Specific gravity 7.37, Material-Scrap-Rate (per kg) ₹ 22.37": the whole material. */
 function describeMaterial(state: z.output<typeof materialState>): string {
   return [
     state.materialInDrawing,
     state.materialConsidered,
-    `${MATERIAL_FIELD_LABELS.pricePerKg} ₹ ${state.pricePerKg}`,
+    `${MATERIAL_FIELD_LABELS.pricePerKg} ${RUPEE} ${state.pricePerKg}`,
     `${MATERIAL_FIELD_LABELS.specificGravity} ${state.specificGravity}`,
-    `${MATERIAL_FIELD_LABELS.scrapRate} ₹ ${state.scrapRate}`,
+    `${MATERIAL_FIELD_LABELS.scrapRate} ${RUPEE} ${state.scrapRate}`,
   ].join(', ');
 }
 
 /**
- * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`). The two
- * shapes share no key, so a value fits exactly one of them and the words are chosen from its keys.
+ * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`). Storage
+ * accepts either shape; the **words** are chosen by the entry's object type, never by guessing from the keys, and the state must fit the
+ * shape of that master: a material state under `process_item` is not described as a rate (the screen shows a dash). A new master adds its
+ * shape and its describer to `MASTER_WORDS`.
  */
 const masterState = z.union([processItemState, materialState]);
 
-function describeMaster(state: z.output<typeof masterState>): string {
-  return 'materialInDrawing' in state ? describeMaterial(state) : describeProcessItem(state);
+function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) => string): (state: unknown) => string | null {
+  return (state) => {
+    const parsed = shape.safeParse(state);
+    return parsed.success ? describe(parsed.data) : null;
+  };
+}
+
+const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> = {
+  process_item: wordsOf(processItemState, describeProcessItem),
+  material: wordsOf(materialState, describeMaterial),
+};
+
+/** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */
+function describeMasterChange(objectType: string, before: unknown, after: unknown): AuditChangeText {
+  const words = MASTER_WORDS[objectType];
+  if (words === undefined) return NO_DETAIL;
+  const beforeWords = before === null ? 'Not added' : words(before);
+  const afterWords = after === null ? 'Deleted' : words(after);
+  return beforeWords === null || afterWords === null ? NO_DETAIL : { before: beforeWords, after: afterWords };
 }
 
 /** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
@@ -195,7 +215,7 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: z.null(),
     after: masterState,
-    describe: (_before, after) => ({ before: 'Not added', after: describeMaster(after) }),
+    describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.edited': defineEvent({
     objectType: 'master',
@@ -203,7 +223,7 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: masterState,
     after: masterState,
-    describe: (before, after) => ({ before: describeMaster(before), after: describeMaster(after) }),
+    describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.deleted': defineEvent({
     objectType: 'master',
@@ -211,7 +231,7 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: masterState,
     after: z.null(),
-    describe: (before) => ({ before: describeMaster(before), after: 'Deleted' }),
+    describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
 
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------

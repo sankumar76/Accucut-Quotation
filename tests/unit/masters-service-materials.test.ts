@@ -13,7 +13,7 @@ import { refusal } from '../support/user-service-fixture';
 /**
  * STORY-02.03 T2 (AC-2, AC-3, AC-5): the rules of the Material Master service over in-memory storage and the real audit service. The real
  * storage, the table lock and the constraints are tested against PostgreSQL in `tests/integration/masters/materials.test.ts`. Every name and
- * number is invented (`n.37`, ADR-014).
+ * number is invented (`n.37`, ADR-014), except inputs that test the format.
  */
 
 const ALPHA = MATERIAL_CANARIES[0];
@@ -22,8 +22,8 @@ const NEW_MATERIAL = {
   materialInDrawing: 'Invented-bar-grade-B',
   materialConsidered: 'Invented bronze',
   pricePerKg: '310.37',
-  specificGravity: '8.8',
-  scrapRate: '120.00',
+  specificGravity: '8.37',
+  scrapRate: '120.37',
 } as const;
 
 function build() {
@@ -50,7 +50,7 @@ describe('createMaterial (AC-2, AC-5)', () => {
   it('adds the material with every number to two decimals, in one transaction with exactly one master.created entry of object type material', async () => {
     const { service, world, masters } = build();
     const created = await service.createMaterial(CONTEXT, NEW_MATERIAL);
-    expect(created).toMatchObject({ materialInDrawing: 'Invented-bar-grade-B', pricePerKg: '310.37', specificGravity: '8.80', scrapRate: '120.00' });
+    expect(created).toMatchObject({ materialInDrawing: 'Invented-bar-grade-B', pricePerKg: '310.37', specificGravity: '8.37', scrapRate: '120.37' });
     expect(masters.materials.map((material) => material.id)).toContain(created.id);
     expect(world.audit.committed).toHaveLength(1);
     expect(world.audit.committed[0]).toMatchObject({
@@ -61,7 +61,7 @@ describe('createMaterial (AC-2, AC-5)', () => {
       actorId: CONTEXT.actorId,
       actorLabel: CONTEXT.actorLabel,
       before: null,
-      after: { materialInDrawing: 'Invented-bar-grade-B', materialConsidered: 'Invented bronze', pricePerKg: '310.37', specificGravity: '8.80', scrapRate: '120.00' },
+      after: { materialInDrawing: 'Invented-bar-grade-B', materialConsidered: 'Invented bronze', pricePerKg: '310.37', specificGravity: '8.37', scrapRate: '120.37' },
     });
   });
 
@@ -101,15 +101,15 @@ describe('updateMaterial (AC-2, AC-3, AC-5)', () => {
 
   it('changes the fields given and writes exactly one master.edited entry with the material before and after', async () => {
     const { service, world } = build();
-    const updated = await service.updateMaterial(CONTEXT, id, { scrapRate: '700', specificGravity: '8' });
-    expect(updated).toMatchObject({ scrapRate: '700.00', specificGravity: '8.00', pricePerKg: ALPHA?.pricePerKg });
+    const updated = await service.updateMaterial(CONTEXT, id, { scrapRate: '700.37', specificGravity: '8.37' });
+    expect(updated).toMatchObject({ scrapRate: '700.37', specificGravity: '8.37', pricePerKg: ALPHA?.pricePerKg });
     expect(world.audit.committed).toHaveLength(1);
     expect(world.audit.committed[0]).toMatchObject({
       event: 'master.edited',
       objectType: 'material',
       objectId: id,
       before: { scrapRate: ALPHA?.scrapRate, specificGravity: ALPHA?.specificGravity },
-      after: { scrapRate: '700.00', specificGravity: '8.00' },
+      after: { scrapRate: '700.37', specificGravity: '8.37' },
     });
   });
 
@@ -117,7 +117,7 @@ describe('updateMaterial (AC-2, AC-3, AC-5)', () => {
     const { service, masters } = build();
     const lock = vi.spyOn(masters, 'lockMaterials');
     const find = vi.spyOn(masters, 'findMaterialForUpdate');
-    await service.updateMaterial(CONTEXT, id, { scrapRate: '700' });
+    await service.updateMaterial(CONTEXT, id, { scrapRate: '700.37' });
     expect(lock.mock.invocationCallOrder[0]).toBeLessThan(find.mock.invocationCallOrder[0] ?? 0);
   });
 
@@ -149,7 +149,7 @@ describe('updateMaterial (AC-2, AC-3, AC-5)', () => {
 
   it('answers not found for an unknown ID, and writes nothing', async () => {
     const { service, world } = build();
-    const error = await refusal(service.updateMaterial(CONTEXT, '00000000-0000-4000-8000-00000000dead', { scrapRate: '1' }));
+    const error = await refusal(service.updateMaterial(CONTEXT, '00000000-0000-4000-8000-00000000dead', { scrapRate: '1.37' }));
     expect(error).toBeInstanceOf(NotFoundError);
     expect(world.audit.committed).toHaveLength(0);
   });

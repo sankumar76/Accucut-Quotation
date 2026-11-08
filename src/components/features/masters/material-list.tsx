@@ -10,7 +10,7 @@ import { cn } from '@/lib/cn';
 import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
 import type { MaterialRow } from '@/lib/masters/materials-client';
 
-import { editMaterialLabel } from './material-texts';
+import { editMaterialLabel, PRICE_HEADING, SCRAP_HEADING } from './material-texts';
 import { isOpener, type Opener } from './process-opener';
 import { BREAK_LONG_NAMES } from './process-texts';
 
@@ -28,9 +28,6 @@ export interface MaterialListProps {
   readonly onEdit: (item: MaterialRow, byKeyboard: boolean) => void;
 }
 
-/** The column headings, as the mock-up writes them: the units are in the heading, so a cell holds only the number. */
-const PRICE_HEADING = `${MATERIAL_FIELD_LABELS.pricePerKg} (₹)`;
-const SCRAP_HEADING = 'Material-Scrap-Rate (₹ per kg)';
 
 function EditButton({ item, pendingOpener, onEdit, compact }: MaterialListProps & { readonly item: MaterialRow; readonly compact: boolean }) {
   const press = (event: MouseEvent<HTMLButtonElement>): void => onEdit(item, event.detail === 0);

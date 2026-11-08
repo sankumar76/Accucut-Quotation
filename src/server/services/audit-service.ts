@@ -176,7 +176,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
           event: row.event,
           category: definition === undefined ? null : { id: definition.category, label: auditCategoryLabel(definition.category) ?? definition.category },
           objectLabel: row.objectLabel,
-          change: definition?.describeStored(row.before, row.after) ?? NO_DETAIL,
+          change: definition?.describeStored(row.before, row.after, row.objectType) ?? NO_DETAIL,
         };
       });
       const last = page.rows.at(-1);

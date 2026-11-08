@@ -90,7 +90,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'POST /api/v1/materials':
       return {
         id: NO_RECIPE_ID,
-        body: { materialInDrawing: 'Invented-sheet-grade-Z', materialConsidered: 'Invented alloy', pricePerKg: '58.37', specificGravity: '7.85', scrapRate: '22.37' },
+        body: { materialInDrawing: 'Invented-sheet-grade-Z', materialConsidered: 'Invented alloy', pricePerKg: '58.37', specificGravity: '7.37', scrapRate: '22.37' },
         status: 201,
       };
     case 'PATCH /api/v1/materials/[id]':

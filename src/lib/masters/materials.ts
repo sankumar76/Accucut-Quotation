@@ -1,7 +1,6 @@
 import {
   DEFAULT_VALUE_MESSAGE,
   DEFAULT_VALUE_PATTERN,
-  NAME_REQUIRED_MESSAGE,
   NAME_TOO_LONG_MESSAGE,
   normaliseDefaultValue,
 } from './process-items';
@@ -12,7 +11,7 @@ import {
  * (NFR-009) and a client component may import it. The server states the same rules again in `src/server/views/schemas/materials.ts`,
  * which imports the limits, the words and `specificGravityProblem` from here, so a limit or a sentence is written once.
  *
- * A price, a specific gravity and a Material-Scrap-Rate are carried as **decimal text** ("7.85"), never as a JavaScript number
+ * A price, a specific gravity and a Material-Scrap-Rate are carried as **decimal text** ("7.37"), never as a JavaScript number
  * (coding standards section 10, "Money and rates"). The text of a price or a scrap rate follows the Process Master's default value
  * (up to 12 digits, up to two decimals, 0 or more); a specific gravity follows it too and must also be above 0 (UX-37).
  */
@@ -29,9 +28,9 @@ export const MATERIAL_FIELD_LABELS = {
   scrapRate: 'Material-Scrap-Rate (per kg)',
 } as const;
 
-export const MATERIAL_NAME_REQUIRED_MESSAGE = NAME_REQUIRED_MESSAGE;
+export const MATERIAL_NAME_REQUIRED_MESSAGE = 'Enter the Material in Drawing.';
 export const MATERIAL_NAME_TOO_LONG_MESSAGE = NAME_TOO_LONG_MESSAGE;
-/** Proposed by the developer: UX spec SCR-13 words the duplicate and specific gravity messages only. Same pattern as "Enter a name.". */
+/** The ux-expert's words (ux-spec v0.18, SCR-13 "The Materials tab: final words", Jira 11188): "Enter the" plus the field's label. */
 export const CONSIDERED_REQUIRED_MESSAGE = 'Enter the Material Considered.';
 export const MATERIAL_NAME_TAKEN_MESSAGE = 'A material with this name already exists. Names must be unique.';
 export const NUMBER_MESSAGE = DEFAULT_VALUE_MESSAGE;
@@ -91,14 +90,14 @@ export function specificGravityProblem(value: string): string | null {
   return SPECIFIC_GRAVITY_FORMAT_MESSAGE;
 }
 
-/** A typed number as the stored text: no leading zeros, two decimals ("003.5" is "3.50"). The text must already pass its check. */
+/** A typed number as the stored text: no leading zeros, two decimals ("003.37" is "3.37"). The text must already pass its check. */
 export function normaliseMaterialNumber(value: string): string {
   return normaliseDefaultValue(value);
 }
 
 /**
  * What really changes when `wanted` is applied to a material: only a field that is given and differs (a name compared as written, so a
- * change of letter case counts; a number compared as stored text, so "7.85" and "07.85" are one value). An empty result is a save that
+ * change of letter case counts; a number compared as stored text, so "7.37" and "07.37" are one value). An empty result is a save that
  * changes nothing, which writes no entry on the server and sends no request from the screen. The one rule of both.
  */
 export function materialChangesFrom(before: MaterialValues, wanted: MaterialFields): MaterialFields {

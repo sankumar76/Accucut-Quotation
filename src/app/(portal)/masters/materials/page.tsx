@@ -6,7 +6,7 @@ import { authorizePage } from '@/server/http/page-access';
 
 export const metadata: Metadata = {
   title: 'Materials and lists',
-  description: 'Manage materials, exchange rates and the treatment and colour list used in estimates.',
+  description: 'Manage the materials used in estimates.',
 };
 
 /**

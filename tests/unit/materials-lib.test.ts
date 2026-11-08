@@ -17,27 +17,27 @@ import {
 /**
  * STORY-02.03 (AC-2, AC-3, AC-8): the rules of a typed material that the screen and the server share, as pure functions on text. A price,
  * a specific gravity and a Material-Scrap-Rate are decimal text and never a floating-point number, so every check here reads characters.
- * Names and numbers are invented (`n.37`, ADR-014).
+ * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format (zero, a sign, three decimals, padding).
  */
 
 const STEEL: MaterialValues = {
   materialInDrawing: 'Invented-sheet-grade-A',
   materialConsidered: 'Invented steel',
   pricePerKg: '58.37',
-  specificGravity: '7.85',
+  specificGravity: '7.37',
   scrapRate: '22.37',
 };
 
 describe('specificGravityProblem (UX-37: must be above 0)', () => {
-  it.each(['0.01', '7.85', '1', '19.32', '  2.70  ', '000.50', '123456789012.99'])('accepts %j', (value) => {
+  it.each(['0.01', '7.37', '1', '19.37', '  2.37  ', '000.37', '123456789012.37'])('accepts %j', (value) => {
     expect(specificGravityProblem(value)).toBeNull();
   });
 
-  it.each(['0', '0.0', '0.00', '000', ' 0 ', '-1', '-0.5', '-0', '-7.85'])('says "Enter a value above 0." for %j', (value) => {
+  it.each(['0', '0.0', '0.00', '000', ' 0 ', '-1', '-0.5', '-0', '-7.37'])('says "Enter a value above 0." for %j', (value) => {
     expect(specificGravityProblem(value)).toBe(SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE);
   });
 
-  it.each(['', '  ', 'heavy', '7.855', '7.', '.5', '1e3', '1,5', '+7.85', '1234567890123.00', '0.001'])('says what the shape is for %j', (value) => {
+  it.each(['', '  ', 'heavy', '7.375', '7.', '.5', '1e3', '1,5', '+7.37', '1234567890123.00', '0.001'])('says what the shape is for %j', (value) => {
     expect(specificGravityProblem(value)).toBe(SPECIFIC_GRAVITY_FORMAT_MESSAGE);
   });
 
@@ -47,7 +47,7 @@ describe('specificGravityProblem (UX-37: must be above 0)', () => {
 });
 
 describe('materialNumberProblem (a price and a Material-Scrap-Rate: 0 or more, up to 2 decimals)', () => {
-  it.each(['0', '0.00', '58', '58.5', '58.37', ' 22.37 ', '999999999999.99'])('accepts %j', (value) => {
+  it.each(['0', '0.00', '37', '5.37', '58.37', ' 22.37 ', '999999999999.37'])('accepts %j', (value) => {
     expect(materialNumberProblem(value)).toBeNull();
   });
 
@@ -68,12 +68,12 @@ describe('materialTextProblem', () => {
 describe('materialChangesFrom: only what really changes', () => {
   it('is empty for a save that changes nothing, including a number typed another way', () => {
     expect(materialChangesFrom(STEEL, {})).toEqual({});
-    expect(materialChangesFrom(STEEL, { specificGravity: '07.85', pricePerKg: '58.37', materialInDrawing: STEEL.materialInDrawing })).toEqual({});
+    expect(materialChangesFrom(STEEL, { specificGravity: '07.37', pricePerKg: '58.37', materialInDrawing: STEEL.materialInDrawing })).toEqual({});
   });
 
   it('names a field that differs, normalises a number to two decimals and counts a change of letter case in a name', () => {
-    expect(materialChangesFrom(STEEL, { pricePerKg: '59.5', scrapRate: '022.37', materialInDrawing: 'INVENTED-SHEET-GRADE-A' })).toEqual({
-      pricePerKg: '59.50',
+    expect(materialChangesFrom(STEEL, { pricePerKg: '59.37', scrapRate: '022.37', materialInDrawing: 'INVENTED-SHEET-GRADE-A' })).toEqual({
+      pricePerKg: '59.37',
       materialInDrawing: 'INVENTED-SHEET-GRADE-A',
     });
   });
@@ -91,7 +91,7 @@ describe('the form of SCR-13 (material-form)', () => {
 
   it('puts a message under each field that has a problem, in the words of the spec, and none under a good one', () => {
     expect(materialFormProblems(initialMaterialValues(null), null)).toEqual({
-      materialInDrawing: 'Enter a name.',
+      materialInDrawing: 'Enter the Material in Drawing.',
       materialConsidered: 'Enter the Material Considered.',
       pricePerKg: NUMBER_MESSAGE,
       specificGravity: SPECIFIC_GRAVITY_FORMAT_MESSAGE,
@@ -102,9 +102,9 @@ describe('the form of SCR-13 (material-form)', () => {
   });
 
   it('checks a number in an edit only when it was changed, so a rename is not stopped by a value stored with more decimals', () => {
-    const stored = { ...STEEL, specificGravity: '7.8512' };
+    const stored = { ...STEEL, specificGravity: '7.3712' };
     expect(materialFormProblems({ ...stored, materialConsidered: 'Invented steel 2' }, stored)).toEqual({});
-    expect(materialFormProblems({ ...stored, specificGravity: '7.851' }, stored)).toEqual({ specificGravity: SPECIFIC_GRAVITY_FORMAT_MESSAGE });
+    expect(materialFormProblems({ ...stored, specificGravity: '7.371' }, stored)).toEqual({ specificGravity: SPECIFIC_GRAVITY_FORMAT_MESSAGE });
   });
 
   it('sends nothing for an edit that changes nothing, and trims the names it does send', () => {
@@ -116,11 +116,11 @@ describe('the form of SCR-13 (material-form)', () => {
   });
 
   it('builds the body of an add with trimmed names and numbers as stored text', () => {
-    expect(newMaterialBody({ ...STEEL, materialInDrawing: '  Invented ', pricePerKg: '058.5', specificGravity: '7.8', scrapRate: '1' })).toEqual({
+    expect(newMaterialBody({ ...STEEL, materialInDrawing: '  Invented ', pricePerKg: '058.3', specificGravity: '7', scrapRate: '1' })).toEqual({
       materialInDrawing: 'Invented',
       materialConsidered: 'Invented steel',
-      pricePerKg: '58.50',
-      specificGravity: '7.80',
+      pricePerKg: '58.30',
+      specificGravity: '7.00',
       scrapRate: '1.00',
     });
   });

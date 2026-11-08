@@ -1,3 +1,6 @@
+import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
+import { RUPEE } from '@/lib/masters/process-items';
+
 import type { PageNotice } from './process-texts';
 
 /**
@@ -8,19 +11,23 @@ import type { PageNotice } from './process-texts';
  */
 
 export const MASTERS_TITLE = 'Materials and lists';
-export const MASTERS_DESCRIPTION = 'Material prices, exchange rates and the treatment and colour list.';
+export const MASTERS_DESCRIPTION = 'Material prices, specific gravity and scrap rates.';
 
 export const MATERIALS_TAB = 'Materials';
 export const TABS_LABEL = 'Lists';
+
+/** The column headings of the table and the labels of a card, as the mock-up writes them: the unit is in the heading, so a cell holds only the number. */
+export const PRICE_HEADING = `${MATERIAL_FIELD_LABELS.pricePerKg} (${RUPEE})`;
+export const SCRAP_HEADING = `Material-Scrap-Rate (${RUPEE} per kg)`;
 
 export const ADD_MATERIAL = 'Add material';
 export const ADDING_MATERIAL = 'Adding material';
 
 export const MATERIAL_SEARCH_LABEL = 'Search materials';
-export const MATERIAL_SEARCH_PLACEHOLDER = 'Material in Drawing or Material Considered';
+export const MATERIAL_SEARCH_PLACEHOLDER = 'Material in Drawing or Considered';
 
 export const MATERIALS_EMPTY_TITLE = 'No materials yet';
-export const MATERIALS_EMPTY_DESCRIPTION = 'Add the first material. The estimate form offers only the materials on this list.';
+export const MATERIALS_EMPTY_DESCRIPTION = "Add the first material. A part's Material in Drawing is chosen from this list.";
 export const MATERIALS_NO_MATCH_DESCRIPTION = 'Check the spelling, or clear the search.';
 
 export const MATERIALS_ERROR_TITLE = 'We could not load the materials';

@@ -8,7 +8,7 @@ import type { MaterialFields, MaterialValues } from './materials';
  * 0 are the server's, and this file only turns its answer into something the screen can show.
  */
 
-/** A material as SCR-13 shows it. The numbers are decimal text with at least two decimals, for example "7.85". */
+/** A material as SCR-13 shows it. The numbers are decimal text with at least two decimals, for example "7.37". */
 export interface MaterialRow extends MaterialValues {
   readonly id: string;
 }

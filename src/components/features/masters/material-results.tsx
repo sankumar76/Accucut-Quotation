@@ -15,7 +15,7 @@ import {
   MATERIALS_NO_MATCH_DESCRIPTION,
   noMaterialMatchTitle,
 } from './material-texts';
-import { CLEAR_FILTERS, ERROR_RETRY } from './process-texts';
+import { BREAK_LONG_NAMES, CLEAR_FILTERS, ERROR_RETRY } from './process-texts';
 import type { MaterialMaster } from './use-material-master';
 
 /**
@@ -54,6 +54,7 @@ function NoMatch({ query, onClearFilters }: { readonly query: string; readonly o
         icon={<Icon icon={SearchX} size="state" />}
         title={noMaterialMatchTitle(query)}
         description={MATERIALS_NO_MATCH_DESCRIPTION}
+        className={BREAK_LONG_NAMES}
         action={
           <Button variant="secondary" onClick={onClearFilters}>
             {CLEAR_FILTERS}
