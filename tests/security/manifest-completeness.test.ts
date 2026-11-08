@@ -23,8 +23,8 @@ describe('AC-3: the source tree and the manifest agree', () => {
     expect(findRouteProblems(FILES, ROUTE_MANIFEST)).toEqual([]);
   });
 
-  it('only a public route skips withRoute, and only the one named here', () => {
-    expect(Object.keys(OWN_PROTECTION)).toEqual(['/api/auth/[...nextauth]']);
+  it('only a public route skips withRoute, and only the two named here (next-auth, and the scan\'s negative control of STORY-01.03)', () => {
+    expect(Object.keys(OWN_PROTECTION)).toEqual(['/api/auth/[...nextauth]', '/api/test-only/leak']);
     for (const path of Object.keys(OWN_PROTECTION)) {
       expect(ROUTE_MANIFEST.find((row) => row.path === path)?.roles).toBe('public');
     }
