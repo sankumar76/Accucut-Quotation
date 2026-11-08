@@ -300,16 +300,19 @@ export function validCall(call: ApiCall, targetId: string): { readonly id: strin
 
 export interface EngineerScan {
   readonly pages: number;
+  /** The address of every page the scan opened, hidden review pages included, so each can be required to have a body that was read (QLT-16). */
+  readonly addresses: ReadonlyArray<string>;
   readonly calls: number;
   readonly referenced: number;
   readonly durationMs: number;
 }
 
-/** Opens every page the manifest lists for an Engineer, as a person does and as a client navigation fetches it. Returns how many. */
-async function openEngineerPages(page: Page, recorder: ScanRecorder, owner: { readonly id: string }): Promise<number> {
-  const pages = engineerPages();
-  for (const row of pages) {
+/** Opens every page the manifest lists for an Engineer, as a person does and as a client navigation fetches it. Returns their addresses. */
+async function openEngineerPages(page: Page, recorder: ScanRecorder, owner: { readonly id: string }): Promise<string[]> {
+  const addresses: string[] = [];
+  for (const row of engineerPages()) {
     const address = validPageAddress(row.path, { ownerId: owner.id });
+    addresses.push(address);
     const document = await recorder.recordNavigation(`GET ${address} (page)`, await page.goto(address));
     const hidden = row.hiddenInProduction === true;
     expect(document.status, `${address} ${hidden ? 'is a review page, absent from the production build' : 'must answer 200'}`).toBe(hidden ? 404 : 200);
@@ -320,7 +323,7 @@ async function openEngineerPages(page: Page, recorder: ScanRecorder, owner: { re
     if (hidden) expect(payload.status, `${address} as an RSC request`).toBeLessThan(500);
     else expect(payload.status, `${address} as an RSC request`).toBe(200);
   }
-  return pages.length;
+  return addresses;
 }
 
 /** Calls every API route the manifest lists for an Engineer with its real-value recipe, and requires the recipe's status. Returns how many. */
@@ -346,21 +349,36 @@ async function callEngineerRoutes(page: Page, recorder: ScanRecorder, owner: { r
  */
 export async function scanAsEngineer(page: Page, recorder: ScanRecorder, owner: { readonly id: string }): Promise<EngineerScan> {
   const started = Date.now();
-  const pages = await openEngineerPages(page, recorder, owner);
+  const addresses = await openEngineerPages(page, recorder, owner);
   const calls = await callEngineerRoutes(page, recorder, owner);
   await page.waitForLoadState('networkidle');
   await recorder.settled();
   const referenced = await fetchReferencedFiles(recorder, page, new URL(page.url()).origin);
   await recorder.settled();
-  return { pages, calls, referenced, durationMs: Date.now() - started };
+  return { pages: addresses.length, addresses, calls, referenced, durationMs: Date.now() - started };
 }
 
-/** What a scan that looked at something has seen, so "0 found" means something: pages, payloads, JSON, scripts READ, and a flight payload. */
+/**
+ * What a scan that looked at something has seen, so "0 found" means something: pages, payloads, JSON and scripts whose body was READ (a
+ * header-only record does not count, QLT-04 and QLT-16), every page that was opened with a body read for the page and for its RSC payload,
+ * and a flight payload.
+ */
 export function expectScanSawEnough(recorder: ScanRecorder, scan: EngineerScan): void {
-  const withType = (type: RegExp): RecordedResponse[] => recorder.responses.filter((response) => type.test(response.headers['content-type'] ?? ''));
-  expect(withType(/text\/html/).length, 'HTML pages scanned').toBeGreaterThanOrEqual(scan.pages);
-  expect(withType(/text\/x-component/).length, 'RSC payloads scanned').toBeGreaterThanOrEqual(scan.pages);
-  expect(withType(/application\/json/).length, 'JSON answers scanned').toBeGreaterThanOrEqual(scan.calls);
+  const readOfType = (type: RegExp): RecordedResponse[] =>
+    recorder.responses.filter((response) => response.body !== null && type.test(response.headers['content-type'] ?? ''));
+  expect(readOfType(/text\/html/).length, 'HTML pages read').toBeGreaterThanOrEqual(scan.pages);
+  expect(readOfType(/text\/x-component/).length, 'RSC payloads read').toBeGreaterThanOrEqual(scan.pages);
+  expect(readOfType(/application\/json/).length, 'JSON answers read').toBeGreaterThanOrEqual(scan.calls);
+  for (const address of scan.addresses) {
+    for (const kind of ['page', 'RSC']) {
+      const records = recorder.withLabelContaining(`GET ${address} (${kind})`);
+      expect(records.length, `${address} (${kind}) was recorded`).toBeGreaterThan(0);
+      expect(
+        records.every((record) => record.body !== null),
+        `the body of ${address} (${kind}) was read`,
+      ).toBe(true);
+    }
+  }
   expect(scan.referenced, 'build files fetched from the names in pages and payloads').toBeGreaterThan(0);
   expect(recorder.scriptBodies().length, 'script bodies that were read').toBeGreaterThan(0);
   const queue = recorder.responses.find((response) => response.label === 'GET /queue (page)');

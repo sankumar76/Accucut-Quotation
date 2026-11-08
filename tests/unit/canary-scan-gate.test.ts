@@ -21,6 +21,7 @@ const read = (url: string): string => readFileSync(fileURLToPath(new URL(url, im
 const WORKFLOW = read('../../.github/workflows/ci.yml');
 const CONFIG = read('../../playwright.config.ts');
 const SCAN_SPEC = read('../e2e/canary-scan.spec.ts');
+const SCAN_HELPER = read('../e2e/support/canary-scan.ts');
 const PRODUCTION_ROUTES_SPEC = read('../e2e/production-routes.spec.ts');
 
 const SECURITY_DIRECTORY = fileURLToPath(new URL('../security/', import.meta.url));
@@ -50,6 +51,26 @@ function testsWithoutAssertions(text: string): string[] {
     .map((body) => /^('[^']*'|"[^"]*"|`[^`]*`)/.exec(body)?.[1] ?? 'a test');
 }
 
+/**
+ * The body of a named function: from the line that ends the signature with `{` to the closing brace at the indentation of the `function`
+ * line. Prettier puts the signature's closing `{` at the end of a line, so this finds it without parsing the types in the signature.
+ * `undefined` when the function is not there, which a caller treats as a failure (a renamed helper must not escape the check).
+ */
+function functionBody(text: string, name: string): string | undefined {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => new RegExp(`function ${name}\\(`).test(line));
+  if (start === -1) return undefined;
+  const indent = /^\s*/.exec(lines[start] ?? '')?.[0] ?? '';
+  const open = lines.findIndex(
+    (line, index) => index >= start && line.trimEnd().endsWith('{') && (index === start || line.startsWith(`${indent}) `) || line.startsWith(`${indent}):`)),
+  );
+  const close = lines.findIndex((line, index) => index > open && line === `${indent}}`);
+  return open === -1 || close === -1 ? undefined : lines.slice(open + 1, close).join('\n');
+}
+
+/** The functions of the scan helper that make the run meaningful: if one can be left early, the scan can be green having looked at nothing. */
+const SCAN_HELPER_FUNCTIONS = ['scanAsEngineer', 'openEngineerPages', 'callEngineerRoutes', 'expectScanSawEnough', 'fetchReferencedFiles'] as const;
+
 const WIDTHS = ['mobile', 'tablet', 'desktop'];
 
 describe('the scan is not quarantined (AC-8)', () => {
@@ -57,6 +78,7 @@ describe('the scan is not quarantined (AC-8)', () => {
     expect(SECURITY_FILES.length).toBeGreaterThan(5);
     const files: ReadonlyArray<readonly [string, string]> = [
       ['tests/e2e/canary-scan.spec.ts', SCAN_SPEC],
+      ['tests/e2e/support/canary-scan.ts', SCAN_HELPER],
       ['tests/e2e/production-routes.spec.ts', PRODUCTION_ROUTES_SPEC],
       ...SECURITY_FILES.map((name): readonly [string, string] => [`tests/security/${name}`, read(`../security/${name}`)]),
     ];
@@ -88,6 +110,40 @@ describe('the scan is not quarantined (AC-8)', () => {
     const engineerScan = SCAN_SPEC.split(/^test\(/m).find((body) => body.startsWith("'AC-3: an Engineer")) ?? '';
     expect(engineerScan).toContain('scanAsEngineer(');
     expect(engineerScan).toContain('expectScanSawEnough(');
+  });
+
+  it.each(SCAN_HELPER_FUNCTIONS)('the scan helper function %s has no early exit and no read of the environment (QLT-17)', (name) => {
+    const body = functionBody(SCAN_HELPER, name);
+    expect(body, `${name} is in tests/e2e/support/canary-scan.ts`).toBeDefined();
+    expect(earlyExits(body ?? '')).toEqual([]);
+  });
+
+  it('the guard that judges a scan is really there: expectScanSawEnough asserts, and scanAsEngineer opens the pages and calls the routes', () => {
+    expect(functionBody(SCAN_HELPER, 'expectScanSawEnough')).toContain('expect(');
+    const scan = functionBody(SCAN_HELPER, 'scanAsEngineer') ?? '';
+    for (const step of ['openEngineerPages(', 'callEngineerRoutes(', 'fetchReferencedFiles(']) expect(scan, step).toContain(step);
+  });
+
+  it('the helper check can fail: it finds a function body and sees an early return in it (the planted N12)', () => {
+    const helper = [
+      'export function expectScanSawEnough(recorder: ScanRecorder, scan: EngineerScan): void {',
+      '  if (process.env.CI) return;',
+      '  expect(scan.pages).toBeGreaterThan(0);',
+      '}',
+      '',
+      'export async function scanAsEngineer(',
+      '  page: Page,',
+      '  owner: { readonly id: string },',
+      '): Promise<EngineerScan> {',
+      '  return { pages: 1 };',
+      '}',
+      '',
+    ].join('\n');
+    expect(earlyExits(functionBody(helper, 'expectScanSawEnough') ?? '')).toEqual(['a read of the environment: process.env', 'a bare return']);
+    // A signature that wraps over several lines, with braces in its types, still gives the body and nothing after it.
+    expect(functionBody(helper, 'scanAsEngineer')).toBe('  return { pages: 1 };');
+    expect(earlyExits(functionBody(helper, 'scanAsEngineer') ?? '')).toEqual([]);
+    expect(functionBody(helper, 'renamedAway')).toBeUndefined();
   });
 
   it('the early-exit check can fail: it names each way of leaving a scan test before it asserts (the planted F14)', () => {
