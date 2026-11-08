@@ -2,10 +2,20 @@ import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseE
 import { rateUsesOf } from '../../lib/fields/rate-usage';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import type { RateReference } from '../../lib/formula';
+import {
+  MATERIAL_NAME_TAKEN_MESSAGE,
+  materialChangesFrom,
+  normaliseMaterialNumber,
+  specificGravityProblem,
+} from '../../lib/masters/materials';
 import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
 import {
   MasterConstraintError,
   type MasterRepository,
+  type MaterialChanges,
+  type MaterialOptionRecord,
+  type MaterialRecord,
+  type NewMaterial,
   type NewProcessItem,
   type ProcessItemChanges,
   type ProcessItemRecord,
@@ -34,10 +44,19 @@ import { assertNameUsable } from './rate-name-rules';
  * none (AC-5). Every change takes the table lock first (`lockProcessItems`) and then the row, in that order everywhere, so two
  * changes cannot wait for each other (QLT-03). The configuration is read before the transaction opens, so a failure to read it
  * happens before anything is written (QLT-05).
+ *
+ * **The Material Master** (STORY-02.03; FR-015) follows the same rules with fewer of them: a material name is unique ignoring letter case
+ * (the database's index is the judge, so two requests that race for one name cannot both win) and a specific gravity is above 0 on the
+ * server as well as on the screen (UX-37; the route's schema, this service and a CHECK of the table all say so). A material is not named in a
+ * formula (a formula holds `{{mat:<key>}}`, a column and not a row), so no check reads the configuration. Each change takes the table
+ * lock and then the row, as the rates do, and writes its audit entry in its own transaction: `master.created` / `master.edited` with
+ * `object_type` `material` (architecture section 8).
  */
 
 const NOT_FOUND_MESSAGE = 'Rate not found.';
+const MATERIAL_NOT_FOUND_MESSAGE = 'Material not found.';
 const PROCESS_ITEM_OBJECT_TYPE = 'process_item';
+const MATERIAL_OBJECT_TYPE = 'material';
 
 /** A rate as SCR-11 shows it: its values, and the formulas that use it (empty when none does). */
 export interface ProcessItemView extends ProcessItemRecord {
@@ -64,6 +83,15 @@ export interface MastersService {
   updateProcessItem(context: AuditContext, id: string, changes: ProcessItemChanges): Promise<ProcessItemView>;
   /** Refused with `ProcessItemInUseError` (409, naming the formulas) while a formula of the current configuration uses the rate. */
   deleteProcessItem(context: AuditContext, id: string): Promise<void>;
+
+  /** The listed materials for SCR-13, with their numbers. Hidden and deleted materials are never in it. Admin only (the route says so). */
+  listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
+  /** The materials as a choice, for every role: ID, name and Material Considered, and no number of any kind (AC-4). */
+  listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
+  /** Refused with a 422 naming the field for a name that is taken or a specific gravity of 0 or below; nothing is stored. */
+  createMaterial(context: AuditContext, input: NewMaterial): Promise<MaterialRecord>;
+  /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. 404 for an unknown or hidden ID. */
+  updateMaterial(context: AuditContext, id: string, changes: MaterialChanges): Promise<MaterialRecord>;
 }
 
 /** What an audit entry keeps of a rate (`processItemState` in `audit-events.ts`). */
@@ -78,6 +106,107 @@ function entryFor(context: AuditContext, item: ProcessItemRecord) {
 
 function nameTaken(): FieldValidationError {
   return new FieldValidationError([{ field: 'name', message: NAME_TAKEN_MESSAGE }], { code: NAME_TAKEN_CODE });
+}
+
+// ---- The Material Master (STORY-02.03) -----------------------------------------------------------------------------------------
+
+/** What an audit entry keeps of a material (`materialState` in `audit-events.ts`). */
+function materialAuditState(material: MaterialRecord) {
+  return {
+    materialInDrawing: material.materialInDrawing,
+    materialConsidered: material.materialConsidered,
+    pricePerKg: material.pricePerKg,
+    specificGravity: material.specificGravity,
+    scrapRate: material.scrapRate,
+  };
+}
+
+function materialEntryFor(context: AuditContext, material: MaterialRecord) {
+  return { ...context, objectType: MATERIAL_OBJECT_TYPE, object: { id: material.id, label: material.materialInDrawing } };
+}
+
+function materialNameTaken(): FieldValidationError {
+  return new FieldValidationError([{ field: 'materialInDrawing', message: MATERIAL_NAME_TAKEN_MESSAGE }], { code: NAME_TAKEN_CODE });
+}
+
+/** The server's own refusal of a specific gravity of 0 or below (UX-37): the same words as the schema, for a caller that did not go through it. */
+function assertSpecificGravity(value: string | undefined): void {
+  const problem = value === undefined ? null : specificGravityProblem(value);
+  if (problem !== null) throw new FieldValidationError([{ field: 'specificGravity', message: problem }]);
+}
+
+/** Runs a write and gives the database's rule for names its words. Any other failure passes on untouched. */
+async function withMaterialNameRule<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (error instanceof MasterConstraintError && error.constraint === 'material-name') throw materialNameTaken();
+    throw error;
+  }
+}
+
+type MaterialOperations = Pick<MastersService, 'listMaterials' | 'listMaterialOptions' | 'createMaterial' | 'updateMaterial'>;
+type MaterialDependencies = Pick<MastersServiceDependencies, 'masters' | 'transactions' | 'audit'>;
+
+/** A new material as it is stored: every number written to two decimals. */
+function normalisedMaterial(input: NewMaterial): NewMaterial {
+  return {
+    ...input,
+    pricePerKg: normaliseMaterialNumber(input.pricePerKg),
+    specificGravity: normaliseMaterialNumber(input.specificGravity),
+    scrapRate: normaliseMaterialNumber(input.scrapRate),
+  };
+}
+
+/** Takes the table lock, adds the material, and writes its entry, all in the caller's transaction. */
+async function addMaterial({ masters, audit }: MaterialDependencies, tx: Transaction, context: AuditContext, material: NewMaterial): Promise<MaterialRecord> {
+  await masters.lockMaterials(tx);
+  const record = await masters.createMaterial(material, tx);
+  await audit.record(tx, { event: 'master.created', ...materialEntryFor(context, record), before: null, after: materialAuditState(record) });
+  return record;
+}
+
+/** Table lock first, then the row (PRF-01); a save that changes nothing writes no change and no entry. */
+async function changeMaterial(
+  { masters, audit }: MaterialDependencies,
+  tx: Transaction,
+  context: AuditContext,
+  id: string,
+  wanted: MaterialChanges,
+): Promise<MaterialRecord> {
+  await masters.lockMaterials(tx);
+  const before = await masters.findMaterialForUpdate(id, tx);
+  if (before === null) throw new NotFoundError(MATERIAL_NOT_FOUND_MESSAGE);
+  const next = materialChangesFrom(before, wanted);
+  if (Object.keys(next).length === 0) return before;
+  const after = await masters.updateMaterial(before.id, next, tx);
+  if (after === null) throw new NotFoundError(MATERIAL_NOT_FOUND_MESSAGE);
+  const entry = materialEntryFor(context, after);
+  await audit.record(tx, { event: 'master.edited', ...entry, before: materialAuditState(before), after: materialAuditState(after) });
+  return after;
+}
+
+/**
+ * The material methods of the service. Table lock first, then the row, in that order everywhere (PRF-01); nothing is read before the
+ * transaction opens, because no check needs the configuration.
+ */
+function createMaterialOperations(dependencies: MaterialDependencies): MaterialOperations {
+  const { masters, transactions } = dependencies;
+  return {
+    listMaterials: () => masters.listMaterials(),
+    listMaterialOptions: () => masters.listMaterialOptions(),
+
+    async createMaterial(context, input) {
+      assertSpecificGravity(input.specificGravity);
+      const material = normalisedMaterial(input);
+      return withMaterialNameRule(() => transactions.run((tx) => addMaterial(dependencies, tx, context, material)));
+    },
+
+    async updateMaterial(context, id, changes) {
+      assertSpecificGravity(changes.specificGravity);
+      return withMaterialNameRule(() => transactions.run((tx) => changeMaterial(dependencies, tx, context, id, changes)));
+    },
+  };
 }
 
 // Over 40 lines on purpose (coding standards section 1): a factory whose parts are small named functions of 10 to 15 lines each.
@@ -141,6 +270,8 @@ export function createMastersService({ masters, transactions, audit, currentConf
   }
 
   return {
+    ...createMaterialOperations({ masters, transactions, audit }),
+
     async listProcessItems() {
       const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);
       const uses = rateUsesOf(document);

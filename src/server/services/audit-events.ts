@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
 import { formatDefaultValue, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 
@@ -80,6 +81,40 @@ function describeProcessItem(state: z.output<typeof processItemState>): string {
   return `${state.name}, ${unitLabel(state.unit)}, ${formatDefaultValue(state.defaultValue, state.unit)}`;
 }
 
+// ---- Shape of the Material Master events (SCR-16 "Master data edit"; STORY-02.03) ----------------------------------------------
+/** A decimal as the log keeps it: text with two to four decimals ("7.85"). */
+const decimalText = z.string().regex(/^\d+\.\d{2,4}$/);
+
+/** A material as the log keeps it: its name, Material Considered, and the three numbers. The ID and the name label the entry. */
+const materialState = z.strictObject({
+  materialInDrawing: z.string().min(1),
+  materialConsidered: z.string().min(1),
+  pricePerKg: decimalText,
+  specificGravity: decimalText,
+  scrapRate: decimalText,
+});
+
+/** "MS sheet, Mild steel, Price per kg ₹ 58.00, Specific gravity 7.85, Material-Scrap-Rate (per kg) ₹ 22.00": the whole material. */
+function describeMaterial(state: z.output<typeof materialState>): string {
+  return [
+    state.materialInDrawing,
+    state.materialConsidered,
+    `${MATERIAL_FIELD_LABELS.pricePerKg} ₹ ${state.pricePerKg}`,
+    `${MATERIAL_FIELD_LABELS.specificGravity} ${state.specificGravity}`,
+    `${MATERIAL_FIELD_LABELS.scrapRate} ₹ ${state.scrapRate}`,
+  ].join(', ');
+}
+
+/**
+ * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`). The two
+ * shapes share no key, so a value fits exactly one of them and the words are chosen from its keys.
+ */
+const masterState = z.union([processItemState, materialState]);
+
+function describeMaster(state: z.output<typeof masterState>): string {
+  return 'materialInDrawing' in state ? describeMaterial(state) : describeProcessItem(state);
+}
+
 /** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
 const reservedShape = z.json();
 
@@ -150,7 +185,8 @@ export const AUDIT_EVENTS = {
 
   // ---- Wired in STORY-02.01: the three events of the Process Master (AC-5) ------------------------------------------------------
   // Architecture section 8 (AQP-74 ruling): `master.edited`, and a masters story may add `master.created` and `master.deleted` under
-  // the same rule. `object_type` then names the master (`process_item`), which the caller gives (`AuditEntryInput.objectType`).
+  // the same rule. `object_type` then names the master (`process_item`; `material` from STORY-02.03, whose AC-5 says `master.material.*`
+  // and is read with this ruling), which the caller gives (`AuditEntryInput.objectType`).
   // Each save is one entry, whatever number of attributes it changes (AC-5). A rate's value is Restricted, and the log is
   // Admin-only (architecture section 5.3), so the entry may keep it.
   'master.created': defineEvent({
@@ -158,24 +194,24 @@ export const AUDIT_EVENTS = {
     category: 'master_data',
     status: 'wired',
     before: z.null(),
-    after: processItemState,
-    describe: (_before, after) => ({ before: 'Not added', after: describeProcessItem(after) }),
+    after: masterState,
+    describe: (_before, after) => ({ before: 'Not added', after: describeMaster(after) }),
   }),
   'master.edited': defineEvent({
     objectType: 'master',
     category: 'master_data',
     status: 'wired',
-    before: processItemState,
-    after: processItemState,
-    describe: (before, after) => ({ before: describeProcessItem(before), after: describeProcessItem(after) }),
+    before: masterState,
+    after: masterState,
+    describe: (before, after) => ({ before: describeMaster(before), after: describeMaster(after) }),
   }),
   'master.deleted': defineEvent({
     objectType: 'master',
     category: 'master_data',
     status: 'wired',
-    before: processItemState,
+    before: masterState,
     after: z.null(),
-    describe: (before) => ({ before: describeProcessItem(before), after: 'Deleted' }),
+    describe: (before) => ({ before: describeMaster(before), after: 'Deleted' }),
   }),
 
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
