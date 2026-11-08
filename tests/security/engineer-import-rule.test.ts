@@ -9,16 +9,21 @@ import { allowsRole, ROUTE_MANIFEST } from '@/server/http/route-manifest';
 import { nonEmpty } from '../support/security-loops';
 
 /**
- * STORY-01.03 T4 (AC-1; ADR-008 layer 2): an Engineer view (`src/server/views/engineer-*.ts`) or an Engineer page that imports a
- * cost repository, or the formula engine, fails lint. The fixtures are planted at the exact paths the rule applies to, with the
- * imports a careless change would make (`calculation-repository`, the approvals, the masters' rates), as a static `import` and as a
- * literal `import()`. Nothing is written to disk. The paths of the pages come from the route manifest, so a later story that
- * opens a page to an Engineer gets its fixture here without an edit (AC-6).
+ * STORY-01.03 T4 (AC-1; ADR-008 layer 2; G6 STD-01, STD-05): an Engineer view (`src/server/views/engineer-*.ts`) may import from the data
+ * layer only what is on a short allow-list; everything else is refused, including a file that does not exist yet. The fixtures are
+ * planted at the exact paths the rule applies to, as a static `import` and as a literal `import()`. Nothing is written to disk.
+ *   - every file in `src/server/repositories` and `src/server/services` is classed here as allowed or blocked, and the lint is asked
+ *     about each: a file in neither list fails the test, so a new file cannot be added unclassified (the "block by default" is the
+ *     rule's; the classification is this test's);
+ *   - files that do not exist yet (a customer, material or exchange-rate reader, a calculation service) are refused by the same rule;
+ *   - `@/server/composition` (it hands out every service) and the schemas barrel (it re-exports the Admin schemas) are refused;
+ *   - an Engineer page may import no repository, no formula engine and no database driver. The pages come from the route manifest, so a
+ *     later story that opens a page to an Engineer gets its fixture here without an edit (AC-6).
  *
  * The other half of AC-1, "a client component importing the formula engine fails the build", is shown by
  * `tests/integration/formula/server-only-build.test.ts` (a real `next build` of a client page and of a server page, as a control)
  * and `tests/unit/formula/server-only.test.ts` (every `src/lib/formula/**` file starts with `import 'server-only'`), both from
- * STORY-03.02 (AQP-106). Story 03.02 owns the module; the rule and the harness are here and there.
+ * STORY-03.02 (AQP-106). "Build" here means the CI build, whose stage 4 runs this lint: `next build` itself runs no ESLint (QLT-13).
  */
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -40,34 +45,79 @@ const ENGINEER_VIEWS: ReadonlyArray<string> = [
   'src/server/views/engineer-tree.tsx',
 ];
 
-/** A repository or service an Engineer view must never import: Restricted data lives behind each. Real files and planned ones. */
-const COST_IMPORTS: ReadonlyArray<string> = [
+/** What an Engineer view may import from `src/server/repositories`, and what it may not. Both lists together are the directory. */
+const REPOSITORIES = {
+  allowed: ['user-repository', 'database-errors', 'transaction'],
+  blocked: ['audit-repository', 'config-repository', 'master-repository', 'prisma-client', 'throttle-repository'],
+} as const;
+
+/** The same for `src/server/services`. Audit and config modules hold the rate before and after, and the formula text. */
+const SERVICES = {
+  allowed: ['user-service', 'auth-service'],
+  blocked: [
+    'audit-cursor',
+    'audit-events',
+    'audit-secrets',
+    'audit-service',
+    'bootstrap-admin-service',
+    'config-service',
+    'masters-service',
+    'rate-name-rules',
+  ],
+} as const;
+
+/** Files that do not exist yet. The rule refuses them as well, because it lists what is allowed, not what is forbidden. */
+const FUTURE_IMPORTS: ReadonlyArray<string> = [
   '@/server/repositories/calculation-repository',
   '@/server/repositories/approval-repository',
-  '@/server/repositories/master-repository',
   '@/server/repositories/customer-rate-repository',
   '@/server/repositories/material-repository',
   '@/server/repositories/exchange-rate-repository',
-  '@/server/repositories/cost-repository',
-  '@/server/repositories/rate-repository',
+  '@/server/repositories/task-repository',
   '../repositories/master-repository',
   '../../server/repositories/calculation-repository',
-  '@/server/services/masters-service',
   '@/server/services/calculation-service',
   '@/server/services/approval-service',
+  '@/server/services/customers-service',
+  '@/server/services/materials-service',
+  '@/server/services/exchange-rate-service',
+];
+
+/** The service container, and the barrel that re-exports the Admin schemas. */
+const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
+  '@/server/composition',
+  '../composition',
+  '../../server/composition',
+  '@/server/views/schemas',
+  '@/server/views/schemas/index',
+  './schemas',
+  './schemas/index',
 ];
 
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generated/prisma/client'];
 
-/** Imports an Engineer view may make: its own kind of module, none of which holds a rate, a calculation or an approval. */
+const repositoryPath = (name: string): string => `@/server/repositories/${name}`;
+const servicePath = (name: string): string => `@/server/services/${name}`;
+
+/** Imports an Engineer view may make: the allow-lists, its own schema file, and the shell's modules. */
 const ALLOWED_IMPORTS: ReadonlyArray<string> = [
-  '@/server/repositories/user-repository',
-  '@/server/services/user-service',
+  ...REPOSITORIES.allowed.map(repositoryPath),
+  ...SERVICES.allowed.map(servicePath),
   '@/server/http/navigation',
-  '@/server/views/schemas',
+  '@/server/views/schemas/me',
+  './schemas/me',
   '../auth/resolve-session-user',
+];
+
+const BLOCKED_IMPORTS: ReadonlyArray<string> = [
+  ...REPOSITORIES.blocked.map(repositoryPath),
+  ...SERVICES.blocked.map(servicePath),
+  ...FUTURE_IMPORTS,
+  ...CONTAINER_AND_BARREL_IMPORTS,
+  ...FORMULA_IMPORTS,
+  ...PRISMA_IMPORTS,
 ];
 
 /** The page file of each manifest row that an Engineer may open, taken from the manifest, never written out here. */
@@ -85,16 +135,16 @@ beforeAll(async () => {
   await ruleIdsFor('src/lib/warm-up.ts', 'export const warmUp = 1;\n');
 }, ESLINT_WARM_UP_TIMEOUT);
 
-describe('an Engineer view that imports cost data fails lint (AC-1)', () => {
-  const faults = ENGINEER_VIEWS.flatMap((view) =>
-    [...COST_IMPORTS, ...FORMULA_IMPORTS, ...PRISMA_IMPORTS].map((specifier) => ({ view, specifier })),
-  );
+const filesIn = (directory: string): string[] => readdirSync(`${ROOT}${directory}`).map((name) => name.replace(/\.tsx?$/, ''));
 
-  it.each(faults)('static import: $view imports $specifier', async ({ view, specifier }) => {
+describe('an Engineer view may import only what is on the allow-list (AC-1, STD-01)', () => {
+  const faults = ENGINEER_VIEWS.flatMap((view) => BLOCKED_IMPORTS.map((specifier) => ({ view, specifier })));
+
+  it.each(faults)('static import is refused: $view imports $specifier', async ({ view, specifier }) => {
     expect(await ruleIdsFor(view, staticImport(specifier))).toContain('no-restricted-imports');
   });
 
-  it.each(faults)('import(): $view imports $specifier', async ({ view, specifier }) => {
+  it.each(faults)('import() is refused too: $view imports $specifier', async ({ view, specifier }) => {
     expect(await ruleIdsFor(view, dynamicImport(specifier))).toContain('no-restricted-syntax');
   });
 
@@ -106,25 +156,40 @@ describe('an Engineer view that imports cost data fails lint (AC-1)', () => {
     },
   );
 
-  it('the rule covers every repository file of the source tree that holds Restricted data, by name', () => {
-    // A new repository file is a decision: it is either a cost repository (add its prefix to the rule and to COST_IMPORTS) or it is
-    // listed here as one an Engineer view may import.
-    const NOT_COST: ReadonlyArray<string> = ['audit-repository', 'config-repository', 'database-errors', 'prisma-client', 'throttle-repository', 'transaction', 'user-repository'];
-    const COST: ReadonlyArray<string> = ['master-repository'];
-    const files = readdirSync(`${ROOT}src/server/repositories`).map((name) => name.replace(/\.ts$/, ''));
-    expect(files.filter((name) => ![...NOT_COST, ...COST].includes(name))).toEqual([]);
-    for (const name of COST) expect(COST_IMPORTS).toContain(`@/server/repositories/${name}`);
+  it('F10: a named import of a service getter from the container is refused', async () => {
+    const code = "import { getMastersService } from '@/server/composition';\nexport const service = getMastersService;\n";
+    expect(await ruleIdsFor('src/server/views/engineer-me.ts', code)).toContain('no-restricted-imports');
+  });
+});
+
+describe('every repository and service file is classed, and the lint agrees with the class (STD-01 d)', () => {
+  it.each([
+    ['repositories', REPOSITORIES, 'src/server/repositories'],
+    ['services', SERVICES, 'src/server/services'],
+  ] as const)('every file in src/server/%s is on exactly one list; a new file fails here until someone decides', (_name, lists, directory) => {
+    const classed = [...lists.allowed, ...lists.blocked];
+    const files = filesIn(directory);
+    expect(files.filter((file) => !classed.some((name) => name === file))).toEqual([]);
+    expect(classed.filter((name) => !files.includes(name))).toEqual([]);
+    expect(new Set(classed).size).toBe(classed.length);
+  });
+
+  it('the allowed files are the ones a view needs for the shell: people, sign-in state and plain types', () => {
+    expect([...REPOSITORIES.allowed, ...SERVICES.allowed].sort()).toEqual([
+      'auth-service',
+      'database-errors',
+      'transaction',
+      'user-repository',
+      'user-service',
+    ]);
   });
 });
 
 describe('an Engineer page that imports cost data fails lint (AC-1)', () => {
   // A page reaches data through a service or a view, so what the rule forbids it is every repository, the engine and the database
   // driver (architecture section 10); a service is a page's normal neighbour and is judged by the views it feeds.
-  const pageFaults = ENGINEER_PAGES.flatMap((page) =>
-    [...COST_IMPORTS.filter((specifier) => specifier.startsWith('@/server/repositories/')), ...FORMULA_IMPORTS, ...PRISMA_IMPORTS, '@/server/repositories/user-repository'].map(
-      (specifier) => ({ page, specifier }),
-    ),
-  );
+  const repositories = [...REPOSITORIES.allowed, ...REPOSITORIES.blocked].map(repositoryPath);
+  const pageFaults = ENGINEER_PAGES.flatMap((page) => [...repositories, ...FORMULA_IMPORTS, ...PRISMA_IMPORTS].map((specifier) => ({ page, specifier })));
 
   it('lists the pages an Engineer may open, from the manifest', () => {
     expect(ENGINEER_PAGES).toEqual(expect.arrayContaining(['src/app/(portal)/queue/page.tsx', 'src/app/(portal)/page.tsx']));

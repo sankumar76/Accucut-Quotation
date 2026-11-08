@@ -69,31 +69,41 @@ const PRESENTATION_IMPORTS = [
   PRISMA_IMPORT,
 ];
 
-// Cost repositories and the services that read them (ADR-008 layer 2; STORY-01.03 AC-1). Everything Restricted lives in
-// `calculations`, `calculation_rows`, `approvals` and the masters, so an Engineer view may not import the repository of any of
-// them: calculation-, approval-, master- (the Process Master's rates), material-, exchange- (the exchange rate), customer-rate
-// (a customer's rates), cost- and rate-. Masters reach an Engineer only through `/options/*`, which return IDs and names
-// (architecture section 6). A later story that adds one more cost repository adds its file-name prefix here, and
-// `tests/security/engineer-import-rule.test.ts` plants a fault against each prefix and against each real repository file.
+// What an Engineer view may import from the data layer (ADR-008 layer 2; STORY-01.03 AC-1; Coding Standards section 5, deny by
+// default). Everything Restricted is reachable through some repository or service: the rates and prices of the masters, the
+// calculations and approvals, the audit entries (a Process Master entry keeps the rate before and after) and the configuration
+// snapshots (they hold the formula text). So the rule is a short ALLOW-LIST and every other repository and service is refused,
+// including one that does not exist yet: a new file is blocked until someone decides it is safe and adds its name here.
+// `@/server/composition` is refused too, because it hands out every service (views receive their data; they do not fetch it), and
+// so is the schemas barrel, which re-exports the Admin-only schemas (an Engineer view imports `schemas/me` and the like directly).
+// `tests/security/engineer-import-rule.test.ts` lints a planted import of every file in both directories, so these lists cannot
+// drift from the source tree: a file in neither list fails that test. A form that needs a master's names (not its rates) gets a
+// narrow reader with a different name, added to the allow-list on purpose.
+const ENGINEER_ALLOWED_REPOSITORIES = ['user-repository', 'database-errors', 'transaction'];
+const ENGINEER_ALLOWED_SERVICES = ['user-service', 'auth-service'];
+const allowOnly = (directory, allowed) => ({
+  group: [`**/${directory}/*`, ...allowed.map((name) => `!**/${directory}/${name}`)],
+  regex: `${SLASH}${directory}${SLASH}(?!(${allowed.join('|')})$)`,
+});
+
 const ENGINEER_VIEW_IMPORTS = [
   {
-    group: [
-      '**/repositories/calculation-*',
-      '**/repositories/approval-*',
-      '**/repositories/cost-*',
-      '**/repositories/rate-*',
-      '**/repositories/master-*',
-      '**/repositories/material-*',
-      '**/repositories/exchange-*',
-      '**/repositories/customer-rate*',
-    ],
-    regex: `${SLASH}repositories${SLASH}(calculation-|approval-|cost-|rate-|master-|material-|exchange-|customer-rate)`,
-    message: 'Engineer views must not import a cost repository (ADR-008, NFR-002).',
+    ...allowOnly('repositories', ENGINEER_ALLOWED_REPOSITORIES),
+    message: 'Engineer views may import only the repositories on the allow-list: the others hold Restricted data (ADR-008, NFR-002).',
   },
   {
-    group: ['**/services/masters-service', '**/services/calculation-*', '**/services/approval-*'],
-    regex: `${SLASH}services${SLASH}(masters-service|calculation-|approval-)`,
-    message: 'Engineer views must not import a service that reads rates, calculations or approvals (ADR-008, NFR-002).',
+    ...allowOnly('services', ENGINEER_ALLOWED_SERVICES),
+    message: 'Engineer views may import only the services on the allow-list: the others read rates, audit entries, formulas or approvals (ADR-008, NFR-002).',
+  },
+  {
+    group: ['**/composition'],
+    regex: `(^|${SLASH})composition${END}`,
+    message: 'Engineer views receive their data; they do not reach the service container (ADR-008 layer 2).',
+  },
+  {
+    staticRegex: '(^|/)schemas(/index)?$',
+    regex: `(^|${SLASH})schemas(${SLASH}index)?$`,
+    message: 'Engineer views import the one schema file they need (schemas/me), not the barrel that re-exports the Admin schemas.',
   },
   FORMULA_IMPORT,
   PRISMA_IMPORT,
@@ -120,11 +130,14 @@ const NEXT_IMAGE_IMPORT = {
   message: 'Use a plain <img> with width, height and alt (architecture section 10)',
 };
 
-/** The two rules for one file group: static imports by glob, literal `import()` by regular expression. */
+/** The two rules for one file group: static imports by glob (by `staticRegex` where a glob cannot say it), literal `import()` by regular expression. */
 const restrict = (groupEntries) => {
   const entries = [NEXT_IMAGE_IMPORT, ...groupEntries];
   return {
-    'no-restricted-imports': ['error', { patterns: entries.map(({ group, message }) => ({ group, message })) }],
+    'no-restricted-imports': [
+      'error',
+      { patterns: entries.map(({ group, staticRegex, message }) => (group === undefined ? { regex: staticRegex, message } : { group, message })) },
+    ],
     'no-restricted-syntax': [
       'error',
       ...BASE_SYNTAX,
