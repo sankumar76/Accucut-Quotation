@@ -1,10 +1,14 @@
+import type { ConfigDocument } from '../../src/lib/fields/schema';
 import { createAuditRepository, type AuditRepository } from '../../src/server/repositories/audit-repository';
+import { createMasterRepository, type MasterRepository } from '../../src/server/repositories/master-repository';
 import { createTransactionRunner, type TransactionRunner } from '../../src/server/repositories/transaction';
 import { createAuditService, type AuditService } from '../../src/server/services/audit-service';
+import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { openAuthDatabase, type AuthDatabase } from './auth-database';
 import { createTestHasher } from './builders/user';
+import { seedConfig } from './seed-config';
 
 /**
  * A throwaway migrated database with the audit pieces over the runtime role: the audit repository and service, the transaction
@@ -17,6 +21,16 @@ export interface AuditDatabase extends AuthDatabase {
   readonly transactions: TransactionRunner;
   readonly audit: AuditService;
   readonly userService: UserService;
+  readonly masterRepository: MasterRepository;
+  /** The Process Master as the web process wires it, over the runtime role and the seed registry (STORY-02.01). */
+  readonly mastersService: MastersService;
+  /** The same service over a transaction runner or a registry of the test's choosing (a failing runner, a registry that uses a rate twice). */
+  buildMastersService(options?: {
+    readonly transactions?: TransactionRunner;
+    readonly configuration?: ConfigDocument;
+    /** Replaces the reading of the configuration, for a test of a read that fails. */
+    readonly readConfiguration?: () => Promise<ConfigDocument>;
+  }): MastersService;
 }
 
 export const KEY_SECRET = 'invented-throttle-key-material';
@@ -34,7 +48,15 @@ export async function openAuditDatabase(): Promise<AuditDatabase> {
     audit,
     keySecret: KEY_SECRET,
   });
-  return { ...base, auditRepository, transactions, audit, userService };
+  const masterRepository = createMasterRepository(base.prisma);
+  const buildMastersService: AuditDatabase['buildMastersService'] = (options = {}) =>
+    createMastersService({
+      masters: masterRepository,
+      transactions: options.transactions ?? transactions,
+      audit,
+      currentConfiguration: options.readConfiguration ?? (() => Promise.resolve(options.configuration ?? seedConfig)),
+    });
+  return { ...base, auditRepository, transactions, audit, userService, masterRepository, mastersService: buildMastersService(), buildMastersService };
 }
 
 export const AUDIT_REQUEST_ID = 'req-0a0b0c0d';

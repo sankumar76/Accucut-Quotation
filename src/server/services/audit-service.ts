@@ -50,6 +50,11 @@ export interface AuditEntryInput<E extends AuditEventName> extends AuditEventPay
   readonly requestId: string;
   /** What changed. The label is its name **now**; a later rename does not change the entry (AC-5). */
   readonly object: { readonly id: string; readonly label: string };
+  /**
+   * Which master the object is, for the generic `master.*` events only (`process_item`, later `material`; architecture section 8,
+   * AQP-74 ruling). Any other event has its own object type and refuses one.
+   */
+  readonly objectType?: string | undefined;
 }
 
 export interface AuditListQuery {
@@ -98,6 +103,16 @@ export interface AuditServiceDependencies {
 }
 
 const OBJECT_LABEL_MAX_LENGTH = 200;
+/** The object type of the generic master events: lower snake case, as a master's name is (`process_item`). */
+const MASTER_OBJECT_TYPE = /^[a-z][a-z_]{0,39}$/;
+const GENERIC_MASTER_TYPE = 'master';
+
+/** The object type an entry is stored with: the event's own, or, for the generic master events, the master the caller names. */
+function objectTypeOf(definitionType: string, requested: string | undefined): string {
+  if (requested === undefined) return definitionType;
+  if (definitionType !== GENERIC_MASTER_TYPE || !MASTER_OBJECT_TYPE.test(requested)) throw new AuditEntryRefusedError('shape', 'objectType');
+  return requested;
+}
 
 /** The events a filter allows, or undefined for no restriction. A category and an event together must both hold. */
 function eventsOf(query: AuditListQuery): ReadonlyArray<string> | undefined {
@@ -119,6 +134,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
   return {
     async record(tx, entry) {
       const definition = AUDIT_EVENTS[entry.event];
+      const objectType = objectTypeOf(definition.objectType, entry.objectType);
       const label = entry.object.label;
       if (label.length === 0 || label.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'object.label');
       if (entry.actorLabel.length === 0 || entry.actorLabel.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'actorLabel');
@@ -134,7 +150,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
           actorId: entry.actorId,
           actorLabel: entry.actorLabel,
           event: entry.event,
-          objectType: definition.objectType,
+          objectType,
           objectId: entry.object.id,
           objectLabel: label,
           before: before.data,

@@ -50,6 +50,7 @@ export const FORMULA_ISSUE_CODES = [
   'RATE_NAME_IS_COLUMN_LETTER',
   'RATE_NAME_IS_OPERAND',
   'RATE_NAME_DUPLICATE',
+  'RATE_SET_AMBIGUOUS',
 ] as const;
 export type FormulaIssueCode = (typeof FORMULA_ISSUE_CODES)[number];
 

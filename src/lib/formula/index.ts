@@ -18,7 +18,7 @@ export type { RateReference, ReferenceContext } from './names';
 export { parseFormula, parseTokens } from './parser';
 export { compilePlan, createPlanCache, evaluateProductFormulas, evaluateRowFormulas, FormulaConfigurationError } from './plan';
 export type { CompiledFormula, CompiledPlan, PlanCache } from './plan';
-export { MAX_RATE_NAME_LENGTH, rateNameIssues } from './rate-names';
+export { ambiguousRateNames, MAX_RATE_NAME_LENGTH, RATE_SET_AMBIGUOUS_MESSAGE, rateNameIssues, rateSetIssues } from './rate-names';
 export { createRateLookup, formulaRateValue, isPercentRate } from './rates';
 export type { RateValue } from './rates';
 export { analyzeConfiguration, checkDisplayFormula, validateFormulas } from './validate';

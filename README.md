@@ -25,6 +25,7 @@ docker compose -f compose.dev.yml up -d db     # wait about 10 seconds the first
 cp .env.example .env                           # PowerShell or Command Prompt: copy .env.example .env
 npx prisma generate
 npx prisma migrate deploy
+node --conditions=react-server --import tsx scripts/ensure-seed-version.ts   # the field registry, once
 npx next dev
 ```
 
@@ -38,6 +39,14 @@ npx tsx scripts/bootstrap-admin.ts
 It creates one Admin who must choose a new password at first sign-in, stores only a hash of the password, and
 never prints it. It refuses, and changes nothing, if any Admin already exists. Remove the password from `.env`
 afterwards.
+
+**Enter all 15 rates before any estimate is calculated.** The portal starts with the 15 named rates of the Process master
+(cutting, bending, drilling, welding, galvanizing, primer, shot blasting, polishing, plating, powder coating, foam,
+soft anodize, overhead profit, transport and inspection and packing), each with its name and unit and a value of 0. The
+Admin types the real values on **Masters, Process master** (http://localhost:3000/masters/process) before anyone calculates
+an estimate. Do this first because a rate left at 0 is a valid value: an estimate calculated before it is entered prices
+that process at 0, and the portal shows no message. A rate whose name ends in % is typed as a whole percentage (12 means
+12%). The values stay in your own database; they are never put in this repository (ADR-014).
 
 Then open **http://localhost:3000/sign-in** in a browser and sign in. You land on the task queue ("Task queue"
 for a Lead or an Admin, "My tasks" for an Engineer; a placeholder until the task list is built). **Sign out** is in

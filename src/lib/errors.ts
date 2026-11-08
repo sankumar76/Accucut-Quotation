@@ -80,6 +80,35 @@ export class ActiveAdminExistsError extends ConflictError {
   }
 }
 
+/** A rate name that another rate already has, ignoring letter case (STORY-02.01 AC-2): said under the name field. */
+export const NAME_TAKEN_CODE = 'NAME_TAKEN';
+
+/** A rate name a formula could read as something else, alone or in the set of names (DEF-006, `rateNameIssues`, `rateSetIssues`). */
+export const NAME_REFUSED_CODE = 'RATE_NAME_REFUSED';
+
+/** A rate was deleted that a formula of the current configuration uses (STORY-02.01 AC-4). */
+export const PROCESS_ITEM_IN_USE_CODE = 'PROCESS_ITEM_IN_USE';
+
+/** One formula that uses a rate, as the refusal names it: the field's column letter and its label. */
+export interface FormulaUse {
+  readonly letter: string;
+  readonly label: string;
+}
+
+/**
+ * The refusal of deleting a rate that a formula uses: 409, with the formulas named so the screen can list them. The message is
+ * the sentence of SCR-11 and holds the rate's name, which is structure and not a value (ADR-014); the formulas' text is not
+ * carried, only each field's letter and label.
+ */
+export class ProcessItemInUseError extends ConflictError {
+  constructor(
+    rateName: string,
+    readonly usedBy: ReadonlyArray<FormulaUse>,
+  ) {
+    super(`${rateName} cannot be deleted while a formula uses it`, { code: PROCESS_ITEM_IN_USE_CODE });
+  }
+}
+
 /** The process was started with a missing or invalid setting. Never carries a setting's value. */
 export class ConfigurationError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {

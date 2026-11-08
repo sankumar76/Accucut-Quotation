@@ -17,9 +17,11 @@ import {
  * wired, the others are declared and unused, every event belongs to a category the filter offers, and the words are the screen's.
  */
 
-const WIRED: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
+const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
+/** STORY-02.01: the three events of the Process Master. */
+const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER];
 const RESERVED: ReadonlyArray<AuditEventName> = [
-  'master.edited',
   'approval.approved',
   'approval.unlocked',
   'approval.price_overridden',
@@ -29,11 +31,11 @@ const RESERVED: ReadonlyArray<AuditEventName> = [
 ];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen', () => {
+  it('wires exactly the six user events of the Users screen and the three events of the Process Master', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: masters, approval, unlock, price override, quantity warning, cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: approval, unlock, price override, quantity warning, cancel, remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -60,7 +62,8 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
   });
 
   it('puts the six user events under "User change" and the others each under their own', () => {
-    expect(eventsInCategory('user_change')).toEqual(WIRED);
+    expect(eventsInCategory('user_change')).toEqual(WIRED_USER);
+    expect(eventsInCategory('master_data')).toEqual(WIRED_MASTER);
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
     expect(eventsInCategory('quantity_warning')).toEqual(['calculation.warning_acknowledged']);
@@ -125,7 +128,7 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
 });
 
 describe('AC-4: the shapes name their fields, so a secret has no place to go', () => {
-  it('refuses an extra key on every wired event, before and after', () => {
+  it('refuses an extra key on every wired user event, before and after (the Process Master events are held in masters-audit-events.test.ts)', () => {
     const valid: Record<string, readonly [unknown, unknown]> = {
       'user.created': [null, { role: 'ENGINEER', isActive: true }],
       'user.renamed': [{ name: 'Arjun Rai' }, { name: 'Arjun Rao' }],
@@ -134,7 +137,7 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       'user.activated': [{ isActive: false }, { isActive: true }],
       'user.password_reset': [{ mustChangePassword: false }, { mustChangePassword: true }],
     };
-    for (const name of WIRED) {
+    for (const name of WIRED_USER) {
       const [before, after] = valid[name] ?? [];
       expect(AUDIT_EVENTS[name].describeStored(before, after), name).not.toBeNull();
       const withHash = (value: unknown) => (typeof value === 'object' && value !== null ? { ...value, passwordHash: '$argon2id$x' } : value);

@@ -111,16 +111,16 @@ describe('AC-3 and AC-4: record refuses what does not fit its event, or holds a 
   });
 
   it('refuses a secret that a loose shape lets through: a key that names one, and a value that is a hash', async () => {
-    const byKey = await refusalOf((tx) => service.record(tx, { ...base, event: 'master.edited', before: null, after: { rate: 1, passwordHash: 'x' } }));
+    const byKey = await refusalOf((tx) => service.record(tx, { ...base, event: 'approval.approved', before: null, after: { rate: 1, passwordHash: 'x' } }));
     expect(byKey).toMatchObject({ reason: 'secret', where: 'after.passwordHash' });
-    const byValue = await refusalOf((tx) => service.record(tx, { ...base, event: 'master.edited', before: { note: '$argon2id$v=19$m=1,t=1,p=1$a$b' }, after: null }));
+    const byValue = await refusalOf((tx) => service.record(tx, { ...base, event: 'approval.approved', before: { note: '$argon2id$v=19$m=1,t=1,p=1$a$b' }, after: null }));
     expect(byValue).toMatchObject({ reason: 'secret', where: 'before.note' });
     expect(world.audit.committed).toEqual([]);
   });
 
   it('accepts the words "password" and "hash" in a label, a reason or a value that is not a hash', async () => {
     await world.transactions.run((tx) =>
-      service.record(tx, { ...base, event: 'master.edited', object: { id: PERSON, label: 'Password Hash Tester' }, before: { reason: 'the password hash was discussed' }, after: null }),
+      service.record(tx, { ...base, event: 'approval.approved', object: { id: PERSON, label: 'Password Hash Tester' }, before: { reason: 'the password hash was discussed' }, after: null }),
     );
     expect(world.audit.committed).toHaveLength(1);
   });
