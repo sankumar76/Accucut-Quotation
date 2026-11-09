@@ -62,9 +62,39 @@ const FORBID = /(₹\s?\d|\$\s?\d|€\s?\d|\bBG\b|\bBL\b|\bBN\b|\bBO\b|\bBJ\b|\b
       await ctx.close();
     }
   }
+  /* Masters tables (ux-spec 6.0, DEF-021): at every width from 768 to 1440 px, with the region at its start and at its far end, every row action of a
+     table.is-master lies inside the visible region. Run again with the table forced wider than any region (1000 px) to prove the sticky column, not the fit. */
+  const MT_WIDTHS = [768, 900, 1000, 1023, 1024, 1180, 1257, 1279, 1280, 1366, 1440];
+  let mtChecks = 0;
+  for (const f of (process.argv.includes('--skip-masters') ? [] : files).filter((x) => !/-(phone|tablet)\.html$/.test(x) && /is-master/.test(fs.readFileSync(path.join(dir, x), 'utf8')))) {
+    const probe = await b.newPage(); await probe.goto(url(f));
+    const states = (await probe.evaluate(() => document.body.getAttribute('data-states') || 'default')).split(',').map((s) => s.split(':')[0]);
+    await probe.close();
+    for (const w of MT_WIDTHS) {
+      const ctx = await b.newContext({ viewport: { width: w, height: 900 } });
+      const p = await ctx.newPage();
+      for (const st of states) for (const stress of [0, 1000]) {
+        await p.goto(url(f, st)); await p.reload(); await p.waitForTimeout(40); mtChecks++;
+        const r = await p.evaluate((stressPx) => {
+          const out = [];
+          document.querySelectorAll('.table-wrap.is-master').forEach((wrap) => {
+            if (!wrap.offsetParent || wrap.closest('[hidden],.modal')) return;
+            if (stressPx) wrap.querySelector('table').style.minWidth = stressPx + 'px';
+            for (const at of [0, 99999]) {
+              wrap.scrollLeft = at; const q = wrap.getBoundingClientRect();
+              wrap.querySelectorAll('.col-actions .btn').forEach((x) => { const bb = x.getBoundingClientRect(); if (bb.width && (bb.left < q.left - 0.5 || bb.right > q.right + 0.5)) out.push((x.getAttribute('aria-label') || '').slice(0, 30) + ' scrollLeft=' + at); });
+            }
+          });
+          return out.slice(0, 2);
+        }, stress);
+        if (r.length) problems.push(`TABLE-ACTIONS ${f} state=${st} w=${w}${stress ? ' stressed' : ''}: outside the region: ${r.join(' | ')}`);
+      }
+      await ctx.close();
+    }
+  }
   await b.close();
   Object.entries(axeAgg).forEach(([k, v]) => problems.push(`AXE ${k}: ${v.n} node(s), states ${[...new Set(v.states)].join(',')}, e.g. ${v.ex}`));
   problems.forEach((x) => console.log(x));
-  console.log(`checked ${files.length} pages, ${loads} page-state loads at ${WIDTHS.map((x) => x[0]).join('/')} px; axe ${useAxe ? 'on' : 'off'}; problems: ${problems.length}`);
+  console.log(`checked ${files.length} pages, ${loads} page-state loads at ${WIDTHS.map((x) => x[0]).join('/')} px; axe ${useAxe ? 'on' : 'off'}; masters-table action checks: ${mtChecks} loads at ${MT_WIDTHS.length} widths from ${MT_WIDTHS[0]} to ${MT_WIDTHS[MT_WIDTHS.length - 1]} px; problems: ${problems.length}`);
   process.exit(problems.length ? 1 : 0);
 })();

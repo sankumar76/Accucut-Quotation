@@ -329,6 +329,17 @@ button.btn { -webkit-touch-callout: none; }
 .table tr.is-total td { background: var(--surface-2); font-weight: 600; }
 .table tr.is-locked td { color: var(--ink-2); }
 .table td.mono, .mono { font-family: var(--font-mono); font-size: var(--fs-label); }
+/* Masters tables (ux-spec 6.0 "Masters tables", DEF-021): a list table with a row-actions column. Two rules keep every row action visible
+   without scrolling the table, at every width from 768 to 1440 px. The narrowest region is 710 px (1024 px wide, side menu open).
+   1. Fit first: headings may wrap (the base .table keeps them on one line), so the table seldom needs the full 710 px.
+   2. The guarantee: the last column (.col-actions) sticks to the right edge of the region, so the actions stay in view when the table does scroll.
+      The hairline is an inset shadow, not a border: a border on a sticky cell of a collapsed table does not travel with the cell.
+   scroll-padding keeps a focused control from stopping under the sticky column; --actions-w is the width of that column. */
+.table-wrap.is-master { --actions-w: 112px; scroll-padding-inline-end: var(--actions-w); isolation: isolate; }
+.is-master .table th, .is-master .table th.num { white-space: normal; }
+.is-master .table .col-actions { position: sticky; right: 0; z-index: 1; width: 1%; white-space: nowrap; background: var(--surface); box-shadow: inset 1px 0 0 var(--border); }
+.is-master .table .col-actions > .row { flex-wrap: nowrap; }
+.is-master .table th.col-actions { background: var(--surface-2); }
 .formula { font-family: var(--font-mono); font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink-2); overflow-wrap: anywhere; }
 
 /* Cards that replace tables on phones */
