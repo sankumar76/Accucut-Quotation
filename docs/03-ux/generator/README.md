@@ -22,9 +22,9 @@ dependency. The files end in `.cjs` so that they keep working when the applicati
 | `build.cjs` | Runs all of the above in order |
 | `contrast.cjs` | WCAG contrast of every token pair (`node docs/03-ux/generator/contrast.cjs`) |
 | `check-figures.cjs` | Needs Node only. Every number with 2 to 4 decimals on the money pages must come from the data model (a parent shows only its own row, so no sum of rows below may appear), and the identities of the quantity rule must hold (BL is the sum of every row's BG; BN; the override difference) |
-| `check-screens.cjs` | Browser checks on the built pages: no horizontal scroll at 360, 768 and 1280 px, no script errors, axe-core (WCAG 2.0 to 2.2 A and AA), and a scan of the Engineer pages for amounts, rates and formulas |
+| `check-screens.cjs` | Browser checks on the built pages: no horizontal scroll at 360, 768 and 1280 px, no script errors, axe-core (WCAG 2.0 to 2.2 A and AA), and a scan of the Engineer pages for amounts, rates and formulas. For every page that has a masters table (`.table-wrap.is-master`, ux-spec section 6.0) it also checks that every row action lies inside the visible region at 768, 900, 1000, 1023, 1024, 1180, 1257, 1279, 1280, 1366 and 1440 px, with the region scrolled to its start and to its end, and again with the table forced to 1000 px wide (DEF-021) |
 
-Not generated, edited by hand: `../screens/screens.css` (tokens and components), `../screens/screens.js`
+Not generated, edited by hand: `../screens/screens.css` (tokens and components, including the `.is-master` and `.col-actions` rules of the masters table), `../screens/screens.js`
 (the state switcher and small interactions) and `../screens/fonts/`.
 
 ## Build
@@ -65,7 +65,7 @@ QA_MODULES=/path/holding/node_modules CHROME_PATH="C:/Program Files/Google/Chrom
   node docs/03-ux/generator/check-screens.cjs
 ```
 
-Options: `--pages SCR-06.html,SCR-10.html` for some pages, `--no-axe` for layout and script errors alone.
+Options: `--pages SCR-06.html,SCR-10.html` for some pages, `--no-axe` for layout and script errors alone, `--skip-masters` to leave out the slow masters-table action check (about 950 page loads for the five pages that have one).
 It prints one line per problem and exits 1 if there is one. axe cannot judge focus order or the meaning
 of text; the manual rules in `ux-spec.md` section 8 still apply. The script does not use the Playwright or
 chrome-devtools tools of a Claude session, which may be unavailable.
