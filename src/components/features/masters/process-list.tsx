@@ -6,12 +6,13 @@ import type { MouseEvent } from 'react';
 import { ColumnTag } from '@/components/shared/column-tag';
 import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/cn';
 import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '@/lib/masters/process-items';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 
 import { isOpener, type Opener } from './process-opener';
-import { NOT_USED } from './process-texts';
+import { BREAK_LONG_NAMES, NOT_USED } from './process-texts';
 
 /**
  * The rates of SCR-11 (STORY-02.01 AC-1, AC-7): a table from 768 px, where it scrolls inside its own container only, and a card for
@@ -59,7 +60,7 @@ function RowActions({ item, pendingOpener, onAction, compact }: ProcessListProps
   const label = (text: string, glyph: typeof Pencil) => (compact ? <Icon icon={glyph} size="large" /> : <><Icon icon={glyph} />{text}</>);
 
   return (
-    <div className={compact ? 'flex items-center justify-end gap-s-1' : 'flex flex-wrap gap-s-2'}>
+    <div className={compact ? 'flex flex-nowrap items-center justify-end gap-s-2' : 'flex flex-wrap gap-s-2'}>
       <Button variant={variant} size={size} data-action="edit" aria-label={ACTION_NAMES.edit(item)} {...busyFor('edit')} onClick={press('edit')}>
         {label('Edit', Pencil)}
       </Button>
@@ -73,30 +74,28 @@ function RowActions({ item, pendingOpener, onAction, compact }: ProcessListProps
 /** The table from 768 px: it scrolls inside its own container only. */
 function ProcessTable(props: ProcessListProps) {
   return (
-    <Table regionLabel="Process master rates, scrollable" caption="Process master rates">
+    <Table regionLabel="Process master rates, scrollable" caption="Process master rates" actionButtons={2}>
       <TableHeader>
         <TableRow>
           <TableHead>Rate name</TableHead>
           <TableHead>Unit</TableHead>
           <TableHead className="text-right">Default value</TableHead>
           <TableHead>Used in</TableHead>
-          <TableHead className="text-right">
-            <span className="sr-only">Actions</span>
-          </TableHead>
+          <TableActionsHead />
         </TableRow>
       </TableHeader>
       <TableBody>
         {props.items.map((item) => (
           <TableRow key={item.id} data-item-id={item.id}>
-            <TableCell className="font-semibold text-ink">{item.name}</TableCell>
+            <TableCell className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{item.name}</TableCell>
             <TableCell className="text-ink-2">{unitLabel(item.unit)}</TableCell>
             <TableCell className="text-right tabular-nums">{formatDefaultValue(item.defaultValue, item.unit)}</TableCell>
             <TableCell>
               <UsedIn item={item} />
             </TableCell>
-            <TableCell>
+            <TableActionsCell>
               <RowActions {...props} item={item} compact />
-            </TableCell>
+            </TableActionsCell>
           </TableRow>
         ))}
       </TableBody>

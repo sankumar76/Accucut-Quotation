@@ -338,11 +338,10 @@ test.describe('as the Admin', () => {
     await expect(page.getByRole('heading', { name: WORDS.loadErrorTitle })).toBeFocused({ timeout: 3000 });
   });
 
-  // DEF-021: expected to fail at 768 px until it is fixed (see DEF-020 above for how `test.fail` reads). The table needs 968 px (its six headings do not
-  // wrap), so between 768 and 1022 px, and again between 1024 and about 1270 px (the side menu takes 240 px from 1024), the Edit button of every row lies
-  // beyond the right edge of the table's own scroll region and shows only after the region is scrolled sideways. The phone cards and 1366 px are fine.
+  // DEF-021 (AQP-234, fixed): the table used to need 968 px (its six headings did not wrap), so between 768 and 1022 px, and again between 1024 and
+  // about 1270 px, the Edit button of every row lay beyond the right edge of the table's own scroll region. The Actions column is now sticky at that
+  // edge and headings wrap (ux-spec 6.0 "Masters tables"); `masters-table-actions.spec.ts` checks the eleven widths of the spec for both masters tables.
   test('[AQP-122 AC-7] DEF-021: the Edit button of a row is inside the visible table area, with no sideways scroll of the table', async ({ page }, testInfo) => {
-    test.fail(page.viewportSize()?.width === 768, 'DEF-021: at 768 px the Edit button is outside the visible table area');
     await makeMaterial(page, newName(testInfo, 'reach'));
     await openMaterials(page);
     const edit = page.locator('[data-item-id]:visible button[data-action="edit"]').first();

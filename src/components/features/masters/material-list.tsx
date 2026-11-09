@@ -5,7 +5,7 @@ import type { MouseEvent } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/cn';
 import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
 import type { MaterialRow } from '@/lib/masters/materials-client';
@@ -57,7 +57,7 @@ function EditButton({ item, pendingOpener, onEdit, compact }: MaterialListProps 
 /** The table from 768 px: it scrolls inside its own container only. */
 function MaterialTable(props: MaterialListProps) {
   return (
-    <Table regionLabel="Material Master, scrollable" caption="Material Master">
+    <Table regionLabel="Material Master, scrollable" caption="Material Master" actionButtons={1}>
       <TableHeader>
         <TableRow>
           <TableHead>{MATERIAL_FIELD_LABELS.materialInDrawing}</TableHead>
@@ -65,9 +65,7 @@ function MaterialTable(props: MaterialListProps) {
           <TableHead className="text-right">{PRICE_HEADING}</TableHead>
           <TableHead className="text-right">{MATERIAL_FIELD_LABELS.specificGravity}</TableHead>
           <TableHead className="text-right">{SCRAP_HEADING}</TableHead>
-          <TableHead className="text-right">
-            <span className="sr-only">Actions</span>
-          </TableHead>
+          <TableActionsHead />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -78,11 +76,11 @@ function MaterialTable(props: MaterialListProps) {
             <TableCell className="text-right tabular-nums">{item.pricePerKg}</TableCell>
             <TableCell className="text-right tabular-nums">{item.specificGravity}</TableCell>
             <TableCell className="text-right tabular-nums">{item.scrapRate}</TableCell>
-            <TableCell>
-              <div className="flex items-center justify-end gap-s-1">
+            <TableActionsCell>
+              <div className="flex flex-nowrap items-center justify-end gap-s-2">
                 <EditButton {...props} item={item} compact />
               </div>
-            </TableCell>
+            </TableActionsCell>
           </TableRow>
         ))}
       </TableBody>
