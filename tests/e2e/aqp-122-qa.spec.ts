@@ -320,12 +320,10 @@ test.describe('as the Admin', () => {
     mode = 'pass';
   });
 
-  // DEF-020: expected to fail until it is fixed. Playwright reports it as passed while it fails and as failed once it starts to pass, which is the
-  // signal to delete the `test.fail` line. SCR-13 says that in the load error "focus goes to the title"; the code means it (`focusOnMount`, and the
-  // comment of `useReadAgain`), but when the list cannot be read right after a successful save, the dialog's close handler (`onCloseAutoFocus` ->
-  // `focusOpener`) finds the opener gone and moves focus to the page heading (`h1`) after the error title has taken it.
+  // DEF-020 (AQP-235, fixed): SCR-13 says that in the load error "focus goes to the title". When the list cannot be read right after a successful
+  // save, the dialog's close handler (`onCloseAutoFocus` -> `focusOpener`) used to find the opener gone and move focus to the page heading (`h1`)
+  // after the error title had taken it. `focusOpener` now leaves focus alone while the list has failed.
   test('[AQP-122 AC-8] DEF-020: when the list cannot be read after a save, focus is on the load error title', async ({ page }, testInfo) => {
-    test.fail(true, 'DEF-020: focus ends on the page heading, not the error title');
     const name = newName(testInfo, 'focus');
     await makeMaterial(page, name);
     await openMaterials(page);

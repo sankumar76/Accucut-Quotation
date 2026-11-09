@@ -102,7 +102,7 @@ function useReadAgain(list: List, opener: Dialogs['opener']) {
 }
 
 /** The presses that open a dialog, and the return of focus when it closes. */
-function openersFor(dialogs: Dialogs, setNotice: SetNotice) {
+function openersFor(dialogs: Dialogs, list: List, setNotice: SetNotice) {
   function onRowAction(action: RowAction, item: ProcessItemRow, button: HTMLButtonElement, byKeyboard: boolean): void {
     // A rate a formula uses cannot be deleted: the refusal opens at once, from the list the page already holds (AC-4).
     const kind: DialogKind = action === 'delete' && item.usedBy.length > 0 ? 'blocked' : action;
@@ -116,7 +116,7 @@ function openersFor(dialogs: Dialogs, setNotice: SetNotice) {
   /** Radix returns focus only to a trigger, and these dialogs have none: the opener is remembered here. */
   function onCloseAutoFocus(event: Event): void {
     event.preventDefault();
-    focusOpener(dialogs.opener.current);
+    focusOpener(dialogs.opener.current, list.status === 'error');
   }
 
   return { onRowAction, onAdd, onCloseAutoFocus };
@@ -155,7 +155,7 @@ export function useProcessMaster(initialItems: ReadonlyArray<ProcessItemRow>) {
   const dialogs = useDialogs();
   const [notice, setNotice] = useState<PageNotice | null>(null);
   const readAgain = useReadAgain(list, dialogs.opener);
-  return { list, dialogs, notice, readAgain, ...openersFor(dialogs, setNotice), ...outcomesFor(dialogs, setNotice, readAgain) };
+  return { list, dialogs, notice, readAgain, ...openersFor(dialogs, list, setNotice), ...outcomesFor(dialogs, setNotice, readAgain) };
 }
 
 export type ProcessMaster = ReturnType<typeof useProcessMaster>;

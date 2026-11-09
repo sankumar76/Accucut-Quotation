@@ -29,8 +29,13 @@ export function focusHeading(): void {
   document.querySelector<HTMLElement>('main h1')?.focus();
 }
 
-/** Returns focus to the button that opened a dialog; when that button no longer exists (its rate is gone), to the page heading. */
-export function focusOpener(opener: Opener | null): void {
+/**
+ * Returns focus to the button that opened a dialog; when that button no longer exists (its rate is gone), to the page heading.
+ * When the list could not be read again after a saved change (`listFailed`), the load error owns focus (it takes it on mount, UX spec
+ * SCR-11 and SCR-13 "Error (load)"): the dialog's close handler runs after that and must not take it away (DEF-020).
+ */
+export function focusOpener(opener: Opener | null, listFailed = false): void {
+  if (listFailed) return;
   const button = opener === null ? null : findOpenerElement(opener);
   if (button === null) focusHeading();
   else button.focus();
