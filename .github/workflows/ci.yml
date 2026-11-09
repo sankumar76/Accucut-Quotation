@@ -10,7 +10,8 @@
 #   - `verify`, named `Stages 1 to 11b`: stages 1 to 11b, as before.
 #   - `e2e`, named `Stage 12: E2E (shard <i> of <N>)`: a matrix of shard jobs. Each shard builds for itself (nothing is
 #     passed between jobs), migrates its own throwaway database, installs the browser (stage 12a) and runs its share of
-#     the E2E tests with four workers. The shard count is the length of `matrix.shard`, the one line to change.
+#     the E2E tests with four workers. The shard count is the length of `matrix.shard`, the one line to change (three
+#     since AQP-227, STORY-10.17).
 #   - `required`, named `Stages 1 to 11`: the fan-in job and the ONLY job with `needs`. It is the required status check
 #     on master, so branch protection does not change. It runs even when a needed job failed and fails unless every
 #     needed job succeeded, so a failed, cancelled or skipped job cannot be merged past.
@@ -232,11 +233,15 @@ jobs:
         run: echo "Enabled by STORY-10.04 together with the Dockerfile."
 
   # ---- Stage 12: E2E, in shards (AQP-208, STORY-10.15; test strategy section 10.5) ---------------------------------
-  # One job per shard, started together with `verify` (no `needs`). The shard count is the length of `matrix.shard`: for
-  # three shards write `[1, 2, 3]`, nothing else changes (the command reads the total from `strategy.job-total`). With
-  # `fullyParallel`, `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and desktop tests
-  # is the whole suite with none twice (tests/unit/e2e-shards.test.ts). The set-up project runs once in each shard,
-  # against that shard's own database. `fail-fast` is off so every shard reports, as the single job did.
+  # One job per shard, started together with `verify` (no `needs`). The shard count is the length of `matrix.shard`, which
+  # is `[1, 2, 3]` (STORY-10.17, test strategy section 10.5, "Three shards"): nothing else changes with the count (the
+  # command reads the total from `strategy.job-total`). A fourth shard needs section 10.5 first. Two unit tests guard the
+  # count: tests/unit/ci-workflow.test.ts fails on any list other than `[1, 2, 3]`, and tests/unit/ci-workflow-shards.test.ts
+  # fails on an `include`, `exclude` or `max-parallel` in this strategy block (any of them changes the number of shards
+  # that run) and on a job-level `continue-on-error` here or on `verify`. With `fullyParallel` (asserted in
+  # tests/unit/e2e-shards.test.ts), `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and
+  # desktop tests is the whole suite with none twice, in counts that differ by at most one. The set-up project runs once
+  # in each shard, against that shard's own database. `fail-fast` is off so every shard reports, as the single job did.
   #
   # Each shard repeats install, build and database set-up and passes nothing to another job. It does not repeat the
   # secret scan, the checks of stages 3 to 8, the route check of stage 9, the drift check of stage 10 or stage 11:
@@ -248,7 +253,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
 
     services:
       # The same throwaway PostgreSQL as `verify` (same image and digest; change both together). One per shard job, so
@@ -329,7 +334,7 @@ jobs:
 
       # Stage 12a (DEF-015, AQP-206, test strategy section 10.6), once per shard. The browser download and the browser's
       # system packages (.deb files) are cached, and apt is bounded on a miss; the step stops after 8 minutes. Caches are
-      # scoped by ref: a pull request restores entries from its own ref or from master and saves for itself only. Both
+      # scoped by ref: a pull request restores entries from its own ref or from master and saves for itself only. All
       # shards use the same keys; a key is saved once and a hit is never saved again. The fallback warning prints the key
       # and the command that removes it (`gh cache delete <key>`, run by a maintainer), or a commit that raises
       # CACHE_EPOCH (top of this file) starts a new key. README, "Playwright install cache".
