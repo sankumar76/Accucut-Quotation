@@ -80,7 +80,7 @@ export class ActiveAdminExistsError extends ConflictError {
   }
 }
 
-/** A rate name that another rate already has, ignoring letter case (STORY-02.01 AC-2): said under the name field. */
+/** A name that another master entry (a rate or a material) already has, ignoring letter case (STORY-02.01 AC-2, STORY-02.03 AC-2): said under the name field. */
 export const NAME_TAKEN_CODE = 'NAME_TAKEN';
 
 /** A rate name a formula could read as something else, alone or in the set of names (DEF-006, `rateNameIssues`, `rateSetIssues`). */

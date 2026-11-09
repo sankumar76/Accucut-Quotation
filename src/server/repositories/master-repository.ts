@@ -5,8 +5,14 @@ import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
 /**
- * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01); the
- * stories for customers, materials, exchange rates and treatments add their methods here.
+ * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01) and the
+ * Material Master (STORY-02.03); the stories for customers, exchange rates and treatments add their methods here.
+ *
+ * **Materials** (STORY-02.03; architecture sections 4.9 and 5.1): every read and every lookup for a change applies the default filter
+ * `is_hidden = false AND deleted_at IS NULL`, so the "Not applicable" row of story 02.06 and a deleted material are never listed and
+ * never found by ID: a change to one is "not found", the same as an unknown ID. Story 02.06 adds the one separately named method that
+ * reads the hidden row, for the estimate form's drop-down. The three numbers of a material are Restricted: `listMaterialOptions`
+ * does not even read their columns.
  *
  * A rate's default value is carried as **decimal text** ("0.37"), never as a JavaScript number (coding standards section 10,
  * "Money and rates"): the column is `Decimal(18,4)`, and the text keeps at least two decimals and drops zeros beyond them.
@@ -42,8 +48,33 @@ export interface ProcessItemChanges {
   readonly defaultValue?: string | undefined;
 }
 
+/** A material as the Admin keeps it: the three numbers are decimal text with at least two decimals, for example "7.37". Restricted. */
+export interface MaterialRecord {
+  readonly id: string;
+  readonly materialInDrawing: string;
+  readonly materialConsidered: string;
+  readonly pricePerKg: string;
+  readonly specificGravity: string;
+  /** Material-Scrap-Rate, per kg (SPEC D-39). */
+  readonly scrapRate: string;
+}
+
+export type NewMaterial = Omit<MaterialRecord, 'id'>;
+
+export type MaterialChanges = { readonly [Field in keyof NewMaterial]?: string | undefined };
+
+/**
+ * What the estimate form's drop-down needs of a material, and nothing else: the ID, the name (Material in Drawing) and Material
+ * Considered. No number is read from the table for it. `materialConsidered` is null only for the hidden "Not applicable" row (02.06).
+ */
+export interface MaterialOptionRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly materialConsidered: string | null;
+}
+
 /** Which of the rules of the database a write broke. */
-export type MasterConstraint = 'process-item-name';
+export type MasterConstraint = 'process-item-name' | 'material-name';
 
 /** A write that the database refused because it would repeat a rate's name. */
 export class MasterConstraintError extends Error {
@@ -75,6 +106,19 @@ export interface MasterRepository {
   updateProcessItem(id: string, changes: ProcessItemChanges, tx: Transaction): Promise<ProcessItemRecord | null>;
   /** Deletes a rate; false if there was none with this ID. */
   deleteProcessItem(id: string, tx: Transaction): Promise<boolean>;
+
+  /** Every listed material, in the order they were added. Hidden and deleted materials are not listed. */
+  listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
+  /** Every listed material as a choice: ID, name and Material Considered. Reads no number. */
+  listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
+  /** Takes the lock that serialises changes to the materials until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
+  lockMaterials(tx: Transaction): Promise<void>;
+  /** The listed material with this ID, or null (unknown, hidden or deleted alike), read **with its row locked** until the transaction ends. */
+  findMaterialForUpdate(id: string, tx: Transaction): Promise<MaterialRecord | null>;
+  /** Adds a material and returns it. Throws `MasterConstraintError` for a name that is taken. */
+  createMaterial(material: NewMaterial, tx: Transaction): Promise<MaterialRecord>;
+  /** Changes a listed material and returns it, or null if there is none with this ID. Throws `MasterConstraintError` for a name that is taken. */
+  updateMaterial(id: string, changes: MaterialChanges, tx: Transaction): Promise<MaterialRecord | null>;
 }
 
 const RECORD_NOT_FOUND = 'P2025';
@@ -100,11 +144,15 @@ function toRecord(row: { readonly id: string; readonly name: string; readonly un
   return { id: row.id, name: row.name, unit: row.unit, defaultValue: trimDecimalText(row.defaultValue.toFixed(STORED_DECIMALS)) };
 }
 
+const PROCESS_NAME_CONSTRAINTS: ReadonlyArray<string> = ['name', 'uq_process_items_name', 'uq_process_items_name_lower'];
+const MATERIAL_NAME_CONSTRAINTS: ReadonlyArray<string> = ['material_in_drawing', 'uq_materials_material_in_drawing', 'uq_materials_material_in_drawing_lower'];
+
 /** The constraint a unique violation names, from the column or the index it names; null for anything else. */
 function constraintOf(error: unknown): MasterConstraint | null {
   const names = uniqueViolationOf(error);
   if (names === null) return null;
-  return names.some((name) => name === 'name' || name === 'uq_process_items_name' || name === 'uq_process_items_name_lower') ? 'process-item-name' : null;
+  if (names.some((name) => PROCESS_NAME_CONSTRAINTS.includes(name))) return 'process-item-name';
+  return names.some((name) => MATERIAL_NAME_CONSTRAINTS.includes(name)) ? 'material-name' : null;
 }
 
 async function enforcingConstraints<T>(write: () => Promise<T>): Promise<T> {
@@ -117,10 +165,132 @@ async function enforcingConstraints<T>(write: () => Promise<T>): Promise<T> {
   }
 }
 
+// ---- Materials (STORY-02.03) -------------------------------------------------------------------------------------------------
+
+const MATERIAL_SELECT = {
+  id: true,
+  materialInDrawing: true,
+  materialConsidered: true,
+  pricePerKg: true,
+  specificGravity: true,
+  scrapRate: true,
+} as const;
+
+/** The default filter of architecture section 4.9: what the Admin's list shows and a change may reach. */
+const LISTED = { isHidden: false, deletedAt: null } as const;
+
+const LOCKED_MATERIAL_ROWS = z.array(
+  z.strictObject({
+    id: z.string(),
+    materialInDrawing: z.string(),
+    materialConsidered: z.string(),
+    pricePerKg: z.string(),
+    specificGravity: z.string(),
+    scrapRate: z.string(),
+  }),
+);
+
+interface MaterialRow {
+  readonly id: string;
+  readonly materialInDrawing: string;
+  readonly materialConsidered: string | null;
+  readonly pricePerKg: { toFixed(places: number): string };
+  readonly specificGravity: { toFixed(places: number): string };
+  readonly scrapRate: { toFixed(places: number): string };
+}
+
+function decimalText(value: { toFixed(places: number): string }): string {
+  return trimDecimalText(value.toFixed(STORED_DECIMALS));
+}
+
+/** A listed material always has a Material Considered (the table's CHECK says so); a row without one is damaged, and says so loudly. */
+function toMaterialRecord(row: MaterialRow): MaterialRecord {
+  if (row.materialConsidered === null) throw new Error('A listed material has no Material Considered.');
+  return {
+    id: row.id,
+    materialInDrawing: row.materialInDrawing,
+    materialConsidered: row.materialConsidered,
+    pricePerKg: decimalText(row.pricePerKg),
+    specificGravity: decimalText(row.specificGravity),
+    scrapRate: decimalText(row.scrapRate),
+  };
+}
+
+async function readMaterials(db: PrismaClient): Promise<ReadonlyArray<MaterialRecord>> {
+  const rows = await db.material.findMany({ where: LISTED, select: MATERIAL_SELECT, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  return rows.map(toMaterialRecord);
+}
+
+/** Only the three columns a drop-down needs are selected: a price, a gravity and a scrap rate are not read at all (ARCH-R2). */
+async function readMaterialOptions(db: PrismaClient): Promise<ReadonlyArray<MaterialOptionRecord>> {
+  const rows = await db.material.findMany({
+    where: LISTED,
+    select: { id: true, materialInDrawing: true, materialConsidered: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  return rows.map((row) => ({ id: row.id, name: row.materialInDrawing, materialConsidered: row.materialConsidered }));
+}
+
+async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialRecord | null> {
+  // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
+  if (!z.uuid().safeParse(id).success) return null;
+  // Prisma has no row lock, so this is a raw statement: the ID is a bound parameter. The default filter applies (section 4.9).
+  const rows = await clientFor(db, tx).$queryRaw`
+    SELECT id::text AS "id", material_in_drawing AS "materialInDrawing", material_considered AS "materialConsidered",
+           price_per_kg::text AS "pricePerKg", specific_gravity::text AS "specificGravity", scrap_rate::text AS "scrapRate"
+    FROM materials WHERE id = ${id}::uuid AND is_hidden = false AND deleted_at IS NULL FOR UPDATE`;
+  const found = LOCKED_MATERIAL_ROWS.parse(rows)[0];
+  if (found === undefined) return null;
+  return { ...found, pricePerKg: trimDecimalText(found.pricePerKg), specificGravity: trimDecimalText(found.specificGravity), scrapRate: trimDecimalText(found.scrapRate) };
+}
+
+async function changeMaterial(db: PrismaClient, id: string, changes: MaterialChanges, tx: Transaction): Promise<MaterialRecord | null> {
+  try {
+    const updated = await clientFor(db, tx).material.update({
+      where: { id, ...LISTED },
+      // Only the fields given are written.
+      data: {
+        ...(changes.materialInDrawing === undefined ? {} : { materialInDrawing: changes.materialInDrawing }),
+        ...(changes.materialConsidered === undefined ? {} : { materialConsidered: changes.materialConsidered }),
+        ...(changes.pricePerKg === undefined ? {} : { pricePerKg: changes.pricePerKg }),
+        ...(changes.specificGravity === undefined ? {} : { specificGravity: changes.specificGravity }),
+        ...(changes.scrapRate === undefined ? {} : { scrapRate: changes.scrapRate }),
+      },
+      select: MATERIAL_SELECT,
+    });
+    return toMaterialRecord(updated);
+  } catch (error) {
+    if (isRecordNotFound(error)) return null;
+    throw error;
+  }
+}
+
+/** The material methods of the repository; each turns a pool or statement timeout into `DatabaseBusyError`. */
+function createMaterialMethods(db: PrismaClient): Pick<MasterRepository, MaterialMethodName> {
+  return {
+    listMaterials: () => withDatabaseErrors(() => readMaterials(db)),
+    listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
+    lockMaterials: (tx) =>
+      withDatabaseErrors(async () => {
+        await clientFor(db, tx).$executeRaw`LOCK TABLE materials IN SHARE ROW EXCLUSIVE MODE`;
+      }),
+    findMaterialForUpdate: (id, tx) => withDatabaseErrors(() => selectMaterialForUpdate(db, id, tx)),
+    createMaterial: (material, tx) =>
+      withDatabaseErrors(() =>
+        enforcingConstraints(async () => toMaterialRecord(await clientFor(db, tx).material.create({ data: material, select: MATERIAL_SELECT }))),
+      ),
+    updateMaterial: (id, changes, tx) => withDatabaseErrors(() => enforcingConstraints(() => changeMaterial(db, id, changes, tx))),
+  };
+}
+
+type MaterialMethodName = 'listMaterials' | 'listMaterialOptions' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
+
 /** Builds the repository over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
-// Over 40 lines on purpose (coding standards section 1): one object of seven repository methods, each about 20 lines or fewer.
+// Over 40 lines on purpose (coding standards section 1): one object of the seven Process Master methods, each about 20 lines or fewer, plus a spread of the material methods (`createMaterialMethods`).
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
+    ...createMaterialMethods(db),
+
     listProcessItems() {
       return withDatabaseErrors(async () => {
         const rows = await db.processItem.findMany({ select: SELECT, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });

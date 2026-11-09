@@ -9,6 +9,7 @@ import { createUserService, type UserService } from '../../src/server/services/u
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
+import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
 
@@ -91,7 +92,8 @@ export function createSessionHarness(): SessionHarness {
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
   const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
-  const masters = createFakeMasterRepository();
+  // The Material Master holds the canary materials (STORY-02.03): a route that leaked a price, a gravity or a scrap rate to a role would send one.
+  const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES);
 
   return {
     users,

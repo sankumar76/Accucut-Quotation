@@ -129,3 +129,26 @@ model ProcessItem {
   @@unique([name], map: "uq_process_items_name")
   @@map("process_items")
 }
+
+/// One material of the Material Master (STORY-02.03, FR-015; architecture sections 4.9, 5.1 and 6; SPEC section 4.3).
+/// `scrapRate` holds Material-Scrap-Rate, per kg (D-39). `isHidden` marks the "Not applicable" row that story 02.06 adds: the master
+/// repository lists only rows where it is false, and `materialConsidered` is null only for that row. `deletedAt` is for the soft delete
+/// of story 02.07 (A-13). The unique index on `lower(material_in_drawing)` (names differ by more than letter case, AC-2) and the CHECK
+/// constraints (a price and a scrap rate are 0 or more, a specific gravity is above 0 unless the row is hidden, names are not blank) are
+/// hand-written in the migration: Prisma cannot express them. Class Restricted: the three numbers never reach an Engineer.
+model Material {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  materialInDrawing  String    @map("material_in_drawing")
+  materialConsidered String?   @map("material_considered")
+  pricePerKg         Decimal   @default(0) @map("price_per_kg") @db.Decimal(18, 4)
+  specificGravity    Decimal   @default(0) @map("specific_gravity") @db.Decimal(18, 4)
+  scrapRate          Decimal   @default(0) @map("scrap_rate") @db.Decimal(18, 4)
+  isSystem           Boolean   @default(false) @map("is_system")
+  isHidden           Boolean   @default(false) @map("is_hidden")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([materialInDrawing], map: "uq_materials_material_in_drawing")
+  @@map("materials")
+}

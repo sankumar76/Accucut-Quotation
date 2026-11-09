@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
 import { displayFormOf } from '../../support/formula-display';
+import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 
@@ -184,6 +185,22 @@ export async function ensureCanaryProcessRates(): Promise<void> {
       await client.query(insert, [rate.name, rate.unit, rate.value]);
       await client.query('UPDATE process_items SET default_value = $2 WHERE lower(name) = lower($1)', [rate.name, rate.value]);
     }
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Puts the Material Master canary materials (STORY-02.03's names, IDs and numbers, `tests/support/material-master-canary.ts`) into the
+ * database the servers use, so the confidentiality scan has a price, a specific gravity and a Material-Scrap-Rate to look for, and the
+ * recipe for `PATCH /api/v1/materials/{id}` names a material that exists. The statements are `loadCanaryMaterials`: an insert that does
+ * nothing on any conflict, then an update by ID, so several loaders at once (three screen sizes) cannot fail on a name index. A committed
+ * integration test runs three of them at once over many rounds. The numbers are invented and this database is thrown away (guarded above).
+ */
+export async function ensureCanaryMaterials(): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await loadCanaryMaterials(client);
   } finally {
     await client.end();
   }
