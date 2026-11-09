@@ -1,0 +1,13 @@
+diff --git a/src/components/features/masters/process-opener.ts b/src/components/features/masters/process-opener.ts
+index 1e8c99a..f42c2bf 100644
+--- a/src/components/features/masters/process-opener.ts
++++ b/src/components/features/masters/process-opener.ts
+@@ -43,7 +43,7 @@ function focusIsOnPage(): boolean {
+  * while it was open), nothing holds it now, so focus returns to the opener or the heading as it does without an error (QLT-01).
+  */
+ export function focusOpener(opener: Opener | null, listFailed = false): void {
+-  if (listFailed && focusIsOnPage()) return;
++  // PLANT A: guard removed
+   const button = opener === null ? null : findOpenerElement(opener);
+   if (button === null) focusHeading();
+   else button.focus();

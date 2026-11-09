@@ -1,0 +1,212 @@
+
+Running 9 tests using 2 workers
+
+  ✓  2 [setup] › tests\e2e\auth.setup.ts:21:1 › create the E2E users and save a signed-in Lead (24.8s)
+  ✓  1 [setup] › tests\e2e\auth.setup.ts:99:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (43.5s)
+  ✘  3 [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" (11.9s)
+  ✘  4 [desktop] › tests\e2e\aqp-122-qa.spec.ts:326:3 › as the Admin › [AQP-122 AC-8] DEF-020: when the list cannot be read after a save, focus is on the load error title (10.8s)
+  ✘  5 [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" (11.4s)
+  ✘  6 [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" (12.3s)
+  ✘  7 [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" (12.0s)
+  ✘  8 [desktop] › tests\e2e\aqp-234-qa.spec.ts:400:1 › G7-5 SCR-11: Delete confirmed, the re-read fails: focus is on the error title (11.8s)
+  ✘  9 [desktop] › tests\e2e\process-master.spec.ts:365:3 › search and states (AC-1, AC-8) › DEF-020 (AQP-235) and QLT-01: when the list cannot be read after a save, focus is on the load error title; then Add and Escape return focus to "Add rate" (8.3s)
+
+
+  1) [desktop] › tests\e2e\aqp-122-qa.spec.ts:326:3 › as the Admin › [AQP-122 AC-8] DEF-020: when the list cannot be read after a save, focus is on the load error title 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the materials' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the materials' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the materials' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the materials</h2>
+           - unexpected value "inactive"
+
+
+      336 |     await dialog.getByRole('button', { name: 'Save' }).click();
+      337 |     await expect(page.getByRole('heading', { name: WORDS.loadErrorTitle })).toBeVisible();
+    > 338 |     await expect(page.getByRole('heading', { name: WORDS.loadErrorTitle })).toBeFocused({ timeout: 3000 });
+          |                                                                             ^
+      339 |   });
+      340 |
+      341 |   // DEF-021 (AQP-234, fixed): the table used to need 968 px (its six headings did not wrap), so between 768 and 1022 px, and again between 1024 and
+        at tests\e2e\aqp-122-qa.spec.ts:338:77
+
+    Error Context: test-results\aqp-122-qa-as-the-Admin-AQ-9fefb--is-on-the-load-error-title-desktop\error-context.md
+
+  2) [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the materials' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the materials' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the materials' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the materials</h2>
+           - unexpected value "inactive"
+
+
+      378 |         }
+      379 |         await expect(title).toBeVisible();
+    > 380 |         await expect(title).toBeFocused({ timeout: 3000 });
+          |                             ^
+      381 |         // Still on the title a moment later (the late close handler must not take it).
+      382 |         await page.waitForTimeout(600);
+      383 |         await expect(title).toBeFocused();
+        at tests\e2e\aqp-234-qa.spec.ts:380:29
+
+    Error Context: test-results\aqp-234-qa-G7-5-SCR-13-DEF-e125a-turn-focus-to-Add-material--desktop\error-context.md
+
+  3) [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the materials' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the materials' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the materials' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the materials</h2>
+           - unexpected value "inactive"
+
+
+      378 |         }
+      379 |         await expect(title).toBeVisible();
+    > 380 |         await expect(title).toBeFocused({ timeout: 3000 });
+          |                             ^
+      381 |         // Still on the title a moment later (the late close handler must not take it).
+      382 |         await page.waitForTimeout(600);
+      383 |         await expect(title).toBeFocused();
+        at tests\e2e\aqp-234-qa.spec.ts:380:29
+
+    Error Context: test-results\aqp-234-qa-G7-5-SCR-13-DEF-ef78f-turn-focus-to-Add-material--desktop\error-context.md
+
+  4) [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the rates' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the rates' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the rates' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the rates</h2>
+           - unexpected value "inactive"
+
+
+      378 |         }
+      379 |         await expect(title).toBeVisible();
+    > 380 |         await expect(title).toBeFocused({ timeout: 3000 });
+          |                             ^
+      381 |         // Still on the title a moment later (the late close handler must not take it).
+      382 |         await page.waitForTimeout(600);
+      383 |         await expect(title).toBeFocused();
+        at tests\e2e\aqp-234-qa.spec.ts:380:29
+
+    Error Context: test-results\aqp-234-qa-G7-5-SCR-11-DEF-38463-e-return-focus-to-Add-rate--desktop\error-context.md
+
+  5) [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the rates' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the rates' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the rates' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the rates</h2>
+           - unexpected value "inactive"
+
+
+      378 |         }
+      379 |         await expect(title).toBeVisible();
+    > 380 |         await expect(title).toBeFocused({ timeout: 3000 });
+          |                             ^
+      381 |         // Still on the title a moment later (the late close handler must not take it).
+      382 |         await page.waitForTimeout(600);
+      383 |         await expect(title).toBeFocused();
+        at tests\e2e\aqp-234-qa.spec.ts:380:29
+
+    Error Context: test-results\aqp-234-qa-G7-5-SCR-11-DEF-7c561-e-return-focus-to-Add-rate--desktop\error-context.md
+
+  6) [desktop] › tests\e2e\aqp-234-qa.spec.ts:400:1 › G7-5 SCR-11: Delete confirmed, the re-read fails: focus is on the error title 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the rates' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the rates' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the rates' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the rates</h2>
+           - unexpected value "inactive"
+
+
+      410 |   const title = page.getByRole('heading', { name: screen.errorTitle });
+      411 |   await expect(title).toBeVisible();
+    > 412 |   await expect(title).toBeFocused({ timeout: 3000 });
+          |                       ^
+      413 | });
+      414 |
+      415 | // ---------------------------------------------------------------------------------------------------------------------------------------
+        at tests\e2e\aqp-234-qa.spec.ts:412:23
+
+    Error Context: test-results\aqp-234-qa-G7-5-SCR-11-Del-0ff3c-focus-is-on-the-error-title-desktop\error-context.md
+
+  7) [desktop] › tests\e2e\process-master.spec.ts:365:3 › search and states (AC-1, AC-8) › DEF-020 (AQP-235) and QLT-01: when the list cannot be read after a save, focus is on the load error title; then Add and Escape return focus to "Add rate" 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('heading', { name: 'We could not load the rates' })
+    Expected: focused
+    Received: inactive
+    Timeout:  3000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'We could not load the rates' }) with timeout 3000ms
+      - waiting for getByRole('heading', { name: 'We could not load the rates' })
+        10 × locator resolved to <h2 tabindex="-1" class="text-sub font-semibold text-ink">We could not load the rates</h2>
+           - unexpected value "inactive"
+
+
+      376 |     const title = page.getByRole('heading', { name: 'We could not load the rates' });
+      377 |     await expect(title).toBeVisible();
+    > 378 |     await expect(title).toBeFocused({ timeout: 3000 });
+          |                         ^
+      379 |
+      380 |     // The list is still in error and "Add rate" is still there: opening and cancelling it must not leave focus on the body.
+      381 |     const add = page.getByRole('button', { name: 'Add rate' });
+        at tests\e2e\process-master.spec.ts:378:25
+
+    Error Context: test-results\process-master-search-and--caec3-e-return-focus-to-Add-rate--desktop\error-context.md
+
+  7 failed
+    [desktop] › tests\e2e\aqp-122-qa.spec.ts:326:3 › as the Admin › [AQP-122 AC-8] DEF-020: when the list cannot be read after a save, focus is on the load error title 
+    [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" 
+    [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-13: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add material" 
+    [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Edit then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" 
+    [desktop] › tests\e2e\aqp-234-qa.spec.ts:348:7 › G7-5 SCR-11: DEF-020 focus when the list cannot be read again › Add then Save, the re-read fails: focus is on the error title, and stays there; then Add and Escape, Cancel or Close return focus to "Add rate" 
+    [desktop] › tests\e2e\aqp-234-qa.spec.ts:400:1 › G7-5 SCR-11: Delete confirmed, the re-read fails: focus is on the error title 
+    [desktop] › tests\e2e\process-master.spec.ts:365:3 › search and states (AC-1, AC-8) › DEF-020 (AQP-235) and QLT-01: when the list cannot be read after a save, focus is on the load error title; then Add and Escape return focus to "Add rate" 
+  2 passed (2.0m)

@@ -1,0 +1,515 @@
+
+Running 24 tests using 2 workers
+
+  ✓   1 [setup] › tests\e2e\auth.setup.ts:21:1 › create the E2E users and save a signed-in Lead (25.1s)
+  ✓   2 [setup] › tests\e2e\auth.setup.ts:99:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (40.7s)
+  ✘   4 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (10.4s)
+  ✘   3 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (10.4s)
+  ✘   5 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.1s)
+  ✘   6 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.2s)
+  ✘   7 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.3s)
+  ✘   8 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.3s)
+  ✘   9 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.6s)
+  ✘  10 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (9.5s)
+  ✘  11 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (12.2s)
+  ✘  12 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (12.1s)
+  ✘  14 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (6.3s)
+  ✘  13 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (8.6s)
+  ✘  15 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (4.8s)
+  ✘  16 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (4.8s)
+  ✘  17 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (5.1s)
+  ✘  18 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (5.7s)
+  ✘  19 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (6.4s)
+  ✘  20 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (6.3s)
+  ✘  21 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (6.9s)
+  ✘  22 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (5.4s)
+  ✘  23 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (5.7s)
+  ✘  24 [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end (6.6s)
+
+
+  1) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 743
+    Received:    965
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--6ca01-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  2) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 875
+    Received:    1015
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--4ae51-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  3) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 975
+    Received:    1115
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--e4cf7-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  4) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 998
+    Received:    1138
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--50748-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  5) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 991
+    Received:    1221
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--9bf8a-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  6) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1147
+    Received:    1287
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--922bf-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  7) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1224
+    Received:    1364
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--b7045-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  8) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1246
+    Received:    1386
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--a6e3f-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  9) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1247
+    Received:    1387
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--419c0-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  10) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1333
+    Received:    1473
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--add10-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  11) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1407
+    Received:    1547
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--d54c0-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  12) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 743
+    Received:    1009
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--0f2d1-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  13) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 875
+    Received:    1059
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--1287a-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  14) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 975
+    Received:    1159
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--78cff-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  15) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 998
+    Received:    1182
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--c2d03-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  16) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 991
+    Received:    1265
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--394c0-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  17) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1147
+    Received:    1331
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--2c056-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  18) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1224
+    Received:    1408
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--a9289-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  19) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1246
+    Received:    1430
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--711e2-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  20) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1247
+    Received:    1431
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--504a1-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  21) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1333
+    Received:    1517
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--7c890-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  22) [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+
+    Error: forced to scroll, at its start: action 0 ends inside the region
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 1407
+    Received:    1591
+
+      85 |     expect(button, `${mode}: action ${index}`).not.toBeNull();
+      86 |     expect(button?.x ?? -1, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
+    > 87 |     expect((button?.x ?? 0) + (button?.width ?? 0), `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
+         |                                                                                                        ^
+      88 |   }
+      89 | }
+      90 |
+        at expectActionsInside (tests\e2e\masters-table-actions.spec.ts:87:104)
+        at tests\e2e\masters-table-actions.spec.ts:124:9
+
+    Error Context: test-results\masters-table-actions-SCR--c3a31-oll-and-scrolled-to-its-end-desktop\error-context.md
+
+  22 failed
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-11 Process master: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 768 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 900 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1000 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1023 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1024 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1180 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1257 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1279 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1280 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1366 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+    [desktop] › tests\e2e\masters-table-actions.spec.ts:98:7 › SCR-13 Materials: row actions are inside the table region (DEF-021) › at 1440 px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end 
+  2 passed (3.3m)

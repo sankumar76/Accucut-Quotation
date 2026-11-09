@@ -1,0 +1,121 @@
+[
+  {
+    "width": 768,
+    "regionWidth": 718,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1603,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1023,
+    "regionWidth": 973,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 973,
+      "actionsOutside": 0,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1024,
+    "regionWidth": 710,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1603,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1279,
+    "regionWidth": 965,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1000,
+      "actionsOutside": 6,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1280,
+    "regionWidth": 966,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1000,
+      "actionsOutside": 6,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1366,
+    "regionWidth": 1052,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1052,
+      "actionsOutside": 0,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  },
+  {
+    "width": 1440,
+    "regionWidth": 1126,
+    "asDrawn": {
+      "scrollWidth": 1603,
+      "tableScrolls": true,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    },
+    "forced1000": {
+      "scrollWidth": 1603,
+      "actionsOutside": 18,
+      "of": 18,
+      "pageOverflow": 0
+    }
+  }
+]
