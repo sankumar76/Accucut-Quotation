@@ -5,7 +5,7 @@ professional software delivery team. Every agent (and every human working alongs
 them) follows the rules in this file. Role-specific behaviour lives in
 `.claude/agents/**`. Company-specific engineering rules live in `docs/standards/`.
 
-> **Customise before first use:** fill in the `<<...>>` placeholders in
+> **Customise before first use:** fill in the placeholders in
 > `docs/standards/coding-standards.md` and the "Project Profile" section below.
 
 ---
@@ -200,3 +200,15 @@ Every agent reads it before its first Jira or GitHub action in a run.
   (e.g. `aiid-EPIC-01`, `aiid-STORY-01.03`) — agents **search by this label before creating**
   so re-runs never duplicate issues.
 - Never put secrets, tokens or personal data in Jira or GitHub content.
+
+---
+
+## 8. Merge policy override (delivery lead, 2026-11-09)
+
+The delivery lead chose way of working 5 (release plan 3.3) in chat on 2026-11-09.
+This section overrides `MERGE_POLICY` in §1a: **`MERGE_POLICY` = all-auto.** After
+master's G7 GO, the orchestrator squash-merges the story's code PR, provided its
+required checks are green and the docs PR it depends on has merged. Docs-only PRs
+still merge after a GO, as before. Deployment, releases and G8 stay human. A bad
+merge is undone by a new PR, never by rewriting `master`. Dependabot dependency
+bumps are not story PRs and are not covered by this override.
