@@ -234,12 +234,14 @@ jobs:
 
   # ---- Stage 12: E2E, in shards (AQP-208, STORY-10.15; test strategy section 10.5) ---------------------------------
   # One job per shard, started together with `verify` (no `needs`). The shard count is the length of `matrix.shard`, which
-  # is `[1, 2, 3]` since AQP-227 (STORY-10.17, test strategy section 10.5, "Three shards"): three shards, nothing else
-  # changes with the count (the command reads the total from `strategy.job-total`). A fourth shard needs section 10.5
-  # first; tests/unit/ci-workflow.test.ts fails on any list other than `[1, 2, 3]`. With
-  # `fullyParallel`, `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and desktop tests
-  # is the whole suite with none twice (tests/unit/e2e-shards.test.ts). The set-up project runs once in each shard,
-  # against that shard's own database. `fail-fast` is off so every shard reports, as the single job did.
+  # is `[1, 2, 3]` (STORY-10.17, test strategy section 10.5, "Three shards"): nothing else changes with the count (the
+  # command reads the total from `strategy.job-total`). A fourth shard needs section 10.5 first. Two unit tests guard the
+  # count: tests/unit/ci-workflow.test.ts fails on any list other than `[1, 2, 3]`, and tests/unit/ci-workflow-shards.test.ts
+  # fails on an `include`, `exclude` or `max-parallel` in this strategy block (any of them changes the number of shards
+  # that run) and on a job-level `continue-on-error` here or on `verify`. With `fullyParallel` (asserted in
+  # tests/unit/e2e-shards.test.ts), `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and
+  # desktop tests is the whole suite with none twice, in counts that differ by at most one. The set-up project runs once
+  # in each shard, against that shard's own database. `fail-fast` is off so every shard reports, as the single job did.
   #
   # Each shard repeats install, build and database set-up and passes nothing to another job. It does not repeat the
   # secret scan, the checks of stages 3 to 8, the route check of stage 9, the drift check of stage 10 or stage 11:

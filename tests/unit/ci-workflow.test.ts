@@ -178,9 +178,11 @@ describe('CI workflow', () => {
 
   it('AQP-227 AC-1 (AQP-208 AC-1): the shard count is one constant, the length of the matrix, and it is exactly [1, 2, 3]', () => {
     const list = /^ {8}shard: \[([\d, ]+)\]$/m.exec(jobText('e2e'))?.[1];
+    expect(list, 'e2e job: matrix.shard must stay a one-line list at 8 spaces').toBeDefined();
     const shards = (list ?? '').split(',').map((entry) => Number(entry.trim()));
     // Pinned to three shards (test strategy 10.5, "Three shards"): a silent return to two fails here, and a fourth shard
-    // needs test strategy 10.5 to say so first, then this line.
+    // needs test strategy 10.5 to say so first, then this line. Nothing else in the strategy may change the count at run
+    // time (`include`, `exclude`, `max-parallel`): tests/unit/ci-workflow-shards.test.ts.
     expect(shards).toEqual([1, 2, 3]);
     // The total is read from the matrix, never written a second time.
     expect(WORKFLOW).not.toMatch(/--shard[= ]"?\d/);
