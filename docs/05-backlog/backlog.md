@@ -154,7 +154,7 @@ Status: **Draft** = to be written by the scrum-master. There is no Held story. A
 | 35 | 05.09 | Calculate | 05 | 055, 056 | Must | R1 | |
 | 36 | 05.12 | Warn on a 0 in QTY per Assy | 05 | 104 | Must | R1 | Reading R-2 (a top-level item's own 0 warns) |
 | 37 | 06.02 | Estimate review: totals and rows | 06 | 024, 025, 029, 030 (display) | Must | R1 | |
-| 38 | 06.03 | Cost details and Lead formula view | 06 | 058, 059, 060 | Must | R1 | |
+| 38 | 06.03 | Cost details and Lead formula view | 06 | 058, 059, 060 | Must | R1 | Story-prep note (QLT-18, AQP-57 G6, gate-log attempt 2 ruling 3): the story's Testing Notes say that the canary scan opens the refused dynamic page `/estimates/<code>/costs/<slNo>` as an Engineer with a real owned record (its `PAGE_RECIPES` value) and with an invented value, and compares the two answers: both 403 with the same body (AC-5 real versus invented ID). First dynamic Lead or Admin page; 07.01 (`/estimates/<code>/export`) is the second carrier and repeats the line. Written before the story reaches Ready |
 | 39 | 06.04 | Recalculate and the cleared figures | 06 | 061, 100 | Must | R1 | |
 | 40 | 06.05 | Approval blocked while not current | 06 | 101 | Must | R1 | |
 | 41 | 06.06 | Approve and lock | 06 | 062 | Must | R1 | |
