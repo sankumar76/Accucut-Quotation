@@ -2845,3 +2845,1232 @@ QA reads each run log itself.
 
 **Risks registered:** none.
 **Rationale:** The gap that failed attempt 1 is closed with evidence of the right kind: two bypass forms per event, each caught by an assertion built for it. The one form that cannot be caught is stated, and covered by a written review rule.
+
+---
+
+## G6 – Peer Review — AQP-113 (STORY-02.01: Process master, with the DEF-006 fix) — 2026-11-06
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #107 at head 62267af (`origin/feat/AQP-113-process-master` read back at that SHA). CI 42316869370: success on all four jobs (Stages 1 to 11, Stages 1 to 11b, E2E shards 1 and 2), read through the check-runs API. Merge state "behind" (docs-only 86ffb16 on `master`).
+  - **Reviews:** `docs/06-reviews/AQP-113/standards.md`, `quality.md`, `performance.md` (main folder, not committed); PR reviews 5808860041 (standards), 5808899305 (quality), 5808878362 (performance); Jira AQP-113 11136, 11138, 11137; developer hand-off 11134; brief 11135.
+  - **My own checks:** (1) QLT-01 reproduced with my own throwaway unit test in the scratchpad worktree at 62267af (invented names, not in the repository): the forward order is refused; compound first and then both parts is accepted at each step; the rename path is accepted; and a stored `{{rate:A}}-{{rate:B}}` comes back from display form as the compound rate. 4 of 4 assertions held, so the defect is real. (2) QLT-02 read at `process-items.test.ts:281-298`: the order comes from `ORDER BY created_at, id`, with a millisecond `created_at` and a random UUID `id`. A tie between the compound and the second part reorders them, and line 295 then fails on a correct run. (3) The service code read at `masters-service.ts:80-85`, `110-190`: only the new name is judged; delete takes no table lock; `usesByRate()` runs after the commit in create and update. (4) STD-07: I read only the decimal parts of the five comment examples. None ends in `.37`, so the comments do not follow the ADR-014 invented pattern. I did not compare them with any source, and that is not permitted. (5) `ProcessScreen` starts at line 74 of a 265-line file, matching STD-01.
+  - **Not done:** no DB-backed or E2E run of my own (CI is the reference run); no comparison of values with the workbook.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards REQUEST CHANGES (Major 1, Minor 7, Info 6); quality REQUEST CHANGES (Major 2, Minor 6, Info 6); performance APPROVE WITH COMMENTS (Minor 2, Info 4). All three are on head 62267af |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in every report. STD-07 is held Minor on the condition below, and would become a Blocker if any example value is real |
+| 3 | Majors fixed or explicitly accepted | | ⚠️ | STD-01, QLT-01 and QLT-02 are upheld and must be fixed before G7. None is accepted (rulings 1 to 3) |
+| 4 | Findings cite file:line | | ✅ | Every finding in the three reports, and the inline comments on the PR |
+| 5 | Precondition from #35 (due at 02.01's G6) and #48 item 2 | | ✅ | `rateNameIssues` refuses column letters, numbers, operators, operand names and duplicates. It is called on create and rename, its messages carry no name, and it has its own tests (`rate-names.test.ts`, `masters-service.test.ts`). The DEF-006 part of the same class is QLT-01 |
+| 6 | Blocking dependency AQP-169 (10722) | | ✅ | Merged (PR #70); stage 11b ran on this head: `/masters/process` 172,551 B, 17,449 B under the 190,000 B target |
+| 7 | AQP-57 dependency (CR-34) | | ⚠️ | Not merged. The interim canary scan is accepted (ruling 5) |
+
+**Rulings**
+1. **QLT-01 (Major) is upheld and fixed in this PR.** This PR exists to fix DEF-006, and DEF-006 can still be reached through this story's own screen (reproduced above). The result is a stored formula that prices a different rate after a display round trip, with no error, which is a correctness risk to a price.
+   - **Behaviour required:** on create and on rename, the whole resulting set of names is judged. The change is refused if the new name reads as other names and operators. It is also refused if any existing name would read that way once the new name joins.
+   - **Placement:** the rule lives in the formula engine (`src/lib/formula/rate-names.ts`, for example `rateSetIssues(names)`), so the service and any later formula editor share it.
+   - **Message:** the refusal names no rate (the STD-05 rule).
+   - **What it could break:** the 15 seed names must still form a safe set, with a test that says so. A rename that changes only letter case must still pass.
+   - **Tests:** unit tests for compound-then-parts (the second part refused), the rename path (the second rename refused) and the forward order (still refused). The same three cases as integration tests against PostgreSQL.
+2. **QLT-02 (Major) is upheld and fixed in this PR.** The race test belongs to the load- and timing-sensitive class (DL-057), where retries are off, and the developer fixed the same tie elsewhere in this PR. After QLT-01 the outcome is the same in every order. The test asserts that **exactly two of the three creations succeed and the third is refused with `RATE_NAME_REFUSED`**, with no ordering query. Two deterministic sequential tests are added: parts then compound, and compound then parts.
+3. **STD-01 (Major) is fixed in this PR, not deferred, and STD-02 goes with it.** The 40-line rule (Coding Standards §1) was held the same way at AQP-97 (STD-01, STD-02) and AQP-28 (STD-18): in the files that later stories copy. `ProcessScreen` is the first masters screen, and the customers, materials and exchange-rate screens will copy it. A production-code round with re-review is already required for QLT-01, so the split adds no extra round.
+   - **Scope:** `ProcessScreen`, `ProcessForm` and `ProcessList` each come within 40 lines, or carry a one-line inline justification that reviewer-standards accepts.
+   - **`AuditScreen` on `master`** (`audit-screen.tsx:57-206`) is outside this PR. It is **deferred to tech-debt #110** (developer; the next story that changes the audit screen, or before the sprint 1 review).
+4. **Every Minor is fixed in the same push.** They are cheap, and one re-review covers them.
+   - **QLT-03 = PRF-01:** `lockProcessItems` is the first statement of the delete transaction. Test: a delete and an update of one rate raced, and neither ends in a 500. Mapping 40P01 to `DatabaseBusyError` is optional; if it is added, it gets a test.
+   - **QLT-05:** read the uses before `transactions.run` in create and update. Test: a failed configuration read writes no row and no audit entry.
+   - **QLT-06:** a 404 in the edit or delete dialog closes the dialog, refreshes the list and says the rate no longer exists. The wording comes from the ux-expert (condition 5). Test it.
+   - **QLT-08:** tests for the skeleton after 300 ms (with `aria-busy`) and for the empty state with "Add rate" visible.
+   - **STD-03 to STD-06, STD-08:** as each reviewer suggests.
+   - **STD-07:** every example value in the five comments, and in the `trimDecimalText` comment, changes to the `n.37` pattern. The developer states in the PR that none came from the workbook or any other real source. **If any did, the developer stops and reports BLOCKED; the finding becomes a Blocker.** The branch is already public, so only the delivery lead can decide on its history (RISK-006); agents do not rewrite it.
+   - **Cheap Info in the same push:**
+     - STD-09: rename the migration folder to its real creation time. It has never been merged, so a rename is allowed.
+     - STD-10 and STD-11.
+     - QLT-12: check the default value only when it changed, with a test.
+     - STD-14: update the branch from `master`.
+   - **Before the push:** Gitleaks as DL-108 sets out (one commit, or `gitleaks dir` per commit). Stage files by name.
+5. **AC-6, interim canary (QLT-07): accepted for G6 and G7.** At G7, AC-6 is judged on the interim scan, `tests/security/process-master-confidential.test.ts`, which checks every Engineer route and the Process master's routes and page. The `canaryMasters` part moves to AQP-57: 01.03 imports `PROCESS_MASTER_CANARIES` from `tests/support/process-master-canary.ts` rather than copying it. The product-owner records this on AQP-57. This is a move between stories, not a product scope change.
+6. **Routed, not fixed here:**
+   - **QLT-04** goes to tech-debt #111: the config-publish story, with the architect's rule in its Dev Context before Ready.
+   - **PRF-02 and the `@one-width` list:** the architect rules. If the ruling comes before the push, the §10.5 row is written first and the tags go in the push. Otherwise the ruling holds nothing.
+   - **PRF-03 and PRF-05:** no action.
+   - **PRF-04:** the architect, when the load test is planned.
+   - **PRF-06:** the product-manager.
+   - **STD-12, QLT-09, QLT-13:** the solution-architect.
+   - **QLT-10:** the product-owner.
+   - **QLT-11:** the ux-expert and the product-owner.
+   - **STD-13:** the wording is below, to be applied in the governance docs PR.
+7. **Re-review: all three reviewers, on the new diff only, before QA** (DL-051; the AQP-74 fix-push precedent). The push adds a new name rule, a lock change, error paths and a component split. All three are production code, so master's own verification is not enough.
+   - **Quality:** QLT-01 with **one planted fault per case** (remove the new-name check; remove the existing-name check; skip the check on rename), each failing a test. QLT-02 with no ordering dependency. QLT-03, 05, 06, 08 and 12.
+   - **Standards:** STD-01 to STD-08, and the STD-07 statement is present in the PR.
+   - **Performance:** the cost of the set check inside the table lock at n = 15 and n = 100 (it grows to about n² · L), and stage 11b after the split.
+   - **Then:** master checks the push against this record, with CI green on the final head. That check is not a new G6 attempt.
+8. **DEF-006 (AQP-181, #49) is not closed on 8d15405.** QA closes it at G7, on the final head, after a planted-fault check of each direction and the rename path.
+
+**STD-13 wording (Coding Standards §10 SQL, last bullet), to be applied in the governance docs PR:** "Cost, rate and formula fields must never be sent to an Engineer, or written to a log line, an e-mail, a Jira issue or the repository (architecture §5.3, Restricted)."
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #107 | One push with rulings 1 to 4: QLT-01, QLT-02, STD-01, STD-02, QLT-03, QLT-05, QLT-06, QLT-08, STD-03 to STD-08, the STD-07 statement in the PR, STD-09 to STD-11, QLT-12, the branch updated from `master`, and Gitleaks per DL-108 | Before the re-review |
+| 2 | reviewer-standards, reviewer-quality, reviewer-performance | `docs/06-reviews/AQP-113/*.md` (round 2), PR reviews | Re-review the new diff only, as ruling 7 sets out; each reviewer changes only their own PR label | Before G7 |
+| 3 | master | gate log | Check the push against this record; CI green on the final head | Before G7 |
+| 4 | product-owner | AQP-113 AC-5; AQP-57 | AC-5 text to `master.created` / `master.edited` / `master.deleted` with `object_type` `process_item` (architecture §8). A note on AQP-57 that 01.03 imports `PROCESS_MASTER_CANARIES` (ruling 5) | AC-5 before G7; AQP-57 before it starts |
+| 5 | ux-expert; product-owner | ux-spec SCR-11; AQP-113 AC-4 | The wording for a rate deleted elsewhere (QLT-06). Whether the refusal links to the planned `/config/fields` or shows the label as text while the route is planned (QLT-11); if it changes, the product-owner amends AC-4 | QLT-06 wording before the push; QLT-11 before G7 |
+| 6 | solution-architect | test strategy §10.5; architecture §5.1, §5.6, §9.2, §10; test strategy §10 | Rule on the three `@one-width` tests (PRF-02). STD-12 (1) to (3); the line for same-transaction audit entries compared as a set (QLT-09); 14 to 15 rates (QLT-13). Rule for #111 in the config-publish story | `@one-width` before the push if possible, otherwise no hold; documents before the sprint 1 review |
+| 7 | product-manager | PRD NFR-011 | A master-data volume (rates, customers, materials) (PRF-06) | Before the customers and materials stories reach Ready |
+| 8 | orchestrator | `docs/standards/coding-standards.md:95` | Apply the STD-13 wording above in the governance docs PR | Next governance docs PR |
+| 9 | qa-engineer | DEF-006 (AQP-181, #49) | Do not close it on 8d15405; close it at G7 on the final head (ruling 8) | G7 |
+| 10 | developer | #110 | `AuditScreen` split | The next audit-screen story, or the sprint 1 review |
+
+**G7 evidence (full QA cycle, on the final head):**
+- **Each AC with evidence.** AC-5 is read against the corrected text. AC-6 is judged on the interim scan (ruling 5).
+- **DEF-006:** compound-then-parts, parts-then-compound and the rename path are each refused through the API, and a planted fault for each case fails a test.
+- **Audit trail (AQP-74 rule):** for each of the three events (`master.created`, `master.edited`, `master.deleted`), one entry is written in the change's transaction, and a planted bypass fails a test. A refused change writes no entry.
+- **Locks:** a delete and an update of one rate raced end without a 500.
+- **Error paths:**
+  - a failed configuration read writes nothing (QLT-05);
+  - a rate deleted elsewhere is handled as QLT-06 sets out;
+  - the skeleton and the empty state (AC-8).
+- **Screens:** three widths, axe with `wcag21a` 0, keyboard, 44 px.
+- **Stage 11b:** every route under 190,000 B.
+- **Regression:** green.
+- **Closure:** Done only after the posted G7 (DL-098). Evidence runs only by `workflow_dispatch` or a throwaway PR (DL-091).
+
+**Risks registered:** none new. RISK-006 reviewed, score unchanged (STD-07, ruling 4).
+**Rationale:** No Blocker or Critical is open, so G6 can pass by the procedure, but three Majors are upheld. The DEF-006 fix, which this PR exists to make, still lets the defect through in the reverse order and on rename (reproduced). A new test can fail at random. The first masters screen breaks the size rule that later screens will copy. All three are fixed in one push with the cheap Minors, then re-reviewed by all three lenses before QA, because the push is production code.
+
+---
+
+## G6 – Peer Review — AQP-113 (STORY-02.01) — round 2: check of the fix push against the record, and QLT-15 — 2026-11-06
+
+- **Status:** the decision stays **CONDITIONAL GO** (attempt 1, record above). The conditions are **not yet all met**: condition 1 is met for every item it named, but QLT-15 (new Major) adds one more push before G7. This is a conditions check, not a new attempt.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #107 at a4d4d57. This is 66ae511 (fix commits 7bec601, bc09fac, f2e9fe1, 66ae511) plus a merge of `master` 86ffb16. By `git diff --name-only 66ae511 a4d4d57`, the merge changes nothing outside `docs/`. CI 42326697243 on 66ae511 and 42327412105 on a4d4d57: success on all four jobs (check-runs API).
+  - **Re-reviews (round 2, new diff only):**
+    - standards APPROVE WITH COMMENTS (11146; `standards.md` Round 2);
+    - performance APPROVE WITH COMMENTS (11145; `performance.md` Round 2);
+    - quality REQUEST CHANGES (11147; `quality.md` Round 2).
+  - **Other inputs:** developer 11144; product-owner 11142 (AC-4, AC-5; AQP-57 note 11141); ux-expert 11143 (ux-spec v0.17, SCR-11).
+  - **My own checks:**
+    - I read `rateSetIssues` and `assertNameUsable` at 66ae511.
+    - I reproduced QLT-15 with my own throwaway unit test in the scratchpad worktree at 66ae511, with invented names (not in the repository). **(a) Prefix shadow:** the set `Pa`, `Qb-Rc`, `Pa-Qb`, `Pa-Qb-Rc` passes `rateNameIssues` and `rateSetIssues` in three different add orders. A stored `{{rate:Pa}}-{{rate:Qb-Rc}}` then comes back as the single rate `Pa-Qb-Rc`. **(b) Overlap:** the set `Pa`, `Qb-Rc`, `Pa-Qb`, `Rc` passes in two orders, and the same formula comes back as `{{rate:Pa-Qb}}-{{rate:Rc}}`. **Control:** with spaces round the operator, the formula round-trips exactly in set (b).
+  - **Not done:** no PostgreSQL or E2E run of my own (CI is the reference); I did not repeat the planted faults (quality's table is the evidence).
+
+| # | Check against the round-1 record | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | QLT-01 (whole set judged on create and rename) | ✅ for the cases named | `rateSetIssues([...others, name])` in `assertNameUsable`; 15 seed names tested as a safe set; planted faults F1 to F4 each fail tests (quality, Round 2) |
+| 2 | QLT-02 | ✅ | `process-items-names.test.ts:104-120`: 2 fulfilled and 1 `RATE_NAME_REFUSED`, 6 rounds, no ordering query |
+| 3 | STD-01, STD-02 | ✅ | `ProcessScreen` about 30 lines; form and list split; only the two factories exceed 40 lines, each with an inline justification |
+| 4 | Minors (QLT-03 = PRF-01, QLT-05, QLT-06, QLT-08; STD-03 to 06, STD-08) | ✅ | Each reported fixed with tests. QLT-06 uses the 11143 wording word for word |
+| 5 | STD-07 statement | ✅ | Statement in the PR body and in 11144: none came from a real source, and the workbook was never opened. No old value is left in `src`. RISK-006 trigger not met |
+| 6 | Info (STD-09 to 11, QLT-12, STD-14) | ✅ | Migration folder `20261106182200_process_items` (a pure rename); branch updated |
+| 7 | AC-4, AC-5 text (product-owner) | ✅ | 11142: plain text, Close only; `master.created/edited/deleted` |
+| 8 | Re-review by all three, planted fault per DEF-006 case | ✅ | All three Round 2 sections; four faults, each caught |
+| 9 | Stage 11b and CI time | ✅ | `/masters/process` 173,440 B (16,560 B to the target); required path 5m15s |
+| 10 | No new Blocker or Critical | ✅ | 0 in all three |
+| 11 | New Major | ❌ | QLT-15, reproduced by master |
+
+**Rulings**
+1. **QLT-15 (Major) is upheld. The R1 half is fixed in this PR now. The R2 half is split off to #112 with its reason.** Whether a name is ambiguous depends on how the display form is read, not on the names alone. So no check on names alone can be both complete and free of false refusals. The safe property is about the stored formulas: **every stored formula round-trips unchanged under the current names.** In R1, the only write that can break this is a create or rename of a rate; no screen writes a formula from display form. That half is cheap and exact, and it belongs to this story, which exists to fix DEF-006. The other write paths (formula edit, re-lettering, publish, revert) do not exist until EPIC-08, so they cannot be built or tested here. They go to #112, with owners and a due point, rather than holding this story.
+   - **Behaviour required (`assertNameUsable`, create and rename):** refuse with `RATE_NAME_REFUSED` unless, for every formula the current configuration stores, `toInternalForm(toDisplayForm(f, next), next) === f`. Here `next` is the rate set the change would leave, with the configuration's own fields.
+     - **Configuration read:** the configuration already read before the transaction (QLT-05) is used; nothing new is read inside the lock.
+     - **Delete:** needs no check. Removing an unused name cannot change a greedy reading.
+   - **Message:** it names no rate and no formula: "This name would change how an existing formula reads, so it cannot be used." The ux-expert may refine it in the spec later; the push does not wait for that.
+   - **Keep `rateNameIssues` and `rateSetIssues` as guards** for formulas not yet written. **QLT-17 is fixed in the same push:** report only set issues that the change introduces (the set before against the set after), so that an already-unsafe stored set does not refuse every add and rename.
+   - **Tests:**
+     - **Service unit tests, with an injected configuration that holds a formula `{{rate:A}}-{{rate:B}}`:** both probe shapes (a) and (b) are refused at the step that would break the formula, both for adds in every order that reaches them and for renames.
+     - **What it could break:** the seed names with the seed configuration are still accepted. A rename that changes only letter case is accepted where it breaks no formula. A name that makes the set unsafe but breaks no stored formula is decided by the guards as before.
+     - **Integration:** one PostgreSQL test, if the harness can hold such a configuration version; otherwise the Dev Record says why not.
+   - **Cost:** the developer reports the timing at n = 15 and n = 100 with the seed configuration in the Dev Record. Performance does not re-review unless the figure at n = 100 is over 50 ms.
+2. **DEF-006 (AQP-181, #49):** it closes at G7 on the head with this fix, if QA's DEF-006 checks pass: probes (a) and (b) through the API, plus the round-1 cases. Closure is for the R1 defect; #112 carries the R2 write paths as new work, not as DEF-006.
+3. **Cheap Info in the same push**, since a production-code push is required anyway:
+   - **QLT-16:** hold the route on a promise the test releases, not a fixed 1.5 s (DL-057 class);
+   - **STD-15:** rename `useOpeners` and `useOutcomes`;
+   - **STD-16:** name `[overflow-wrap:anywhere]` once;
+   - **STD-17:** `n.37` test values; "about 20 lines".
+4. **Re-review: narrow, by the finding's owner (DL-091).** reviewer-quality re-reviews QLT-15, QLT-16 and QLT-17 on the new diff, with **a planted fault for each case**: the round-trip check removed (both probe shapes, create and rename), and the before/after comparison removed (QLT-17). Each must fail a test. Master then checks STD-15 to STD-17 within the named files and CI green on the final head. G7 follows.
+5. **Routed:**
+   - **PRF-07** goes to the product-manager with PRF-06: state the master-data volume, with a revisit trigger at about 300 rates in the PRD, before the customers and materials stories reach Ready.
+   - **PRF-02 (`@one-width`)** stays with the architect, with no hold.
+   - **STD-12** stays with the architect, and **STD-13** with the governance docs PR (condition 8).
+
+**Conditions / remediation (round 2)**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| R2-1 | developer | PR #107 | One push: QLT-15 R1 half and QLT-17 (ruling 1); QLT-16, STD-15 to STD-17 (ruling 3); the timing figures; Gitleaks per DL-108; stage files by name | Before the narrow re-review |
+| R2-2 | reviewer-quality | `quality.md` Round 3; PR review | Narrow re-review with the planted faults of ruling 4; change only their own label | Before G7 |
+| R2-3 | master | gate log | Check STD-15 to STD-17 within the named files; CI green on the final head | Before G7 |
+| R2-4 | solution-architect; product-owner | architecture; ADR-005; STORY-08.02, 08.03, 08.05, 08.06 | #112: the invariant at every formula write path, and the display-form choice; the matching AC lines | Before STORY-08.02 reaches Ready |
+| R2-5 | qa-engineer | DEF-006 verification | Add probes (a) and (b), through the API | G7 |
+| R2-6 | product-manager | PRD NFR-011 | Master-data volume and the 300-rate revisit trigger (PRF-06, PRF-07) | Before the customers and materials stories reach Ready |
+
+Round-1 conditions 4 to 7 and 10 stand as recorded. Condition 9 is amended by ruling 2.
+
+**G7 evidence:** as in the round-1 record, plus:
+- probes (a) and (b) refused through the API;
+- a refusal that names no rate or formula;
+- the seed set and the seed configuration still accepted;
+- QLT-17 (an existing unsafe set does not block an unrelated rename).
+
+**Risks registered:** RISK-024 (new, 8): ambiguous display form in the R2 formula write paths (#112).
+**Rationale:** The fix push meets every item the record named, and the reviews found nothing Blocker or Critical. But the defect it fixes is still reachable by two shapes that I reproduced. A rule on names alone cannot close it, so the check moves to what must stay true: stored formulas round-trip. In R1 that is enforced at the only write path that exists. The R2 write paths are split to #112 with owners, because they cannot be built in this story.
+
+---
+
+## G6 – Peer Review — AQP-113 (STORY-02.01) — final check against the round-2 record — 2026-11-07
+
+- **Decision:** the round-2 conditions are **met**, and G6 is **closed**. The CONDITIONAL GO (attempt 1) stands with no open developer condition. AQP-113 may go to G7.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #107 at c262853 (`gh pr view`: head `c2628534…`, merge state CLEAN). The commits after a4d4d57 are 5182720 (QLT-15 R1 half, QLT-17, STD-17) and c262853 (QLT-16, STD-15, STD-16). CI 42330556486 (event `pull_request`, head c262853): success on all four jobs (`gh api …/commits/c262853/check-runs`).
+  - **Reviews:** quality Round 3, narrow (Jira 11151; `quality.md` Round 3): APPROVE WITH COMMENTS, Info QLT-18 and QLT-19. Labels: standards, quality and performance all approved.
+  - **Developer:** Jira 11150. Timing about 20 ms at n = 100, under the 50 ms line, so performance has no re-review (DL-110 ruling 1).
+  - **My own checks:**
+    - `git diff 5182720 c262853 -- src tests/e2e` (6 files) read in full.
+    - The STD-17 hunks of 5182720 read (5 test-value hunks and 1 comment).
+    - `rate-name-rules.ts` and `formula-round-trip.ts` read at c262853.
+  - **Not done:** I did not repeat the planted faults or the PostgreSQL and E2E suites (quality's table and CI are the evidence). The Atlassian and GitHub MCP servers were unreachable this session. GitHub was read and written with `gh`, and the Jira texts were handed to the orchestrator to post.
+
+| # | Check against the round-2 record | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | R2-1 QLT-15, R1 half | ✅ | `assertNameUsable` (`rate-name-rules.ts`) is called on add and on a name change. Its last question is `fieldsBrokenByChange`, which tests `toInternalForm(toDisplayForm(f, after), after) === f` for every output formula. Only output fields hold a formula (`rate-usage.ts` says the same). It uses the document read before the transaction. `removeInTransaction` has no name check. The message is exactly `ROUND_TRIP_MESSAGE`, as ruled, and names no rate or formula |
+| 2 | R2-1 QLT-17 | ✅ | The ambiguity guard and the round trip both compare after with before (`wasAmbiguous`; `alreadyBroken`) |
+| 3 | R2-1 QLT-16 | ✅ | `process-master.spec.ts:306-328`: the GET is held on a promise and released after the skeleton and `aria-busy` are asserted. No fixed delay, no timeout raised, no retry (DL-057) |
+| 4 | **R2-3 STD-15 (checked by master)** | ✅ | `useOpeners` is now `openersFor` and `useOutcomes` is now `outcomesFor` (`use-process-master.ts:105, 126, 158`). The renames only: no `use` prefix is left on a function that calls no hook, and the callers changed with them |
+| 5 | **R2-3 STD-16 (checked by master)** | ✅ | `BREAK_LONG_NAMES = '[overflow-wrap:anywhere]'` once, in `process-texts.ts`, with a comment that Tailwind finds the class there. All four uses are replaced (delete dialog twice, form title, page notice). `git grep` at c262853 finds the literal nowhere else in `src`, and neither old hook name remains in `src` or `tests`. One cosmetic point: in `process-delete-dialogs.tsx` the new name is imported between `BLOCKED_CLOSE` and `BLOCKED_TITLE`, not in alphabetical order. It needs no action, since there is no lint rule and STD-06 is about module order |
+| 6 | **R2-3 STD-17 (checked by master)** | ✅ | The test values in `master-repository.test.ts`, `process-items-lib.test.ts` and `masters-service.test.ts` now follow the `n.37` pattern; the integer-padding cases use whole numbers. The comment at `master-repository.ts:121` reads "about 20 lines or fewer". No other change in those files |
+| 7 | R2-1 timing | ✅ | About 20 ms at n = 100 (11150), under 50 ms. Performance's PRF-07 and the PRD volume stay with the product-manager (R2-6) |
+| 8 | R2-2 narrow re-review with planted faults | ✅ | G1 (round trip off), G1a (add only), G1b (rename only), G2 (round-trip before/after off), G3 (guard before/after off): 6, 4, 2, 2 and 3 tests failed. Restored, nothing committed |
+| 9 | Beyond the ruling | ✅ | Quality's own sets are refused: a column letter plus hyphen, spaced operators, and the renamed rate inside the formula. The first two are caught only by the round trip, which confirms the ruling's reason |
+| 10 | CI and merge state | ✅ | 42330556486 green on c262853; CLEAN against `master` 86ffb16 |
+| 11 | No new Blocker, Critical, Major or Minor | ✅ | QLT-18 and QLT-19 are Info |
+
+**Rulings**
+1. **G6 is closed. AQP-113 goes to G7 on c262853.** If the head changes before G7 (for example a branch update), the G7 evidence is gathered on the final head.
+2. **QLT-18 (Info):** no action needed. The test title overstates its body, but the "a change that breaks a healthy formula is refused" half is proved by the set (a) and (b) tests and by fault G1. If the developer touches that file again before the merge, they shorten the title or add the assertion. That edit is test-only and needs no re-review.
+3. **QLT-19 (Info):** recorded on #112. Older versions (revert), and a version published while a rename waits (#111), are part of the R2 write-path invariant. This needs no action in R1.
+4. **Round-1 conditions for other roles:**
+   - **Met:** 4 (product-owner 11141, 11142) and 5 (ux-expert 11143, product-owner 11142).
+   - **Still open, holding nothing:** 6 (solution-architect: `@one-width`, STD-12, QLT-09, QLT-13), 7 and R2-6 (product-manager: PRF-06, PRF-07), 8 (STD-13 wording in the governance docs PR), 10 (#110), R2-4 (#112).
+   - **At G7:** 9 and R2-5 (qa-engineer).
+
+**G7 evidence:** the round-1 and round-2 lists stand. QA adds:
+- probes (a) and (b) through the API;
+- one of quality's extra shapes (a column letter plus hyphen) through the API;
+- a check that every refusal message names no rate and no formula.
+
+DEF-006 closes at G7 for R1 on that evidence (DL-110). Done only after the posted G7 (DL-098). Evidence runs only by `workflow_dispatch` or a throwaway PR (DL-091).
+
+**Risks registered:** none new. RISK-024 unchanged (8).
+**Rationale:** Every item of the round-2 record is in the code at c262853, and I checked the three standards items myself. Each planted fault, on each path, fails a test. The round trip also catches shapes the name rules never saw, which is why the ruling put the check on the formulas, not on the names.
+
+---
+
+## G7 – QA Acceptance — AQP-113 (STORY-02.01: Process master, with DEF-006) — 2026-11-07
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR:** PR #107 at e66e74b. It is c262853 plus the QA commit, which changes only `docs/07-qa/AQP-113-test-report.md` and `docs/07-qa/defects/DEF-006-…md` (`git diff --name-only c262853 e66e74b`).
+  - **CI:** the reference run is 42330556486 on c262853: success on all four jobs. The run on e66e74b was still in progress when read (`gh api …/commits/e66e74b/check-runs`).
+  - **QA:** the report (ACCEPT); PR comment 6713349197.
+  - **QA's uncommitted files**, read in the scratchpad worktree `qa113`: `tests/acceptance/aqp-113-process-master.test.ts` (1,336 lines, 169 tests) and `tests/e2e/zz-qa-aqp113.spec.ts` (97 lines).
+  - **Not done:** I did not run the suites or plant faults myself; QA's tables and CI are the evidence. Jira was unreachable for QA, the orchestrator and me.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Report matrix: AC-1 to AC-9 pass, through the real route handlers over PostgreSQL and in the browser at 360, 768 and 1366 px. AC-4 and AC-5 are judged on the corrected text (product-owner 11142, quoted in the round-1 G6 record and the PR). AC-6 is judged on the interim scan (G6 ruling 5) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | No new defect at any severity. DEF-006 is verified for R1 |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42330556486 green. Local: vitest 3,415 of 3,415 on the clean head; full browser suite 439 passed, 21 self-skipped by viewport, retries off. Two Windows load failures pass alone (DL-057 class, outside the PR, OBS-7) |
+| 4 | Exploratory testing notes | | ✅ | Three charters (name rules, races and failures, hostile input) |
+| 5 | Accessibility for the UI | | ✅ | axe with `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa`: 0 at three widths; keyboard; 44 px and 36 px targets |
+| 6 | G6 evidence lists (rounds 1, 2 and final) | | ✅ | DEF-006: every case, including probes (a) and (b), the column letter plus hyphen, and spaced operators, refused through the API, with faults caught. Planted bypass per audit event: 9 of 9 caught by QA's file. Locks: 12 races, no 500. QLT-05, QLT-06, skeleton and empty state; stage 11b 173,446 B. Refusal messages: 83 bodies, 6 sentences, none naming a rate or formula |
+| 7 | The audit-bypass protection is in the repository | | ⚠️ | OBS-1. The developer's committed suites miss 3 of the 9 bypass faults: `master.deleted` in a nested transaction, and `master.edited` and `master.deleted` written after the commit. QA's file catches all 9, but it is not committed |
+| 8 | AC text confirmed against Jira | | ⚠️ | QA took the AC wording from the PR, the reviews, ux-spec v0.17 and the gate log. Jira, the system of record, was not read |
+
+**Rulings**
+1. **AQP-113 is accepted on conditions 1 and 2, both before the Done transition and the merge.** Every mandatory item passes. The two open items concern the evidence's persistence and its source, not the product, so this is a CONDITIONAL GO.
+2. **OBS-1: QA's tests are committed before the merge (qa-engineer, `tests/**` lane). No separate defect is opened.** The core promise of this story is one audit entry per change in the change's own transaction. AQP-74 set the rule that this is shown per event by a planted fault (DL-107). Here the evidence exists, unlike AQP-74's G7, where no test caught the bypass and the result was a NO-GO and DEF-017. What is missing is the protection after the merge. That is why this is a pre-merge condition and not a NO-GO.
+   - **Scope:** at minimum, every test that catches one of the 9 bypasses goes into the repository. The rest of the 169 may go in too, at QA's choice, under the same rules.
+   - **Rules for the committed files:**
+     - every file within 400 lines (Coding Standards §1), split by concern (for example audit, names and DEF-006, roles and errors);
+     - the `QA_NOTES` file-writing helper removed (debug code);
+     - the canary taken from `tests/support/process-master-canary.ts`, the single definition (G6 ruling 5), not a local value;
+     - invented values only, no timing waits, no raised limits (DL-057).
+   - **`tests/e2e/zz-qa-aqp113.spec.ts`:** not required. The developer's spec covers the same states at three widths, and stage 12 time is a watched trend (PRF-02).
+   - **Proof in the PR comment:** QA re-plants the three bypasses the developer's suites missed. Each must make the committed files fail, with the test names given.
+   - **Re-run:** yes. The commit changes `tests/`, so CI runs on the new head, and that run must be green on all four jobs before the merge. Master verifies the commit (file list under `tests/` only, nothing in `src/`, the line counts, the three planted results, CI green). QA files after G6 need no peer review (DL-050, DL-060).
+3. **AC text: the agent that moves AQP-113 to Done reads the Jira description first, the orchestrator or qa-engineer.** Done is a Jira transition, so it waits for Jira anyway. Before it, they compare the nine ACs in AQP-113's description with the report's AC column. If any wording differs in a way that could change a result (a number, a rule, a label), QA re-judges that AC and reports to master before Done. Otherwise the Done comment states "AC text checked against Jira: no difference".
+4. **DEF-006 (AQP-181, #49)** closes, with AQP-113 moving to Done, after this decision is posted on Jira (DL-098) and conditions 1 to 3 are met. The R2 write paths stay with #112 and RISK-024.
+5. **Observations routed. None holds the merge:**
+   - **OBS-2 and OBS-4** go to #113: the product-owner decides on lookalike names (NFC, zero-width), and the ux-expert decides on a hint line, before the customers master story, or any story reusing the name rules, reaches Ready.
+   - **OBS-3, OBS-5 and OBS-7** go to #114 (solution-architect, before the sprint 1 review).
+   - **OBS-6:** no action. The 409's title names the rate the Admin chose, as AC-4 requires.
+6. **Merge order:** the e66e74b run completes; QA's test commit is pushed; CI is green on that head; master verifies; the branch is updated from `master` if it has moved, with CI green again; then the delivery lead squash-merges (MERGE_POLICY code-human). The governance logs go in a docs PR.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | qa-engineer | `tests/acceptance/` on PR #107 | Commit the bypass-catching tests (ruling 2): files within 400 lines, no `QA_NOTES` writer, shared canary; re-plant the 3 missed bypasses and post the result; Gitleaks per DL-108; stage files by name | Before the merge |
+| 2 | master | gate log | Verify condition 1 and CI green on the new head | Before the merge |
+| 3 | orchestrator or qa-engineer | Jira AQP-113 | Compare the Jira AC text with the report before the Done transition (ruling 3); post this G7 decision on Jira first | Before Done |
+| 4 | product-owner; ux-expert | #113 | OBS-2, OBS-4 decisions | Before the next name-rule story reaches Ready |
+| 5 | solution-architect | #114 | OBS-3, OBS-5, OBS-7 decisions | Sprint 1 review |
+
+**Risks registered:** none new. RISK-024 unchanged (8).
+**Rationale:** QA proved every AC and every G6 evidence item through the real stack, with 21 planted faults caught and no defect found. DEF-006 is closed for R1 by the round-trip invariant. Two things are left: the audit-bypass tests that prove the story's core promise must live in the repository, not in a scratch folder, and the AC wording must be checked against Jira once it is reachable. Both are cheap, and both come before the merge.
+
+**AQP-113 G7, condition 1 verified — 2026-11-07 (master).** The commit is 323d6f2, the head of PR #107 (`gh pr view`: merge state CLEAN, base 86ffb16). QA hand-off: PR comment 6714792972. **Result: met.** Conditions 1 and 2 are closed; condition 3 is open.
+- **Files:** `git diff --name-status e66e74b 323d6f2` shows 8 added files, all under `tests/`, and nothing in `src/`.
+- **Line counts:** `tests/support/process-master-api.ts` 267; `aqp-113-add` 158, `-audit` 215, `-def006-names` 144, `-def006-probes` 217, `-list-edit-delete` 212, `-races` 77, `-roles-and-errors` 155. Every file is within 400.
+- **Content:** `git grep` at 323d6f2 over the 8 files finds no `QA_NOTES`, no `appendFileSync` or `writeFileSync`, no `console.`, `.only`, `.skip`, `setTimeout` or raised timeout. The only hit for "retry" is a test title. The local canary value is gone, and `aqp-113-roles-and-errors.test.ts` imports `PROCESS_MASTER_CANARIES` from `tests/support/process-master-canary.ts`.
+- **CI:** run 42427499733 (event `pull_request`, head 323d6f2): success on all four jobs. In its log, stage 11 (integration against PostgreSQL) ran the seven new files with 58, 12, 25, 15, 16, 30 and 9 tests, 165 in all. The stage passed: 3,579 tests and 168 files passed.
+- **Re-plants:** QA's account, not repeated by me. The three bypasses the developer's suites missed each fail one named test in `aqp-113-audit.test.ts`, and nine of nine are caught against the committed files.
+- **Ruling on the merge:** condition 3 (the Jira AC comparison) gates the **Done transition, not the merge**, as recorded, so the squash merge may proceed now (delivery lead, MERGE_POLICY code-human). Stated consequence: if the comparison later finds a wording difference that changes a result, QA re-judges that AC, Done waits, and any gap is a defect against AQP-113, fixed forward on `master`. Recommendation: if Jira is back before the delivery lead merges, do the comparison first, because it is cheap. If `master` moves before the merge, update the branch and wait for CI green.
+- **Not done:** no suite run of my own.
+
+---
+
+## G6 – Peer Review — AQP-57 (STORY-01.03: Engineer sees no cost: projection and scan) — 2026-11-08
+
+- **Decision:** NO-GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #115 at ff9d9a3 (`gh pr view`: head `ff9d9a3d…`, OPEN, not draft, merge state CLEAN against `master` e466c3b). CI 42463553178: success on all four check runs on ff9d9a3 ("Stages 1 to 11", "Stages 1 to 11b", "Stage 12: E2E (shard 1 of 2)", "Stage 12: E2E (shard 2 of 2)"), read through the check-runs API. It went green on attempt 5, after two Gitleaks-download 504s. Attempts 3 to 5 reused attempt 3's shard results (performance report).
+  - **Reviews:** `docs/06-reviews/AQP-57/standards.md`, `quality.md`, `performance.md` (main folder, not committed). PR reviews 5817422301 (standards), 5817439148 (performance), 5817456299 (quality), all COMMENT on ff9d9a3 (single-token), with 37 inline comments. Labels: `review:standards-changes-requested`, `review:quality-changes-requested`, `review:performance-approved`.
+  - **Jira AQP-57:** the description (AC-1 to AC-8, Dev Context, Files list); developer hand-off 11161; brief 11162; reviews 11163 (standards), 11164 (performance), 11165 (quality); product-owner note 11141.
+  - **My own checks, read-only, at ff9d9a3:**
+    - **QLT-01:** `grep` for "canary" and "Restricted" in `docs/templates/story.md` and `.github/pull_request_template.md` finds nothing. Neither file has changed since c7576f0. The rule is only in `README.md` and `sprint-01-plan.md:269` (cross-cutting rule 3).
+    - **STD-01 (c) = QLT-12:** `eslint.config.mjs:79-100` restricts repository prefixes and `services/(masters-service|calculation-|approval-)` only. `src/server/composition.ts` exports `getAuditService` (line 57) and `getMastersService` (line 82), and no Engineer-view pattern names `composition`.
+    - **QLT-02:** `canary-scan.spec.ts:77-91` fills pages with an invented value and APIs with `INVENTED_ID`, and checks only `status < 500`.
+    - **QLT-04:** the `scripts` filter at `:105` has no `body !== null` term.
+    - **STD-02:** `node_modules/next/dist/bin/next:80` (16.4.3) is `process.env.NODE_ENV = process.env.NODE_ENV || defaultEnv`.
+    - **PRF-06:** `canary-scan-gate.test.ts:84-86` asserts that all five scan tests run in the mobile, tablet and desktop projects.
+    - **RISK-023:** nightly 42458228143 (2026-11-08) reports "only 13 runs: p95 5 m 45 s, median 4 m 59 s". PR #96 (AQP-208) merged 2026-11-06.
+  - **Not done:** no suite run, no planted fault and no build of my own. Quality's 14 faults and CI are the evidence. No workbook and no `.env*` file was opened.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards REQUEST CHANGES (Major 2, Minor 9, Info 5). Quality REQUEST CHANGES (Critical 1, Major 3, Minor 6, Info 5). Performance APPROVE WITH COMMENTS (Minor 3, Info 6). All three are on ff9d9a3 |
+| 2 | Zero open Blocker or Critical | ✱ | ❌ | **QLT-01, Critical, is upheld and open.** The reviewer-quality scale says "Critical = AC not met". AC-6's last clause, "A rule in the story template checklist states this", is not delivered in any template (my check above). Blocker 0 |
+| 3 | Majors fixed or explicitly accepted | | ❌ | STD-01, STD-02, QLT-02, QLT-03 and QLT-04 are all upheld. None is accepted (rulings 2 and 3) |
+| 4 | Findings cite file:line | | ✅ | Every finding in the three reports, and the 37 inline comments |
+| 5 | The developer's departures (11161) | | ⚠️ | (1) The AQP-113 interim test is retired: verified (QLT-14). (2) The spec location is accepted; the documents are corrected (ruling 5). (3) The AC-4 reading is accepted as to outcome; the stated reason is wrong (ruling 4). (4) The widened rule is accepted in direction, with gaps (STD-01). (5) `@one-width` is not applied, which is correct (ruling 6) |
+| 6 | Product runtime and NFR-009 budget | | ✅ | Stage 11b is byte-identical to `master` (worst `/masters/process` 173,446 B). The strict parse costs 4.9 us on `/me` (PRF-05) |
+| 7 | CI time (RISK-023) | | ✅ | Required path 5:47 and 5:22, under the 6:00 warning. Nightly median 4:59, p95 5:45 |
+| 8 | AQP-113 AC-6 retirement | | ✅ | QLT-14: every assertion of `process-master-confidential.test.ts` is kept or widened. `PROCESS_MASTER_CANARIES` is imported, not copied (11141) |
+
+**Rulings**
+1. **QLT-01 (Critical) is upheld, so G6 cannot pass at this attempt.** This story's business value is that "every later story is born under the scan". AC-6 depends on later stories adding their Restricted values. The template rule is what prompts them, so it is not decoration. The fix is two lines, made by two owners. Both land on PR #115, so that G7 can judge AC-6 on one head.
+   - **(a) `.github/pull_request_template.md`: the developer, in the fix push.** Add one line at the end of the "Checklist (Definition of Done — developer)" list. Change no existing line (the file is append-only). Exact text:
+     `- [ ] Cost confidentiality (STORY-01.03 AC-6): every new Restricted value is in \`tests/support/canary-masters.ts\` with its loader; every new route or page is in the route manifest, with a real-value recipe in \`tests/support/route-calls.ts\` for a dynamic segment; the canary scan still finds 0 (or: "none added")`
+   - **(b) `docs/templates/story.md`: the orchestrator.** No agent's write area covers `docs/templates/`. The scrum-master's guard allows only `docs/05-backlog/`, and agents do not change guards. The orchestrator already applies master's wording to project-wide process files (DL-109 condition 8). Add this line directly under the "Testing Notes" line (line 49), and change no existing line. Testing Notes is one of the sections the scrum-master copies into every Jira story description (playbook §4.4), so the rule reaches story authors in this mode. The DoD block at line 78 does not reach Jira. Exact text:
+     `- **Cost confidentiality checklist (STORY-01.03 AC-6; sprint plan cross-cutting rule 3):** ☐ every new Restricted value (rate, price, specific gravity, scrap rate, exchange rate, formula text, calculated output) is added to \`tests/support/canary-masters.ts\` with its loader; ☐ every new route or page is in the route manifest, and a dynamic one has a real-value recipe in \`tests/support/route-calls.ts\`; ☐ the canary scan still finds 0. Write "none added" if the story adds neither.`
+     - **Placement:** its own docs-only commit on `feat/AQP-57-engineer-projection-scan`, after the developer's push and before the re-review. Master verifies it: one file, one added line, the wording verbatim.
+     - **Why not the governance docs PR:** there, AC-6 would depend on an unrelated merge, and G7 could not see the line on PR #115's head.
+   - **(c) The scrum-master needs to do nothing new.** The seven stories that extend `canaryMasters` already carry it as an AC (CR-34; sprint plan §7). The new line applies to stories written from now on.
+   - **Recommended, not a condition:** the same line in `docs/standards/definition-of-done.md` (Developer), in the next governance docs PR. The orchestrator adds it with the STD-13 wording that is still owed (DL-109 condition 8; STD-16 confirms that the file still ends mid-sentence).
+2. **The five Majors are upheld. Each is fixed in the fix push, with a test that can fail.**
+   - **STD-01 (= QLT-12, F10):** both the Process Master audit entries (`defaultValue` before and after) and the configuration snapshots (formula text) are Restricted under architecture §5.3. Deny by default (Coding Standards §5):
+     - add `audit-*` and `config-*` to the repository and service patterns, and to `COST_IMPORTS`;
+     - forbid `@/server/composition` and `**/server/composition` in `engineer-*` views, with a planted-fault case. Views receive data; they do not fetch it;
+     - add an exhaustive classification test over `src/server/services` beside the repository test, and move `audit-repository` and `config-repository` out of `NOT_COST`;
+     - correct the rule comment and the test title so they claim only what the rule enforces.
+     A future Engineer form that needs field labels gets a narrow, differently named reader (ruling 5).
+   - **STD-02:**
+     - Correct the four comments (`negative-control-gate.ts:4-5`, `leak/route.ts:7-10`, `README.md:167-168`, `playwright.config.ts:46-48`) and the PR description to give the real reason. The guard is the build-time replacement of the dot-access `process.env.NODE_ENV` default, so keep it in that form.
+     - **Pin it with one check that fails on a planted fault.** I prefer a build-output assertion in `scripts/check-production-routes.ts`: the compiled chunk that reads `CANARY_NEGATIVE_CONTROL` contains no runtime `process.env.NODE_ENV` read. A unit test on the gate's source form is acceptable if the build route cannot be done in this push; the Dev Record says which was chosen. The planted fault is a destructured or bracketed read, and it must fail the check.
+   - **QLT-02:**
+     - **Engineer API calls:** assert the recipe's status, not `< 500`.
+     - **Implemented, non-hidden Engineer pages:** require 200, and require that `new URL(document.url).pathname` equals the path, so a lost session that lands on sign-in fails.
+     - **A dynamic segment with no real-value recipe** fails with "add a real-value recipe for <route> (AC-6)".
+   - **QLT-03:** record the bodies of the responses the browser itself fetches (fetch, XHR, RSC prefetch) during the journeys, by interception in the Engineer context (`context.route` → `route.fetch()` → record → `route.fulfill`). The live negative control is extended with a sentinel planted in a browser-initiated response, which must be found. If a response type cannot be intercepted (for example a stream), the Dev Record names it and says why. reviewer-quality then rules whether that is acceptable. The developer does not exempt it silently.
+   - **QLT-04:**
+     - The "scripts scanned" guard counts only records with `body !== null`, and asserts `referenced > 0`.
+     - The AC-3 procedure moves into one helper (for example `scanAsEngineer`). The planted-chunk negative control calls that same helper with the default `ScanRecorder()`.
+     - **This is the condition on which the AC-4 reading is accepted (ruling 4).**
+3. **The Minors and the cheap Info items are fixed in the same push.** Only the items listed below are deferred. One re-review covers the whole push (DL-109 ruling 4).
+   - **STD-03:** a note on why `CANARY_NEGATIVE_CONTROL` stays outside `env.ts`, and the variable named in the README scan section.
+   - **STD-04:** correct the pointer to `tests/security/scanner.test.ts`.
+   - **STD-05 with PRF-07:** `engineer-*` views and `/api/v1/me` import `schemas/me` directly. The barrel is removed from the Engineer allowed imports, a restricted pattern for it is added with a planted fault, and the barrel gets `import 'server-only'`.
+   - **STD-06:** one sentence at the top of `engineer-me.ts` on what `engineer-*` means.
+   - **STD-07:** `expect(recorder.unreadable).toEqual([])` in the AC-3 and AC-5 tests, and in the control tests where the planted response must be readable.
+   - **STD-08:** items (a) to (e).
+   - **STD-09:** every test body within 40 lines, or with a one-line justification (the QLT-04 helper should achieve this); `SETUP_TIMEOUT` named once.
+   - **STD-10:** wrap the lines over 160 characters in the new files. The format gate is deferred (ruling 6).
+   - **STD-11:** the PR body carries the squash message, which names the retirement of `process-master-confidential.test.ts`. The PR is squash-merged.
+   - **QLT-05:** keep every stored formula that contains `{{`, and add each one's display form (skip one-token forms).
+   - **QLT-06:** the walker flags every `type: object` without `additionalProperties: false` (records included) and every empty `{}` schema, both added to the "walker can fail" control.
+   - **QLT-07:** collisions are compared on the printed forms, both ways, with a can-fail case.
+   - **QLT-08:** a dynamic Lead or Admin row asserts that its real ID is not `invented-id`.
+   - **QLT-09:** every response to a request that carried the session cookie is held to `private, no-store`, except `/_next/static/**`. If the next-auth session route fails this, the developer reports it in the PR and does not add an exemption. The solution-architect decides on a header or an ADR-008 note before attempt 2.
+   - **QLT-10 (F14):** the gate rejects an early exit in `canary-scan.spec.ts`: a `process.env` condition, or a bare `return` before the first `expect`. Alternatively, each scan test ends with a count the gate can see. Either way, the re-planted F14 must fail.
+   - **PRF-03:** fetch referenced files in batches of 6 to 8 with `Promise.all`, and record the scan's elapsed time as a test annotation. Splitting AC-3 into several tests is not required, because it would multiply sign-ins at three widths.
+   - **No change:** STD-12 (the guard stays at exactly two routes), STD-13 to STD-15, QLT-11, QLT-14 and QLT-15, and PRF-04, PRF-05 and PRF-08.
+   - **Process:** Gitleaks before the push (DL-098, DL-108); stage files by name; planted-fault evidence never committed (DL-091).
+4. **The AC-4 reading is accepted for G6 and G7, conditionally.** AC-4 is judged on three things, provided STD-02 and QLT-04 are met:
+   - the in-process route, on only under `NODE_ENV=test`;
+   - the production build answering 404 with the sentinel supplied, plus the STD-02 pin, which shows that the gate is a constant in that build;
+   - the live negative controls (real data sent to the Admin; sentinels planted in a header, an RSC payload, a browser-initiated response and a chunk, all through the same pipeline as the Engineer scan).
+   The developer's stated reason ("`next start` forces production") is rejected (STD-02, QLT-11). This record is the reading QA uses. The solution-architect writes it into test strategy §6 (ruling 5).
+5. **For the solution-architect. Documents only, none holds the fix push or attempt 2, due before the sprint 1 review:**
+   - **Test strategy §6:** the AC-4 reading of ruling 4, with the correct reason.
+   - **Spec location:** the scan spec stays at `tests/e2e/canary-scan.spec.ts` (Playwright `testDir`; the shard and one-width guards key by it). The architect corrects every test-strategy reference to `tests/security/canary-scan.spec.ts`. The scrum-master corrects the AQP-57 Jira Files list and the Testing Notes command (STD-14).
+   - **ADR-008 / architecture §10:** audit and config modules are not Engineer-importable (STD-01); the narrow-reader pattern for an Engineer form that needs field labels, written before the first Engineer form story reaches Ready; the `engineer-*` naming convention (STD-06); "build fails" means the CI build, because `next build` runs no ESLint (QLT-13).
+   - **QLT-09:** if the developer reports that next-auth's session route fails the no-store check, the architect decides before attempt 2.
+   - **The CI items** are in ruling 6 and tech-debt #116.
+6. **Three shards and `@one-width` stay out of this PR. Both go to the architect through tech-debt #116.**
+   - **Three shards:** no trigger has fired. Test strategy §10.5 names the 9-minute nightly line as the trigger, and the nightly shows p95 5:45. This PR's two runs have a median of 5:34. A CI-topology change would also distort the re-review's measurement of this PR. PRF-01's proposal (an earlier trigger: an E2E-adding story whose head and two re-runs have a median over 6:00 sets N = 3, already pre-authorised by AQP-208 AC-1) is the architect's to write into §10.5. If the fix push's head goes over 6:00, it is reported in the re-review. It does not hold G6, because 6:00 is an early warning, not a hold (DL-102, DL-103).
+   - **`@one-width` for the scan:** not in this PR, for three reasons. Section 10.5 needs a ruling before any new file is tagged. It edits an AC-8 guard (`canary-scan-gate.test.ts:84-86`) that this push is strengthening (QLT-10). And it saves about 4 s today.
+     - **The question the architect must answer first:** the scan reads no layout, but after QLT-03 it records every response the browser fetches, and client code can fetch differently at different widths (lazily loaded menus and drawers, phone-only variants). Does one width still see every response an Engineer can receive?
+     - **If they tag it:** the scan still runs on every PR in `desktop`, and is never skipped or narrowed otherwise. The allow-list and the gate test change in the same follow-up PR. That PR is reviewed by reviewer-quality with a planted narrowing fault.
+   - **Also deferred to #116:**
+     - PRF-02 (count-based shard balance);
+     - PRF-09 (retries and time-outs on the Gitleaks download), which cost this PR two attempts;
+     - the format gate of STD-10.
+7. **Re-review: all three reviewers, on the new diff only, before attempt 2** (DL-051, DL-109). The push changes ESLint rules, two product files (`/api/v1/me`, the gate) and the scan pipeline, which sets CI time. Each reviewer changes only their own label.
+   - **Quality, with a planted fault per item, each failing a test:**
+     - F10 and F14 re-planted;
+     - a dynamic Engineer row with no recipe;
+     - a session cleared mid-scan;
+     - a sentinel in a browser-initiated response;
+     - `fetchReferencedFiles` fetching nothing;
+     - a sentinel in a chunk, through the shared helper;
+     - a `z.record` in a strict schema;
+     - QLT-05 to QLT-09 as fixed.
+     Quality also confirms that both template lines are present.
+   - **Standards:**
+     - STD-01: planted `audit-*`, `config-*` and `composition` imports, and an unclassified service, each failing lint or the test;
+     - STD-02: the pin fails on a destructured read;
+     - STD-03 to STD-11.
+   - **Performance, narrow:**
+     - the required path of the new head (its first attempt, and one re-run if that is over 6:00);
+     - the scan tests' durations with interception and batching;
+     - PRF-03 and PRF-07.
+   - **Then attempt 2:** master verifies the orchestrator's template commit. Master takes the G6 decision at attempt 2 on the final head, with CI green on all four jobs.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #115 | One push: the PR-template line (ruling 1a); STD-01, STD-02, QLT-02, QLT-03, QLT-04 (ruling 2); the Minors and the cheap Info of ruling 3; the PR description corrected (STD-02) with the squash message (STD-11); Gitleaks per DL-098 and DL-108 | Before the re-review |
+| 2 | orchestrator | `docs/templates/story.md` on PR #115 | The Testing Notes line of ruling 1b, verbatim, in its own docs-only commit, with no existing line changed | After condition 1, before the re-review |
+| 3 | reviewer-standards, reviewer-quality, reviewer-performance | `docs/06-reviews/AQP-57/*.md` (round 2); PR reviews | Re-review the new diff only, as ruling 7 sets out | Before G6 attempt 2 |
+| 4 | master | gate log | Verify condition 2; G6 attempt 2 on the final head, with CI green | G6 attempt 2 |
+| 5 | solution-architect | test strategy §6, §10.5 and the scan path; ADR-008 or architecture §10 | Ruling 5 (AC-4 reading, spec path, audit and config, narrow reader, `engineer-*`, QLT-13); QLT-09 only if reported | QLT-09 before attempt 2; the rest before the sprint 1 review (the narrow reader before the first Engineer form story reaches Ready) |
+| 6 | scrum-master | Jira AQP-57 description | Files list and Testing Notes: `tests/e2e/canary-scan.spec.ts` (STD-14) | Before G7 |
+| 7 | solution-architect | #116 | Three-shard trigger and `@one-width` question (ruling 6), PRF-02, PRF-09, the format gate | Sprint 1 review |
+| 8 | orchestrator | Jira and PR | Post this decision; labels `gate:g6-changes`; Jira story to Changes Requested (In Progress) | Now |
+
+**Risks registered:** none new. **RISK-023 is lowered from 8 to 6 by its own stated rule (DL-102):** AQP-208 merged, and nightly 42458228143 shows median 4:59 and p95 5:45. It stays open on PRF-01's trend.
+**Rationale:** AC-6 promises that later stories keep the scan's depth growing. One of its clauses, the template rule, is not delivered, which is Critical under the review scale, so the gate fails at attempt 1. The five Majors share one theme. The safety net is sound for today's few routes, but it can stay green while missing a future leak: an import through `composition`, a dynamic route scanned only on its 404, a browser-fetched body never read, or a chunk crawl that reads nothing. They are cheap to close now, while no cost-bearing view exists, and costly to discover later. The product itself leaks nothing today, and performance has no objection.
+**Posted:** Jira AQP-57 comment 11166; PR #115 comment 6720217885; the risk update on AQP-1, comment 11167; tech-debt #116 created.
+
+---
+
+## G6 – Peer Review — AQP-57 (STORY-01.03: Engineer sees no cost: projection and scan) — 2026-11-08 (attempt 2)
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (attempt 1 NO-GO, record above, DL-112)
+- **Artefacts evaluated:**
+  - **PR and CI:** PR #115 at c162eee (`gh pr view`: head `c162eee3…`, merge state CLEAN). There are five commits after ff9d9a3:
+    - 8dcb4c2: the PR-template line;
+    - e617f6d: the import allow-list;
+    - d9f50aa: the STD-02 reason and pin;
+    - 539bded: the scan pipeline and the early-exit bypass;
+    - c162eee: the orchestrator's template line.
+    CI 42473467530 on 539bded and CI 42474042206 on c162eee: success on all four check runs each, read through the check-runs API. `git diff --name-only 539bded c162eee` is `docs/templates/story.md` only.
+  - **Re-reviews (round 2, `ff9d9a3..c162eee`):**
+    - standards APPROVE WITH COMMENTS (Jira 11170; `standards.md` "Round 2");
+    - quality APPROVE WITH COMMENTS (11171; `quality.md` "Round 2");
+    - performance APPROVE WITH COMMENTS (11169; `performance.md` "Round 2").
+    Labels: `review:standards-approved`, `review:quality-approved`, `review:performance-approved`.
+  - **Developer:** hand-off 11168 and the round-2 Dev Record in the PR description.
+  - **My own checks:**
+    - **Condition 2 (template commit):**
+      - c162eee changes one file, `docs/templates/story.md`, with one added line (line 50, under "Testing Notes") and no other change. Its line ending matches its neighbours (LF).
+      - The line equals ruling 1b character for character, compared with `grep -x` against the text I posted on the PR.
+      - The PR-template line from 8dcb4c2 (`pull_request_template.md:45`) also equals ruling 1a, character for character, as one insertion.
+      - **Condition 2 is met.**
+    - **The three new findings**, each read at c162eee:
+      - QLT-16: `canary-scan.ts:360-363`, where `withType` filters by content type only;
+      - QLT-17: `canary-scan-gate.test.ts:85`, where `earlyExits` reads only `SCAN_SPEC`;
+      - STD-17: `negative-control-gate.ts:12`, which names `tests/security/scanner.test.ts`.
+    - The full list of files changed since ff9d9a3 is within the story's scope (31 paths: `src/` security files, `scripts/` production-routes check, `tests/`, ESLint, Playwright config, README, the two templates).
+  - **Not done:** no suite run, no planted fault and no build of my own. The reviewers' planted-fault tables (standards 22 specifiers; quality F10, F14 and N1 to N12) and CI are the evidence.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Round 2 of all three, each on `ff9d9a3..c162eee`, each APPROVE WITH COMMENTS |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | QLT-01 is fixed: both template lines are verbatim, checked by master, standards and quality. Blocker 0 and Critical 0 open in all three reports |
+| 3 | Majors fixed or explicitly accepted | | ✅ | Each round-1 Major is fixed, and each fix was caught by a planted fault:<br>• STD-01: 18 of 18 real-case specifiers refused; F10 caught.<br>• STD-02: the stage-9 pin fails on an un-inlined, destructured or bracketed read.<br>• QLT-02: N1 and N2 caught.<br>• QLT-03: N3 caught.<br>• QLT-04: N4 and N5 caught |
+| 4 | Findings cite file:line | | ✅ | All new findings and all thread replies |
+| 5 | Ruling-1 template lines | | ✅ | Condition 2 above |
+| 6 | AC-4 reading conditions (ruling 4) | | ✅ | QLT-04 (quality) and STD-02 (standards) are both met |
+| 7 | QLT-09 | | ✅ | next-auth's session route carries `private, no-store`, so nothing goes to the architect. The developer exempts `/_next/static/**` and `public/` files. **Accepted:** `public/` files are static, the same for every viewer, carry no session data, and the logo is cacheable on purpose |
+| 8 | CI and runtime | | ✅ | Required path 5:11 (539bded) and 4:50 (c162eee), under the 6:00 warning. Stage 11b is identical to `master`. `src/` changes are one import path, a `server-only` marker and comments (performance, round 2) |
+| 9 | New findings | | ⚠️ | Minor: QLT-16, QLT-17, STD-17. Info: QLT-18, STD-18 to STD-20; PRF-03 lowered to Info. Ruling 1 |
+
+**Rulings**
+1. **QLT-16, QLT-17 and STD-17 are fixed in this PR, in one small push before QA, and master verifies the push. They are not routed to a follow-up.**
+   - **Why now:**
+     - QLT-16 and QLT-17 are the same fail-open class as round-1 QLT-04 and QLT-10, which this story exists to close. Each is one line of code away from a scan that stays green while reading less.
+     - The scan helper is the file that seven later stories extend (AC-6), so a hole left in it is copied forward.
+     - A follow-up would trail behind those stories: the STD-13 wording has waited since DL-109.
+     - The fixes are test-only, plus one comment, so the cost is one CI run of about 5 minutes. It holds nothing else, because QA can prepare in parallel.
+   - **QLT-16:**
+     - `withType` counts only records with `body !== null`;
+     - `openEngineerPages` returns the addresses it opened, and `expectScanSawEnough` requires a read body for each `GET <address> (page)` label.
+   - **QLT-17:** `earlyExits` also checks the bodies of `scanAsEngineer`, `openEngineerPages`, `callEngineerRoutes` and `expectScanSawEnough` in `tests/e2e/support/canary-scan.ts`. It checks those function bodies, not the whole file, because the listener's bare `return;` at `:73` is legitimate. The test proves itself on a planted helper body.
+   - **STD-17:** the pointer becomes `tests/unit/production-routes.test.ts`.
+   - **Cheap Info in the same push** (test, lint or comment only):
+     - **STD-18:** rename the "computed read" fixture, or drop its `/* NODE_ENV */` comment, and add one line to the check's doc saying it cannot see a key built at run time.
+     - **STD-19:** refuse the bare directory specifiers `@/server/repositories` and `@/server/services` in Engineer views, with planted-fault cases.
+     - **Optional:** PRF-03's one `console.log` of the scan's elapsed time.
+   - **Proof in the PR:**
+     - the developer re-plants N11 (the body of `GET / (page)` never read) and N12 (`if (process.env.CI) return;` at the top of `expectScanSawEnough`), and both now fail named tests;
+     - all plants are reverted and never committed;
+     - Gitleaks runs per DL-098 and DL-108, and files are staged by name.
+   - **Master verifies before G7:**
+     - the file list (no `src/` change other than the STD-17 comment);
+     - the four items above;
+     - the N11 and N12 results;
+     - CI green on all four jobs of the new head.
+   - **No reviewer re-review**, because the fixes are test-only (DL-047, DL-086, DL-088). If the push changes anything in `src/` other than that comment, it needs reviewer-quality's narrow re-review instead.
+2. **No action now:**
+   - **STD-20:** fix when the file is next touched.
+   - **PRF-01, PRF-02 and PRF-06:** these stay in #116.
+3. **QLT-18 is routed, not fixed here.** The first story that implements a dynamic Lead or Admin page (planned `/estimates/[code]/costs/[slNo]`, `/export`) opens it with its `PAGE_RECIPES` value and with an invented one, and compares the two answers (AC-5's real-ID versus invented-ID promise). The scrum-master writes this into that story's Testing Notes before it reaches Ready.
+4. **Round-1 conditions:**
+   - **Met:** 1 (developer), 2 (template commit), 3 (re-reviews), 4 (master).
+   - **Still open, holding nothing:**
+     - 5 (solution-architect documents; QLT-09 needs no decision);
+     - 7 (#116);
+     - the STD-13 and STD-16 wording in the governance docs PR (DL-109 condition 8, orchestrator).
+   - **At G7:** condition 6 (scrum-master: the AQP-57 Jira Files list and the Testing Notes path become `tests/e2e/canary-scan.spec.ts`), due before G7.
+   - **Now:** condition 8 (orchestrator: labels and the Jira transition, after this decision).
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| A2-1 | developer | PR #115 | One push: QLT-16, QLT-17, STD-17, STD-18, STD-19 (ruling 1); N11 and N12 re-planted, with results in the PR; Gitleaks per DL-098 and DL-108; stage files by name | Before G7 |
+| A2-2 | master | gate log | Verify A2-1 and CI green on the new head | Before G7 |
+| A2-3 | scrum-master | Jira AQP-57 description; the first dynamic Lead or Admin page story | Spec path (round-1 condition 6); the QLT-18 line in that story's Testing Notes | Before G7; before that story reaches Ready |
+| A2-4 | orchestrator | PR and Jira | Post this decision; labels `gate:g6-pass` once A2-2 is met (`gate:g6-changes` until then); Jira to In QA after A2-2 | After A2-2 |
+
+**G7 evidence (QA, on the final head):**
+- **Each AC with evidence.** AC-4 is judged on the reading accepted in ruling 4 of attempt 1. AC-6 on both template lines and the manifest-driven loops.
+- **The scan, at three widths, on the production build:** 0 found, and every non-vacuity count met with read bodies.
+- **Planted faults, one per guard, each failing a test:**
+  - a sentinel in a page, an RSC payload, a JSON answer, a header, a browser-initiated response and a chunk;
+  - an import of `audit-*`, `config-*` or `composition` in an Engineer view;
+  - a dynamic Engineer row with no recipe;
+  - an early exit in the spec and in the helper.
+  Evidence runs only by `workflow_dispatch` or a throwaway PR (DL-091); nothing planted is committed.
+- **AC-5:** 403 with the fixed body for every Lead and Admin row, and the same answer for a real and an invented ID on API rows.
+- **AC-8:** the gate shows the scan unquarantined at three widths.
+- **AQP-113 AC-6:** fully met with this PR (QLT-14).
+- **Regression:** green.
+- **Closure:** Done only after the posted G7 (DL-098). Squash merge with the PR body's squash message (STD-11); the merge is the delivery lead's (code-human).
+
+**Risks registered:** none new. RISK-023 unchanged at 6: the paths are 5:11 and 4:50, and the window median is 4:59 with p95 5:47 (performance, round 2).
+**Rationale:** Every mandatory item now passes. The Critical and all five Majors are fixed, and each fix is proven by a planted fault that fails a test. The template lines are verbatim, checked by me and by two reviewers. What remains are three Minors. Two of them are narrower forms of the fail-open class this story exists to close, so they are fixed now in a test-only push that master verifies, rather than left for the stories that will copy the helper.
+**Posted:** Jira AQP-57 comment 11172; PR #115 comment 6721909577.
+
+**AQP-57 G6 attempt 2, condition A2-2: verified — 2026-11-08 (master).** **Result: met.** A2-1 and A2-2 are closed, and G6 is closed. AQP-57 may go to G7 on 64a1678.
+- **Artefacts:**
+  - **PR:** PR #115 at 64a1678 (`gh pr view`: head `64a16780…`, merge state CLEAN). The commits after c162eee are 5e8bfd8 (QLT-16, QLT-17) and 64a1678 (STD-17, STD-18, STD-19).
+  - **CI:** run 42484736523, success on all four check runs on 64a1678, first attempt (check-runs API). In its log, `tests/security/engineer-import-rule.test.ts` ran 554 tests, `tests/unit/canary-scan-gate.test.ts` 16 tests and `tests/unit/production-routes.test.ts` 18 tests, all passed; the shards passed 235 and 217 tests.
+  - **Developer:** hand-off 11173.
+- **File list:** `git diff --stat c162eee 64a1678` shows 7 files:
+  - `eslint.config.mjs` +6;
+  - `scripts/lib/production-routes.ts` +5 (doc comment);
+  - `src/lib/negative-control-gate.ts` 1 line;
+  - `tests/e2e/support/canary-scan.ts`;
+  - `tests/security/engineer-import-rule.test.ts` +4;
+  - `tests/unit/canary-scan-gate.test.ts` +56;
+  - `tests/unit/production-routes.test.ts`.
+  **The only `src/` change is the STD-17 comment line**, so the re-review trigger of ruling 1 is not met.
+- **Each item, read in the diff:**
+  - **QLT-16:**
+    - `expectScanSawEnough` now counts only records with `body !== null` ("HTML pages read", "RSC payloads read", "JSON answers read").
+    - `openEngineerPages` returns every address it opened, hidden review pages included.
+    - Every address must have its `(page)` and `(RSC)` records present, each with a read body.
+    - Developer's N11 re-plant (the body of `GET /` never read): the AC-3 scan test fails with "HTML pages read".
+  - **QLT-17:**
+    - The gate reads `tests/e2e/support/canary-scan.ts` for the quarantine markers.
+    - It applies `earlyExits` to the bodies of five helper functions (the four named plus `fetchReferencedFiles`), using `functionBody`. That function returns `undefined` for a renamed or missing helper, which fails the test, so a rename cannot escape the check.
+    - Two self-tests prove it can fail: a planted N12 helper body, and a signature that wraps over several lines.
+    - A further test requires that `expectScanSawEnough` asserts and that `scanAsEngineer` calls the three steps.
+    - Developer's N12 re-plant: the named QLT-17 test fails.
+  - **STD-17:** the pointer now reads `tests/unit/production-routes.test.ts`.
+  - **STD-18:** the fixture is renamed "a read through a variable named NODE_ENV", so its name now matches what it proves. The check's doc states both limits: a key built at run time, and `GATE_WINDOW`.
+  - **STD-19:** one `staticRegex` and `regex` entry, `(repositories|services)/?$`. It follows the same pattern as the schemas-barrel entry that standards reviewed in round 2. Four planted specifiers are added (`@/server/repositories`, `@/server/services`, `../repositories`, `../services/`), and all pass the refusal tests in CI.
+  - **PRF-03:** the optional `console.log` was not added, which I accept, because `no-console` applies and the elapsed time is already a test annotation.
+- **Ruling: the `eslint.config.mjs` change does not trigger the narrow reviewer-quality re-review. My check is enough.**
+  - The trigger was a change to `src/` beyond the STD-17 comment, because that is product code. `eslint.config.mjs` is not product code, and STD-19 was ruled into this push by name, "with planted-fault cases".
+  - The change only adds a refusal; it removes or relaxes nothing. It can fail in only two ways:
+    - **It refuses too little.** The four planted specifiers would then pass lint and fail the test, but the test is green in CI.
+    - **It refuses too much.** `eslint . --max-warnings=0` on the whole tree would then fail stage 1, but stage 1 is green.
+  - STD-19 is a standards finding, and its owner's round-2 review already covered this mechanism. This is consistent with DL-047, DL-086 and DL-088.
+- **Not done:** I did not re-plant N11 or N12 myself. The developer's results and the self-tests in the gate are the evidence.
+- **CI time:** the required path was 5:35, the developer's figure, under the 6:00 warning. RISK-023 stays at 6.
+- **Next:**
+  - The orchestrator switches `gate:g6-changes` to `gate:g6-pass` and moves AQP-57 to In QA. The qa-engineer then runs G7 on the G7 evidence list of attempt 2.
+  - Before G7, the scrum-master corrects the spec path in the Jira Files list and Testing Notes (A2-3).
+  - If the head moves before G7 (for example, a branch update from `master`), the G7 evidence is gathered on the final head.
+
+---
+
+## G7 – QA Acceptance — AQP-57 (STORY-01.03: Engineer sees no cost: projection and scan) — 2026-11-08
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR:** PR #115 at a6728b4 (`gh pr view`: head `a6728b49…`; merge state BLOCKED while CI runs). a6728b4 is 64a1678 plus the QA commit. `git diff --name-status 64a1678 a6728b4` shows three added files, all under `docs/07-qa/`: the test report, DEF-018 and DEF-019. No planted file and no `src/` or `tests/` change.
+  - **CI:** the reference run is 42484736523 on 64a1678: success on all four jobs, first attempt. Run 42493344482 on a6728b4 was **in progress** on all three of its jobs when read (check-runs API).
+  - **QA:**
+    - the report `docs/07-qa/AQP-57-test-report.md` (ACCEPT), tested on 64a1678;
+    - Jira 11176; PR comment 6723151711;
+    - DEF-018 (AQP-225, #117, Sev-3, Test) and DEF-019 (AQP-226, #118, Sev-4, Test or Environment).
+  - **Jira AQP-57 description**, read by master: AC-1 to AC-8 match the report's AC column. The Files list and the Testing Notes now name `tests/e2e/canary-scan.spec.ts` and `npx playwright test canary-scan`.
+  - **Backlog:** `docs/05-backlog/backlog.md` row 38 (06.03), uncommitted in the main folder.
+  - **Route manifest at 64a1678:** the planned dynamic Lead or Admin pages are `/estimates/[code]/costs/[slNo]` (SCR-07) and `/estimates/[code]/export` (SCR-10).
+  - **Not done:** no suite run, plant or build of my own. QA's tables and CI are the evidence.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Each AC was tested on the production build, real PostgreSQL and a real browser at 360, 768 and 1366 px, and every guard was shown to catch a planted fault:<br>• **AC-1:** 8 lint errors on planted imports (D1, D2); a client import of `lib/formula` fails `next build` (D3); 13 of 13 formula modules are `server-only`.<br>• **AC-2:** a non-strict schema fails 3 tests.<br>• **AC-3:** 21 of 21 pass; a plant on each of the six surfaces (P1 to P6) is reported by place and value at three widths.<br>• **AC-4:** on master's accepted reading. V1: the production build with `NODE_ENV=test` and the sentinel answers 404. V2 and V3: a planted run-time read builds cleanly, so `next build` alone does not catch it, but the stage-9 pin exits 1. This confirms the corrected reason.<br>• **AC-5:** 49 calls, one 403 body, `private, no-store` on every response; a route with no role check fails the live scan and the manifest test (C2).<br>• **AC-6:** both template lines verbatim; a new manifest route is scanned with no scanner change (C1); a dynamic route with no recipe is named (C3).<br>• **AC-7:** 0 collisions, and 2 builder mutations caught.<br>• **AC-8:** wired into the required check; 11 of 12 quarantine attempts fail a named gate test (ruling 2 covers the twelfth) |
+| 2 | No open Sev-1 or Sev-2 | ✱ | ✅ | No product defect. Open: DEF-018 Sev-3 and DEF-019 Sev-4, both Test or Environment, both pre-existing, neither caused by this PR (ruling 5) |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42484736523 is green on the tested head; the local run failed only for DEF-018 and DEF-019:<br>• Lint, `tsc`, build and the stage-9 pin are clean.<br>• Vitest: 4,255 passed. The one red suite is DEF-018; it passes alone, 25 of 25.<br>• E2E: 445 of 470. The 2 failures and 2 flaky tests are DEF-019, all Users or Audit at tablet width with about 200 accumulated users; 67 of 67 pass after the clean-up.<br>• Retries are as configured, and no timeout was raised (DL-057).<br>The a6728b4 run is a merge precondition (ruling 4), not a G7 item |
+| 4 | Exploratory testing notes | | ✅ | Charter C1 (finding a cost as an Engineer): 12 transformed forms, error cards, RSC, source maps, size against rates (byte-identical), bookmarked Lead URLs. The ideas not run (sign-out cache, print, Warn, e-mail) are stated with their reason |
+| 5 | Accessibility for the UI | | ✅ n/a | No screen in this story (stated). The existing axe suite ran in the full E2E run |
+| 6 | G6 attempt-2 evidence list | | ✅ | Every item on the list is covered:<br>• the scan at three widths with read bodies;<br>• a plant per guard: six surfaces; `audit-*`, `config-*` and `composition` imports (D1, D2, plus standards' 22 specifiers); a dynamic Engineer row with no recipe (C3); early exits in the spec and the helper (G6, G7, G8);<br>• AC-5 real against invented ID on API rows;<br>• AC-8 at three widths;<br>• AQP-113 AC-6 (QLT-14).<br>Nothing planted was committed (DL-091) |
+| 7 | A2-3 (scrum-master) | | ✅ | Ruling 6 |
+
+**Rulings**
+1. **The "two routes missing from the manifest" are not a finding.** They are `/api/qa-plant` and `/api/v1/qa-new`, which QA itself added in the planted-fault worktree as the independent pass's negative control. On the clean head, the file system, the build's `app-paths-manifest.json` and the manifest's implemented rows are identical (16 routes, QA-INV).
+   - The live scan iterates the manifest by design, so an unlisted route is outside its sight. Two other layers close that gap:
+     - `manifest-completeness.test.ts` (CI stage 11) fails a route file with no row;
+     - `withRoute` refuses at build time a path that is not in the manifest.
+   - The independent pass agrees with both. No action is needed.
+2. **The twelfth quarantine attempt (G12, one `expect` removed from a test that has several) is a stated limit, not a defect of AC-8.**
+   - **Why it is not a quarantine:** AC-8 is about switching the scan off or narrowing it (skip, filter, early exit, width, retries), and the gate stops all eleven of those. Weakening an assertion is a change in the diff. No static gate can judge its strength, and the same holds for any test in the repository.
+   - **The control is a review rule**, as at DL-107 for the sibling-before audit limit. Any PR that removes or weakens an assertion in any of the following must state it in the PR body with its reason:
+     - `tests/e2e/canary-scan.spec.ts`;
+     - `tests/e2e/support/canary-scan.ts`;
+     - `tests/unit/canary-scan-gate.test.ts`;
+     - `tests/security/**`.
+   - reviewer-quality then shows, with a planted fault, that what the removed assertion guarded still fails a test. An unstated removal is a Major finding at G6.
+   - The solution-architect writes the limit and the rule into test strategy §10, with OBS-3 (which build-time layers exist), before the sprint 1 review. Until then, this record is the rule.
+3. **No throwaway-PR quarantine demonstration is required.**
+   - The gate test is the same code that CI stage 11 runs, inside the required check. QA confirmed the wiring: the required job `needs: [verify, e2e]`, and `master` protection requires that check, strict, with admins enforced.
+   - DL-091 and DL-105 say where planted runs may go; they do not ask for them. A planted fault in a remote commit on this public repository has a cost and adds nothing that the stage-11 result does not already show.
+4. **CI on a6728b4 must finish green on all four jobs before the merge. It does not hold this G7 decision.**
+   - **Why it does not hold G7:** the diff from the tested head is three QA documents. Branch protection already blocks the merge until the required check passes (merge state BLOCKED now).
+   - **If any job fails:**
+     - do not re-run it blind, and do not merge;
+     - the orchestrator reports the failing job and test to master;
+     - a failure in a test is classified before any re-run (DL-057, DL-089), because a docs-only diff cannot cause a product failure;
+     - a pure infrastructure failure (for example, the Gitleaks download 504 seen at G6, PRF-09) may be re-run once, with the reason recorded on the PR.
+   - If `master` moves before the merge, update the branch and wait for CI green again.
+5. **DEF-018 (Sev-3) and DEF-019 (Sev-4) hold neither G7 nor the merge.**
+   - **Why:** both are test or environment defects, both are pre-existing, CI is green on the tested head, and both pass in a clean setting.
+   - **Owner and due:** the developer, in their own defect PRs (the DEF-003 family, DL-057: no raised timeouts, no retries), before the sprint 1 review.
+   - **DEF-019:** the developer states whether the tablet-width time-out at about 200 users comes from the test (for example, a selector over a long list) or from the Users page. If it comes from the page, QA reclassifies it, and the product-manager decides whether a Users list of that size is in scope: NFR-011 states 50 users. It is not a product defect until that is shown.
+6. **A2-3 is met.**
+   - **(a) Spec path:** the AQP-57 Jira description now lists `tests/e2e/canary-scan.spec.ts` in Files and `npx playwright test canary-scan` in Testing Notes (read by master).
+   - **(b) QLT-18:** `backlog.md` row 38 (06.03, `/estimates/<code>/costs/<slNo>`) carries the line, and 07.01 (`/estimates/<code>/export`) is named as the second carrier.
+     - These are the only two planned dynamic Lead or Admin pages in the manifest, and 06.03's is the first.
+     - **What remains due:** the scrum-master writes the line into the Testing Notes of each Jira story before that story reaches Ready.
+     - **If another dynamic Lead or Admin page is planned earlier,** the line moves to that story.
+     - The `backlog.md` edit is uncommitted, so it goes in the next docs PR.
+7. **Observations:**
+   - **OBS-1** (the scan finds only known sentinels) is ARCH-R2's stated residual. Its control is AC-6's template lines, now in place. No action.
+   - **OBS-2** is ruling 2.
+   - **OBS-3** goes to the solution-architect with ruling 2.
+   - **OBS-4** (refused pages differ in size by route) is carried by QLT-18 at 06.03.
+8. **Closure and merge:**
+   - **Done:** QA moves AQP-57 to Done after this decision is posted on Jira (DL-098).
+   - **AQP-113:** its AC-6 is fully met when PR #115 merges (QLT-14).
+   - **Merge:** the delivery lead squash-merges (MERGE_POLICY code-human) after ruling 4, using the squash message in the PR body (STD-11).
+   - **Governance logs** go in a docs PR.
+   - **Still open, holding nothing:**
+     - the solution-architect's documents (attempt 1 ruling 5, and ruling 2 here);
+     - #116;
+     - the STD-13 and STD-16 wording in the governance docs PR (DL-109 condition 8).
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | orchestrator | PR #115 | CI green on all four jobs on the final head before the merge; a failure goes to master as in ruling 4 | Before the merge |
+| 2 | qa-engineer | Jira AQP-57 | Done after this decision is posted (DL-098) | Now |
+| 3 | developer | DEF-018 (#117), DEF-019 (#118) | Defect PRs per DL-057; DEF-019 states its cause (ruling 5) | Sprint 1 review |
+| 4 | solution-architect | test strategy §6, §10; ADR-008 or architecture §10 | Ruling 2 (the G12 limit and the review rule, OBS-3) and attempt-1 ruling 5 | Sprint 1 review |
+| 5 | scrum-master | 06.03 and 07.01 in Jira; `backlog.md` | The QLT-18 line in Testing Notes before Ready; the backlog edit in the next docs PR | Before 06.03 reaches Ready |
+
+**Risks registered:** none new. RISK-023 unchanged at 6. The required path on the tested head was 5:34, 26 s under the warning; the three-shard trigger is with the architect (#116).
+**Rationale:** QA proved every AC on the production stack, and showed that every guard this story adds catches a planted fault at three widths, including a leak on each of the six surfaces the AC names. An independent pass that does not use the developer's scanner found nothing. No product defect is open. What remains are a merge precondition that branch protection already enforces, two pre-existing test defects with owners, and one limit no static gate can close, now covered by a review rule.
+**Posted:** Jira AQP-57 comment 11177; PR #115 comment 6723194751. When posted, run 42493344482 on a6728b4 showed "Stages 1 to 11b" and shard 2 green, with shard 1 still in progress. Ruling 4 stands until all four jobs are green.
+
+---
+
+## G6 – Peer Review — AQP-122 (STORY-02.03: Material Master) — 2026-11-08
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #120 at 40107d5 (`gh pr view`: head `40107d57…`, merge state CLEAN; base `master` 3695f90; 3 commits: 255cc75, 18ddf2d, 40107d5).
+    - CI 42500626525: success on all four check runs (check-runs API). Required path 5:17 (performance, verified).
+  - **Reviews:**
+    - `docs/06-reviews/AQP-122/standards.md`, `quality.md` and `performance.md` (main folder, not committed);
+    - PR reviews 5818746909 (standards), 5818796649 (quality) and 5818736845 (performance), all COMMENT on 40107d5;
+    - labels `review:standards-approved`, `review:quality-changes-requested` and `review:performance-approved`.
+  - **Jira AQP-122:** developer hand-off 11181; brief 11182; reviews 11184 (standards), 11185 (quality) and 11183 (performance).
+  - **My own checks, read-only, at 40107d5:**
+    - **QLT-01:** `tests/e2e/support/auth.ts:196-206`. The comment claims the loader is "safe when three screen sizes run it at once", but the statement is `ON CONFLICT (id) DO UPDATE`, which arbitrates on the ID only.
+    - **QLT-02:** `tests/integration/masters/materials.test.ts` has the refused-entry test at `:276` for create only. No twin for update exists in the file's test list.
+    - **STD-02:** `src/server/services/audit-events.ts:97` reads "MS sheet, Mild steel, Price per kg ₹ 58.00, Specific gravity 7.85, Material-Scrap-Rate (per kg) ₹ 22.00", in production source of a public repository. I compared nothing with any source; that is not permitted.
+    - **Follow-up #119** (shared master hooks) is open.
+  - **Not done:** no suite run, plant, probe or build of my own. Quality's 11 plants and 3 probes, and CI, are the evidence.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards APPROVE WITH COMMENTS (Minor 8, Info 4); quality REQUEST CHANGES (Major 2, Minor 3, Info 5); performance APPROVE WITH COMMENTS (Minor 2, Info 4). All three are on 40107d5 |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in every report. STD-02 is held Minor on the condition of ruling 3, and becomes a Blocker if any value is real |
+| 3 | Majors fixed or explicitly accepted | | ⚠️ | QLT-01 and QLT-02 are upheld and must be fixed before G7. Neither is accepted (rulings 1 and 2) |
+| 4 | Findings cite file:line | | ✅ | All reports and the inline comments |
+| 5 | Product code against AC-1 to AC-8 | | ✅ | Quality's AC table: all met. 10 of 11 plants were caught (P1 to P8; P3u survived, which is QLT-02) |
+| 6 | NFR-009 budget and CI | | ✅ | Stage 11b: every route under 200,000 B. `/masters/materials` is 185,555 B (14,445 B headroom, PRF-01). Path 5:17, under 6:00 (PRF-02) |
+| 7 | AQP-57 AC-6 rule (PR-template line) | | ✅ | Filled in and matching the diff (standards, focus checks). Canary values come from one definition, `material-master-canary.ts` |
+
+**Rulings**
+1. **QLT-01 (Major) is upheld and fixed in this PR.**
+   - **Why Major:** a loader that the comment calls safe fails 32 of 40 rounds when three widths load at once. CI's single retry would hide it as "flaky", so it would cost path time against RISK-023 and pollute the flaky record. This is the DEF-003 class (DL-057). Fixing it with a retry or a longer wait is not allowed.
+   - **Behaviour required:** `INSERT … ON CONFLICT DO NOTHING` (no target, so every unique index arbitrates), then `UPDATE … WHERE id = $1`. Alternatively, load the canaries once in `auth.setup.ts`. Correct the comment.
+   - **Evidence:** if the loader can run in CI stage 11, add a committed integration test that runs three loaders at once on an empty `materials` table, over at least 10 rounds, with no rejection. Otherwise the Dev Record says why not, and the reviewer's 40-round probe is the evidence.
+   - **The same pattern elsewhere:** the developer checks `ensureCanaryProcessRates` (AQP-57) for the same flaw and fixes it the same way if it has one (`process_items` has a name index too).
+2. **QLT-02 (Major) is upheld and fixed in this PR.**
+   - **Why Major:** NFR-007 needs an audit entry in the change's transaction on every change, and DL-107 set the rule that this is shown per event by a planted fault. An edit whose entry is written outside its transaction passes all 140 tests.
+   - **Fix:** add the update twin of "an entry the audit service refuses takes the change back" (quality's suggested test).
+   - **Proof:** plant P3u must fail it.
+3. **STD-02 (Minor) is held Minor on one condition, the same ruling as AQP-113 STD-07 (DL-109).**
+   - **The statement:** the developer states in the PR body that none of `7.85`, `58.00`, `22.00`, `58.5`, `59.50`, `214.5`, `95`, `19.32`, `2.70` or `30.5` came from Accucut's list, the workbook or any other real price source. **If any did, the developer stops, reports BLOCKED, and the finding becomes a Blocker.** The branch is public, so only the delivery lead decides on its history (RISK-006); agents do not rewrite it.
+   - **Then every stored or shown value moves to the `n.37` pattern:**
+     - specific gravity `7.37`;
+     - the `audit-events.ts:97` example gets invented names and `.37` values;
+     - `214.5` and the like become `n.37`.
+   - **Exception:** format-edge inputs that cannot be `.37` (`58.123`, `0.01`, `1e3`) stay.
+   - **Spec headers:** the two headers say "invented, `n.37`, except inputs that test the format".
+   - **Why this matters even for a physical constant:** `7.85` is the textbook gravity of steel, so it is likely to match the real list as well. That is exactly why the pattern exists: a pasted real value must stand out.
+4. **The other Minors are fixed in the same push, except where a destination is named:**
+   - **STD-01:** two warm-up helpers, so the `auth.setup.ts` callback is within 40 lines.
+   - **STD-03:** one exported `RUPEE`, used in all six places; the two headings go in `material-texts.ts`.
+   - **STD-05:** choose the describer by the entry's `objectType` (`process_item`, `material`), not by key presence. Planted fault: a material state described as a rate fails a test.
+   - **STD-06:** both comments corrected.
+   - **STD-07:** shorten the comment so `role-matrix.test.ts` is within 400 lines. The split goes in the next story that touches the file.
+   - **STD-08:** the PR body's DL-108 row says why `gitleaks git` was unavailable, gives the exact `dir` command, and states that the files left out by the scratch config are untouched by the diff.
+   - **QLT-03:** the race assertion is order-free (no `ORDER BY created_at`).
+   - **QLT-05:** cleanup in `finally` or `afterEach`. Proof: re-plant P4, which then reports one failure, not three.
+   - **STD-04: not in this PR.** It is added to #119 (neutral names `DECIMAL_TEXT_*`, `master-texts.ts`, `master-opener.ts`) before 02.02 starts. Renaming 02.01 files here would be churn.
+   - **Process:** Gitleaks per DL-098 and DL-108, and files staged by name.
+5. **Re-review: narrow, by the finding owners, on the new diff only (DL-091, DL-109 ruling 7).**
+   - **reviewer-quality:**
+     - QLT-01: re-run the three-loader probe, 40 rounds, 0 failures;
+     - QLT-02: re-plant P3u, which must fail the update twin;
+     - QLT-03;
+     - QLT-05: re-plant P4, one failure reported.
+   - **reviewer-standards:**
+     - STD-01 to STD-03, STD-05 to STD-08, and the STD-02 statement present in the PR;
+     - STD-03 and STD-05 change product code, which is why they are re-reviewed.
+   - **reviewer-performance does not re-review,** unless stage 11b on the new head grows any route by more than 500 B, or the required path goes over 6:00. Master reads both from CI.
+   - **Then:** master checks the push against this record, with CI green on the final head.
+6. **Routed. None holds the push or G7 unless stated:**
+   - **AC-5 wording (QLT-06):** the product-owner changes AC-5 to `master.created` and `master.edited`, with `object_type` `material` (architecture §8, as for AQP-113), **before G7**. QA judges AC-5 on the corrected text.
+   - **Wording (QLT-08, and the standards note on the page description):**
+     - the ux-expert adopts or amends the proposed words (with "Enter the Material in Drawing." for parallelism) and adds the Materials empty and no-match texts to SCR-13, **before G7**;
+     - they also decide whether the page description may name tabs that do not exist until 02.04 and 02.05;
+     - if a word changes, it goes in the developer's push or in one text-only commit, verified by master before G7.
+   - **Specific-gravity decimals (QLT-07):** the business-analyst asks the delivery lead whether 2 decimals is enough (some references give 3, for example 7.874), and records the answer as a question with an owner.
+     - **Accepted as built for now:** storage is `Decimal(18,4)`, so widening is a one-pattern change.
+     - **Due:** before the first estimate story that uses specific gravity in a calculation reaches Ready. It holds neither G7 nor the merge.
+   - **Soft-deleted names (QLT-04), with the locale note:** the solution-architect rules before STORY-02.07 reaches Ready (tech-debt #122).
+   - **PRF-01 (lazy tab panels):** tech-debt #121. The scrum-master puts first-activation loading of each non-default tab panel into the Dev Context of AQP-123 (02.04) and AQP-130 (02.05) **before each starts**. 02.04's PR states the route's size before and after.
+   - **PRF-02 (CI trend):** the solution-architect writes the earlier three-shard trigger into test strategy 10.5 **before AQP-130 (02.05) starts**. This is brought forward from "sprint 1 review" in #116. The proposal: a first-attempt required path of 5:45 or more in an E2E-adding story sets N = 3 in that PR. Nothing changes in this PR.
+   - **PRF-03:** the solution-architect rules on `@one-width` for "an edit that changes nothing" (10.5). "Duplicate name" stays at three widths (axe and the `:visible` count). No hold.
+   - **PRF-05:** the scrum-master adds "fetch `/options/materials` once per page, not per row" to the Dev Context of the first estimate-form story that uses it.
+   - **PRF-06:** the product-manager adds a master-data volume to NFR-011. This was owed at AQP-113 (round-1 condition 7, R2-6) "before the customers and materials stories reach Ready"; the materials half has slipped. **Now due before AQP-142 (02.02, customers) starts.**
+   - **STD-09:** added to #119 (split the material methods into their own repository before 02.04).
+   - **STD-10:** the format and `max-len` decision is in #116.
+   - **STD-12 / STD-13:** the coding-standards §10 SQL sentence is still truncated (DL-109 condition 8, orchestrator). **Due in the next governance docs PR, and no later than the sprint 1 review.**
+   - **STD-08 (tooling):** the solution-architect documents a worktree-safe `gitleaks git --log-opts` form (#116).
+   - **QLT-09:** in #122.
+   - **QLT-10, STD-11, PRF-04:** no action.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | PR #120 | One push: QLT-01 (and the `ensureCanaryProcessRates` check), QLT-02, QLT-03, QLT-05; STD-01, STD-02 with the statement in the PR, STD-03, STD-05 to STD-08; Gitleaks per DL-098 and DL-108; stage files by name | Before the re-review |
+| 2 | reviewer-quality; reviewer-standards | `docs/06-reviews/AQP-122/` (round 2); PR reviews | Narrow re-review per ruling 5, with the probe and the re-plants | Before G7 |
+| 3 | master | gate log | Check the push against this record; CI green on the final head; 11b and the path within ruling 5's lines | Before G7 |
+| 4 | product-owner | AQP-122 AC-5 | Event wording per architecture §8 | Before G7 |
+| 5 | ux-expert | ux-spec SCR-13 | Adopt or amend the proposed words; the empty and no-match texts; the page description | Before G7 |
+| 6 | business-analyst | requirements questions; delivery lead | Specific-gravity decimals (QLT-07) | Before the first estimate story using specific gravity reaches Ready |
+| 7 | solution-architect | #122; test strategy 10.5 (#116) | QLT-04 and locale; the earlier three-shard trigger; PRF-03; the `gitleaks git` form | #122 before 02.07 reaches Ready; trigger before AQP-130 starts; the rest by the sprint 1 review |
+| 8 | scrum-master | AQP-123, AQP-130, the first estimate-form story | PRF-01 (#121) and PRF-05 in Dev Context | Before each starts |
+| 9 | product-manager | PRD NFR-011 | Master-data volume (PRF-06) | Before AQP-142 starts |
+| 10 | developer | #119 | STD-04 and STD-09 noted there; done before 02.02 and 02.04 respectively | 02.02 / 02.04 |
+
+**G7 evidence (QA, on the final head):**
+- **Each AC with evidence.** AC-5 is judged on the corrected text and AC-8 on the ux-expert's words.
+- **Audit (DL-107):** for `master.created` and `master.edited` with `object_type` `material`, one entry in the change's transaction. A planted bypass per event fails a test, including P3u. A refused change writes no entry.
+- **Specific gravity:** 0 and below are refused with 422 on POST and PATCH, through the API, and the hidden-row exemption holds.
+- **`/options/materials`:** exactly `id`, `name`, `materialConsidered` for all three roles, with no number.
+- **The cost scan:** finds the canary materials for the Admin and 0 for an Engineer, at three widths.
+- **The canary loader under concurrency:** QA repeats the scan specs with `--repeat-each=5 --retries=0` at three widths, with 0 failures.
+- **Screens:** three widths, axe with `wcag21a` 0, keyboard, 44 px.
+- **Stage 11b:** every route under 200,000 B.
+- **Regression:** green.
+- **Closure:** Done only after the posted G7 (DL-098). Evidence runs only by `workflow_dispatch` or a throwaway PR (DL-091).
+
+**Risks registered:** none new.
+- **RISK-006 reviewed, score unchanged:** STD-02 and ruling 3 hold it, as at AQP-113.
+- **RISK-020 unchanged at 3:** `/masters/materials` is 185,555 B. The trigger is "any portal route above 198,000 B", which is not met. #121 is the mitigation.
+- **RISK-023 unchanged at 6:** path 5:17. The nightly trigger is not met. The earlier 10.5 trigger is brought forward (ruling 6).
+
+**Rationale:** No Blocker or Critical is open, and the product code meets every AC under 10 of 11 plants, so G6 can pass. Two Majors are upheld, both in tests:
+- a loader whose safety claim is false and would surface as hidden flakiness;
+- a missing audit-rollback test that leaves the edit path's core promise unguarded.
+Both are cheap and are fixed with the Minors in one push, re-reviewed by the finding owners, because two of the Minors touch product code. The off-pattern figures are held Minor only on the developer's statement, as at AQP-113.
+**Posted:** Jira AQP-122 comment 11186; PR #120 comment 6724545847. Tech-debt #121 (PRF-01) and #122 (QLT-04, locale, QLT-09) were created. Comments were added on #116 (the trigger brought forward, PRF-03, STD-08, STD-10) and on #119 (STD-04, STD-09).
+
+---
+
+## G6 – Peer Review — AQP-122 (STORY-02.03) — check of the fix push against the DL-115 record — 2026-11-08
+
+- **Decision:** the DL-115 conditions are **met**, and G6 is **closed**. The CONDITIONAL GO (attempt 1) stands with no open developer condition. **AQP-122 may go to G7 now, on b02955b.**
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR:** PR #120 at b02955b (`gh pr view`: head `b02955bb…`, merge state CLEAN). The commits after 40107d5 are 59426c8 (tests) and b02955b (product and wording). `git diff --stat 40107d5 b02955b` lists 24 files, all within the story: `src/` masters, errors, audit events and the materials page; `tests/`.
+  - **CI:** run 42506525720 on b02955b, success on all four check runs, with `run_attempt` 3. Per-attempt job timestamps, read by master through the attempts API (first job start to the end of `Stages 1 to 11`):
+    - attempt 1: 17:45:20 to 17:51:17, **5:57**;
+    - attempt 2: 18:05:54 to 18:12:11, **6:17** (shard 1, 6:12);
+    - attempt 3: 18:12:22 to 18:17:27, **5:05**.
+  - **Round-2 reviews** (`docs/06-reviews/AQP-122/*.md`, "Round 2"):
+    - standards APPROVE (Jira 11190);
+    - quality APPROVE WITH COMMENTS (11192);
+    - performance APPROVE WITH COMMENTS (11191).
+    The labels are all `review:*-approved`.
+  - **Other inputs:** developer 11189; product-owner 11187 (AC-5); ux-expert 11188 (ux-spec v0.18, SCR-13 final words); follow-up #123 (open).
+  - **My own checks:**
+    - **AC-5 in the Jira description** now reads `master.created` on an add and `master.edited` on an update, with `object_type` `material` (architecture §8).
+    - **The STD-02 statement** is in the PR body (line 64). `git grep` at b02955b over `src` and `tests` finds no `7.85`, `58.00` or `22.00`. The remaining "MS sheet" and "Mild steel" hits are material names in a test and in the design-system page, not values.
+    - The attempt timings above.
+  - **Not done:** no suite run, probe or plant of my own. The reviewers' plant results and CI are the evidence.
+
+| # | Check against DL-115 | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | QLT-01 loader | ✅ | `INSERT … ON CONFLICT DO NOTHING`, then `UPDATE` by ID, in `tests/support/material-canary-loader.ts`; no retry.<br>• The committed integration test runs 3 loaders × 12 rounds, and planting the old `ON CONFLICT (id)` fails it.<br>• Quality's probe failed 0 of 40 (round 1: 32 of 40).<br>• `ensureCanaryProcessRates` was probed 40 × 3 with 0 rejections, so it needs no change |
+| 2 | QLT-02 update rollback twin | ✅ | P3u re-planted, and the new test fails (quality and developer) |
+| 3 | STD-02 statement and `n.37` | ✅ | The statement is in the PR; every stored or shown value is `n.37`; format inputs are excepted (standards). RISK-006 trigger not met |
+| 4 | STD-01, 03, 05 to 08; QLT-03, QLT-05 | ✅ | All resolved:<br>• STD-01: the set-up callback is under 40 lines.<br>• STD-03: one exported `RUPEE`.<br>• STD-05: describer chosen by object type, tested both ways.<br>• STD-07: `role-matrix.test.ts` is 400 lines.<br>• STD-08: the DL-108 row is complete.<br>• QLT-03: order-free.<br>• QLT-05: P4 reports 1 failure, not 3 |
+| 5 | Narrow re-review (ruling 5) | ✅ | Quality and standards done. Performance re-reviewed because 11b grew by +942 B, over the 500 B line, and the path was near 6:00 |
+| 6 | 11b | ✅ | `/masters/materials` 186,497 B (+942 B; headroom 13,503 B). Performance: bundler packing, not code (esbuild graph +4 B gzip). Accepted |
+| 7 | Condition 4: AC-5 text (product-owner) | ✅ | 11187; the description was read by master |
+| 8 | Condition 5: words (ux-expert) | ✅ | 11188: five strings, all applied exactly (standards). Of the five tests named, all are updated, plus the one-tab test. The build check found a 416 px overflow on a long search in No match; it is fixed and tested |
+| 9 | No new Blocker, Critical or Major | ✅ | New: R2-QLT-11 (Minor, outside the story, #123); R2-QLT-12, R2-01, R2-02 and PRF-07 (Info); PRF-08 (Minor, restates PRF-02) |
+
+**Rulings**
+1. **G6 is closed. AQP-122 goes to G7 on b02955b.** The G7 evidence list of the DL-115 record stands, plus:
+   - the five ux-expert strings and the one-tab description test;
+   - the long-search overflow test at three widths;
+   - **the canary loader under concurrency:** `--repeat-each=5 --retries=0` on the scan and materials specs at three widths, with 0 failures. This was already listed, and it matters more now that the loader changed.
+   If the head moves (for example, a branch update from `master`), the evidence is gathered on the final head.
+2. **The other findings:**
+   - **R2-QLT-11 (Minor, SCR-11 No-match overflow, AQP-113's delivered screen):** follow-up #123. The developer fixes it once in the shared `EmptyState`, with an SCR-11 test, **before STORY-02.02 starts**, because 02.02 is the next screen to reuse `EmptyState`. It holds neither G7 nor the merge of PR #120. If QA sees it at AQP-122's G7 on SCR-11, it is not a defect against this story.
+   - **R2-01 (Info, `MASTER_WORDS` resolves inherited keys such as `toString`):** goes to #119, fixed when the file is next touched (`Object.hasOwn` or a `Map`). Object types come from the server's own constant set, so no input reaches it today.
+   - **R2-02 and R2-QLT-12 (Info):** fix when next touched.
+   - **PRF-07 (Info):** the +1,500 B tripwire at 02.04's G6 is adopted into #121. More than +1,500 B over 02.04's base on CI means the panel is not lazy.
+   - **Testing Notes:** the AQP-122 Jira Testing Notes still name `tests/security/canary-scan.spec.ts`. The scrum-master corrects it to `npx playwright test canary-scan` before G7 (the AQP-57 A2-3 pattern). This holds nothing.
+3. **RISK-023 (the CI-time risk): score and trigger unchanged, restated.**
+   - **Why unchanged:** its rule (DL-112) raises it to 8 only if **a nightly window** shows a median over 6:00 or a p95 over 7:00. One attempt at 6:17 on unchanged code does not meet that rule. The same code ran 5:05 to 6:17, a spread of 72 s, so the 6:17 is runner variance, not this PR's cost. The three-run median is 5:57, under 6:00.
+   - **The 6:00 line stays an early warning, not a hold** (DL-102, DL-103). The only G6 hold on CI time is still the nightly p95 over 9:00.
+   - **What is new:** the margin to 6:00 is now inside the run-to-run noise. The last-20 median is 5:13, and the estimated trend is about +33 s per E2E-adding story, so the next story's first attempts will cross 6:00 often. That is the evidence for ruling 4.
+   - **Lowered:** when the shard enabler merges and a nightly window shows a median of 5:00 or less.
+4. **The three-shard enabler is created now, as its own story. It is not held to PR #120, and it creates no new G6 hold.**
+   - **Is it a scope change? No. It is an enabler** (DL-056), with an established route (DL-084), followed for AQP-199, AQP-208 and AQP-216 (DL-097, DL-102, DL-105). Its resource cost is already pre-authorised by the product-manager (AQP-208 AC-1: three shards as a one-line change of N, under the 2.5× guard; performance estimates +15 to +19 % of runner time). So **no delivery-lead decision is needed.** The orchestrator reports it in the next result report (DL-010).
+   - **Roles, in order:**
+     - **product-manager:** places it through the DL-084 route. That means a PRD §13 scope note and a release-plan entry, with effort (1 to 2 points; performance estimate), committed or stretch, and the date effect. No date is adopted. Master ratifies the governance parts in the decision log, as before.
+     - **solution-architect, before it reaches Ready:** writes test strategy 10.5:
+       - (a) N = 3 as the current step;
+       - (b) the earlier trigger for the step after three (#116 PRF-01, PRF-08);
+       - (c) the measure: head plus two re-runs, and the union of the shard lists equal to the single list;
+       - (d) the resource guard.
+       This replaces the "before AQP-130" due date in DL-115 ruling 6 with "before the enabler reaches Ready".
+     - **scrum-master:** creates the Jira story in EPIC-10 (the next free number, presumably STORY-10.17). They search `aiid-STORY-10.17` first. The ACs come from the performance report, round 2, and 10.5.
+     - **product-owner:** validates DoR.
+     - **developer:** builds it. It passes G5 to G7 like AQP-208.
+   - **Order (master's recommendation; the placement is the product-manager's):**
+     - build it in the merge and QA wait of PR #120, merged **before AQP-123 (02.04) reaches G6**;
+     - AQP-123 may start before it merges, and updates from `master` before its G6, so that 02.04 is measured on three shards;
+     - starting AQP-123 is not held, because a hold on a warning would contradict DL-102 and DL-103.
+   - **#116** is updated to point to the new story. Its other items (PRF-03, STD-08, STD-10) stay.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | orchestrator | Jira and PR #120 | `gate:g6-pass`; AQP-122 to In QA; start QA | Now |
+| 2 | qa-engineer | `docs/07-qa/AQP-122-test-report.md` | G7 on the DL-115 list plus ruling 1 | G7 |
+| 3 | scrum-master | AQP-122 Testing Notes | Correct the scan spec path | Before G7 |
+| 4 | developer | #123 | `EmptyState` wrap with an SCR-11 test | Before 02.02 starts |
+| 5 | product-manager → solution-architect → scrum-master → product-owner | PRD §13, release plan; test strategy 10.5; Jira EPIC-10 | The three-shard enabler (ruling 4) | Placed now; merged before AQP-123's G6 (recommended) |
+
+**Risks registered:** none new. RISK-023 is restated, with its score (6) and trigger unchanged (ruling 3). RISK-020 is unchanged at 3: `/masters/materials` is 186,497 B, and the trigger is 198,000 B.
+**Rationale:** Every item of DL-115 is in the code at b02955b, checked by the finding owners with plants and probes. The two pre-G7 conditions for other roles are also met. The one over-6:00 run is runner variance on unchanged code, so the risk rule written for it does not fire. But it shows that the margin is gone, and that is why the shard enabler is started now as its own story, through the route the last three CI enablers took, without holding this PR or the next story's start.
+**Posted:** Jira AQP-122 comment 11193; PR #120 comment 6725274827. Issue comments: #116 (the enabler and its route), #119 (R2-01), #121 (the tripwire), #123 (owner and due date).
+
+---
+
+## G6 – Peer Review — AQP-227 (STORY-10.17: Three E2E shards in CI) — 2026-11-09
+
+- **Decision:** CONDITIONAL GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #124 at fe520d2 (`pull_request_read get`: base `master` 3695f90, 2 commits bd3d673 and fe520d2, 3 files, +30 / -10, mergeable state clean, labels `review:standards-changes-requested`, `review:quality-changes-requested`, `review:performance-approved`).
+    - Check runs on fe520d2 (run 42513656141): `Stages 1 to 11b`, `Stage 12: E2E (shard 1 of 3)`, `(shard 2 of 3)`, `(shard 3 of 3)` and `Stages 1 to 11`, all success.
+  - **Reviews:**
+    - `docs/06-reviews/AQP-227/standards.md`, `quality.md` and `performance.md` (main folder, not committed);
+    - PR reviews 5819390752 (standards), 5819871409 (quality) and 5819405981 (performance), all COMMENT on fe520d2, verdict in the body.
+  - **Jira AQP-227** (status In Review): developer hand-off 11213; brief 11214; reviews 11215 (standards), 11216 (performance) and 11217 (quality). Story description revision 2 (AC-1 to AC-8), PO READY 11203.
+  - **Governance:** DL-047, DL-051, DL-057, DL-091, DL-098, DL-105, DL-108, DL-113, DL-116; test strategy v0.25 10.5 (main folder, uncommitted).
+  - **My own checks, in a scratch worktree at fe520d2 (reverted with `git checkout`, nothing committed or pushed):**
+    - Guard files at head (`vitest run` of `ci-workflow`, `e2e-shards`, `ci-fan-in`, `ci-feedback-time`, `one-width-tag`): 77 passed, warm cache.
+    - **QLT-01 reproduced:** top-level `fullyParallel: false` gives width-test counts 163 / 156 / 148 by `playwright test --list --shard=i/3`, and all 43 tests of `e2e-shards`, `one-width-tag` and `ci-workflow` pass. Also tried: `fullyParallel: false` on the `mobile` project only gives 156 / 156 / 155 (no effect on today's split).
+    - **QLT-02 reproduced:** `matrix.exclude: [{shard: 3}]` and `matrix.include: [{shard: 4}]`, each alone: 77 of 77 guard tests pass.
+    - **QLT-03 reproduced:** job-level `continue-on-error: true` on `e2e` only: `ci-workflow` and `ci-fan-in` 32 of 32 pass; on `verify` and `e2e` together: 77 of 77 pass.
+    - **QLT-04 reproduced:** `e2e-shards.test.ts` with a fresh `PWTEST_CACHE_DIR`: the union test fails (1 of 1); the same file warm: 4 of 4 pass. My first run in the new worktree also had 1 failure.
+    - **STD-01:** the comment at `tests/unit/e2e-shards.test.ts:83-86` says the test fails if `fullyParallel` is switched off; the QLT-01 reproduction shows it passes.
+    - **STD-05:** `git grep "Three shards"` finds nothing on `origin/master`; test strategy v0.25 is only in the main folder, and no docs PR is open (`gh pr list`).
+  - **Not done by me:** the CI timing figures (AC-5 to AC-8) were not recomputed; reviewer-performance and reviewer-quality each recomputed them from the jobs API and agree with the PR. No Gitleaks run (not installed). No probe of the proposed fixes; reviewer-quality proved them on the plants.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Standards REQUEST CHANGES (Major 1, Minor 4, Info 3); quality REQUEST CHANGES (Major 2, Minor 3, Info 1); performance APPROVE WITH COMMENTS (Minor 2, Info 3). All on fe520d2 |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in every report; my reproductions raise none (rulings 1 and 2 explain why the Majors are not Critical) |
+| 3 | Majors fixed or explicitly accepted | | ⚠️ | STD-01, QLT-01 and QLT-02 upheld, none accepted; fixed in this PR before G7 (rulings 1 to 3) |
+| 4 | Findings cite file:line | | ✅ | All three reports and the inline comments; QLT-05 and PRF-05 are evidence items with run IDs |
+| 5 | The change against AC-1 to AC-8 | | ⚠️ | AC-3 to AC-8 met on reviewers' recomputed evidence. AC-1's "a silent return to two shards fails it" and AC-2's "it fails if `fullyParallel` is switched off" are not delivered by the guards (QLT-02, QLT-01) |
+| 6 | NFR-009 and the runner-minutes guard | | ✅ | Median path 4:37 (limit 4:45), worst of five 4:44; billed 1.20 (limit 1.60), 1.25 by means; queue wait 2 to 4 s in 37 of 37 jobs; 0 flaky in five runs (performance, quality) |
+| 7 | Workflow hygiene and repository settings | | ✅ | Permissions, SHA pins, fan-in and branch protection unchanged; branch protection `["Stages 1 to 11"]` read back by two reviewers; #125 and #126 closed unmerged; no `ci-control/*` branch left |
+| 8 | Pre-push secret scan (DL-098 b, DL-108) | | ⚠️ | Changed-paths `dir` per commit, disclosed; per-commit record missing (ruling 4) |
+
+**Rulings**
+1. **QLT-01 (Major) is upheld, with STD-01 (Major) as its wording half. Fixed in this PR.**
+   - **Why Major and not Minor:** AC-2 states the purpose of the assertion ("it fails if the split ever becomes per file, for example if `fullyParallel` is switched off"), and the delivered assertion does not do it on today's suite (163 / 156 / 148, 4.9 %, reproduced). Nothing in `tests/` asserts `fullyParallel: true`, although test strategy 10.5's whole design rests on it. The comment then tells the next reader the opposite. A control that looks complete and is not is the AQP-27 and AQP-57 class (DL-047, DL-113).
+   - **Why not Critical:** today's split is correct (156 / 156 / 155), so nothing runs wrong now; the gap is a missing guard.
+   - **Behaviour required:** a guard that **fails** with top-level `fullyParallel: false` (plant P3) and on a gross imbalance (the developer's 400-test serial group), and **passes** on today's suite. It asserts the cause (`fullyParallel: true` in `playwright.config.ts`, read from `e2e-shards.test.ts`; `playwright.config.ts` and `one-width-tag.test.ts` stay untouched) and the effect: shard width-test counts differ by at most one (reviewer-quality's bound). If the developer prefers a looser effect bound, it must still fail P3; say which bound and why in the Dev Record. A project-level `fullyParallel: false` is not required to be caught: it does not change today's split (my plant, 156 / 156 / 155), and the effect bound catches it once it does.
+   - **The 10 % assertion stays** as AC-2 literally asks; the new assertions sit beside it. AC-2's "one assertion is added" is read as "at least the 10 % assertion". **STD-01:** the comment says what each assertion catches and what it does not, with no claim the reproduction contradicts.
+2. **QLT-02 (Major) is upheld. Fixed in this PR.**
+   - **Why Major:** AC-1 and `ci.yml:239` state that any list other than `[1, 2, 3]` fails. A one-line `exclude` (two shards at run time) or `include` (a fourth shard, which 10.5 says needs the architect first) passes all 77 tests (reproduced). That bypasses the AC-6 cost guard and the 10.5 order silently. Why not Critical: the head runs three shards correctly.
+   - **Behaviour required:** the AC-1 test fails when the `e2e` job's `strategy` holds anything that can change the shard set or its concurrency at run time: `include`, `exclude` or `max-parallel`, anywhere in the block, not only by position. Plants P4 (`exclude` shard 3) and P6 (`include` shard 4) must fail; P1, P7 and P8 must still fail. Reviewer-quality's anchored-block regex is one way.
+3. **The Minors and Infos in the same push (one test-and-comment push, the files of this PR only).**
+   - **QLT-03 (Minor, pre-existing, AQP-208):** one assertion that no job the fan-in needs (`verify`, `e2e`) has a job-level `continue-on-error`. Cheap, the same file, and how GitHub reports `needs.<job>.result` for such a job was not verified by anyone, so the guard is the safe side. Plant P5 on `e2e`, and the same on `verify`, must fail.
+   - **QLT-04 (Minor, pre-existing, reproduced by me):** the union test fails on a cold Playwright cache. Fixed now, because the same file is being edited and QA's G7 run in a fresh worktree would hit it. **Behaviour required:** with a fresh `PWTEST_CACHE_DIR` each time, `e2e-shards.test.ts` passes 3 of 3 on Windows. Keys must stay unique per test (two tests with the same title path in one file must not collapse into one key), so prefer listing the whole suite before the shard listings over dropping the line from the key. If the cause cannot be fixed in this push, the developer says so in the Dev Record and opens a `tech-debt` issue; master then decides at the verification.
+   - **STD-02, STD-03 (Minor), STD-06, STD-08 (Info):** fixed as suggested in the standards report.
+   - **STD-07 (Info):** no change. The next test added to `ci-workflow.test.ts` starts a second file, so the QLT-02 and QLT-03 assertions may go to a new `ci-workflow-shards.test.ts` if the 400-line limit would be passed (386 now).
+4. **STD-04 (Minor): the DL-108 reading. The scan done is accepted for bd3d673 and fe520d2, and DL-108 is clarified (DL-117).**
+   - **The reading:** when `gitleaks git` cannot run, `gitleaks dir` over the paths each pushed commit adds or modifies (`git diff-tree --no-commit-id --name-only -r --diff-filter=AMR <commit>`), with each file's content taken at that commit, meets DL-108. A commit can add bytes only to those paths, so the add-then-remove case DL-108 names is caught. Findings from a whole-tree `dir` that lie only in files no pushed commit touches, and that are listed in `.gitleaks-baseline.json`, are not a failure. Any finding in a path the push changes still stops the push (DL-098 b).
+   - **Why accept after the fact and not NO-GO:** the substance of DL-108 was met, the developer disclosed the narrowing instead of hiding it, and CI stage 2 (full history, baseline) is green on the head. The narrowing should have been asked, not chosen; that is now settled for everyone.
+   - **Required:** the PR body gives one line per pushed commit (bd3d673, fe520d2 and each fix commit): SHA, command, path count, exit code.
+5. **QLT-05 (Minor): AC-4 (b)'s deviation is accepted and recorded.** GitHub cannot cancel one job of a run, so control (b) cancelled the whole run and `VERIFY` was cancelled too. The fan-in log still names `E2E finished as 'cancelled'` as its own error, and `ci-fan-in.test.ts` runs the fan-in script for each result. An isolated repeat (a sleep in shard 3 on a throwaway PR) would add little. No repeat is required.
+6. **STD-05 (Minor): merge order.** The code cites test strategy 10.5 "Three shards", which is not on `master`. **The docs change (test strategy v0.25 plus the architect's corrections in ruling 7, and architecture 9.2) merges before PR #124 merges.** It does not hold QA.
+7. **Routed, holding neither G7 nor the merge unless said:**
+   - **solution-architect (test strategy 10.5, in the docs change of ruling 6):** §2 names the assertions that now exist (`fullyParallel: true`, the effect bound, the 10 % backstop, the strategy-block anchor, no job-level `continue-on-error`) and drops the claim that 10 % alone catches a per-file split. Restate the planning figure as the slowest shard (path 4:37, about 53 s and two stories to the 5:30 trigger; PRF-01), the fourth-shard figures (`Stages 1 to 11b` now 2:47 to 4:08; a fourth shard gains about 15 to 25 s; PRF-03), and "steadier, not 1:30 shorter" (PRF-05). Architecture 9.2: three shards (PO note 4).
+   - **scrum-master:** a note under AC-2 and AC-1 in AQP-227 that records rulings 1 and 2 (the assertions added, "one assertion" read as at least one), before G7, so QA reads the same text.
+   - **product-manager, then scrum-master (DL-084 enabler route, no hold):** the set-up-cut enabler (test strategy 10.5's next step) is placed and Ready before AQP-142 (02.02) starts (PRF-01, PRF-03). PRF-04 (per-shard times in the job summary) goes into that story's Dev Context.
+   - **orchestrator:** AQP-123's G6 path is measured against a fresh `master` run at N = 3, with the base commit and shard count stated (PRF-05; already in AQP-123's Dev Context). The order "AQP-227 merges before AQP-123's G6" (DL-116) stands.
+   - **PRF-02 (Info):** no duration-aware split; the architect's no-weighting ruling stands.
+8. **Verification before G7 (DL-047, DL-113): master verifies the fix push, with no reviewer re-review, on these conditions.**
+   - The diff from fe520d2 touches only `tests/unit/ci-workflow.test.ts`, `tests/unit/e2e-shards.test.ts`, optionally a new `tests/unit/ci-workflow-shards.test.ts`, and comment lines of `.github/workflows/ci.yml`.
+   - In a scratch worktree at the new head: plants P3, P4, P5 (on `e2e`, and on `verify`) and P6 each fail at least one test; P1, P7 and P8 still fail; the head passes the five guard files; `e2e-shards.test.ts` passes 3 of 3 with a fresh `PWTEST_CACHE_DIR`.
+   - All five check runs are green on the new head. The AC-5 to AC-8 evidence from fe520d2 stands, because a comment-only `ci.yml` change and unit tests do not change what stage 12 runs (evidence is repeated only when the code under test changed, as at AQP-188 AC-10, DL-091).
+   - **If any non-comment `ci.yml` line, any `src/` file, `playwright.config.ts` or any other file changes,** reviewer-quality (and reviewer-standards for `ci.yml`) re-review the new diff narrowly instead, and AC-5 is re-measured if stage 12's work changed.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| 1 | developer | `tests/unit/e2e-shards.test.ts` | QLT-01 guard (cause and effect), STD-01 comment, STD-02, STD-03 (rulings 1, 3) | Before G7 |
+| 2 | developer | `tests/unit/ci-workflow.test.ts` (or a new `ci-workflow-shards.test.ts`) | QLT-02 strategy-block guard, QLT-03 job-level `continue-on-error` guard, STD-08 message (rulings 2, 3) | Before G7 |
+| 3 | developer | `tests/unit/e2e-shards.test.ts` | QLT-04: cold-cache union test 3 of 3 (ruling 3) | Before G7 |
+| 4 | developer | `.github/workflows/ci.yml` comments; PR #124 body | STD-06; the claim at `ci.yml:239` matches the new guard; per-commit Gitleaks lines (ruling 4); the Dev Record lists the plants run | Before G7 |
+| 5 | master | gate log | Verify the fix push (ruling 8) | Before G7 |
+| 6 | scrum-master | AQP-227 description | Note under AC-1 and AC-2 (ruling 7) | Before G7 |
+| 7 | solution-architect, then orchestrator | `test-strategy.md` 10.5, `architecture.md` 9.2; docs PR | Ruling 7 text; docs PR merged | Before PR #124 merges |
+| 8 | product-manager, then scrum-master | PRD §13, release plan; Jira EPIC-10 | Set-up-cut enabler placed and Ready, with PRF-04 in its Dev Context | Before AQP-142 starts |
+| 9 | orchestrator | PR #124, Jira AQP-227 | `Changes Requested` until condition 5 is met, then `In QA` | Now |
+
+**Risks registered:** none new. RISK-023 restated, score 6 and trigger unchanged: at N = 3 the median path is 4:37 with about 53 s to the 5:30 trigger, which 02.02 (AQP-142) is expected to reach (performance estimate); mitigation: condition 8.
+**Rationale:** The change itself is correct and every figure reproduces, but two guards that the ACs describe as protecting the design do not, and I reproduced both bypasses and the cold-cache failure. No Blocker or Critical, so by the procedure this is CONDITIONAL GO, as at AQP-113, AQP-57 and AQP-122. All fixes are test lines in the PR's own files with plants already specified, so master verifies them rather than a re-review round (DL-047, DL-113), with a re-review trigger if the push reaches further.
+**Posted:** Jira AQP-227 comment 11219; PR #124 comment 6735462704. No `tech-debt` issue: nothing is deferred (QLT-04 opens one only if its cause cannot be fixed in the push).
+
+---
+
+## G6 – Peer Review — AQP-227 (STORY-10.17) — check of the fix push against the DL-117 record — 2026-11-09
+
+- **Decision:** condition 5 is **met**. The fix push 0147c3e stays within ruling 8's file list, so no re-review is needed, and G6 is **closed**. The CONDITIONAL GO (attempt 1) stands with no open developer condition. **AQP-227 may go to In QA now, on 0147c3e.**
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #124 at 0147c3e (`gh pr view`: commits bd3d673, fe520d2 and 0147c3e; 4 files; merge state CLEAN; labels `review:standards-changes-requested`, `review:quality-changes-requested`, `review:performance-approved`).
+    - Check runs on 0147c3e (run 42588037093, `gh api …/commits/0147c3e…/check-runs`): `Stages 1 to 11b`, `Stage 12: E2E (shard 1 of 3)`, `(shard 2 of 3)`, `(shard 3 of 3)` and `Stages 1 to 11`, all success.
+  - **Developer:** PR comment 6735939136; Jira AQP-227 11221; the PR body's Dev Record section "G6 attempt 1: fixes" and its per-commit secret scan table.
+  - **Other conditions:**
+    - Jira AQP-227 description: the note under AC-1 and AC-2 (condition 6).
+    - solution-architect 11220; `test-strategy.md` v0.26 10.5 and `architecture.md` v0.30 9.2 (main folder, uncommitted; condition 7).
+  - **My own checks.** I ran them in the scratch worktree `m227` with 0147c3e checked out detached. Plants were restored with `git checkout`; nothing was committed or pushed.
+    - **Scope:** `git diff --stat fe520d2 0147c3e` lists 4 files, +107 / -20: `tests/unit/e2e-shards.test.ts` (52 lines), `tests/unit/ci-workflow.test.ts` (4 lines, now 388 lines long), the new `tests/unit/ci-workflow-shards.test.ts` (57 lines) and `.github/workflows/ci.yml` (14 lines). I filtered the `ci.yml` diff (`git diff -U0`) for changed lines that are not comments, and it returned none. The test diff was read in full.
+    - **Guards at head:** `vitest run` of `ci-workflow`, `ci-workflow-shards`, `e2e-shards`, `ci-fan-in`, `ci-feedback-time` and `one-width-tag`: 6 files, 83 of 83 passed. That is the 77 from attempt 1 plus 2 new tests in `e2e-shards` and 4 in the new file.
+    - **Plants:** each was applied alone and run against the same six files (table below). My first P4 and P6 attempt did not apply: the pattern was escaped wrongly and the diff was empty. I re-ran both with a literal match and confirmed the diff before the test run.
+    - **Cold cache:** I ran `e2e-shards.test.ts` three times. Each run used a new `PWTEST_CACHE_DIR` that did not exist before the run. All 6 tests passed each time (3 of 3).
+    - **Gitleaks:** the pinned image `zricethezav/gitleaks:v8.30.1` (local Docker), run on a scratch clone at 0147c3e. Command: `gitleaks git --redact --no-banner --config .gitleaks.toml --log-opts="-1 <sha>"` for bd3d673, fe520d2 and 0147c3e. Result: no leaks, exit 0 for each. `git diff-tree` path counts are 2, 1 and 4, which match the PR table.
+  - **Not done by me:**
+    - The CI timings were not re-measured. Ruling 8 says the AC-5 to AC-8 evidence from fe520d2 stands, because stage 12's work did not change.
+    - The whole-history Gitleaks scan with the baseline was not repeated; CI stage 2 is green on the head.
+    - The developer's full unit run (129 files) was not repeated; CI is green.
+    - The old listing order was not re-run cold on this head. I reproduced that failure at fe520d2 (attempt 1 record), and the developer's probe found it in 4 of 4 runs.
+
+**Plants at 0147c3e** (failures out of 83 tests, six guard files)
+| # | Plant | Fails | Caught by |
+|---|-------|-------|-----------|
+| P1 | `shard: [1, 2]` | 2 | AQP-227 AC-1 list test; strategy block equality |
+| P3 | top-level `fullyParallel: false` | 2 | `fullyParallel stays on`; `the shards differ by at most one` (the 10 % test passes, as the comment says) |
+| P4 | `exclude: - shard: 3` under `matrix` | 2 | no `include`/`exclude`/`max-parallel`; strategy block equality |
+| P5 | job-level `continue-on-error: true` on `e2e` | 1 | `the e2e job does not continue on error` |
+| P5 | the same on `verify` | 1 | `the verify job does not continue on error` |
+| P6 | `include: - shard: 4` under `matrix` | 2 | as P4 |
+| P7 | `max-parallel: 1` between `fail-fast` and `matrix` | 3 | as P4, plus the AQP-208 AC-4 strategy test |
+| P8 | `shard: [3, 2, 1]` | 2 | as P1 |
+
+| # | Check against ruling 8 and conditions 1 to 4 | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | File scope (ruling 8, first item) | ✅ | Only the four named files changed; `ci.yml` comment lines only; no `src/`, `playwright.config.ts` or other file. The re-review trigger (last item of ruling 8) is not met |
+| 2 | QLT-01 with STD-01 (ruling 1) | ✅ | **Cause:** `e2e-shards.test.ts` reads `playwright.config.ts` and asserts `^ {2}fullyParallel: true,$`. It also asserts no `fullyParallel: false` anywhere, which covers the project-level form the ruling did not require. **Effect:** width-test counts differ by at most one. **The 10 % test is kept.** The new comment says 10 % does not detect a per-file split (4.9 %), which matches my reproduction. P3 fails. Today's split passes |
+| 3 | QLT-02 (ruling 2) | ✅ | The new file strips comment lines from the `e2e` strategy block. It asserts no `include`, `exclude` or `max-parallel`, and that the block is exactly `fail-fast: false`, `matrix:`, `shard: [1, 2, 3]`. That catches a sibling key in any position, and an inline strategy fails closed. P4, P6 and P7 fail, and P1 and P8 still fail |
+| 4 | QLT-03 (ruling 3) | ✅ | No job-level `continue-on-error` on `verify` or `e2e`. P5 fails on each |
+| 5 | QLT-04 (ruling 3) | ✅ | The whole suite is listed first, then the shards together. Keys stay `file:line` per test, as the ruling preferred. 3 of 3 cold. The cause the developer found (concurrent listings racing on a cold compile cache) is stated in the comment. No `tech-debt` issue is needed |
+| 6 | STD-02, STD-03, STD-06, STD-08 | ✅ | In the diff: the header sentence and the describe title; the named `deviation` and `detail`; the `ci.yml` comment rewritten (the old line 239 now names both guards, and "since AQP-227" is gone); `expect(list, …).toBeDefined()` |
+| 7 | STD-07 | ✅ | `ci-workflow.test.ts` has 388 lines; the new assertions went to a second file, as the ruling allowed |
+| 8 | Ruling 4: per-commit scan lines | ✅ | The PR body gives SHA, command, path count and exit code for each of the three commits, from `gitleaks git` (DL-108's own form, run on a clone). Reproduced by me (above) |
+| 9 | Condition 4: Dev Record lists the plants | ✅ | The PR body's fixes table names P1 and P3 to P8 with counts that match mine |
+| 10 | CI on the new head | ✅ | 42588037093, 5 of 5 success |
+| 11 | Condition 6 (scrum-master) | ✅ | The AQP-227 description carries "Note under AC-1 and AC-2: master's G6 rulings 1 and 2" (ACs unchanged; "one assertion" read as at least one) |
+| 12 | Condition 7 (solution-architect half) | ✅ | Test strategy v0.26: 10.5 is headed "corrected for DL-117"; the version line names the assertions, 53 s of headroom and the fourth-shard figures. Architecture v0.30: 9.2. Both are in the main folder, uncommitted. **The docs PR merge is still owed before PR #124 merges** |
+| 13 | No new finding | ✅ | None at Minor or above from my reading or my plants |
+
+**Rulings**
+1. **G6 is closed. AQP-227 goes to In QA on 0147c3e.** If the head changes before G7 (for example a branch update from `master`), the G7 evidence is gathered on the final head.
+2. **Labels.** `review:standards-changes-requested` and `review:quality-changes-requested` describe fe520d2. Ruling 8 replaced their re-review with this check, and all three reviews were submitted as COMMENT, so no review request is outstanding. Before the merge, reviewer-standards and reviewer-quality each switch only their own label to approved, citing this record (no re-review). This does not hold QA.
+3. **G7 evidence (qa-engineer):**
+   - The AC-1 and AC-2 rulings as noted in the description.
+   - The six guard files in a fresh worktree with a fresh `PWTEST_CACHE_DIR` (the QLT-04 case).
+   - One local plant per guard: P1, P3, P4, P6, P7, and P5 on `e2e` and on `verify`. Never committed.
+   - AC-5 to AC-8 stand on fe520d2's figures unless stage 12's work changes.
+   - Any live control only by throwaway PR or `workflow_dispatch` (DL-091).
+4. **Merge.**
+   - Condition 7: the docs PR carrying test strategy v0.26 and architecture v0.30 merges **before** PR #124 (STD-05, ruling 6).
+   - From today the orchestrator merges code PRs after master's G7 GO (CLAUDE.md §8, DL-118). §8 makes "the docs PR it depends on has merged" a precondition, so condition 7 is now checked by the orchestrator at the merge.
+   - Condition 8 (the set-up-cut enabler, Ready before AQP-142 starts) stays open and holds neither G7 nor the merge.
+
+**Risks registered:** none new. RISK-023 unchanged (6).
+**Rationale:** Every item of ruling 8 is in the code at 0147c3e. The diff reaches no file beyond the list and no non-comment workflow line. Each planted fault fails a guard: the two bypasses and the `fullyParallel` gap I reproduced at attempt 1, and the job-level `continue-on-error` gap. The cold-cache failure no longer occurs. Master's verification therefore stands in for the re-review, as at AQP-113 and AQP-122 (DL-047, DL-113).
+**Posted:** Jira AQP-227 comment 11222; PR #124 comment 6736165461. No `tech-debt` issue: nothing is deferred.
+
+---
+
+## G7 – QA Acceptance — AQP-227 (STORY-10.17: Three E2E shards in CI) — 2026-11-09
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #124 at f9d65c8 (`gh pr view`, `gh api …/pulls/124`): commits bd3d673, fe520d2, 0147c3e and f9d65c8; 6 files; `mergeable: true`, `mergeable_state: blocked` (the required check is missing on the head); labels `ai-delivery`, `ci`, `review:standards-changes-requested`, `review:quality-changes-requested`, `review:performance-approved`.
+    - **CI on f9d65c8: none.** `gh api …/commits/f9d65c8…/check-runs` returns 0 check runs, the combined status is `pending` with 0 contexts, and `actions/runs?head_sha=f9d65c8…` returns 0 runs. Checked at 09:49Z, 09:53Z and 09:59Z. The commit is dated 09:46:40Z and QA's PR comment was posted at 09:47:09Z, so the push came before that. For comparison, 0147c3e's run started 8 minutes after its commit time. The last runs on the branch are 42588037093 (0147c3e, 5 of 5 success) and 42513656141 (fe520d2).
+    - `git diff --stat 0147c3e f9d65c8`: 2 files, both new, +144 lines: `docs/07-qa/AQP-227-test-report.md` and `docs/07-qa/defects/DEF-022-cold-cache-listing-race-between-guard-files.md`. No test, script, workflow or `src/` file. No unit test reads `docs/07-qa` (`git grep` over `tests`, `scripts`, `.github`).
+    - Branch protection (`gh api …/branches/master/protection`): `strict: true`, contexts `["Stages 1 to 11"]`, `required_approving_review_count: 0`.
+  - **QA:** test report and DEF-022 at f9d65c8 (read in full); PR comment 6737001200; Jira AQP-227 11225; Jira AQP-236 (DEF-022, Bug, Sev-3, label `aiid-DEF-022`, relates to AQP-227) with QA's count correction 11224; GitHub #129.
+  - **Governance:** G6 attempt 1 and the condition-5 check of 2026-11-09 (this log), DL-057, DL-091, DL-117, DL-118 (§8 and its point 3), test plan §6 (severity, service levels) and §7 (flaky tests).
+  - **My own checks:**
+    - **DEF-022 reproduced,** in the scratch worktree `m227` at 0147c3e (nothing changed or committed). I ran only the two files that race, `e2e-shards.test.ts` and `one-width-tag.test.ts`, together, 10 times, each on a new `PWTEST_CACHE_DIR`. Runs 5 and 6 failed (2 of 10); the other 8 passed 16 of 16. Each failure is the union test, `expected [ …(467) ] to deeply equal [ …(467) ]`. `e2e-shards.test.ts` alone on a new cache: 5 of 5 passed.
+    - **Pre-existing at base:** at 3695f90 both `one-width-tag.test.ts` (line 136) and `e2e-shards.test.ts` (lines 48 to 49) call `listPlaywrightSuites()`, which has been in `tests/support/playwright-list.ts` since AQP-208 (4c12103). The race therefore predates this story. I did not run the base.
+    - **Gitleaks on the QA commit:** pinned image `zricethezav/gitleaks:v8.30.1`, `gitleaks git --redact --no-banner --config .gitleaks.toml --log-opts="-1 f9d65c8…"` on the scratch clone: 1 commit scanned, no leaks, exit 0. This is the one CI stage that reads the new files.
+    - **Labels and reviews:** all three reviews on PR #124 are COMMENT; none is REQUEST_CHANGES.
+  - **Not done by me:** AC-1 to AC-8 were not re-tested; QA's figures match the G6 records to the second (path 4:37, 4:26, 4:39; billed 1.20). The 19 plants were not re-run; master's own plants at 0147c3e (G6 check) gave the same counts. The full unit run was not repeated.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Report matrix AC-1 to AC-8, each with run IDs, commands or API reads. AC-1: only `[1, 2]` to `[1, 2, 3]` is executable; plants P1, P2, P4, P6 to P13, P16 fail. AC-2: 156 / 156 / 155, union 467, P3 fails 2. AC-3: protection read. AC-4: controls #125, #126 re-read; no repeat, because no non-comment workflow line changed (as G6 ruled). AC-5: median 4:37 (limit 4:45). AC-6: 1.20 (limit 1.60). AC-7: at most 4 s. AC-8: no `failed` or `flaky` in 18 shard logs |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | Open: DEF-022, Sev-3, type Test, pre-existing (ruling 1), and DEF-018 as at AQP-57. DEF-022's severity holds on the test-plan scale. It is a false red that never lets a fault through: every plant still fails its guard, and no AC fails, so "an AC fails with a workaround" (Sev-2) does not apply |
+| 3 | Regression result recorded and green | ✱ | ✅ | CI run 42588037093 on 0147c3e: 5 of 5. f9d65c8 adds two Markdown files that no test reads, so the code under test is unchanged and the result stands (DL-091). eslint and tsc exit 0. The local unit run has one known load-sensitive hook timeout (DEF-018, green alone; CI is the reference run, DL-057). DEF-022 fails the union test in 3 of 10 six-file cold runs (QA) and 2 of 10 two-file cold runs (master), and has never failed in CI. **No CI run exists yet on f9d65c8** (ruling 2) |
+| 4 | Exploratory testing notes | | ✅ | Charter on bypassing the required check; P14 gap noted (covered by `ci-feedback-time-sharded.test.ts`, which runs in CI); DEF-022 found |
+| 5 | Accessibility checks for UI stories | | n/a | No screen |
+| 6 | G6 conditions | | ✅ | Conditions 1 to 6 met (G6 check of 2026-11-09). Condition 7: the docs PR has not merged (`master` is still 3695f90); it is a pre-merge condition (ruling 4). Condition 8 is open and holds neither G7 nor the merge |
+
+**Rulings**
+1. **DEF-022 is not covered by DL-117, and it does not hold G7.** QA's question is answered here.
+   - **What DL-117 required.** G6 attempt 1, ruling 3 (finding QLT-04; QA's report calls it "G6 ruling 4") set the behaviour as "`e2e-shards.test.ts` passes 3 of 3 on a fresh cache". I verified it that way at 0147c3e, and QA has it at 10 of 10. That condition is met and stays closed. The G6 check's ruling 3 asked QA to gather evidence by running the six files on a fresh cache. That was an evidence step, not a new pass line.
+   - **What DEF-022 is.** The same cause one file wider: two cold `playwright test --list` processes on one cache, now in two test files instead of inside one. The 0147c3e fix ordered the listings inside `e2e-shards.test.ts` only. My G6 check ran the single file cold and the six files warm, so it could not see this. That was my miss: the check should have run the six files cold, as I later asked QA to.
+   - **Why it does not hold G7.** It fails closed: a red local run, never a green one over a real fault. Every plant still fails its guard. It predates the story: both callers are on `master` since AQP-208. It has not appeared in CI, the reference run (DL-057). The fix belongs in `tests/support/playwright-list.ts` or the Vitest set-up, which is shared by other tests and outside PR #124's files. Adding it here would trigger the re-review that ruling 8 reserves for files beyond the list, for a defect this story did not cause. Under test plan §6, a Sev-3 is fixed before G8 or accepted in writing.
+   - **Required (condition 1).**
+     - The fix is its own test-only PR (`fix/AQP-236-…`): each listing gets its own cache, or the cache is warmed once in `globalSetup`. No retry and no raised limit (DL-057).
+     - **Due before the sprint 1 review,** with DEF-018 in the same family (DL-057), as ruled for DEF-018 at AQP-57 G7. At the latest G8 (test plan §6).
+     - QA verifies it with the six-file cold loop (10 of 10) and the two-file pair (10 of 10).
+     - Review: reviewer-quality only, narrowly (DL-091). The fix is in test support.
+   - **Not quarantined.** The test plan §7 quarantine rule is for tests that flake in the reference run. Quarantining this test would switch off the AC-2 guard, which CI runs green.
+   - **Until the fix.** In a local cold run, a failure of exactly this union test with equal counts is recorded against DEF-022 and is not charged to the story under test. Running `npx playwright test --list` once before Vitest warms the cache. That is a set-up step, not a retry.
+   - DEF-022 joins the DL-057 class of environment-sensitive tests, with DEF-018.
+2. **CI on f9d65c8.**
+   - No run has been created for the head. The new commit holds two Markdown files, and the pinned Gitleaks run on it is clean. So G7 is judged on 0147c3e's code with f9d65c8's records, and no QA evidence is repeated.
+   - The merge still needs green checks on the head that merges (DL-118 point 3; strict branch protection).
+   - Because protection is strict, the docs PR merging first (ruling 4) leaves PR #124 behind `master`. The branch update then makes a new head, and CI runs on that head. So no separate trigger for f9d65c8 is needed.
+   - If the orchestrator wants a run on f9d65c8 before that, it may close and reopen PR #124, which fires `pull_request: reopened`. It must not push an empty commit.
+3. **The reviewers' labels (G6 check, ruling 2) are recorded differently. Switching them is no longer a merge precondition.**
+   - **Why.** Master's condition-5 check replaced the standards and quality re-review (ruling 8), so that record is their verdict on the final code. All three reviews are COMMENT, so no REQUEST_CHANGES is outstanding (playbook 5.5). Protection needs no approval. All roles share one token, so a label says nothing about who set it.
+   - **But a stale label misleads.** `changes-requested` on a merged PR would mislead anyone auditing it later.
+   - **What the orchestrator does at the merge.**
+     - It removes `review:standards-changes-requested` and `review:quality-changes-requested` **by name**. It does not replace the label set, so `review:performance-approved`, `ai-delivery` and `ci` stay.
+     - Its merge comment says that the standards and quality findings were closed by master's G6 check of 2026-11-09 (PR comment 6736165461), with no re-review.
+     - It adds no `-approved` label on their behalf, because no reviewer re-reviewed.
+   - If either reviewer runs on PR #124 before the merge for another reason, they may switch their own label as first ruled. Either form satisfies the record.
+4. **Merge (CLAUDE.md §8, DL-118). The orchestrator merges when items (a) to (e) are all true; it does not need another master decision.**
+   - **(a)** The docs PR has merged to `master`. It holds test strategy v0.26, architecture v0.30 and the governance records up to and including this record and DL-120 (G6 condition 7, STD-05).
+   - **(b)** PR #124 is updated from `master` by a merge, never by a rebase or force-push.
+   - **(c)** The update changes none of PR #124's six files. That is, the merge needs no conflict resolution in them. If it does, the head goes back to master before the merge.
+   - **(d)** All five checks are green on the updated head. If the update brings in a code PR merged meanwhile, green CI on the updated head covers the integration. AC-5 is not re-measured: it is this story's own measure against its base.
+   - **(e)** Before merging, the orchestrator posts on PR #124 the updated head SHA, its run ID and the commits taken from `master`. That is "master is told" under DL-118 point 3, so it need not wait for a reply.
+   - **Then:** squash-merge, and the label step of ruling 3. QA moves AQP-227 to Done once this decision is posted (DL-098, CLAUDE.md §4). The merge does not wait for that, and Done does not wait for the merge.
+   - Condition 8 (the set-up-cut enabler, Ready before AQP-142 starts) stays open and holds nothing here.
+5. **Report wording.** QA's report names QLT-04 "G6 ruling 4" and the docs-PR merge "condition 8". In this log they are ruling 3 (condition 3) and condition 7. The report is merged as written: the finding ID and the content are unambiguous, and this record carries the correct references. No docs fix is required.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer, then reviewer-quality (narrow), then qa-engineer | `tests/support/playwright-list.ts` or Vitest `globalSetup`; own PR for AQP-236 (DEF-022, #129) | No two listings share a cold cache; no retry, no raised limit; six-file and two-file cold loops 10 of 10 (ruling 1) | Before the sprint 1 review (with DEF-018); at the latest G8 |
+| 2 | orchestrator | docs PR, then PR #124 | Ruling 4 (a) to (e): docs PR first; update by merge; six files unchanged; 5 of 5 green on the updated head; head and run posted | Before PR #124 merges |
+| 3 | orchestrator | PR #124 labels and merge comment | Ruling 3 | At the merge |
+| 4 | qa-engineer | Jira AQP-227, AQP-236 | AQP-227 to Done (DL-098); AQP-236 stays open for condition 1 | Now |
+| 5 | product-manager, then scrum-master | G6 condition 8 (unchanged) | Set-up-cut enabler Ready | Before AQP-142 starts |
+
+**Risks registered:** none new. RISK-023 unchanged (6): the median path is 4:37, 53 s under the 5:30 trigger. DEF-022 is a defect with a due point, not a risk.
+**Rationale:** Every mandatory item passes. Every AC is verified with evidence I can trace to run IDs and API reads, and the figures match the G6 records. There is no Sev-1 or Sev-2 defect, and the regression run is green on the story's code. The one new defect is a pre-existing false red in local cold runs. It sits in shared test support outside this PR, and I reproduced it. At AQP-57 the same kind of defect (DEF-018: Test type, pre-existing, green in CI) gave a GO with an owner and a due date. The same evidence gives the same decision here. Rulings 2 to 4 set how the merge happens, and they bind the merge under DL-118.
+**Posted:** Jira AQP-227 comment 11226; Jira AQP-236 comment 11227; PR #124 comment 6737232233. No `tech-debt` issue: DEF-022 is already tracked as AQP-236 and #129, and nothing else is deferred.
+
+---
+
+## G7 – QA Acceptance — AQP-122 (STORY-02.03: Material Master) — 2026-11-09
+
+- **Decision:** GO
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **PR and CI:**
+    - PR #120 at fd853ac (`gh pr view`: head `fd853ac7…`, `mergeable` MERGEABLE, merge state BLOCKED at 10:51Z, while the required check was still running; labels `ai-delivery`, `feature`, `review:standards-approved`, `review:quality-approved`, `review:performance-approved`, `gate:g6-pass`). Reviews: 17, all COMMENT, none REQUEST_CHANGES. Base `master` 3695f90.
+    - `git diff --stat b02955b fd853ac`: 10 files, +1,834, nothing deleted, **nothing under `src/`**. Four QA acceptance files, one QA browser spec, one support file (`tests/support/material-master-qa-api.ts`, new), the report, DEF-020, DEF-021, and one test-plan version row (0.2.2).
+    - **CI run 42604122075 on fd853ac** (`pull_request`, attempt 1): success on all four check runs. `Stages 1 to 11b` 10:50:12 to 10:54:33Z; shard 1 to 10:54:57Z; shard 2 to 10:55:22Z; `Stages 1 to 11` 10:55:25 to 10:55:29Z. **Required path 5:17.** Shard logs: shard 1, 294 tests, 292 passed and 2 skipped (3.4 m); shard 2, 293 tests, 274 passed and 19 skipped (3.1 m). No failed, flaky or retried test. QA spec lines: 40 + 20 = 60, so every QA browser test ran.
+    - Stage 11 runs `tests/acceptance`, so QA's 112 API tests are in CI. Stage 2 runs Gitleaks over the full history, so the QA commit is scanned.
+    - Branch protection: `strict: true`, contexts `["Stages 1 to 11"]`.
+  - **QA:** `docs/07-qa/AQP-122-test-report.md`, DEF-020 and DEF-021 at fd853ac (read in full); Jira AQP-122 11228 (and 11218, the paused run); PR #120 comment 6738177723; Jira AQP-234 (DEF-021, Sev-3) and AQP-235 (DEF-020, Sev-4); GitHub #127, #128.
+  - **Governance:** G6 attempt 1 and its close (this log), DL-091, DL-094, DL-098, DL-107, DL-111, DL-115, DL-116, DL-118, DL-120; test plan §6 (service levels); ux-spec §6.0 ("Tables and cards": tables scroll horizontally only inside their container).
+  - **My own checks:**
+    - **The QA spec and the AQP-227 guards.** `tests/unit/e2e-shards.test.ts` at 0147c3e asserts proportions, not counts: the union equals the whole list, shards differ by at most one test, and each is within 10 % of the mean. "156 / 156 / 155" appears only in comments. `one-width-tag.test.ts` pins an allow-list of 47 tagged tests, and the QA spec has no `@one-width` tag. So the 60 new tests change no guard's pass line.
+    - **File overlap.** PR #124 changes `ci.yml`, three `tests/unit` guard files and two QA records. PR #120 changes none of them. The main folder's pending docs do not touch `docs/07-qa/test-plan.md`.
+    - **ux-spec v0.18** (SCR-13 final words, on which AC-8 was judged) is only in the main folder's uncommitted copy. It is on neither `master` nor the branch, and no docs PR is open.
+    - **OBS-1 mechanism read in the code.** The developer's `failingAfterTheLastStep()` (`tests/integration/masters/materials.test.ts:259`, and `process-items.test.ts:221` from AQP-113) throws after every `run`, nested ones too. So a second transaction inside the change is rolled back by the test itself. QA's `lateFailingRunner()` (`aqp-122-materials-audit.test.ts:164`) fails only the outermost transaction. `tests/support/late-failure.ts` (DEF-017) has the depth rule, but it builds a user service, so it could not be imported here.
+    - **DEF-021 against the spec.** ux-spec §6.0 lets tables scroll inside their container, and the measurements show no page scroll at any width and keyboard focus reaching Edit.
+    - **CI cost of the 60 tests:** the logged durations sum to 183.5 s, about 23 s of wall time per shard on two shards (4 workers) and about 15 s on three.
+  - **Not done by me:** no AC re-test, no plant, no local suite run, no browser probe. QA's 13 plants, the 363-test loader repeat and the local regression are QA's evidence. CI on fd853ac is the reference run.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | Report matrix AC-1 to AC-8 with test IDs, techniques and evidence. AC-5 on the corrected text (11187), AC-8 on ux-spec v0.18 words written out in the spec. DL-115 evidence list complete: audit per event with a plant each, including P3u (8 audit plants, 5 others); gravity 422 on POST and PATCH; options exactly three keys for three roles; cost scan at three widths; loader `--repeat-each=5 --retries=0` 363 of 363; the five strings; the overflow test; axe with `wcag21a`; 11b 186,497 B |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | Open: DEF-021 Sev-3 and DEF-020 Sev-4 (new), DEF-018 and DEF-022 (Test, pre-existing). DEF-021's severity holds on the test-plan scale (ruling 1): no AC fails as worded, no WCAG 2.2 AA criterion fails, and no task is blocked |
+| 3 | Regression result recorded and green | ✱ | ✅ | CI 42604122075 on fd853ac: 4 of 4, 566 browser tests passed, 0 flaky. Local: Vitest 4,539 passed with the one DEF-018 file (green alone, green in CI; DL-057); Playwright `--retries=0` 563 passed, 0 failed |
+| 4 | Exploratory testing notes | | ✅ | Charter, nine areas, DEF-020 and DEF-021 found, OBS-3 (axe and the sticky bar) |
+| 5 | Accessibility checks for UI stories | | ✅ | axe (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`) 0 on every state at three widths; keyboard-only add and edit; 44 px dialog targets. No real device or screen reader: planned for G8 (test plan 12) |
+| 6 | G6 conditions | | ✅ | DL-115 and DL-116 conditions met or not due. #123 is before 02.02 starts. The Testing Notes path was corrected (11194) |
+
+**Rulings**
+1. **DEF-021 (Sev-3) does not hold G7 or the merge. It goes to the ux-expert before AQP-123 starts, and its fix lands before AQP-123's G6.**
+   - **Why the severity holds.**
+     - The build does what ux-spec §6.0 says: a table scrolls only inside its own container. So the defect is in the design, not the build.
+     - The page never scrolls sideways, so AC-7 as worded holds.
+     - Keyboard focus scrolls the region to Edit, and nothing is lost. Reflow (1.4.10) exempts tables, so no WCAG 2.2 AA criterion fails, and the DL-094 Sev-2 rule does not apply.
+     - A sighted touch user on an iPad, or on a 1024 to 1279 px laptop, still has to discover a sideways scroll to find the row's only action. That is a real cost, and Sev-3 states it.
+   - **Why not hold the merge.**
+     - The fix needs a design choice first: wrap the headings, move Edit to the first column, or show cards up to 1280 px.
+     - Holding the merge would put that choice, a product change, a re-review and a new QA run into PR #120, for a Sev-3 that test plan §6 lets wait until G8.
+     - What matters is that 02.04 and 02.05 do not copy the gap. Ordering the work prevents that at no cost to this PR. This is the R2-QLT-11 route (#123: fixed once, before the next screen that reuses it).
+     - Contrast with AQP-113's in-PR function-size rule. That fix was cheap and needed no decision.
+   - **Route.**
+     - **ux-expert, before AQP-123 starts:** chooses the pattern and writes it into ux-spec §6.0 "Tables and cards" as the rule for every master table, with SCR-13 per width. **Pass line:** the row's actions are visible without scrolling the table at every width from 768 to 1440 px, with the side menu open from 1024 px.
+     - **scrum-master, before AQP-123 starts:** puts the rule into the Dev Context of AQP-123 and AQP-130.
+     - **developer:** one fix PR, `fix/AQP-234-…`, that also carries DEF-020 (ruling 2). It removes both `test.fail` lines.
+     - **Review:** narrow, by reviewer-quality (DL-091). The ux-expert confirms the result against the rule.
+     - **qa-engineer:** verifies SCR-13 and SCR-11 at 360, 768, 1000, 1024, 1180, 1280 and 1366 px. SCR-11's region at 1024 px (710 px with the side menu) is narrower than its 718 px content at 768 px, so it may have the same fault there. QA also measures every other delivered table at those widths and logs any finding against its own story.
+     - **Due:** merged before AQP-123 reaches G6, so that 02.04 updates from `master` and builds on it. If it has not merged by then, AQP-123's G6 checks that 02.04's own table follows the rule, and DEF-021 stays due by the sprint 1 review, at the latest G8.
+2. **DEF-020 (Sev-4) is fixed in the same PR, not left in the backlog.** By test plan §6 a Sev-4 goes to the backlog. But the faulty shape (`focusOpener` falling back to the heading after the list turned into the error state) is in the master hook that 02.04 and 02.05 will copy (#119), and SCR-11's hook probably has it too (OBS-4). So the fix costs one guard and saves two copies. The developer checks `use-process-master.ts` in the same PR. QA's DEF-020 test is the regression test once its `test.fail` line is removed.
+3. **The developer test gap (OBS-1) goes to tech-debt #130. It does not hold G7 or the merge.**
+   - **Why no hold.** The bypass is caught by QA's committed `aqp-122-materials-audit.test.ts`, which CI stage 11 runs. So the protection exists after the merge. This is the DL-111 case (QA's file catches every bypass), not the DL-107 case (nothing catches it).
+   - **Why it still needs fixing.** The developer's runner masks the very form it should expose, which is the DEF-017 class. The same weak runner is already on `master` in `process-items.test.ts`, and 02.04 would copy it a third time.
+   - **Fix (#130):** one service-independent outermost-only runner in `tests/support/`, used by the materials and process-items integration tests and by every new audited master. Plants A3 and A4 must then fail the developer's file. Done in AQP-123's PR or earlier. reviewer-quality re-plants at AQP-123's G6. **Due before AQP-123's G6.**
+   - **#104** (the static check that `audit.record` takes the change's transaction) is the structural guard for this class. It is also the only guard for the "entry committed before the change" form. It has had no story since 2026-11-06. The scrum-master places it with an owner and a due point at the next sprint-plan update (DL-080: a mitigation with no story never gets scheduled).
+4. **CI time of the 60 new browser tests: measured, within the noise, no hold and no tagging required.**
+   - **The run on fd853ac** took a 5:17 path, under the 6:00 warning. b02955b ran 5:57, 6:17 and 5:05, so the four-run median is 5:37.
+   - **The 60 tests** sum to 183.5 s, about 23 s per shard on two shards. That is well inside the 72 s run-to-run spread recorded at DL-116.
+   - **RISK-023** is not re-scored: its rule (a nightly median over 6:00 or a p95 over 7:00) is not met. It is restated.
+   - **QA's OBS-2.** Tagging the two role tests `@one-width` would save four test runs of about 2 s each, and it would need a 10.5 ruling and a change to the allow-list guard. It is not required. It goes to #116 as an option for the architect's next 10.5 review.
+   - **After PR #124 merges,** the three shards rebalance by themselves: the guards are proportional, and the QA spec adds about 15 s per shard. The figures 156 / 156 / 155 in `e2e-shards.test.ts` are comments, not assertions, so nothing fails when they go stale. They need no edit in this PR.
+5. **`test.fail` markers.** A test marked `test.fail(true)` passes on **any** failure, including a timeout or a broken page, so it is a known-defect marker, not evidence. That is acceptable only while the fix is due. Both lines come out in the ruling-1 fix PR, and QA's test-plan 0.2.2 habit says so. The DEF-021 marker is limited to 768 px, and the test passes at 360 and 1366 px.
+6. **Merge order: the docs PR first, then PR #124, then PR #120.**
+   - **The docs PR is a dependency for both.** DL-120 (a) requires it for #124. For #120, ux-spec v0.18 holds the SCR-13 words that AC-8 was judged on, and it is not on `master`. Under DL-118 point 2, the story depends on that docs PR, so merging the code first would leave the spec behind the screen.
+   - **#124 before #120 is a preference, not a dependency.** Reasons:
+     - #124 has its G7 GO and pre-ruled conditions already.
+     - DL-116 meant 02.0x stories to be measured on three shards.
+     - #120's branch update will then run #124's guards over the larger suite, an integration check at no extra cost.
+     - The two PRs share no file, so either order merges cleanly.
+   - **If #124 cannot merge** (for example, a check fails on its updated head), #120 is not held by it. #120 merges under ruling 7 on its own, and #124 follows under DL-120.
+7. **Merge (CLAUDE.md §8, DL-118). The orchestrator merges PR #120 when items (a) to (f) are all true; it needs no further master decision.**
+   - **(a)** The docs PR has merged to `master`. It holds ux-spec v0.18 and the governance records up to and including this record and DL-121, besides DL-120 (a)'s contents. If it was opened before this record, the orchestrator adds this record to it. No second docs PR is needed.
+   - **(b)** PR #124 has merged first, or ruling 6's fallback applies, and the PR comment says which.
+   - **(c)** PR #120 is updated from `master` by a merge commit, never by a rebase or force-push.
+   - **(d)** The update changes none of PR #120's files, so no conflict was resolved in them. If one was, the head comes back to master before the merge.
+   - **(e)** Every check is green on the updated head: `Stages 1 to 11b`, each E2E shard and `Stages 1 to 11`, with the AQP-227 guards over the new suite. If a check is re-run to green, the failing test's name is posted, and a failure that is not DEF-022's exact union test comes back to master.
+   - **(f)** Before merging, the orchestrator posts on PR #120 the updated head SHA, the run ID, the commits taken from `master` and the path time (first job start to the end of `Stages 1 to 11`). That is "master is told" under DL-118 point 3, so it need not wait for a reply.
+   - **Then:** squash-merge. The labels are already correct (all three `review:*-approved`). QA moves AQP-122 to Done once this decision is posted (DL-098). The merge does not wait for Done, and Done does not wait for the merge. AQP-234, AQP-235 and #130 stay open.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | ux-expert | ux-spec §6.0 "Tables and cards", SCR-13 | DEF-021 pattern; row actions visible without table scroll from 768 to 1440 px, side menu open from 1024 (ruling 1) | Before AQP-123 starts |
+| 2 | scrum-master | AQP-123, AQP-130 Dev Context; sprint plan | The ruling-1 rule, the DEF-020 guard and #130's runner; place #104 with an owner and a due point | Before AQP-123 starts; #104 at the next sprint-plan update |
+| 3 | developer, then reviewer-quality (narrow), then qa-engineer | `fix/AQP-234-…` (AQP-234, AQP-235; #127, #128) | DEF-021 and DEF-020 fixed, SCR-11 hook checked, both `test.fail` lines removed; QA measures the delivered tables (ruling 1) | Merged before AQP-123's G6; otherwise by the sprint 1 review, at the latest G8 |
+| 4 | developer; reviewer-quality at AQP-123 G6 | #130 | Shared outermost-only late-failure runner; A3 and A4 fail the developer's files (ruling 3) | Before AQP-123's G6 |
+| 5 | orchestrator | docs PR, PR #124, PR #120 | Rulings 6 and 7 (a) to (f) | Before PR #120 merges |
+| 6 | qa-engineer | Jira AQP-122 | Done (DL-098) | Now |
+
+**Risks registered:** none new. RISK-023 restated, score 6 unchanged: path 5:17 on fd853ac, about 23 s per shard of new test time on two shards (ruling 4). RISK-020 unchanged at 3: `/masters/materials` 186,497 B, trigger 198,000 B. DEF-021 is a defect with an owner and a due point, not a risk.
+**Rationale:** Every mandatory item passes. Each AC has traceable evidence, a planted fault was caught for every audited event, there is no Sev-1 or Sev-2 defect, and CI is green on the exact head with QA's tests inside it. The two new defects are design and focus gaps that the spec and the ACs did not forbid. Their real cost is being copied into 02.04 and 02.05, so they are ordered ahead of those stories rather than held against this one. The test gap is closed by QA's committed file, as at AQP-113 (DL-111), and its root, a runner that masks the fault it should expose, gets an owner before the next audited master. The CI cost of QA's tests was measured on the head, not estimated, and it is inside the noise. The same evidence pattern gave GO at AQP-57 and AQP-227, so it gives GO here.
+**Posted:** Jira AQP-122 comment 11231; Jira AQP-234 comment 11232 (DEF-021 routing); PR #120 comment 6738380800; #104 comment 6738386309. Tech-debt issue created: #130 (OBS-1). DEF-020 and DEF-021 are already tracked as AQP-235 / #128 and AQP-234 / #127.
