@@ -17,10 +17,9 @@ import {
   renderSummary,
   slowestShard,
   summariseRun,
-  type JobData,
 } from '../../scripts/lib/ci-run-summary';
 import { iso } from '../support/ci-feedback-records';
-import { installSteps, job, runOf, step } from '../support/ci-run-jobs';
+import { apiJobsOf, installSteps, job, runOf, step } from '../support/ci-run-jobs';
 
 /**
  * AQP-243 (STORY-10.19) AC-5, PRF-04 of AQP-227: the per-run summary written by the fan-in job. The cases are fabricated runs:
@@ -210,24 +209,12 @@ describe('AC-5: the script, run as the workflow runs it (Node type stripping, no
   let status = 200;
   let directory = '';
 
-  /** The API shape of a fabricated run. */
-  const apiJobs = (jobs: ReadonlyArray<JobData>): unknown => ({
-    jobs: jobs.map((entry) => ({
-      name: entry.name,
-      conclusion: entry.conclusion,
-      created_at: entry.createdAt,
-      started_at: entry.startedAt,
-      completed_at: entry.completedAt,
-      steps: entry.steps.map((s) => ({ name: s.name, conclusion: s.conclusion, started_at: s.startedAt, completed_at: s.completedAt })),
-    })),
-  });
-
   beforeAll(async () => {
     directory = mkdtempSync(join(tmpdir(), 'ci-run-summary-'));
     server = createServer((_request, response) => {
       response.statusCode = status;
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify(apiJobs(runOf({ shardTests: [150, 230, 170] }))));
+      response.end(JSON.stringify(apiJobsOf(runOf({ shardTests: [150, 230, 170] }))));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
@@ -283,5 +270,15 @@ describe('AC-5: the script, run as the workflow runs it (Node type stripping, no
     const bare = await runScript({});
     expect(bare.code).toBe(0);
     expect(bare.stdout).toContain('n/a');
+  }, 30_000);
+
+  it('exits 0 but prints a token-free warning when the summary file can not be written (STD-01)', async () => {
+    status = 200;
+    const unwritable = join(directory, 'no-such-directory', 'summary.md');
+    const { code, stdout } = await runScript(environment(unwritable));
+    expect(code).toBe(0);
+    expect(stdout).toContain('::warning::The run summary could not be written (Error).');
+    expect(stdout).not.toContain('invented-token-value');
+    expect(stdout).not.toContain('no-such-directory');
   }, 30_000);
 });

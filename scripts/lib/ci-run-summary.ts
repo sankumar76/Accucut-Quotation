@@ -40,6 +40,11 @@ const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
 const API_VERSION = '2022-11-28';
 const DEFAULT_API_ORIGIN = 'https://api.github.com';
 const NOT_AVAILABLE = 'n/a';
+/** Sort ranks of `jobOrder`: `Stages 1 to 11b` is 0 and a shard is its index, so the fan-in job comes after the shards and any other job after it. */
+const FAN_IN_RANK = 1_000;
+const OTHER_RANK = 2_000;
+/** A run has six jobs, so one page of the jobs API is enough. */
+const JOBS_PER_PAGE = 100;
 
 export interface StepData {
   readonly name: string;
@@ -109,13 +114,19 @@ export function installSeconds(steps: ReadonlyArray<StepData>): number | undefin
 }
 
 /**
- * The cache state of a job, read from which install steps ran (the API does not expose step outputs): a hit ran the check and
- * neither `npm ci`; a miss ran `npm ci (cache miss)`; a fallback ran `npm ci (cache fallback)` after a failed check.
+ * The cache state of a job, read from which install steps RAN (the API does not expose step outputs): a hit ran the check and
+ * neither `npm ci`; a miss ran `npm ci (cache miss)`; a fallback ran `npm ci (cache fallback)` after a failed check. A step that
+ * ran and then failed or was cancelled still counts, so a job whose fallback failed is shown as a fallback (the entry to delete),
+ * not as a hit (QLT-01).
  */
 export function cacheState(steps: ReadonlyArray<StepData>): CacheState {
   if (installStep(steps, RESTORE_STEP)?.conclusion !== 'success') return NOT_AVAILABLE;
-  if (installStep(steps, FALLBACK_STEP)?.conclusion === 'success') return 'fallback';
-  if (installStep(steps, MISS_STEP)?.conclusion === 'success') return 'miss';
+  const ran = (part: string): boolean => {
+    const conclusion = installStep(steps, part)?.conclusion;
+    return conclusion !== undefined && conclusion !== null && conclusion !== 'skipped';
+  };
+  if (ran(FALLBACK_STEP)) return 'fallback';
+  if (ran(MISS_STEP)) return 'miss';
   return installStep(steps, CHECK_STEP)?.conclusion === 'success' ? 'hit' : NOT_AVAILABLE;
 }
 
@@ -134,7 +145,7 @@ function jobOrder(job: JobData): number {
   if (job.name === VERIFY_JOB_NAME) return 0;
   const index = shardIndex(job);
   if (index !== undefined) return index;
-  return job.name === FAN_IN_JOB_NAME ? 1_000 : 2_000;
+  return job.name === FAN_IN_JOB_NAME ? FAN_IN_RANK : OTHER_RANK;
 }
 
 interface ShardSplit {
@@ -186,12 +197,21 @@ export function pathSeconds(jobs: ReadonlyArray<JobData>, now: number): number |
 
 // ---- The summary -----------------------------------------------------------------------------------------------------
 
+/**
+ * After "Re-run failed jobs" the API lists the jobs that were not run again with their old times. A job that started before this
+ * attempt did is from an earlier attempt: it is left out of the path and the slowest shard (QLT-03) and marked in the table.
+ */
+export function isCarriedOver(job: JobData, attemptStartedAt: number | undefined): boolean {
+  const start = timeOf(job.startedAt);
+  return attemptStartedAt !== undefined && start !== undefined && start < attemptStartedAt;
+}
+
 const cell = (text: string): string => text.replaceAll('|', '\\|');
 
-function jobLine(job: JobData, now: number): string {
+function jobLine(job: JobData, now: number, carried: boolean): string {
   const running = job.name === FAN_IN_JOB_NAME && job.completedAt === null;
   const duration = formatDuration(durationOf(job, now));
-  const label = running ? `${job.name} (this job, so far)` : job.name;
+  const label = running ? `${job.name} (this job, so far)` : carried ? `${job.name} (earlier attempt)` : job.name;
   const isInstallJob = job.name === VERIFY_JOB_NAME || shardIndex(job) !== undefined;
   const install = isInstallJob ? formatDuration(installSeconds(job.steps)) : '-';
   const cache = isInstallJob ? cacheState(job.steps) : '-';
@@ -213,20 +233,29 @@ function shardLine(split: ShardSplit | undefined): string {
   );
 }
 
-/** The run summary as Markdown. `now` is the time of the summary, in milliseconds. */
-export function renderSummary(jobs: ReadonlyArray<JobData>, now: number): string {
+/**
+ * The run summary as Markdown. `now` is the time of the summary, in milliseconds; `attemptStartedAt` is when this attempt began
+ * (undefined when it could not be read, and then every job counts as part of the attempt).
+ */
+export function renderSummary(jobs: ReadonlyArray<JobData>, now: number, attemptStartedAt?: number): string {
   const ordered = [...jobs].sort((a, b) => jobOrder(a) - jobOrder(b));
+  const current = jobs.filter((job) => !isCarriedOver(job, attemptStartedAt));
+  const carriedNote =
+    current.length < jobs.length
+      ? ['Jobs marked (earlier attempt) were not run again in this attempt; they are left out of the path and the slowest shard.', '']
+      : [];
   const lines = [
     '### CI run time (AQP-243, test strategy 10.5)',
     '',
-    `**Path so far:** ${formatDuration(pathSeconds(jobs, now))}, from the first job start to this summary, queue wait excluded. ` +
+    `**Path so far:** ${formatDuration(pathSeconds(current, now))}, from the first job start to this summary, queue wait excluded. ` +
       `\`${FAN_IN_JOB_NAME}\` cannot read its own end, so the path is a few seconds short of the NFR-009 figure.`,
     '',
     '| Job | Duration | Queue wait | Install plus generate | node_modules cache |',
     '| --- | --- | --- | --- | --- |',
-    ...ordered.map((job) => jobLine(job, now)),
+    ...ordered.map((job) => jobLine(job, now, isCarriedOver(job, attemptStartedAt))),
     '',
-    shardLine(slowestShard(jobs)),
+    shardLine(slowestShard(current)),
+    ...carriedNote,
     '',
   ];
   return `${lines.join('\n')}\n`;
@@ -279,7 +308,7 @@ export interface RunLocation {
 export async function fetchRunJobs(location: RunLocation, fetchImpl: typeof fetch = fetch): Promise<JobData[]> {
   if (!/^[\w.-]+\/[\w.-]+$/.test(location.repository)) throw new Error('the repository name is not in the form owner/name');
   if (!/^\d+$/.test(location.runId) || !/^\d+$/.test(location.attempt)) throw new Error('the run id or the attempt is not a number');
-  const path = `/repos/${location.repository}/actions/runs/${location.runId}/attempts/${location.attempt}/jobs?per_page=100`;
+  const path = `/repos/${location.repository}/actions/runs/${location.runId}/attempts/${location.attempt}/jobs?per_page=${JOBS_PER_PAGE}`;
   const response = await fetchImpl(`${location.apiOrigin}${path}`, {
     headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${location.token}`, 'x-github-api-version': API_VERSION },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
@@ -288,20 +317,35 @@ export async function fetchRunJobs(location: RunLocation, fetchImpl: typeof fetc
   return parseJobs(await response.json());
 }
 
+/** When this attempt began (`run_started_at`), or undefined when it cannot be read: the summary then treats every job as current. */
+export async function fetchAttemptStart(location: RunLocation, fetchImpl: typeof fetch = fetch): Promise<number | undefined> {
+  try {
+    const path = `/repos/${location.repository}/actions/runs/${location.runId}/attempts/${location.attempt}`;
+    const response = await fetchImpl(`${location.apiOrigin}${path}`, {
+      headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${location.token}`, 'x-github-api-version': API_VERSION },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+    });
+    if (response.status !== 200) return undefined;
+    const body: unknown = await response.json();
+    return isRecord(body) ? timeOf(textOrNull(body['run_started_at'])) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The summary for the run named by the environment. Never throws: a problem gives the "n/a" text. */
 export async function summariseRun(env: Readonly<Record<string, string | undefined>>, now: number, fetchImpl: typeof fetch = fetch): Promise<string> {
   try {
-    const jobs = await fetchRunJobs(
-      {
-        repository: env['GITHUB_REPOSITORY'] ?? '',
-        runId: env['GITHUB_RUN_ID'] ?? '',
-        attempt: env['GITHUB_RUN_ATTEMPT'] ?? '',
-        token: env['GITHUB_TOKEN'] ?? '',
-        apiOrigin: env['GITHUB_API_URL'] ?? DEFAULT_API_ORIGIN,
-      },
-      fetchImpl,
-    );
-    return jobs.length === 0 ? renderUnavailable('the API listed no job') : renderSummary(jobs, now);
+    const location: RunLocation = {
+      repository: env['GITHUB_REPOSITORY'] ?? '',
+      runId: env['GITHUB_RUN_ID'] ?? '',
+      attempt: env['GITHUB_RUN_ATTEMPT'] ?? '',
+      token: env['GITHUB_TOKEN'] ?? '',
+      apiOrigin: env['GITHUB_API_URL'] ?? DEFAULT_API_ORIGIN,
+    };
+    const jobs = await fetchRunJobs(location, fetchImpl);
+    if (jobs.length === 0) return renderUnavailable('the API listed no job');
+    return renderSummary(jobs, now, await fetchAttemptStart(location, fetchImpl));
   } catch (error) {
     return renderUnavailable(error instanceof Error ? error.message : 'unexpected error');
   }
@@ -317,13 +361,9 @@ async function main(): Promise<void> {
 // Runs only as the entry point, so the tests can import the functions above.
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
-  main().then(
-    () => {
-      process.exitCode = 0;
-    },
-    () => {
-      // The summary must never fail the job: a failed write is the only thing that gets here.
-      process.exitCode = 0;
-    },
-  );
+  main().catch((error: unknown) => {
+    // The exit status stays 0 (AC-5: the summary never fails the job), but the reason must be visible in the log. Only the error
+    // name is printed, never its message, so a path or a token can not be echoed.
+    process.stdout.write(`::warning::The run summary could not be written (${error instanceof Error ? error.name : 'unknown error'}).\n`);
+  });
 }

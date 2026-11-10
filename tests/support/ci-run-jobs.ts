@@ -8,6 +8,20 @@ import { iso } from './ci-feedback-records';
  * `ci.yml` gives (tests/unit/ci-setup-cut.test.ts checks that the install steps below exist there under these names).
  */
 
+/** The jobs API shape (snake_case) of fabricated jobs, as the summary script reads it. */
+export function apiJobsOf(jobs: ReadonlyArray<JobData>): unknown {
+  return {
+    jobs: jobs.map((entry) => ({
+      name: entry.name,
+      conclusion: entry.conclusion,
+      created_at: entry.createdAt,
+      started_at: entry.startedAt,
+      completed_at: entry.completedAt,
+      steps: entry.steps.map((s) => ({ name: s.name, conclusion: s.conclusion, started_at: s.startedAt, completed_at: s.completedAt })),
+    })),
+  };
+}
+
 export interface StepOptions {
   readonly conclusion?: string | null;
   readonly missingTimes?: boolean;
