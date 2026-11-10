@@ -117,10 +117,12 @@ async function lockedChangeable({ masters }: TreatmentDependencies, tx: Transact
 }
 
 /** Takes the table lock, adds the treatment, and writes its entry, all in the caller's transaction. */
-async function add({ masters, audit }: TreatmentDependencies, tx: Transaction, context: AuditContext, name: string): Promise<TreatmentRecord> {
+async function add({ masters, audit, transactions }: TreatmentDependencies, tx: Transaction, context: AuditContext, name: string): Promise<TreatmentRecord> {
   await masters.lockTreatments(tx);
   const record = await masters.createTreatment(name, tx);
-  await audit.record(tx, { event: 'master.created', ...entryFor(context, record), before: null, after: auditState(record) });
+  // QUALITY PLANT A3 (control PR, never merged): the entry is written in a second transaction opened inside the change.
+  const plantedEntry = { event: 'master.created' as const, ...entryFor(context, record), before: null, after: auditState(record) };
+  await transactions.run((plantTx) => audit.record(plantTx, plantedEntry));
   return record;
 }
 
