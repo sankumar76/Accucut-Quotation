@@ -122,7 +122,7 @@ export function useMaterialMaster(initialItems: ReadonlyArray<MaterialRow>) {
   /** Radix returns focus only to a trigger, and this dialog has none: the opener is remembered here. */
   function onCloseAutoFocus(event: Event): void {
     event.preventDefault();
-    focusOpener(dialog.opener.current);
+    focusOpener(dialog.opener.current, list.status === 'error');
   }
 
   return { list, dialog, notice, readAgain, onAdd, onEdit, onSaved, onCloseAutoFocus };

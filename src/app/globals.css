@@ -52,8 +52,10 @@
   --swatch-min: 168px;
   --drawer-max: 88vw;
 
-  /* Stacking order, lowest to highest: the sticky bar, the dim behind a drawer, the drawer, menus and pickers (which
+  /* Stacking order, lowest to highest: the sticky Actions column of a masters table (inside the isolated scroll region of its
+     table, so it never competes with the rest), the sticky bar, the dim behind a drawer, the drawer, menus and pickers (which
      may open from inside a drawer), and the skip link. Used as `z-(--z-bar)` and so on. */
+  --z-sticky-cell: 1;
   --z-bar: 30;
   --z-overlay: 40;
   --z-drawer: 50;

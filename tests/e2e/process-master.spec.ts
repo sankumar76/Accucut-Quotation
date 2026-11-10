@@ -361,4 +361,28 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await page.getByRole('button', { name: 'Try again' }).click();
     await expect(rowOf(page, name)).toContainText('3.37');
   });
+
+  test('DEF-020 (AQP-235) and QLT-01: when the list cannot be read after a save, focus is on the load error title; then Add and Escape return focus to "Add rate"', async ({ page }, testInfo) => {
+    const name = await makeRate(page, testInfo);
+    await openProcessMaster(page);
+    await page.route('**/api/v1/process-items', (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      return route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ type: 'about:blank', title: 'busy', status: 503, code: 'DATABASE_BUSY', requestId: 'req-0a0b0c0d' }) });
+    });
+    await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
+    const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+    await dialog.getByLabel('Default value').fill('3.37');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const title = page.getByRole('heading', { name: 'We could not load the rates' });
+    await expect(title).toBeVisible();
+    await expect(title).toBeFocused({ timeout: 3000 });
+
+    // The list is still in error and "Add rate" is still there: opening and cancelling it must not leave focus on the body.
+    const add = page.getByRole('button', { name: 'Add rate' });
+    await pressWithKeyboard(add);
+    await expect(page.getByRole('dialog', { name: 'Add rate' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(add).toBeFocused({ timeout: 3000 });
+  });
 });

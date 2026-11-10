@@ -29,8 +29,21 @@ export function focusHeading(): void {
   document.querySelector<HTMLElement>('main h1')?.focus();
 }
 
-/** Returns focus to the button that opened a dialog; when that button no longer exists (its rate is gone), to the page heading. */
-export function focusOpener(opener: Opener | null): void {
+/** Is focus on a live element of the page, and not lost to `<body>` because the dialog that held it has gone? */
+function focusIsOnPage(): boolean {
+  const active = document.activeElement;
+  return active !== null && active !== document.body;
+}
+
+/**
+ * Returns focus to the button that opened a dialog; when that button no longer exists (its rate is gone), to the page heading.
+ * When the list could not be read again after a saved change (`listFailed`), the load error owns focus (it takes it on mount, UX spec
+ * SCR-11 and SCR-13 "Error (load)"): the dialog's close handler runs after that and must not take it away (DEF-020). But if the dialog
+ * itself held focus while the list was in error (Add opened from the error state and cancelled, or a refusal whose re-read failed
+ * while it was open), nothing holds it now, so focus returns to the opener or the heading as it does without an error (QLT-01).
+ */
+export function focusOpener(opener: Opener | null, listFailed = false): void {
+  if (listFailed && focusIsOnPage()) return;
   const button = opener === null ? null : findOpenerElement(opener);
   if (button === null) focusHeading();
   else button.focus();

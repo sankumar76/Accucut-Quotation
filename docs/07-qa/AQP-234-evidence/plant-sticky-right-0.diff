@@ -1,0 +1,13 @@
+diff --git a/src/components/ui/table.tsx b/src/components/ui/table.tsx
+index d0c4574..f120468 100644
+--- a/src/components/ui/table.tsx
++++ b/src/components/ui/table.tsx
+@@ -80,7 +80,7 @@ export function TableCell({ className, ...props }: ComponentProps<'td'>) {
+ }
+ 
+ /** The classes of the Actions heading and its cells: the last column, sticky at the right edge of the region with a hairline on its left. */
+-const STICKY_ACTIONS = 'sticky right-0 z-(--z-sticky-cell) w-(--actions-w) min-w-(--actions-w) shadow-[inset_1px_0_0_var(--border)]';
++const STICKY_ACTIONS = 'z-(--z-sticky-cell) w-(--actions-w) min-w-(--actions-w) shadow-[inset_1px_0_0_var(--border)]';
+ 
+ /** The heading of the Actions column of a masters table; its `Table` needs `actionButtons`. The word "Actions" is for assistive technology only. */
+ export function TableActionsHead({ className, ...props }: Omit<ComponentProps<'th'>, 'children'>) {

@@ -320,12 +320,10 @@ test.describe('as the Admin', () => {
     mode = 'pass';
   });
 
-  // DEF-020: expected to fail until it is fixed. Playwright reports it as passed while it fails and as failed once it starts to pass, which is the
-  // signal to delete the `test.fail` line. SCR-13 says that in the load error "focus goes to the title"; the code means it (`focusOnMount`, and the
-  // comment of `useReadAgain`), but when the list cannot be read right after a successful save, the dialog's close handler (`onCloseAutoFocus` ->
-  // `focusOpener`) finds the opener gone and moves focus to the page heading (`h1`) after the error title has taken it.
+  // DEF-020 (AQP-235, fixed): SCR-13 says that in the load error "focus goes to the title". When the list cannot be read right after a successful
+  // save, the dialog's close handler (`onCloseAutoFocus` -> `focusOpener`) used to find the opener gone and move focus to the page heading (`h1`)
+  // after the error title had taken it. `focusOpener` now leaves focus alone while the list has failed.
   test('[AQP-122 AC-8] DEF-020: when the list cannot be read after a save, focus is on the load error title', async ({ page }, testInfo) => {
-    test.fail(true, 'DEF-020: focus ends on the page heading, not the error title');
     const name = newName(testInfo, 'focus');
     await makeMaterial(page, name);
     await openMaterials(page);
@@ -340,11 +338,10 @@ test.describe('as the Admin', () => {
     await expect(page.getByRole('heading', { name: WORDS.loadErrorTitle })).toBeFocused({ timeout: 3000 });
   });
 
-  // DEF-021: expected to fail at 768 px until it is fixed (see DEF-020 above for how `test.fail` reads). The table needs 968 px (its six headings do not
-  // wrap), so between 768 and 1022 px, and again between 1024 and about 1270 px (the side menu takes 240 px from 1024), the Edit button of every row lies
-  // beyond the right edge of the table's own scroll region and shows only after the region is scrolled sideways. The phone cards and 1366 px are fine.
+  // DEF-021 (AQP-234, fixed): the table used to need 968 px (its six headings did not wrap), so between 768 and 1022 px, and again between 1024 and
+  // about 1270 px, the Edit button of every row lay beyond the right edge of the table's own scroll region. The Actions column is now sticky at that
+  // edge and headings wrap (ux-spec 6.0 "Masters tables"); `masters-table-actions.spec.ts` checks the eleven widths of the spec for both masters tables.
   test('[AQP-122 AC-7] DEF-021: the Edit button of a row is inside the visible table area, with no sideways scroll of the table', async ({ page }, testInfo) => {
-    test.fail(page.viewportSize()?.width === 768, 'DEF-021: at 768 px the Edit button is outside the visible table area');
     await makeMaterial(page, newName(testInfo, 'reach'));
     await openMaterials(page);
     const edit = page.locator('[data-item-id]:visible button[data-action="edit"]').first();
