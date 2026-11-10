@@ -18,6 +18,18 @@ export const TREATMENT_LIST_LABEL = 'Treatment / Color';
 export const TREATMENT_NAME_HEADING = 'Name';
 export const TREATMENT_NAME_FIELD_LABEL = 'Name';
 
+/** The visible reason on the locked "Other" row (AC-1), words from the story: text, not colour alone. */
+export const OTHER_LOCKED_REASON = 'Always offered; the Engineer types the text';
+
+/** The labels of the row actions (the buttons are named for the row: `Rename <name>`, `Delete <name>`) and of the dialogs' two buttons. */
+export const RENAME_ACTION = 'Rename';
+export const DELETE_ACTION = 'Delete';
+export const CANCEL_TREATMENT = 'Cancel';
+export const SAVE_TREATMENT = 'Save';
+
+/** The rows of the skeleton, in the slot that waits for the panel's code and in the panel that waits for the list. */
+export const TREATMENT_SKELETON_ROWS = 4;
+
 export const ADD_TREATMENT = 'Add treatment';
 export const ADDING_TREATMENT = 'Adding treatment';
 export const SAVING_TREATMENT = 'Saving';
@@ -37,20 +49,26 @@ export const FAILED_WRITE_KEEPS_FORM_BODY = 'Check your connection and try again
 export const FAILED_WRITE_BODY = 'Check your connection and try again.';
 
 export const renameTreatmentTitle = (name: string): string => `Rename ${name}`;
-export const renameTreatmentLabel = (name: string): string => `Rename ${name}`;
+export const renameTreatmentLabel = renameTreatmentTitle;
 export const deleteTreatmentLabel = (name: string): string => `Delete ${name}`;
 
 export const DELETE_KEEP_TREATMENT = 'Keep treatment';
 export const DELETE_CONFIRM_TREATMENT = 'Delete treatment';
 export const deleteTreatmentTitle = (name: string): string => `Delete ${name}?`;
 export const deleteTreatmentDescription = (name: string): string =>
-  `${name} is removed from the Treatment / Color list. Estimates that are already calculated keep their figures. You cannot undo this here.`;
+  `${name} is removed from the Treatment / Color list. Estimates that are already calculated keep the treatment they show. To bring it back, add it again.`;
 
-/** The sentence under the page after a change succeeded; the audit log keeps the detail (SCR-11 "Saved"). */
-export const treatmentNotice = (what: 'added' | 'renamed' | 'deleted', name: string): PageNotice => ({
+/** The sentence under the page after an add or a delete succeeded; each writes exactly one audit entry, so the clause is always true (ux-spec v0.22). */
+export const treatmentNotice = (what: 'added' | 'deleted', name: string): PageNotice => ({
   tone: 'success',
   text: `${name} was ${what}. The change is in the audit log.`,
 });
+
+/**
+ * After a rename: `<old name> was renamed to <new name>.` With no audit clause (ux-spec v0.22): a rename that finds the name already there answers 200 and
+ * writes no entry, so the clause can be false. The old name is the one the Rename dialog opened with.
+ */
+export const treatmentRenamedNotice = (oldName: string, newName: string): PageNotice => ({ tone: 'success', text: `${oldName} was renamed to ${newName}.` });
 
 /**
  * A treatment that was deleted elsewhere while its dialog was open (the pattern of ux-spec v0.17, QLT-06): nothing failed and nothing is at risk, so

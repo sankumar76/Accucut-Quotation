@@ -6,12 +6,14 @@ import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
 import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/cn';
-import { OTHER_LOCKED_REASON } from '@/lib/masters/treatments';
 import type { TreatmentRow } from '@/lib/masters/treatments-client';
 
 import { BREAK_LONG_NAMES } from './process-texts';
 import {
+  DELETE_ACTION,
   deleteTreatmentLabel,
+  OTHER_LOCKED_REASON,
+  RENAME_ACTION,
   renameTreatmentLabel,
   TREATMENT_LIST_LABEL,
   TREATMENT_NAME_HEADING,
@@ -72,10 +74,10 @@ function RowActions({ item, onAction, compact }: Pick<TreatmentListProps, 'onAct
   return (
     <div className={compact ? 'flex flex-nowrap items-center justify-end gap-s-2' : 'flex flex-wrap gap-s-2'}>
       <Button variant={variant} size={size} data-action={TREATMENT_ACTIONS.rename} aria-label={renameTreatmentLabel(item.name)} onClick={press('rename')}>
-        {label('Rename', Pencil)}
+        {label(RENAME_ACTION, Pencil)}
       </Button>
       <Button variant={variant} size={size} data-action={TREATMENT_ACTIONS.delete} aria-label={deleteTreatmentLabel(item.name)} onClick={press('delete')}>
-        {label('Delete', Trash2)}
+        {label(DELETE_ACTION, Trash2)}
       </Button>
     </div>
   );

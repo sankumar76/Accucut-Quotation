@@ -189,7 +189,7 @@ test.describe('DEF-020 guard: a change succeeds and the read after it fails', ()
     fail.value = true;
     const focusLog = await recordFocus(page);
     await dialog.getByRole('button', { name: 'Save' }).click();
-    await expectErrorTitleHoldsFocus(page, focusLog, `${renamed} was renamed.`);
+    await expectErrorTitleHoldsFocus(page, focusLog, `${name} was renamed to ${renamed}.`);
     await expectTryAgainBringsTheListBack(page, fail);
     await expect(rowOf(page, renamed)).toBeVisible();
   });
@@ -206,6 +206,48 @@ test.describe('DEF-020 guard: a change succeeds and the read after it fails', ()
     await expectErrorTitleHoldsFocus(page, focusLog, `${name} was deleted.`);
     await expectTryAgainBringsTheListBack(page, fail);
     await expect(rowOf(page, name)).toHaveCount(0);
+  });
+});
+
+test.describe('the latest read wins (QLT-04)', () => {
+  test('a first read that answers after the list was read again does not bring the older list back', async ({ page }, testInfo) => {
+    const name = newTreatmentName(testInfo);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let delivered: () => void = () => undefined;
+    const firstDelivered = new Promise<void>((resolve) => {
+      delivered = resolve;
+    });
+    let firstRead = true;
+    await page.route('**/api/v1/treatments', async (route: Route) => {
+      if (route.request().method() !== 'GET' || !firstRead) return route.continue();
+      firstRead = false;
+      // The older list is fetched now, before the add, and handed to the page only after the add and the read that follows it.
+      const older = await route.fetch();
+      await gate;
+      await route.fulfill({ response: older });
+      delivered();
+    });
+    await page.goto('/masters/materials');
+    await expect(page.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
+    await waitUntilHydrated(page, 'main button[data-action="add"]');
+    await page.getByRole('tab', { name: TAB }).click();
+    const add = page.getByRole('button', { name: 'Add treatment' });
+    await pressWithKeyboard(add);
+    const dialog = page.getByRole('dialog', { name: 'Add treatment' });
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByRole('button', { name: 'Add treatment' }).click();
+    await expect(rowOf(page, name)).toBeVisible();
+    await expect(add).toBeFocused();
+
+    release();
+    await firstDelivered;
+    await afterOneFrame(page);
+    await afterOneFrame(page);
+    await expect(rowOf(page, name)).toBeVisible();
+    await expect(add).toBeFocused();
   });
 });
 

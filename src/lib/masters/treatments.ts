@@ -21,9 +21,6 @@ export const TREATMENT_NAME_RESERVED_MESSAGE = 'That name cannot be used.';
 export const TREATMENT_LOCKED_MESSAGE = 'This entry is always offered and cannot be renamed or deleted.';
 export const NOTHING_TO_CHANGE_TREATMENT_MESSAGE = 'Change the name.';
 
-/** The visible reason on the locked "Other" row (AC-1), words from the story: text, not colour alone. */
-export const OTHER_LOCKED_REASON = 'Always offered; the Engineer types the text';
-
 /** What a treatment holds, as the screen and the routes carry it. */
 export interface TreatmentValues {
   readonly name: string;
@@ -40,6 +37,14 @@ export type TreatmentFieldName = keyof TreatmentValues;
 export const TREATMENT_FIELD_NAMES: ReadonlyArray<TreatmentFieldName> = ['name'];
 
 export type TreatmentErrors = Readonly<Partial<Record<TreatmentFieldName, string>>>;
+
+/**
+ * The one form in which a name is stored and compared (QLT-01): compatibility forms folded (full-width letters become ordinary ones), surrounding spaces
+ * removed, and every run of white space made one space. The server applies it; the unique index then compares names ignoring letter case only.
+ */
+export function canonicalTreatmentName(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/g, ' ');
+}
 
 /** The message for the name field, or null. Only the shape is checked here; whether a name is free or kept by the system is the server's. */
 export function treatmentNameProblem(value: string): string | null {

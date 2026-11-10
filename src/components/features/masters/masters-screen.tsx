@@ -11,8 +11,8 @@ import type { ExchangeRatesPanelProps } from './exchange-rates-panel';
 import { LazyTabSlot } from './lazy-tab-slot';
 import { MASTERS_DESCRIPTION, MASTERS_TITLE, MATERIALS_TAB, TABS_LABEL } from './material-texts';
 import { MaterialsPanel } from './materials-panel';
-import { TREATMENT_ERROR_TITLE, TREATMENT_LOADING_LABEL, TREATMENT_TAB } from './treatment-texts';
 import type { TreatmentPanelProps } from './treatment-panel';
+import { TREATMENT_ERROR_TITLE, TREATMENT_LOADING_LABEL, TREATMENT_SKELETON_ROWS, TREATMENT_TAB } from './treatment-texts';
 
 /**
  * SCR-13 "Materials and lists" (STORY-02.03): the page header and the tab shell. The tabs are the screen's three lists (UX spec SCR-13): Materials
@@ -62,7 +62,7 @@ export function MastersScreen({ initialMaterials }: MastersScreenProps) {
             <LazyTabSlot loader={exchangeRates} errorTitle={EXCHANGE_ERROR_TITLE} loadingLabel={EXCHANGE_LOADING_LABEL} />
           </TabsContent>
           <TabsContent value={TREATMENT_TAB_VALUE}>
-            <LazyTabSlot loader={treatments} errorTitle={TREATMENT_ERROR_TITLE} loadingLabel={TREATMENT_LOADING_LABEL} skeletonRows={4} />
+            <LazyTabSlot loader={treatments} errorTitle={TREATMENT_ERROR_TITLE} loadingLabel={TREATMENT_LOADING_LABEL} skeletonRows={TREATMENT_SKELETON_ROWS} />
           </TabsContent>
         </Tabs>
       </Card>

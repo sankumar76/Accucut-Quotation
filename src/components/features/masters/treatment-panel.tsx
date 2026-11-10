@@ -15,8 +15,10 @@ import {
   ADD_TREATMENT,
   TREATMENT_ERROR_TITLE,
   TREATMENT_LOADING_LABEL,
+  TREATMENT_SKELETON_ROWS,
   TREATMENT_SAVED_NOT_SHOWN_BODY,
   treatmentNotice,
+  treatmentRenamedNotice,
 } from './treatment-texts';
 import { useTreatments, type TreatmentsState } from './use-treatments';
 
@@ -70,15 +72,13 @@ function LoadError({ onRetry, saved }: { readonly onRetry: () => void; readonly 
   );
 }
 
-const SKELETON_ROWS = 4;
-
 /** What the tab shows below the notices: the error with "Try again", the skeleton, or the list. */
 function Body({ state }: { readonly state: TreatmentsState }) {
   const { items, status, showSkeleton, notice } = state;
   if (status === 'error') return <LoadError onRetry={state.retry} saved={notice?.tone === 'success'} />;
   // The first read has no list to keep on screen: the skeleton appears after 300 ms. A later read keeps the list until 300 ms have passed.
-  if (items === null) return <SkeletonBlock rows={SKELETON_ROWS} label={TREATMENT_LOADING_LABEL} />;
-  if (showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={TREATMENT_LOADING_LABEL} />;
+  if (items === null) return <SkeletonBlock rows={TREATMENT_SKELETON_ROWS} label={TREATMENT_LOADING_LABEL} />;
+  if (showSkeleton) return <SkeletonBlock rows={TREATMENT_SKELETON_ROWS} delayMs={0} label={TREATMENT_LOADING_LABEL} />;
   return <TreatmentList items={items} onAction={state.onRowAction} />;
 }
 
@@ -92,7 +92,7 @@ function Dialogs({ state }: { readonly state: TreatmentsState }) {
         open={dialog.open === 'add' || dialog.open === 'rename'}
         item={dialog.formItem}
         onClose={close}
-        onSaved={(saved, kind) => void state.onSaved(treatmentNotice(kind, saved.name))}
+        onSaved={(saved, kind) => void state.onSaved(kind === 'added' ? treatmentNotice('added', saved.name) : treatmentRenamedNotice(dialog.formItem?.name ?? saved.name, saved.name))}
         onGone={(item) => state.onGone(item, 'rename')}
         onCloseAutoFocus={state.onCloseAutoFocus}
       />

@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
-import {
-  NOTHING_TO_CHANGE_TREATMENT_MESSAGE,
-  TREATMENT_NAME_MAX_LENGTH,
-} from '../../../lib/masters/treatments';
 import { NAME_REQUIRED_MESSAGE, NAME_TOO_LONG_MESSAGE } from '../../../lib/masters/process-items';
+import { NOTHING_TO_CHANGE_TREATMENT_MESSAGE, TREATMENT_NAME_MAX_LENGTH } from '../../../lib/masters/treatments';
 
 /**
  * The contract of the Treatment routes (STORY-02.05, architecture section 6 "Treatments"). Every body, path parameter and answer is a strict

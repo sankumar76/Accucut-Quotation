@@ -3,6 +3,7 @@ import {
   TREATMENT_LOCKED_MESSAGE,
   TREATMENT_NAME_RESERVED_MESSAGE,
   TREATMENT_NAME_TAKEN_MESSAGE,
+  canonicalTreatmentName,
   treatmentChangesFrom,
   treatmentNameProblem,
   type TreatmentFields,
@@ -23,11 +24,13 @@ import type { AuditContext, AuditService } from './audit-service';
  * colours an Engineer chooses from, with "Other" always on the list, locked. Who may call it is decided before it is reached (`withRoute`, the
  * manifest, BR-004); this file holds the rules that stay true whoever asks:
  *
- *   - **A name is required and unique ignoring letter case** (AC-2). The database's index is the judge of the second rule, so two requests that
- *     race for one name cannot both win.
+ *   - **A name is required and unique ignoring letter case** (AC-2), and it is stored in one canonical form: compatibility forms folded (NFKC),
+ *     surrounding spaces removed, runs of spaces made one (QLT-01). The database's index is the judge of uniqueness, so two requests that race for
+ *     one name cannot both win.
  *   - **The names the system keeps are refused** (AC-2): "Other" and "Not applicable" in any letter case, and with any spacing (" other ",
- *     "Not  applicable"), are 422 `NAME_RESERVED` with a sentence that names neither (architecture section 4.9). The check is made before a
- *     transaction opens, so a refused name writes nothing.
+ *     "Not  applicable"), are 422 `NAME_RESERVED` with a sentence that names neither (architecture section 4.9). On an add the check is made before
+ *     a transaction opens; on a rename it is made after the lookup, so an unknown ID is 404 and "Other" is 409 whatever the new name is (QLT-02).
+ *     A refused name writes nothing.
  *   - **"Other" is locked** (AC-3): a rename or a delete of it is refused with 409 `TREATMENT_LOCKED` and nothing changes. The service decides
  *     this, not only the screen; the repository's rename and delete also skip a system row.
  *   - **A hidden entry is never found** (architecture section 4.9): every lookup applies the default filter, so a change to one is "not found".
@@ -80,16 +83,24 @@ function refusal(message: string, code?: string): FieldValidationError {
 
 /** Is this name one the system keeps? Letter case, surrounding spaces, repeated spaces and compatibility forms (full-width letters) do not matter. */
 export function isReservedTreatmentName(name: string): boolean {
-  return RESERVED_NAMES.has(name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase());
+  return RESERVED_NAMES.has(canonicalTreatmentName(name).toLowerCase());
 }
 
-/** The server's own refusal of a name the screen or the schema would have refused, and of a name the system keeps. Returns the name as it is stored. */
-function usableName(name: string): string {
-  const problem = treatmentNameProblem(name);
+/**
+ * The server's own refusal of a name the screen or the schema would have refused. Returns the name **as it is stored**: one canonical form (compatibility
+ * forms folded, surrounding spaces removed, runs of spaces made one), so "Powder coat", "Powder  coat" and a full-width spelling are one name for the
+ * duplicate rule and for the reserved names alike (QLT-01).
+ */
+function shapedName(name: string): string {
+  const canonical = canonicalTreatmentName(name);
+  const problem = treatmentNameProblem(canonical);
   if (problem !== null) throw refusal(problem);
-  const trimmed = name.trim();
-  if (isReservedTreatmentName(trimmed)) throw refusal(TREATMENT_NAME_RESERVED_MESSAGE, NAME_RESERVED_CODE);
-  return trimmed;
+  return canonical;
+}
+
+/** The names the system keeps are refused with 422 `NAME_RESERVED`, in a sentence that names neither entry. */
+function assertNotReserved(name: string): void {
+  if (isReservedTreatmentName(name)) throw refusal(TREATMENT_NAME_RESERVED_MESSAGE, NAME_RESERVED_CODE);
 }
 
 /** Runs a write and gives the database's rule for names its words. Any other failure passes on untouched. */
@@ -124,7 +135,10 @@ async function add({ masters, audit }: TreatmentDependencies, tx: Transaction, c
   return record;
 }
 
-/** A rename that changes nothing writes no change and no entry. */
+/**
+ * A rename that changes nothing writes no change and no entry. The answer depends on the resource first: an unknown or hidden ID is 404 and "Other" is 409
+ * whatever the new name is; only then is a name the system keeps refused (QLT-02).
+ */
 async function change(
   dependencies: TreatmentDependencies,
   tx: Transaction,
@@ -133,6 +147,7 @@ async function change(
   wanted: TreatmentFields,
 ): Promise<TreatmentRecord> {
   const before = await lockedChangeable(dependencies, tx, id);
+  if (wanted.name !== undefined) assertNotReserved(wanted.name);
   const next = treatmentChangesFrom(before, wanted);
   if (next.name === undefined) return before;
   const after = await dependencies.masters.renameTreatment(before.id, next.name, tx);
@@ -155,12 +170,13 @@ export function createTreatmentOperations(dependencies: TreatmentDependencies): 
     listTreatmentOptions: () => masters.listTreatmentOptions(),
 
     async createTreatment(context, input) {
-      const name = usableName(input.name);
+      const name = shapedName(input.name);
+      assertNotReserved(name);
       return withNameRule(() => transactions.run((tx) => add(dependencies, tx, context, name)));
     },
 
     async updateTreatment(context, id, changes) {
-      const wanted = changes.name === undefined ? changes : { name: usableName(changes.name) };
+      const wanted = changes.name === undefined ? changes : { name: shapedName(changes.name) };
       return withNameRule(() => transactions.run((tx) => change(dependencies, tx, context, id, wanted)));
     },
 

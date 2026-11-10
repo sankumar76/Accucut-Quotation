@@ -186,6 +186,7 @@ function createFakeTreatmentMethods(treatments: MutableTreatment[], onLock: () =
   };
 }
 
+// Over 40 lines on purpose (coding standards section 1): the process-item methods are written out here, and each master's methods are spread in from a helper (`createFakeTreatmentMethods`).
 export function createFakeMasterRepository(
   initial: ReadonlyArray<ProcessItemRecord> = seedRecords(),
   initialMaterials: ReadonlyArray<MaterialRecord> = [],

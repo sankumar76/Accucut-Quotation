@@ -25,10 +25,12 @@ import { BREAK_LONG_NAMES } from './process-texts';
 import {
   ADD_TREATMENT,
   ADDING_TREATMENT,
+  CANCEL_TREATMENT,
   FAILED_ADD_TREATMENT_MESSAGE,
   FAILED_RENAME_TREATMENT_MESSAGE,
   FAILED_WRITE_KEEPS_FORM_BODY,
   renameTreatmentTitle,
+  SAVE_TREATMENT,
   SAVING_TREATMENT,
   TREATMENT_NAME_FIELD_LABEL,
 } from './treatment-texts';
@@ -144,10 +146,10 @@ function TreatmentForm(props: FormProps) {
       </FormField>
       <DialogFooter>
         <DialogClose asChild>
-          <Button variant="secondary">Cancel</Button>
+          <Button variant="secondary">{CANCEL_TREATMENT}</Button>
         </DialogClose>
         <Button type="submit" loading={form.submitting}>
-          {form.submitting ? (adding ? ADDING_TREATMENT : SAVING_TREATMENT) : adding ? ADD_TREATMENT : 'Save'}
+          {form.submitting ? (adding ? ADDING_TREATMENT : SAVING_TREATMENT) : adding ? ADD_TREATMENT : SAVE_TREATMENT}
         </Button>
       </DialogFooter>
     </form>

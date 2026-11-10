@@ -175,6 +175,31 @@ describe('AC-2, AC-6 (T2): adding a treatment', () => {
   });
 });
 
+describe('QLT-01, QLT-02 (T2): one canonical form of a name, and the resource answers before the name', () => {
+  afterEach(emptyTable);
+
+  it('stores spaces collapsed and full-width letters folded, and refuses the near-duplicate with NAME_TAKEN, on an add and on a rename', async () => {
+    const created = await db.mastersService.createTreatment(by(), { name: '  Invented   powder coat ' });
+    expect(created.name).toBe('Invented powder coat');
+    expect((await byName('Invented powder coat'))?.id).toBe(created.id);
+    const other = await db.mastersService.createTreatment(by(), { name: 'Ｉｎｖｅｎｔｅｄ anodised' });
+    expect(other.name).toBe('Invented anodised');
+    const entries = await entryCount(db);
+    expect(await refusal(db.mastersService.createTreatment(by(), { name: 'Invented  Powder Coat' }))).toMatchObject({ code: NAME_TAKEN_CODE });
+    expect(await refusal(db.mastersService.updateTreatment(by(), other.id, { name: 'invented powder   coat' }))).toMatchObject({ code: NAME_TAKEN_CODE });
+    expect(await entryCount(db)).toBe(entries);
+  });
+
+  it('answers 409 for "Other" and 404 for an unknown ID before it judges the new name, even when the new name is one the system keeps', async () => {
+    const entries = await entryCount(db);
+    for (const name of ['Other', 'OTHER', 'Not applicable']) {
+      expect(await refusal(db.mastersService.updateTreatment(by(), OTHER_TREATMENT_ID, { name }))).toMatchObject({ code: TREATMENT_LOCKED_CODE, httpStatus: 409 });
+      expect(await refusal(db.mastersService.updateTreatment(by(), '00000000-0000-4000-8000-0ccc00000009', { name }))).toBeInstanceOf(NotFoundError);
+    }
+    expect(await entryCount(db)).toBe(entries);
+  });
+});
+
 describe('AC-2, AC-6 (T2): renaming a treatment', () => {
   afterEach(emptyTable);
 

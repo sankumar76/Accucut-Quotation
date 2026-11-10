@@ -171,6 +171,24 @@ describe('PATCH /api/v1/treatments/{id} (AC-2, AC-3, AC-6)', () => {
     expect(harness.masters.treatments.find((treatment) => treatment.id === OTHER_TREATMENT_ID)).toEqual(FRESH_TREATMENTS[0]);
   });
 
+  it.each(['Other', 'OTHER', ' other ', 'Not applicable'])('answers the resource before the name (QLT-02): "Other" renamed to %j is 409, an unknown ID renamed to it is 404, not 422', async (name) => {
+    const locked = await PATCH(request('PATCH', { name }), withId(OTHER_TREATMENT_ID));
+    expect(locked.status).toBe(409);
+    expect(record.parse(await locked.json())['code']).toBe('TREATMENT_LOCKED');
+    expect((await PATCH(request('PATCH', { name }), withId(UNKNOWN_ID))).status).toBe(404);
+  });
+
+  it('stores one canonical form of the name: collapsed spaces, folded full-width letters (QLT-01)', async () => {
+    const response = await PATCH(request('PATCH', { name: '  Invented   Ｈａｒｄ coat ' }), withId(ALPHA));
+    expect(response.status).toBe(200);
+    expect(record.parse(await response.json())['name']).toBe('Invented Hard coat');
+    const taken = await PATCH(request('PATCH', { name: 'canary-treatment-BETA' }), withId(ALPHA));
+    expect(taken.status).toBe(422);
+    const spaced = await POST(request('POST', { name: 'Invented  Hard  coat' }));
+    expect(spaced.status).toBe(422);
+    expect(await fieldMessages(spaced, 'NAME_TAKEN')).toEqual({ name: 'A treatment with this name already exists.' });
+  });
+
   it('answers 404 for an ID no treatment has and 422 for one that is not a UUID; an empty body and an unknown key are 422', async () => {
     expect((await PATCH(request('PATCH', { name: 'Invented hard coat' }), withId(UNKNOWN_ID))).status).toBe(404);
     expect((await PATCH(request('PATCH', { name: 'Invented hard coat' }), withId('not-an-id'))).status).toBe(422);

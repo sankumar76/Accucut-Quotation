@@ -184,7 +184,10 @@ test.describe('rename a treatment (AC-2, AC-6, AC-8)', () => {
     await page.keyboard.type(renamed);
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: `${renamed} was renamed. The change is in the audit log.` })).toBeVisible();
+    // No audit-log clause: a rename that finds the name already there writes no entry (ux-spec v0.22).
+    const notice = page.getByRole('status').filter({ hasText: `${name} was renamed to ${renamed}.` });
+    await expect(notice).toBeVisible();
+    await expect(notice).not.toContainText('audit');
     await expect(rowOf(page, renamed)).toBeVisible();
     // The renamed name contains the old one, so the old name is looked for as a whole (exact), not as a part of the new one.
     await expect(page.getByRole('button', { name: `Rename ${name}`, exact: true })).toHaveCount(0);

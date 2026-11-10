@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { uniqueViolationOf, withDatabaseErrors } from './database-errors';
+import { isRecordNotFound, uniqueViolationOf, withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
@@ -58,7 +58,6 @@ export interface TreatmentMethods {
   deleteTreatment(id: string, tx: Transaction): Promise<boolean>;
 }
 
-const RECORD_NOT_FOUND = 'P2025';
 const NAME_CONSTRAINTS: ReadonlyArray<string> = ['name', 'uq_treatments_name', 'uq_treatments_name_lower'];
 
 const SELECT = { id: true, name: true, isSystem: true } as const;
@@ -70,10 +69,6 @@ const LISTED = { isHidden: false } as const;
 const LIST_ORDER = [{ isSystem: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }] as const;
 
 const LOCKED_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), locked: z.boolean() }));
-
-function isRecordNotFound(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === RECORD_NOT_FOUND;
-}
 
 function toRecord(row: { readonly id: string; readonly name: string; readonly isSystem: boolean }): TreatmentRecord {
   return { id: row.id, name: row.name, locked: row.isSystem };

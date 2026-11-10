@@ -3,13 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   initialTreatmentValues,
   newTreatmentBody,
-  OTHER_LOCKED_REASON,
   TREATMENT_NAME_MAX_LENGTH,
   treatmentChangesFrom,
   treatmentEditChanges,
   treatmentFormProblems,
   withoutTreatmentError,
 } from '@/lib/masters/treatments';
+import {
+  deleteTreatmentDescription,
+  OTHER_LOCKED_REASON,
+  treatmentNotice,
+  treatmentRenamedNotice,
+} from '@/components/features/masters/treatment-texts';
 import { createTreatment, deleteTreatment, listTreatments, toTreatmentRow, updateTreatment } from '@/lib/masters/treatments-client';
 
 /**
@@ -72,6 +77,23 @@ describe('the form', () => {
 
   it('gives "Other" a visible reason in words (AC-1)', () => {
     expect(OTHER_LOCKED_REASON).toBe('Always offered; the Engineer types the text');
+  });
+});
+
+describe('the words of ux-spec v0.22', () => {
+  it('the renamed notice names the old and the new name and has no audit-log clause', () => {
+    expect(treatmentRenamedNotice('Textured grey', 'Brushed finish')).toEqual({ tone: 'success', text: 'Textured grey was renamed to Brushed finish.' });
+  });
+
+  it('the added and deleted notices keep the audit-log clause', () => {
+    expect(treatmentNotice('added', 'Brushed finish').text).toBe('Brushed finish was added. The change is in the audit log.');
+    expect(treatmentNotice('deleted', 'Brushed finish').text).toBe('Brushed finish was deleted. The change is in the audit log.');
+  });
+
+  it('the delete text says what stays and how to bring the treatment back, and claims nothing about a draft', () => {
+    expect(deleteTreatmentDescription('Brushed finish')).toBe(
+      'Brushed finish is removed from the Treatment / Color list. Estimates that are already calculated keep the treatment they show. To bring it back, add it again.',
+    );
   });
 });
 

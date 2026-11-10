@@ -53,7 +53,7 @@ describe('listing (AC-1, AC-5)', () => {
 
 describe('the names the system keeps (AC-2)', () => {
   it.each(['Other', 'OTHER', 'other', ' other ', 'Not applicable', 'NOT APPLICABLE', 'not  applicable', ' Not\tapplicable ', 'Ｏｔｈｅｒ'])(
-    'refuses %j with 422 NAME_RESERVED, in words that name neither entry, on an add and on a rename, and writes nothing',
+    'refuses %j with 422 NAME_RESERVED, in words that name neither entry, on an add and on a rename of a real treatment, and writes nothing',
     async (name) => {
       const { service, world, masters } = build();
       const added = await refusal(service.createTreatment(CONTEXT, { name }));
@@ -63,7 +63,8 @@ describe('the names the system keeps (AC-2)', () => {
       expect(renamed).toMatchObject({ code: NAME_RESERVED_CODE, fields: [{ field: 'name', message: 'That name cannot be used.' }] });
       expect(world.audit.committed).toHaveLength(0);
       expect(masters.treatments).toHaveLength(3);
-      expect(masters.treatmentLockCount()).toBe(0);
+      // An add is refused before any transaction; a rename is refused after the lookup (QLT-02), so only that one took the lock.
+      expect(masters.treatmentLockCount()).toBe(1);
     },
   );
 
@@ -79,6 +80,59 @@ describe('the names the system keeps (AC-2)', () => {
     expect(await refusal(service.createTreatment(CONTEXT, { name: '  ' }))).toMatchObject({ fields: [{ field: 'name', message: 'Enter a name.' }] });
     expect(await refusal(service.createTreatment(CONTEXT, { name: 'x'.repeat(101) }))).toMatchObject({ fields: [{ field: 'name', message: 'Use 100 characters or fewer.' }] });
     expect(world.audit.committed).toHaveLength(0);
+  });
+});
+
+describe('one canonical form of a name (QLT-01)', () => {
+  it('stores a name with its spaces collapsed and trimmed, and a full-width spelling folded', async () => {
+    const { service, masters } = build();
+    const spaced = await service.createTreatment(CONTEXT, { name: '  Invented   powder\tcoat ' });
+    const wide = await service.createTreatment(CONTEXT, { name: 'Ｉｎｖｅｎｔｅｄ matt' });
+    expect([spaced.name, wide.name]).toEqual(['Invented powder coat', 'Invented matt']);
+    expect(masters.treatments.map((treatment) => treatment.name)).toEqual(expect.arrayContaining(['Invented powder coat', 'Invented matt']));
+  });
+
+  it.each(['Invented  powder coat', 'INVENTED POWDER  COAT', 'Ｉｎｖｅｎｔｅｄ ｐｏｗｄｅｒ ｃｏａｔ'])(
+    'refuses %j as the name an earlier treatment already has, with NAME_TAKEN, on an add and on a rename',
+    async (name) => {
+      const { service, world } = build();
+      await service.createTreatment(CONTEXT, { name: 'Invented powder coat' });
+      const entries = world.audit.committed.length;
+      expect(await refusal(service.createTreatment(CONTEXT, { name }))).toMatchObject({ code: NAME_TAKEN_CODE });
+      expect(await refusal(service.updateTreatment(CONTEXT, BETA?.id ?? '', { name }))).toMatchObject({ code: NAME_TAKEN_CODE });
+      expect(world.audit.committed).toHaveLength(entries);
+    },
+  );
+
+  it('counts a rename to the same name with other spacing as no change: no update and no entry', async () => {
+    const { service, world, masters } = build();
+    const created = await service.createTreatment(CONTEXT, { name: 'Invented powder coat' });
+    const rename = vi.spyOn(masters, 'renameTreatment');
+    const entries = world.audit.committed.length;
+    expect((await service.updateTreatment(CONTEXT, created.id, { name: ' Invented  powder   coat ' })).name).toBe('Invented powder coat');
+    expect(rename).not.toHaveBeenCalled();
+    expect(world.audit.committed).toHaveLength(entries);
+  });
+});
+
+describe('the resource answers before the name does (QLT-02)', () => {
+  it.each(['Other', 'OTHER', 'Not applicable', 'Invented new name'])('a rename of the locked "Other" to %j is 409 TREATMENT_LOCKED, never 422', async (name) => {
+    const { service, world } = build();
+    expect(await refusal(service.updateTreatment(CONTEXT, OTHER_TREATMENT_ID, { name }))).toMatchObject({ code: TREATMENT_LOCKED_CODE, httpStatus: 409 });
+    expect(world.audit.committed).toHaveLength(0);
+  });
+
+  it.each(['Other', 'Not applicable'])('a rename of an unknown ID to %j is 404, never 422', async (name) => {
+    const { service } = build();
+    expect(await refusal(service.updateTreatment(CONTEXT, '00000000-0000-4000-8000-00000000dead', { name }))).toBeInstanceOf(NotFoundError);
+  });
+
+  it('a rename of a real treatment to a name the system keeps is still 422 NAME_RESERVED, after the lock, and writes nothing', async () => {
+    const { service, world, masters } = build();
+    expect(await refusal(service.updateTreatment(CONTEXT, ALPHA?.id ?? '', { name: 'other' }))).toMatchObject({ code: NAME_RESERVED_CODE });
+    expect(masters.treatmentLockCount()).toBe(1);
+    expect(world.audit.committed).toHaveLength(0);
+    expect(masters.treatments.find((treatment) => treatment.id === ALPHA?.id)?.name).toBe('Canary-Treatment-Alpha');
   });
 });
 

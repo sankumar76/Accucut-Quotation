@@ -11,9 +11,9 @@ import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepos
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
-import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
 /**
  * A signed-in caller for the tests that run the real routes and pages (`tests/security`), without a database or a

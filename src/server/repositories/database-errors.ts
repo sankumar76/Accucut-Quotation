@@ -74,6 +74,14 @@ export function uniqueViolationOf(error: unknown): ReadonlyArray<string> | null 
   return null;
 }
 
+/** Prisma's code for an update or delete of a row that is not there. */
+const RECORD_NOT_FOUND = 'P2025';
+
+/** Is this the error Prisma raises when the row an update asked for does not exist? Repositories turn it into `null`. */
+export function isRecordNotFound(error: unknown): boolean {
+  return isRecord(error) && error['code'] === RECORD_NOT_FOUND;
+}
+
 /** `DatabaseBusyError` (with the original as its cause) for a timeout; the same value for anything else. */
 export function translateDatabaseError(error: unknown): unknown {
   return isBusyError(error) ? new DatabaseBusyError({ cause: error }) : error;

@@ -40,12 +40,17 @@ function useTreatmentList(opener: { readonly current: Opener | null }) {
   const [items, setItems] = useState<ReadonlyArray<TreatmentRow> | null>(null);
   const [status, setStatus] = useState<TreatmentListStatus>('loading');
   const wantsFocus = useRef(false);
+  // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
+  const newest = useRef(0);
   const showSkeleton = useAfterDelay(status === 'loading' && items !== null, SKELETON_DELAY_MS);
 
-  /** Reads the list and settles the status. Sets nothing before the answer. */
+  /** Reads the list and settles the status. Sets nothing before the answer, and nothing at all if a newer read was started meanwhile (the latest read wins). */
   const read = useCallback(async (returnFocus: boolean): Promise<void> => {
     wantsFocus.current = returnFocus;
+    newest.current += 1;
+    const mine = newest.current;
     const outcome = await listTreatments();
+    if (mine !== newest.current) return;
     if (outcome.status === 'ok') setItems(outcome.value);
     setStatus(outcome.status === 'ok' ? 'ready' : 'error');
   }, []);
@@ -91,17 +96,13 @@ function useTreatmentDialog() {
   return { open, setOpen, target, formItem, opener, openDialog, forgetOpener };
 }
 
-/** The whole of the Treatment / Color tab's behaviour. The notice is replaced by the next one and cleared by the next press of a button. */
-export function useTreatments() {
-  const dialog = useTreatmentDialog();
-  const list = useTreatmentList(dialog.opener);
-  const [notice, setNotice] = useState<PageNotice | null>(null);
-  const { read, readAgain, status } = list;
+type TreatmentList = ReturnType<typeof useTreatmentList>;
+type TreatmentDialog = ReturnType<typeof useTreatmentDialog>;
+type SetNotice = (notice: PageNotice | null) => void;
 
-  // The first activation of the tab: the list is read. The status starts as `loading`, so nothing is set before the answer.
-  useEffect(() => {
-    void read(false);
-  }, [read]);
+/** The presses that open a dialog, what the server's answer does to the screen, and where focus goes when a dialog closes. */
+function useTreatmentActions(dialog: TreatmentDialog, list: TreatmentList, setNotice: SetNotice) {
+  const { readAgain, status } = list;
 
   function onAdd(): void {
     dialog.openDialog('add', null, { itemId: null, action: TREATMENT_ACTIONS.add });
@@ -134,17 +135,28 @@ export function useTreatments() {
     focusOpener(dialog.opener.current, status === 'error');
   }
 
+  return { onAdd, onRowAction, onSaved, onGone, onCloseAutoFocus };
+}
+
+/** The whole of the Treatment / Color tab's behaviour. The notice is replaced by the next one and cleared by the next press of a button. */
+export function useTreatments() {
+  const dialog = useTreatmentDialog();
+  const list = useTreatmentList(dialog.opener);
+  const [notice, setNotice] = useState<PageNotice | null>(null);
+  const { read, readAgain } = list;
+
+  // The first activation of the tab: the list is read. The status starts as `loading`, so nothing is set before the answer.
+  useEffect(() => {
+    void read(false);
+  }, [read]);
+
   return {
     items: list.items,
-    status,
+    status: list.status,
     showSkeleton: list.showSkeleton,
     notice,
     dialog,
-    onAdd,
-    onRowAction,
-    onSaved,
-    onGone,
-    onCloseAutoFocus,
+    ...useTreatmentActions(dialog, list, setNotice),
     retry: () => void readAgain(false),
   };
 }
