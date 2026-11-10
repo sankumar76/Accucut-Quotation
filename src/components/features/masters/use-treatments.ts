@@ -50,7 +50,6 @@ function useTreatmentList(opener: { readonly current: Opener | null }) {
     newest.current += 1;
     const mine = newest.current;
     const outcome = await listTreatments();
-    if (mine !== newest.current) return;
     if (outcome.status === 'ok') setItems(outcome.value);
     setStatus(outcome.status === 'ok' ? 'ready' : 'error');
   }, []);
