@@ -90,7 +90,7 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
 
   const setField = (field: MaterialFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
-    setErrors((current) => withoutMaterialError(current, field));
+    showErrors(withoutMaterialError(errors, field));
   };
 
   /** Shows the server's answer to an add or an edit. */

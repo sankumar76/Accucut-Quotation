@@ -88,7 +88,7 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
 
   const setField = (field: FieldName) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
-    setErrors((current) => withoutError(current, field));
+    showErrors(withoutError(errors, field));
   };
 
   /** Shows the server's answer to an add or an edit. */

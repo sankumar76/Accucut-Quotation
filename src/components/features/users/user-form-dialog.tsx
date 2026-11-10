@@ -117,7 +117,7 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
 
   const set = (field: FieldName) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
-    setErrors((current) => withoutError(current, field));
+    showErrors(withoutError(errors, field));
   };
 
   // After a refusal, focus goes to the first field with a message (SCR-14, UX spec section 6.0 "Forms"), and never while a person types (DEF-026).
