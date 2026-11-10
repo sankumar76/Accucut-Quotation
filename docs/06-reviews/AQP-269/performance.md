@@ -67,7 +67,7 @@ Seconds per instance, from the `✓ … (Ns)` lines:
 - **Path.** Shard 3 ended at 16:19:52, about a minute after shards 1 and 2 (16:18:52 and 16:18:55), so shard 3 sets the path of 5:05 (16:15:04 to 16:20:09). Instances on shards 1 and 2 add nothing to the path.
 - **Added to shard 3.** 10.1 s of worker time over 4 workers with `fullyParallel` is about 2.5 s of wall time if the work packs evenly (estimate), and 10.1 s at the very most. That is 0.8 % to 3.3 % of 305 s. As a per-instance figure it is about 0.8 s of path per desktop instance. The ledger of test strategy section 10.5 uses 0.47 s (estimate), which would give 1.4 s for these three. These tests are heavier than the average, because each opens a dialog, submits, types and tabs.
 - **Runner variance in the same run.** The same set-up tests (same code on every shard) took 22.5 s on shard 1, 23.8 s on shard 2 and 29.2 s on shard 3, so the runner of shard 3 was about 6 s slower before any new test ran. Desktop table-action tests on shard 3 took 8.5 to 9.4 s each.
-- **Spread of the same shard in earlier runs.** E2E step times, with different test sets, so this is a spread and not a clean control: shard 1 at 3:21 to 3:47, shard 2 at 2:12 to 3:27, shard 3 at 2:53 to 3:51 (runs 42846533197, 42847539067, 42849365337). This run has more tests than those, and shards 1 and 2 are faster (2:43 and 2:52) than in any of them. A move of 2.5 s cannot be read out of a spread of 60 to 90 s, and I do not claim to.
+- **Spread of the same shard in earlier runs.** E2E step times, with different test sets, so this is a spread and not a clean control: shard 1 at 3:21 to 3:47, shard 2 at 2:12 to 3:27, shard 3 at 2:53 to 3:51 (runs 42846533197, 42847539067, 42849365337). This run has more tests than those, and shard 1 is faster (2:43) than in any of them, while shard 3 is the slowest of the four (3:57). A move of 2.5 s cannot be read out of a spread of 60 to 90 s, and I do not claim to.
 - **Against 5:00 and 5:30.** 5:05 is one first-attempt reading, not the median of five hit runs that test strategy v0.30 section 10.5 item 9 asks for, so it does not count against either line. If it were read as it stands, it is 25 s under 5:30, and the story's share of that is at most 2.5 s (about a tenth). AQP-244 is measuring the path now (base 322cd8e, head PR #166); RISK-023 stays at 6 (DL-134), and this story gives no reason to change it.
 - **No cut is available inside the story.** The tests press Tab, which section 10.5 counts as focus order, so they are not eligible for `@one-width`; and tagging in a feature PR is out of scope there ("any `@one-width` tag or pin change"). Nine instances is the rulebook's number for three widths.
 
@@ -81,7 +81,6 @@ Seconds per instance, from the `✓ … (Ns)` lines:
 |------------|------|----------|
 | NFR-009 (first-load JS ≤ 200,000 B gzip per route) | None: 0, -2 and +3 B on the three routes; `/masters/materials` headroom stays 12,885 B | none |
 | NFR-016 (E2E at three widths) | None: three tests per dialog run at 360, 768 and 1366 px | PRF-01 (cost only) |
-| NFR-009 interaction latency, as far as it applies to typing | Improved: no effect runs per key from this hook | none |
 | RISK-023 / test strategy 10.5 (CI path; not an NFR) | Low: at most about 2.5 s of path (estimate); the reading is AQP-244's | PRF-01 |
 
 ## Not applicable
