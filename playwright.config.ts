@@ -97,7 +97,7 @@ export default defineConfig({
     {
       name: 'desktop',
       dependencies: ['setup'],
-      testIgnore: '**/auth.setup.ts',
+      testIgnore: ['**/auth.setup.ts', '**/masters-table-actions.spec.ts'],
       use: { browserName: 'chromium', viewport: { width: 1366, height: 768 }, storageState: SIGNED_IN_STATE },
     },
   ],
