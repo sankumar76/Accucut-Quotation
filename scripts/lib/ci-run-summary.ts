@@ -40,6 +40,8 @@ const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
 const API_VERSION = '2022-11-28';
 const DEFAULT_API_ORIGIN = 'https://api.github.com';
 const NOT_AVAILABLE = 'n/a';
+/** Said when the start of a later attempt could not be read, so the reader knows that jobs of earlier attempts may be counted (STD-12). */
+export const ATTEMPT_START_UNKNOWN = 'Attempt start could not be read, so jobs from earlier attempts are counted.';
 /** Sort ranks of `jobOrder`: `Stages 1 to 11b` is 0 and a shard is its index, so the fan-in job comes after the shards and any other job after it. */
 const FAN_IN_RANK = 1_000;
 const OTHER_RANK = 2_000;
@@ -345,7 +347,10 @@ export async function summariseRun(env: Readonly<Record<string, string | undefin
     };
     const jobs = await fetchRunJobs(location, fetchImpl);
     if (jobs.length === 0) return renderUnavailable('the API listed no job');
-    return renderSummary(jobs, now, await fetchAttemptStart(location, fetchImpl));
+    const attemptStartedAt = await fetchAttemptStart(location, fetchImpl);
+    const summary = renderSummary(jobs, now, attemptStartedAt);
+    // Attempt 1 has no earlier attempt, so a missing start matters only from attempt 2 on.
+    return attemptStartedAt === undefined && Number(location.attempt) > 1 ? `${summary}${ATTEMPT_START_UNKNOWN}\n` : summary;
   } catch (error) {
     return renderUnavailable(error instanceof Error ? error.message : 'unexpected error');
   }

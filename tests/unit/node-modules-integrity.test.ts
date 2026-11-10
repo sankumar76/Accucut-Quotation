@@ -101,6 +101,11 @@ async function scenario(root: string, damage: Damage, extra: Record<string, stri
   return run('check', modules, extra);
 }
 
+// QLT-08: the suite may skip on a developer machine without GNU find, but never on CI, where a skip would hide a broken check.
+it('is not skipped on CI: bash and GNU find are available there', () => {
+  if (process.env['CI'] === 'true') expect(BASH_AVAILABLE).toBe(true);
+});
+
 describe.skipIf(!BASH_AVAILABLE)('AQP-243 AC-3: the node_modules integrity check, run in bash', () => {
   const root = mkdtempSync(join(tmpdir(), 'node-modules-integrity-'));
   const outcomes = new Map<string, Outcome>();

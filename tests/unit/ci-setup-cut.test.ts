@@ -15,6 +15,8 @@ import { installSteps } from '../support/ci-run-jobs';
 const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
 const WORKFLOW = read('../../.github/workflows/ci.yml');
 const LINES = WORKFLOW.split('\n');
+/** The whole `key:` line of a node_modules cache step (QLT-10): a suffix such as `-${{ github.run_id }}` makes every run miss, so `toContain` is not enough. */
+const KEY_LINE = /^\s+key: \$\{\{ steps\.nmkey\.outputs\.key \}\}$/m;
 const CACHE_SHA = /actions\/cache(?:\/restore|\/save)?@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6\.1\.0$/;
 
 /** The text of one job, from its key to the next job's key. */
@@ -89,8 +91,8 @@ describe.each(INSTALL_JOBS)('AQP-243 AC-2 / AC-3: the node_modules cache in the 
     const key = step('name the node_modules cache key');
     expect(key).toContain("INPUT_HASH: ${{ hashFiles('package-lock.json', 'package.json', '.npmrc') }}");
     expect(key).toContain('"key=node-modules-v${NODE_MODULES_CACHE_FORMAT}-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}"');
-    expect(step('restore node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
-    expect(step('save node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
+    expect(step('restore node_modules')).toMatch(KEY_LINE);
+    expect(step('save node_modules')).toMatch(KEY_LINE);
     for (const part of ['restore node_modules', 'save node_modules']) {
       expect(step(part), part).not.toContain('restore-keys');
       expect(step(part), part).toContain('path: node_modules');
@@ -174,7 +176,7 @@ describe('AQP-243 AC-2 / AC-3: the whole workflow', () => {
         if (!/actions\/cache\/(save|restore)@/.test(body)) continue;
         expect(name).toMatch(/: install, (restore|save) node_modules$/);
         expect(body).toContain('path: node_modules');
-        expect(body).toContain('key: ${{ steps.nmkey.outputs.key }}');
+        expect(body).toMatch(KEY_LINE);
       }
     }
   });

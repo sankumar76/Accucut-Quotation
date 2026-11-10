@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cacheState, fetchAttemptStart, isCarriedOver, pathSeconds, renderSummary, slowestShard, summariseRun } from '../../scripts/lib/ci-run-summary';
+import { ATTEMPT_START_UNKNOWN, cacheState, fetchAttemptStart, isCarriedOver, pathSeconds, renderSummary, slowestShard, summariseRun } from '../../scripts/lib/ci-run-summary';
 import { iso } from '../support/ci-feedback-records';
 import { apiJobsOf, installSteps, job, runOf, shardJob } from '../support/ci-run-jobs';
 
@@ -79,6 +79,28 @@ describe('QLT-03: jobs from an earlier attempt are left out of the path and the 
   });
 });
 
+describe('STD-12: a failed read of the attempt start is said, on a later attempt', () => {
+  const base = { GITHUB_REPOSITORY: 'owner/name', GITHUB_RUN_ID: '5', GITHUB_TOKEN: 'invented-token-value', GITHUB_API_URL: 'https://api.example.test' };
+  /** The jobs answer; the attempt endpoint answers `status`. */
+  const withAttemptStatus = (status: number): typeof fetch => (input) => {
+    const isJobs = String(input).includes('/jobs?');
+    return Promise.resolve(new Response(JSON.stringify(isJobs ? apiJobsOf(rerunOfFailed()) : { run_started_at: iso(0) }), { status: isJobs ? 200 : status }));
+  };
+
+  it('adds one fixed line when attempt 2 could not read its start (HTTP 500), and nothing else from the error', async () => {
+    const text = await summariseRun({ ...base, GITHUB_RUN_ATTEMPT: '2' }, NOW, withAttemptStatus(500));
+    expect(text.split('\n').filter((line) => line === ATTEMPT_START_UNKNOWN)).toHaveLength(1);
+    expect(text.endsWith(`${ATTEMPT_START_UNKNOWN}\n`)).toBe(true);
+    expect(text).not.toContain('500');
+    expect(text).not.toContain('invented-token-value');
+  });
+
+  it('adds no line on attempt 1 (no earlier attempt), or when the start was read', async () => {
+    expect(await summariseRun({ ...base, GITHUB_RUN_ATTEMPT: '1' }, NOW, withAttemptStatus(500))).not.toContain(ATTEMPT_START_UNKNOWN);
+    expect(await summariseRun({ ...base, GITHUB_RUN_ATTEMPT: '2' }, NOW, withAttemptStatus(200))).not.toContain(ATTEMPT_START_UNKNOWN);
+  });
+});
+
 describe('QLT-03: reading the start of this attempt', () => {
   const location = { repository: 'owner/name', runId: '5', attempt: '5', token: 'invented-token-value', apiOrigin: 'https://api.example.test' };
   const answer = (status: number, body: unknown): typeof fetch => () => Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -112,7 +134,8 @@ describe('QLT-03: reading the start of this attempt', () => {
     expect(known).toContain('(earlier attempt)');
     expect(known).toContain('**Slowest shard:** shard 2,');
     const unknown = await summariseRun(env, NOW, routed({}));
-    expect(unknown).not.toContain('earlier attempt');
+    expect(unknown).not.toContain('(earlier attempt)');
+    expect(unknown).toContain(ATTEMPT_START_UNKNOWN);
     expect(unknown).toContain('**Slowest shard:** shard 3,');
   });
 });
