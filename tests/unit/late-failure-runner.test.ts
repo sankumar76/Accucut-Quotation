@@ -97,6 +97,25 @@ describe('the outermost transaction fails after its work', () => {
     expect(store.committed).toEqual([]);
   });
 
+  it('keeps two overlapping outer calls apart: each nested call belongs to its own outer one (QLT-02)', async () => {
+    const store = createStore();
+    const runner = createLateFailingRunner(store.runner, LATE);
+    const first = runner.run(async (outer) => {
+      store.write(outer, 'o1');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await runner.run((inner) => Promise.resolve(store.write(inner, 'i1')));
+    });
+    const second = runner.run(async (outer) => {
+      store.write(outer, 'o2');
+      await runner.run((inner) => Promise.resolve(store.write(inner, 'i2')));
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    });
+    const settled = await Promise.allSettled([first, second]);
+    expect(settled.map((result) => (result.status === 'rejected' ? result.reason : 'resolved'))).toEqual([LATE, LATE]);
+    // Both nested calls committed on their own and neither outer call did: no call was taken for another's nested one.
+    expect([...store.committed].sort()).toEqual(['i1', 'i2']);
+  });
+
   it('opens one transaction on the wrapped runner and never retries (DL-057)', async () => {
     const store = createStore();
     await expect(createLateFailingRunner(store.runner, LATE).run(() => Promise.resolve())).rejects.toBe(LATE);
