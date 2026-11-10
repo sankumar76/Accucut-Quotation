@@ -4642,3 +4642,43 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. RISK-023 stays at 6; this PR adds about 2.5 s.
 **Rationale:** the fix is correct and shared, as DL-135 asked. The gaps are in its proof. The F-b sequence is the one DL-135 named, and two plants pass the whole suite. Each gap is closed by a few test lines the reviewer has already written, so a test-only push read by master is proportionate. The standards Minors would widen a test-only push into production code across another story's screen, so they go to #171 with an owner and a due point.
 **Posted:** Jira AQP-269 comment 11366; PR #167 comment 6773602588; tech-debt GitHub #171 created (STD-01, STD-02, STD-04).
+
+## G6 – Peer Review — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** There is no Blocker or Critical. QLT-01 (Major) is upheld and fixed in one push, together with the named Minors. reviewer-quality and reviewer-standards re-review the new diff only. Master closes G6 on the fix head before In QA. The cut is kept, and PRF-01 goes to the architect. RISK-023 is read at G7 (DL-137).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #166** at 953b8ca: 4 files. `OWN_WIDTH_FILES` (`aqp-234-qa.spec.ts`, `masters-table-actions.spec.ts`) goes into `testIgnore` of `mobile` and `tablet` in `playwright.config.ts`, with the new `tests/support/own-width-files.ts` and `tests/unit/own-width-files.test.ts`. One assertion in `tests/unit/one-width-tag.test.ts` is relaxed for the two files and declared under G12.
+  - **Reports:** `docs/06-reviews/AQP-244/{standards,quality,performance,consolidated}.md`.
+    - standards: APPROVE WITH COMMENTS, 8 Minor and 1 Info (Jira 11372);
+    - quality: REQUEST CHANGES (review 5846162115, Jira 11373), 1 Major, 1 Minor and 3 Info; plants P1, P2, P3 and P5 caught (control PRs #175, #176, #177, #179), P4 survives (#178);
+    - performance: APPROVE WITH COMMENTS (Jira 11374), with every figure recomputed from the API and 30 shard logs.
+  - **Rulings:** architect 11342 (the cut) and 11367 (the measured reading governs AC-3 (c)); test strategy v0.31 §10.5 item 9; AC-3 (c) replaced by the product-owner (AQP-1 11370) and aligned by the scrum-master (11371).
+  - **Developer:** AQP-244 11364.
+  - **My own checks:** nothing was run locally (machine memory). I read the findings tables of all three reports against the consolidated record. The figures and plants are taken from the reviewers' recomputation and the control PRs, and were not re-run by master.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ⚠️ | QLT-01 open. The skip in `masters-table-actions.spec.ts` sits inside two describe blocks, so a test added outside them runs in desktop only with every guard green (P4, #178) |
+| 4 | G12: the relaxed assertion is declared and still guarding | | ⚠️ | Declared. But STD-06: adding a file to `OWN_WIDTH_FILES` in the config widens the relaxation with no test edit, so "needs a ruling" is a convention only |
+| 5 | Each test runs once | | ✅ | 665 passed at base and head; skipped 131 → 23 |
+| 6 | Measured ACs | | ✅ | AC-3 base 4:41 / 5:17 against head 4:37 / 4:52 (five runs each, 40 of 40 hits, 0 flaky, billed 0.95x); AC-3 (c) 16 s against 35 s by ruling 11367 |
+| 7 | Time effect of the cut | | ⚠️ | PRF-01: -4 s against a standard error of about 15 s. Not measurable; routed to the architect (DL-137 (3)) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #166, one push | **QLT-01:** a file-level `test.beforeEach` skip in `masters-table-actions.spec.ts`, plus a guard that accepts a listed file only when its skip is file-level (P4 must fail). **STD-06:** pin the two ruled file names in a test, as `RULED_FILES` is pinned, so that a new entry is a visible test edit under G12. **In the same push:** QLT-02 (assert, or rename to what the test checks); STD-01 (`ReadonlyArray`); STD-02 (the durable reason in the config comment); STD-03 (module name and doc comment); STD-04 (108, not 114, and say which guards exist); STD-05 (accept both quote styles); STD-07 (title); STD-08 (one config reader). **The runtime test set must not change:** the fix head's CI must show the same passed and skipped counts per shard as 953b8ca; if not, it comes back to master. Update the Dev Record | Before the re-review |
+| B | reviewer-quality; reviewer-standards | PR #166, new diff only | reviewer-quality: QLT-01 and QLT-02, and P4 re-planted by a control PR (closed unmerged) that must fail. reviewer-standards: STD-01 to STD-08. reviewer-performance is not required while the counts per shard are unchanged | After A |
+| C | master | gate log | G6 close on the fix head: both re-reviews with no open Major; CI 5 of 5 with unchanged counts per shard; the diff limited to the PR's files plus any new test file. Then In QA | After B |
+| D | qa-engineer | `docs/07-qa/AQP-244-test-report.md` | G7 through the API and CI (no local runs): AC-1 to AC-6, each with evidence; AC-3 recomputed from base run 42850365032 and head run 42852486467 (medians, slowest, hit 40 of 40, 0 flaky); counts per shard on the final head; P4 and one other plant (P1 or P5) re-planted by QA's own control PRs; the G12 relaxation read against the pinned list | G7 |
+| E | solution-architect | test strategy §10.5 item 9 | PRF-01: say whether the 35 s balance line (AC-3 (c)) stays as a reading line, given that it sits below the noise of its own statistic (29 s on means, 46 s host-free, 68 s modelled), and state what a future balance reading uses. This does not hold AQP-244 | Before the next CI-time decision (fourth shard or nightly review), at the latest before the sprint 1 review |
+| F | orchestrator | merge | DL-137 (5) | After G7 GO |
+
+**Accepted (Info):** STD-09 (covered by QLT-01), QLT-03 (fails safe for coverage), QLT-04, QLT-05, and the performance Infos.
+**Risks:** RISK-023 is not re-scored now. The fall rule's target is corrected to 4 (P 2 × I 2), and it is read at G7 (DL-137 (4)).
+**Rationale:** the change is small and measured, and four of five plants are caught. The Major is a coverage hole that the change itself creates, in the file most likely to get new masters-table tests, so it is fixed before QA. The Minors are in the same four files, so they ride the same push (the AQP-38 rule).
+**Posted:** Jira AQP-244 comment 11376; PR #166 comment 6774316410. No tech-debt issue created (every Minor is in the push; PRF-01 goes to the architect with a due point).
