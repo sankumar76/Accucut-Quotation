@@ -4469,3 +4469,46 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. RISK-023 is not restated in the register. This head's single attempt is 6:10 (6:05 median of three at 939f32f); reviewer-performance's identical-code mean is 5:28, plus about 12 s for the story. The escalation was answered by the product-manager (11305). A path of 5:30 or more on the updated head is reported, not held.
 **Rationale:** the Major is fixed and proven by a re-plant. Every Minor routed into the push is fixed, the quality ones checked by the reviewer and the standards ones by master from the diff, as DL-129 (7) set. The one new item is a coverage gap the integration tests already close for the write path, and QA's own run closes it for the screen.
 **Posted:** Jira AQP-123 comment 11323; PR #151 comment 6765772392. No tech-debt issue created (QLT-11 is covered at G7; STD-03 to STD-05 stay on #119).
+
+## G7 – QA Acceptance — AQP-243 (STORY-10.19, CI set-up cut and set-up summary, PR #152) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** QA's report and DEF-023 (Sev-3, Test, pre-existing) were judged at 350c9d0; the code is at 6bdbb77. AQP-243 moves to Done. The PR merges under the conditions of DL-132 (4).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-243-test-report.md` and `docs/07-qa/defects/DEF-023-g7-7-keyboard-768-test-flaky-in-shard-3.md`, committed as 350c9d0 (2 files, docs only, on top of 6bdbb77). QA hand-off Jira AQP-243 11330. Recommendation ACCEPT, with the AC-6 reading left to master.
+  - **DEF-023:** Jira AQP-268, GitHub #159. Sev-3, Test, pre-existing.
+  - **GitHub #137** (owner qa-engineer; trims the G7-7 768 px tests that DEF-023 names).
+  - **My own checks:**
+    - **`git diff 8b587be 6bdbb77`**, the follow-up commit DL-130 (2) said master would read at G7. It has 4 files, all in the named list (`ci-run-summary.ts`, `ci-run-summary-attempts.test.ts`, `ci-setup-cut.test.ts`, `node-modules-integrity.test.ts`), +41 / -6.
+      - **QLT-10:** `KEY_LINE` anchors the whole `key:` line in the three places.
+      - **STD-12:** `ATTEMPT_START_UNKNOWN` is added only when the start is unknown and the attempt is above 1, with two tests (one checks that no status code or credential leaks).
+      - **QLT-08:** on CI the integrity suite can no longer be skipped.
+      - One assertion was narrowed: `not.toContain('earlier attempt')` became `not.toContain('(earlier attempt)')`. The new STD-12 line itself contains those words, and the same test now also asserts that the line is present. Accepted.
+    - **CI 42815039602** on 350c9d0: 5 of 5 `success`. Path 4:09, recomputed (249 s).
+    - **Shard 3 logs:** `1 flaky` on base run 42757450173 and on 42815039602, as DEF-023 states.
+    - **Not re-run by master:** QA's plants and probes. QA ran them on 6bdbb77 with diffs printed, and the code is the same at 350c9d0. My own P3, P5 and P3b runs at 8b587be are in the G6 close.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-7 in the matrix, each with run IDs or tests; AC-6 is reported as Partial, and is read against its purpose in DL-132 (1); AC-8 is the architect's, after the merge |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | open: Sev-3 DEF-023 only, pre-existing at base 051c0b5 |
+| 3 | Regression suite result recorded and green | ✱ | ✅ | CI 42815039602, 5 of 5; QA's run on 6bdbb77 (42802757357): stages 6 and 11 green, 623 E2E passed |
+| 4 | Exploratory testing notes present | | ✅ | charter "break the claim that the cache can only cost time"; OBS-1 (Sev-4 wording, the same as QLT-09) |
+| 5 | Accessibility checks for UI stories | | n/a | no screen |
+| 6 | DL-130 evidence (D2) | | ✅ | P3, P5 and P3b caught, plus a QA variant in the shell key line; the failed or cancelled fallback reads `fallback`; an unwritable path gives exit 0 and a name-only warning; each removed step timeout is caught; run 42463553178 attempt 5 reads 4:00, with the STD-12 line when the start is unknown; same key and `hit` 4 of 4; the integrity tests ran (11) in stages 6 and 11 |
+| 7 | Follow-up commit within the named files | | ✅ | read by master (above) |
+| 8 | Records match the CI run | | ⚠️ | the PR body's "0 flaky in five full runs" is contradicted by the shard 3 logs; corrected before the squash (condition b) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | qa-engineer | `tests/e2e/aqp-234-qa.spec.ts` (DEF-023 with #137) | Remove the flake: #137's deletion of the 768 px G7-7 tests, deletions only, in its own test-only PR. Or, if the test is kept, it creates its own rows. No retry increase and no wider limit (DL-057). Verified by no `flaky` line in shard 3 over five full runs. Master checks the diff and CI per #137's rule | Before AQP-244's head measurement runs, at the latest before AQP-244's G6 |
+| b | developer | PR #152 body | Replace the "0 flaky" sentence with what the logs show: one flaky test in shard 3 in every run, the same as on the base (DEF-023). Editing the description does not change the head | Before the squash |
+| c | orchestrator | PR #152 merge | DL-132 (4) | After this GO |
+| d | orchestrator; master | RISK-023 | The fall-back reading after the merge, DL-132 (5) | After the squash |
+
+**Not verified, accepted:** the text of the host line on a job's summary page. The API does not expose that page. The step succeeded in 4 of 4 jobs, and its command is pinned by the guard tests.
+**Risks registered:** none new. RISK-023 is unchanged until the reading in DL-132 (5).
+**Rationale:** every AC that this story can affect is verified with independent evidence, and every DL-130 item is evidenced on the final code. AC-6's "0 flaky" exists to show that the story adds no flake. The same test flakes 3 of 3 on the base, the story touches no E2E file, and the defect is a cross-test dependency in QA's own spec. So AC-6 is met in substance. A pre-existing Sev-3 Test defect that fails closed (a second failure would turn the run red) and is green in CI gives GO with an owner and a due point, as at DL-120.
+**Posted:** Jira AQP-243 comment 11332; PR #152 comment 6767387622. No tech-debt issue created (DEF-023 has its own Bug and issue, #159, with an owner and a due point).
