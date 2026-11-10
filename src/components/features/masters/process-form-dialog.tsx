@@ -98,7 +98,7 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
     if (outcome.status === 'refused' && outcome.httpStatus === 404 && item !== null) return onGone(item);
     const fromServer = outcome.status === 'refused' ? serverErrors(outcome.fields) : {};
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    showErrors(fromServer);
+    setErrors(fromServer);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {

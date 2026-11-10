@@ -154,12 +154,12 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
     if (outcome.status === 'ok') return onSaved(outcome.value, kind);
     if (outcome.status === 'failed') return setFailed(true);
     if (outcome.code === ADMIN_ALREADY_ACTIVE_CODE) {
-      showErrors({ role: outcome.title });
+      setErrors({ role: outcome.title });
       return onAdminTaken(outcome.currentAdminName);
     }
     const fromServer = serverErrors(outcome);
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    showErrors(fromServer);
+    setErrors(fromServer);
   }
 
   return (
