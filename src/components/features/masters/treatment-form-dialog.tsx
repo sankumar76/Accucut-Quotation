@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
@@ -83,6 +83,11 @@ function useTreatmentForm({ item, onClose, onSaved, onGone }: FormProps) {
   const [submitting, setSubmitting] = useState(false);
   // After a refusal, focus goes to the first field with a message (UX spec section 6.0 "Forms"), and never while a person types (DL-135).
   const showErrors = useFocusOnRefusal(TREATMENT_FIELD_NAMES, (field) => document.getElementById(FIELD_IDS[field])?.focus(), setErrors);
+  // The old DEF-024 effect, planted back: keyed on the errors object, which typing rebuilds.
+  useEffect(() => {
+    const first = TREATMENT_FIELD_NAMES.find((field) => errors[field] !== undefined);
+    if (first !== undefined) document.getElementById(FIELD_IDS[first])?.focus();
+  }, [errors]);
 
   const setField = (field: TreatmentFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
