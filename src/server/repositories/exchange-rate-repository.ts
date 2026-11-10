@@ -94,11 +94,12 @@ async function readRows(db: PrismaClient, tx?: Transaction): Promise<ExchangeRat
   const found = await clientFor(db, tx).exchangeRate.findMany({
     select: { currency: true, inrValue: true, updatedAt: true, updatedById: true, updatedBy: { select: { name: true } } },
   });
-  const rows = found.flatMap((row): RateRow[] => {
+  const rows = found.map((row): RateRow => {
     const currency = CURRENCIES.find((candidate) => candidate === row.currency);
-    // The table's CHECK allows only these two; a row of another currency is damaged and is not shown as a rate.
-    if (currency === undefined) return [];
-    return [{ currency, inrValue: row.inrValue.toFixed(4), updatedById: row.updatedById, updatedByName: row.updatedBy.name, updatedAt: row.updatedAt }];
+    // The table's CHECK allows only these two; a row of another currency is damaged. It is reported, as the locked read does, and never shown as a partial pair.
+    // The message holds no value: a rate is Restricted.
+    if (currency === undefined) throw new Error('The exchange_rates table holds a row that is neither USD nor EUR.');
+    return { currency, inrValue: row.inrValue.toFixed(4), updatedById: row.updatedById, updatedByName: row.updatedBy.name, updatedAt: row.updatedAt };
   });
   return toRecord(rows);
 }

@@ -159,6 +159,9 @@ model Material {
 /// the rates in. `updatedById` and `updatedAt` are the stamp of the last save that changed a rate, kept on both rows because the two rates are saved
 /// together. `updatedAt` is set by the service from its clock (UTC), not by Prisma. The CHECK constraints (the currency is USD or EUR, a rate is 0 or
 /// more) are hand-written in the migration: Prisma cannot express them. Class Restricted: a rate never reaches an Engineer.
+/// Departs from the SQL conventions of the coding standards (section 10) on purpose, as architecture section 5.1 specifies: the table is keyed by
+/// `currency` (two fixed rows) instead of an `id` UUID; the stamp columns are `updated_by` / `updated_at`; there is no `created_at`, because the table is
+/// created empty and changed in place.
 model ExchangeRate {
   currency    String   @id
   inrValue    Decimal  @map("inr_value") @db.Decimal(18, 4)

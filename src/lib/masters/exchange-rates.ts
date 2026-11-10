@@ -77,7 +77,7 @@ export interface ExchangeRateColumns {
 const CURRENCY_WORDS: Readonly<Record<ExchangeRateField, string>> = { usd: 'US dollars', eur: 'euros' };
 
 /**
- * The hint under a field (AC-5, UX-23): "Converts prices to US dollars. The rate (BH) feeds Unit Production Price (USD), BJ." The letters and the
+ * The hint under a field (AC-5, UX-23): "Converts prices to US dollars. The rate (<its letter>) feeds Unit Production Price (USD), <its letter>." The letters and the
  * name of the price column are the registry's, passed in, never typed here, so a later re-lettering keeps the hint right.
  */
 export function exchangeRateHint(field: ExchangeRateField, columns: ExchangeRateColumns): string {

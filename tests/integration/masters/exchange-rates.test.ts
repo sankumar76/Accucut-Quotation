@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { FieldValidationError } from '@/lib/errors';
-import { createFixedClock } from '@/lib/time';
+import { createFixedClock, formatIst } from '@/lib/time';
 import { EXCHANGE_RATES_OBJECT_ID } from '@/lib/masters/exchange-rates';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 
@@ -205,9 +205,12 @@ describe('AC-2, AC-4 (T2): saving the pair', () => {
   it('shows the stamp across midnight IST: the instant is stored in UTC, and 00:00:01 IST is a different day from 23:59:59 IST', async () => {
     const clock = createFixedClock(BEFORE_MIDNIGHT_IST);
     const service = db.buildMastersService({ clock });
-    expect((await service.saveExchangeRates(by(), SAVED)).updatedAt).toBe('2026-11-09T18:29:59.000Z');
+    const first = (await service.saveExchangeRates(by(), SAVED)).updatedAt;
     clock.advance(2_000);
-    expect((await service.saveExchangeRates(by(), { usd: '84.37', eur: SAVED.eur })).updatedAt).toBe('2026-11-09T18:30:01.000Z');
+    const second = (await service.saveExchangeRates(by(), { usd: '84.37', eur: SAVED.eur })).updatedAt;
+    expect([first, second]).toEqual(['2026-11-09T18:29:59.000Z', '2026-11-09T18:30:01.000Z']);
+    // The day the screen shows (SCR-13 writes the stamp with `formatIst`): 23:59:59 on 9 Nov, then 00:00:01 on 10 Nov.
+    expect([formatIst(new Date(defined(first))), formatIst(new Date(defined(second)))]).toEqual(['09 Nov 2026, 23:59 IST', '10 Nov 2026, 00:00 IST']);
   });
 
   it('puts the saver\'s current name in the view, not the name they had when they saved', async () => {

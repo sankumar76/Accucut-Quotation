@@ -9,6 +9,7 @@ import {
   specificGravityProblem,
 } from '../../lib/masters/materials';
 import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
+import type { Clock } from '../../lib/time';
 import {
   MasterConstraintError,
   type MasterRepository,
@@ -21,7 +22,6 @@ import {
   type ProcessItemRecord,
 } from '../repositories/master-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
-import type { Clock } from '../../lib/time';
 
 import type { AuditContext, AuditService } from './audit-service';
 import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';

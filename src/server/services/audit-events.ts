@@ -144,7 +144,8 @@ const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> 
 
 /** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */
 function describeMasterChange(objectType: string, before: unknown, after: unknown): AuditChangeText {
-  const words = MASTER_WORDS[objectType];
+  // An own property only: a stored object type such as "toString" must not find a function inherited from Object.prototype (deny by default).
+  const words = Object.hasOwn(MASTER_WORDS, objectType) ? MASTER_WORDS[objectType] : undefined;
   if (words === undefined) return NO_DETAIL;
   const beforeWords = before === null ? 'Not added' : words(before);
   const afterWords = after === null ? 'Deleted' : words(after);

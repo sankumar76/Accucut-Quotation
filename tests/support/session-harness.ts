@@ -6,10 +6,10 @@ import { type AuditService, createAuditService } from '../../src/server/services
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
+import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
-import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';

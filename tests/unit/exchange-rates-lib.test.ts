@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { cloneSeedConfig, seedConfig } from '../support/seed-config';
-import { columnOfKey, letterOfKey } from '@/lib/fields/lookup';
+import { columnOfKey } from '@/lib/fields/lookup';
 import {
   changedExchangeRates,
   EXCHANGE_RATE_LABELS,
+  EXCHANGE_RATES_OBJECT_ID,
+  EXCHANGE_RATES_OBJECT_TYPE,
   exchangeRateHint,
   exchangeRateProblem,
   exchangeRateProblems,
@@ -76,9 +78,9 @@ describe('the labels and the hints (AC-1, AC-5, UX-23)', () => {
   });
 });
 
-describe('columnOfKey and letterOfKey (AC-5)', () => {
+describe('columnOfKey (AC-5)', () => {
   it('gives the letter and the name of the field with a key, from the document it is given', () => {
-    expect(letterOfKey(seedConfig, 'exchange-rate-usd')).toBe('BH');
+    expect(columnOfKey(seedConfig, 'exchange-rate-usd')?.letter).toBe('BH');
     expect(columnOfKey(seedConfig, 'unit-price-eur')).toEqual({ letter: 'BK', label: 'Unit Production Price (EUR)' });
   });
 
@@ -86,17 +88,21 @@ describe('columnOfKey and letterOfKey (AC-5)', () => {
     const moved = cloneSeedConfig();
     const field = moved.fields.find((candidate) => candidate.key === 'exchange-rate-eur');
     if (field !== undefined) field.position += 1;
-    expect(letterOfKey(moved, 'exchange-rate-eur')).toBe('BJ');
-    expect(letterOfKey(seedConfig, 'exchange-rate-eur')).toBe('BI');
+    expect(columnOfKey(moved, 'exchange-rate-eur')?.letter).toBe('BJ');
+    expect(columnOfKey(seedConfig, 'exchange-rate-eur')?.letter).toBe('BI');
   });
 
   it('gives null for a key the document does not have', () => {
     expect(columnOfKey(seedConfig, 'no-such-field')).toBeNull();
-    expect(letterOfKey(seedConfig, 'no-such-field')).toBeNull();
   });
 });
 
 describe('the audit entry of a save (AC-4, SCR-16)', () => {
+  it('keeps the fixed object id of the pair (architecture 8): a new value would split the append-only history', () => {
+    expect(EXCHANGE_RATES_OBJECT_ID).toBe('00000000-0000-4000-8000-000600000001');
+    expect(EXCHANGE_RATES_OBJECT_TYPE).toBe('exchange_rate');
+  });
+
   const words = (before: unknown, after: unknown, objectType = 'exchange_rate') => AUDIT_EVENTS['master.edited'].describeStored(before, after, objectType);
 
   it('is a master.edited entry in the "Master data edit" category', () => {
