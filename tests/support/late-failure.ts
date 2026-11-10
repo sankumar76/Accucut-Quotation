@@ -1,9 +1,10 @@
-import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
+import type { TransactionRunner } from '../../src/server/repositories/transaction';
 import { AuditEntryRefusedError } from '../../src/server/services/audit-secrets';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { KEY_SECRET, type AuditDatabase } from './audit-database';
 import { createTestHasher } from './builders/user';
+import { createLateFailingRunner } from './late-failure-runner';
 
 /**
  * DEF-017 (STORY-01.07 AC-2): a user service over the real database whose unit of work fails **after** the audit entry was
@@ -27,7 +28,7 @@ import { createTestHasher } from './builders/user';
  * one, and `'after-the-last-step'` lands in it and rolls the entry back; `'refuse-entry'` refuses the entry before it is written.
  * A review rule covers that case instead.
  *
- * Nothing here retries, and no time limit is raised (DL-057).
+ * The depth rule is the shared runner's (tests/support/late-failure-runner.ts, #130). Nothing here retries, and no time limit is raised (DL-057).
  */
 
 export type LateFailure =
@@ -38,25 +39,8 @@ export type LateFailure =
 export const LATE_FAILURE = new Error('the unit of work failed after its last step');
 
 export function createUserServiceThatFails(db: AuditDatabase, failure: LateFailure): UserService {
-  let depth = 0;
   const transactions: TransactionRunner =
-    failure.kind === 'after-the-last-step'
-      ? {
-          async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-            const outermost = depth === 0;
-            depth += 1;
-            try {
-              return await db.transactions.run(async (tx) => {
-                const result = await work(tx);
-                if (outermost) throw LATE_FAILURE;
-                return result;
-              });
-            } finally {
-              depth -= 1;
-            }
-          },
-        }
-      : db.transactions;
+    failure.kind === 'after-the-last-step' ? createLateFailingRunner(db.transactions, LATE_FAILURE) : db.transactions;
 
   let entries = 0;
   const audit: AuditDatabase['audit'] = {
