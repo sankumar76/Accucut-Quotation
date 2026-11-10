@@ -138,7 +138,9 @@ describe('CI workflow', () => {
   it('AQP-208 AC-4: the fan-in job runs always, needs success from every needed job, and cannot be skipped past', () => {
     const required = jobText('required');
     expect(required).toMatch(/^ {4}if: \$\{\{ always\(\) \}\}$/m);
-    expect(required).not.toContain('continue-on-error');
+    // AQP-243: the summary steps after the verdict may continue on error; the job and the verdict may not (ci-setup-cut.test.ts).
+    expect(required.slice(0, required.indexOf('- name: "Summary:'))).not.toContain('continue-on-error');
+    expect(required).not.toMatch(/^ {4}continue-on-error:/m);
     // No `success()` or `!cancelled()` shortcut: those let a skipped or cancelled needed job through.
     expect(required).not.toMatch(/success\(\)|cancelled\(\)|failure\(\)/);
     // The results arrive through the environment (STD-01), one per needed job, for every job in `needs`.
@@ -152,12 +154,15 @@ describe('CI workflow', () => {
 
   // The script of the fan-in step is run in bash, with each combination of results, in tests/unit/ci-fan-in.test.ts.
 
-  it('AQP-208 STD-04: the fan-in job holds no permission at all, because it reads no repository content and calls no API', () => {
+  // AQP-208 STD-04 held the fan-in job to NO permission, no `uses:` and no token. AQP-243 AC-5 gives it a run summary that
+  // reads the run's jobs from the API (`actions: read`) and a one-file checkout of its script (`contents: read`), so that test
+  // is replaced by the exact pair below. The rest of the guard is in ci-setup-cut.test.ts.
+  it('AQP-243 AC-5 (replaces AQP-208 STD-04): the fan-in job holds exactly actions: read and contents: read, and no write scope', () => {
     const required = jobText('required');
-    expect(required).toMatch(/^ {4}permissions: \{\}$/m);
-    // No checkout, no action and no token in that job: only its own script runs.
-    expect(required).not.toMatch(/^\s*uses:/m);
-    expect(required).not.toMatch(/GITHUB_TOKEN|:\s*(read|write)\b/);
+    expect(required).toMatch(/^ {4}permissions:\n {6}actions: read\n {6}contents: read\n {4}\w/m);
+    expect(required).not.toMatch(/:\s*write\b/);
+    // The token reaches only the summary step, and not the verdict step.
+    expect(required.slice(0, required.indexOf('- name: "Summary:'))).not.toMatch(/GITHUB_TOKEN|github\.token|^\s*uses:/m);
   });
 
   it('AQP-208 AC-4: the shards are one matrix job, every shard reports, and the command carries only --shard', () => {
@@ -206,7 +211,7 @@ describe('CI workflow', () => {
     expect(position('Shard: build')).toBeLessThan(position('Stage 12: E2E'));
     expect(position('Stage 12a')).toBeLessThan(position('Stage 12: E2E'));
     // Nothing passes between jobs.
-    expect(WORKFLOW).not.toMatch(/upload-artifact|download-artifact|actions\/cache\/(save|restore)/);
+    expect(WORKFLOW).not.toMatch(/upload-artifact|download-artifact/);
     // The throwaway passwords are made in the job and masked before use, as in `verify`.
     const roles = stepNamed('Shard: create the two database roles');
     expect(roles.indexOf('::add-mask::${owner}')).toBeGreaterThan(roles.indexOf('openssl rand'));
@@ -284,9 +289,10 @@ describe('CI workflow', () => {
     expect(debs).toContain('id: debs');
     expect(debs).toContain('path: ${{ runner.temp }}/playwright-debs');
     expect(debs).toContain('key: ${{ steps.versions.outputs.debs_key }}');
-    // No new action: every `uses:` in the workflow is one of the three already pinned before this change.
+    // No new action: every `uses:` is one of the three already pinned; AQP-243 adds only the restore and save parts of the same
+    // pinned `actions/cache` repository, for `node_modules` (ci-setup-cut.test.ts).
     const actions = new Set(LINES.filter((line) => /^\s*(?:- )?uses:/.test(line)).map((line) => line.replace(/^\s*(?:- )?uses:\s*/, '').split('@')[0]));
-    expect([...actions].sort()).toEqual(['actions/cache', 'actions/checkout', 'actions/setup-node']);
+    expect([...actions].sort()).toEqual(['actions/cache', 'actions/cache/restore', 'actions/cache/save', 'actions/checkout', 'actions/setup-node']);
   });
 
   it('DEF-015 (AQP-206): stage 12a installs the browser and system packages in its own bounded step, before stage 12', () => {
@@ -314,8 +320,10 @@ describe('CI workflow', () => {
     expect(epochs).toHaveLength(1);
     expect(epochs[0]).toMatch(/^ {2}CACHE_EPOCH: '\d+'$/);
     expect(WORKFLOW.indexOf('CACHE_EPOCH:')).toBeLessThan(WORKFLOW.indexOf('jobs:'));
-    // Not saved a second time under another key: the cache action is used as one step, never split into save steps.
-    expect(WORKFLOW).not.toMatch(/actions\/cache\/(save|restore)/);
+    // Not saved a second time under another key: the Playwright caches are one step each, never split into save steps. (AQP-243
+    // splits the `node_modules` cache into restore and save on purpose; ci-setup-cut.test.ts pins that.)
+    expect(stepNamed('Cache the Playwright browsers')).not.toMatch(/actions\/cache\/(save|restore)/);
+    expect(stepNamed('Cache the Playwright system packages')).not.toMatch(/actions\/cache\/(save|restore)/);
   });
 
   it('PRF-03 / QLT-81 (AQP-206): the README documents both ways to replace a bad system-package cache entry', () => {
