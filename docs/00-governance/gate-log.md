@@ -4246,3 +4246,43 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks registered:** none new.
 **Rationale:** each acceptance item has evidence from someone other than the developer, and the regression is green on the exact head. A QA run would repeat the reviewer's plants and has no user-facing behaviour to check.
 **Posted:** PR #139 comment 6755851518 (G6 and G7 together); Jira AQP-123 comment 11258. No tech-debt issue created (no finding deferred).
+
+## Docs PR merge — #144 (sprint 1 refinement: plan v0.14, four enablers Ready, DL-122 condition B) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** The orchestrator may squash-merge PR #144 (docs only) once master's four governance files are committed to it and CI is green on that head (DL-126).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #144** at c91fd64 (`gh pr view 144`): open, not draft, MERGEABLE, CLEAN, labels `documentation` and `ai-delivery`. It has five commits (dae58dd, 7452dae, 3242b0e, fef5993, c91fd64), and its merge base is `origin/master` 023e17d. The six files are `docs/05-backlog/sprint-01-plan.md` v0.14, `docs/02-product/prd.md` and `release-plan.md` v0.22, `docs/03-ux/ux-spec.md` v0.20, and `docs/04-architecture/architecture.md` v0.32 and `test-strategy.md` v0.28. CI on c91fd64 is green, 5 of 5.
+  - **Jira:** AQP-1 comments 11259 to 11282; the product-owner's results on the stories (AQP-243 11268, AQP-237 11269, AQP-244 11270, AQP-245 11271); the architect's rulings (AQP-243 11278, AQP-244 11279); the ux-expert on AQP-245 (11277). Statuses read by JQL: AQP-237, AQP-243, AQP-244 and AQP-245 are Ready for Dev; AQP-123 is In Progress; AQP-234 and AQP-235 are Done.
+  - **My own checks** (worktree `sm-wave2`, read-only apart from these records):
+    - `git diff --name-only origin/master...HEAD`: six paths, all under `docs/`.
+    - That diff piped to `zricethezav/gitleaks:v8.30.1 stdin --redact`: about 183 KB scanned, no leaks, exit 0.
+    - `git grep '\.record(' 023e17d -- src/server/services`: 11 call sites (5 in `masters-service.ts`, 6 in `user-service.ts`), as architecture v0.32 section 6 and AQP-237 AC-4 now say.
+    - Condition B on the build: on `origin/master`, `process-list.tsx` line 63 and `material-list.tsx` line 80 use `flex flex-nowrap items-center justify-end gap-s-2`. The arithmetic of the Width rule (ux-spec line 426) is 2 × 36 + 8 + 32 = 112 and 3 × 36 + 16 + 32 = 156. `USER_NAME_MAX_LENGTH = 120` (`src/lib/users/validation.ts` line 16); the process-item and material limits are 100.
+    - Nothing was run beyond these: no test or build, as the PR has no code.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | The PR touches only `docs/` | ✱ | ✅ | Six paths, listed above; `gh pr view 144 --json files` agrees |
+| 2 | CI green on the judged head | ✱ | ✅ | 5 of 5 on c91fd64 (`Stages 1 to 11b`, three shards, `Stages 1 to 11`) |
+| 3 | No secrets | ✱ | ✅ | Gitleaks over the diff, no leaks |
+| 4 | The four Ready moves rest on product-owner validation | ✱ | ✅ | READY, 17 of 17 on each (11268 to 11271), posted 23:07 to 23:09; the scrum-master's moves (11281) came at 23:18; Jira reads Ready for Dev |
+| 5 | DL-122 condition B written as ruled | ✱ | ✅ | ux-spec v0.20 line 459 reads `gap-s-2`, matching the Width rule and the delivered build; the Version row and change-log row 0.20 record it |
+| 6 | Corrections consistent across documents | | ✅ | AQP-243 AC-4 reads "lower than its own base median, by any amount" in test strategy 10.5 item 7, PRD 13.16 item 6, release plan 3.14 (both places) and sprint plan v0.14; the `record` count is 11 in architecture section 6 and the plan; AQP-244 AC-1 takes its timing from `list` reporter log lines (test strategy 10.5 item 8) |
+| 7 | No scope change hidden in the PR | | ✅ | PRD and release plan v0.22 change wording only (no FR, NFR, priority, effort or date change); the counts stay 55 of 55 committed, 104 planned |
+| 8 | Plan text current | | ⚠️ | "Not Ready, and why" still says AQP-188 is Draft and that the plan assumes way 1, with no history marker. Minor, scrum-master, next plan version |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | orchestrator | PR #144 | Commit only `docs/00-governance/decision-log.md`, `risk-register.md`, `gate-log.md` and `docs/project-state.md`; CI green on the new head; if `master` has moved, update the branch by a merge commit, docs only; squash | Before the merge |
+| b | orchestrator | `origin/master` after the merge | `git grep -n "justify-end gap-s-1" origin/master -- docs/03-ux/ux-spec.md` returns nothing and line ~459 reads `gap-s-2` (DL-122 condition B met); then ask the scrum-master to close AQP-245's Gates line | Before delegating AQP-130 or AQP-245 |
+| c | orchestrator | Dependabot #145 | Close it unmerged with the DL-127 reason and `@dependabot ignore this major version`; list it in the next results report | Now (it does not hold #144) |
+| d | scrum-master | `sprint-01-plan.md` | Refresh or mark as history the stale "Not Ready, and why" lines | Next plan version |
+| e | solution-architect | GitHub #143 | Decide whether the #143 PR also adds a semver-major `ignore` for `postgres` to the `docker-compose` entry (DL-127 (3)) | With #143 |
+
+**Risks registered:** RISK-023 re-scored, P 3 → 4, score 6 → 8 🟡 (DL-125); no new risk.
+**Rationale:** the PR is documentation only, every Ready move has the product-owner's READY before it, and condition B's line now matches the rule and the delivered build, so merging the PR is what meets the condition. The one gap is history text in the plan that still reads as current, with no effect on any story's start.
+**Records:** DL-125 (placement of AQP-243 and AQP-244, corrections, RISK-023), DL-126 (this merge, condition B, G4 condition 3), DL-127 (Dependabot #145 and database majors; #148 noted).
+**Posted:** Jira AQP-1 comment 11283; PR #144 comment 6759069406. No tech-debt issue created (no finding deferred).

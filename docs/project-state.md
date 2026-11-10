@@ -8,12 +8,12 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | G4 passed: CONDITIONAL GO, attempt 2. Next: scrum-master moves the 18 stories to Ready for Dev, orchestrator merges the docs PR, then sprint 1 |
-| Last gate passed   | G4 Backlog Ready (CONDITIONAL GO, attempt 2) |
-| Next gate          | G5 to G7 per story, from STORY-10.01. No story branch before the docs PR merge. Code merges: by the orchestrator after G7 GO from 2026-11-09 (`CLAUDE.md` §8, DL-118); deployment and G8 stay human |
-| Current sprint     | —                        |
-| Overall health     | 🟡 Amber (G4 passed with 11 conditions; one red risk, RISK-016 at 16, a typed count can misprice an order, field in 05.03; way of working chosen 2026-11-09, way 5 (DL-118); no date adopted) |
-| Last updated       | 2026-11-03 by master (G7 AQP-97: CONDITIONAL GO; DL-060) |
+| Current phase      | Sprint 1, story cycles (G5 to G7). Committed 55 of 55; stretch 49; planned 104 points, 28 stories (sprint plan v0.14). AQP-123 (02.04) is in development; AQP-237, AQP-243, AQP-244 and AQP-245 are Ready for Dev (2026-11-10) |
+| Last gate passed   | G7 for tech-debt #130 (PR #139, GO, DL-124; merged as b438d2e). Docs PR #144: GO to merge (DL-126) |
+| Next gate          | G6 for AQP-123. Before the orchestrator delegates AQP-130 or AQP-245: DL-122 condition B on `master` (DL-126 (4)). Before AQP-142: AQP-243 Ready for Dev (met). Code merges: by the orchestrator after G7 GO (`CLAUDE.md` §8, DL-118); Dependabot PRs are not covered (DL-119, DL-127); deployment and G8 stay human |
+| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
+| Overall health     | 🟡 Amber (one red risk, RISK-016 at 16, a typed count can misprice an order, field in 05.03; RISK-023, the CI path, re-scored to 8 on 2026-11-10 (DL-125): median 5:53 against the 5:30 trigger, two enablers Ready; way 5 since 2026-11-09 (DL-118); no date adopted) |
+| Last updated       | 2026-11-10 by master (docs PR #144 GO; DL-125 to DL-127) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
 ## Request (G0 Intake)
@@ -37,11 +37,39 @@
 
 ## Story Board (current sprint)
 
+Status from Jira (JQL, 2026-11-10 by master). Each gate decision is in `docs/00-governance/gate-log.md`; the rows below give the state and the merge only. The rows as written up to 2026-11-03 (AQP-27, AQP-97 and AQP-28 not merged) are superseded.
+
 | Story ID | Title | Status | Owner agent | G5 | G6 | G7 | Notes |
 |----------|-------|--------|-------------|----|----|----|-------|
-| AQP-27 (STORY-10.01) | Scaffold, CI and repository hygiene | Rejected (QA moves it on this decision) | developer | Passed (10653) | ⚠️ CONDITIONAL GO, attempt 2 (DL-047); conditions 1 and 2 met 2026-11-03 | ⚠️ CONDITIONAL GO, attempt 2 (DL-050); attempt 1 NO-GO (DL-048) | PR #16, head f1bb796, CI 41594298884 green. QA moves the story to Done. Before the merge: the docs PR (G6 condition 3). The human squash merge, then the first `master` run green (condition 4). DEF-003 (#24) before G8. Not merged |
-| AQP-97 (STORY-03.01) | Field registry seed and column letters | Done on this decision (QA moves it); merge is human | qa-engineer | Passed (10694) | ⚠️ CONDITIONAL GO (DL-051); conditions met (DL-054, DL-057) | ⚠️ CONDITIONAL GO, attempt 1 (DL-060) | PR #32, head da654ce, CI 41631686706 green. Before the merge: README OBS-4 fix verified by master; docs PR first. Routed: #40, #41, #34, #38. Not merged |
-| AQP-28 (STORY-10.02) | Design tokens and responsive app shell | In QA (G6 met; f903d48 verified) | qa-engineer | Passed (10703) | ⚠️ CONDITIONAL GO, attempt 1 (DL-053); conditions met (DL-059); f903d48 verified | — | PR #33, head f903d48, CI 41629593078 green (61 E2E passed, 11 skipped). G7: AC-9 with the delivery lead present. Playwright cache comes out with the next CI change. Docs PR before the merge. Not merged |
+| AQP-27 (STORY-10.01) | Scaffold, CI and repository hygiene | Done | — | Passed | Passed | Passed | PR #16 merged |
+| AQP-97 (STORY-03.01) | Field registry seed and column letters | Done | — | Passed | Passed | Passed | PR #32 merged |
+| AQP-28 (STORY-10.02) | Design tokens and responsive app shell | Done | — | Passed | Passed | Passed | PR #33 merged |
+| AQP-106 (STORY-03.02) | Formula engine | Done | — | Passed | Passed | Passed | PR #45 merged |
+| AQP-38 (STORY-01.01) | Sign in and sign out | Done | — | Passed | Passed | Passed | PR #62 merged |
+| AQP-169 (STORY-10.10) | NFR-009 guards | Done | — | Passed | Passed | Passed | PR #70 merged |
+| AQP-188 (STORY-10.13) | First-load JS headroom | Done | — | Passed | Passed | Passed | PR #75 merged |
+| AQP-48 (STORY-01.02) | Role enforcement and navigation | Done | — | Passed | Passed | Passed | PR #79 merged |
+| AQP-199 (STORY-10.14) | Cut CI feedback time | Done | — | Passed | Passed | Passed | PR #86 merged |
+| AQP-65 (STORY-01.04) | Users; one Admin | Done | — | Passed | Passed | Passed | PR #87 merged |
+| AQP-206 (DEF-015) | CI install stall | Done | — | Passed | Passed | Passed | PR #92 merged (defect) |
+| AQP-208 (STORY-10.15) | CI shard step | Done | — | Passed | Passed | Passed | PR #96 merged |
+| AQP-74 (STORY-01.07) | Audit service and audit screen | Done | — | Passed | Passed | Passed | PR #97 merged |
+| AQP-216 (STORY-10.16) | CI cache warm-up | Done | — | Passed | Passed | Passed | PR #100 merged |
+| AQP-113 (STORY-02.01) | Process Master | Done | — | Passed | Passed | Passed | PR #107 merged |
+| AQP-57 (STORY-01.03) | Engineer sees no cost | Done | — | Passed | Passed | Passed | PR #115 merged as 3695f90 |
+| AQP-122 (STORY-02.03) | Material Master | Done | — | Passed | Passed | GO (DL-121) | PR #120 merged |
+| AQP-227 (STORY-10.17) | CI three shards | Done | — | Passed | Passed | GO (DL-120) | PR #124 merged |
+| AQP-234 / AQP-235 (DEF-021, DEF-020) | Masters table actions and focus | Done | — | Passed | ⚠️ CONDITIONAL GO (DL-122) | GO (DL-123) | PR #135 merged |
+| GitHub #130 (tech-debt) | Shared late-failure runner | Closed | — | Passed | ⚠️ CONDITIONAL GO (DL-124) | GO (DL-124) | PR #139 merged as b438d2e |
+| AQP-123 (STORY-02.04) | Exchange Rate Master | In Progress | developer | — | — | — | At its G6, reviewer-quality re-plants A3 and A4 (#130) |
+| AQP-130 (STORY-02.05) | Treatment / Color list | Ready for Dev | — | — | — | — | Starts only after DL-122 condition B is on `master` (DL-126 (4)) |
+| AQP-142 (STORY-02.02) | Customers | Ready for Dev | — | — | — | — | Before delegating it: AQP-243 Ready for Dev (met, DL-117 (8)) |
+| AQP-237 (STORY-10.18) | `audit.record` transaction checks | Ready for Dev (2026-11-10) | — | — | — | — | Stretch 12g, 3 points; due before the sprint 1 review |
+| AQP-243 (STORY-10.19) | CI set-up cut | Ready for Dev (2026-11-10) | — | — | — | — | Stretch 12h, 3 points; first in an idle merge wait; RISK-023 |
+| AQP-244 (STORY-10.20) | CI path variance | Ready for Dev (2026-11-10) | — | — | — | — | Stretch 12i, 3 points; attribution now, the cut after AQP-243 merges |
+| AQP-245 (STORY-10.21) | Users list table pattern (#134) | Ready for Dev (2026-11-10) | — | — | — | — | Stretch 12j, 1 point; starts after DL-122 condition B is on `master`; must not merge between AQP-244's base and head runs |
+| AQP-81, AQP-89, AQP-90, AQP-148 | Stretch stories | Ready for Dev | — | — | — | — | Order as in sprint plan v0.14 |
+| AQP-236 (DEF-022) | Union-test cold-cache race | To Do | developer | — | — | — | Own test-only PR before the sprint 1 review (DL-120) |
 
 ## Open Questions
 
@@ -93,7 +121,7 @@
 |---|-------|------|-----|--------|
 | 1 | scrum-master | Confirm the 11 Trace corrections; move the 18 stories to Ready for Dev | Before the first story branch | Open |
 | 2 | orchestrator | Way of working and turnaround, by name; tell them A-36 and the ceiling at about 5 to 6 GB | Before sprint 1 starts | Met 2026-11-09: way 5 by name, so no turnaround applies; A-36 and the ceiling were told on 2026-11-02 at 17:15Z (DL-118) |
-| 3 | scrum-master | Name the way of working in `sprint-01-plan.md` | Before sprint 1 starts | Open (overdue): name way 5 (DL-118) |
+| 3 | scrum-master | Name the way of working in `sprint-01-plan.md` | Before sprint 1 starts | Met: sprint plan v0.12 names way 5 (section "Way of working assumed"), merged as dd7e2f4 (PR #133); scrum-master AQP-1 11242; confirmed by master 2026-11-10 (DL-126 (5)) |
 | 4 | qa-engineer | Test plan: 403 on rows 01.02, 01.07, 02.09, 06.06, 06.12 and the scan paragraph; `sudo -l` two scripts; QA-OQ-08 answered | Before AQP-48 reaches G7 | Open |
 | 5 | business-analyst | SPEC: retention, picture limit, Q-18 and OQ-ARCH-11 answers | Before 10.05 and 05.07 reach Ready | Open |
 | 6 | solution-architect | Sign-out and `session_version`; a deleted treatment on a draft | Before AQP-38 reaches G5; before 05.06 Ready | Open |
@@ -117,6 +145,7 @@
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
+| 2026-11-10 | master | Docs PR #144 (sprint plan v0.14, PRD and release plan v0.22, ux-spec v0.20, architecture v0.32, test strategy v0.28; c91fd64, docs only, CI 5 of 5 green): GO to merge (DL-126). The four Ready moves rest on the product-owner's READY, 17 of 17. DL-122 condition B is written correctly and is met on the merge; the orchestrator checks it on `master` before delegating AQP-130 or AQP-245. G4 condition 3 confirmed met (v0.12). DL-125 records the placement of AQP-243 and AQP-244 (PRD 13.16, release plan 3.14) with its corrections; RISK-023 is re-scored 6 → 8. DL-127: Dependabot #145 (PostgreSQL 17 → 18, red on AQP-27 AC-9) is closed by the orchestrator, and database majors change only through the architecture; #148 recorded under DL-119 (2); #146, #147 (red), #149 and #150 wait for the delivery lead | `docs/00-governance/gate-log.md`, `decision-log.md` (DL-125 to DL-127), `risk-register.md` (RISK-023), `docs/project-state.md` |
 | 2026-11-09 | master | Tech-debt #130 (PR #139 at a879d61, test-only, 7 files under `tests/`; CI 42731951221 green, 5 of 5, path 5:57): narrow reviewer-quality route; G6 CONDITIONAL GO (condition: Dev Record row for a879d61, guard count 24) and G7 GO decided without a QA run (DL-124). Merge under §8 after this docs PR, a merge-commit update, 5 of 5 green and the merge record. reviewer-quality re-plants A3 and A4 at AQP-123 G6 | `docs/00-governance/gate-log.md`, `decision-log.md` (DL-124), `docs/06-reviews/130/quality.md` |
 | 2026-11-09 | master | G6 AQP-234 / AQP-235 (DEF-021 and DEF-020, PR #135 at 04bec3e; CI 42649224878 green, 5 of 5): CONDITIONAL GO, narrow reviewer-quality route of DL-121. QLT-01 to QLT-04 fixed in round 2; Info items accepted. Conditions (DL-122): developer updates the Dev Record before G7; ux-expert fixes the §6.0 `gap-s-1` build note before AQP-130 or #134; QA at G7 checks seven widths, the other tables, QLT-06 and the sticky plant. In QA now | `docs/00-governance/gate-log.md`, `decision-log.md` DL-122, `docs/06-reviews/AQP-234/quality.md` |
 | 2026-11-09 | master | G7 AQP-122 (STORY-02.03 Material Master, PR #120 at fd853ac, QA tests and records only; CI 42604122075 green, 4 of 4, path 5:17, 566 browser tests passed, 0 flaky): GO. All 8 ACs verified, 13 of 13 plants caught. DEF-021 (AQP-234, Sev-3) does not hold the merge: ux-expert pattern before AQP-123 starts, fix with DEF-020 (AQP-235, Sev-4) before AQP-123's G6. Developer test gap to tech-debt #130; #104 to be placed. RISK-023 restated (QA's 60 tests about 23 s per shard). Merge order: docs PR (with ux-spec v0.18 and records to DL-121), then #124, then #120 under conditions (a) to (f). QA moves AQP-122 to Done now (DL-121) | `docs/00-governance/gate-log.md`; `decision-log.md` DL-121; `risk-register.md` RISK-023; Jira AQP-122 11231, AQP-234 11232; PR #120 comment 6738380800; GitHub #130, #104 |
