@@ -18,7 +18,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  */
 
 const SCRIPT = fileURLToPath(new URL('../../scripts/ci/node-modules-integrity.sh', import.meta.url));
-const BASH_AVAILABLE = spawnSync('bash', ['--version']).error === undefined;
+// The script needs bash and GNU `find -printf` (it says so in its header); elsewhere these tests skip instead of failing.
+const BASH_AVAILABLE = spawnSync('bash', ['--version']).error === undefined && spawnSync('find', ['.', '-maxdepth', '0', '-printf', 'x']).status === 0;
 /** Bash on Windows reads a backslash as an escape, so every path given to it uses forward slashes. */
 const posix = (path: string): string => path.split('\\').join('/');
 
@@ -112,6 +113,7 @@ describe.skipIf(!BASH_AVAILABLE)('AQP-243 AC-3: the node_modules integrity check
   let secondRecordText = '';
   let wrongMode: Outcome | undefined;
   let recordMissing: Outcome | undefined;
+  let recordFindFails: Outcome | undefined;
 
   beforeAll(async () => {
     const damages: Damage[] = ['none', 'missing package', 'truncated file', 'extra file', 'no record', 'damaged record', 'empty record', 'not a directory'];
@@ -127,6 +129,15 @@ describe.skipIf(!BASH_AVAILABLE)('AQP-243 AC-3: the node_modules integrity check
     writeFileSync(join(fakeBin, 'find'), '#!/usr/bin/env bash\nexec sleep 30\n');
     chmodSync(join(fakeBin, 'find'), 0o755);
     outcomes.set('slow listing', await scenario(join(root, 'slow'), 'none', { PATH: `${posix(fakeBin)}:${process.env['PATH'] ?? ''}`, INTEGRITY_TIMEOUT: '1' }));
+
+    // STD-03: a `find` that fails for another reason (permission, a broken disk) is reported as that, not as a time-out.
+    const failingBin = join(root, 'failing-bin');
+    mkdirSync(failingBin, { recursive: true });
+    writeFileSync(join(failingBin, 'find'), '#!/usr/bin/env bash\nexit 1\n');
+    chmodSync(join(failingBin, 'find'), 0o755);
+    const failingPath = { PATH: `${posix(failingBin)}:${process.env['PATH'] ?? ''}` };
+    outcomes.set('find fails', await scenario(join(root, 'findfail'), 'none', failingPath));
+    recordFindFails = await run('record', makeModules(join(root, 'recordfail')), failingPath);
 
     // The record is stable: the record file is not in its own list, so recording twice gives the same text.
     const stable = makeModules(join(root, 'stable'));
@@ -175,7 +186,16 @@ describe.skipIf(!BASH_AVAILABLE)('AQP-243 AC-3: the node_modules integrity check
     expect(outcome('slow listing').status).toBe(1);
     // The fake listing sleeps 30 s; with the 1 s limit the check ends long before that (a missing bound would take 30 s).
     expect(outcome('slow listing').elapsedMs).toBeLessThan(15_000);
-    expect(outcome('slow listing').output).toContain('could not be listed within 1 s');
+    expect(outcome('slow listing').output).toContain('stopped after 1 s');
+  });
+
+  it('says what failed when find itself fails, in check and in record, and does not call it a time-out (STD-03)', () => {
+    expect(outcome('find fails').status).toBe(1);
+    expect(outcome('find fails').output).toContain('failed (exit 1)');
+    expect(outcome('find fails').output).not.toContain('stopped after');
+    expect(recordFindFails?.status).toBe(1);
+    expect(recordFindFails?.output).toContain('failed (exit 1)');
+    expect(recordFindFails?.output).toContain('integrity record failed');
   });
 
   it('records the same text twice, because the record is not part of its own list', () => {

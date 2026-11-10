@@ -16,14 +16,17 @@
 # (lint, the type-check and the build write caches there later), and the cache is saved right after it, so the restored list
 # is exactly the recorded one. The list holds names and sizes only, no file content and no secret.
 #
-# The record is part of the cache entry, so its format is part of the cache key: the key in ci.yml starts with `node-modules-v1`, and
-# that `v1` is raised with any change to what `record` writes (otherwise an old entry would fail the new check on every run).
+# The record is part of the cache entry, so its format is part of the cache key: the key in ci.yml starts with `node-modules-v<N>`,
+# where N is `NODE_MODULES_CACHE_FORMAT` in the env block of ci.yml. Raise it with any change to what `record` writes (otherwise an
+# old entry would fail the new check on every run), or to start a new key when an entry is bad and cannot be deleted.
 #
 # What the check does not do: it does not read file content, so a changed byte with the same size is not seen. The cache key
 # (`package-lock.json`, `package.json`, `.npmrc`, the Node and npm versions) fixes which packages are in the entry, and the
 # cache action checks its own archive; this check covers the gap between them, a restore that is incomplete.
 #
 # Usage:   bash scripts/ci/node-modules-integrity.sh record|check
+# Needs:   bash, and GNU find and coreutils (`find -printf`, `timeout`, `sha256sum`): true on ubuntu-latest and in Git Bash.
+# Exit:    0 done or intact; 1 failed (also a missing argument; the cause is printed first); 2 unknown mode.
 # Testable settings (tests/unit/node-modules-integrity.test.ts); the defaults are the workflow's:
 #   NODE_MODULES_DIR     the directory to list     (node_modules)
 #   INTEGRITY_TIMEOUT    seconds allowed for the listing in `check`   (5)
@@ -32,16 +35,25 @@ set -euo pipefail
 mode="${1:?usage: node-modules-integrity.sh record|check}"
 dir="${NODE_MODULES_DIR:-node_modules}"
 limit="${INTEGRITY_TIMEOUT:-5}"
+# Generous, because `record` runs once per cache entry, after `npm ci`, and never on a hit.
+record_bound=120
 record_name=".ci-integrity"
 record_file="${dir}/${record_name}"
 
 # "<count> <sha256>" of the sorted "<path> <size>" list of every file and link in the directory, without the record itself.
 # `find` runs under `timeout` in `check`, and `pipefail` turns a stopped listing into a failure.
 fingerprint() {
-  local bound="$1"
-  local list
+  local bound="$1" list status=0
   # `set -e` does not apply inside a function that is called as an `if` condition, so a stopped listing is returned by hand.
-  list="$(cd "${dir}" && timeout "${bound}" find . \( -type f -o -type l \) ! -path "./${record_name}" -printf '%p %s\n' | LC_ALL=C sort)" || return 1
+  list="$(cd "${dir}" && timeout "${bound}" find . \( -type f -o -type l \) ! -path "./${record_name}" -printf '%p %s\n' | LC_ALL=C sort)" || status=$?
+  if [ "${status}" -eq 124 ]; then
+    echo "listing ${dir} stopped after ${bound} s" >&2
+    return 1
+  fi
+  if [ "${status}" -ne 0 ]; then
+    echo "listing ${dir} failed (exit ${status})" >&2
+    return 1
+  fi
   if [ -z "${list}" ]; then
     echo "the directory ${dir} holds no file" >&2
     return 1
@@ -53,8 +65,7 @@ fingerprint() {
 case "${mode}" in
   record)
     [ -d "${dir}" ] || { echo "no directory ${dir} to record" >&2; exit 1; }
-    # A generous bound: this runs once per cache entry, after `npm ci`, never on a hit.
-    current="$(fingerprint 120)"
+    current="$(fingerprint "${record_bound}")" || { echo "node_modules integrity record failed" >&2; exit 1; }
     temporary="$(mktemp "${dir}/.ci-integrity.XXXXXX")"
     printf '%s\n' "${current}" > "${temporary}"
     mv -f "${temporary}" "${record_file}"
@@ -67,7 +78,7 @@ case "${mode}" in
     fi
     expected="$(tr -d '\r' < "${record_file}")"
     if ! actual="$(fingerprint "${limit}")"; then
-      echo "node_modules integrity check failed: the directory could not be listed within ${limit} s" >&2
+      echo "node_modules integrity check failed: the restored directory could not be listed" >&2
       exit 1
     fi
     if [ "${actual}" != "${expected}" ]; then
