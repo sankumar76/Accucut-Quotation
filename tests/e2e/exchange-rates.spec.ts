@@ -2,6 +2,8 @@ import { expect, test, type Page, type Request, type Route } from '@playwright/t
 import { z } from 'zod';
 
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
+
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -10,9 +12,11 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * violations, targets of 44 px, money fields with `inputmode="decimal"`, and the whole form by keyboard.
  *
  * There is ONE pair of exchange rates in the database and three screen sizes run at once, so no test here relies on what the database holds after
- * another test may have saved. The tests that show stored values answer `GET /api/v1/exchange-rates` themselves (a fixed pair, or "not set yet");
- * the tests that save send values of their own and judge the request, the server's answer to it, and the screen; persistence, the audit entry and
- * the stamp are judged against PostgreSQL in `tests/integration/masters/exchange-rates.test.ts`. The words are the UX spec's, written out here.
+ * another test may have saved. The tests that show stored values answer `GET /api/v1/exchange-rates` themselves (a fixed pair, or "not set yet").
+ * The tests that really save send only the canary pair (`CANARY_PAIR`), whatever the screen shows as stored, so the pair in the database is always
+ * the one the confidentiality scan looks for (QLT-02) and a retry meets the same state as the first attempt (QLT-10); they judge the request, the
+ * server's answer to it, and the screen. Persistence, the audit entry and the stamp are judged against PostgreSQL in
+ * `tests/integration/masters/exchange-rates.test.ts`. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format.
  *
  * Width: none of these tests carries the one-width tag: test strategy section 10.5 has not ruled on this file, and every test reads layout or focus, so each runs at three widths.
@@ -25,7 +29,10 @@ const NUMBER_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
 const LABEL_USD = '1 USD in ₹';
 const LABEL_EUR = '1 EUR in ₹';
 const LOAD_ERROR_TITLE = 'We could not load the exchange rates';
-const SAVED_NOTICE = 'Exchange rates saved. The change is in the audit log.';
+const SAVED_NOTICE = 'Exchange rates saved.';
+const NOTHING_TO_SAVE_NOTICE = 'You have not changed either rate, so there is nothing to save.';
+const FAILED_SAVE_BODY = 'Check your connection and try again. What you typed is still in the form.';
+const SAVED_BUT_NOT_SHOWN_BODY = 'The exchange rates were saved, but we could not show them. Check your connection and try again.';
 const API = `${DEVELOPMENT_URL}/api/v1/exchange-rates`;
 const JSON_HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
 
@@ -49,11 +56,12 @@ const problem = (status: number, code: string, title: string) => ({
 });
 const BUSY = problem(503, 'DATABASE_BUSY', 'The service is busy. Try again in a moment.');
 
-/** A rate that no other test sends: it carries the screen size, so the three sizes never send the same pair. */
-function rateFor(testInfo: { project: { name: string } }, base: number): { usd: string; eur: string } {
-  const offset = ['mobile', 'tablet', 'desktop'].indexOf(testInfo.project.name) + 1;
-  return { usd: `${base + offset}.37`, eur: `${base + 10 + offset}.73` };
-}
+/**
+ * The only rates a test here really saves: the canary pair of the scan (invented, `tests/support/exchange-rate-canary.ts`). The database keeps this
+ * pair whenever a save happens, so no save here can change what the scan looks for while it runs. The page is told the stored pair is another one
+ * (`STORED`), so sending these is a change on screen and a real request, and the server finds them already stored and writes nothing.
+ */
+const CANARY_PAIR = { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur };
 
 /** Answers `GET /api/v1/exchange-rates` with a fixed body, and lets every other call through. */
 async function answerGetWith(page: Page, body: unknown): Promise<void> {
@@ -160,8 +168,9 @@ test.describe('the tab and its form (AC-1, AC-5, AC-7)', () => {
 });
 
 test.describe('saving (AC-2, AC-3, AC-7)', () => {
-  test('AC-2, AC-7: by keyboard only: the tab opens with the arrow key, Tab reaches both fields and Save, Enter in a field saves both rates together, and focus is back on Save', async ({ page }, testInfo) => {
-    const values = rateFor(testInfo, 100);
+  test('AC-2, AC-7: by keyboard only: the tab opens with the arrow key, Tab reaches both fields and Save, Enter in a field saves both rates together, and focus is back on Save', async ({ page }) => {
+    const values = CANARY_PAIR;
+    await answerGetWith(page, STORED);
     const sent = recordPuts(page);
     await page.goto('/masters/materials');
     await waitUntilHydrated(page, 'main button[data-action="add"]');
@@ -215,6 +224,82 @@ test.describe('saving (AC-2, AC-3, AC-7)', () => {
     await expectNoAxeViolations(page);
   });
 
+  test('AC-3, AC-7 (QLT-01): after a refusal of both fields, typing a fix into the first keeps focus and the text there, and writes nothing into the second', async ({ page }) => {
+    await answerGetWith(page, STORED);
+    const sent = recordPuts(page);
+    await openWithForm(page);
+    await page.getByLabel(LABEL_USD).fill('');
+    await page.getByLabel(LABEL_EUR).fill('88.371');
+    await page.getByRole('button', { name: 'Save exchange rates' }).click();
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(2);
+    await expect(page.getByLabel(LABEL_USD)).toBeFocused();
+
+    // The keys go to whatever has focus, as a keyboard user's do. The first key clears the message under USD; focus must not move to EUR for it.
+    await page.keyboard.type('84.37');
+    await expect(page.getByLabel(LABEL_USD)).toBeFocused();
+    await expect(page.getByLabel(LABEL_USD)).toHaveValue('84.37');
+    await expect(page.getByLabel(LABEL_EUR)).toHaveValue('88.371');
+    // Only the message under EUR is left, and nothing was sent.
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(1);
+    expect(sent).toEqual([]);
+  });
+
+  test('AC-3, AC-7 (QLT-01, mirror): after a refusal of both fields, Tab to the second and typing a fix keeps focus and the text there', async ({ page }) => {
+    await answerGetWith(page, STORED);
+    await openWithForm(page);
+    await page.getByLabel(LABEL_USD).fill('');
+    await page.getByLabel(LABEL_EUR).fill('88.371');
+    await page.getByRole('button', { name: 'Save exchange rates' }).click();
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(2);
+    await expect(page.getByLabel(LABEL_USD)).toBeFocused();
+
+    // The person goes on to the second field. Clearing its message must not send focus back to the first field, which still has one.
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel(LABEL_EUR)).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('88.37');
+    await expect(page.getByLabel(LABEL_EUR)).toBeFocused();
+    await expect(page.getByLabel(LABEL_EUR)).toHaveValue('88.37');
+    await expect(page.getByLabel(LABEL_USD)).toHaveValue('');
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(1);
+  });
+
+  test('AC-3, AC-7 (QLT-01, server): after the server refuses both fields, typing a fix into the first keeps focus and the text there', async ({ page }) => {
+    await answerGetWith(page, STORED);
+    await page.route('**/api/v1/exchange-rates', (route) =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({
+            status: 422,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'about:blank',
+              title: 'Invalid',
+              status: 422,
+              code: 'VALIDATION_FAILED',
+              requestId: 'req-0a0b0c0d',
+              errors: [
+                { field: 'usd', message: NUMBER_MESSAGE },
+                { field: 'eur', message: NUMBER_MESSAGE },
+              ],
+            }),
+          })
+        : route.fallback(),
+    );
+    await openWithForm(page);
+    await page.getByLabel(LABEL_USD).fill('99.37');
+    await page.getByLabel(LABEL_EUR).fill('98.73');
+    await page.getByRole('button', { name: 'Save exchange rates' }).click();
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(2);
+    await expect(page.getByLabel(LABEL_USD)).toBeFocused();
+
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('84.37');
+    await expect(page.getByLabel(LABEL_USD)).toBeFocused();
+    await expect(page.getByLabel(LABEL_USD)).toHaveValue('84.37');
+    await expect(page.getByLabel(LABEL_EUR)).toHaveValue('98.73');
+    await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(1);
+  });
+
   test('AC-3: the real server refuses a bad value with 422 naming the field, and the screen shows its message under that field', async ({ page, request }) => {
     const refused = await request.put(API, { headers: JSON_HEADERS, data: { usd: '81.37', eur: '88.371' } });
     expect(refused.status()).toBe(422);
@@ -247,7 +332,7 @@ test.describe('saving (AC-2, AC-3, AC-7)', () => {
     const sent = recordPuts(page);
     await openWithForm(page);
     await page.getByRole('button', { name: 'Save exchange rates' }).click();
-    await expect(page.getByText('The exchange rates already have these values. Nothing was changed.')).toBeVisible();
+    await expect(page.getByText(NOTHING_TO_SAVE_NOTICE)).toBeVisible();
     expect(sent).toEqual([]);
   });
 
@@ -258,7 +343,8 @@ test.describe('saving (AC-2, AC-3, AC-7)', () => {
     await page.getByLabel(LABEL_USD).fill('99.37');
     await page.getByRole('button', { name: 'Save exchange rates' }).click();
     await expect(page.getByText('We could not save the exchange rates.')).toBeVisible();
-    await expect(page.getByText('Check your connection and try again. Nothing was changed.')).toBeVisible();
+    await expect(page.getByText(FAILED_SAVE_BODY)).toBeVisible();
+    await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
     await expect(page.getByLabel(LABEL_USD)).toHaveValue('99.37');
   });
 });
@@ -294,8 +380,8 @@ test.describe('loading and the load error (AC-7)', () => {
     await expect(page.getByRole('button', { name: 'Save exchange rates' })).toBeFocused();
   });
 
-  test('DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save', async ({ page }, testInfo) => {
-    const values = rateFor(testInfo, 120);
+  test('DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save', async ({ page }) => {
+    const values = CANARY_PAIR;
     let putDone = false;
     await page.route('**/api/v1/exchange-rates', (route) => {
       const method = route.request().method();
@@ -303,7 +389,8 @@ test.describe('loading and the load error (AC-7)', () => {
         putDone = true;
         return route.continue();
       }
-      return method === 'GET' && putDone ? route.fulfill(BUSY) : route.continue();
+      if (method !== 'GET') return route.continue();
+      return putDone ? route.fulfill(BUSY) : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(STORED) });
     });
     await openWithForm(page);
     await page.getByLabel(LABEL_USD).fill(values.usd);
@@ -321,8 +408,10 @@ test.describe('loading and the load error (AC-7)', () => {
     await expect(title).toBeFocused();
     // Polled at the three widths of the projects (360, 768 and 1366 px): the element with focus is the title, and stays it.
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? ''), { message: 'focus stays on the error title' }).toBe(LOAD_ERROR_TITLE);
-    // The save did succeed, and the notice says so beside the error.
+    // The save did succeed, and the notice says so beside the error, whose sentence does not say that nothing was changed.
     await expect(page.getByRole('status').filter({ hasText: SAVED_NOTICE })).toBeVisible();
+    await expect(page.getByText(SAVED_BUT_NOT_SHOWN_BODY)).toBeVisible();
+    await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
 
     putDone = false;
     await page.getByRole('button', { name: 'Try again' }).click();

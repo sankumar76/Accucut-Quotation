@@ -17,12 +17,15 @@ import {
   EXCHANGE_ERROR_TITLE,
   EXCHANGE_LOADING_LABEL,
   FAILED_SAVE_RATES_MESSAGE,
+  FAILED_SAVE_RATES_BODY,
   lastUpdatedLine,
   NOT_SET_YET,
+  RATES_SAVED_NOT_SHOWN_BODY,
+  RATES_SAVED_NOTICE,
   SAVE_EXCHANGE_RATES,
   SAVING_EXCHANGE_RATES,
 } from './exchange-rate-texts';
-import { ERROR_RETRY, TRY_AGAIN_BODY } from './process-texts';
+import { ERROR_RETRY } from './process-texts';
 import { RATE_FIELD_IDS, useExchangeRates, type ExchangeRatesState } from './use-exchange-rates';
 
 /**
@@ -96,17 +99,19 @@ function Notices({ state }: { readonly state: ExchangeRatesState }) {
       )}
       {saveFailed ? (
         <Notice tone="danger" title={FAILED_SAVE_RATES_MESSAGE}>
-          {TRY_AGAIN_BODY}
+          {FAILED_SAVE_RATES_BODY}
         </Notice>
       ) : null}
     </div>
   );
 }
 
-function LoadError({ onRetry }: { readonly onRetry: () => void }) {
+/** The load error. While the Saved notice is on the page, its sentence says the save happened, so it never reads "Nothing was changed" under "Exchange rates saved.". */
+function LoadError({ onRetry, saved }: { readonly onRetry: () => void; readonly saved: boolean }) {
   return (
     <ErrorState
       title={EXCHANGE_ERROR_TITLE}
+      {...(saved ? { description: RATES_SAVED_NOT_SHOWN_BODY } : {})}
       focusOnMount
       action={
         <Button onClick={onRetry}>
@@ -121,7 +126,7 @@ function LoadError({ onRetry }: { readonly onRetry: () => void }) {
 /** What the tab shows below the notices: the error with "Try again", the skeleton, or the form. */
 function Body({ state }: { readonly state: ExchangeRatesState }) {
   const { row, status, showSkeleton } = state;
-  if (status === 'error') return <LoadError onRetry={state.retry} />;
+  if (status === 'error') return <LoadError onRetry={state.retry} saved={state.notice === RATES_SAVED_NOTICE} />;
   // The first read has no form to keep on screen: the skeleton appears after 300 ms. A later read keeps the form until 300 ms have passed.
   if (row === null) return <SkeletonBlock rows={2} label={EXCHANGE_LOADING_LABEL} />;
   if (showSkeleton) return <SkeletonBlock rows={2} delayMs={0} label={EXCHANGE_LOADING_LABEL} />;

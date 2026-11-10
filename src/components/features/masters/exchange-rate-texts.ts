@@ -6,7 +6,9 @@ import type { PageNotice } from './process-texts';
  * The words that SCR-11 says for every master (the failure line, Try again) are SCR-11's, imported where used.
  *
  * The ux-spec fixes the tab name, the two labels, the hints, the stamp line and the Save button's name. The sentences of the states below
- * (Saved, Nothing to save, Failed, Loading, Error) are proposed from the patterns of SCR-11 and the Materials tab, for the ux-expert to rule.
+ * (Saved, Nothing to save, Failed, Loading, Error) are the ux-expert's ruling on QLT-06 and STD-13 (ux-spec v0.21, SCR-13 "The Exchange rates tab:
+ * final words"). Each is true in every case it can appear in: a save that reaches the server changes nothing when the screen was stale, and a lost
+ * answer can follow a commit, so neither Saved nor Failed promises an audit entry or says that nothing changed.
  */
 
 export const EXCHANGE_TAB = 'Exchange rates';
@@ -22,11 +24,17 @@ export const EXCHANGE_ERROR_TITLE = 'We could not load the exchange rates';
 
 export const FAILED_SAVE_RATES_MESSAGE = 'We could not save the exchange rates.';
 
-/** The sentence under the tab bar after a save; the audit log keeps the detail (the pattern of SCR-11 "Saved"). */
-export const RATES_SAVED_NOTICE: PageNotice = { tone: 'success', text: 'Exchange rates saved. The change is in the audit log.' };
+/** Under the failed-save title. It does not say "Nothing was changed": a lost answer can follow a commit, and trying again is safe (the same values write no second entry). */
+export const FAILED_SAVE_RATES_BODY = 'Check your connection and try again. What you typed is still in the form.';
 
-/** Save pressed with the values that are already stored: nothing is sent and nothing is written. */
-export const RATES_UNCHANGED_NOTICE: PageNotice = { tone: 'info', text: 'The exchange rates already have these values. Nothing was changed.' };
+/** The sentence under the tab bar after a save. It makes no promise about the audit log: a stale screen can save values the server already holds. */
+export const RATES_SAVED_NOTICE: PageNotice = { tone: 'success', text: 'Exchange rates saved.' };
+
+/** The load error's sentence while the Saved notice is on the page: the save happened, and the read after it failed (DEF-020 case). */
+export const RATES_SAVED_NOT_SHOWN_BODY = 'The exchange rates were saved, but we could not show them. Check your connection and try again.';
+
+/** Save pressed with the values the screen shows as stored: nothing is sent and nothing is written. The screen speaks for itself, not for the server. */
+export const RATES_NOTHING_TO_SAVE_NOTICE: PageNotice = { tone: 'info', text: 'You have not changed either rate, so there is nothing to save.' };
 
 /** "Last updated by Meera Iyer, 02 Nov 2026, 15:10 IST." The time arrives already in IST, from `formatIst` (AC-1). */
 export const lastUpdatedLine = (name: string, whenInIst: string): string => `Last updated by ${name}, ${whenInIst}.`;
