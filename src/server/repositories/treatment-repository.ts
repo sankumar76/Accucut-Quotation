@@ -117,7 +117,8 @@ export function createTreatmentMethods(db: PrismaClient): TreatmentMethods {
 
     lockTreatments: (tx) =>
       withDatabaseErrors(async () => {
-        await clientFor(db, tx).$executeRaw`LOCK TABLE treatments IN SHARE ROW EXCLUSIVE MODE`;
+        // QUALITY PLANT (round 2): no table lock (control PR, never merged).
+        await Promise.resolve(clientFor(db, tx));
       }),
 
     findTreatmentForUpdate: (id, tx) => withDatabaseErrors(() => selectForUpdate(db, id, tx)),
