@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Story / AC | AQP-65 (STORY-01.04) / the UX spec 6.0 "Forms" rule |
-| Severity | Sev-3 Moderate |
-| Priority | P3 |
+| Severity | Sev-2 Major (raised from Sev-3 by master at the G7 of AQP-123, DL-135: "an AC fails with a workaround" on the scale, and letters land unseen in the masked password field) |
+| Priority | P2 |
 | Type | Product |
-| Status | New |
+| Status | Verified by QA in CI on PR #167 (closes with the merge and master's G7) |
 | Found by / date | qa-engineer, 2026-11-10 (G7 of AQP-123, condition F of DL-129 (8) and DL-131 (3)) |
 | Build / commit | `e72e8f2` (PR #151 head). `src/components/features/users/user-form-dialog.tsx` is byte-identical to `origin/master` (ce9c02c), so the fault is on `master` |
 | Environment | Windows 11, Node v24.19.0, Chromium (Playwright 1.64.1) at 360, 768 and 1366 px, development server, throwaway PostgreSQL 17 on port 55523. Probe: `docs/07-qa/AQP-123-evidence/aqp-123-focus-jump.spec.ts.txt` |
@@ -34,6 +34,6 @@ The cause is the same line in each dialog: an effect keyed on the `errors` objec
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added | developer | | The probe's F-a and F-b cases for this dialog, as a committed spec at three widths |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-10 | PR #167 (AQP-269, AQP-270, AQP-271): `69805d1` the shared hook `src/components/shared/use-focus-on-refusal.ts` and the three dialogs; `db1319a` and `cde1b29` the round-2 tests; G6 closed at `cde1b29` (DL-138) |
+| Regression test added | developer | 2026-11-10 | users.spec.ts "DEF-026: after a refusal of several fields ..." (360, 768, 1366 px), with the used-e-mail and second-Admin server refusals now asserting focus on E-mail and Role |
+| Verified | qa-engineer | 2026-11-10 | QA's own F-a and F-b probes for this dialog, replayed in CI on the fixed code (control PR #185, run 42867526102): all 6 pass at 360, 768 and 1366 px; the same probes and the developer's test fail with the old effect planted back (control #186, run 42867558564) and with typing asking the hook for focus (control #187, run 42867587822); report `docs/07-qa/AQP-269-test-report.md` |
