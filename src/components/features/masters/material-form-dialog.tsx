@@ -99,7 +99,7 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
     if (outcome.status === 'ok') return onSaved(outcome.value, item === null ? 'added' : 'edited');
     const fromServer = outcome.status === 'refused' ? serverErrors(outcome.fields) : {};
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    showErrors(fromServer);
+    setErrors(fromServer);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
