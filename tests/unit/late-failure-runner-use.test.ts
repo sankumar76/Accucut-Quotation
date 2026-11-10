@@ -12,10 +12,14 @@ import { describe, expect, it } from 'vitest';
  * The check parses each test file with the TypeScript compiler API (QLT-01 of the review of PR #139: a text match was passed by a
  * renamed parameter, `async`, a method, a shorthand `{ transactions }`, or a file that also imports the shared helper). It looks at
  * the syntax, so a comment or a string that says "run:" is not a finding. A file is refused when
- *  - it defines a member named `run` (property, method, accessor or shorthand, in any form): that is what a transaction runner is. A
- *    **call** such as `real.run(work)` is not a definition;
+ *  - it defines a member named `run` (property, class field, method, accessor or shorthand, in any form, or an assignment such as
+ *    `r.run = ...` or `r['run'] = ...`): that is what a transaction runner is. A **call** such as `real.run(work)` is not a definition;
  *  - it hands the masters service a `transactions` (any form, including the shorthand) or declares a function returning a
  *    `TransactionRunner`, and never calls `createLateFailingRunner(`.
+ *
+ * Out of reach of a check on one file (QLT-10): a runner built with `Object.defineProperty(...)`, and a runner imported from another
+ * file (a second helper that defines `run` outside `tests/integration/masters`). The A3/A4 re-plant at each audited master's G6
+ * covers these: a runner that rolls back a nested transaction lets the planted second-transaction entry pass.
  */
 
 const MASTERS_TESTS = join(process.cwd(), 'tests', 'integration', 'masters');
@@ -40,8 +44,25 @@ function calleeName(call: ts.CallExpression): string | undefined {
 
 function isNamedMember(node: ts.Node, wanted: string): boolean {
   if (ts.isShorthandPropertyAssignment(node)) return node.name.text === wanted;
-  if (ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
+  if (
+    ts.isPropertyAssignment(node) ||
+    ts.isPropertyDeclaration(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessor(node) ||
+    ts.isSetAccessor(node)
+  ) {
     return memberName(node.name) === wanted;
+  }
+  return false;
+}
+
+/** An assignment to a member named `wanted` after the object exists: `r.run = ...` or `r['run'] = ...` (QLT-09). */
+function isAssignmentTo(node: ts.Node, wanted: string): boolean {
+  if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
+  const target = node.left;
+  if (ts.isPropertyAccessExpression(target)) return target.name.text === wanted;
+  if (ts.isElementAccessExpression(target)) {
+    return (ts.isStringLiteral(target.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(target.argumentExpression)) && target.argumentExpression.text === wanted;
   }
   return false;
 }
@@ -52,7 +73,7 @@ function localRunnerProblems(source: string): string[] {
   const seen = { definesRun: false, injectsRunner: false, callsSharedRunner: false };
 
   const visit = (node: ts.Node): void => {
-    if (isNamedMember(node, 'run')) seen.definesRun = true;
+    if (isNamedMember(node, 'run') || isAssignmentTo(node, 'run')) seen.definesRun = true;
     if (ts.isCallExpression(node)) {
       const callee = calleeName(node);
       if (callee === SHARED_RUNNER) seen.callsSharedRunner = true;
@@ -114,6 +135,10 @@ describe('the masters integration tests use the shared late-failure runner (#130
       ['a computed string name', "const failing = () => ({ ['run']: (fn) => real.run(fn) });"],
       ['a shorthand member', 'const run = (fn) => real.run(fn); const failing = () => ({ run });'],
       ['a class method', 'class Failing { async run(fn) { return real.run(fn); } }'],
+      ['a class field (QLT-09)', 'class Failing { run = async (fn) => real.run(fn); }'],
+      ['an assignment to a property (QLT-09)', 'const failing = {}; failing.run = (fn) => real.run(fn);'],
+      ['an assignment to a quoted property (QLT-09)', "const failing = {}; failing['run'] = (fn) => real.run(fn);"],
+      ['an assignment to a property of a runner (QLT-09)', 'const failing = createLateFailingRunner(real, e); failing.run = (fn) => real.run(fn);'],
     ])('refuses %s, even when the shared runner is also imported and used', (_form, definition) => {
       const source = `${IMPORT}const shared = createLateFailingRunner(real, new Error('late'));\n${definition}\n${wired}`;
       expect(localRunnerProblems(source)).toEqual(RUN_OF_ITS_OWN);
