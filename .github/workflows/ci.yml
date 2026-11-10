@@ -166,6 +166,15 @@ jobs:
           rm -rf node_modules
           npm ci
 
+      - name: "CONTROL PLANT (Stage 1): truncate one file after the record, before the save"
+        if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
+        run: |
+          file="$(find node_modules -maxdepth 3 -type f -name LICENSE | sort | head -n 1)"
+          echo "PLANT: truncating ${file} to 3 bytes"
+          ls -l "${file}"
+          truncate -s 3 "${file}"
+          ls -l "${file}"
+
       - name: "Stage 1: install, save node_modules"
         if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -412,6 +421,15 @@ jobs:
           echo "::warning::The restored node_modules failed its integrity check, so it is installed again with npm ci and not saved. Key: ${NM_KEY}. A maintainer can delete the entry: gh cache delete ${NM_KEY}"
           rm -rf node_modules
           npm ci
+
+      - name: "CONTROL PLANT (Shard): truncate one file after the record, before the save"
+        if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
+        run: |
+          file="$(find node_modules -maxdepth 3 -type f -name LICENSE | sort | head -n 1)"
+          echo "PLANT: truncating ${file} to 3 bytes"
+          ls -l "${file}"
+          truncate -s 3 "${file}"
+          ls -l "${file}"
 
       - name: "Shard: install, save node_modules"
         if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
