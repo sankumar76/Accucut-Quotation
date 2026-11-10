@@ -3,11 +3,11 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | 1 |
+| Review round | 2. Round 1 is below; round 2 is at the end of this file |
 | Base…branch | `master...feat/AQP-123-exchange-rate-master` (PR #151; merge base 023e17d; PR base `master` 051c0b5, docs-only since) |
-| Commit reviewed | 939f32f (commits 1fb8031, 699ec1e, 05d90fa, 2420242, d9e5711, 939f32f) |
+| Commit reviewed | Round 1: 939f32f (commits 1fb8031, 699ec1e, 05d90fa, 2420242, d9e5711, 939f32f). Round 2: `939f32f..e72e8f2` (7950c4c, 4f59298, e72e8f2) |
 | Date | 2026-11-10 |
-| **Verdict** | **REQUEST CHANGES** (1 Major: QLT-01; no Blocker or Critical) |
+| **Verdict** | Round 2: **APPROVE WITH COMMENTS** (no open Blocker, Critical or Major; 1 new Info, QLT-11). Round 1 was REQUEST CHANGES (1 Major: QLT-01) |
 
 ## Summary
 
@@ -208,3 +208,105 @@ No planted-fault proof is required. QLT-02 concerns the scan's precondition, not
 ## Verdict
 
 **REQUEST CHANGES.** The verdict rests on one Major, QLT-01, a keyboard data-entry defect in the new tab that I reproduced in the browser. Its fix is about 10 lines plus one E2E test. I checked it: the probe passes at all three widths, and so do the existing AC-3 focus tests. The server, the audit and the transaction behaviour are correct, and plants A3, A4 and the lock plant prove the tests have teeth. On re-review I will check QLT-01 with the probe at three widths, and only the new diff.
+
+---
+
+## Round 2 — `939f32f..e72e8f2` (new diff only)
+
+| Field | Value |
+|-------|-------|
+| Commits | 7950c4c (focus on refusal only; ux-spec v0.21 words; saving tests send the canary pair), 4f59298 (the Engineer scans check the canary pair at their end), e72e8f2 (`Object.hasOwn`, damaged row fails loudly, schema comment, imports, `object_id` pin) |
+| Diff | 16 files, +266 / -90 |
+| Rulings read | master G6 DL-129 (Jira 11299, PR comment 6761458791); ux-spec v0.21 SCR-13 "The Exchange rates tab: final words"; architecture v0.33 §6 and §8; AC-4 amended (AQP-1 11304). STD-03, STD-04 and STD-05 are out of scope by ruling |
+| **Verdict** | **APPROVE WITH COMMENTS.** QLT-01 (Major) and the three Minors are fixed and verified. One new Info (QLT-11) |
+
+### Checks run (round 2)
+
+The same scratchpad worktree was checked out at e72e8f2. A new throwaway PostgreSQL 17 container (`rq151r2-db`, port 55451, invented passwords) was migrated, seeded and given its configuration version, then **removed afterwards**. The dev server ran with `next dev --webpack` (port 3151), with the same minimal Admin set-up and local timeouts as round 1. No PR file was changed, apart from the planted lines, which were reverted.
+
+| Check | Command | Result |
+|-------|---------|--------|
+| PR CI | run 42780235188 on e72e8f2 (orchestrator brief) | Green, 5 of 5 |
+| Unit, integration, security, guards | `npx vitest run` on the story's integration file, `exchange-rates-lib`, `exchange-rates-routes`, `masters-service-exchange-rates`, `masters-audit-events`, `canary-scan-gate`, `one-width-tag`, `late-failure-runner-use` and `tests/security` | 22 files, **1,133 of 1,133 pass** |
+| E2E, real code | `npx playwright test … tests/e2e/exchange-rates.spec.ts --retries=0` (360, 768, 1366) | **49 of 49 pass** (16 tests × 3 widths, plus set-up) |
+| QLT-10, second pass on the same database | the keyboard and DEF-020 tests again, `--retries=0`, no reset | **7 of 7 pass**. Stored pair after each pass: `EUR=839.7300 USD=838.3700` |
+| **QLT-01 re-plant** | round-1 focus behaviour put back (diff below) | The three new QLT-01 tests **fail 9 of 9** (3 tests × 3 widths), each `Expected: focused, Received: inactive` (lines 239, 261, 297). Reverted with `git checkout` |
+| Canary text | `Number('838.37').toFixed(4)`, `Number('839.73').toFixed(4)` | `838.3700`, `839.7300`, equal to `inr_value::text` |
+| Scan spec | not run locally (it needs the production server) | Relies on CI stage 12 (green) |
+
+QLT-01 re-plant, `src/components/features/masters/use-exchange-rates.ts` (printed before the run, then reverted):
+
+```diff
+   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+-  useFocusOnRefusal(focusRequest);
++  useEffect(() => {
++    const first = EXCHANGE_RATE_FIELDS.find((field) => errors[field] !== undefined);
++    if (first !== undefined) document.getElementById(RATE_FIELD_IDS[first])?.focus();
++  }, [errors]);
+@@
+-    setErrors((current) => (current[field] === undefined ? current : Object.fromEntries(Object.entries(current).filter(([name]) => name !== field))));
++    setErrors((current) => Object.fromEntries(Object.entries(current).filter(([name]) => name !== field)));
+```
+
+### Round-1 findings
+
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-01 | Major | **Fixed** | `useRateForm` asks for focus only through `showErrors`, called on a client or server refusal, and each refusal makes a new `FocusRequest`. `setField` returns the same object when the field had no message. Three new E2E tests: my case, the mirror (Tab to EUR, type; USD keeps its message) and a server 422 naming both fields. They fail under the re-plant (9 of 9) and pass on the real code |
+| QLT-02 | Minor | **Fixed** | Two fixes, both sound. (1) The only E2E writes to `exchange_rates` are now the keyboard test, the DEF-020 test and the Admin control, and all three send the canary pair. The AC-3 real-server PUTs and the set-up warm-up are 422 and write nothing. (2) The AC-3 and AC-5 Engineer scans and the chunk negative control each call `expectCanaryRatesStillStored()` at their end |
+| QLT-03 | Minor | **Fixed** | `formatIst` of both saves is asserted: `09 Nov 2026, 23:59 IST` and `10 Nov 2026, 00:00 IST`. Integration 26 of 26 |
+| QLT-10 | Minor | **Fixed** (by another route than I suggested; rebuttal accepted) | The GET is answered with `STORED` and the PUT sends the canary pair, so every attempt sees a change and sends a real request. The second pass on the same database passes 7 of 7 |
+| QLT-04 | Info | Closed | AC-4 now reads `master.edited` / `exchange_rate`. Architecture v0.33 §8 (line 1034) fixes `object_id` `00000000-0000-4000-8000-000600000001`, and the new unit test pins that literal and `exchange_rate` exactly |
+| QLT-05 | Info | Closed | Architecture v0.33 §6 lists `columns` |
+| QLT-06 | Info | Fixed | The words match ux-spec v0.21 lines 829-833 word for word (table below). Roles are right: Failed is `role="alert"` (danger tone) and Saved is `role="status"` |
+| QLT-07 | Info | Not changed; accepted | The re-read stays. The DEF-020 guard line is unchanged, and the DEF-020 test passes at three widths and now also checks the Saved-case error sentence |
+| QLT-08 | Info | Not changed; accepted | It holds nothing |
+| QLT-09 | Info | n/a | Good practice, noted in round 1 |
+
+**The words of ux-spec v0.21 against the build.**
+
+| State | ux-spec v0.21 | Build (`exchange-rate-texts.ts`, `states.tsx`) |
+|-------|---------------|------------------------------------------------|
+| Saved | `Exchange rates saved.` | Same |
+| Nothing to save | `You have not changed either rate, so there is nothing to save.` | Same |
+| Failed | Title `We could not save the exchange rates.`, sentence `Check your connection and try again. What you typed is still in the form.` | Same |
+| Loading | `Loading the exchange rates` | Same |
+| Error (load), no Saved notice | Title `We could not load the exchange rates`, sentence `Check your connection and try again. Nothing was changed.` | Same (the `ErrorState` default) |
+| Error (load), Saved notice on the page | `The exchange rates were saved, but we could not show them. Check your connection and try again.` | Same. The condition is `notice === RATES_SAVED_NOTICE`, the "Saved notice on the page" rule |
+
+### New finding (round 2)
+
+| ID | Severity | File:line | Issue | Impact | Suggested fix |
+|----|----------|-----------|-------|--------|---------------|
+| QLT-11 | Info | `tests/e2e/exchange-rates.spec.ts:59-64, 171-199, 383-420` | The two saving tests now always send the canary pair, which the database normally already holds. So the server answers 200 without writing, and no E2E test drives a save that really changes a stored rate through the screen. The file header says so | Low. A changing save (both rows, one stamp, one audit entry, in one transaction) is proven against PostgreSQL by the integration file, including the A3, A4 and lock plants. The route is proven by `exchange-rates-routes.test.ts`. The screen side of a changing save (the PUT body, the Saved notice, the re-read) does not depend on what the server writes | None for this PR. If a later story needs a real changing save in E2E, it can save another pair and restore the canary pair in `finally`, as long as no Engineer scan runs in that window. The post-scan check (QLT-02) would then catch an overlap |
+
+### G12 (round 2)
+
+In scope, only `tests/e2e/canary-scan.spec.ts` changed: one import, the helper `expectCanaryRatesStillStored`, and one call at the end of each of three tests. **Nothing is removed or weakened; three assertions are added.** `tests/security/**`, the scan helper and `canary-scan-gate.test.ts` are not touched.
+
+Outside G12 scope, in `exchange-rates.spec.ts`:
+- The changed sentence assertions follow the v0.21 ruling.
+- The failed-save and DEF-020 tests gain a negative assertion (`Nothing was changed.` has count 0).
+- The DEF-020 test's first GET is now answered with `STORED` instead of the real route. That does not weaken it: the guarded path (a 200 PUT, then a failing re-read) is unchanged.
+
+The other changes need no G12 check:
+- `masters-audit-events.test.ts` gains a deny-by-default test.
+- `exchange-rates-lib.test.ts` replaces `letterOfKey(...)` with `columnOfKey(...)?.letter`, an equivalent assertion, and adds the `object_id` pin.
+
+### Other changes in the diff (quality view)
+
+- `audit-events.ts:147` (`Object.hasOwn`): correct, and the new test covers `toString`, `constructor`, `__proto__` and `hasOwnProperty`.
+- `exchange-rate-repository.ts:97-103`: a damaged row now throws, with no value in the message. Both reads now agree.
+- The hook split (`useRatesRead`, `useRateForm`, `useSaveRates`) keeps the behaviour. The full spec passes, including the keyboard save, the late first read and the skeleton.
+
+### Verdict (round 2)
+
+**APPROVE WITH COMMENTS.** No Blocker, Critical or Major remains. The open items are three Infos: QLT-07, QLT-08 and QLT-11.
+
+| Severity | Open after round 2 |
+|----------|--------------------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 3 (QLT-07, QLT-08, QLT-11) |
