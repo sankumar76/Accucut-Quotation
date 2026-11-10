@@ -176,6 +176,13 @@ jobs:
       - name: "Stage 1: install, prisma generate"
         run: npx prisma generate
 
+      - name: "CONTROL (Stage 1): installed path-key equals the lockfile"
+        run: |
+          installed="$(node -p "require('./node_modules/path-key/package.json').version")"
+          locked="$(node -p "require('./package-lock.json').packages['node_modules/path-key'].version")"
+          echo "CONTROL: installed path-key=${installed} lockfile path-key=${locked}"
+          test "${installed}" = "${locked}"
+
       # ---- Stage 2: secret scan --------------------------------------------------------------
       - name: "Stage 2: secret scan (Gitleaks, full history)"
         run: |
@@ -422,6 +429,13 @@ jobs:
 
       - name: "Shard: install, prisma generate"
         run: npx prisma generate
+
+      - name: "CONTROL (Shard): installed path-key equals the lockfile"
+        run: |
+          installed="$(node -p "require('./node_modules/path-key/package.json').version")"
+          locked="$(node -p "require('./package-lock.json').packages['node_modules/path-key'].version")"
+          echo "CONTROL: installed path-key=${installed} lockfile path-key=${locked}"
+          test "${installed}" = "${locked}"
 
       # The same cache key as `verify`'s stage 9 (the sources and the lockfile are the same). A key is saved once; a job
       # that loses the race gets a harmless "already exists" notice.
