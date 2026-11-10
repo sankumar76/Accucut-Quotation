@@ -122,3 +122,68 @@ On run 42463553178, attempt 5 started at 09:32:41Z, but `attempts/5/jobs` lists 
 
 ## Previous Findings (re-review only)
 n/a (round 1).
+
+---
+
+# Round 2 — new diff only (`c24fe22..8b587be`)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (after master's G6 CONDITIONAL GO, DL-128) |
+| Commits reviewed | a740788, 5f38af9, 8b587be (9 files) |
+| Commit reviewed | 8b587be |
+| Date | 2026-11-10 |
+| **Verdict** | **APPROVE WITH COMMENTS** (0 Blocker, 0 Critical, 0 Major; 1 Minor and 2 Info new) |
+
+## Round 2 summary
+All four actionable findings are fixed, and I proved each fix independently. One variant plant (P3b) shows that the new exact test still accepts a suffix on the node_modules key (QLT-10, Minor). The check I proposed in round 1 used `toContain`, so the gap is partly mine. It costs time and storage, never a stale or wrong install, so it does not hold G6. QLT-01 was checked with a probe, QLT-02 with re-plants P3 and P5 plus two variants of my own, QLT-03 against real API data from a partial re-run, and QLT-04 by its test pin. No assertion was weakened again. The two `expect` lines removed this round were replaced by equal or stronger ones, and `ci-workflow.test.ts` and `aqp-27-scaffold.test.ts` are untouched. The one new narrowing is a skip condition in `node-modules-integrity.test.ts`; it is declared, and it never applies on CI (QLT-08, Info). CI run 42776699570 on 8b587be is green, 5 of 5. All four jobs hit with the unchanged key, and each logged `integrity check passed: 58972 files`.
+
+| Severity | New this round |
+|----------|----------------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 1 (QLT-10) |
+| Info | 2 (QLT-08, QLT-09) |
+
+## Round 2 checks run
+| Check | Command | Result |
+|-------|---------|--------|
+| Story and CI-guard tests at 8b587be | `npx vitest run` on the 10 CI test files (the 9 of round 1 plus `ci-run-summary-attempts.test.ts`) | 10 files, **245 passed**, 0 skipped (GNU `find -printf` available, so the integrity tests ran) |
+| QLT-01 probe | `node --experimental-strip-types` probe importing the new `cacheState` | failed fallback gives `fallback`; cancelled fallback gives `fallback`; failed miss gives `miss`; hit stays `hit` |
+| QLT-03 with real data | API output of run 42463553178 attempt 5 (attempt start 09:32:41Z) through the new `renderSummary` | path **4 m 00 s** with the attempt start (old behaviour: 12 m 24 s); both carried-over shards labelled `(earlier attempt)` and left out; the note is printed |
+| Re-plants (each alone, diff printed, restored, `git status` clean after each) | plant, then `npx vitest run tests/unit/ci-workflow.test.ts tests/unit/ci-setup-cut.test.ts tests/acceptance/aqp-27-scaffold.test.ts` | P3, P5, P5b caught; P3b survived (QLT-10); `git status` clean at 8b587be after the last one |
+| CI | run 42776699570 (8b587be) | success; integrity check passed in 4 of 4 jobs |
+
+### Round 2 plants
+| Plant | Diff (summary) | Result |
+|-------|----------------|--------|
+| P3 (round-1 plant, again) | `verify` saves `.next` with `actions/cache/save@<pinned>` under `handover-${{ github.run_id }}`; `e2e` restores it with `actions/cache/restore@<pinned>` (+12 lines) | **caught**: `ci-setup-cut` "uses the split cache action only for the node_modules restore and save" (1 failed, 161 passed) |
+| P5 (round-1 plant, again) | new step `Shard: browsers again`: `actions/cache/save@<pinned>` of `~/.cache/ms-playwright` under `browsers-other-${{ github.sha }}` (+6 lines) | **caught**: the same test (1 failed, 161 passed) |
+| P5b (variant, master's ask) | a new job `warm:` (no `needs`) with one step `actions/cache/save@<pinned>` of `~/.cache/ms-playwright` under `browsers-warm-${{ github.sha }}`, outside the three jobs the new test iterates | **caught**: the count of 4 in the same test, plus `ci-workflow` AQP-208 AC-4 (three jobs) (2 failed, 160 passed) |
+| P3b (variant) | all four node_modules key lines become `key: ${{ steps.nmkey.outputs.key }}-${{ github.run_id }}` (a run-scoped key: every run misses, saves a 233 MiB entry per run, and a re-run attempt restores another job's entry) | **survived**: 162 of 162 passed. The key checks use `toContain`, so a suffix passes (QLT-10, Minor) |
+
+## Previous Findings (round 2 re-review)
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Major | **Fixed** | a740788; probe and 4 new tests (failure and cancelled, fallback and miss) |
+| QLT-02 | Major | **Fixed** | 8b587be; exact test in `ci-setup-cut.test.ts`; P3, P5 and the variants: see the plants table |
+| QLT-03 | Minor | **Fixed** | a740788; checked on real data from run 42463553178 attempt 5. Wording nit in QLT-09 |
+| QLT-04 | Minor | **Fixed** | 8b587be; `timeout-minutes: 1` on all three summary steps, pinned |
+| QLT-05 | Info | Closed | now `NODE_MODULES_CACHE_FORMAT: '1'`; key text unchanged (all four jobs hit in 42776699570) |
+| QLT-06 | Info | Open for the architect (AC-8) | unchanged, as intended |
+| QLT-07 | Info | Closed | STD-03 also makes the cause of a failed listing visible |
+
+## New findings (round 2)
+| ID | Severity | File:line | Issue | Suggested fix |
+|----|----------|-----------|-------|---------------|
+| QLT-08 | Info | `tests/unit/node-modules-integrity.test.ts:22` | The suite now skips where `find -printf` is missing (declared, STD-08). On ubuntu CI it always runs. On a Windows machine where `System32\find.exe` comes before Git's `find` in `PATH`, it would skip silently instead of failing. CI is the reference run (DL-057), so nothing is lost at the gate. | Optional: `if (process.env['CI']) expect(BASH_AVAILABLE).toBe(true)` so CI can never skip it. |
+| QLT-09 | Info | `scripts/lib/ci-run-summary.ts` (`shardLine`) | When every shard is carried over, the line reads "no shard job has a start and an end", although those shards have both. | Say "no shard ran in this attempt" when shards exist but all are carried over. |
+| QLT-10 | Minor | `tests/unit/ci-setup-cut.test.ts:92-93`, `:177` | Plant P3b: a run-scoped suffix on the four node_modules keys passes all 162 guard tests, because the key is checked with `toContain('key: ${{ steps.nmkey.outputs.key }}')` (the check I proposed in round 1). The effect is cost and performance only: every run misses (set-up back to about 70 s, AC-2 lost), a 233 MiB entry is saved per run (with 10.89 GB already in use), and a re-run attempt restores an entry another job saved. Install correctness holds (exact key, integrity check). | Anchor the line: `expect(body).toMatch(/^s+key: ${{ steps.nmkey.outputs.key }}$/m)` in the three places. Re-run P3b. Can be done in a later commit; not needed for G6. |
+
+## Round 2 G12 statement
+Removed `expect` lines this round, with their replacements:
+1. `ci-setup-cut.test.ts`, the literal `node-modules-v1-...` key. Replaced by the same key built from `v${NODE_MODULES_CACHE_FORMAT}`, plus a new test that pins the env value to `'1'`, requires exactly one entry before `jobs:` and bans a literal `node-modules-v<digit>`. The guard is stronger.
+2. `node-modules-integrity.test.ts`, the slow-listing message `could not be listed within 1 s`. Replaced by `stopped after 1 s`, with the same status and elapsed-time assertions. Equal strength, and a new test separates a failing `find` from a time-out.
+
+The README word list grew (`'ref'` became `'--ref refs/pull/'`, and three entries were added), which is stronger. The new skip condition is QLT-08.
