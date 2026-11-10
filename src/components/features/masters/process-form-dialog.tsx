@@ -1,11 +1,10 @@
 'use client';
 
-import { useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
 import { UnitInput } from '@/components/shared/unit-input';
-import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -67,15 +66,7 @@ function useFieldFocus(setErrors: (errors: FieldErrors) => void) {
   const name = useRef<HTMLInputElement>(null);
   const unit = useRef<HTMLSelectElement>(null);
   const defaultValue = useRef<HTMLInputElement>(null);
-  const showErrors = useFocusOnRefusal(
-    FIELD_NAMES,
-    (field) => {
-      const target = field === 'name' ? name : field === 'unit' ? unit : field === 'defaultValue' ? defaultValue : null;
-      target?.current?.focus();
-    },
-    setErrors,
-  );
-  return { refs: { name, unit, defaultValue }, showErrors };
+  return { refs: { name, unit, defaultValue }, showErrors: setErrors };
 }
 
 /** What the form holds, what it was told, and what pressing Add or Save does. */
@@ -85,6 +76,11 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { refs, showErrors } = useFieldFocus(setErrors);
+  useEffect(() => {
+    const first = FIELD_NAMES.find((field) => errors[field] !== undefined);
+    const target = first === 'name' ? refs.name : first === 'unit' ? refs.unit : first === 'defaultValue' ? refs.defaultValue : null;
+    target?.current?.focus();
+  }, [errors, refs]);
 
   const setField = (field: FieldName) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));

@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
 import { UnitInput } from '@/components/shared/unit-input';
-import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -86,7 +85,11 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // After a refusal, focus goes to the first field with a message (SCR-13, UX spec section 6.0 "Forms"), and never while a person types (DEF-024).
-  const showErrors = useFocusOnRefusal(MATERIAL_FIELD_NAMES, (field) => document.getElementById(FIELD_IDS[field])?.focus(), setErrors);
+  const showErrors = setErrors;
+  useEffect(() => {
+    const first = MATERIAL_FIELD_NAMES.find((field) => errors[field] !== undefined);
+    if (first !== undefined) document.getElementById(FIELD_IDS[first])?.focus();
+  }, [errors]);
 
   const setField = (field: MaterialFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
