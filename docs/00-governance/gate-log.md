@@ -4180,3 +4180,69 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks registered:** none new. RISK-023 is not re-scored here, since the brief does not name the register. Its trigger reading is met (5:49, 6:11), and the procedure is condition d6. The solution-architect restates the headroom figure in test strategy 10.5 at the next docs change.
 **Rationale:** QA verified every item of condition C on the exact code that G6 judged. QA reproduced the sticky plant independently, which closes the one point G6 rested on the developer's word alone. CI is green on the head that carries QA's tests, so the spec is shown to run in the pipeline. The open items are a spec line not yet due, a follow-up outside this defect's scope, and a CI cost that is real but small and not what caused the path reading. Each now has an owner and a due point. None is a risk to users or correctness on the screens this PR changes. The same evidence pattern gave GO at AQP-122 (DL-121) and AQP-227 (DL-120).
 **Posted:** PR #135 comment 6747841591; Jira AQP-234 comment 11250, AQP-235 comment 11251. Tech-debt issue created: #137 (ruling a).
+
+## G6 – Peer Review — tech-debt #130 (shared late-failure runner, PR #139) — 2026-11-09 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** The narrow route (DL-124 ruling 1) is met. reviewer-quality's round 2 approves with comments, the round-2 Minor and Info are fixed in a879d61 (checked by master), and CI is green on a879d61. The one condition is the PR description, which does not hold G7.
+- **Decided by:** master  ·  **Human override:** none
+- **Review route:** #130 names reviewer-quality as the reviewer ("reviewer-quality re-plants A3 and A4"). DL-121 and DL-122 set the narrow route for a fix with one surface. PR #139 changes 7 files, all under `tests/` (`tests/support/late-failure-runner.ts`, `tests/support/late-failure.ts`, 2 masters integration files, 1 audit integration file, 2 unit files), with no `src/`, config, dependency or workflow change. So one quality report is the full G6 evidence. The standards hygiene items are checked by master below; the performance surface is CI time, measured by the path rule. The G6 checklist item "three reports present" is not met as written; this is a recorded exception (DL-124).
+- **Artefacts evaluated:**
+  - **PR #139** at a879d61 (`gh pr view 139`): open, MERGEABLE, labels `ai-delivery`, `tech-debt`, `review:quality-approved`, body "Closes #130". Commits b165c2c, a0db6c2, 9254510, a879d61. `origin/master` (eed733b) has no commit missing from the head.
+  - **Quality review** `docs/06-reviews/130/quality.md` (branch `docs/130-review-quality`, be99f56; brought into this docs PR). PR reviews 5834954712 (round 1, REQUEST CHANGES as COMMENT: QLT-01 Major, QLT-02 Minor, 6 Info) and 5835041397 (round 2, APPROVE WITH COMMENTS as COMMENT: both fixed; new QLT-09 Minor, QLT-10 Info). The reviewer re-planted A3 and A4 on a throwaway PostgreSQL 17, with each diff printed: masked by the old local runners (all AC-5 tests pass), caught by the shared runner (A3 fails both create tests, A4 both update tests). QLT-02 confirmed by mutation (a shared depth counter fails both concurrency tests).
+  - **My own checks** (worktree `master-139`; no tests run locally, the machine is low on memory):
+    - **a879d61, unreviewed:** `git diff 9254510 a879d61` is 1 file, `tests/unit/late-failure-runner-use.test.ts`, +29 / -4. It adds `ts.isPropertyDeclaration` to `isNamedMember`, adds `isAssignmentTo` (an `=` whose left side is `x.run` or `x['run']`), and calls it in `visit`. This is the reviewer's suggested code for QLT-09. It adds 4 refused-form rows (class field, property assignment, quoted assignment, assignment onto a shared runner), each with the shared helper also imported and called. The header now names the QLT-10 limits (`Object.defineProperty`, a runner imported from another file) and the A3/A4 re-plant that covers them. No production path, no new dependency. Compound assignments (`||=`) are not caught; that is contrived and also covered by the re-plant, so no finding.
+    - **Scope:** `git diff --stat origin/master...a879d61`: 7 files, +534 / -38, all under `tests/`.
+    - **Secrets:** that diff piped to `zricethezav/gitleaks:v8.30.1 stdin --redact` (local Docker): about 32.7 KB scanned, no leaks, exit 0.
+    - **CI:** run 42730771190 on 9254510 green, 5 of 5. Run 42731951221 on a879d61: green, 5 of 5 (`Stages 1 to 11b` 00:55:17 to 00:58:13Z, so the guard unit tests ran green; E2E shards 1, 2 and 3; `Stages 1 to 11` ended 01:01:14Z). Path 5:57 (first job start to the end of `Stages 1 to 11`); the slowest shard ended at 5:50. The diff adds no E2E test, so this reading is the suite, not this PR (RISK-023, DL-123 reading).
+    - **PR description:** the Dev Record still gives the guard file as "(20)" tests and has no row for QLT-09 / QLT-10 or a879d61 (now 24 guard tests, 35 unit tests across the 2 unit files, per the developer).
+
+**Checklist**
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1* | Review reports present for the route | ✅ (narrow route) | `docs/06-reviews/130/quality.md`, rounds 1 and 2; DL-124 ruling 1 |
+| 2* | Zero open Blocker / Critical | ✅ | Round 1: 0 / 0; round 2: 0 / 0 |
+| 3 | Major fixed or accepted | ✅ | QLT-01 fixed in 9254510 (reviewer-verified, round 2) |
+| 4 | Minor / Info | ✅ | QLT-02 fixed (mutation-verified); QLT-09 and QLT-10 fixed in a879d61 (master-verified); QLT-03, -04, -06, -07 Info accepted, no tech-debt issue |
+| 5 | Findings cite file:line | ✅ | Every finding row has file:line |
+| 6 | Scope and secrets | ✅ | 7 files under `tests/`; Gitleaks clean |
+| 7 | CI green on the judged head | ✅ | Run 42731951221 on a879d61 (above) |
+| 8 | PR description matches the head | ⚠️ | Guard count 20 (now 24); no a879d61 row. Condition 1 |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #139 description (Dev Record) | Add a QLT-09 / QLT-10 row with a879d61; guard count 20 → 24; 35 unit tests; CI run 42731951221 | Before the squash (merge condition d) |
+
+**Risks registered:** none new. The residual (a runner defined outside the masters folder or by `Object.defineProperty`) is covered by #130's re-plant of A3 and A4 at each audited master's G6 (AQP-123, 02.05, 02.02).
+**Rationale:** the risk in a test-only PR is a test that passes over a fault. The reviewer showed, by plant and by mutation, that the new runner and guard catch what the old ones masked. The one unreviewed commit is the reviewer's own suggested fix, which master read line by line.
+**Posted:** PR #139 comment 6755851518 (G6 and G7 together); Jira AQP-123 comment 11258. No tech-debt issue created (no finding deferred).
+
+## G7 – QA Acceptance — tech-debt #130 (shared late-failure runner, PR #139) — 2026-11-09 (attempt 1)
+
+- **Decision:** **GO.** Decided now, without a QA run (DL-124 ruling 3). The orchestrator may squash-merge PR #139 under CLAUDE.md §8 once the merge conditions below are met.
+- **Decided by:** master  ·  **Human override:** none
+- **Acceptance items:** #130's three "Required" points, which the PR body maps under "Acceptance criteria coverage". There is no Jira story to move; #130 closes on the merge.
+
+**Checklist**
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1* | Every acceptance item has a result with evidence | ✅ | (1) One shared outermost-only runner, no retry or raised limit: `tests/support/late-failure-runner.ts`; unit tests incl. overlapping-and-nested calls; reviewer mutation. (2) Masters tests moved, guard in place: `materials.test.ts` and `process-items.test.ts` use `createLateFailingRunner`; AST guard with 24 cases; reviewer probes. (3) A3 and A4 fail both masters files with the shared runner and pass with the old ones: reviewer re-plant, diffs printed (`quality.md`, "The plants") |
+| 2* | No open Sev-1 / Sev-2 defects | ✅ | None raised against PR #139 |
+| 3* | Regression recorded and green | ✅ | CI 42731951221 on a879d61 (G6 entry above) |
+| 4 | Exploratory notes | n/a | Test-only change, no user-facing behaviour |
+| 5 | Accessibility checks | n/a | No UI |
+
+**Merge conditions (DL-124 ruling 4)**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | orchestrator | this docs PR | Merge it first (docs-only, after this GO) | Before PR #139 is updated |
+| b | orchestrator | PR #139 | Update from `master` by a merge commit (no rebase, no force-push), its 7 files unchanged; a conflict in them comes back to master | Before the squash |
+| c | orchestrator | PR #139 | 5 of 5 checks green on the updated head. A re-run to green names its failing test; anything but DEF-022's union test comes back to master | Before the squash |
+| d | developer, checked by orchestrator | PR #139 description | G6 condition 1 met | Before the squash |
+| e | orchestrator | PR #139 comment | Head SHA, run ID, commits taken from `master`, path time. If the path is 5:30 or more, DL-123 (d) applies; the squash does not wait for the re-runs | Before the squash |
+| f | orchestrator | GitHub #130 | Confirm the merge closed it; if not, close it as completed with the merge commit | After the squash |
+| g | reviewer-quality | AQP-123 G6 | Re-plant A3 and A4 on AQP-123's new integration file (#130), and the same at 02.05 and 02.02 | Each audited master's G6 |
+
+**Risks registered:** none new.
+**Rationale:** each acceptance item has evidence from someone other than the developer, and the regression is green on the exact head. A QA run would repeat the reviewer's plants and has no user-facing behaviour to check.
+**Posted:** PR #139 comment 6755851518 (G6 and G7 together); Jira AQP-123 comment 11258. No tech-debt issue created (no finding deferred).
