@@ -30,7 +30,7 @@ const OWN_WIDTH_FILES = ownWidthFilesOf(CONFIG);
  * without this pin a new entry plus a skip line would turn every guard green with no test edit. Adding a file is an edit of
  * BOTH this constant and `OWN_WIDTH_FILES`, after a ruling there, as for the `@one-width` allow-list (section 10 review rule).
  */
-const RULED_OWN_WIDTH_FILES: ReadonlyArray<string> = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts'];
+const RULED_OWN_WIDTH_FILES: ReadonlyArray<string> = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts', 'shell.spec.ts'];
 
 /**
  * A `test.skip(...)` whose condition is true in every project but `desktop`. Two spellings exist in the suite:
@@ -49,7 +49,7 @@ const FILE_LEVEL_DESKTOP_ONLY = /^test\.beforeEach\(\(\{\}, testInfo\) => \{\n {
  * `testIgnore` would drop tests that must run in `mobile` and `tablet`. They are not own-width files. Adding a file here is
  * a ruling in test strategy 10.5, like an entry in the list.
  */
-const PARTLY_DESKTOP_ONLY: ReadonlyArray<string> = ['shell.spec.ts'];
+const PARTLY_DESKTOP_ONLY: ReadonlyArray<string> = [];
 
 const specFiles = (): string[] =>
   readdirSync(E2E_DIRECTORY, { recursive: true, encoding: 'utf8' })

@@ -38,7 +38,7 @@ const ONE_WIDTH = /@one-width/;
 // count split balanced entries that never run, and a third file of this kind would also escape the `@one-width` guard. A file joins
 // this list only after a ruling in test strategy section 10.5 item 9 (rulings 11342, 11367, STORY-10.20, AQP-244);
 // tests/unit/own-width-files.test.ts pins the names, the file-level skip, and Playwright's listing.
-const OWN_WIDTH_FILES: ReadonlyArray<string> = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts'];
+const OWN_WIDTH_FILES: ReadonlyArray<string> = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts', 'shell.spec.ts'];
 
 // Invented values so the app's start-up check (src/lib/env.ts) passes. `DATABASE_URL` is the real one when it is set.
 const DATABASE_URL =
