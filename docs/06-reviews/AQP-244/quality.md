@@ -100,3 +100,45 @@ Plant to show it red: a top-level `test(...)` appended to `masters-table-actions
 
 ## Previous Findings (re-review only)
 n/a (round 1).
+
+---
+
+## Round 2 — new diff `953b8ca..a4eab7f` (2026-11-10)
+
+| Field | Value |
+|-------|-------|
+| Commit reviewed | a4eab7f (one commit: "fix(e2e): file-level skip in masters-table-actions and pin the own-width list") |
+| Context | master G6 CONDITIONAL GO (DL-137, Jira 11376); architect 11379 (test strategy v0.32): the 35 s line is withdrawn and AC-3 (c) is reported only |
+| **Verdict** | **APPROVE WITH COMMENTS**: 0 Blocker, 0 Critical, 0 Major, 1 Minor (QLT-06) |
+| Review | https://github.com/sankumar76/Accucut-Quotation/pull/166#pullrequestreview-5848133647 |
+
+### Previous findings
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Major | Fixed | `masters-table-actions.spec.ts` skips at file level. `own-width-files.test.ts` pins a column-0 `test.beforeEach` with the skip for each entry. The developer's re-plant #183 (describe-level form plus a top-level test) is red. Residual: QLT-06 |
+| QLT-02 | Minor | Fixed | The listing check is per title: all three widths, or `desktop` only with `@one-width` |
+| QLT-03 | Info | Acknowledged | The scan now takes `!=` and either quote |
+| QLT-04 | Info | Acknowledged | The `RULED_OWN_WIDTH_FILES` pin closes "a new entry plus a skip line turns every guard green" (P8 red) |
+| QLT-05 | Info | n/a | praise |
+
+### G12 and counts
+- **Nothing weakened again.** `one-width-tag.test.ts` changes its test name and reads the config through `readConfig()`, and the relaxation is unchanged. `e2e-shards.test.ts` is untouched. The new guards are stricter: the ruled-list pin, the file-level pin, and the per-title listing check. The support module is renamed `tests/support/playwright-config.ts`, and `ownWidthFilesOf` now expects the `ReadonlyArray<string>` annotation.
+- **Counts:** CI 42867165582 on a4eab7f (success): shards 230 / 229 / 229 listed with set-up; 228 / 225 / 212 = **665 passed**; 2 / 4 / 17 = **23 skipped**; 0 flaky. These are identical to 953b8ca, so every test still runs once.
+- **AC conformance:** unchanged from round 1. AC-3 (c) is now report-only (11379); its measured figures are reported.
+
+### Round-2 plants (from a4eab7f, diff printed before the result, closed unmerged; DL-091, DL-105)
+| Plant | PR / run | Change | `Stages 1 to 11b` | Result |
+|-------|----------|--------|-------------------|--------|
+| P6, the strongest form of P4 | #191 / 42869998085 | the file-level hook left only inside a `/* … */` block (still at column 0), the skip moved back into the describe, and a top-level test appended | **pass** (2,793 of 2,793) | QLT-06 |
+| P7, a variant | #192 / 42870016507 | the column-0 hook wrapped in an unindented `test.describe(…, () => {`, and a top-level test after it | **pass** (2,793 of 2,793) | QLT-06 |
+| P8, the strongest form of P1 | #193 / 42870032956 | a new spec with the file-level skip, added to `OWN_WIDTH_FILES` but not to `RULED_OWN_WIDTH_FILES` | **fail** (1) | "is exactly the two files ruled in test strategy 10.5 item 9, and no other": the pin works |
+| (developer) P4 re-plant | #183 / 42867966691 | the describe-level form plus a top-level test | fail | "skips outside desktop at file level in each own-width file" |
+
+### New finding
+| ID | Severity | File:line | Issue | Impact | Suggested fix |
+|----|----------|-----------|-------|--------|---------------|
+| QLT-06 | Minor | `tests/unit/own-width-files.test.ts:45` | The file-level pin is a regex over source text. A hook left only in a block comment (P6), or a column-0 hook inside an unindented describe (P7), still matches. | The runtime outcome is the same as the design (the file is listed in `desktop` only either way), and both edits need an unusual layout that is visible in a diff. The spec comment "fails if this hook moves into a describe block" is not fully true. | Optional: check with the TypeScript AST that a top-level `test.beforeEach` statement of the source file skips outside `desktop` (precedent: `late-failure-runner-use.test.ts`); snippet in the inline comment. P6 and P7 would turn red. |
+
+## Hand-off (round 2)
+- Status: COMPLETE · Verdict APPROVE WITH COMMENTS · label `review:quality-approved`
+- Control PRs #191, #192 and #193 were opened and closed unmerged.

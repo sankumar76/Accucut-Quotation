@@ -4774,3 +4774,114 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
   - (c) QA moves AQP-272 to Done and fills in DEF-027's Fix & Verification rows (aff4791, the two runs).
   - (d) PR #167 then merges under DL-139 (3).
 **Posted:** Jira AQP-272 comment 11393; PR #189 comment 6775228086.
+
+## G6 – Peer Review (close) — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1, closed at a4eab7f)
+
+- **Decision:** **G6 closed at a4eab7f. DL-137 conditions A to C are met.** AQP-244 goes to In QA. QLT-06 (Minor) goes to tech-debt #203 (DL-141).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **Fix head a4eab7f:** one commit on 953b8ca, 5 files (`playwright.config.ts` +6 / -6; `masters-table-actions.spec.ts` +6 / -4; `tests/support/playwright-config.ts`, renamed from `own-width-files.ts`; `one-width-tag.test.ts` +3 / -3; `own-width-files.test.ts` +63 / -23). No `src/` change.
+  - **Developer:** Jira AQP-244 11384.
+  - **Re-reviews:** standards round 2 (11385): APPROVE WITH COMMENTS, Info only. Quality round 2 (review 5848133647, 11404): APPROVE WITH COMMENTS, 1 Minor (QLT-06). Reports: `docs/06-reviews/AQP-244/standards.md` and `quality.md`, round 2.
+  - **Control PRs:** #183 (P4 re-planted, red), #191 (P6, green), #192 (P7, green), #193 (P8, red).
+  - **My own checks** (API and CI logs only):
+    - **Runtime diff:** the config change is a `ReadonlyArray` annotation and a rewritten comment, with the list unchanged. In the spec, the `desktop` skip moves from the describe's `beforeEach` to a file-level `test.beforeEach`, with the same condition.
+    - **CI 42867165582** on a4eab7f: `success`, with no `flaky` or `failed` line. Per shard: 228 / 225 / 212 passed and 2 / 4 / 17 skipped. That is **identical to the measured head 953b8ca** (run 42852486467, latest attempt), so DL-137's condition holds and AC-3 is not re-measured.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Zero open Blocker or Critical findings | ✱ | ✅ | both re-reviews |
+| 2 | QLT-01 fixed | | ✅ | file-level skip; the guard pins it; P4 re-planted (#183, run 42867966691) is red |
+| 3 | STD-06 and the named Minors | | ✅ | two ruled names pinned in a test; QLT-02, STD-01 to STD-05, STD-07 and STD-08 per standards round 2 |
+| 4 | Runtime test set unchanged | | ✅ | counts per shard identical to 953b8ca |
+| 5 | G12 | | ✅ | nothing weakened (quality round 2) |
+| 6 | Residual guard gap | | ⚠️ | QLT-06: the pin reads source text, so P6 (the hook only in a block comment) and P7 (an unindented describe) stay green. These are unusual edits, and P8 (a third file) is caught. Goes to #203 |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D | qa-engineer | `docs/07-qa/AQP-244-test-report.md` | DL-137 (D), with the architect's v0.32 (AC-3 (c) reported only): AC-1 to AC-6 with evidence; AC-3 recomputed from base run 42850365032 and head run 42852486467 (median of five, slowest, hits, 0 flaky); counts per shard on the final head; P4 and one other plant (P1 or P5) re-planted by QA's own control PRs; the G12 relaxation read against the pinned names | G7 |
+| E | developer | #203 | QLT-06: a syntax-based pin; P6 and P7 must fail | Before any change to `OWN_WIDTH_FILES` or either file's skip line; at the latest G8 |
+| F | orchestrator | merge | DL-141 (4) | After G7 GO |
+
+**Accepted:** STD-10 and STD-11 (Info, optional).
+**Risks:** RISK-023 stays 6 until G7; the reading at G7 is set in DL-141 (3).
+**Rationale:** the Major is fixed and its plant is red, and the runtime is provably unchanged. The remaining gap needs a deliberately odd edit. It gets an owner and a due point tied to the only change that could exploit it.
+**Posted:** Jira AQP-244 comment 11406; PR #166 comment 6777366036; tech-debt GitHub #203 created (QLT-06).
+
+## G6 – Peer Review — AQP-130 (STORY-02.05 Treatment / Color list, PR #195) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** There are zero Blocker and Critical findings. PRF-01 is ruled a measurement condition, not a code defect: a median of five is read on the final head. QLT-01 to QLT-04 and the named standards Minors are fixed in one push. reviewer-quality and reviewer-standards re-review the new diff, and master closes G6 on the fix head with the median of five (DL-142).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #195** at 67febe3: 50 files, CLEAN. Developer hand-off: Jira AQP-130 11403.
+  - **Reviews** (`docs/06-reviews/AQP-130/{standards,quality,performance,consolidated}.md`):
+    - standards: APPROVE WITH COMMENTS, review 5848269835 (Jira 11409);
+    - quality: APPROVE WITH COMMENTS (Jira 11410);
+    - performance: APPROVE WITH COMMENTS (Jira 11408).
+  - **Control PRs:** the developer's #196 to #200, and reviewer-quality's #204 to #206.
+  - **Test strategy v0.32** §10.5 item 9 (the reading rule and the RISK-023 trigger).
+  - **My own checks** (API only; nothing run locally):
+    - CI 42881974487 on 67febe3: success. Path 5:51, recomputed (351 s).
+    - Read item 9: a pull-request first attempt of 5:30 or more starts a median of five full runs. A median of five of 5:30 or more makes the next CI-time step due and is a RISK-023 trigger. It is not a merge hold.
+    - Read the findings tables of the standards and quality reports.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ⚠️ | PRF-01 is re-ruled from Major to a measurement condition (DL-142 (1)). No code Major |
+| 4 | Plants | | ⚠️ | A3 and A4 are caught (developer #196, #197; quality #204, #205), and so are the focus and DEF-020 plants (#198, #200). **Locks removed (#206) stay green: QLT-03.** #199 (old effect) is caught only by the source guard, which is accepted (QLT-05: one field) |
+| 5 | Correctness | | ⚠️ | QLT-01 (canonical name vs reserved check), QLT-02 (422 before 409/404), QLT-04 (stale first read) |
+| 6 | Standards | | ⚠️ | STD-01, 02, 05, 06, 07 and 08 in the push; STD-03 and STD-04 to the #119 refactor (DL-142 (3)) |
+| 7 | CI | | ✅ | green; coverage 99.2 % |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #195, one push | **QLT-01:** the stored name is canonical (NFKC, trimmed, inner whitespace collapsed), checked against the reserved names and against duplicates on that form, with integration tests for a double space and for full-width letters. **QLT-02:** the shape check runs before the transaction, then the lookup and lock (404 / 409), then the reserved-name check (422), with route and unit tests. **QLT-03:** one integration test of two simultaneous renames of one treatment, asserting the second `master.edited` entry's `before` equals the first entry's `after`. It must fail with both locks removed (re-run of #206). **QLT-04:** the latest read wins (a ticket check), with a test. **STD-01** (split or justify), **STD-02** (`isRecordNotFound` from `database-errors.ts`), **STD-05** (words into `treatment-texts.ts`), **STD-06** (`SPEC_ACCESS` to a support file; another story's rows restored), **STD-07**, **STD-08**. Update the Dev Record | Before the re-review |
+| B | reviewer-quality; reviewer-standards | PR #195, new diff only | quality: QLT-01 to QLT-04, with a locks-removed control PR that must now fail, and STD-14 judged. standards: their Minors | After A |
+| C | orchestrator, then master | final head | **The median of five** (test strategy v0.32 §10.5 item 9) on the fix head: five full runs, `hit` in every job, misses replaced. Post the five paths, each slowest shard and its host line. Master closes G6 on the re-reviews and this reading | After B |
+| D | product-owner | Jira AQP-130 AC-6 | Event names `master.created`, `master.edited` and `master.deleted` with `object_type` `treatment` (as DL-129 did for AQP-123) | Before G7 |
+| E | solution-architect | architecture §6; #202; the 05.06 open question | Add 409 `TREATMENT_LOCKED` and the 422 codes to the §6 codes line (STD-12). Rule on #202 (a database guard for system rows). Take QLT-09 (deleting a treatment an estimate uses: restrict with 409, soft delete, or a copied name) into the 05.06 open question | §6 before G7; #202 and QLT-09 before 05.06 is Ready |
+| F | ux-expert | #201 | Rule the words. If ruled before A is pushed, they ride the push; otherwise the words stand as built and #201 stays open | Before G7 where possible |
+| G | product-manager | PRF-06 | State a maximum number of treatments (the list has no paging) | Before 05.06 is Ready |
+| H | developer | #119 refactor PR | DL-142 (3) | Before AQP-142 starts G5 |
+
+**Accepted (Info):** QLT-05 (the one-field replacement for DL-135's two-field test), STD-09 (fixed with the push if touched), STD-10, STD-13, and the remaining Infos. PRF-02 (desktop pinning, about 6 s per shard) is not taken: v0.32 says balance work below 80 s host-free is not due.
+**Risks:** none new. RISK-023 stays at 6 until the median of five is read (DL-142 (1)).
+**Rationale:** the story is sound, and its guards bite except one. The concurrency test that passes with no lock is the DL-117 class, so it is fixed now. The three correctness Minors sit in the code being pushed anyway. The cross-screen refactor of #119 is better as its own reviewed change than inside a 50-file feature PR.
+**Posted:** Jira AQP-130 comment 11412; PR #195 comment 6777713030; GitHub #119 (one refactor PR, with an owner and a due point).
+
+## G7 – QA Acceptance — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** The QA record is at 50425f5; the code is a4eab7f, unchanged since the G6 close. AQP-244 moves to Done. **RISK-023 falls from 6 to 4** (P 2 × I 2) by the register's rule, as DL-141 (3) pre-ruled. PR #166 merges under DL-143 (3).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-244-test-report.md`: ACCEPT, no defects.
+  - **QA plants:** #207 (P4) and #208 (P9), each failing 1 of 2,793 on the file-level skip guard; both closed unmerged.
+  - **Ruling:** test strategy v0.32 §10.5 item 9 (AC-3 (c) is reported only).
+  - **My own checks** (API and CI logs only):
+    - **Scope** (`compare a4eab7f...50425f5`): 1 file, the QA report.
+    - **CI 42890394439** on 50425f5 (the merge ref): 5 of 5 `success`, path **4:44**, recomputed (284 s). 231 / 228 / 215 passed and 2 / 4 / 17 skipped, with no `flaky` or `failed` line. The 9 extra passed tests are #167's, carried by the merge ref; the skipped counts are unchanged.
+    - **AC-3 recomputed** from the jobs API, first job start to the end of `Stages 1 to 11`:
+      - head run 42852486467, attempts 1 to 5: 250, 292, 268, 277 and 280 s, so the **median is 4:37 and the slowest 4:52**;
+      - base run 42850365032: 296, 266, 281, 317 and 270 s, so the median is 4:41 and the slowest 5:17.
+      - Both match QA and the reviewers.
+    - **Not re-run by master:** QA's count comparison (665 passed entries equal in 5 of 5 pairs; the 108 skipped own-width entries gone) and the host-free fit.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | AC-1 to AC-6 in QA's report. AC-3: median of five at most 5:00 (4:37) and the slowest at most 5:30 (4:52), with 20 of 20 jobs hit and 0 flaky. AC-3 (c) is reported only (50 s → 27 s host-free) |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | none |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42890394439, 5 of 5, no flaky line |
+| 4 | Each test still runs once | | ✅ | passed entries equal the base in 5 of 5 pairs; only the skipped own-width entries drop |
+| 5 | QA plants | | ✅ | P4 and P9 each red on the file-level guard |
+| 6 | Exploratory and method notes | | ✅ | QA's note that `gh run view --job` returns the latest attempt; DEF-023's evidence re-read per attempt, and it stands |
+
+**Risks:** **RISK-023 falls from 6 to 4 (P 2 × I 2)** (DL-143 (2); register updated). A pending input is noted: AQP-130's single PR reading of 5:51 awaits its median of five (DL-142 (1)), and a median of 5:30 or more on a PR or `master` head raises it to 8 again.
+**Rationale:** every AC has independent evidence on the code that passed G6. The figures master recomputed match QA's. The fall rule names AC-3, and AC-3 holds.
+**Posted:** Jira AQP-244 comment 11421; PR #166 comment 6777948136; RISK-023 on Jira AQP-1 comment 11422.
