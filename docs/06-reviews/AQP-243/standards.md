@@ -55,7 +55,7 @@ rejection with no output. The fix is three lines and keeps exit 0. The Minors ar
 | Item | Result | Evidence |
 |------|--------|----------|
 | Top-level permissions | Pass | `permissions: contents: read` (ci.yml:36-37) unchanged; `verify` and `e2e` inherit it. The cache actions need no extra scope |
-| Fan-in job permissions | Pass | `required` (ci.yml:536-539 region) holds exactly `actions: read` and `contents: read`, no write scope; the replacement test pins the pair. Matches AC-5 ("`contents: read`, `actions: read` only") and the architect's "at job level only" |
+| Fan-in job permissions | Pass | `required` (ci.yml:535-538) holds exactly `actions: read` and `contents: read`, no write scope; the replacement test pins the pair. Matches AC-5 ("`contents: read`, `actions: read` only") and the architect's "at job level only" |
 | Token handling | Pass | `GITHUB_TOKEN: ${{ github.token }}` only in the script step; the verdict step has no `uses:` or token (asserted); `persist-credentials: false` on the summary checkout; the script sends the token in one `authorization` header and reports `HTTP <status>` only (tested with a body of "secret body") |
 | Trigger | Pass | `pull_request` and `push` to `master`; never `pull_request_target`. A fork's pull request gets a read-only token |
 | Cache key | Pass with STD-05 | `key=node-modules-v1-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}`, `INPUT_HASH` = `hashFiles('package-lock.json', 'package.json', '.npmrc')`; the key is built in the shell because `ImageOS` is not in the `env` expression context (correct). No `restore-keys` on this cache (the two remaining ones are the Next.js build caches; asserted) |
