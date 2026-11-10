@@ -207,6 +207,17 @@ export async function ensureCanaryMaterials(): Promise<void> {
   }
 }
 
+/** The exchange rates the database holds now, as the stored text per currency (QLT-02: the scan checks its precondition at the end). */
+export async function readExchangeRatesFromDatabase(): Promise<Record<string, string>> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ currency: string; inr_value: string }>('SELECT currency, inr_value::text AS inr_value FROM exchange_rates');
+    return Object.fromEntries(rows.map((row) => [row.currency, row.inr_value]));
+  } finally {
+    await client.end();
+  }
+}
+
 /**
  * Puts the canary exchange rates (STORY-02.04's values, `tests/support/exchange-rate-canary.ts`) into the database the servers use, stamped by the E2E
  * Admin, so the confidentiality scan has a USD and a EUR rate to look for. The upsert is on the currency (the primary key), so three screen sizes

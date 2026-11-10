@@ -18,6 +18,7 @@ import {
   ensureCanaryMaterials,
   ensureCanaryProcessRates,
   ensureCanaryUser,
+  readExchangeRatesFromDatabase,
   readFormulaTexts,
   signInThroughThePage,
   useFreshAddress,
@@ -94,6 +95,19 @@ async function prepare(
   return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
 }
 
+/**
+ * The end of an Engineer scan: the canary pair was still in the database. The scan finds nothing when it looks for values that are not there, so a
+ * pair changed by another test while the scan ran (QLT-02) would pass it for the wrong reason. The saving tests of `exchange-rates.spec.ts` send
+ * only this pair, so they cannot change it.
+ */
+async function expectCanaryRatesStillStored(): Promise<void> {
+  const stored = await readExchangeRatesFromDatabase();
+  expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+    USD: Number(EXCHANGE_RATE_CANARIES.usd).toFixed(4),
+    EUR: Number(EXCHANGE_RATE_CANARIES.eur).toFixed(4),
+  });
+}
+
 test('AC-3: an Engineer is sent no Restricted value, name or formula by any page, payload, header or script', async ({ page, context }, testInfo) => {
   const { forbidden, engineer } = await prepare(testInfo);
   const recorder = new ScanRecorder();
@@ -111,6 +125,7 @@ test('AC-3: an Engineer is sent no Restricted value, name or formula by any page
   expect(sentences(recorder, forbidden)).toEqual([]);
   // AC-5: `private, no-store` on every response to a request that carried the session (build files and `public/` excepted).
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
 });
 
 /** Calls every Lead and Admin route as the signed-in Engineer, for a real ID and, where the path has one, an invented one. */
@@ -166,6 +181,7 @@ test('AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
   expect(sentences(recorder, forbidden)).toEqual([]);
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
 });
 
 test('AC-3, AC-4 (control with real data): the same scan finds the canary rates in what the Admin is sent', async ({ page, context }) => {
@@ -318,6 +334,7 @@ test('AC-4 (negative control): a sentinel planted in a script chunk and in a res
     findings.some((finding) => finding.label.includes('/api/v1/me') && finding.found === customer),
     'the sentinel planted in a fetched response',
   ).toBe(true);
+  await expectCanaryRatesStillStored();
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {
