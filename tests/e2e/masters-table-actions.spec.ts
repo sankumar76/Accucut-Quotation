@@ -140,3 +140,7 @@ for (const screen of SCREENS) {
     }
   });
 }
+
+test('CONTROL plant: a test outside the desktop-only describe must run at every width', () => {
+  expect(NAME_LENGTH).toBe(100);
+});
