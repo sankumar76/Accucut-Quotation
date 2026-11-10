@@ -157,7 +157,15 @@ describe('[AQP-27 AC-4] the CI workflow', () => {
     const stageNumbers = jobs.map((job) => [...job.matchAll(/- name: "Stage (\d+):/g)].map((match) => Number(match[1])));
     for (const numbers of stageNumbers) expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
     expect([...new Set(stageNumbers.flat())].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
-    expect(text).not.toContain('continue-on-error');
+    // AQP-243 AC-5: the three `Summary:` steps of the fan-in job are the only steps that may continue on error, because the run
+    // summary must never change the job result. Every other step, and every job, is still not allowed to fail quietly.
+    const withTheSetting = text.split(/\n(?= {6}- name: )/).filter((step) => step.includes('continue-on-error'));
+    expect(withTheSetting.map((step) => /- name: "(Summary: [^"]*)"/.exec(step)?.[1])).toEqual([
+      'Summary: check out the script',
+      'Summary: set up Node.js',
+      'Summary: show the time of this run',
+    ]);
+    expect(text.match(/continue-on-error/g)).toHaveLength(3);
   });
 
   // Stage 12 was switched off by STORY-10.01 "until the first page story"; STORY-10.02 (AQP-28, AC-8) switched it

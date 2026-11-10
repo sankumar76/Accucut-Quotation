@@ -25,6 +25,8 @@ const posix = (path: string): string => path.split('\\').join('/');
 interface Outcome {
   readonly status: number | null;
   readonly output: string;
+  /** How long the run took, in milliseconds. */
+  readonly elapsedMs: number;
 }
 
 type Damage = 'none' | 'missing package' | 'truncated file' | 'extra file' | 'no record' | 'damaged record' | 'empty record' | 'not a directory';
@@ -51,6 +53,7 @@ function makeModules(root: string): string {
 }
 
 function run(mode: string, modules: string, extra: Record<string, string> = {}): Promise<Outcome> {
+  const started = performance.now();
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [posix(SCRIPT), mode], { env: { ...process.env, NODE_MODULES_DIR: posix(modules), ...extra } });
     let output = '';
@@ -60,7 +63,7 @@ function run(mode: string, modules: string, extra: Record<string, string> = {}):
       });
     }
     child.on('error', reject);
-    child.on('close', (status) => resolve({ status, output }));
+    child.on('close', (status) => resolve({ status, output, elapsedMs: performance.now() - started }));
   });
 }
 
@@ -170,6 +173,8 @@ describe.skipIf(!BASH_AVAILABLE)('AQP-243 AC-3: the node_modules integrity check
 
   it('fails when the listing runs past its time limit, and does not wait for it', () => {
     expect(outcome('slow listing').status).toBe(1);
+    // The fake listing sleeps 30 s; with the 1 s limit the check ends long before that (a missing bound would take 30 s).
+    expect(outcome('slow listing').elapsedMs).toBeLessThan(15_000);
     expect(outcome('slow listing').output).toContain('could not be listed within 1 s');
   });
 
