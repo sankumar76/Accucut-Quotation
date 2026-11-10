@@ -15,9 +15,9 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * random part), so the three screen sizes and the retries never meet on one material. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format (three decimals, zero, a sign).
  *
- * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-199) and pinned by
- * `tests/unit/one-width-tag.test.ts`; none of them is tagged until it is ruled. Proposed for the ruling: "refuses a name another material
- * has" and "an edit that changes nothing closes without a request" read no layout.
+ * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-122 PRF-03; ruling 2026-11-08) and pinned
+ * by `tests/unit/one-width-tag.test.ts`. Two are tagged `@one-width`: "an edit that changes nothing closes without a request" (the AQP-65 client
+ * rule) and the filter test. Every other test, "Duplicate name" included (it runs axe on the error state), keeps three widths.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -240,7 +240,7 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
     await expect(rowOf(page, name).getByRole('button', { name: `Edit ${name}` })).toBeFocused();
   });
 
-  test('an edit that changes nothing closes without a request', async ({ page }, testInfo) => {
+  test('an edit that changes nothing closes without a request', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = await makeMaterial(page, testInfo);
     await openMaterials(page);
     let requests = 0;
@@ -269,7 +269,7 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
 });
 
 test.describe('search and states (AC-1, AC-8)', () => {
-  test('filters by Material in Drawing or Material Considered ignoring letter case, says "No material matches" with Clear filters, and Clear filters brings the list back and focuses the search', async ({ page }, testInfo) => {
+  test('filters by Material in Drawing or Material Considered ignoring letter case, says "No material matches" with Clear filters, and Clear filters brings the list back and focuses the search', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = await makeMaterial(page, testInfo);
     await openMaterials(page);
     const search = page.getByLabel('Search materials');

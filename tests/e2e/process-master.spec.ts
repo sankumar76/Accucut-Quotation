@@ -16,8 +16,9 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * the refusal test opens the dialog of a rate a formula uses and closes it. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014).
  *
- * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-199) and pinned by
- * `tests/unit/one-width-tag.test.ts`; none of them is tagged until it is ruled.
+ * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-113 PRF-02; ruling 2026-11-08) and pinned
+ * by `tests/unit/one-width-tag.test.ts`. Three are tagged `@one-width`: the add test, the edit test (with its no-change check) and the
+ * filter test. Every other test in the file keeps three widths.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -132,7 +133,7 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
     await expect(dialog.getByLabel('Rate name')).toBeFocused();
   });
 
-  test('adds a rate, shows it in the list with the saved notice, and refuses a second one that differs only in letter case or reads as a column letter', async ({ page }, testInfo) => {
+  test('adds a rate, shows it in the list with the saved notice, and refuses a second one that differs only in letter case or reads as a column letter', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = newRateName(testInfo);
     await openProcessMaster(page);
     await pressWithKeyboard(page.getByRole('button', { name: 'Add rate' }));
@@ -167,7 +168,7 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
 });
 
 test.describe('edit a rate (AC-3, AC-5)', () => {
-  test('changes the name and the default value; the saved notice names the new name; an edit that changes nothing closes without a request', async ({ page }, testInfo) => {
+  test('changes the name and the default value; the saved notice names the new name; an edit that changes nothing closes without a request', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = await makeRate(page, testInfo);
     await openProcessMaster(page);
     await pressWithKeyboard(rowOf(page, name).getByRole('button', { name: `Edit ${name}` }));
@@ -287,7 +288,7 @@ test.describe('a rate deleted elsewhere while its dialog is open (QLT-06, ux-spe
 });
 
 test.describe('search and states (AC-1, AC-8)', () => {
-  test('filters by name ignoring letter case, says "No rate matches" with Clear filters, and Clear filters brings the list back and focuses the search', async ({ page }) => {
+  test('filters by name ignoring letter case, says "No rate matches" with Clear filters, and Clear filters brings the list back and focuses the search', { tag: '@one-width' }, async ({ page }) => {
     await openProcessMaster(page);
     const search = page.getByLabel('Search');
     await search.fill('cutting-rate');
