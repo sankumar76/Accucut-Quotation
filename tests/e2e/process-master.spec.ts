@@ -133,6 +133,33 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
     await expect(dialog.getByLabel('Rate name')).toBeFocused();
   });
 
+  test('DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the default value', async ({ page }) => {
+    await openProcessMaster(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add rate' }));
+    const dialog = page.getByRole('dialog', { name: 'Add rate' });
+    await dialog.getByLabel('Default value').fill('1.234');
+    await dialog.getByRole('button', { name: 'Add rate' }).click();
+    await expect(dialog.getByText('Enter a name.')).toBeVisible();
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
+
+    // The keys go to whatever has focus, as a keyboard user's do. Each key clears a message; none of them may move focus.
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
+    await expect(dialog.getByLabel('Rate name')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Default value')).toHaveValue('1.234');
+
+    // Tab past the unit (still refused) to the default value, replace it, and focus stays there while the unit still has its message.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Default value')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('12.37');
+    await expect(dialog.getByLabel('Default value')).toBeFocused();
+    await expect(dialog.getByLabel('Default value')).toHaveValue('12.37');
+    await expect(dialog.getByLabel('Rate name')).toHaveValue('xyz');
+    await expect(dialog.getByText('Choose a unit.')).toBeVisible();
+  });
+
   test('adds a rate, shows it in the list with the saved notice, and refuses a second one that differs only in letter case or reads as a column letter', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = newRateName(testInfo);
     await openProcessMaster(page);
@@ -157,10 +184,13 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
     await dialog.getByRole('button', { name: 'Add rate' }).click();
     await expect(dialog.getByText(NAME_TAKEN)).toBeVisible();
     await expect(dialog).toBeVisible();
+    // The server refusal takes focus to the field it names (UX spec 6.0 "Forms"; QLT-03 of AQP-269).
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
     // A valid column letter: letters move, so it is refused.
     await dialog.getByLabel('Rate name').fill('AL');
     await dialog.getByRole('button', { name: 'Add rate' }).click();
     await expect(dialog.getByText(/cannot read as column letters/)).toBeVisible();
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
     await page.keyboard.press('Escape');
     // Playwright matches text ignoring letter case, so one row for the name is one rate: the capitals did not add a second.
     await expect(rowOf(page, name)).toHaveCount(1);

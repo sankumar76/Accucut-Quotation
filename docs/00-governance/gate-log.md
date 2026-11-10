@@ -4600,3 +4600,288 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. RISK-023 stays at 6.
 **Rationale:** every AC is verified with independent evidence on the exact code that passed G6. Every DL-131 item is done, including the screen side of a changing save that CI cannot cover. The defects found are on other stories' screens, are already graded, and are now scheduled before the next story that would copy the pattern.
 **Posted:** Jira AQP-123 comment 11351; PR #151 comment 6771797276. No tech-debt issue created (DEF-024 to DEF-026 have their own Bugs and issues, with an owner and a due point).
+
+## G6 – Peer Review — AQP-269 / AQP-270 / AQP-271 (DEF-024, DEF-025, DEF-026: dialog focus jump while typing, PR #167) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** Zero Blocker, Critical and Major across three reviews. QLT-01 to QLT-03 are fixed in this PR by one test-only push, which master reads with no review round. The standards Minors STD-01, STD-02 and STD-04 are deferred to tech-debt #171. G7 takes a QA verification route with control PRs in CI (DL-136).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #167** at 69805d1: 7 files, CLEAN. The new shared hook `src/components/shared/use-focus-on-refusal.ts` (30 lines), the three dialogs, and one keyboard E2E test per dialog.
+  - **Reviews:** `docs/06-reviews/AQP-269/{standards,quality,performance,consolidated}.md`. Standards: APPROVE WITH COMMENTS, 3 Minor. Quality: APPROVE WITH COMMENTS, review 5845771350, 3 Minor. Performance: APPROVE, 1 Info.
+  - **Jira:** developer AQP-269 11358; quality 11362.
+  - **Control PRs:** #168, #169 and #170.
+  - **Context:** AQP-244's runs finished at 16:39 UTC, so the merge hold is lifted.
+  - **My own checks** (GitHub API and CI logs only; nothing run locally because of machine memory):
+    - **Diff, read in full:** every refusal path in the three dialogs (local submit, server refusal, Second Admin) now calls `showErrors`, and the only remaining `setErrors` calls clear one field while typing. The hook asks for focus with a new object per refusal and uses `useEffectEvent` correctly. The DEF-020 guard and Exchange rates are untouched.
+    - **CI 42852617579** on 69805d1: success, path 5:05, recomputed (305 s).
+    - **Plant run 42852695987** (`plant/AQP-269-old-focus`, the old effect restored): fails the DEF-024, DEF-025 and DEF-026 tests at mobile and tablet in the shard logs read (and desktop per the developer: 9 in all).
+    - **Control 42856414166** (server-refusal focus dropped): fails only Material tests (`materials.spec.ts:231` and `aqp-122-qa.spec.ts:199`). This confirms QLT-03.
+    - **Control 42856570620** (focus request kept as a field name): success. This confirms QLT-02.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ✅ | none raised |
+| 4 | Findings cite file:line | | ✅ | all |
+| 5 | DL-135 (b): regression tests from QA's F-a **and** F-b probes, one per dialog at 3 widths, failing with the old effect | | ⚠️ | F-a is covered in all three dialogs. F-b (type into a later refused field while an earlier one is still refused) is covered only in Process. The plant shows failures, but stops at the first focus check (QLT-01) |
+| 6 | Mutation coverage of the new hook and its call sites | | ⚠️ | QLT-02 and QLT-03 plants survive (controls #169 and #170) |
+| 7 | CI green; first-load JS | | ✅ | 5 of 5; 0, -2 and +3 B |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #167, one test-only push (`materials.spec.ts`, `users.spec.ts`, `process-master.spec.ts`) | **QLT-01:** the F-b step in the Material and Users tests: Tab to the second refused field while the first is still refused, type, and assert that focus and value stay and that the first is still empty (reviewer's snippet). **QLT-02:** in one dialog's existing empty-refusal test, submit again without typing and assert focus is back on the first field. **QLT-03:** `toBeFocused` on the named field in the existing server-refusal tests: Process duplicate name (`process-master.spec.ts:185`, Rate name), Users e-mail in use (`users.spec.ts:168`, E-mail) and Second Admin (`users.spec.ts:181`, Role). No file under `src/` changes. Add a Dev Record row and the CI run on the new head | Before G7 |
+| B | master | PR #167 diff | Read the push: test files only, assertions as specified. No review round (DL-047). Any `src/` change brings a narrow reviewer-quality re-review instead | With G7 |
+| C | qa-engineer | `docs/07-qa/AQP-269-test-report.md`; defect files | G7 verification, using CI because of machine memory. **Three throwaway control PRs, each planted alone and closed unmerged:** (i) the old `[errors]` effect restored in the three dialogs must fail both the F-a and F-b assertions in all three dialogs at three widths; (ii) the hook's request stored as a field name must fail the QLT-02 assertion; (iii) `setErrors` at the server-refusal sites must fail the Process and both Users focus assertions. Each diff and failing test list is posted. Then the final-head CI is 5 of 5. QA reads QA's own F-a and F-b probes (`docs/07-qa/AQP-123-evidence/aqp-123-focus-jump.spec.ts.txt`) against the committed tests, and fills in each defect's Fix & Verification rows. It also corrects **DEF-026's file to Sev-2** (DL-135 (a), still open). Optional: one Edit-mode keyboard check (QLT-05) | G7 |
+| D | developer | #171 | STD-01, STD-02, STD-04 | Next change to those files, or G8 |
+| E | orchestrator | merge | DL-136 (5) | After G7 GO |
+
+**Accepted (Info):** STD-03, STD-05, QLT-04 (`showErrors` is not stable; it is only called from handlers), QLT-05, QLT-06, and PRF-01 (about 2.5 s on the path).
+**Risks:** none new. RISK-023 stays at 6; this PR adds about 2.5 s.
+**Rationale:** the fix is correct and shared, as DL-135 asked. The gaps are in its proof. The F-b sequence is the one DL-135 named, and two plants pass the whole suite. Each gap is closed by a few test lines the reviewer has already written, so a test-only push read by master is proportionate. The standards Minors would widen a test-only push into production code across another story's screen, so they go to #171 with an owner and a due point.
+**Posted:** Jira AQP-269 comment 11366; PR #167 comment 6773602588; tech-debt GitHub #171 created (STD-01, STD-02, STD-04).
+
+## G6 – Peer Review — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** There is no Blocker or Critical. QLT-01 (Major) is upheld and fixed in one push, together with the named Minors. reviewer-quality and reviewer-standards re-review the new diff only. Master closes G6 on the fix head before In QA. The cut is kept, and PRF-01 goes to the architect. RISK-023 is read at G7 (DL-137).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #166** at 953b8ca: 4 files. `OWN_WIDTH_FILES` (`aqp-234-qa.spec.ts`, `masters-table-actions.spec.ts`) goes into `testIgnore` of `mobile` and `tablet` in `playwright.config.ts`, with the new `tests/support/own-width-files.ts` and `tests/unit/own-width-files.test.ts`. One assertion in `tests/unit/one-width-tag.test.ts` is relaxed for the two files and declared under G12.
+  - **Reports:** `docs/06-reviews/AQP-244/{standards,quality,performance,consolidated}.md`.
+    - standards: APPROVE WITH COMMENTS, 8 Minor and 1 Info (Jira 11372);
+    - quality: REQUEST CHANGES (review 5846162115, Jira 11373), 1 Major, 1 Minor and 3 Info; plants P1, P2, P3 and P5 caught (control PRs #175, #176, #177, #179), P4 survives (#178);
+    - performance: APPROVE WITH COMMENTS (Jira 11374), with every figure recomputed from the API and 30 shard logs.
+  - **Rulings:** architect 11342 (the cut) and 11367 (the measured reading governs AC-3 (c)); test strategy v0.31 §10.5 item 9; AC-3 (c) replaced by the product-owner (AQP-1 11370) and aligned by the scrum-master (11371).
+  - **Developer:** AQP-244 11364.
+  - **My own checks:** nothing was run locally (machine memory). I read the findings tables of all three reports against the consolidated record. The figures and plants are taken from the reviewers' recomputation and the control PRs, and were not re-run by master.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ⚠️ | QLT-01 open. The skip in `masters-table-actions.spec.ts` sits inside two describe blocks, so a test added outside them runs in desktop only with every guard green (P4, #178) |
+| 4 | G12: the relaxed assertion is declared and still guarding | | ⚠️ | Declared. But STD-06: adding a file to `OWN_WIDTH_FILES` in the config widens the relaxation with no test edit, so "needs a ruling" is a convention only |
+| 5 | Each test runs once | | ✅ | 665 passed at base and head; skipped 131 → 23 |
+| 6 | Measured ACs | | ✅ | AC-3 base 4:41 / 5:17 against head 4:37 / 4:52 (five runs each, 40 of 40 hits, 0 flaky, billed 0.95x); AC-3 (c) 16 s against 35 s by ruling 11367 |
+| 7 | Time effect of the cut | | ⚠️ | PRF-01: -4 s against a standard error of about 15 s. Not measurable; routed to the architect (DL-137 (3)) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #166, one push | **QLT-01:** a file-level `test.beforeEach` skip in `masters-table-actions.spec.ts`, plus a guard that accepts a listed file only when its skip is file-level (P4 must fail). **STD-06:** pin the two ruled file names in a test, as `RULED_FILES` is pinned, so that a new entry is a visible test edit under G12. **In the same push:** QLT-02 (assert, or rename to what the test checks); STD-01 (`ReadonlyArray`); STD-02 (the durable reason in the config comment); STD-03 (module name and doc comment); STD-04 (108, not 114, and say which guards exist); STD-05 (accept both quote styles); STD-07 (title); STD-08 (one config reader). **The runtime test set must not change:** the fix head's CI must show the same passed and skipped counts per shard as 953b8ca; if not, it comes back to master. Update the Dev Record | Before the re-review |
+| B | reviewer-quality; reviewer-standards | PR #166, new diff only | reviewer-quality: QLT-01 and QLT-02, and P4 re-planted by a control PR (closed unmerged) that must fail. reviewer-standards: STD-01 to STD-08. reviewer-performance is not required while the counts per shard are unchanged | After A |
+| C | master | gate log | G6 close on the fix head: both re-reviews with no open Major; CI 5 of 5 with unchanged counts per shard; the diff limited to the PR's files plus any new test file. Then In QA | After B |
+| D | qa-engineer | `docs/07-qa/AQP-244-test-report.md` | G7 through the API and CI (no local runs): AC-1 to AC-6, each with evidence; AC-3 recomputed from base run 42850365032 and head run 42852486467 (medians, slowest, hit 40 of 40, 0 flaky); counts per shard on the final head; P4 and one other plant (P1 or P5) re-planted by QA's own control PRs; the G12 relaxation read against the pinned list | G7 |
+| E | solution-architect | test strategy §10.5 item 9 | PRF-01: say whether the 35 s balance line (AC-3 (c)) stays as a reading line, given that it sits below the noise of its own statistic (29 s on means, 46 s host-free, 68 s modelled), and state what a future balance reading uses. This does not hold AQP-244 | Before the next CI-time decision (fourth shard or nightly review), at the latest before the sprint 1 review |
+| F | orchestrator | merge | DL-137 (5) | After G7 GO |
+
+**Accepted (Info):** STD-09 (covered by QLT-01), QLT-03 (fails safe for coverage), QLT-04, QLT-05, and the performance Infos.
+**Risks:** RISK-023 is not re-scored now. The fall rule's target is corrected to 4 (P 2 × I 2), and it is read at G7 (DL-137 (4)).
+**Rationale:** the change is small and measured, and four of five plants are caught. The Major is a coverage hole that the change itself creates, in the file most likely to get new masters-table tests, so it is fixed before QA. The Minors are in the same four files, so they ride the same push (the AQP-38 rule).
+**Posted:** Jira AQP-244 comment 11376; PR #166 comment 6774316410. No tech-debt issue created (every Minor is in the push; PRF-01 goes to the architect with a due point).
+
+## G6 – Peer Review (close) — AQP-269 / AQP-270 / AQP-271 (DEF-024 to DEF-026, PR #167) — 2026-11-10 (attempt 1, closed at cde1b29)
+
+- **Decision:** **G6 closed at cde1b29. DL-136 conditions A and B are met.** The stories go to In QA. G7 follows DL-136 (4), unchanged. A newly seen flake is logged as DEF-027 and must be fixed before #167 is squashed (DL-138).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #167** at cde1b29: two commits on 69805d1 (db1319a, cde1b29). Developer hand-off: Jira AQP-269 11377.
+  - **Controls:** the developer's control PRs #180, #181 and #182 (closed unmerged).
+  - **My own checks:**
+    - **The push** (`compare 69805d1...cde1b29`, GitHub API): 3 files, all spec files (`materials.spec.ts` +18 / -5, `process-master.spec.ts` +3, `users.spec.ts` +17 / -2), with no `src/` change.
+      - **QLT-01:** the F-b step is added to the Material and Users tests. It Tabs to the later refused field while the first is still refused, types, asserts focus and value, and asserts the first is still empty, then Shift+Tab.
+      - **QLT-02:** a second click of Add on the empty-refusal test, then `toBeFocused` on Material in Drawing.
+      - **QLT-03:** `toBeFocused` on Rate name (both server refusals), on E-mail (e-mail in use) and on the Role combobox (Second Admin).
+      - Two value assertions were replaced, not dropped, because the new F-b step puts text in those fields first.
+      - Every point matches DL-136 (2).
+    - **CI 42862491463** on cde1b29: 5 of 5 `success`. The shard 2 log shows `1 flaky`: `aqp-122-qa.spec.ts:439` on tablet failed its first attempt at line 443 (`expect(body.options.length).toBeGreaterThan(0)`, received 0) and passed on retry #1.
+    - **Developer's plants:** control runs 42863792922 (C, the old effect) and 42863743797 (B, server sites) show the same flaky line. Run 42863675866 (A) shows none in the log read.
+    - **The flake is new on #167's heads.** It is absent from 42852617579 (69805d1), from AQP-244's five-run head and base runs (42852486467, 42850365032), and from `master` 322cd8e.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Zero open Blocker or Critical findings | ✱ | ✅ | none |
+| 2 | DL-136 (2): the test-only push as specified | | ✅ | read by master, above |
+| 3 | No `src/` change; no review round needed | | ✅ | 3 spec files |
+| 4 | CI green on the judged head | | ✅ | 5 of 5 (one retry, DEF-027) |
+| 5 | Plants shown failing named tests | | ✅ | the developer's #180 to #182: C fails the DEF-024 and DEF-026 sequence tests at 3 widths; A fails `materials.spec:166` at 3 widths and `process-master:163` at desktop; B fails the Material, Process and Users server-refusal tests. QA reproduces them at G7 (DL-136 (4)) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| G | qa-engineer | DEF-027 (Jira Bug and GitHub `bug`) | Log it: `aqp-122-qa.spec.ts:439` "[AQP-122 AC-4] the browser fetch of /api/v1/options/materials …" asserts `options.length > 0`. That needs materials made by other tests, so it fails when the test runs first in a shard on an empty database. #167's added tests moved it there. Sev-3, type Test, latent since AQP-122's QA spec. Fix it with its own row, as DEF-023 did: the test creates the material it reads. No retry or timeout change. While there, check QA's specs for other assertions that need rows they did not create, and list any found in the defect | **Before PR #167 is squashed** |
+| H | qa-engineer | `docs/07-qa/AQP-269-test-report.md` | G7 as DL-136 (4): QA's own three control PRs (old effect; request as a field name; `setErrors` at the server sites), each failing named tests at the stated widths; the F-a and F-b probes read against the committed tests; the Fix & Verification rows of DEF-024 to DEF-026; DEF-026's file corrected to Sev-2; CI on the final head with no `flaky` line once DEF-027 is fixed | G7 |
+
+**Risks:** none new. While #167 is unmerged, DEF-027 affects no RISK-023 or AQP-244 reading: AQP-244's five-run head and base runs show no flaky line, and `master` does not yet carry #167's tests.
+**Rationale:** the push is exactly what DL-136 asked, and the plants show each new assertion bites. The flake is a latent cross-test dependency of the same kind as DEF-023, and this PR is what exposes it on `master`. So it is fixed before #167 is squashed, and every later run, including AQP-244's merge-commit run, stays clean.
+**Posted:** Jira AQP-269 comment 11381; PR #167 comment 6774479569. DEF-027 is to be logged by qa-engineer (Jira Bug and GitHub `bug`).
+
+## G7 – QA Acceptance — AQP-269 / AQP-270 / AQP-271 (DEF-024, DEF-025, DEF-026, PR #167) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** QA records are at 552b497; the code is cde1b29, unchanged since the G6 close. AQP-269, AQP-270 and AQP-271 move to Done, and #161 to #163 close. PR #167 merges under DL-139 (3), after the DEF-027 fix.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA files:** `docs/07-qa/AQP-269-test-report.md`; `docs/07-qa/AQP-269-evidence/` (three plant diffs, four control results and the probe source as `.txt`); the Fix & Verification rows of DEF-024 to DEF-026, with DEF-026 now Sev-2.
+  - **QA hand-off:** Jira AQP-269 11386; PR #167 comment 6775062894.
+  - **QA's control PRs** #185 to #188.
+  - **My own checks** (API and CI logs only):
+    - **Scope** (`compare cde1b29...552b4976`): 1 commit, 12 files, all under `docs/07-qa/`.
+    - **CI 42869671189** on 552b497: 5 of 5 `success`. Path **5:11**, recomputed (311 s). Shards 213, 210 and 251 passed, with no `flaky` or `failed` line.
+    - **QA's controls:** c0 (no fault) `success`; c1 (old effect), c2 (typing asks the hook) and c3 (the last refused field targeted) each `failure`. Master read the diffs of c2 and c3: c2 makes each dialog's typing handler call `showErrors`; c3 reverses the field search in the hook.
+    - **The developer's controls for QLT-02 and QLT-03,** read by master because QA substituted other classes (see below):
+      - A (QLT-02, run 42863675866) fails `materials.spec.ts:166` at 3 widths and `process-master.spec.ts:163` at desktop.
+      - B (QLT-03, run 42863743797) fails Material's duplicate name (`materials.spec.ts:244`, `aqp-122-qa.spec.ts:199`), Process's duplicate name (`process-master.spec.ts:163`), the Users e-mail in use (`users.spec.ts:179`) and the Second Admin (`users.spec.ts:194`).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every acceptance item verified with evidence | ✱ | ✅ | each defect's expected behaviour checked: F-a and F-b at 3 widths in all three dialogs (QA's 18-test probe passes on the fix, c0); Fix & Verification rows filled in |
+| 2 | No open Sev-1 or Sev-2 defect against these items | ✱ | ✅ | DEF-024 to DEF-026 verified fixed; DEF-027 (Sev-3) is separate |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 5 of 5 on 552b497; in each control, only the named tests fail |
+| 4 | Exploratory notes | | ✅ | OBS-1 to OBS-4 |
+| 5 | Accessibility | | ✅ | keyboard-only focus behaviour is the subject of the fix, at 3 widths |
+| 6 | DL-136 (4) and DL-138 (2): QA's own three controls | | ⚠️ | QA ran c1 (the old effect) as named, but substituted c2 (typing asks the hook) and c3 (wrong target) for the field-name and server-site plants. The substitution is accepted, because master read the developer's A and B runs above and both bite. Together the five classes (typing, wrong target, old effect, second refusal, server refusal) are covered |
+| 7 | DEF-026 record at Sev-2 | | ✅ | corrected in this commit |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | orchestrator | PR #189 (DEF-027) | Merges first, after master's check (DL-133 route; brought by the orchestrator when its runs report) | Before #167 is squashed |
+| b | orchestrator | PR #167 merge | DL-139 (3) | After (a) |
+
+**Accepted:** OBS-1 (no Edit-mode typing test): Edit uses the same component and the same hook as Add, so the Add tests and plants cover the code path; no issue. OBS-2 is already #171 (STD-01). OBS-3 and OBS-4 are noted.
+**Risks:** none new. RISK-023 is unchanged (#167 adds about 2.5 s).
+**Rationale:** each defect's fault is shown fixed by QA's probe and by tests that five independent fault classes break. The one deviation from the ruled controls is covered by evidence master read directly.
+**Posted:** Jira AQP-269 comment 11388; PR #167 comment 6775129363. No tech-debt issue created.
+
+## G6 + G7 (narrow route) — DEF-027 fix, PR #189 (AQP-272, #184; `tests/e2e/aqp-122-qa.spec.ts`) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO to merge (DL-140).** This is the DL-133 narrow route for a test-only fix: one file, +4 / -1, no `src/`, config, dependency or CI change. G6 and G7 are decided together with no review round. DEF-027 closes on the merge.
+- **Decided by:** master  ·  **Human override:** none
+- **Evidence read by master** (API and CI logs):
+  - **Diff:** the test now makes its own material (`newName`, `makeMaterial`) and asserts that the material is listed. The existing assertions stay (`options.length > 0`, three keys per entry, `no-store`). No retry, timeout, skip or tag was added (DL-057).
+  - **PR #189** at aff4791 is CLEAN. Run 42867881487, attempts 1 to 3, is 5 of 5 each.
+  - **Control PR #190** (#167's head cde1b29 plus the fix, closed unmerged). Run 42868028432, attempts 1 and 2, is 5 of 5 each.
+  - **Latest attempt of each run:** the tablet test passes first time in shard 2 (slot 5), with no `flaky` or `failed` line. Without the fix, the same slot failed and needed retry #1 (42862491463). That makes five clean full runs, two of them on #167's test set.
+  - **QA's audit** of the four QA specs found no other assertion that depends on rows the test did not create (QA hand-off on AQP-272).
+- **Conditions:**
+  - (a) Either order with the records docs PR #194. Whichever merges second is updated by a merge commit only, with its files unchanged, and needs 5 of 5 green.
+  - (b) The PR body has no "Closes #184", so the orchestrator closes #184 as completed with the merge commit.
+  - (c) QA moves AQP-272 to Done and fills in DEF-027's Fix & Verification rows (aff4791, the two runs).
+  - (d) PR #167 then merges under DL-139 (3).
+**Posted:** Jira AQP-272 comment 11393; PR #189 comment 6775228086.
+
+## G6 – Peer Review (close) — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1, closed at a4eab7f)
+
+- **Decision:** **G6 closed at a4eab7f. DL-137 conditions A to C are met.** AQP-244 goes to In QA. QLT-06 (Minor) goes to tech-debt #203 (DL-141).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **Fix head a4eab7f:** one commit on 953b8ca, 5 files (`playwright.config.ts` +6 / -6; `masters-table-actions.spec.ts` +6 / -4; `tests/support/playwright-config.ts`, renamed from `own-width-files.ts`; `one-width-tag.test.ts` +3 / -3; `own-width-files.test.ts` +63 / -23). No `src/` change.
+  - **Developer:** Jira AQP-244 11384.
+  - **Re-reviews:** standards round 2 (11385): APPROVE WITH COMMENTS, Info only. Quality round 2 (review 5848133647, 11404): APPROVE WITH COMMENTS, 1 Minor (QLT-06). Reports: `docs/06-reviews/AQP-244/standards.md` and `quality.md`, round 2.
+  - **Control PRs:** #183 (P4 re-planted, red), #191 (P6, green), #192 (P7, green), #193 (P8, red).
+  - **My own checks** (API and CI logs only):
+    - **Runtime diff:** the config change is a `ReadonlyArray` annotation and a rewritten comment, with the list unchanged. In the spec, the `desktop` skip moves from the describe's `beforeEach` to a file-level `test.beforeEach`, with the same condition.
+    - **CI 42867165582** on a4eab7f: `success`, with no `flaky` or `failed` line. Per shard: 228 / 225 / 212 passed and 2 / 4 / 17 skipped. That is **identical to the measured head 953b8ca** (run 42852486467, latest attempt), so DL-137's condition holds and AC-3 is not re-measured.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Zero open Blocker or Critical findings | ✱ | ✅ | both re-reviews |
+| 2 | QLT-01 fixed | | ✅ | file-level skip; the guard pins it; P4 re-planted (#183, run 42867966691) is red |
+| 3 | STD-06 and the named Minors | | ✅ | two ruled names pinned in a test; QLT-02, STD-01 to STD-05, STD-07 and STD-08 per standards round 2 |
+| 4 | Runtime test set unchanged | | ✅ | counts per shard identical to 953b8ca |
+| 5 | G12 | | ✅ | nothing weakened (quality round 2) |
+| 6 | Residual guard gap | | ⚠️ | QLT-06: the pin reads source text, so P6 (the hook only in a block comment) and P7 (an unindented describe) stay green. These are unusual edits, and P8 (a third file) is caught. Goes to #203 |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D | qa-engineer | `docs/07-qa/AQP-244-test-report.md` | DL-137 (D), with the architect's v0.32 (AC-3 (c) reported only): AC-1 to AC-6 with evidence; AC-3 recomputed from base run 42850365032 and head run 42852486467 (median of five, slowest, hits, 0 flaky); counts per shard on the final head; P4 and one other plant (P1 or P5) re-planted by QA's own control PRs; the G12 relaxation read against the pinned names | G7 |
+| E | developer | #203 | QLT-06: a syntax-based pin; P6 and P7 must fail | Before any change to `OWN_WIDTH_FILES` or either file's skip line; at the latest G8 |
+| F | orchestrator | merge | DL-141 (4) | After G7 GO |
+
+**Accepted:** STD-10 and STD-11 (Info, optional).
+**Risks:** RISK-023 stays 6 until G7; the reading at G7 is set in DL-141 (3).
+**Rationale:** the Major is fixed and its plant is red, and the runtime is provably unchanged. The remaining gap needs a deliberately odd edit. It gets an owner and a due point tied to the only change that could exploit it.
+**Posted:** Jira AQP-244 comment 11406; PR #166 comment 6777366036; tech-debt GitHub #203 created (QLT-06).
+
+## G6 – Peer Review — AQP-130 (STORY-02.05 Treatment / Color list, PR #195) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** There are zero Blocker and Critical findings. PRF-01 is ruled a measurement condition, not a code defect: a median of five is read on the final head. QLT-01 to QLT-04 and the named standards Minors are fixed in one push. reviewer-quality and reviewer-standards re-review the new diff, and master closes G6 on the fix head with the median of five (DL-142).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #195** at 67febe3: 50 files, CLEAN. Developer hand-off: Jira AQP-130 11403.
+  - **Reviews** (`docs/06-reviews/AQP-130/{standards,quality,performance,consolidated}.md`):
+    - standards: APPROVE WITH COMMENTS, review 5848269835 (Jira 11409);
+    - quality: APPROVE WITH COMMENTS (Jira 11410);
+    - performance: APPROVE WITH COMMENTS (Jira 11408).
+  - **Control PRs:** the developer's #196 to #200, and reviewer-quality's #204 to #206.
+  - **Test strategy v0.32** §10.5 item 9 (the reading rule and the RISK-023 trigger).
+  - **My own checks** (API only; nothing run locally):
+    - CI 42881974487 on 67febe3: success. Path 5:51, recomputed (351 s).
+    - Read item 9: a pull-request first attempt of 5:30 or more starts a median of five full runs. A median of five of 5:30 or more makes the next CI-time step due and is a RISK-023 trigger. It is not a merge hold.
+    - Read the findings tables of the standards and quality reports.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ⚠️ | PRF-01 is re-ruled from Major to a measurement condition (DL-142 (1)). No code Major |
+| 4 | Plants | | ⚠️ | A3 and A4 are caught (developer #196, #197; quality #204, #205), and so are the focus and DEF-020 plants (#198, #200). **Locks removed (#206) stay green: QLT-03.** #199 (old effect) is caught only by the source guard, which is accepted (QLT-05: one field) |
+| 5 | Correctness | | ⚠️ | QLT-01 (canonical name vs reserved check), QLT-02 (422 before 409/404), QLT-04 (stale first read) |
+| 6 | Standards | | ⚠️ | STD-01, 02, 05, 06, 07 and 08 in the push; STD-03 and STD-04 to the #119 refactor (DL-142 (3)) |
+| 7 | CI | | ✅ | green; coverage 99.2 % |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #195, one push | **QLT-01:** the stored name is canonical (NFKC, trimmed, inner whitespace collapsed), checked against the reserved names and against duplicates on that form, with integration tests for a double space and for full-width letters. **QLT-02:** the shape check runs before the transaction, then the lookup and lock (404 / 409), then the reserved-name check (422), with route and unit tests. **QLT-03:** one integration test of two simultaneous renames of one treatment, asserting the second `master.edited` entry's `before` equals the first entry's `after`. It must fail with both locks removed (re-run of #206). **QLT-04:** the latest read wins (a ticket check), with a test. **STD-01** (split or justify), **STD-02** (`isRecordNotFound` from `database-errors.ts`), **STD-05** (words into `treatment-texts.ts`), **STD-06** (`SPEC_ACCESS` to a support file; another story's rows restored), **STD-07**, **STD-08**. Update the Dev Record | Before the re-review |
+| B | reviewer-quality; reviewer-standards | PR #195, new diff only | quality: QLT-01 to QLT-04, with a locks-removed control PR that must now fail, and STD-14 judged. standards: their Minors | After A |
+| C | orchestrator, then master | final head | **The median of five** (test strategy v0.32 §10.5 item 9) on the fix head: five full runs, `hit` in every job, misses replaced. Post the five paths, each slowest shard and its host line. Master closes G6 on the re-reviews and this reading | After B |
+| D | product-owner | Jira AQP-130 AC-6 | Event names `master.created`, `master.edited` and `master.deleted` with `object_type` `treatment` (as DL-129 did for AQP-123) | Before G7 |
+| E | solution-architect | architecture §6; #202; the 05.06 open question | Add 409 `TREATMENT_LOCKED` and the 422 codes to the §6 codes line (STD-12). Rule on #202 (a database guard for system rows). Take QLT-09 (deleting a treatment an estimate uses: restrict with 409, soft delete, or a copied name) into the 05.06 open question | §6 before G7; #202 and QLT-09 before 05.06 is Ready |
+| F | ux-expert | #201 | Rule the words. If ruled before A is pushed, they ride the push; otherwise the words stand as built and #201 stays open | Before G7 where possible |
+| G | product-manager | PRF-06 | State a maximum number of treatments (the list has no paging) | Before 05.06 is Ready |
+| H | developer | #119 refactor PR | DL-142 (3) | Before AQP-142 starts G5 |
+
+**Accepted (Info):** QLT-05 (the one-field replacement for DL-135's two-field test), STD-09 (fixed with the push if touched), STD-10, STD-13, and the remaining Infos. PRF-02 (desktop pinning, about 6 s per shard) is not taken: v0.32 says balance work below 80 s host-free is not due.
+**Risks:** none new. RISK-023 stays at 6 until the median of five is read (DL-142 (1)).
+**Rationale:** the story is sound, and its guards bite except one. The concurrency test that passes with no lock is the DL-117 class, so it is fixed now. The three correctness Minors sit in the code being pushed anyway. The cross-screen refactor of #119 is better as its own reviewed change than inside a 50-file feature PR.
+**Posted:** Jira AQP-130 comment 11412; PR #195 comment 6777713030; GitHub #119 (one refactor PR, with an owner and a due point).
+
+## G7 – QA Acceptance — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** The QA record is at 50425f5; the code is a4eab7f, unchanged since the G6 close. AQP-244 moves to Done. **RISK-023 falls from 6 to 4** (P 2 × I 2) by the register's rule, as DL-141 (3) pre-ruled. PR #166 merges under DL-143 (3).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-244-test-report.md`: ACCEPT, no defects.
+  - **QA plants:** #207 (P4) and #208 (P9), each failing 1 of 2,793 on the file-level skip guard; both closed unmerged.
+  - **Ruling:** test strategy v0.32 §10.5 item 9 (AC-3 (c) is reported only).
+  - **My own checks** (API and CI logs only):
+    - **Scope** (`compare a4eab7f...50425f5`): 1 file, the QA report.
+    - **CI 42890394439** on 50425f5 (the merge ref): 5 of 5 `success`, path **4:44**, recomputed (284 s). 231 / 228 / 215 passed and 2 / 4 / 17 skipped, with no `flaky` or `failed` line. The 9 extra passed tests are #167's, carried by the merge ref; the skipped counts are unchanged.
+    - **AC-3 recomputed** from the jobs API, first job start to the end of `Stages 1 to 11`:
+      - head run 42852486467, attempts 1 to 5: 250, 292, 268, 277 and 280 s, so the **median is 4:37 and the slowest 4:52**;
+      - base run 42850365032: 296, 266, 281, 317 and 270 s, so the median is 4:41 and the slowest 5:17.
+      - Both match QA and the reviewers.
+    - **Not re-run by master:** QA's count comparison (665 passed entries equal in 5 of 5 pairs; the 108 skipped own-width entries gone) and the host-free fit.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | AC-1 to AC-6 in QA's report. AC-3: median of five at most 5:00 (4:37) and the slowest at most 5:30 (4:52), with 20 of 20 jobs hit and 0 flaky. AC-3 (c) is reported only (50 s → 27 s host-free) |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | none |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42890394439, 5 of 5, no flaky line |
+| 4 | Each test still runs once | | ✅ | passed entries equal the base in 5 of 5 pairs; only the skipped own-width entries drop |
+| 5 | QA plants | | ✅ | P4 and P9 each red on the file-level guard |
+| 6 | Exploratory and method notes | | ✅ | QA's note that `gh run view --job` returns the latest attempt; DEF-023's evidence re-read per attempt, and it stands |
+
+**Risks:** **RISK-023 falls from 6 to 4 (P 2 × I 2)** (DL-143 (2); register updated). A pending input is noted: AQP-130's single PR reading of 5:51 awaits its median of five (DL-142 (1)), and a median of 5:30 or more on a PR or `master` head raises it to 8 again.
+**Rationale:** every AC has independent evidence on the code that passed G6. The figures master recomputed match QA's. The fall rule names AC-3, and AC-3 holds.
+**Posted:** Jira AQP-244 comment 11421; PR #166 comment 6777948136; RISK-023 on Jira AQP-1 comment 11422.

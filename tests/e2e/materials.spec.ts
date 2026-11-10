@@ -176,6 +176,45 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
     await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
     await expect(dialog.getByLabel('Material in Drawing')).toHaveAttribute('aria-invalid', 'true');
+
+    // A second refusal of the same first field moves focus there again, from the button just pressed (the hook's contract, QLT-02 of AQP-269).
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+  });
+
+  test('DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and so does the next field', async ({ page }) => {
+    await openMaterials(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add material' }));
+    const dialog = page.getByRole('dialog', { name: 'Add material' });
+    await dialog.getByLabel('Price per kg').fill('58.123');
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByText('Enter the Material in Drawing.')).toBeVisible();
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+
+    // The later refused field first, while the one before it still has its message (the old code jumped back to it).
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await page.keyboard.type('abc');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('abc');
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('');
+    await page.keyboard.press('Shift+Tab');
+
+    // The keys go to whatever has focus, as a keyboard user does. Each key clears a message; none of them may move focus.
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
+
+    // And the second field again, now that the one before it is fixed (Tab selects its text, so the new letters replace it): focus and the letters stay while the fields after it still have messages.
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await page.keyboard.type('def');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('def');
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
   });
 
   test('state "Specific gravity 0": 0 is refused under the field with "Enter a value above 0.", the hint stays, the dialog keeps what was typed and focus goes to the field (UX-37)', async ({ page }, testInfo) => {
