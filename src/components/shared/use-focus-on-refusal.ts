@@ -15,16 +15,16 @@ export function useFocusOnRefusal<TField extends string>(
   focusField: (field: TField) => void,
   setErrors: (errors: Readonly<Partial<Record<TField, string>>>) => void,
 ): (errors: Readonly<Partial<Record<TField, string>>>) => void {
-  const [request, setRequest] = useState<{ readonly field: TField } | null>(null);
+  const [request, setRequest] = useState<TField | null>(null);
   const focus = useEffectEvent(focusField);
 
   useEffect(() => {
-    if (request !== null) focus(request.field);
+    if (request !== null) focus(request);
   }, [request]);
 
   return (errors) => {
     setErrors(errors);
     const first = order.find((field) => errors[field] !== undefined);
-    if (first !== undefined) setRequest({ field: first });
+    if (first !== undefined) setRequest(first);
   };
 }
