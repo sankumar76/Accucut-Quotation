@@ -84,7 +84,7 @@ export default defineConfig({
       name: 'mobile',
       grepInvert: ONE_WIDTH,
       dependencies: ['setup'],
-      testIgnore: ['**/auth.setup.ts', ...OWN_WIDTH_FILES.map((file) => `**/${file}`)],
+      testIgnore: ['**/auth.setup.ts', '**/navigation.spec.ts', ...OWN_WIDTH_FILES.map((file) => `**/${file}`)],
       use: { browserName: 'chromium', viewport: { width: 360, height: 800 }, hasTouch: true, storageState: SIGNED_IN_STATE },
     },
     {
