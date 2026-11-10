@@ -137,14 +137,18 @@ async function change(
   if (next.name === undefined) return before;
   const after = await dependencies.masters.renameTreatment(before.id, next.name, tx);
   if (after === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  await dependencies.audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
+  // QUALITY PLANT A4 (control PR, never merged): the rename's entry is written in a second transaction opened inside the change.
+  const plantedEdit = { event: 'master.edited' as const, ...entryFor(context, after), before: auditState(before), after: auditState(after) };
+  await dependencies.transactions.run((plantTx) => dependencies.audit.record(plantTx, plantedEdit));
   return after;
 }
 
 async function remove(dependencies: TreatmentDependencies, tx: Transaction, context: AuditContext, id: string): Promise<void> {
   const before = await lockedChangeable(dependencies, tx, id);
   if (!(await dependencies.masters.deleteTreatment(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
+  // QUALITY PLANT A4 (control PR, never merged): the delete's entry is written in a second transaction opened inside the change.
+  const plantedDelete = { event: 'master.deleted' as const, ...entryFor(context, before), before: auditState(before), after: null };
+  await dependencies.transactions.run((plantTx) => dependencies.audit.record(plantTx, plantedDelete));
 }
 
 /** The treatment methods of the masters service. Nothing is read before the transaction opens, because no check needs the configuration. */
