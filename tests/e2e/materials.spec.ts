@@ -207,12 +207,12 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
     await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
 
-    // And the second field again, now that the one before it is fixed: focus and the letters stay while the fields after it still have messages.
+    // And the second field again, now that the one before it is fixed (Tab selects its text, so the new letters replace it): focus and the letters stay while the fields after it still have messages.
     await page.keyboard.press('Tab');
     await expect(dialog.getByLabel('Material Considered')).toBeFocused();
     await page.keyboard.type('def');
     await expect(dialog.getByLabel('Material Considered')).toBeFocused();
-    await expect(dialog.getByLabel('Material Considered')).toHaveValue('abcdef');
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('def');
     await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
     await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
   });
