@@ -90,6 +90,17 @@ jobs:
           fetch-depth: 0 # the secret scan reads every commit; changed-code coverage reads the base branch
           persist-credentials: false
 
+      # The host's CPU count and model go to this job's own summary, because the API does not expose them and, without them,
+      # host speed can only be guessed from the `prisma generate` time (AQP-243 AC-5). It reads nothing from the repository.
+      - name: "Host: CPU count and model (job summary)"
+        run: |
+          model="$(awk -F': ' '/^model name/ {print $2; exit}' /proc/cpuinfo)"
+          {
+            echo "### Host"
+            echo "- CPUs (nproc): $(nproc)"
+            echo "- CPU model: ${model:-n/a}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -101,10 +112,68 @@ jobs:
         run: npm install --global "npm@${NPM_VERSION}"
 
       # ---- Stage 1: install ------------------------------------------------------------------
-      - name: "Stage 1: install (npm ci, prisma generate)"
+      # AQP-243 (STORY-10.19, test strategy 10.5 item 7): `node_modules` comes from a cache, not from `npm ci` on every run.
+      # The key is the runner, the Node and npm versions and a hash of the three files that decide what `npm ci` builds
+      # (`package.json` and `.npmrc` hold the install-script allow-list, which is not in the lockfile). There is NO
+      # `restore-keys`: only an exact match restores, so a changed lockfile is always a miss and installs exactly that
+      # lockfile. `ImageOS` is a runner variable and is not in the `env` context, so the key is built in the shell. On a hit
+      # the restored directory must pass scripts/ci/node-modules-integrity.sh; if it does not, `node_modules` is deleted and
+      # `npm ci` runs with no save, so a bad cache costs time and never a red run or a stale install. On a miss `npm ci`
+      # runs, its result is recorded, and the cache is saved only if all of that succeeded; a lost save race is a warning.
+      # `prisma generate` writes to `src/generated`, outside `node_modules`, so it runs every time. The step names are read
+      # by scripts/lib/ci-run-summary.ts to show each job's cache state; rename them together. README, "node_modules cache".
+      - name: "Stage 1: install, name the node_modules cache key"
+        id: nmkey
+        env:
+          INPUT_HASH: ${{ hashFiles('package-lock.json', 'package.json', '.npmrc') }}
+        run: echo "key=node-modules-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}" >> "${GITHUB_OUTPUT}"
+
+      - name: "Stage 1: install, restore node_modules"
+        id: nm
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.nmkey.outputs.key }}
+
+      - name: "Stage 1: install, check node_modules"
+        id: nmcheck
+        if: steps.nm.outputs.cache-hit == 'true'
+        run: |
+          if bash scripts/ci/node-modules-integrity.sh check; then
+            echo "intact=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "intact=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: "Stage 1: install, npm ci (cache miss)"
+        id: nminstall
+        if: steps.nm.outputs.cache-hit != 'true'
         run: |
           npm ci
-          npx prisma generate
+          if bash scripts/ci/node-modules-integrity.sh record; then
+            echo "recorded=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::warning::The node_modules integrity record could not be written, so this install is not saved to the cache."
+          fi
+
+      - name: "Stage 1: install, npm ci (cache fallback)"
+        if: steps.nm.outputs.cache-hit == 'true' && steps.nmcheck.outputs.intact != 'true'
+        env:
+          NM_KEY: ${{ steps.nmkey.outputs.key }}
+        run: |
+          echo "::warning::The restored node_modules failed its integrity check, so it is installed again with npm ci and not saved. Key: ${NM_KEY}. A maintainer can delete the entry: gh cache delete ${NM_KEY}"
+          rm -rf node_modules
+          npm ci
+
+      - name: "Stage 1: install, save node_modules"
+        if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.nmkey.outputs.key }}
+
+      - name: "Stage 1: install, prisma generate"
+        run: npx prisma generate
 
       # ---- Stage 2: secret scan --------------------------------------------------------------
       - name: "Stage 2: secret scan (Gitleaks, full history)"
@@ -279,6 +348,17 @@ jobs:
         with:
           persist-credentials: false
 
+      # The host's CPU count and model go to this job's own summary, because the API does not expose them and, without them,
+      # host speed can only be guessed from the `prisma generate` time (AQP-243 AC-5). It reads nothing from the repository.
+      - name: "Host: CPU count and model (job summary)"
+        run: |
+          model="$(awk -F': ' '/^model name/ {print $2; exit}' /proc/cpuinfo)"
+          {
+            echo "### Host"
+            echo "- CPUs (nproc): $(nproc)"
+            echo "- CPU model: ${model:-n/a}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -288,10 +368,59 @@ jobs:
       - name: Use the pinned npm
         run: npm install --global "npm@${NPM_VERSION}"
 
-      - name: "Shard: install (npm ci, prisma generate)"
+      # The same steps as stage 1 of `verify` above (AQP-243): restore `node_modules`, check it, `npm ci` only on a miss or a failed check, save on a miss, generate.
+      - name: "Shard: install, name the node_modules cache key"
+        id: nmkey
+        env:
+          INPUT_HASH: ${{ hashFiles('package-lock.json', 'package.json', '.npmrc') }}
+        run: echo "key=node-modules-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}" >> "${GITHUB_OUTPUT}"
+
+      - name: "Shard: install, restore node_modules"
+        id: nm
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.nmkey.outputs.key }}
+
+      - name: "Shard: install, check node_modules"
+        id: nmcheck
+        if: steps.nm.outputs.cache-hit == 'true'
+        run: |
+          if bash scripts/ci/node-modules-integrity.sh check; then
+            echo "intact=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "intact=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: "Shard: install, npm ci (cache miss)"
+        id: nminstall
+        if: steps.nm.outputs.cache-hit != 'true'
         run: |
           npm ci
-          npx prisma generate
+          if bash scripts/ci/node-modules-integrity.sh record; then
+            echo "recorded=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::warning::The node_modules integrity record could not be written, so this install is not saved to the cache."
+          fi
+
+      - name: "Shard: install, npm ci (cache fallback)"
+        if: steps.nm.outputs.cache-hit == 'true' && steps.nmcheck.outputs.intact != 'true'
+        env:
+          NM_KEY: ${{ steps.nmkey.outputs.key }}
+        run: |
+          echo "::warning::The restored node_modules failed its integrity check, so it is installed again with npm ci and not saved. Key: ${NM_KEY}. A maintainer can delete the entry: gh cache delete ${NM_KEY}"
+          rm -rf node_modules
+          npm ci
+
+      - name: "Shard: install, save node_modules"
+        if: steps.nm.outputs.cache-hit != 'true' && steps.nminstall.outputs.recorded == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.nmkey.outputs.key }}
+
+      - name: "Shard: install, prisma generate"
+        run: npx prisma generate
 
       # The same cache key as `verify`'s stage 9 (the sources and the lockfile are the same). A key is saved once; a job
       # that loses the race gets a harmless "already exists" notice.
@@ -400,8 +529,11 @@ jobs:
     name: Stages 1 to 11
     needs: [verify, e2e]
     if: ${{ always() }}
-    # No permission at all: the job reads no repository content and calls no API, so it needs no token scope.
-    permissions: {}
+    # Two read scopes, and no other (AQP-243 AC-5; before it this job held none): `actions: read` for the run summary, which reads
+    # the jobs of this run from the API, and `contents: read` for a one-file checkout of the summary script. No write scope.
+    permissions:
+      actions: read
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -421,3 +553,31 @@ jobs:
             fi
           done
           exit "${failed}"
+
+      # The run summary (AQP-243 AC-5, PRF-04 of AQP-227): the path, each job's time and cache state, and the slowest shard, in
+      # this run's job summary. It comes after the verdict and cannot change it: each of its steps carries the setting that lets it fail without
+      # failing the job, the script exits 0 on any API or data problem, and these are the only steps in this job that have it. The script
+      # has no dependency, so it needs only Node (type stripping) and no install. The fan-in job cannot read its own end, so the
+      # summary's path is up to its own time. `if: always()` keeps the summary when a needed job failed.
+      - name: "Summary: check out the script"
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/lib/ci-run-summary.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: "Summary: set up Node.js"
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: "Summary: show the time of this run"
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/lib/ci-run-summary.ts
