@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
+import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
 import { MATERIAL_CANARIES } from '../support/material-master-canary';
 import { defined } from '../support/defined';
 import { cacheControlProblems, describeFinding, fixedForbiddenProblem, isBuiltFile, maskRequestId, scanResponses } from '../support/scanner';
@@ -13,6 +14,7 @@ import {
   createDisposableUser,
   E2E_ADMIN,
   E2E_PASSWORD,
+  ensureCanaryExchangeRates,
   ensureCanaryMaterials,
   ensureCanaryProcessRates,
   ensureCanaryUser,
@@ -88,6 +90,7 @@ async function prepare(
 ): Promise<{ readonly forbidden: ReturnType<typeof forbiddenStrings>; readonly engineer: Awaited<ReturnType<typeof createDisposableUser>> }> {
   await ensureCanaryProcessRates();
   await ensureCanaryMaterials();
+  await ensureCanaryExchangeRates();
   return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
 }
 
@@ -207,6 +210,27 @@ test('AC-6 (control with real data, STORY-02.03): the same scan finds the canary
       expect(found.has(value), `the scan finds ${value} of ${material.materialInDrawing}`).toBe(true);
     }
   }
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+/**
+ * The exchange rates (STORY-02.04 AC-6). The Admin saves the canary pair through the route, as the screen does, and the same scan finds both values in
+ * the answer. The answer of the PUT is the state written in the same transaction, so no other test's save can change what this one looks for. The Engineer
+ * side of the story is the scan above: the route is in no Engineer list, the pair is in the database (`prepare`), and the scan finds neither value.
+ */
+test('AC-6 (control with real data, STORY-02.04): the same scan finds both canary exchange rates in what the Admin is sent', async ({ page, context }) => {
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, E2E_ADMIN);
+
+  const answer = await callInBrowser(recorder, page, 'PUT /api/v1/exchange-rates (API, Admin)', '/api/v1/exchange-rates', { method: 'PUT', body: EXCHANGE_RATE_CANARIES });
+  expect(answer.status).toBe(200);
+  await recorder.settled();
+
+  const found = new Set(scanResponses(recorder.responses, forbidden).map((finding) => finding.found));
+  for (const [currency, value] of Object.entries(EXCHANGE_RATE_CANARIES)) expect(found.has(value), `the scan finds the ${currency} rate ${value}`).toBe(true);
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
 });
 

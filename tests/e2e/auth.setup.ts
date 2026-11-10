@@ -4,6 +4,7 @@ import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
 
 import { E2E_ADMIN, E2E_ENGINEER, E2E_LEAD, E2E_PASSWORD, ensureE2eAdmin, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
 import { fillPath } from './support/canary-scan';
+import { waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL, PRODUCTION_URL, SIGNED_IN_STATE } from './support/servers';
 
 /**
@@ -96,6 +97,19 @@ async function warmMaterialsRoutes(page: Page, headers: Record<string, string>):
   expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`)).status()).toBe(200);
 }
 
+/**
+ * The Exchange rates tab and its route (STORY-02.04), compiled for the same reason, with the tab's own chunk: it is fetched when the tab first opens, so
+ * opening it here compiles the chunk and reads `GET /api/v1/exchange-rates`. Nothing is stored (an empty body is 422).
+ */
+async function warmExchangeRatesRoutes(page: Page, headers: Record<string, string>): Promise<void> {
+  await page.goto(`${DEVELOPMENT_URL}/masters/materials`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await page.getByRole('tab', { name: 'Exchange rates' }).click();
+  await expect(page.getByLabel('1 USD in ₹')).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  expect((await page.request.put(`${DEVELOPMENT_URL}/api/v1/exchange-rates`, { headers, data: {} })).status()).toBe(422);
+}
+
 setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
   setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eAdmin();
@@ -121,6 +135,7 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/users/00000000-0000-4000-8000-000000000000`, { headers, data: { role: 'LEAD' } })).status()).toBe(404);
     await warmProcessRoutes(page, headers);
     await warmMaterialsRoutes(page, headers);
+    await warmExchangeRatesRoutes(page, headers);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();

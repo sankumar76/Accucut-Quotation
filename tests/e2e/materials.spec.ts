@@ -98,14 +98,14 @@ test.describe('the tab shell and the list (AC-1, AC-7)', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('the page description and the description meta name only the tabs that exist: with one tab, neither says "exchange" or "treatment" (ux-spec v0.18)', async ({ page }) => {
+  test('the page description and the description meta name only the tabs that exist: with the Materials and Exchange rates tabs, they say "exchange" and not "treatment" (ux-spec v0.18)', async ({ page }) => {
     await openMaterials(page);
-    await expect(page.getByRole('tab')).toHaveCount(1);
+    await expect(page.getByRole('tab')).toHaveCount(2);
     const description = page.locator('main h1 + p');
-    await expect(description).toHaveText('Material prices, specific gravity and scrap rates.');
+    await expect(description).toHaveText('Material prices and exchange rates.');
     const meta = page.locator('meta[name="description"]');
-    await expect(meta).toHaveAttribute('content', 'Manage the materials used in estimates.');
-    for (const text of [await description.innerText(), (await meta.getAttribute('content')) ?? '']) expect(text).not.toMatch(/exchange|treatment/i);
+    await expect(meta).toHaveAttribute('content', 'Manage materials and exchange rates used in estimates.');
+    for (const text of [await description.innerText(), (await meta.getAttribute('content')) ?? '']) expect(text).not.toMatch(/treatment/i);
   });
 
   test('AC-7: controls are at least 44 px, and the icon button of a table row at least 36 px', async ({ page }, testInfo) => {
