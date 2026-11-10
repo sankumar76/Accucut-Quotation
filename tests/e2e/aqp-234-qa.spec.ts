@@ -28,6 +28,10 @@ const WIDTHS = [768, 1023, 1024, 1279, 1280, 1366, 1440] as const;
 const HEIGHT = 900;
 const NAME_LENGTH = 100;
 const OUT = 'qa-evidence';
+/** Tab presses of the G7-7 keyboard walk; a table with more row actions than this is walked for its first TAB_PRESSES actions. */
+const TAB_PRESSES = 12;
+/** Row actions that one row has on each screen: Edit on the material rows (SCR-13), Edit and Delete on the rate rows (SCR-11). */
+const ACTIONS_PER_ROW = { 'SCR-13': 1, 'SCR-11': 2 } as const;
 
 interface Screen {
   readonly key: 'SCR-13' | 'SCR-11';
@@ -456,8 +460,12 @@ for (const screen of SCREENS) {
       await region.locator('table').evaluate((table) => { table.style.minWidth = '1000px'; });
       expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
       await region.focus();
+      // DEF-023: how many row actions there are is read from the page, never assumed. The test makes two rows, so the table has at least
+      // two rows' actions whatever other tests have saved; the walk must reach every action of the table (up to TAB_PRESSES).
+      const total = await region.locator('[data-item-id] button[data-action]:visible').count();
+      expect(total, 'the two rows this test made are listed').toBeGreaterThanOrEqual(2 * ACTIONS_PER_ROW[screen.key]);
       const seen: string[] = [];
-      for (let press = 0; press < 12; press += 1) {
+      for (let press = 0; press < TAB_PRESSES; press += 1) {
         await page.keyboard.press('Tab');
         const info = await page.evaluate(() => {
           const el = document.activeElement as HTMLElement | null;
@@ -484,7 +492,7 @@ for (const screen of SCREENS) {
         expect(info.scrollX).toBe(0);
         expect(info.inView).toBe(true);
       }
-      expect(seen.length, `Tab reached the row actions: ${seen.join(' | ')}`).toBeGreaterThanOrEqual(4);
+      expect(seen.length, `Tab reached the row actions (the table has ${total}): ${seen.join(' | ')}`).toBeGreaterThanOrEqual(Math.min(total, TAB_PRESSES));
       expect(seen[0]).toMatch(/^Edit /);
 
       // Enter opens the first Edit and Escape returns focus to it.
