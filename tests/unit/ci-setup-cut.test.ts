@@ -88,7 +88,7 @@ describe.each(INSTALL_JOBS)('AQP-243 AC-2 / AC-3: the node_modules cache in the 
   it('keys the cache on the runner, Node, npm and the three files, with no restore-keys (a changed file is a miss)', () => {
     const key = step('name the node_modules cache key');
     expect(key).toContain("INPUT_HASH: ${{ hashFiles('package-lock.json', 'package.json', '.npmrc') }}");
-    expect(key).toContain('"key=node-modules-v1-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}"');
+    expect(key).toContain('"key=node-modules-v${NODE_MODULES_CACHE_FORMAT}-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}"');
     expect(step('restore node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
     expect(step('save node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
     for (const part of ['restore node_modules', 'save node_modules']) {
@@ -155,6 +155,30 @@ describe.each(INSTALL_JOBS)('AQP-243 AC-2 / AC-3: the node_modules cache in the 
 });
 
 describe('AQP-243 AC-2 / AC-3: the whole workflow', () => {
+  // STD-05: the record format is one quoted constant in the top-level env, beside CACHE_EPOCH, and the key text it makes is the one
+  // that was measured (`node-modules-v1-...`), so the entries already saved stay valid.
+  it('keeps the record format in one quoted env entry before the jobs, set to 1', () => {
+    const entries = LINES.filter((line) => /^\s*NODE_MODULES_CACHE_FORMAT:/.test(line));
+    expect(entries).toEqual(["  NODE_MODULES_CACHE_FORMAT: '1'"]);
+    expect(WORKFLOW.indexOf('NODE_MODULES_CACHE_FORMAT:')).toBeLessThan(WORKFLOW.indexOf('jobs:'));
+    expect(WORKFLOW).not.toMatch(/node-modules-v\d/);
+  });
+
+  // QLT-02 (G12 rule). `ci-workflow.test.ts` no longer bans the split cache action as a whole, so this is the exact replacement:
+  // it is used four times, and only for the node_modules restore and save. A cache handed from `verify` to `e2e`, or a second save
+  // of another cache (the Playwright browsers) under a new key, fails here.
+  it('uses the split cache action only for the node_modules restore and save', () => {
+    expect(LINES.filter((line) => /uses: actions\/cache\/(save|restore)@/.test(line))).toHaveLength(4);
+    for (const job of ['verify', 'e2e', 'required']) {
+      for (const [name, body] of stepsOf(jobText(job))) {
+        if (!/actions\/cache\/(save|restore)@/.test(body)) continue;
+        expect(name).toMatch(/: install, (restore|save) node_modules$/);
+        expect(body).toContain('path: node_modules');
+        expect(body).toContain('key: ${{ steps.nmkey.outputs.key }}');
+      }
+    }
+  });
+
   it('has restore-keys only on the two Next.js build caches, never on the node_modules cache', () => {
     expect(LINES.filter((line) => line.trim() === 'restore-keys: |')).toHaveLength(2);
     expect(WORKFLOW).not.toContain('restore-keys: node-modules');
@@ -187,6 +211,8 @@ describe('AQP-243 AC-5: the run summary in the fan-in job', () => {
     for (const name of summaryNames) {
       const step = stepText(required, name);
       expect(step, name).toMatch(/^\s+continue-on-error: true$/m);
+      // A stalled step is a failure, which `continue-on-error` absorbs; the 5-minute job limit is not (STD-02, QLT-04, PRF-01).
+      expect(step, name).toMatch(/^\s+timeout-minutes: 1$/m);
       expect(step, name).toMatch(/^\s+if: \$\{\{ always\(\) \}\}$/m);
     }
     expect(required).not.toMatch(/^ {4}continue-on-error:/m);
@@ -228,7 +254,8 @@ describe('AQP-243: the README says how the node_modules cache works and how to r
     const readme = read('../../README.md');
     const section = readme.slice(readme.indexOf('### node_modules cache'), readme.indexOf('## Performance checks'));
     expect(section.length).toBeGreaterThan(200);
-    for (const text of ['package-lock.json', 'package.json', '.npmrc', 'restore-keys', 'gh cache delete', 'fallback', 'node-modules-integrity.sh', 'ref']) {
+    const wanted = ['package-lock.json', 'package.json', '.npmrc', 'restore-keys', 'gh cache delete', '--ref refs/pull/', 'fallback', 'node-modules-integrity.sh', 'NODE_MODULES_CACHE_FORMAT', 'CPU count and model', 'actions/cache/usage'];
+    for (const text of wanted) {
       expect(section, text).toContain(text);
     }
   });
