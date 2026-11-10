@@ -91,6 +91,8 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
   const setField = (field: MaterialFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => withoutMaterialError(current, field));
+    const earlier = MATERIAL_FIELD_NAMES.slice(0, MATERIAL_FIELD_NAMES.indexOf(field)).find((other) => errors[other] !== undefined);
+    if (earlier !== undefined) document.getElementById(FIELD_IDS[earlier])?.focus();
   };
 
   /** Shows the server's answer to an add or an edit. */
