@@ -9,6 +9,7 @@ import { createTransactionRunner, type TransactionRunner } from '@/server/reposi
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
+import { createLateFailingRunner } from '../../support/late-failure-runner';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { refusal } from '../../support/user-service-fixture';
@@ -255,16 +256,9 @@ describe('AC-2, AC-3, AC-5: changing a material', () => {
 });
 
 describe('AC-5 (DEF-017): an entry commits with its change, or not at all', () => {
-  /** A runner whose work completes and then fails, before the commit: what the change and its entry did must be taken back. */
+  /** The outermost transaction fails after its work; one opened inside it commits (tests/support/late-failure-runner.ts, #130). */
   function failingAfterTheLastStep(): TransactionRunner {
-    const real = createTransactionRunner(db.prisma);
-    return {
-      run: (work) =>
-        real.run(async (tx) => {
-          await work(tx);
-          throw new Error(LATE_FAILURE);
-        }),
-    };
+    return createLateFailingRunner(createTransactionRunner(db.prisma), new Error(LATE_FAILURE));
   }
 
   it('create: no material is left and no entry is kept', async () => {
