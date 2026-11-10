@@ -4215,7 +4215,7 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 
 **Risks registered:** none new. The residual (a runner defined outside the masters folder or by `Object.defineProperty`) is covered by #130's re-plant of A3 and A4 at each audited master's G6 (AQP-123, 02.05, 02.02).
 **Rationale:** the risk in a test-only PR is a test that passes over a fault. The reviewer showed, by plant and by mutation, that the new runner and guard catch what the old ones masked. The one unreviewed commit is the reviewer's own suggested fix, which master read line by line.
-**Posted:** POSTED
+**Posted:** PR #139 comment 6755851518 (G6 and G7 together); Jira AQP-123 comment 11258. No tech-debt issue created (no finding deferred).
 
 ## G7 – QA Acceptance — tech-debt #130 (shared late-failure runner, PR #139) — 2026-11-09 (attempt 1)
 
@@ -4245,4 +4245,4 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 
 **Risks registered:** none new.
 **Rationale:** each acceptance item has evidence from someone other than the developer, and the regression is green on the exact head. A QA run would repeat the reviewer's plants and has no user-facing behaviour to check.
-**Posted:** POSTED
+**Posted:** PR #139 comment 6755851518 (G6 and G7 together); Jira AQP-123 comment 11258. No tech-debt issue created (no finding deferred).
