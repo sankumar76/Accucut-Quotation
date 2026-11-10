@@ -2,6 +2,7 @@
   "name": "accucut-quotation-portal",
   "version": "0.1.0",
   "private": true,
+  "description": "Accucut Quotation Portal (AQP-243 control: package.json only)",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
