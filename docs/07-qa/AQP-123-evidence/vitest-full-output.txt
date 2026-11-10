@@ -1,0 +1,28 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/unit/e2e-shards.test.ts (6 tests | 1 failed) 28731ms
+ ❯ tests/acceptance/aqp-122-materials-rules.test.ts (78 tests | 4 failed) 61112ms
+ ❯ tests/unit/playwright-system-deps.test.ts (25 tests | 25 skipped) 221957ms
+ ❯ tests/acceptance/aqp-38-sign-in.test.ts (42 tests | 2 failed) 44401ms
+ FAIL  tests/unit/playwright-system-deps.test.ts > scripts/ci/playwright-system-deps.sh
+Error: Hook timed out in 120000ms.
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-122-materials-rules.test.ts > the Material Master over the API (AC-1, AC-2, AC-3) > AC-2: Price per kg and Material-Scrap-Rate (per kg) are numbers of 0 or more, up to 2 decimals, stored as Decimal(18,4) > [AQP-122 AC-2] pricePerKg accepts the valid shapes and returns the
+ FAIL  tests/acceptance/aqp-122-materials-rules.test.ts > the Material Master over the API (AC-1, AC-2, AC-3) > AC-2: Price per kg and Material-Scrap-Rate (per kg) are numbers of 0 or more, up to 2 decimals, stored as Decimal(18,4) > [AQP-122 AC-2] scrapRate accepts the valid shapes and returns them
+Error: Test timed out in 5000ms.
+ FAIL  tests/acceptance/aqp-122-materials-rules.test.ts > the Material Master over the API (AC-1, AC-2, AC-3) > AC-2: Price per kg and Material-Scrap-Rate (per kg) are numbers of 0 or more, up to 2 decimals, stored as Decimal(18,4) > [AQP-122 AC-2, AC-3] pricePerKg refuses a negative, three decimals
+AssertionError: expected 40 to be 37 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-122-materials-rules.test.ts > the Material Master over the API (AC-1, AC-2, AC-3) > AC-2: Price per kg and Material-Scrap-Rate (per kg) are numbers of 0 or more, up to 2 decimals, stored as Decimal(18,4) > [AQP-122 AC-2, AC-3] scrapRate refuses a negative, three decimals,
+AssertionError: expected 42 to be 40 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-38-sign-in.test.ts > [AQP-38 AC-3] the lock-out, one attempt at a time, on a controlled clock > [AQP-38 AC-3] per address: 29 failures, then the 15-minute window runs out, and the count starts again
+Error: Test timed out in 5000ms.
+ FAIL  tests/acceptance/aqp-38-sign-in.test.ts > [AQP-38 AC-3] the lock-out, one attempt at a time, on a controlled clock > [AQP-38 AC-3] a forged X-Forwarded-For first entry does not buy a fresh address: only the proxy's last entry counts
+Error: Test timed out in 5000ms.
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the shards differ by at most one mobile, tablet and desktop test
+AssertionError: tests per shard: 279 / 283 / 273: expected 10 to be less than or equal to 1
+ Test Files  4 failed | 192 passed (196)
+      Tests  7 failed | 4793 passed | 25 skipped (4825)
+   Duration  395.79s (tests 87%, import 12%)

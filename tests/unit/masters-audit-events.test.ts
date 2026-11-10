@@ -47,6 +47,12 @@ describe('master.created / master.edited / master.deleted (AC-5)', () => {
     expect(NO_DETAIL).toEqual({ before: '—', after: '—' });
   });
 
+  it('gives no words for an object type that Object.prototype has a member of (deny by default)', () => {
+    for (const objectType of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(AUDIT_EVENTS['master.edited'].describeStored(FOAM, { ...FOAM, defaultValue: '22.37' }, objectType)).toEqual(NO_DETAIL);
+    }
+  });
+
   it('names its fields, so a secret has no place to go: an extra key on any side makes the values not fit', () => {
     const withHash = { ...FOAM, passwordHash: '$argon2id$x' };
     expect(wordsOf('master.created', null, withHash)).toBeNull();

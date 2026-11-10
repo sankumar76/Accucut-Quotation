@@ -1,0 +1,25 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/security/role-matrix.test.ts (163 tests | 6 failed) 11234ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/security/role-matrix.test.ts > AC-2: the manifest says what SPEC sections 3 and 9 say > allows exactly the roles of the SPEC on each screen: 0 differences
+AssertionError: expected [ '/api/v1/exchange-rates as LEAD' ] to deeply equal []
+- Expected
++ Received
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > GET /api/v1/exchange-rates as LEAD
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > PUT /api/v1/exchange-rates as LEAD
+AssertionError: expected 200 to be 403 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > QLT-64: the "same 403 for a real and an invented ID" loop > a refused role gets the same 403 for an invented ID and a real one, whatever was asked for
+TypeError: .toMatch() expects to receive a string, but got undefined
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > QLT-64: the "same 403 for a real and an invented ID" loop > is the same 403 with no body at all, and with a body that would not pass validation: the role is checked first
+AssertionError: GET /api/v1/exchange-rates as LEAD: expected [ 200, 200 ] to deeply equal [ 403, 403 ]
+- Expected
++ Received
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > a role change is seen at the next request: an Engineer made a Lead opens a Lead route at once
+AssertionError: expected 200 to be 403 // Object.is equality
+- Expected
++ Received
+ Test Files  1 failed | 18 passed (19)
+      Tests  6 failed | 1074 passed (1080)
+   Duration  31.22s (tests 61%, import 35%, transform 4%)

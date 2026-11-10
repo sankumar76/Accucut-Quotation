@@ -70,10 +70,10 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/process-items/[id]': ['ADMIN'],
   '/api/v1/materials': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
   '/api/v1/materials/[id]': ['ADMIN'],
+  '/api/v1/exchange-rates': ['ADMIN'], // the Exchange rates tab (STORY-02.04): the Admin's alone; an Engineer never receives a rate (BR-003)
 };
 
-/** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
-// `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options").
+/** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
 const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/account/password'];
 
 /**

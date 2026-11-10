@@ -9,6 +9,7 @@ import {
   specificGravityProblem,
 } from '../../lib/masters/materials';
 import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
+import type { Clock } from '../../lib/time';
 import {
   MasterConstraintError,
   type MasterRepository,
@@ -23,6 +24,7 @@ import {
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
+import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';
 import { assertNameUsable } from './rate-name-rules';
 
 /**
@@ -51,6 +53,9 @@ import { assertNameUsable } from './rate-name-rules';
  * formula (a formula holds `{{mat:<key>}}`, a column and not a row), so no check reads the configuration. Each change takes the table
  * lock and then the row, as the rates do, and writes its audit entry in its own transaction: `master.created` / `master.edited` with
  * `object_type` `material` (architecture section 8).
+ *
+ * **The Exchange Rate Master** (STORY-02.04; FR-016) is `exchange-rate-service.ts`: the pair of rates is saved together, in one transaction with
+ * one `master.edited` entry of `object_type` `exchange_rate`.
  */
 
 const NOT_FOUND_MESSAGE = 'Rate not found.';
@@ -70,13 +75,15 @@ export interface MastersServiceDependencies {
   readonly audit: AuditService;
   /** The document of the current configuration version, where the formulas that use a rate are read. Fails if there is none. */
   currentConfiguration(): Promise<ConfigDocument>;
+  /** The clock that stamps an exchange-rate save (STORY-02.04). The system clock when none is given. */
+  readonly clock?: Clock | undefined;
 }
 
 /**
  * Every change takes the `AuditContext` first: `actorId` is the Admin making the change and `requestId` the request it came in
  * on. Both go into the audit entry.
  */
-export interface MastersService {
+export interface MastersService extends ExchangeRateOperations {
   listProcessItems(): Promise<ReadonlyArray<ProcessItemView>>;
   createProcessItem(context: AuditContext, input: NewProcessItem): Promise<ProcessItemView>;
   /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. */
@@ -210,7 +217,7 @@ function createMaterialOperations(dependencies: MaterialDependencies): MaterialO
 }
 
 // Over 40 lines on purpose (coding standards section 1): a factory whose parts are small named functions of 10 to 15 lines each.
-export function createMastersService({ masters, transactions, audit, currentConfiguration }: MastersServiceDependencies): MastersService {
+export function createMastersService({ masters, transactions, audit, currentConfiguration, clock }: MastersServiceDependencies): MastersService {
   const withUses = (item: ProcessItemRecord, uses: ReadonlyMap<string, ReadonlyArray<FormulaUse>>): ProcessItemView => ({
     ...item,
     usedBy: uses.get(item.id.toLowerCase()) ?? [],
@@ -271,6 +278,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
 
   return {
     ...createMaterialOperations({ masters, transactions, audit }),
+    ...createExchangeRateOperations({ masters, transactions, audit, currentConfiguration, clock }),
 
     async listProcessItems() {
       const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);

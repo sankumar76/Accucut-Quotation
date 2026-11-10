@@ -1,12 +1,15 @@
 import { z } from 'zod';
 
 import { uniqueViolationOf, withDatabaseErrors } from './database-errors';
+import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
+import { createExchangeRateMethods, type ExchangeRateMethods } from './exchange-rate-repository';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01) and the
- * Material Master (STORY-02.03); the stories for customers, exchange rates and treatments add their methods here.
+ * Material Master (STORY-02.03); the stories for customers and treatments add their methods here. The Exchange Rate Master (STORY-02.04) is
+ * `exchange-rate-repository.ts`, which this repository includes, so the file stays within its size limit (coding standards section 1).
  *
  * **Materials** (STORY-02.03; architecture sections 4.9 and 5.1): every read and every lookup for a change applies the default filter
  * `is_hidden = false AND deleted_at IS NULL`, so the "Not applicable" row of story 02.06 and a deleted material are never listed and
@@ -87,7 +90,7 @@ export class MasterConstraintError extends Error {
   }
 }
 
-export interface MasterRepository {
+export interface MasterRepository extends ExchangeRateMethods {
   /** Every rate, in the order of SPEC section 4.1 (the seed items) and then in the order they were added. */
   listProcessItems(): Promise<ReadonlyArray<ProcessItemRecord>>;
   /**
@@ -122,8 +125,6 @@ export interface MasterRepository {
 }
 
 const RECORD_NOT_FOUND = 'P2025';
-const STORED_DECIMALS = 4;
-const SHOWN_DECIMALS = 2;
 
 const SELECT = { id: true, name: true, unit: true, defaultValue: true } as const;
 
@@ -133,12 +134,8 @@ function isRecordNotFound(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === RECORD_NOT_FOUND;
 }
 
-/** "0.3700" is "0.37" and "21.3700" is "21.37": at least two decimals, and no zero beyond them. */
-export function trimDecimalText(text: string): string {
-  const [whole = '0', fraction = ''] = text.split('.');
-  const kept = fraction.replace(/0+$/, '').padEnd(SHOWN_DECIMALS, '0');
-  return `${whole}.${kept}`;
-}
+export { trimDecimalText };
+export type { ExchangeRateMethods, ExchangeRateStamp, ExchangeRatesRecord, NewExchangeRateStamp } from './exchange-rate-repository';
 
 function toRecord(row: { readonly id: string; readonly name: string; readonly unit: string; readonly defaultValue: { toFixed(places: number): string } }): ProcessItemRecord {
   return { id: row.id, name: row.name, unit: row.unit, defaultValue: trimDecimalText(row.defaultValue.toFixed(STORED_DECIMALS)) };
@@ -290,6 +287,7 @@ type MaterialMethodName = 'listMaterials' | 'listMaterialOptions' | 'lockMateria
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     ...createMaterialMethods(db),
+    ...createExchangeRateMethods(db),
 
     listProcessItems() {
       return withDatabaseErrors(async () => {

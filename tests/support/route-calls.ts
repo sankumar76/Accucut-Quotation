@@ -1,5 +1,6 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
+import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
 
 /**
@@ -95,6 +96,11 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       };
     case 'PATCH /api/v1/materials/[id]':
       return { id: MATERIAL_RECIPE_ID, body: { scrapRate: '23.37' }, status: 200 };
+    // STORY-02.04: the Exchange Rate Master route. It has no ID. The body is the pair of canary rates, which every database the scan reads holds already.
+    case 'GET /api/v1/exchange-rates':
+      return DEFAULT_CALL;
+    case 'PUT /api/v1/exchange-rates':
+      return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
       return DEFAULT_CALL;
   }

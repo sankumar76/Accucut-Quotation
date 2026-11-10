@@ -18,6 +18,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/materials': () => import('@/app/api/v1/materials/route'),
   '/api/v1/materials/[id]': () => import('@/app/api/v1/materials/[id]/route'),
   '/api/v1/options/materials': () => import('@/app/api/v1/options/materials/route'),
+  '/api/v1/exchange-rates': () => import('@/app/api/v1/exchange-rates/route'),
 };
 
 export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {

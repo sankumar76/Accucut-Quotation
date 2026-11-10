@@ -1,0 +1,446 @@
+import { expect, test, type Page } from '@playwright/test';
+import { Client } from 'pg';
+
+import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
+
+import { ensureCanaryExchangeRates, E2E_ADMIN, E2E_ENGINEER, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
+import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
+
+/**
+ * QA probe, AQP-123 (STORY-02.04), G7 evidence. NOT committed as a CI spec (it really saves, which would race the Engineer scan, QLT-02): it is run
+ * locally with `playwright.local.config.ts`, one width at a time, against the development server and a throwaway PostgreSQL, and its source is kept in
+ * docs/07-qa/AQP-123-evidence/. The sentences are written out here from ux-spec v0.21 (SCR-13, "The Exchange rates tab: final words"), not imported.
+ */
+
+const API = `${DEVELOPMENT_URL}/api/v1/exchange-rates`;
+const LABEL_USD = '1 USD in ₹';
+const LABEL_EUR = '1 EUR in ₹';
+const SAVE = 'Save exchange rates';
+const NUMBER_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
+const SAVED = 'Exchange rates saved.';
+const NOTHING_TO_SAVE = 'You have not changed either rate, so there is nothing to save.';
+const FAILED_TITLE = 'We could not save the exchange rates.';
+const FAILED_BODY = 'Check your connection and try again. What you typed is still in the form.';
+const LOADING = 'Loading the exchange rates';
+const LOAD_ERROR_TITLE = 'We could not load the exchange rates';
+const LOAD_ERROR_BODY = 'Check your connection and try again. Nothing was changed.';
+const SAVED_NOT_SHOWN = 'The exchange rates were saved, but we could not show them. Check your connection and try again.';
+const FIXED_OBJECT_ID = '00000000-0000-4000-8000-000600000001';
+const OTHER_PAIR = { usd: '91.37', eur: '92.73' };
+/** `browser.newContext()` inherits the project's saved Admin state unless told otherwise (found the hard way: a sign-in on it never shows its form). */
+const NOBODY = { cookies: [], origins: [] };
+const CANARY = { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur };
+
+async function ownerClient(): Promise<Client> {
+  const url = process.env['MIGRATE_DATABASE_URL'];
+  if (url === undefined || !url.includes('localhost:55523')) throw new Error('The QA probe runs only against its own throwaway database on port 55523.');
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  return client;
+}
+
+async function pairInDatabase(): Promise<Record<string, string>> {
+  const client = await ownerClient();
+  try {
+    const { rows } = await client.query<{ currency: string; v: string }>('SELECT currency, inr_value::text AS v FROM exchange_rates');
+    return Object.fromEntries(rows.map((row) => [row.currency, row.v]));
+  } finally {
+    await client.end();
+  }
+}
+
+async function exchangeAudit(): Promise<Array<{ event: string; object_type: string; object_id: string; before: unknown; after: unknown; actor_label: string }>> {
+  const client = await ownerClient();
+  try {
+    const { rows } = await client.query(
+      "SELECT event, object_type, object_id::text, before, after, actor_label FROM audit_log WHERE object_type = 'exchange_rate' ORDER BY created_at, id",
+    );
+    return rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function open(page: Page): Promise<void> {
+  await page.goto('/masters/materials');
+  await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible();
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await page.getByRole('tab', { name: 'Materials' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByLabel(LABEL_USD)).toBeVisible();
+}
+
+const usd = (page: Page) => page.getByLabel(LABEL_USD);
+const eur = (page: Page) => page.getByLabel(LABEL_EUR);
+const save = (page: Page) => page.getByRole('button', { name: SAVE });
+
+/** Types into the focused field by keyboard: select all, then type. */
+async function typeOver(page: Page, text: string): Promise<void> {
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type(text);
+}
+
+/** Keyboard only, from the first field: USD, Tab, EUR, Tab, Save, Enter. Returns the PUT response. */
+async function keyboardSave(page: Page, pair: { usd: string; eur: string }) {
+  await usd(page).focus();
+  await typeOver(page, pair.usd);
+  await page.keyboard.press('Tab');
+  await expect(eur(page)).toBeFocused();
+  await typeOver(page, pair.eur);
+  await page.keyboard.press('Tab');
+  await expect(save(page)).toBeFocused();
+  const answered = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/api/v1/exchange-rates'));
+  await page.keyboard.press('Enter');
+  return answered;
+}
+
+/** Both fields refused by keyboard: USD "abc", EUR "-1", Save. Focus ends on USD (first message). */
+async function refuseBoth(page: Page): Promise<void> {
+  await usd(page).focus();
+  await typeOver(page, 'abc');
+  await page.keyboard.press('Tab');
+  await typeOver(page, '-1');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(2);
+  await expect(usd(page)).toBeFocused();
+}
+
+test.use({ storageState: ADMIN_STATE });
+
+test.describe.configure({ mode: 'serial' });
+
+test('D3-1a: keyboard only, two fields refused, FIXING USD FIRST: focus and text stay in USD, EUR keeps its text and message', async ({ page }) => {
+  await open(page);
+  await refuseBoth(page);
+  await typeOver(page, '81.37');
+  await expect(usd(page)).toBeFocused();
+  await expect(usd(page)).toHaveValue('81.37');
+  await expect(eur(page)).toHaveValue('-1');
+  await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(1);
+});
+
+test('D3-1b: keyboard only, two fields refused, FIXING EUR FIRST (Tab to EUR): focus and text stay in EUR; USD keeps its text', async ({ page }) => {
+  await open(page);
+  await refuseBoth(page);
+  await page.keyboard.press('Tab');
+  await expect(eur(page)).toBeFocused();
+  await typeOver(page, '88.37');
+  await expect(eur(page)).toBeFocused();
+  await expect(eur(page)).toHaveValue('88.37');
+  await expect(usd(page)).toHaveValue('abc');
+  await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(1);
+  // then fix USD by Shift+Tab: still its own
+  await page.keyboard.press('Shift+Tab');
+  await expect(usd(page)).toBeFocused();
+  await typeOver(page, '81.37');
+  await expect(usd(page)).toHaveValue('81.37');
+  await expect(eur(page)).toHaveValue('88.37');
+  await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(0);
+});
+
+test('D3-1c: a server 422 naming both fields (the real 422 body), then typing a fix: focus and text stay in the field typed', async ({ page, request }) => {
+  const real = await request.put(API, { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, data: { usd: '', eur: '-1' } });
+  expect(real.status()).toBe(422);
+  const genuine = await real.text();
+  await page.route('**/api/v1/exchange-rates', (route) =>
+    route.request().method() === 'PUT' ? route.fulfill({ status: 422, contentType: 'application/problem+json', body: genuine }) : route.fallback(),
+  );
+  await open(page);
+  await usd(page).focus();
+  await typeOver(page, '90.37');
+  await page.keyboard.press('Tab');
+  await typeOver(page, '91.73');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(NUMBER_MESSAGE)).toHaveCount(2);
+  await expect(usd(page)).toBeFocused();
+  await typeOver(page, '84.37');
+  await expect(usd(page)).toBeFocused();
+  await expect(usd(page)).toHaveValue('84.37');
+  await expect(eur(page)).toHaveValue('91.73');
+  await page.keyboard.press('Tab');
+  await expect(eur(page)).toBeFocused();
+  await typeOver(page, '85.73');
+  await expect(eur(page)).toBeFocused();
+  await expect(eur(page)).toHaveValue('85.73');
+  await expect(usd(page)).toHaveValue('84.37');
+});
+
+test('D3-7 QLT-11: a keyboard-only save of a pair other than the canary pair, through the real route, stores both with one stamp and writes one master.edited entry; then the canary pair is restored', async ({ page }) => {
+  await ensureCanaryExchangeRates();
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+  const entriesBefore = (await exchangeAudit()).length;
+
+  await open(page);
+  await expect(usd(page)).toHaveValue(CANARY.usd);
+  const first = await keyboardSave(page, OTHER_PAIR);
+  expect(first.status()).toBe(200);
+  const body = (await first.json()) as { usd: string; eur: string; updatedBy: string; updatedAt: string };
+  expect(body).toMatchObject({ usd: OTHER_PAIR.usd, eur: OTHER_PAIR.eur, updatedBy: E2E_ADMIN.name });
+  await expect(page.getByRole('status').filter({ hasText: SAVED })).toBeVisible();
+  await expect(save(page)).toBeFocused();
+
+  const client = await ownerClient();
+  try {
+    const { rows } = await client.query<{ currency: string; v: string; by: string; at: Date }>(
+      'SELECT currency, inr_value::text AS v, updated_by::text AS by, updated_at AS at FROM exchange_rates ORDER BY currency',
+    );
+    expect(rows.map((row) => [row.currency, row.v])).toEqual([['EUR', `${OTHER_PAIR.eur}00`], ['USD', `${OTHER_PAIR.usd}00`]]);
+    expect(rows[0]?.at.getTime()).toBe(rows[1]?.at.getTime());
+    expect(rows[0]?.by).toBe(rows[1]?.by);
+    expect(rows[0]?.at.toISOString()).toBe(body.updatedAt);
+    console.log('QLT11 rows', JSON.stringify(rows.map((r) => ({ currency: r.currency, value: r.v, updated_by: r.by, updated_at: r.at.toISOString() }))));
+  } finally {
+    await client.end();
+  }
+  const afterFirst = await exchangeAudit();
+  expect(afterFirst).toHaveLength(entriesBefore + 1);
+  console.log('QLT11 entry 1', JSON.stringify(afterFirst.at(-1)));
+  expect(afterFirst.at(-1)).toMatchObject({
+    event: 'master.edited',
+    object_type: 'exchange_rate',
+    object_id: FIXED_OBJECT_ID,
+    actor_label: E2E_ADMIN.name,
+    before: { usd: CANARY.usd, eur: CANARY.eur },
+    after: OTHER_PAIR,
+  });
+  // The stamp line on screen is that instant in IST, worked out by hand.
+  const shifted = new Date(new Date(body.updatedAt).getTime() + 330 * 60_000);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const two = (n: number) => String(n).padStart(2, '0');
+  const ist = `${two(shifted.getUTCDate())} ${months[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}, ${two(shifted.getUTCHours())}:${two(shifted.getUTCMinutes())} IST`;
+  await expect(page.getByText(`Last updated by ${E2E_ADMIN.name}, ${ist}.`)).toBeVisible();
+
+  // A second press with nothing changed: Nothing to save, no request, no entry.
+  let puts = 0;
+  page.on('request', (r) => {
+    if (r.method() === 'PUT') puts += 1;
+  });
+  await save(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').filter({ hasText: NOTHING_TO_SAVE })).toBeVisible();
+  expect(puts).toBe(0);
+
+  // Restore the canary pair, keyboard only, and check what the scan needs.
+  const second = await keyboardSave(page, CANARY);
+  expect(second.status()).toBe(200);
+  await expect(page.getByRole('status').filter({ hasText: SAVED })).toBeVisible();
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+  const afterSecond = await exchangeAudit();
+  expect(afterSecond).toHaveLength(entriesBefore + 2);
+  console.log('QLT11 entry 2 (restore)', JSON.stringify(afterSecond.at(-1)));
+  console.log('QLT11 entries before/after', entriesBefore, afterSecond.length, 'pair now', JSON.stringify(await pairInDatabase()));
+  expect(afterSecond.at(-1)).toMatchObject({ event: 'master.edited', object_id: FIXED_OBJECT_ID, before: OTHER_PAIR, after: { usd: CANARY.usd, eur: CANARY.eur } });
+});
+
+test('D3-8: the five sentences of ux-spec v0.21, in the browser', async ({ page }) => {
+  // Loading (a slow read), then the form.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = true;
+  await page.route('**/api/v1/exchange-rates', async (route) => {
+    if (route.request().method() === 'GET' && held) {
+      await gate;
+      held = false;
+    }
+    await route.fallback();
+  });
+  await page.goto('/masters/materials');
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await page.getByRole('tab', { name: 'Exchange rates' }).click();
+  await expect(page.getByText(LOADING)).toBeVisible();
+  release();
+  await expect(usd(page)).toBeVisible();
+  await page.unroute('**/api/v1/exchange-rates');
+
+  // Failed: the title is bold, then the sentence; what was typed stays; no "Nothing was changed."
+  await page.route('**/api/v1/exchange-rates', (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ type: 'about:blank', title: 'busy', status: 503, code: 'DATABASE_BUSY', requestId: 'req-0a0b0c0d' }) })
+      : route.fallback(),
+  );
+  await usd(page).fill('99.37');
+  await save(page).click();
+  await expect(page.getByText(FAILED_TITLE)).toBeVisible();
+  await expect(page.getByText(FAILED_BODY)).toBeVisible();
+  await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
+  await expect(page.getByRole('alert').filter({ hasText: FAILED_TITLE })).toBeVisible();
+  await expect(usd(page)).toHaveValue('99.37');
+  await page.unroute('**/api/v1/exchange-rates');
+
+  // Load error without a Saved notice: title takes focus, sentence says "Nothing was changed."
+  await page.route('**/api/v1/exchange-rates', (route) => (route.request().method() === 'GET' ? route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ type: 'about:blank', title: 'busy', status: 503, code: 'DATABASE_BUSY', requestId: 'req-0a0b0c0d' }) }) : route.fallback()));
+  await page.goto('/masters/materials');
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await page.getByRole('tab', { name: 'Exchange rates' }).click();
+  await expect(page.getByText(LOAD_ERROR_TITLE)).toBeVisible();
+  await expect(page.getByText(LOAD_ERROR_BODY)).toBeVisible();
+  await expect(page.getByRole('heading', { name: LOAD_ERROR_TITLE })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await page.unroute('**/api/v1/exchange-rates');
+});
+
+test('D3-8b: Error with the Saved notice on the page says the rates were saved but cannot be shown; focus on the error title and stays', async ({ page, request }) => {
+  await ensureCanaryExchangeRates();
+  const real = (await (await request.get(API)).json()) as Record<string, unknown>;
+  // The screen is told another pair is stored, so sending the canary pair is a change on screen and a no-op write on the server; the re-read then fails.
+  let putSeen = false;
+  await page.route('**/api/v1/exchange-rates', (route) => {
+    if (route.request().method() !== 'GET') {
+      putSeen = true;
+      return route.fallback();
+    }
+    return !putSeen
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...real, usd: OTHER_PAIR.usd, eur: OTHER_PAIR.eur }) })
+      : route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ type: 'about:blank', title: 'busy', status: 503, code: 'DATABASE_BUSY', requestId: 'req-0a0b0c0d' }) });
+  });
+  await open(page);
+  const answered = await keyboardSave(page, CANARY);
+  expect(answered.status()).toBe(200);
+  await expect(page.getByText(SAVED_NOT_SHOWN)).toBeVisible();
+  await expect(page.getByRole('heading', { name: LOAD_ERROR_TITLE })).toBeFocused();
+  await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('heading', { name: LOAD_ERROR_TITLE })).toBeFocused();
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+});
+
+test('D3-9: AC-1, AC-5, AC-7 on the real server and stored data: no sideways scroll, axe 0, targets of 44 px, inputmode decimal, hints with the registry letters, stamp as text', async ({ page }) => {
+  await ensureCanaryExchangeRates();
+  await open(page);
+  await expect(page.getByText('Converts prices to US dollars. The rate (BH) feeds Unit Production Price (USD), BJ.')).toBeVisible();
+  await expect(page.getByText('Converts prices to euros. The rate (BI) feeds Unit Production Price (EUR), BK.')).toBeVisible();
+  await expect(page.getByText(/^Last updated by .+ IST\.$/)).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: 'Exchange rates' })).toBeVisible();
+  for (const control of [usd(page), eur(page), save(page), page.getByRole('tab', { name: 'Exchange rates' })]) {
+    expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+  }
+  await expect(usd(page)).toHaveAttribute('inputmode', 'decimal');
+  await expect(eur(page)).toHaveAttribute('inputmode', 'decimal');
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await expectNoAxeViolations(page);
+  // states: refusal, saved notice, failed notice
+  await refuseBoth(page);
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await expectNoAxeViolations(page);
+  await usd(page).focus();
+  await typeOver(page, CANARY.usd);
+  await eur(page).focus();
+  await typeOver(page, CANARY.eur);
+  await save(page).click();
+  await expect(page.getByRole('status').filter({ hasText: NOTHING_TO_SAVE })).toBeVisible();
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await expectNoAxeViolations(page);
+  // a very long typed value stays inside the field and the page
+  await usd(page).fill('9'.repeat(300));
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await save(page).click();
+  await expect(page.getByText(NUMBER_MESSAGE).first()).toBeVisible();
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await expectNoAxeViolations(page);
+});
+
+test('D3-9 AC-6: a Lead and an Engineer have no way to the tab and no rate over the wire; signed out is refused', async ({ browser }) => {
+  test.setTimeout(180_000);
+  await ensureCanaryExchangeRates();
+  const lead = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: SIGNED_IN_STATE });
+  try {
+    const page = await lead.newPage();
+    const answer = await page.goto('/masters/materials');
+    expect(answer?.status()).toBe(403);
+    await expect(page.getByRole('tab', { name: 'Exchange rates' })).toHaveCount(0);
+    const seen: string[] = [await page.content()];
+    for (const method of ['get', 'put'] as const) {
+      const result = await page.request[method](API, { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, ...(method === 'put' ? { data: CANARY } : {}) });
+      expect(result.status()).toBe(403);
+      seen.push(await result.text());
+    }
+    expect(seen.join(' ')).not.toMatch(/838[.,]?37|839[.,]?73|inrValue|"usd"|"eur"/);
+  } finally {
+    await lead.close();
+  }
+  const engineer = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: NOBODY });
+  try {
+    await useFreshAddress(engineer);
+    const page = await engineer.newPage();
+    await page.goto('/sign-in');
+    await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
+    await expect(page).toHaveURL(/queue$/, { timeout: 120_000 });
+    const answer = await page.goto('/masters/materials');
+    expect(answer?.status()).toBe(403);
+    await expect(page.getByRole('tab', { name: 'Exchange rates' })).toHaveCount(0);
+    const seen: string[] = [await page.content()];
+    for (const method of ['get', 'put'] as const) {
+      const result = await page.request[method](API, { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, ...(method === 'put' ? { data: CANARY } : {}) });
+      expect(result.status()).toBe(403);
+      seen.push(await result.text());
+    }
+    expect(seen.join(' ')).not.toMatch(/838[.,]?37|839[.,]?73|inrValue|"usd"|"eur"/);
+  } finally {
+    await engineer.close();
+  }
+  const anonymous = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: NOBODY });
+  try {
+    expect((await anonymous.request.get(API)).status()).toBe(401);
+    expect((await anonymous.request.put(API, { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, data: CANARY })).status()).toBe(401);
+  } finally {
+    await anonymous.close();
+  }
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+});
+
+test('E-1 exploratory: a stale second tab saves the values another tab already saved: 200, "Exchange rates saved.", and no second audit entry (QLT-06 a)', async ({ browser }) => {
+  await ensureCanaryExchangeRates();
+  const tabA = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: ADMIN_STATE });
+  const tabB = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: ADMIN_STATE });
+  try {
+    const a = await tabA.newPage();
+    const b = await tabB.newPage();
+    await open(a);
+    await open(b);
+    await expect(usd(b)).toHaveValue(CANARY.usd);
+    const before = (await exchangeAudit()).length;
+    const savedByA = await keyboardSave(a, OTHER_PAIR);
+    expect(savedByA.status()).toBe(200);
+    expect((await exchangeAudit()).length).toBe(before + 1);
+    // Tab B still shows the canary pair. It types the pair A saved and presses Save.
+    const savedByB = await keyboardSave(b, OTHER_PAIR);
+    expect(savedByB.status()).toBe(200);
+    await expect(b.getByRole('status').filter({ hasText: SAVED })).toBeVisible();
+    expect((await exchangeAudit()).length).toBe(before + 1);
+    console.log('E-1 stale tab: saved notice shown, audit entries added =', (await exchangeAudit()).length - before);
+    // restore
+    const restored = await keyboardSave(a, CANARY);
+    expect(restored.status()).toBe(200);
+  } finally {
+    await tabA.close();
+    await tabB.close();
+  }
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+});
+
+test('E-2 exploratory: two presses of Save at once (a double click) send one or two requests, both 200, and write exactly one entry', async ({ page }) => {
+  await ensureCanaryExchangeRates();
+  await open(page);
+  const before = (await exchangeAudit()).length;
+  await usd(page).fill(OTHER_PAIR.usd);
+  await eur(page).fill(OTHER_PAIR.eur);
+  const sent: number[] = [];
+  page.on('response', (r) => {
+    if (r.request().method() === 'PUT' && r.url().endsWith('/api/v1/exchange-rates')) sent.push(r.status());
+  });
+  await save(page).dblclick();
+  await expect(page.getByRole('status').filter({ hasText: SAVED })).toBeVisible();
+  await page.waitForTimeout(500);
+  const added = (await exchangeAudit()).length - before;
+  console.log('E-2 double click: PUT responses =', JSON.stringify(sent), 'audit entries added =', added);
+  expect(sent.every((s) => s === 200)).toBe(true);
+  expect(added).toBe(1);
+  const restored = await keyboardSave(page, CANARY);
+  expect(restored.status()).toBe(200);
+  expect(await pairInDatabase()).toEqual({ USD: `${CANARY.usd}00`, EUR: `${CANARY.eur}00` });
+});

@@ -1,0 +1,104 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/unit/exchange-rates-routes.test.ts (16 tests | 3 failed) 1252ms
+ ❯ tests/unit/exchange-rates-lib.test.ts (39 tests | 7 failed) 396ms
+ ❯ tests/integration/masters/exchange-rates.test.ts (26 tests | 19 failed) 7105ms
+ ❯ tests/unit/masters-service-exchange-rates.test.ts (20 tests | 16 failed) 160ms
+ ❯ tests/security/role-matrix.test.ts (163 tests | 1 failed) 16185ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 46 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/security/role-matrix.test.ts > AC-2 and AC-4: API routes, as each role and signed out > PUT /api/v1/exchange-rates as ADMIN
+AssertionError: expected 422 to be 200 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts "0"
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts "0.5"
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts "83.37"
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts "083.37"
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts " 83.37 "
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > accepts "123456789012.99"
+AssertionError: expected 'Enter a number, 0 or more, with up to…' to be null
+- Expected:
++ Received:
+ FAIL  tests/unit/exchange-rates-lib.test.ts > exchangeRateProblem (AC-2, AC-3) > judges each field on its own and names only the ones that fail
+AssertionError: expected { …(2) } to deeply equal { Object (eur) }
+- Expected
++ Received
+ FAIL  tests/unit/exchange-rates-routes.test.ts > PUT /api/v1/exchange-rates (AC-2, AC-4) > saves both rates: 200, the rates to two decimals, the stamp, and exactly one master.edited entry of object type exchange_rate
+AssertionError: expected 422 to be 200 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/unit/exchange-rates-routes.test.ts > PUT /api/v1/exchange-rates (AC-2, AC-4) > is idempotent: the same body twice gives the same answer and only the first writes an entry
+AssertionError: expected '{"type":"about:blank","title":"Check …' to be '{"type":"about:blank","title":"Check …' // Object.is equality
+Expected: "{"type":"about:blank","title":"Check the values and try again.","status":422,"code":"VALIDATION_FAILED","requestId":"req-4bdfbfb9","errors":[{"field":"usd","message":"Enter a number, 0 or more, with up to 2 decimals."},{"field":"eur","message":"Enter a number, 0 or more, with up to 2 deci
+Received: "{"type":"about:blank","title":"Check the values and try again.","status":422,"code":"VALIDATION_FAILED","requestId":"req-aab025a3","errors":[{"field":"usd","message":"Enter a number, 0 or more, with up to 2 decimals."},{"field":"eur","message":"Enter a number, 0 or more, with up to 2 deci
+ FAIL  tests/unit/exchange-rates-routes.test.ts > PUT /api/v1/exchange-rates (AC-2, AC-4) > accepts 0 for a rate (assumption A-1)
+AssertionError: expected 422 to be 200 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > getExchangeRates (AC-1) > gives the stored rates, who saved them and when (an ISO instant in UTC)
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > the columns of the hints come from the registry (AC-5, UX-23) > fails loudly, and writes nothing, when the registry has no field for a hint, rather than printing a typed letter
+AssertionError: expected [Function] to throw error including 'unit-price-eur' but got 'Enter a number, 0 or more, with up to…'
+Expected: "unit-price-eur"
+Received: "Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals."
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > stores both rates with one stamp and writes exactly one master.edited entry of object type exchange_rate, with both rates before and after
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > writes the rates to two decimals and without leading zeros, and takes the stamp from the clock it was given
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > records a change of one rate with both rates in the entry, and stamps the pair anew
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > writes no stamp, no row and no entry for a save that changes nothing, however the same numbers are written (idempotent)
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > takes the table lock before it reads the rows, as every master does (PRF-01)
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > reads the configuration before the transaction opens, so a read that fails writes nothing (QLT-05)
+AssertionError: expected [Function] to throw error including 'no configuration' but got 'Enter a number, 0 or more, with up to…'
+Expected: "no configuration"
+Received: "Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals."
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a blank value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a spaces only value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a negative value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a not a number value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a three decimals value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a a sign value: 422 naming the field, nothing stored, no lock, no entry
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > a more than 12 digits value: 422 naming the field, nothing stored, no lock, no entry
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates refuses what the rules refuse (AC-3) > accepts 0 for either rate (assumption A-1)
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > stores both rates with one stamp (who, when in UTC) and writes exactly one master.edited entry of object type exchange_rate
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > is idempotent: the same body again gives the same state, the same stamp and no second entry
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > records a change of one rate with both rates before and after, and stamps both rows with the new save
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > accepts 0 (assumption A-1) and writes the stored value with two decimals
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > shows the stamp across midnight IST: the instant is stored in UTC, and 00:00:01 IST is a different day from 23:59:59 IST
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > puts the saver's current name in the view, not the name they had when they saved
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a blank value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a spaces only value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a negative value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a not a number value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a a sign value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a three decimals value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a an exponent value, naming the field
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-3 (T2): a value the rules refuse changes neither rate and writes nothing > refuses a a thousands separator value, naming the field
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-4 (DEF-017): an entry commits with its change, or not at all > first save (create): no rate is left and no entry is kept
+AssertionError: expected [Function] to throw error including 'a failure after the entry was written' but got 'Enter a number, 0 or more, with up to…'
+Expected: "a failure after the entry was written"
+Received: "Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals."
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-4 (DEF-017): an entry commits with its change, or not at all > a later save (edit): the rates are as they were, with their stamp, and no entry is kept
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-4 (DEF-017): an entry commits with its change, or not at all > an entry the audit service refuses takes the first save back (a rate is never saved without its record)
+AssertionError: expected FieldValidationError: Enter a number, 0 o… { …(3) } to match object { reason: 'shape' }
+- Expected
++ Received
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-4 (DEF-017): an entry commits with its change, or not at all > an entry the audit service refuses takes a later save back (NFR-007)
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ FAIL  tests/integration/masters/exchange-rates.test.ts > two saves at once > wait for each other: the state is one save entire, never half of each, and the entry of the second holds the state the first left
+FieldValidationError: Enter a number, 0 or more, with up to 2 decimals. Enter a number, 0 or more, with up to 2 decimals.
+ Test Files  5 failed | 14 passed (19)
+      Tests  46 failed | 1036 passed (1082)
+   Duration  36.22s (tests 55%, import 38%, transform 6%, worker 1%)

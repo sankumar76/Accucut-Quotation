@@ -39,6 +39,7 @@ model User {
 
   configVersions ConfigVersion[]
   auditEntries   AuditLog[]
+  exchangeRates  ExchangeRate[]
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -151,4 +152,23 @@ model Material {
 
   @@unique([materialInDrawing], map: "uq_materials_material_in_drawing")
   @@map("materials")
+}
+
+/// One exchange rate of the Exchange Rate Master (STORY-02.04, FR-016; architecture sections 5.1 and 6; SPEC sections 4.4 and 7.4): 1 unit of
+/// `currency` in INR. The table holds at most two rows, USD and EUR, and is created EMPTY (ADR-014: no real rate is committed); the Admin types
+/// the rates in. `updatedById` and `updatedAt` are the stamp of the last save that changed a rate, kept on both rows because the two rates are saved
+/// together. `updatedAt` is set by the service from its clock (UTC), not by Prisma. The CHECK constraints (the currency is USD or EUR, a rate is 0 or
+/// more) are hand-written in the migration: Prisma cannot express them. Class Restricted: a rate never reaches an Engineer.
+/// Departs from the SQL conventions of the coding standards (section 10) on purpose, as architecture section 5.1 specifies: the table is keyed by
+/// `currency` (two fixed rows) instead of an `id` UUID; the stamp columns are `updated_by` / `updated_at`; there is no `created_at`, because the table is
+/// created empty and changed in place.
+model ExchangeRate {
+  currency    String   @id
+  inrValue    Decimal  @map("inr_value") @db.Decimal(18, 4)
+  updatedById String   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User @relation(fields: [updatedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_exchange_rates_updated_by")
+
+  @@map("exchange_rates")
 }

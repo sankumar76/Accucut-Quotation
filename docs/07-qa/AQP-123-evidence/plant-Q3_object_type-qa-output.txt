@@ -1,0 +1,26 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 5 failed) 5581ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] idempotent: the same body gives the same answer (stamp included); "83.5" and "083.50" are one value
+AssertionError: expected [] to have a length of 1 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] first save: exactly one entry, with the fixed object_id, the label, the actor, the request ID of the response, befo
+AssertionError: expected [] to have a length of 1 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] a change of one currency is one entry holding both before and after; a chain: each before is the previous after
+AssertionError: expected [] to have a length of 3 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] atomic: with the unit of work failing after its last step, the save answers 500 with the generic words, stores noth
+AssertionError: expected [] to have a length of 1 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] parallel saves of six different pairs: the rows hold one request's pair entire, and the entries form one unbroken c
+AssertionError: expected [] to have a length of 7 but got +0
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  5 failed | 55 passed (60)
+   Duration  7.80s (tests 77%, import 13%, transform 9%)

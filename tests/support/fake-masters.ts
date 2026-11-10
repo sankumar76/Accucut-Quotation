@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import {
   MasterConstraintError,
+  type ExchangeRateStamp,
+  type ExchangeRatesRecord,
   type MasterRepository,
   type MaterialChanges,
   type MaterialRecord,
@@ -23,6 +25,9 @@ import { SEED_PROCESS_ITEMS } from './seed-config';
 /** A rate the test may change in place. */
 export type MutableProcessItem = { -readonly [K in keyof ProcessItemRecord]: ProcessItemRecord[K] };
 
+/** The exchange rates the test may change in place: the two rates (null while never set) and the stamp of the pair. */
+export type MutableExchangeRates = { -readonly [K in keyof ExchangeRatesRecord]: ExchangeRatesRecord[K] };
+
 /** A material the test may change in place. */
 export type MutableMaterial = { -readonly [K in keyof MaterialRecord]: MaterialRecord[K] };
 
@@ -31,6 +36,10 @@ export interface FakeMasterRepository extends MasterRepository {
   readonly records: MutableProcessItem[];
   /** The listed materials, mutable in the same way. There is no hidden row here: that is story 02.06's. */
   readonly materials: MutableMaterial[];
+  /** The Exchange Rate Master, mutable in the same way (STORY-02.04). Starts with no rate set. */
+  readonly exchange: MutableExchangeRates;
+  /** How many times the exchange rates' table lock was taken. */
+  exchangeLockCount(): number;
   /** How many times the table lock was taken: a change to the set of names takes it first. */
   lockCount(): number;
   /** How many times the materials' table lock was taken. */
@@ -86,6 +95,31 @@ function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => v
   };
 }
 
+/** The name a stamp shows for a person; the fake has no user table, so every actor is this one unless a test sets a name. */
+const FAKE_ACTOR_NAME = 'Invented Admin';
+
+/** The exchange-rate half of the fake: the pair is kept together, and a save replaces both rates and the stamp. */
+function createFakeExchangeMethods(state: MutableExchangeRates, onLock: () => void): Pick<MasterRepository, ExchangeMethod> {
+  const copy = (): ExchangeRatesRecord => ({ usd: state.usd, eur: state.eur, stamp: state.stamp === null ? null : { ...state.stamp } });
+  return {
+    readExchangeRates: () => Promise.resolve(copy()),
+    lockExchangeRates() {
+      onLock();
+      return Promise.resolve();
+    },
+    findExchangeRatesForUpdate: () => Promise.resolve(copy()),
+    saveExchangeRates(values, stamp) {
+      const written: ExchangeRateStamp = { updatedById: stamp.updatedById, updatedByName: FAKE_ACTOR_NAME, updatedAt: stamp.updatedAt };
+      state.usd = values.usd;
+      state.eur = values.eur;
+      state.stamp = written;
+      return Promise.resolve(copy());
+    },
+  };
+}
+
+type ExchangeMethod = 'readExchangeRates' | 'lockExchangeRates' | 'findExchangeRatesForUpdate' | 'saveExchangeRates';
+
 type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
 
 export function createFakeMasterRepository(
@@ -96,14 +130,21 @@ export function createFakeMasterRepository(
   const materials: MutableMaterial[] = initialMaterials.map((material) => ({ ...material }));
   let locks = 0;
   let materialLocks = 0;
+  let exchangeLocks = 0;
+  const exchange: MutableExchangeRates = { usd: null, eur: null, stamp: null };
   const taken = (name: string, exceptId?: string): boolean =>
     records.some((record) => record.name.toLowerCase() === name.toLowerCase() && record.id.toLowerCase() !== exceptId?.toLowerCase());
 
   return {
     records,
     materials,
+    exchange,
     lockCount: () => locks,
     materialLockCount: () => materialLocks,
+    exchangeLockCount: () => exchangeLocks,
+    ...createFakeExchangeMethods(exchange, () => {
+      exchangeLocks += 1;
+    }),
     ...createFakeMaterialMethods(materials, () => {
       materialLocks += 1;
     }),
