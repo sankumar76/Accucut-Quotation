@@ -186,3 +186,61 @@ First review; nothing to verify yet. On a re-review I will check STD-01 to STD-0
 - Open questions: STD-07 (architect: record `v1`)
 - Risks raised: none new
 - Recommended next agent: developer — fix STD-01 (Major) and, ideally, STD-02 to STD-06 in one push; then reviewer-standards re-review
+
+---
+
+# Round 2
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (new diff only: `c24fe22..8b587be`, 9 files, commits a740788, 5f38af9, 8b587be) |
+| Date | 2026-11-10 |
+| **Verdict** | **APPROVE WITH COMMENTS** (no Blocker, Critical or Major open; one new Minor, one new Info) |
+
+## Prior findings
+
+| ID | Result | Evidence |
+|----|--------|----------|
+| STD-01 (Major) | **Fixed** | `ci-run-summary.ts` `main().catch(...)` prints `::warning::The run summary could not be written (<error.name>).` and keeps exit 0; no message text, so no path or token. New test with an unwritable `GITHUB_STEP_SUMMARY` asserts exit 0, the warning, and that neither the token nor the path appears |
+| STD-02 (Minor) | **Fixed** | `timeout-minutes: 1` on the three `Summary:` steps (`ci.yml`); the workflow comment says why; `ci-setup-cut.test.ts` requires it in each step |
+| STD-03 (Minor) | **Fixed** | `fingerprint` returns "stopped after N s" for status 124 and "failed (exit N)" otherwise; `record` ends with "integrity record failed"; tests add a failing `find` for both modes and assert it is not called a time-out |
+| STD-04 (Minor) | **Fixed** | `FAN_IN_RANK`, `OTHER_RANK`, `JOBS_PER_PAGE`, `record_bound`, each with a reason |
+| STD-05 (Minor) | **Fixed** | `NODE_MODULES_CACHE_FORMAT: '1'` once in the top-level `env`, used by both key steps, referenced from the script header and the workflow comment; a guard asserts one entry before `jobs:` and no literal `node-modules-v<digit>`. The name does not contain `CACHE_EPOCH:`. Value stays 1, so saved entries stay valid. README lists both ways to replace a bad entry |
+| STD-06 (Minor) | **Fixed** | README: `--ref refs/pull/<n>/merge` note, host line sentence, section re-wrapped near 125 columns. The fallback warning in both jobs now adds `--ref ${GITHUB_REF}` (valid for `refs/pull/N/merge` and `refs/heads/master`). The new Budget paragraph says 76 entries and 10.89 GB; I read `gh api .../actions/cache/usage` and it returns 76 entries, 10,891,286,327 bytes |
+| STD-07 (Info) | **Closed** | Architect accepted the format number in architecture v0.33 §9.2 (Jira 11309) |
+| STD-08 (Info) | **Fixed** | Header `Needs:` and `Exit:` lines (a missing argument exits 1, confirmed with a probe script); the test file skips when `find -printf` is unavailable |
+| STD-09 (Info) | **Rebuttal accepted** | Follow-up issue #157; not for this PR |
+| STD-10, STD-11 (Info) | No change asked | `ci-run-summary.ts` is 369 lines, `ci-run-summary.test.ts` 284, `ci-setup-cut.test.ts` 262, `node-modules-integrity.test.ts` 210, the new `ci-run-summary-attempts.test.ts` 118: all under 400. The shared `apiJobsOf` helper moved to `tests/support/ci-run-jobs.ts`, so the loopback test and the new file share it |
+
+## New code
+
+| Check | Result |
+|-------|--------|
+| eslint on the 6 changed TypeScript files (`--no-cache`), `tsc --noEmit --incremental false`, read-only in `dev-243` at 8b587be | both exit 0 |
+| CI on 8b587be | 5 of 5 `success` (`Stages 1 to 11`, `Stages 1 to 11b`, shards 1 to 3) |
+| Workflow | env entry quoted and before `jobs:`; key text unchanged at value 1 (`node-modules-v1-...`), so cached entries still hit; no new permission, no new action; step timeouts present on all three summary steps |
+| Script hygiene | `set -euo pipefail` kept; `local bound list status=0` and `|| status=$?` are correct under `pipefail` (124 survives `sort`); `current="$(...)" || { ...; exit 1; }` prints the cause first; every expansion quoted |
+| Guards (G12) | Round 2 adds, and does not remove: an exact guard for the split cache action (four uses, only for the node_modules restore and save), the single env entry, the step timeouts, the README keywords (`--ref refs/pull/` replaces the loose `ref`). No assertion removed or narrowed |
+| Secrets in logs | The new warning prints the error name only; the new attempt request sends the token in the header only and reports no body |
+
+| ID | Severity | File:line | Rule | Issue | Fix |
+|----|----------|-----------|------|-------|-----|
+| STD-12 | Minor | `scripts/lib/ci-run-summary.ts:328-332` | Coding Standards §1, §10 | `fetchAttemptStart` returns `undefined` on a non-200 or any throw with no sign in the output; on a "Re-run failed jobs" attempt, carried-over jobs would then be counted in the path and the slowest shard silently | When `GITHUB_RUN_ATTEMPT` > 1 and the start is unreadable, add one fixed line to the summary; one test |
+| STD-13 | Info | `scripts/lib/ci-run-summary.ts:313`, `:325`, `:214` | Coding Standards §1 (rule of three) | The request is written twice; `fetchAttemptStart` relies on `fetchRunJobs` having validated the location; a nested ternary in `jobLine` | Extract `assertLocation` and `getJson` at the third use; optional `labelOf` |
+
+| Severity | Open after round 2 |
+|----------|--------------------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 1 (STD-12) |
+| Info | 1 (STD-13) |
+
+## Hand-off (round 2)
+
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/AQP-243/standards.md` (this section)
+- Jira / GitHub updates: replies in the PR #152 threads, round-2 COMMENT review, label `review:standards-approved` (own label only), hand-off comment on AQP-243
+- Open questions: none
+- Risks raised: none
+- Recommended next agent: master — standards review has no Blocker, Critical or Major open; STD-12 may be fixed with any later push or deferred as `tech-debt`
