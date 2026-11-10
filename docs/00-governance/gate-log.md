@@ -4757,3 +4757,20 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. RISK-023 is unchanged (#167 adds about 2.5 s).
 **Rationale:** each defect's fault is shown fixed by QA's probe and by tests that five independent fault classes break. The one deviation from the ruled controls is covered by evidence master read directly.
 **Posted:** Jira AQP-269 comment 11388; PR #167 comment 6775129363. No tech-debt issue created.
+
+## G6 + G7 (narrow route) — DEF-027 fix, PR #189 (AQP-272, #184; `tests/e2e/aqp-122-qa.spec.ts`) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO to merge (DL-140).** This is the DL-133 narrow route for a test-only fix: one file, +4 / -1, no `src/`, config, dependency or CI change. G6 and G7 are decided together with no review round. DEF-027 closes on the merge.
+- **Decided by:** master  ·  **Human override:** none
+- **Evidence read by master** (API and CI logs):
+  - **Diff:** the test now makes its own material (`newName`, `makeMaterial`) and asserts that the material is listed. The existing assertions stay (`options.length > 0`, three keys per entry, `no-store`). No retry, timeout, skip or tag was added (DL-057).
+  - **PR #189** at aff4791 is CLEAN. Run 42867881487, attempts 1 to 3, is 5 of 5 each.
+  - **Control PR #190** (#167's head cde1b29 plus the fix, closed unmerged). Run 42868028432, attempts 1 and 2, is 5 of 5 each.
+  - **Latest attempt of each run:** the tablet test passes first time in shard 2 (slot 5), with no `flaky` or `failed` line. Without the fix, the same slot failed and needed retry #1 (42862491463). That makes five clean full runs, two of them on #167's test set.
+  - **QA's audit** of the four QA specs found no other assertion that depends on rows the test did not create (QA hand-off on AQP-272).
+- **Conditions:**
+  - (a) Either order with the records docs PR #194. Whichever merges second is updated by a merge commit only, with its files unchanged, and needs 5 of 5 green.
+  - (b) The PR body has no "Closes #184", so the orchestrator closes #184 as completed with the merge commit.
+  - (c) QA moves AQP-272 to Done and fills in DEF-027's Fix & Verification rows (aff4791, the two runs).
+  - (d) PR #167 then merges under DL-139 (3).
+**Posted:** Jira AQP-272 comment 11393; PR #189 comment 6775228086.
