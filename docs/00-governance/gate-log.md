@@ -4682,3 +4682,40 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** RISK-023 is not re-scored now. The fall rule's target is corrected to 4 (P 2 × I 2), and it is read at G7 (DL-137 (4)).
 **Rationale:** the change is small and measured, and four of five plants are caught. The Major is a coverage hole that the change itself creates, in the file most likely to get new masters-table tests, so it is fixed before QA. The Minors are in the same four files, so they ride the same push (the AQP-38 rule).
 **Posted:** Jira AQP-244 comment 11376; PR #166 comment 6774316410. No tech-debt issue created (every Minor is in the push; PRF-01 goes to the architect with a due point).
+
+## G6 – Peer Review (close) — AQP-269 / AQP-270 / AQP-271 (DEF-024 to DEF-026, PR #167) — 2026-11-10 (attempt 1, closed at cde1b29)
+
+- **Decision:** **G6 closed at cde1b29. DL-136 conditions A and B are met.** The stories go to In QA. G7 follows DL-136 (4), unchanged. A newly seen flake is logged as DEF-027 and must be fixed before #167 is squashed (DL-138).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #167** at cde1b29: two commits on 69805d1 (db1319a, cde1b29). Developer hand-off: Jira AQP-269 11377.
+  - **Controls:** the developer's control PRs #180, #181 and #182 (closed unmerged).
+  - **My own checks:**
+    - **The push** (`compare 69805d1...cde1b29`, GitHub API): 3 files, all spec files (`materials.spec.ts` +18 / -5, `process-master.spec.ts` +3, `users.spec.ts` +17 / -2), with no `src/` change.
+      - **QLT-01:** the F-b step is added to the Material and Users tests. It Tabs to the later refused field while the first is still refused, types, asserts focus and value, and asserts the first is still empty, then Shift+Tab.
+      - **QLT-02:** a second click of Add on the empty-refusal test, then `toBeFocused` on Material in Drawing.
+      - **QLT-03:** `toBeFocused` on Rate name (both server refusals), on E-mail (e-mail in use) and on the Role combobox (Second Admin).
+      - Two value assertions were replaced, not dropped, because the new F-b step puts text in those fields first.
+      - Every point matches DL-136 (2).
+    - **CI 42862491463** on cde1b29: 5 of 5 `success`. The shard 2 log shows `1 flaky`: `aqp-122-qa.spec.ts:439` on tablet failed its first attempt at line 443 (`expect(body.options.length).toBeGreaterThan(0)`, received 0) and passed on retry #1.
+    - **Developer's plants:** control runs 42863792922 (C, the old effect) and 42863743797 (B, server sites) show the same flaky line. Run 42863675866 (A) shows none in the log read.
+    - **The flake is new on #167's heads.** It is absent from 42852617579 (69805d1), from AQP-244's five-run head and base runs (42852486467, 42850365032), and from `master` 322cd8e.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Zero open Blocker or Critical findings | ✱ | ✅ | none |
+| 2 | DL-136 (2): the test-only push as specified | | ✅ | read by master, above |
+| 3 | No `src/` change; no review round needed | | ✅ | 3 spec files |
+| 4 | CI green on the judged head | | ✅ | 5 of 5 (one retry, DEF-027) |
+| 5 | Plants shown failing named tests | | ✅ | the developer's #180 to #182: C fails the DEF-024 and DEF-026 sequence tests at 3 widths; A fails `materials.spec:166` at 3 widths and `process-master:163` at desktop; B fails the Material, Process and Users server-refusal tests. QA reproduces them at G7 (DL-136 (4)) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| G | qa-engineer | DEF-027 (Jira Bug and GitHub `bug`) | Log it: `aqp-122-qa.spec.ts:439` "[AQP-122 AC-4] the browser fetch of /api/v1/options/materials …" asserts `options.length > 0`. That needs materials made by other tests, so it fails when the test runs first in a shard on an empty database. #167's added tests moved it there. Sev-3, type Test, latent since AQP-122's QA spec. Fix it with its own row, as DEF-023 did: the test creates the material it reads. No retry or timeout change. While there, check QA's specs for other assertions that need rows they did not create, and list any found in the defect | **Before PR #167 is squashed** |
+| H | qa-engineer | `docs/07-qa/AQP-269-test-report.md` | G7 as DL-136 (4): QA's own three control PRs (old effect; request as a field name; `setErrors` at the server sites), each failing named tests at the stated widths; the F-a and F-b probes read against the committed tests; the Fix & Verification rows of DEF-024 to DEF-026; DEF-026's file corrected to Sev-2; CI on the final head with no `flaky` line once DEF-027 is fixed | G7 |
+
+**Risks:** none new. While #167 is unmerged, DEF-027 affects no RISK-023 or AQP-244 reading: AQP-244's five-run head and base runs show no flaky line, and `master` does not yet carry #167's tests.
+**Rationale:** the push is exactly what DL-136 asked, and the plants show each new assertion bites. The flake is a latent cross-test dependency of the same kind as DEF-023, and this PR is what exposes it on `master`. So it is fixed before #167 is squashed, and every later run, including AQP-244's merge-commit run, stays clean.
+**Posted:** Jira AQP-269 comment 11381; PR #167 comment 6774479569. DEF-027 is to be logged by qa-engineer (Jira Bug and GitHub `bug`).
