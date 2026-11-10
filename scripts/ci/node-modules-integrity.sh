@@ -16,6 +16,9 @@
 # (lint, the type-check and the build write caches there later), and the cache is saved right after it, so the restored list
 # is exactly the recorded one. The list holds names and sizes only, no file content and no secret.
 #
+# The record is part of the cache entry, so its format is part of the cache key: the key in ci.yml starts with `node-modules-v1`, and
+# that `v1` is raised with any change to what `record` writes (otherwise an old entry would fail the new check on every run).
+#
 # What the check does not do: it does not read file content, so a changed byte with the same size is not seen. The cache key
 # (`package-lock.json`, `package.json`, `.npmrc`, the Node and npm versions) fixes which packages are in the entry, and the
 # cache action checks its own archive; this check covers the gap between them, a restore that is incomplete.

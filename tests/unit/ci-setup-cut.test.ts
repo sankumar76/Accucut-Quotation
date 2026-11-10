@@ -88,7 +88,7 @@ describe.each(INSTALL_JOBS)('AQP-243 AC-2 / AC-3: the node_modules cache in the 
   it('keys the cache on the runner, Node, npm and the three files, with no restore-keys (a changed file is a miss)', () => {
     const key = step('name the node_modules cache key');
     expect(key).toContain("INPUT_HASH: ${{ hashFiles('package-lock.json', 'package.json', '.npmrc') }}");
-    expect(key).toContain('"key=node-modules-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}"');
+    expect(key).toContain('"key=node-modules-v1-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-node${NODE_VERSION}-npm${NPM_VERSION}-${INPUT_HASH}"');
     expect(step('restore node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
     expect(step('save node_modules')).toContain('key: ${{ steps.nmkey.outputs.key }}');
     for (const part of ['restore node_modules', 'save node_modules']) {

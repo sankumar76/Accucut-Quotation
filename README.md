@@ -262,7 +262,7 @@ to that pull request only. The entries every branch reads are written only by `p
 ### node_modules cache
 
 The install in each CI job (`Stages 1 to 11b` and the three E2E shards) does not run `npm ci` on every run (AQP-243, test strategy 10.5
-item 7). `node_modules` is restored from a cache whose key is the runner OS, architecture and image (`ImageOS`), the Node and
+item 7). `node_modules` is restored from a cache whose key is the runner OS, architecture and image (`ImageOS`), a format number for the integrity record (`v1`), the Node and
 npm versions of `ci.yml`, and a hash of `package-lock.json`, `package.json` and `.npmrc`. There is no `restore-keys`: only an exact
 match restores, so a changed lockfile, a changed install-script allow-list (`allowScripts`, `strict-allow-scripts`) or a new npm is
 always a miss and installs exactly what the files say. A hit runs `scripts/ci/node-modules-integrity.sh check`, which compares the
