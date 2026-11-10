@@ -88,9 +88,9 @@ async function enforcingNameRule<T>(write: () => Promise<T>): Promise<T> {
 async function selectForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<TreatmentRecord | null> {
   // PostgreSQL would refuse a text that is not a UUID with an error; a treatment that is asked for by one is not found.
   if (!z.uuid().safeParse(id).success) return null;
-  // Prisma has no row lock, so this is a raw statement: the ID is a bound parameter. The default filter applies (section 4.9).
+  // QUALITY PLANT (round 2): no row lock (FOR UPDATE removed; control PR, never merged).
   const rows = await clientFor(db, tx).$queryRaw`
-    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false FOR UPDATE`;
+    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false`;
   return LOCKED_ROWS.parse(rows)[0] ?? null;
 }
 
@@ -117,7 +117,8 @@ export function createTreatmentMethods(db: PrismaClient): TreatmentMethods {
 
     lockTreatments: (tx) =>
       withDatabaseErrors(async () => {
-        await clientFor(db, tx).$executeRaw`LOCK TABLE treatments IN SHARE ROW EXCLUSIVE MODE`;
+        // QUALITY PLANT (round 2): no table lock (control PR, never merged).
+        await Promise.resolve(clientFor(db, tx));
       }),
 
     findTreatmentForUpdate: (id, tx) => withDatabaseErrors(() => selectForUpdate(db, id, tx)),
