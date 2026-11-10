@@ -107,6 +107,10 @@ function describeMaterial(state: z.output<typeof materialState>): string {
   ].join(', ');
 }
 
+// ---- Shape of the Treatment / Color events (SCR-16 "Master data edit"; STORY-02.05) ---------------------------------------------
+/** A treatment as the log keeps it: its name. The ID and the name label the entry. */
+const treatmentState = z.strictObject({ name: z.string().min(1) });
+
 // ---- Shape of the Exchange Rate Master events (SCR-16 "Master data edit"; STORY-02.04) ------------------------------------------
 /**
  * The exchange rates as the log keeps them: each of the two rates as decimal text, or null while it was never set. One entry covers the pair
@@ -122,12 +126,12 @@ function describeExchangeRates(state: z.output<typeof exchangeRateState>): strin
 }
 
 /**
- * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`, `exchange_rate`). Storage
+ * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`, `exchange_rate`, `treatment`). Storage
  * accepts either shape; the **words** are chosen by the entry's object type, never by guessing from the keys, and the state must fit the
  * shape of that master: a material state under `process_item` is not described as a rate (the screen shows a dash). A new master adds its
  * shape and its describer to `MASTER_WORDS`.
  */
-const masterState = z.union([processItemState, materialState, exchangeRateState]);
+const masterState = z.union([processItemState, materialState, exchangeRateState, treatmentState]);
 
 function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) => string): (state: unknown) => string | null {
   return (state) => {
@@ -140,6 +144,7 @@ const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> 
   process_item: wordsOf(processItemState, describeProcessItem),
   material: wordsOf(materialState, describeMaterial),
   exchange_rate: wordsOf(exchangeRateState, describeExchangeRates),
+  treatment: wordsOf(treatmentState, (state) => state.name),
 };
 
 /** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */

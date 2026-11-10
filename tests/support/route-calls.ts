@@ -2,6 +2,7 @@ import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest'
 
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
+import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
 /**
  * What a **valid, allowed** call to each implemented API route looks like, so the role matrix can show that the role the
@@ -101,6 +102,16 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return DEFAULT_CALL;
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
+    // STORY-02.05: the Treatment routes. The ID is a canary treatment (`treatment-canary.ts`), which the in-memory repository of the security tests holds; the bodies are
+    // invented. `GET /api/v1/options/treatments` has no ID or body: the default call is its valid call.
+    case 'GET /api/v1/treatments':
+      return DEFAULT_CALL;
+    case 'POST /api/v1/treatments':
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-treatment-Z' }, status: 201 };
+    case 'PATCH /api/v1/treatments/[id]':
+      return { id: TREATMENT_RECIPE_ID, body: { name: 'Invented-renamed-treatment' }, status: 200 };
+    case 'DELETE /api/v1/treatments/[id]':
+      return { id: TREATMENT_RECIPE_ID, status: 204 };
     default:
       return DEFAULT_CALL;
   }

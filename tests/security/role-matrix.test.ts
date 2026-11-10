@@ -68,13 +68,13 @@ const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],
-  '/api/v1/materials': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
-  '/api/v1/materials/[id]': ['ADMIN'],
+  '/api/v1/materials': ['ADMIN'], '/api/v1/materials/[id]': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
   '/api/v1/exchange-rates': ['ADMIN'], // the Exchange rates tab (STORY-02.04): the Admin's alone; an Engineer never receives a rate (BR-003)
+  '/api/v1/treatments': ['ADMIN'], '/api/v1/treatments/[id]': ['ADMIN'], // the Treatment / Color tab (STORY-02.05): the Admin's alone (BR-004)
 };
 
 /** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/account/password'];
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
