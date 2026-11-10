@@ -6,7 +6,7 @@
 | Severity | Sev-3 Moderate |
 | Priority | P3 |
 | Type | Test (flaky E2E test; pre-existing at base `051c0b5`) |
-| Status | New |
+| Status | Closed (fixed in PR #160, squash `43b7a65`; verified) |
 | Jira / GitHub | [AQP-268](https://sankumar76.atlassian.net/browse/AQP-268) / [#159](https://github.com/sankumar76/Accucut-Quotation/issues/159) |
 | Found by / date | qa-engineer, 2026-11-10 |
 | Build / commit | `6bdbb77` on `feat/AQP-243-ci-setup-cut` (PR #152); also the base run on `master` 051c0b5 |
@@ -34,9 +34,12 @@ Same test name in all 9 shard 3 logs. On the failing attempt the walk lists thre
 ## Suspected Area (optional)
 The test counts rows that other tests of the same file create, so the count when it runs depends on timing under `fullyParallel` and three shards. GitHub #137 (trim the duplicated G7-1 and G7-7 768 px tests from `aqp-234-qa.spec.ts`) already plans to delete the 768 px tests of G7-7; doing it would remove this flake. If the test is kept it should create its own rows. No retry increase and no wider limit (DL-057). Not confirmed by a local run (no local E2E, by agreement with the AQP-123 stream).
 
+## Root cause (confirmed at the fix)
+The Tab walk asserted `seen.length >= 4`, but the test makes two materials and a material row has one row action (Edit), so it needed rows from other tests. In shard 3 it runs in slot 4 to 7 of an empty database, when only the axe test's row exists besides its own: the table held exactly three rows in all 9 failing runs (read attempt by attempt). The retry passed because the failed attempt's rows were already there.
+
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | qa-engineer (test is QA's; with #137) | | |
-| Regression test added | n/a (the test itself) | | |
-| Verified | qa-engineer: no `flaky` line in shard 3 over five full runs | | |
+| Fixed | qa-engineer | 2026-11-10 | PR #160 (squash `43b7a65`), `tests/e2e/aqp-234-qa.spec.ts`: the walk reads the row-action count from the page, requires the test's own rows and every action up to its 12 presses. Not #137's deletion: the 1024 px test had the same threshold. #137 stays open |
+| Regression test added | n/a (the test itself) | 2026-11-10 | `total >= 2 x actions per row` and `seen >= min(total, 12)` in the G7-7 keyboard test |
+| Verified | qa-engineer | 2026-11-10 | PR #160 run 42825009199, attempts 1 to 3: shard 3 `234 passed`, 0 `flaky` or `failed` lines, the test first-try each time; the orchestrator's five runs (DL-133); the AQP-244 G7 reads (base `322cd8e` run 42850365032 attempts 1 to 5, head runs 42852486467 attempts 1 to 5 and 42867165582): 33 shard logs, no `flaky` line |
