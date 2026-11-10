@@ -4600,3 +4600,45 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. RISK-023 stays at 6.
 **Rationale:** every AC is verified with independent evidence on the exact code that passed G6. Every DL-131 item is done, including the screen side of a changing save that CI cannot cover. The defects found are on other stories' screens, are already graded, and are now scheduled before the next story that would copy the pattern.
 **Posted:** Jira AQP-123 comment 11351; PR #151 comment 6771797276. No tech-debt issue created (DEF-024 to DEF-026 have their own Bugs and issues, with an owner and a due point).
+
+## G6 – Peer Review — AQP-269 / AQP-270 / AQP-271 (DEF-024, DEF-025, DEF-026: dialog focus jump while typing, PR #167) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** Zero Blocker, Critical and Major across three reviews. QLT-01 to QLT-03 are fixed in this PR by one test-only push, which master reads with no review round. The standards Minors STD-01, STD-02 and STD-04 are deferred to tech-debt #171. G7 takes a QA verification route with control PRs in CI (DL-136).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #167** at 69805d1: 7 files, CLEAN. The new shared hook `src/components/shared/use-focus-on-refusal.ts` (30 lines), the three dialogs, and one keyboard E2E test per dialog.
+  - **Reviews:** `docs/06-reviews/AQP-269/{standards,quality,performance,consolidated}.md`. Standards: APPROVE WITH COMMENTS, 3 Minor. Quality: APPROVE WITH COMMENTS, review 5845771350, 3 Minor. Performance: APPROVE, 1 Info.
+  - **Jira:** developer AQP-269 11358; quality 11362.
+  - **Control PRs:** #168, #169 and #170.
+  - **Context:** AQP-244's runs finished at 16:39 UTC, so the merge hold is lifted.
+  - **My own checks** (GitHub API and CI logs only; nothing run locally because of machine memory):
+    - **Diff, read in full:** every refusal path in the three dialogs (local submit, server refusal, Second Admin) now calls `showErrors`, and the only remaining `setErrors` calls clear one field while typing. The hook asks for focus with a new object per refusal and uses `useEffectEvent` correctly. The DEF-020 guard and Exchange rates are untouched.
+    - **CI 42852617579** on 69805d1: success, path 5:05, recomputed (305 s).
+    - **Plant run 42852695987** (`plant/AQP-269-old-focus`, the old effect restored): fails the DEF-024, DEF-025 and DEF-026 tests at mobile and tablet in the shard logs read (and desktop per the developer: 9 in all).
+    - **Control 42856414166** (server-refusal focus dropped): fails only Material tests (`materials.spec.ts:231` and `aqp-122-qa.spec.ts:199`). This confirms QLT-03.
+    - **Control 42856570620** (focus request kept as a field name): success. This confirms QLT-02.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ✅ | none raised |
+| 4 | Findings cite file:line | | ✅ | all |
+| 5 | DL-135 (b): regression tests from QA's F-a **and** F-b probes, one per dialog at 3 widths, failing with the old effect | | ⚠️ | F-a is covered in all three dialogs. F-b (type into a later refused field while an earlier one is still refused) is covered only in Process. The plant shows failures, but stops at the first focus check (QLT-01) |
+| 6 | Mutation coverage of the new hook and its call sites | | ⚠️ | QLT-02 and QLT-03 plants survive (controls #169 and #170) |
+| 7 | CI green; first-load JS | | ✅ | 5 of 5; 0, -2 and +3 B |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #167, one test-only push (`materials.spec.ts`, `users.spec.ts`, `process-master.spec.ts`) | **QLT-01:** the F-b step in the Material and Users tests: Tab to the second refused field while the first is still refused, type, and assert that focus and value stay and that the first is still empty (reviewer's snippet). **QLT-02:** in one dialog's existing empty-refusal test, submit again without typing and assert focus is back on the first field. **QLT-03:** `toBeFocused` on the named field in the existing server-refusal tests: Process duplicate name (`process-master.spec.ts:185`, Rate name), Users e-mail in use (`users.spec.ts:168`, E-mail) and Second Admin (`users.spec.ts:181`, Role). No file under `src/` changes. Add a Dev Record row and the CI run on the new head | Before G7 |
+| B | master | PR #167 diff | Read the push: test files only, assertions as specified. No review round (DL-047). Any `src/` change brings a narrow reviewer-quality re-review instead | With G7 |
+| C | qa-engineer | `docs/07-qa/AQP-269-test-report.md`; defect files | G7 verification, using CI because of machine memory. **Three throwaway control PRs, each planted alone and closed unmerged:** (i) the old `[errors]` effect restored in the three dialogs must fail both the F-a and F-b assertions in all three dialogs at three widths; (ii) the hook's request stored as a field name must fail the QLT-02 assertion; (iii) `setErrors` at the server-refusal sites must fail the Process and both Users focus assertions. Each diff and failing test list is posted. Then the final-head CI is 5 of 5. QA reads QA's own F-a and F-b probes (`docs/07-qa/AQP-123-evidence/aqp-123-focus-jump.spec.ts.txt`) against the committed tests, and fills in each defect's Fix & Verification rows. It also corrects **DEF-026's file to Sev-2** (DL-135 (a), still open). Optional: one Edit-mode keyboard check (QLT-05) | G7 |
+| D | developer | #171 | STD-01, STD-02, STD-04 | Next change to those files, or G8 |
+| E | orchestrator | merge | DL-136 (5) | After G7 GO |
+
+**Accepted (Info):** STD-03, STD-05, QLT-04 (`showErrors` is not stable; it is only called from handlers), QLT-05, QLT-06, and PRF-01 (about 2.5 s on the path).
+**Risks:** none new. RISK-023 stays at 6; this PR adds about 2.5 s.
+**Rationale:** the fix is correct and shared, as DL-135 asked. The gaps are in its proof. The F-b sequence is the one DL-135 named, and two plants pass the whole suite. Each gap is closed by a few test lines the reviewer has already written, so a test-only push read by master is proportionate. The standards Minors would widen a test-only push into production code across another story's screen, so they go to #171 with an owner and a due point.
+**Posted:** Jira AQP-269 comment 11366; PR #167 comment 6773602588; tech-debt GitHub #171 created (STD-01, STD-02, STD-04).
