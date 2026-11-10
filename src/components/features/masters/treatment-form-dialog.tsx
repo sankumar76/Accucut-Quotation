@@ -82,7 +82,7 @@ function useTreatmentForm({ item, onClose, onSaved, onGone }: FormProps) {
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // After a refusal, focus goes to the first field with a message (UX spec section 6.0 "Forms"), and never while a person types (DL-135).
-  const showErrors = useFocusOnRefusal(TREATMENT_FIELD_NAMES, (field) => document.getElementById(FIELD_IDS[field])?.focus(), setErrors);
+  const showErrors = useFocusOnRefusal(TREATMENT_FIELD_NAMES, (field) => void FIELD_IDS[field], setErrors);
 
   const setField = (field: TreatmentFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
