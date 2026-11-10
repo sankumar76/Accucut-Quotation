@@ -38,7 +38,7 @@ const ONE_WIDTH = /@one-width/;
 // filled shards 1 and 2 with work that never runs while shard 3, which holds the desktop block, did it (STORY-10.20, AQP-244;
 // test strategy section 10.5 item 9). A file joins this list only after a ruling there; tests/unit/own-width-files.test.ts
 // guards the list against the specs' own skip lines and against Playwright's listing.
-const OWN_WIDTH_FILES = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts'];
+const OWN_WIDTH_FILES = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts', 'navigation.spec.ts'];
 
 // Invented values so the app's start-up check (src/lib/env.ts) passes. `DATABASE_URL` is the real one when it is set.
 const DATABASE_URL =
