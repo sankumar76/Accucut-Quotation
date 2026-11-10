@@ -4425,3 +4425,47 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks registered:** none new. RISK-023 is unchanged; the fix head's path is 4:23 on a hit.
 **Rationale:** both re-reviewers approve, and my own plants and probe pass on the fix head. The two new Minors are cheap and sit in the story's own guard and new code. QLT-10 would let a key suffix silently remove the whole cut (AC-2); STD-12 is the STD-01 class (a silent error path). QA has not started, so one commit now costs a CI run and no QA rework. DL-047 sets the route: cheap Minors in one commit, read by master within a named file list, with no further review round.
 **Posted:** Jira AQP-243 comment 11318; PR #152 comment 6765302066; GitHub #157 (owner and due point). No tech-debt issue created (QLT-10 and STD-12 are fixed before G7).
+
+## G6 – Peer Review (close) — AQP-123 (STORY-02.04 Exchange Rate Master, PR #151) — 2026-11-10 (attempt 1, closed at e72e8f2)
+
+- **Decision:** **G6 closed at e72e8f2. Every DL-129 condition for G6 (A, B, C) is met.** AQP-123 goes to In QA now (DL-131).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #151** at e72e8f2: three commits on 939f32f (7950c4c, 4f59298, e72e8f2); 16 files, +266 / -90, all among the PR's files or their tests. No migration file is changed. The PR is BEHIND `master` by docs only. The round-2 Dev Record in the PR body has a row per finding with its fix and test, the QLT-01 and DEF-020 re-plants, and CI.
+  - **Re-review:** reviewer-quality round 2 (review 5840818277, Jira 11321; `docs/06-reviews/AQP-123/quality.md`, section "Round 2"): APPROVE WITH COMMENTS. QLT-01, QLT-02, QLT-03 and QLT-10 are fixed. The QLT-01 re-plant fails 9 of 9. `exchange-rates.spec.ts` passes 49 of 49, and unit, integration and security tests 1,133 of 1,133. G12: three assertions added, none weakened. New QLT-11 (Info).
+  - **Routing done:** AC-4 amended (product-owner, AQP-1 11304); architecture v0.33 §5.1, §6, §8 and §10 (architect 11308, 11310); ux-spec v0.21 sentences (ux-expert 11306, 11307), applied in the build word for word (reviewer-quality's table); merge order (product-manager, AQP-1 11305).
+  - **My own checks** (read-only, from the g6c-docs object store):
+    - **Standards Minors, read in `git diff 939f32f e72e8f2`:**
+      - STD-02: `Object.hasOwn` in `describeMasterChange`, with a test for `toString`, `constructor`, `__proto__` and `hasOwnProperty`.
+      - STD-06: `readRows` throws on a currency that is neither USD nor EUR, with no value in the message.
+      - STD-07: three lines in the `schema.prisma` model comment, with the migration untouched.
+      - STD-08: both imports moved into their groups.
+      - STD-09: `letterOfKey` deleted, and the comment letters replaced with `<its letter>`.
+      - STD-01: every function in `use-exchange-rates.ts` at e72e8f2 is 40 lines or fewer (longest `useSaveRates`, 39).
+      - All six verified.
+    - **CI 42780235188** on e72e8f2: 5 of 5 `success`. Path **6:10**, recomputed (370 s, first job start to the end of `Stages 1 to 11`). The first-load JS of `/masters/materials` is 187,115 B, +384 B against base, under the +1,500 B tripwire (Dev Record, stage 11b).
+    - **Not re-run by master:** the browser tests and the plants (reviewer-quality ran them on a throwaway database, with diffs printed); Gitleaks (CI stage 2, full history, green).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | round 1 reports, plus reviewer-quality round 2; standards and performance not re-engaged by DL-129 (7) |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | round 2: 0 Blocker, Critical, Major or Minor open |
+| 3 | Major fixed | | ✅ | QLT-01: three E2E tests at three widths fail 9 of 9 under the re-plant and pass on the code |
+| 4 | Minors of DL-129 (2) fixed | | ✅ | QLT-02, QLT-03 and QLT-10 (reviewer); STD-01, 02, 06, 07, 08 and 09 (master, from the diff) |
+| 5 | G12 | | ✅ | `canary-scan.spec.ts` gains three post-scan checks; nothing removed or weakened |
+| 6 | CI green; first-load within the tripwire | | ✅ | 5 of 5; +384 B |
+| 7 | New finding | | ⚠️ | QLT-11 (Info): no E2E test drives a save that changes a stored rate; covered at G7 by QA's own run (D3, item 7) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D3 | qa-engineer | `docs/07-qa/AQP-123-test-report.md` | G7 evidence on the final head (DL-129 D, adjusted): (1) a keyboard-only run at 360, 768 and 1366 px: a two-field refusal, fixing USD first, then EUR first, and a server 422 naming both, where focus and text stay in the field typed; (2) the QLT-01 tests failing with the old focus behaviour planted back, diff posted; (3) A3 and A4 re-planted on the final head; (4) the DEF-020 guard plant on the final head; (5) the QLT-02 post-scan check shown failing when the stored pair is not the canary pair (a planted write or a planted expected value, diff posted); (6) the QLT-10 retry case: a second pass of the saving tests on the same database; (7) **QLT-11:** in QA's own run (not CI, with no Engineer scan running), a keyboard-only save of a pair other than the canary pair. It must store both values with one stamp and write one `master.edited` entry with `object_type` `exchange_rate` and the fixed `object_id`. QA then restores the canary pair; (8) the five sentences match ux-spec v0.21; (9) AC-1 to AC-7 at three widths, axe 0, 44 px, with AC-4 read against the amended text; (10) CI 5 of 5 and the path | G7 |
+| F | qa-engineer | Jira Bug(s), GitHub `bug` | Unchanged from DL-129 (8): reproduce the `[errors]`-keyed focus jump in the **Material, Process and Users** dialogs on `master` and grade it on the test plan scale. It does not bind this PR (the Dev Record names only two dialogs; all three are in scope) | Before AQP-123's G7 |
+| K | developer | GitHub `follow-up` issue | The ux-expert's shared rule (ux-spec v0.21 §6.0: a failed write never says "Nothing was changed"), applied to SCR-11, the SCR-13 Materials tab and SCR-14 with one shared constant per module and tests (AQP-1 11307). It may be one fix with any defects F raises on the same dialogs | Before G8 |
+| M | orchestrator | PR #151 merge | Merge per DL-131 (4) | After G7 GO |
+
+**Accepted:** QLT-07, QLT-08 and QLT-11 (Info; QLT-11 is covered by D3 item 7). STD-03, STD-04 and STD-05 stay on #119, as DL-129 (5) routed them.
+**Risks:** none new. RISK-023 is not restated in the register. This head's single attempt is 6:10 (6:05 median of three at 939f32f); reviewer-performance's identical-code mean is 5:28, plus about 12 s for the story. The escalation was answered by the product-manager (11305). A path of 5:30 or more on the updated head is reported, not held.
+**Rationale:** the Major is fixed and proven by a re-plant. Every Minor routed into the push is fixed, the quality ones checked by the reviewer and the standards ones by master from the diff, as DL-129 (7) set. The one new item is a coverage gap the integration tests already close for the write path, and QA's own run closes it for the screen.
+**Posted:** Jira AQP-123 comment 11323; PR #151 comment 6765772392. No tech-debt issue created (QLT-11 is covered at G7; STD-03 to STD-05 stay on #119).
