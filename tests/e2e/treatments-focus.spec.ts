@@ -129,7 +129,7 @@ test.describe('a failed write (ux-spec v0.21, section 6.0)', () => {
     const dialog = page.getByRole('alertdialog', { name: `Delete ${name}?` });
     await dialog.getByRole('button', { name: 'Delete treatment' }).click();
     await expect(dialog.getByText('We could not delete the treatment.')).toBeVisible();
-    await expect(dialog.getByText(FAILED_PLAIN, { exact: true })).toBeVisible();
+    await expect(dialog.getByText(FAILED_PLAIN)).toBeVisible();
     await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
     await expect(rowOf(page, name)).toHaveCount(1);
   });

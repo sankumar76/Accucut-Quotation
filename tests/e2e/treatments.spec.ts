@@ -186,7 +186,8 @@ test.describe('rename a treatment (AC-2, AC-6, AC-8)', () => {
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: `${renamed} was renamed. The change is in the audit log.` })).toBeVisible();
     await expect(rowOf(page, renamed)).toBeVisible();
-    await expect(rowOf(page, name).getByRole('button', { name: `Rename ${name}` })).toHaveCount(0);
+    // The renamed name contains the old one, so the old name is looked for as a whole (exact), not as a part of the new one.
+    await expect(page.getByRole('button', { name: `Rename ${name}`, exact: true })).toHaveCount(0);
     await expect(rowOf(page, renamed).getByRole('button', { name: `Rename ${renamed}` })).toBeFocused();
   });
 
