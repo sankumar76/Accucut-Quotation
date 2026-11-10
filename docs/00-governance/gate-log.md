@@ -4809,3 +4809,48 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** RISK-023 stays 6 until G7; the reading at G7 is set in DL-141 (3).
 **Rationale:** the Major is fixed and its plant is red, and the runtime is provably unchanged. The remaining gap needs a deliberately odd edit. It gets an owner and a due point tied to the only change that could exploit it.
 **Posted:** Jira AQP-244 comment 11406; PR #166 comment 6777366036; tech-debt GitHub #203 created (QLT-06).
+
+## G6 – Peer Review — AQP-130 (STORY-02.05 Treatment / Color list, PR #195) — 2026-11-10 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO.** There are zero Blocker and Critical findings. PRF-01 is ruled a measurement condition, not a code defect: a median of five is read on the final head. QLT-01 to QLT-04 and the named standards Minors are fixed in one push. reviewer-quality and reviewer-standards re-review the new diff, and master closes G6 on the fix head with the median of five (DL-142).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #195** at 67febe3: 50 files, CLEAN. Developer hand-off: Jira AQP-130 11403.
+  - **Reviews** (`docs/06-reviews/AQP-130/{standards,quality,performance,consolidated}.md`):
+    - standards: APPROVE WITH COMMENTS, review 5848269835 (Jira 11409);
+    - quality: APPROVE WITH COMMENTS (Jira 11410);
+    - performance: APPROVE WITH COMMENTS (Jira 11408).
+  - **Control PRs:** the developer's #196 to #200, and reviewer-quality's #204 to #206.
+  - **Test strategy v0.32** §10.5 item 9 (the reading rule and the RISK-023 trigger).
+  - **My own checks** (API only; nothing run locally):
+    - CI 42881974487 on 67febe3: success. Path 5:51, recomputed (351 s).
+    - Read item 9: a pull-request first attempt of 5:30 or more starts a median of five full runs. A median of five of 5:30 or more makes the next CI-time step due and is a RISK-023 trigger. It is not a merge hold.
+    - Read the findings tables of the standards and quality reports.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | 0 and 0 in each |
+| 3 | Majors fixed or accepted | | ⚠️ | PRF-01 is re-ruled from Major to a measurement condition (DL-142 (1)). No code Major |
+| 4 | Plants | | ⚠️ | A3 and A4 are caught (developer #196, #197; quality #204, #205), and so are the focus and DEF-020 plants (#198, #200). **Locks removed (#206) stay green: QLT-03.** #199 (old effect) is caught only by the source guard, which is accepted (QLT-05: one field) |
+| 5 | Correctness | | ⚠️ | QLT-01 (canonical name vs reserved check), QLT-02 (422 before 409/404), QLT-04 (stale first read) |
+| 6 | Standards | | ⚠️ | STD-01, 02, 05, 06, 07 and 08 in the push; STD-03 and STD-04 to the #119 refactor (DL-142 (3)) |
+| 7 | CI | | ✅ | green; coverage 99.2 % |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #195, one push | **QLT-01:** the stored name is canonical (NFKC, trimmed, inner whitespace collapsed), checked against the reserved names and against duplicates on that form, with integration tests for a double space and for full-width letters. **QLT-02:** the shape check runs before the transaction, then the lookup and lock (404 / 409), then the reserved-name check (422), with route and unit tests. **QLT-03:** one integration test of two simultaneous renames of one treatment, asserting the second `master.edited` entry's `before` equals the first entry's `after`. It must fail with both locks removed (re-run of #206). **QLT-04:** the latest read wins (a ticket check), with a test. **STD-01** (split or justify), **STD-02** (`isRecordNotFound` from `database-errors.ts`), **STD-05** (words into `treatment-texts.ts`), **STD-06** (`SPEC_ACCESS` to a support file; another story's rows restored), **STD-07**, **STD-08**. Update the Dev Record | Before the re-review |
+| B | reviewer-quality; reviewer-standards | PR #195, new diff only | quality: QLT-01 to QLT-04, with a locks-removed control PR that must now fail, and STD-14 judged. standards: their Minors | After A |
+| C | orchestrator, then master | final head | **The median of five** (test strategy v0.32 §10.5 item 9) on the fix head: five full runs, `hit` in every job, misses replaced. Post the five paths, each slowest shard and its host line. Master closes G6 on the re-reviews and this reading | After B |
+| D | product-owner | Jira AQP-130 AC-6 | Event names `master.created`, `master.edited` and `master.deleted` with `object_type` `treatment` (as DL-129 did for AQP-123) | Before G7 |
+| E | solution-architect | architecture §6; #202; the 05.06 open question | Add 409 `TREATMENT_LOCKED` and the 422 codes to the §6 codes line (STD-12). Rule on #202 (a database guard for system rows). Take QLT-09 (deleting a treatment an estimate uses: restrict with 409, soft delete, or a copied name) into the 05.06 open question | §6 before G7; #202 and QLT-09 before 05.06 is Ready |
+| F | ux-expert | #201 | Rule the words. If ruled before A is pushed, they ride the push; otherwise the words stand as built and #201 stays open | Before G7 where possible |
+| G | product-manager | PRF-06 | State a maximum number of treatments (the list has no paging) | Before 05.06 is Ready |
+| H | developer | #119 refactor PR | DL-142 (3) | Before AQP-142 starts G5 |
+
+**Accepted (Info):** QLT-05 (the one-field replacement for DL-135's two-field test), STD-09 (fixed with the push if touched), STD-10, STD-13, and the remaining Infos. PRF-02 (desktop pinning, about 6 s per shard) is not taken: v0.32 says balance work below 80 s host-free is not due.
+**Risks:** none new. RISK-023 stays at 6 until the median of five is read (DL-142 (1)).
+**Rationale:** the story is sound, and its guards bite except one. The concurrency test that passes with no lock is the DL-117 class, so it is fixed now. The three correctness Minors sit in the code being pushed anyway. The cross-screen refactor of #119 is better as its own reviewed change than inside a 50-file feature PR.
+**Posted:** Jira AQP-130 comment 11412; PR #195 comment 6777713030; GitHub #119 (one refactor PR, with an owner and a due point).
