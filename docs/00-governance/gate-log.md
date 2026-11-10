@@ -4383,3 +4383,132 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks registered:** RISK-023 restated, score 8: its escalation clause is met (a median of three of 6:05 before AQP-243 merges). No new risk.
 **Rationale:** the server side is the best-built master so far, and every audit and lock plant is caught. The one Major is a keyboard data-entry fault that can put a rate into the wrong currency. That is a correctness risk on the two divisors of every USD and EUR price, so it is fixed and re-reviewed before QA. Because the fix changes `src/`, a narrow re-review is required (DL-051, DL-091). The cheap Minors ride the same push (the AQP-38 rule). The refactors that were scheduled against other code move to #119 with owners, rather than widening this PR.
 **Posted:** Jira AQP-123 comment 11299; PR #151 comment 6761458791; GitHub #119 comment 6761461742 (STD-03 owner and due point, STD-04, STD-05); RISK-023 on Jira AQP-1 comment 11300 (both G6 decisions). No new tech-debt issue (the re-routed Minors go to the existing #119).
+
+## G6 – Peer Review (close) — AQP-243 (STORY-10.19, CI set-up cut and set-up summary, PR #152) — 2026-11-10 (attempt 1, closed at 8b587be)
+
+- **Decision:** **G6 closed at 8b587be. Every DL-128 condition for G6 (A, B, C) is met.** AQP-243 goes to In QA now. Before QA gathers evidence, the developer pushes one small follow-up commit with QLT-10 and STD-12. That commit is limited to a named file list, has no re-review round, and is read by master at G7 (DL-130).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #152** at 8b587be: three commits on c24fe22 (a740788 fix(summary), 5f38af9 fix(setup), 8b587be ci); 9 files, +337 / -83. Eight of them are among the PR's 10 files. The ninth is the new `tests/unit/ci-run-summary-attempts.test.ts`, which holds the QLT-01 and QLT-03 tests DL-128 asked for. That is accepted as within condition A. The Round 2 Dev Record in the PR body has a row per finding with its commit and test, ten plants of the developer's, and the quality loop on 8b587be.
+  - **Re-reviews:** reviewer-standards round 2 (review 5838422397, APPROVE WITH COMMENTS): STD-01 to STD-06 and STD-08 fixed; STD-07 closed (architect v0.33 §9.2, Jira 11309); STD-09 rebuttal accepted (#157); new STD-12 (Minor) and STD-13 (Info). reviewer-quality round 2 (review 5838466379, APPROVE WITH COMMENTS): QLT-01 to QLT-04 fixed and verified; P3, P5 and P5b caught; P3b survives (new QLT-10, Minor); QLT-08 and QLT-09 (Info). The reports are the round 2 sections of `docs/06-reviews/AQP-243/standards.md` and `quality.md`.
+  - **Jira AQP-243:** developer 11311.
+  - **My own checks** (dev-243 worktree at 8b587be, read-only; each plant applied by a Node script that stops when an anchor does not occur exactly once; the diff printed before the result; restored with `git checkout`; `git status` clean afterwards):
+    - **P3** (`.next` hand-over between `verify` and `e2e`, +12 lines): **caught**. 1 failed, 161 passed: `ci-setup-cut` "uses the split cache action only for the node_modules restore and save".
+    - **P5** (a second save of `~/.cache/ms-playwright` under another key, +6 lines): **caught** by the same test (1 failed, 161 passed).
+    - **P3b** (a `-${{ github.run_id }}` suffix on the four node_modules key lines): **survives**, 162 of 162 passed (QLT-10 reproduced).
+    - **QLT-01 probe** importing the new `cacheState`: fallback `success`, `failure` and `cancelled` all give `fallback`; miss `success`, `failure` and `cancelled` all give `miss`; a hit gives `hit`.
+    - **STD-12 read:** at `ci-run-summary.ts` lines 321 to 336, `fetchAttemptStart` returns `undefined` on a non-200 or a throw. The summary then counts every job as current, with no sign in the output.
+    - **CI 42776699570** on 8b587be: 5 of 5 `success`. Path 4:23, recomputed from the jobs API (first job start to the end of `Stages 1 to 11`). The run log shows `Cache restored from key: node-modules-v1-Linux-X64-ubuntu26-node22-npm11.17.0-<hash>` in all four install jobs, with the same hash as c24fe22's run 42763746916. The resolved key is unchanged.
+    - `compare 8b587be...master`: one commit ahead (PR #155), docs only.
+    - Not re-run: lint, type-check and the full unit suite (CI green; both reviewers ran the CI test files, 245 passed).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | round 1 reports, plus round 2 sections for standards and quality; performance not required (no install step changed beyond the key expression) |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | round 2: 0 and 0 in both re-reviews |
+| 3 | Majors fixed or explicitly accepted | | ✅ | QLT-01 (probe, master and reviewer), QLT-02 (P3 and P5 caught, master and reviewer), STD-01 (reviewer's test with an unwritable path) |
+| 4 | DL-128 condition A (scope, Minors, key unchanged, Dev Record) | | ✅ | the named Minors fixed; key text identical and `hit` in 4 of 4; Round 2 Dev Record complete |
+| 5 | G12 | | ✅ | two `expect` lines replaced by equal or stronger ones (reviewer-quality round 2 statement); the new skip condition is declared (QLT-08) |
+| 6 | New findings | | ⚠️ | QLT-10 (Minor: a key suffix passes the guards) and STD-12 (Minor: a silent fallback when the attempt start cannot be read); both go into the follow-up commit (condition A2) |
+| 7 | CI green on the judged head | | ✅ | 5 of 5 on 8b587be; path 4:23 |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A2 | developer | PR #152, one commit | **QLT-10:** anchor the node_modules key line in the three places of `ci-setup-cut.test.ts` (an exact line, so a suffix fails), and show P3b caught. **STD-12:** when `GITHUB_RUN_ATTEMPT` is above 1 and the attempt start cannot be read, write one fixed line saying so (no response body, no credential), with one test. Optional in the same commit: QLT-08 (on CI the integrity suite may not skip) and QLT-09 (the wording when every shard is carried over). **Files:** `tests/unit/ci-setup-cut.test.ts`, `scripts/lib/ci-run-summary.ts`, `tests/unit/ci-run-summary-attempts.test.ts` or `ci-run-summary.test.ts`, `tests/unit/node-modules-integrity.test.ts`; a Dev Record row. Any other file comes back to master. CI 5 of 5 on the new head | Before QA gathers G7 evidence |
+| D2 | qa-engineer | `docs/07-qa/AQP-243-test-report.md` | G7 evidence on the final head (DL-128 condition D, adjusted): (1) P3, P5 and P3b re-planted, each caught, diffs posted; (2) the failed-fallback probe (fallback `failure` and `cancelled` give `fallback`; miss `failure` gives `miss`); (3) an unwritable `GITHUB_STEP_SUMMARY` gives exit 0 and one `::warning::` naming only the error class; (4) removing one `Summary:` step's `timeout-minutes` is caught; (5) run 42463553178 attempt 5 through `renderSummary`: carried-over shards marked and left out (the reviewer read 4:00), plus the STD-12 line when the attempt start cannot be read; (6) final-head CI 5 of 5, the same resolved key, `hit` in all four jobs, and the path; (7) the node-modules-integrity unit tests ran on CI, not skipped (job log); (8) AC-1 to AC-7, each with evidence, citing the reviewers' recomputed AC-4 and AC-7 figures. **The live #153 and #154 controls are not repeated:** `git diff c24fe22 <final> -- .github/workflows/ci.yml` shows only the env entry, the key expression, the fallback warning text and the step timeouts (QA confirms this), and the changed integrity script runs for real in CI's unit tests | G7 |
+| E | solution-architect | test strategy 10.5, architecture 9.2 | Remaining from DL-128 (E): QLT-06, PRF-04, the DL-128 (4) reading rule and the fourth-shard question. The format number is done (v0.33, 11309) | After the merge, before AQP-244's G6 |
+| F | orchestrator | PR #152 merge | DL-128 (6), unchanged. The PR is BEHIND by the docs-only #155, so it is updated by a merge commit at merge time. The docs PR carrying these records merges first | After G7 GO |
+
+**Accepted:** STD-13 and QLT-08 / QLT-09 (Info; QLT-08 and QLT-09 optional in A2). #157 (`.gitattributes`, STD-09) gets owner developer and is due before G8.
+**Risks registered:** none new. RISK-023 is unchanged; the fix head's path is 4:23 on a hit.
+**Rationale:** both re-reviewers approve, and my own plants and probe pass on the fix head. The two new Minors are cheap and sit in the story's own guard and new code. QLT-10 would let a key suffix silently remove the whole cut (AC-2); STD-12 is the STD-01 class (a silent error path). QA has not started, so one commit now costs a CI run and no QA rework. DL-047 sets the route: cheap Minors in one commit, read by master within a named file list, with no further review round.
+**Posted:** Jira AQP-243 comment 11318; PR #152 comment 6765302066; GitHub #157 (owner and due point). No tech-debt issue created (QLT-10 and STD-12 are fixed before G7).
+
+## G6 – Peer Review (close) — AQP-123 (STORY-02.04 Exchange Rate Master, PR #151) — 2026-11-10 (attempt 1, closed at e72e8f2)
+
+- **Decision:** **G6 closed at e72e8f2. Every DL-129 condition for G6 (A, B, C) is met.** AQP-123 goes to In QA now (DL-131).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #151** at e72e8f2: three commits on 939f32f (7950c4c, 4f59298, e72e8f2); 16 files, +266 / -90, all among the PR's files or their tests. No migration file is changed. The PR is BEHIND `master` by docs only. The round-2 Dev Record in the PR body has a row per finding with its fix and test, the QLT-01 and DEF-020 re-plants, and CI.
+  - **Re-review:** reviewer-quality round 2 (review 5840818277, Jira 11321; `docs/06-reviews/AQP-123/quality.md`, section "Round 2"): APPROVE WITH COMMENTS. QLT-01, QLT-02, QLT-03 and QLT-10 are fixed. The QLT-01 re-plant fails 9 of 9. `exchange-rates.spec.ts` passes 49 of 49, and unit, integration and security tests 1,133 of 1,133. G12: three assertions added, none weakened. New QLT-11 (Info).
+  - **Routing done:** AC-4 amended (product-owner, AQP-1 11304); architecture v0.33 §5.1, §6, §8 and §10 (architect 11308, 11310); ux-spec v0.21 sentences (ux-expert 11306, 11307), applied in the build word for word (reviewer-quality's table); merge order (product-manager, AQP-1 11305).
+  - **My own checks** (read-only, from the g6c-docs object store):
+    - **Standards Minors, read in `git diff 939f32f e72e8f2`:**
+      - STD-02: `Object.hasOwn` in `describeMasterChange`, with a test for `toString`, `constructor`, `__proto__` and `hasOwnProperty`.
+      - STD-06: `readRows` throws on a currency that is neither USD nor EUR, with no value in the message.
+      - STD-07: three lines in the `schema.prisma` model comment, with the migration untouched.
+      - STD-08: both imports moved into their groups.
+      - STD-09: `letterOfKey` deleted, and the comment letters replaced with `<its letter>`.
+      - STD-01: every function in `use-exchange-rates.ts` at e72e8f2 is 40 lines or fewer (longest `useSaveRates`, 39).
+      - All six verified.
+    - **CI 42780235188** on e72e8f2: 5 of 5 `success`. Path **6:10**, recomputed (370 s, first job start to the end of `Stages 1 to 11`). The first-load JS of `/masters/materials` is 187,115 B, +384 B against base, under the +1,500 B tripwire (Dev Record, stage 11b).
+    - **Not re-run by master:** the browser tests and the plants (reviewer-quality ran them on a throwaway database, with diffs printed); Gitleaks (CI stage 2, full history, green).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | round 1 reports, plus reviewer-quality round 2; standards and performance not re-engaged by DL-129 (7) |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | round 2: 0 Blocker, Critical, Major or Minor open |
+| 3 | Major fixed | | ✅ | QLT-01: three E2E tests at three widths fail 9 of 9 under the re-plant and pass on the code |
+| 4 | Minors of DL-129 (2) fixed | | ✅ | QLT-02, QLT-03 and QLT-10 (reviewer); STD-01, 02, 06, 07, 08 and 09 (master, from the diff) |
+| 5 | G12 | | ✅ | `canary-scan.spec.ts` gains three post-scan checks; nothing removed or weakened |
+| 6 | CI green; first-load within the tripwire | | ✅ | 5 of 5; +384 B |
+| 7 | New finding | | ⚠️ | QLT-11 (Info): no E2E test drives a save that changes a stored rate; covered at G7 by QA's own run (D3, item 7) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D3 | qa-engineer | `docs/07-qa/AQP-123-test-report.md` | G7 evidence on the final head (DL-129 D, adjusted): (1) a keyboard-only run at 360, 768 and 1366 px: a two-field refusal, fixing USD first, then EUR first, and a server 422 naming both, where focus and text stay in the field typed; (2) the QLT-01 tests failing with the old focus behaviour planted back, diff posted; (3) A3 and A4 re-planted on the final head; (4) the DEF-020 guard plant on the final head; (5) the QLT-02 post-scan check shown failing when the stored pair is not the canary pair (a planted write or a planted expected value, diff posted); (6) the QLT-10 retry case: a second pass of the saving tests on the same database; (7) **QLT-11:** in QA's own run (not CI, with no Engineer scan running), a keyboard-only save of a pair other than the canary pair. It must store both values with one stamp and write one `master.edited` entry with `object_type` `exchange_rate` and the fixed `object_id`. QA then restores the canary pair; (8) the five sentences match ux-spec v0.21; (9) AC-1 to AC-7 at three widths, axe 0, 44 px, with AC-4 read against the amended text; (10) CI 5 of 5 and the path | G7 |
+| F | qa-engineer | Jira Bug(s), GitHub `bug` | Unchanged from DL-129 (8): reproduce the `[errors]`-keyed focus jump in the **Material, Process and Users** dialogs on `master` and grade it on the test plan scale. It does not bind this PR (the Dev Record names only two dialogs; all three are in scope) | Before AQP-123's G7 |
+| K | developer | GitHub `follow-up` issue | The ux-expert's shared rule (ux-spec v0.21 §6.0: a failed write never says "Nothing was changed"), applied to SCR-11, the SCR-13 Materials tab and SCR-14 with one shared constant per module and tests (AQP-1 11307). It may be one fix with any defects F raises on the same dialogs | Before G8 |
+| M | orchestrator | PR #151 merge | Merge per DL-131 (4) | After G7 GO |
+
+**Accepted:** QLT-07, QLT-08 and QLT-11 (Info; QLT-11 is covered by D3 item 7). STD-03, STD-04 and STD-05 stay on #119, as DL-129 (5) routed them.
+**Risks:** none new. RISK-023 is not restated in the register. This head's single attempt is 6:10 (6:05 median of three at 939f32f); reviewer-performance's identical-code mean is 5:28, plus about 12 s for the story. The escalation was answered by the product-manager (11305). A path of 5:30 or more on the updated head is reported, not held.
+**Rationale:** the Major is fixed and proven by a re-plant. Every Minor routed into the push is fixed, the quality ones checked by the reviewer and the standards ones by master from the diff, as DL-129 (7) set. The one new item is a coverage gap the integration tests already close for the write path, and QA's own run closes it for the screen.
+**Posted:** Jira AQP-123 comment 11323; PR #151 comment 6765772392. No tech-debt issue created (QLT-11 is covered at G7; STD-03 to STD-05 stay on #119).
+
+## G7 – QA Acceptance — AQP-243 (STORY-10.19, CI set-up cut and set-up summary, PR #152) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** QA's report and DEF-023 (Sev-3, Test, pre-existing) were judged at 350c9d0; the code is at 6bdbb77. AQP-243 moves to Done. The PR merges under the conditions of DL-132 (4).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-243-test-report.md` and `docs/07-qa/defects/DEF-023-g7-7-keyboard-768-test-flaky-in-shard-3.md`, committed as 350c9d0 (2 files, docs only, on top of 6bdbb77). QA hand-off Jira AQP-243 11330. Recommendation ACCEPT, with the AC-6 reading left to master.
+  - **DEF-023:** Jira AQP-268, GitHub #159. Sev-3, Test, pre-existing.
+  - **GitHub #137** (owner qa-engineer; trims the G7-7 768 px tests that DEF-023 names).
+  - **My own checks:**
+    - **`git diff 8b587be 6bdbb77`**, the follow-up commit DL-130 (2) said master would read at G7. It has 4 files, all in the named list (`ci-run-summary.ts`, `ci-run-summary-attempts.test.ts`, `ci-setup-cut.test.ts`, `node-modules-integrity.test.ts`), +41 / -6.
+      - **QLT-10:** `KEY_LINE` anchors the whole `key:` line in the three places.
+      - **STD-12:** `ATTEMPT_START_UNKNOWN` is added only when the start is unknown and the attempt is above 1, with two tests (one checks that no status code or credential leaks).
+      - **QLT-08:** on CI the integrity suite can no longer be skipped.
+      - One assertion was narrowed: `not.toContain('earlier attempt')` became `not.toContain('(earlier attempt)')`. The new STD-12 line itself contains those words, and the same test now also asserts that the line is present. Accepted.
+    - **CI 42815039602** on 350c9d0: 5 of 5 `success`. Path 4:09, recomputed (249 s).
+    - **Shard 3 logs:** `1 flaky` on base run 42757450173 and on 42815039602, as DEF-023 states.
+    - **Not re-run by master:** QA's plants and probes. QA ran them on 6bdbb77 with diffs printed, and the code is the same at 350c9d0. My own P3, P5 and P3b runs at 8b587be are in the G6 close.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-7 in the matrix, each with run IDs or tests; AC-6 is reported as Partial, and is read against its purpose in DL-132 (1); AC-8 is the architect's, after the merge |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | open: Sev-3 DEF-023 only, pre-existing at base 051c0b5 |
+| 3 | Regression suite result recorded and green | ✱ | ✅ | CI 42815039602, 5 of 5; QA's run on 6bdbb77 (42802757357): stages 6 and 11 green, 623 E2E passed |
+| 4 | Exploratory testing notes present | | ✅ | charter "break the claim that the cache can only cost time"; OBS-1 (Sev-4 wording, the same as QLT-09) |
+| 5 | Accessibility checks for UI stories | | n/a | no screen |
+| 6 | DL-130 evidence (D2) | | ✅ | P3, P5 and P3b caught, plus a QA variant in the shell key line; the failed or cancelled fallback reads `fallback`; an unwritable path gives exit 0 and a name-only warning; each removed step timeout is caught; run 42463553178 attempt 5 reads 4:00, with the STD-12 line when the start is unknown; same key and `hit` 4 of 4; the integrity tests ran (11) in stages 6 and 11 |
+| 7 | Follow-up commit within the named files | | ✅ | read by master (above) |
+| 8 | Records match the CI run | | ⚠️ | the PR body's "0 flaky in five full runs" is contradicted by the shard 3 logs; corrected before the squash (condition b) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | qa-engineer | `tests/e2e/aqp-234-qa.spec.ts` (DEF-023 with #137) | Remove the flake: #137's deletion of the 768 px G7-7 tests, deletions only, in its own test-only PR. Or, if the test is kept, it creates its own rows. No retry increase and no wider limit (DL-057). Verified by no `flaky` line in shard 3 over five full runs. Master checks the diff and CI per #137's rule | Before AQP-244's head measurement runs, at the latest before AQP-244's G6 |
+| b | developer | PR #152 body | Replace the "0 flaky" sentence with what the logs show: one flaky test in shard 3 in every run, the same as on the base (DEF-023). Editing the description does not change the head | Before the squash |
+| c | orchestrator | PR #152 merge | DL-132 (4) | After this GO |
+| d | orchestrator; master | RISK-023 | The fall-back reading after the merge, DL-132 (5) | After the squash |
+
+**Not verified, accepted:** the text of the host line on a job's summary page. The API does not expose that page. The step succeeded in 4 of 4 jobs, and its command is pinned by the guard tests.
+**Risks registered:** none new. RISK-023 is unchanged until the reading in DL-132 (5).
+**Rationale:** every AC that this story can affect is verified with independent evidence, and every DL-130 item is evidenced on the final code. AC-6's "0 flaky" exists to show that the story adds no flake. The same test flakes 3 of 3 on the base, the story touches no E2E file, and the defect is a cross-test dependency in QA's own spec. So AC-6 is met in substance. A pre-existing Sev-3 Test defect that fails closed (a second failure would turn the run red) and is green in CI gives GO with an owner and a due point, as at DL-120.
+**Posted:** Jira AQP-243 comment 11332; PR #152 comment 6767387622. No tech-debt issue created (DEF-023 has its own Bug and issue, #159, with an owner and a due point).
