@@ -436,11 +436,15 @@ test.describe('as the Admin', () => {
     await expect(rowOf(page, added)).toContainText('8.37');
   });
 
-  test('[AQP-122 AC-4] the browser fetch of /api/v1/options/materials as the Admin has exactly three keys per entry and no number', async ({ page }) => {
+  test('[AQP-122 AC-4] the browser fetch of /api/v1/options/materials as the Admin has exactly three keys per entry and no number', async ({ page }, testInfo) => {
+    // DEF-027: the test makes the material it reads. It used to rely on materials made by other tests, so it failed when it ran first in a shard.
+    const name = newName(testInfo, 'opt');
+    await makeMaterial(page, name);
     const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`);
     expect(response.status()).toBe(200);
     const body = (await response.json()) as { options: Array<Record<string, unknown>> };
     expect(body.options.length).toBeGreaterThan(0);
+    expect(body.options.map((option) => option['name']), 'the material this test made is listed').toContain(name);
     for (const option of body.options) expect(Object.keys(option).sort()).toEqual(['id', 'materialConsidered', 'name']);
     expect(response.headers()['cache-control']).toMatch(/no-store/);
   });
