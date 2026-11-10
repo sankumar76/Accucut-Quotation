@@ -90,6 +90,7 @@ async function expectActionsInside(page: Page, region: Locator, mode: string): P
 
 // File level on purpose (AQP-244, QLT-01): this file is in OWN_WIDTH_FILES, so only `desktop` lists it, and every test in it, present or
 // future, sets its own width. tests/unit/own-width-files.test.ts fails if this hook moves into a describe block.
+test.describe('DEF-021 row actions, desktop only', () => {
 test.beforeEach(({}, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'each test sets its own width, so one project runs it');
 });
@@ -142,3 +143,8 @@ for (const screen of SCREENS) {
     }
   });
 }
+});
+
+test('CONTROL plant: a test outside the desktop-only scope must run at every width', () => {
+  expect(NAME_LENGTH).toBe(100);
+});
