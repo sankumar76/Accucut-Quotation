@@ -1,0 +1,13 @@
+diff --git a/src/components/features/masters/use-exchange-rates.ts b/src/components/features/masters/use-exchange-rates.ts
+index 5ed42e9..53d6090 100644
+--- a/src/components/features/masters/use-exchange-rates.ts
++++ b/src/components/features/masters/use-exchange-rates.ts
+@@ -116,6 +116,8 @@ function useRateForm(row: ExchangeRatesRow | null) {
+ 
+   const setField = (field: ExchangeRateField, value: string): void => {
+     setTyped((current) => ({ ...(current ?? values), [field]: value }));
++    const others = EXCHANGE_RATE_FIELDS.find((other) => other !== field && errors[other] !== undefined);
++    if (others !== undefined) setFocusRequest({ field: others });
+     setErrors((current) => (current[field] === undefined ? current : Object.fromEntries(Object.entries(current).filter(([name]) => name !== field))));
+   };
+ 

@@ -1,0 +1,13 @@
+diff --git a/src/lib/masters/exchange-rates.ts b/src/lib/masters/exchange-rates.ts
+index 27720c5..bbb43d9 100644
+--- a/src/lib/masters/exchange-rates.ts
++++ b/src/lib/masters/exchange-rates.ts
+@@ -27,7 +27,7 @@ export type StoredExchangeRates = { readonly [Field in ExchangeRateField]: strin
+  * What an audit entry about the pair is about (architecture section 8: `object_type` names the master; every audited object has a UUID, so the
+  * pair has one fixed ID). One save is one entry, whatever number of the two rates it changes.
+  */
+-export const EXCHANGE_RATES_OBJECT_TYPE = 'exchange_rate';
++export const EXCHANGE_RATES_OBJECT_TYPE = 'exchange_rates';
+ export const EXCHANGE_RATES_OBJECT_ID = '00000000-0000-4000-8000-000600000001';
+ export const EXCHANGE_RATES_LABEL = 'Exchange rates';
+ 

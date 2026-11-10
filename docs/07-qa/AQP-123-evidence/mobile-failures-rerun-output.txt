@@ -1,0 +1,5 @@
+  ✓  1 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (16.5s)
+  ✓  2 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (40.7s)
+  ✓  3 [mobile] › tests\e2e\navigation.spec.ts:198:3 › the Engineer (signs in through the page) › AC-8: an unknown address shows the "not found" card to an Engineer, with the button named "Go to my tasks" (7.9s)
+  ✓  4 [mobile] › tests\e2e\users.spec.ts:204:3 › reset a password (AC-5, AC-7) › asks for a password, then sets it; Escape closes the dialog and focus returns to the button (14.7s)
+  4 passed (2.1m)

@@ -1,0 +1,28 @@
+  ✓  2 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (34.9s)
+  ✓  1 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (59.1s)
+  ✘  3 [mobile] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (8.2s)
+  ✘  4 [tablet] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (8.3s)
+  ✘  5 [desktop] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (3.7s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "H1:Materials and lists",
+    + ]
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "H1:Materials and lists",
+    + ]
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "H1:Materials and lists",
+    + ]
+  3 failed
+  2 passed (2.0m)
