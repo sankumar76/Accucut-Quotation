@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { ownWidthFilesOf, projectBlock, readConfig } from '../support/own-width-files';
+import { ownWidthFilesOf, projectBlock, readConfig } from '../support/playwright-config';
 import { forEachSpec, listPlaywrightSuites } from '../support/playwright-list';
 
 /**
@@ -166,7 +166,7 @@ describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-
     expect(ONE_WIDTH_TESTS).toHaveLength(52);
   });
 
-  it('run in the desktop project only, and every other test runs in all three width projects', () => {
+  it('run in the desktop project only, and every other test runs in all three width projects, except the own-width files, which run in desktop only (AQP-244)', () => {
     expect(listed.length).toBeGreaterThan(ONE_WIDTH_TESTS.length);
     // AQP-244 AC-2: the own-width files are listed in desktop only. Their tests set their own widths and ran in desktop alone
     // before the change too (they skipped in the other two); tests/unit/own-width-files.test.ts guards that list.
@@ -202,7 +202,7 @@ describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-
 });
 
 describe('Playwright projects and the tag (AQP-199 AC-3)', () => {
-  const config = read(fileURLToPath(new URL('../../playwright.config.ts', import.meta.url)));
+  const config = readConfig();
   const project = (name: string): string => projectBlock(config, name);
 
   it('hides the tagged tests from mobile and tablet, and runs everything in desktop', () => {

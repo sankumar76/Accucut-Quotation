@@ -88,12 +88,14 @@ async function expectActionsInside(page: Page, region: Locator, mode: string): P
   }
 }
 
+// File level on purpose (AQP-244, QLT-01): this file is in OWN_WIDTH_FILES, so only `desktop` lists it, and every test in it, present or
+// future, sets its own width. tests/unit/own-width-files.test.ts fails if this hook moves into a describe block.
+test.beforeEach(({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'each test sets its own width, so one project runs it');
+});
+
 for (const screen of SCREENS) {
   test.describe(`${screen.label}: row actions are inside the table region (DEF-021)`, () => {
-    test.beforeEach(({}, testInfo) => {
-      test.skip(testInfo.project.name !== 'desktop', 'the test sets its own widths, so one project runs it');
-    });
-
     for (const width of WIDTHS) {
       test(`at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
         const name = longName(testInfo);

@@ -33,12 +33,12 @@ const LOCAL_WORKERS = 2;
 // 10.5). Only four spec files may carry it; tests/unit/one-width-tag.test.ts fails if it appears anywhere else.
 const ONE_WIDTH = /@one-width/;
 
-// Specs whose tests set their own widths and skip unless the project is `desktop` (`test.skip(project.name !== 'desktop')`).
-// They run once, in desktop. `mobile` and `tablet` do not list them: `--shard` divides LISTED tests, and the skipped entries
-// filled shards 1 and 2 with work that never runs while shard 3, which holds the desktop block, did it (STORY-10.20, AQP-244;
-// test strategy section 10.5 item 9). A file joins this list only after a ruling there; tests/unit/own-width-files.test.ts
-// guards the list against the specs' own skip lines and against Playwright's listing.
-const OWN_WIDTH_FILES = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts'];
+// Specs whose tests all set their own widths and skip unless the project is `desktop` (a file-level `test.skip(project.name !==
+// 'desktop')`). They run once, in desktop, and `mobile` and `tablet` do not list them. Why: `--shard` divides LISTED tests, so the
+// count split balanced entries that never run, and a third file of this kind would also escape the `@one-width` guard. A file joins
+// this list only after a ruling in test strategy section 10.5 item 9 (rulings 11342, 11367, STORY-10.20, AQP-244);
+// tests/unit/own-width-files.test.ts pins the names, the file-level skip, and Playwright's listing.
+const OWN_WIDTH_FILES: ReadonlyArray<string> = ['aqp-234-qa.spec.ts', 'masters-table-actions.spec.ts'];
 
 // Invented values so the app's start-up check (src/lib/env.ts) passes. `DATABASE_URL` is the real one when it is set.
 const DATABASE_URL =
