@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useRef, useState, type FormEvent, type RefObject } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
 import { UnitInput } from '@/components/shared/unit-input';
+import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -61,17 +62,20 @@ function serverErrors(fields: Readonly<Record<string, string>>): FieldErrors {
   return Object.fromEntries(FIELD_NAMES.flatMap((field) => (fields[field] === undefined ? [] : [[field, fields[field]]])));
 }
 
-/** After a refusal, focus goes to the first field with a message (SCR-11, UX spec section 6.0 "Forms"). */
-function useFocusFirstError(errors: FieldErrors) {
+/** The three fields' refs, and the function that moves focus to the first field with a message after a refusal (SCR-11, UX spec section 6.0 "Forms"; never while a person types, DEF-025). */
+function useFieldFocus(setErrors: (errors: FieldErrors) => void) {
   const name = useRef<HTMLInputElement>(null);
   const unit = useRef<HTMLSelectElement>(null);
   const defaultValue = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const first = FIELD_NAMES.find((field) => errors[field] !== undefined);
-    const target = first === 'name' ? name : first === 'unit' ? unit : first === 'defaultValue' ? defaultValue : null;
-    target?.current?.focus();
-  }, [errors]);
-  return { name, unit, defaultValue };
+  const showErrors = useFocusOnRefusal(
+    FIELD_NAMES,
+    (field) => {
+      const target = field === 'name' ? name : field === 'unit' ? unit : field === 'defaultValue' ? defaultValue : null;
+      target?.current?.focus();
+    },
+    setErrors,
+  );
+  return { refs: { name, unit, defaultValue }, showErrors };
 }
 
 /** What the form holds, what it was told, and what pressing Add or Save does. */
@@ -80,7 +84,7 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const refs = useFocusFirstError(errors);
+  const { refs, showErrors } = useFieldFocus(setErrors);
 
   const setField = (field: FieldName) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
@@ -94,14 +98,14 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
     if (outcome.status === 'refused' && outcome.httpStatus === 404 && item !== null) return onGone(item);
     const fromServer = outcome.status === 'refused' ? serverErrors(outcome.fields) : {};
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    setErrors(fromServer);
+    showErrors(fromServer);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (submitting) return;
     const found = formProblems(values, item);
-    setErrors(found);
+    showErrors(found);
     setFailed(false);
     if (Object.keys(found).length > 0) return;
     const request = requestFor(item, values);

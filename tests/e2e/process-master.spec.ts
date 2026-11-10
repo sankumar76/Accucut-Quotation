@@ -133,6 +133,33 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
     await expect(dialog.getByLabel('Rate name')).toBeFocused();
   });
 
+  test('DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the default value', async ({ page }) => {
+    await openProcessMaster(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add rate' }));
+    const dialog = page.getByRole('dialog', { name: 'Add rate' });
+    await dialog.getByLabel('Default value').fill('1.234');
+    await dialog.getByRole('button', { name: 'Add rate' }).click();
+    await expect(dialog.getByText('Enter a name.')).toBeVisible();
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
+
+    // The keys go to whatever has focus, as a keyboard user's do. Each key clears a message; none of them may move focus.
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
+    await expect(dialog.getByLabel('Rate name')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Default value')).toHaveValue('1.234');
+
+    // Tab past the unit (still refused) to the default value, replace it, and focus stays there while the unit still has its message.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Default value')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('12.37');
+    await expect(dialog.getByLabel('Default value')).toBeFocused();
+    await expect(dialog.getByLabel('Default value')).toHaveValue('12.37');
+    await expect(dialog.getByLabel('Rate name')).toHaveValue('xyz');
+    await expect(dialog.getByText('Choose a unit.')).toBeVisible();
+  });
+
   test('adds a rate, shows it in the list with the saved notice, and refuses a second one that differs only in letter case or reads as a column letter', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = newRateName(testInfo);
     await openProcessMaster(page);

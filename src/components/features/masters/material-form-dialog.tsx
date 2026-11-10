@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
 import { UnitInput } from '@/components/shared/unit-input';
+import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -78,21 +79,14 @@ function serverErrors(fields: Readonly<Record<string, string>>): FieldErrors {
   return Object.fromEntries(MATERIAL_FIELD_NAMES.flatMap((field) => (fields[field] === undefined ? [] : [[field, fields[field]]])));
 }
 
-/** After a refusal, focus goes to the first field with a message (SCR-13, UX spec section 6.0 "Forms"). */
-function useFocusFirstError(errors: FieldErrors) {
-  useEffect(() => {
-    const first = MATERIAL_FIELD_NAMES.find((field) => errors[field] !== undefined);
-    if (first !== undefined) document.getElementById(FIELD_IDS[first])?.focus();
-  }, [errors]);
-}
-
 /** What the form holds, what it was told, and what pressing Add or Save does. */
 function useMaterialForm({ item, onClose, onSaved }: FormProps) {
   const [values, setValues] = useState<MaterialValues>(() => initialMaterialValues(item));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  useFocusFirstError(errors);
+  // After a refusal, focus goes to the first field with a message (SCR-13, UX spec section 6.0 "Forms"), and never while a person types (DEF-024).
+  const showErrors = useFocusOnRefusal(MATERIAL_FIELD_NAMES, (field) => document.getElementById(FIELD_IDS[field])?.focus(), setErrors);
 
   const setField = (field: MaterialFieldName, value: string): void => {
     setValues((current) => ({ ...current, [field]: value }));
@@ -105,14 +99,14 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
     if (outcome.status === 'ok') return onSaved(outcome.value, item === null ? 'added' : 'edited');
     const fromServer = outcome.status === 'refused' ? serverErrors(outcome.fields) : {};
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    setErrors(fromServer);
+    showErrors(fromServer);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (submitting) return;
     const found = materialFormProblems(values, item);
-    setErrors(found);
+    showErrors(found);
     setFailed(false);
     if (Object.keys(found).length > 0) return;
     const request = requestFor(item, values);

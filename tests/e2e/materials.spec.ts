@@ -178,6 +178,32 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     await expect(dialog.getByLabel('Material in Drawing')).toHaveAttribute('aria-invalid', 'true');
   });
 
+  test('DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and so does the next field', async ({ page }) => {
+    await openMaterials(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add material' }));
+    const dialog = page.getByRole('dialog', { name: 'Add material' });
+    await dialog.getByLabel('Price per kg').fill('58.123');
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByText('Enter the Material in Drawing.')).toBeVisible();
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+
+    // The keys go to whatever has focus, as a keyboard user's do. Each key clears a message; none of them may move focus.
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
+
+    // The same for the second field: Tab, type, and focus and the letters stay there while the fields after it still have messages.
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await page.keyboard.type('abc');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('abc');
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
+  });
+
   test('state "Specific gravity 0": 0 is refused under the field with "Enter a value above 0.", the hint stays, the dialog keeps what was typed and focus goes to the field (UX-37)', async ({ page }, testInfo) => {
     const name = newMaterialName(testInfo);
     await openMaterials(page);
