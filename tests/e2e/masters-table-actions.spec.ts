@@ -7,7 +7,8 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
 /**
  * DEF-021 (AQP-234): the row actions of a masters table are inside the table's visible box, without scrolling it, at every width from 768 to
- * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master and for Materials, with one row whose name is
+ * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master, for Materials and, since STORY-02.05, for the
+ * Treatment / Color tab (Rename and Delete, 112 px), with one row whose name is
  * 100 characters with no space (the longest the form allows), at the eleven widths of the spec's table of regions.
  *
  * Each width is checked three ways: as drawn (the fit), with the table forced wider than the region, at its start and after a Tab, and scrolled to its
@@ -28,6 +29,8 @@ interface Screen {
   readonly title: string;
   readonly region: string;
   readonly make: (page: Page, name: string) => Promise<void>;
+  /** Brings the table on screen when it is not on the page's first tab. */
+  readonly open?: (page: Page) => Promise<void>;
 }
 
 async function post(page: Page, path: string, data: Record<string, string>): Promise<void> {
@@ -56,6 +59,17 @@ const SCREENS: ReadonlyArray<Screen> = [
         specificGravity: '7.37',
         scrapRate: '22.37',
       }),
+  },
+  {
+    label: 'SCR-13 Treatment / Color',
+    path: '/masters/materials',
+    title: 'Materials and lists',
+    region: 'Treatment / Color, scrollable',
+    make: (page, name) => post(page, '/api/v1/treatments', { name }),
+    open: async (page) => {
+      await page.getByRole('tab', { name: 'Treatment / Color' }).click();
+      await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible();
+    },
   },
 ];
 
@@ -103,6 +117,7 @@ for (const screen of SCREENS) {
         await page.goto(screen.path);
         await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
         await waitUntilHydrated(page, 'main button[data-action="add"]');
+        await screen.open?.(page);
 
         const region = page.getByRole('region', { name: screen.region });
         await expect(region).toBeVisible();
@@ -127,7 +142,7 @@ for (const screen of SCREENS) {
         // 3. A Tab from the region goes to the first row action, which is not under the sticky column and does not move the page sideways.
         await region.focus();
         await page.keyboard.press('Tab');
-        await expect(page.locator(':focus')).toHaveAttribute('data-action', /^(edit|delete)$/);
+        await expect(page.locator(':focus')).toHaveAttribute('data-action', /^(edit|rename|delete)$/);
         await expectActionsInside(page, region, 'forced to scroll, after Tab');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
