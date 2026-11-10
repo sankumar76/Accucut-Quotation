@@ -11,6 +11,7 @@ import {
   FAILED_WITH_FORM,
   failListWhen,
   LOAD_ERROR_TITLE,
+  lockedRow,
   makeTreatment,
   NAME_REQUIRED,
   NAME_RESERVED,
@@ -157,7 +158,7 @@ async function expectErrorTitleHoldsFocus(page: Page, focusLog: ReadonlyArray<st
 async function expectTryAgainBringsTheListBack(page: Page, fail: { value: boolean }): Promise<void> {
   fail.value = false;
   await page.getByRole('button', { name: 'Try again' }).click();
-  await expect(page.getByText('Always offered; the Engineer types the text')).toBeVisible();
+  await expect(lockedRow(page)).toBeVisible();
   await expect(page.getByRole('heading', { name: LOAD_ERROR_TITLE })).toHaveCount(0);
 }
 
@@ -224,9 +225,9 @@ test.describe('loading and the load error (AC-8)', () => {
     await waitUntilHydrated(page, 'main button[data-action="add"]');
     await page.getByRole('tab', { name: TAB }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Loading the treatments' })).toBeAttached();
-    await expect(page.getByText('Always offered; the Engineer types the text')).toHaveCount(0);
+    await expect(lockedRow(page)).toHaveCount(0);
     release();
-    await expect(page.getByText('Always offered; the Engineer types the text')).toBeVisible();
+    await expect(lockedRow(page)).toBeVisible();
   });
 
   test('when the first read fails, "We could not load the treatments" takes focus with the read-only sentence, and Try again brings the list', async ({ page }) => {

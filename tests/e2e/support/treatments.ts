@@ -52,6 +52,11 @@ export async function makeTreatment(page: Page, name: string): Promise<{ readonl
   return { name, id };
 }
 
+/** The visible row (table) or card (phone) of the locked entry. The text is in both layouts, one of them hidden, so a text locator would match twice. */
+export function lockedRow(page: Page): Locator {
+  return page.locator('[data-item-id]:visible').filter({ hasText: LOCKED_REASON });
+}
+
 /** Opens the page on the Materials tab, waits for the page to be live, and opens the Treatment / Color tab with its list on the screen. */
 export async function openTreatments(page: Page): Promise<void> {
   await page.goto('/masters/materials');
@@ -60,7 +65,7 @@ export async function openTreatments(page: Page): Promise<void> {
   await waitUntilHydrated(page, 'main button[data-action="add"]');
   await page.getByRole('tab', { name: TAB }).click();
   await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible();
-  await expect(page.getByText(LOCKED_REASON)).toBeVisible();
+  await expect(lockedRow(page)).toBeVisible();
 }
 
 /** Presses a button with the keyboard, the way a person who does not use a pointer does. */

@@ -120,7 +120,7 @@ async function warmTreatmentRoutes(page: Page, headers: Record<string, string>):
   await waitUntilHydrated(page, 'main button[data-action="add"]');
   await page.getByRole('tab', { name: 'Treatment / Color' }).click();
   await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
-  await expect(page.getByText('Always offered; the Engineer types the text')).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await expect(page.locator('[data-item-id]:visible').filter({ hasText: 'Always offered; the Engineer types the text' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
   expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/treatments`, { headers, data: {} })).status()).toBe(422);
   expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/treatments/${NOBODY}`, { headers, data: { name: 'Invented warm-up' } })).status()).toBe(404);
   expect((await page.request.delete(`${DEVELOPMENT_URL}/api/v1/treatments/${NOBODY}`, { headers })).status()).toBe(404);
