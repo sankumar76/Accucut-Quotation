@@ -4719,3 +4719,41 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** none new. While #167 is unmerged, DEF-027 affects no RISK-023 or AQP-244 reading: AQP-244's five-run head and base runs show no flaky line, and `master` does not yet carry #167's tests.
 **Rationale:** the push is exactly what DL-136 asked, and the plants show each new assertion bites. The flake is a latent cross-test dependency of the same kind as DEF-023, and this PR is what exposes it on `master`. So it is fixed before #167 is squashed, and every later run, including AQP-244's merge-commit run, stays clean.
 **Posted:** Jira AQP-269 comment 11381; PR #167 comment 6774479569. DEF-027 is to be logged by qa-engineer (Jira Bug and GitHub `bug`).
+
+## G7 – QA Acceptance — AQP-269 / AQP-270 / AQP-271 (DEF-024, DEF-025, DEF-026, PR #167) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** QA records are at 552b497; the code is cde1b29, unchanged since the G6 close. AQP-269, AQP-270 and AQP-271 move to Done, and #161 to #163 close. PR #167 merges under DL-139 (3), after the DEF-027 fix.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA files:** `docs/07-qa/AQP-269-test-report.md`; `docs/07-qa/AQP-269-evidence/` (three plant diffs, four control results and the probe source as `.txt`); the Fix & Verification rows of DEF-024 to DEF-026, with DEF-026 now Sev-2.
+  - **QA hand-off:** Jira AQP-269 11386; PR #167 comment 6775062894.
+  - **QA's control PRs** #185 to #188.
+  - **My own checks** (API and CI logs only):
+    - **Scope** (`compare cde1b29...552b4976`): 1 commit, 12 files, all under `docs/07-qa/`.
+    - **CI 42869671189** on 552b497: 5 of 5 `success`. Path **5:11**, recomputed (311 s). Shards 213, 210 and 251 passed, with no `flaky` or `failed` line.
+    - **QA's controls:** c0 (no fault) `success`; c1 (old effect), c2 (typing asks the hook) and c3 (the last refused field targeted) each `failure`. Master read the diffs of c2 and c3: c2 makes each dialog's typing handler call `showErrors`; c3 reverses the field search in the hook.
+    - **The developer's controls for QLT-02 and QLT-03,** read by master because QA substituted other classes (see below):
+      - A (QLT-02, run 42863675866) fails `materials.spec.ts:166` at 3 widths and `process-master.spec.ts:163` at desktop.
+      - B (QLT-03, run 42863743797) fails Material's duplicate name (`materials.spec.ts:244`, `aqp-122-qa.spec.ts:199`), Process's duplicate name (`process-master.spec.ts:163`), the Users e-mail in use (`users.spec.ts:179`) and the Second Admin (`users.spec.ts:194`).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every acceptance item verified with evidence | ✱ | ✅ | each defect's expected behaviour checked: F-a and F-b at 3 widths in all three dialogs (QA's 18-test probe passes on the fix, c0); Fix & Verification rows filled in |
+| 2 | No open Sev-1 or Sev-2 defect against these items | ✱ | ✅ | DEF-024 to DEF-026 verified fixed; DEF-027 (Sev-3) is separate |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 5 of 5 on 552b497; in each control, only the named tests fail |
+| 4 | Exploratory notes | | ✅ | OBS-1 to OBS-4 |
+| 5 | Accessibility | | ✅ | keyboard-only focus behaviour is the subject of the fix, at 3 widths |
+| 6 | DL-136 (4) and DL-138 (2): QA's own three controls | | ⚠️ | QA ran c1 (the old effect) as named, but substituted c2 (typing asks the hook) and c3 (wrong target) for the field-name and server-site plants. The substitution is accepted, because master read the developer's A and B runs above and both bite. Together the five classes (typing, wrong target, old effect, second refusal, server refusal) are covered |
+| 7 | DEF-026 record at Sev-2 | | ✅ | corrected in this commit |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | orchestrator | PR #189 (DEF-027) | Merges first, after master's check (DL-133 route; brought by the orchestrator when its runs report) | Before #167 is squashed |
+| b | orchestrator | PR #167 merge | DL-139 (3) | After (a) |
+
+**Accepted:** OBS-1 (no Edit-mode typing test): Edit uses the same component and the same hook as Add, so the Add tests and plants cover the code path; no issue. OBS-2 is already #171 (STD-01). OBS-3 and OBS-4 are noted.
+**Risks:** none new. RISK-023 is unchanged (#167 adds about 2.5 s).
+**Rationale:** each defect's fault is shown fixed by QA's probe and by tests that five independent fault classes break. The one deviation from the ruled controls is covered by evidence master read directly.
+**Posted:** Jira AQP-269 comment 11388; PR #167 comment 6775129363. No tech-debt issue created.
