@@ -1,0 +1,39 @@
+diff --git a/src/components/features/masters/material-form-dialog.tsx b/src/components/features/masters/material-form-dialog.tsx
+index f593b90..d15dbc5 100644
+--- a/src/components/features/masters/material-form-dialog.tsx
++++ b/src/components/features/masters/material-form-dialog.tsx
+@@ -90,7 +90,7 @@ function useMaterialForm({ item, onClose, onSaved }: FormProps) {
+ 
+   const setField = (field: MaterialFieldName, value: string): void => {
+     setValues((current) => ({ ...current, [field]: value }));
+-    setErrors((current) => withoutMaterialError(current, field));
++    showErrors(withoutMaterialError(errors, field));
+   };
+ 
+   /** Shows the server's answer to an add or an edit. */
+diff --git a/src/components/features/masters/process-form-dialog.tsx b/src/components/features/masters/process-form-dialog.tsx
+index 763a14e..e26c079 100644
+--- a/src/components/features/masters/process-form-dialog.tsx
++++ b/src/components/features/masters/process-form-dialog.tsx
+@@ -88,7 +88,7 @@ function useProcessForm({ item, onClose, onSaved, onGone }: FormProps) {
+ 
+   const setField = (field: FieldName) => (value: string) => {
+     setValues((current) => ({ ...current, [field]: value }));
+-    setErrors((current) => withoutError(current, field));
++    showErrors(withoutError(errors, field));
+   };
+ 
+   /** Shows the server's answer to an add or an edit. */
+diff --git a/src/components/features/users/user-form-dialog.tsx b/src/components/features/users/user-form-dialog.tsx
+index 6e27a32..1c469ed 100644
+--- a/src/components/features/users/user-form-dialog.tsx
++++ b/src/components/features/users/user-form-dialog.tsx
+@@ -117,7 +117,7 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
+ 
+   const set = (field: FieldName) => (value: string) => {
+     setValues((current) => ({ ...current, [field]: value }));
+-    setErrors((current) => withoutError(current, field));
++    showErrors(withoutError(errors, field));
+   };
+ 
+   // After a refusal, focus goes to the first field with a message (SCR-14, UX spec section 6.0 "Forms"), and never while a person types (DEF-026).
