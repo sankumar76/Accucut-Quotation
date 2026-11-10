@@ -137,14 +137,14 @@ async function change(
   if (next.name === undefined) return before;
   const after = await dependencies.masters.renameTreatment(before.id, next.name, tx);
   if (after === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  await dependencies.audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
+  await dependencies.transactions.run((tx2) => dependencies.audit.record(tx2, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) }));
   return after;
 }
 
 async function remove(dependencies: TreatmentDependencies, tx: Transaction, context: AuditContext, id: string): Promise<void> {
   const before = await lockedChangeable(dependencies, tx, id);
   if (!(await dependencies.masters.deleteTreatment(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
+  await dependencies.transactions.run((tx2) => dependencies.audit.record(tx2, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null }));
 }
 
 /** The treatment methods of the masters service. Nothing is read before the transaction opens, because no check needs the configuration. */
