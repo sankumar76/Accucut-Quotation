@@ -11,7 +11,7 @@ import type { PageNotice } from './process-texts';
  */
 
 export const MASTERS_TITLE = 'Materials and lists';
-export const MASTERS_DESCRIPTION = 'Material prices and exchange rates.';
+export const MASTERS_DESCRIPTION = 'Material prices, exchange rates and the treatment and colour list.';
 
 export const MATERIALS_TAB = 'Materials';
 export const TABS_LABEL = 'Lists';
