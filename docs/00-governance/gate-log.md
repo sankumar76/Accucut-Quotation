@@ -4512,3 +4512,49 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks registered:** none new. RISK-023 is unchanged until the reading in DL-132 (5).
 **Rationale:** every AC that this story can affect is verified with independent evidence, and every DL-130 item is evidenced on the final code. AC-6's "0 flaky" exists to show that the story adds no flake. The same test flakes 3 of 3 on the base, the story touches no E2E file, and the defect is a cross-test dependency in QA's own spec. So AC-6 is met in substance. A pre-existing Sev-3 Test defect that fails closed (a second failure would turn the run red) and is green in CI gives GO with an owner and a due point, as at DL-120.
 **Posted:** Jira AQP-243 comment 11332; PR #152 comment 6767387622. No tech-debt issue created (DEF-023 has its own Bug and issue, #159, with an owner and a due point).
+
+## G6 + G7 (narrow route) — DEF-023 fix, PR #160 (AQP-268, #159; `tests/e2e/aqp-234-qa.spec.ts`) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO to merge, after two more full re-runs show no flake (DL-133).** This is the DL-124 narrow route for a test-only fix: one file under `tests/e2e/`, nothing under `src/`, no config, dependency or CI change. Master decides G6 and G7 together, with no review round. DEF-023 closes when the PR merges.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #160** at 8dca9df (`fix/AQP-268-flaky-g7-7`): one commit, one file, +10 / -2, CLEAN. The PR body has the root cause, the G12-style assertion table and the CI evidence.
+  - **QA hand-off:** Jira AQP-268 11340.
+  - **My own checks:**
+    - **Diff** (`pull_request_read get_diff`): two constants (`TAB_PRESSES = 12`; `ACTIONS_PER_ROW`, with SCR-13 at 1 and SCR-11 at 2). A new `total` (visible row actions in the table) must be at least two rows' worth. The loop uses `TAB_PRESSES`. The final bound changes from `seen.length >= 4` to `seen.length >= min(total, 12)`.
+    - **Is it weaker? Not in what it guards.** On SCR-11, two rows already give 4 actions, so the bound is at least 4 and grows to 12 on a full table, which is stronger. On SCR-13, the old bound of 4 could only be met with rows from other tests (one action per row, two own rows). That cross-test dependency was the defect. The new bound requires every visible action, up to 12. The per-button checks (not covered, focus visible, no sideways scroll, in view, `seen[0]` an Edit, Enter and Escape) are unchanged.
+    - **CI run 42825009199** on 8dca9df: attempts 1 to 3 (attempt 1 plus two "Re-run all jobs") are each 5 of 5 `success`. The latest attempt's logs read shard 3 `234 passed`, shard 2 `194 passed` and shard 1 `196 passed`, with no `flaky` or `failed` line. Before the fix, shard 3 read `233 passed` and `1 flaky`.
+    - **Not done:** a planted fault against the new bound. The file is outside G12 scope, and the logic above was read line by line. My fetch of the branch into the records worktree was denied by the permission layer; the diff was read through the GitHub API.
+
+**Checklist (narrow route)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Scope: test-only, named file | ✱ | ✅ | 1 file, `tests/e2e/aqp-234-qa.spec.ts` |
+| 2 | Root cause named and fixed, not masked | ✱ | ✅ | a fixed count that needed rows from other tests; the test now uses its own rows. No retry, timeout, skip or one-width change (DL-057) |
+| 3 | No assertion weakened in what it guards | ✱ | ✅ | analysis above; the PR body declares the change |
+| 4 | Verification as DL-132 and #137 state it: no `flaky` line in shard 3 over **five** full runs | | ⚠️ | 3 of 5 done, each clean, with the test passing first time in the slot that failed 9 of 9. Two more full re-runs are required before the merge (condition a) |
+| 5 | CI green | | ✅ | 5 of 5 in 3 of 3 attempts |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | orchestrator | run 42825009199 | Two more "Re-run all jobs" (attempts 4 and 5). Each must be 5 of 5 green, with no `flaky` or `failed` line in any shard. Post both on PR #160. A flake or failure comes back to master | Before the merge |
+| b | orchestrator | PR #160 merge | Squash after (a). If the records docs PR merges first, update #160 by a merge commit only, with its file unchanged, and require 5 of 5 green on the updated head. Either order is allowed | After (a) |
+| c | qa-engineer | DEF-023 (AQP-268, #159) | Fill in the Fix & Verification rows (8dca9df, run 42825009199 attempts 1 to 5), move AQP-268 to Done and close #159 as completed with the merge commit | On the merge |
+| d | qa-engineer | GitHub #137 | Stays open, for CI time only. Its due point goes back to "before the sprint 1 review, at the latest G8". The DL-132 pull-forward is withdrawn, because the flake it was meant to remove is fixed here for every G7-7 width | Before the sprint 1 review |
+
+**Risks:** RISK-023 lowered to 6 (DL-134); the retry this fix removes is named there.
+**Rationale:** the root cause was a cross-test dependency, and it is fixed at the source, for every width the loop runs. Three clean runs in the exact slot that failed 9 of 9 are strong evidence. Five is the bar my own DL-132 and #137 wording set, and two more re-runs cost no head change, so the bar is kept rather than waived.
+
+## RISK-023 re-score after AQP-243's merge — 2026-11-10
+
+- **Decision:** **RISK-023 lowered, P 4 → 3, score 8 → 6 🟢, by the register's rule (DL-134).**
+- **Evidence:**
+  - Merge record: PR #152 comment 6767785599 (updated head 4b5ba82, run 42818504016 green, path 4:30) and comment 6768315003; AQP-1 11335.
+  - Master read the push run 42819300261 on ce9c02c:
+    - Attempt 1: 5:45. The `node_modules` cache missed in 4 of 4 jobs (`Cache not found for input keys`) and was saved once. Replaced under DL-128 (4).
+    - Attempts 2 to 4: hit in 4 of 4 jobs each (`Cache restored from key`), at 5:05, 4:03 and 5:09. **The median is 5:05, at most 5:30.**
+  - Context, not used for the rule: Jira AQP-244 11338 reads a post-merge hit-run median of 4:32 over 8 runs, with an sd of 26 s.
+- **Reading rule:** the architect's median of five (test strategy v0.30 §10.5 item 9; AQP-244 11342) applies from its merge. This reading was taken under the median-of-three rule then in force, and it holds under the new one: with 4:03, 5:05 and 5:09 already in, no two further runs can lift a median of five above 5:09. So no further runs are asked for.
+- **Next thresholds:** the register now states them (falls to 3 on AQP-244's AC-3 or a nightly median at most 5:00; back to 8 on a `master` reading, or a nightly median, over 5:30).
+**Posted:** Jira AQP-268 comment 11345; PR #160 comment 6769247675; RISK-023 on Jira AQP-1 comment 11346. No tech-debt issue created.
