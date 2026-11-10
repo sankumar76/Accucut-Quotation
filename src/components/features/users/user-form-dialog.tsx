@@ -1,11 +1,10 @@
 'use client';
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { FormField } from '@/components/shared/form-field';
 import { Notice } from '@/components/shared/notice';
 import { PasswordInput } from '@/components/shared/password-input';
-import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -120,18 +119,20 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
     setErrors((current) => withoutError(current, field));
   };
 
-  // After a refusal, focus goes to the first field with a message (SCR-14, UX spec section 6.0 "Forms"), and never while a person types (DEF-026).
-  const showErrors = useFocusOnRefusal(
-    FIELD_NAMES,
-    (field) => ({ name: nameRef, email: emailRef, role: roleRef, password: passwordRef })[field].current?.focus(),
-    setErrors,
-  );
+  // After a refusal, focus goes to the first field with a message (SCR-14, UX spec section 6.0 "Forms").
+  useEffect(() => {
+    const first = FIELD_NAMES.find((field) => errors[field] !== undefined);
+    if (first === 'name') nameRef.current?.focus();
+    else if (first === 'email') emailRef.current?.focus();
+    else if (first === 'role') roleRef.current?.focus();
+    else if (first === 'password') passwordRef.current?.focus();
+  }, [errors]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (submitting) return;
     const found = problemsOf(values, adding);
-    showErrors(found);
+    setErrors(found);
     setFailed(false);
     if (Object.keys(found).length > 0) return;
 
@@ -154,12 +155,12 @@ function UserForm({ user, isOwnRow, onClose, onSaved, onAdminTaken }: FormProps)
     if (outcome.status === 'ok') return onSaved(outcome.value, kind);
     if (outcome.status === 'failed') return setFailed(true);
     if (outcome.code === ADMIN_ALREADY_ACTIVE_CODE) {
-      showErrors({ role: outcome.title });
+      setErrors({ role: outcome.title });
       return onAdminTaken(outcome.currentAdminName);
     }
     const fromServer = serverErrors(outcome);
     if (Object.keys(fromServer).length === 0) return setFailed(true);
-    showErrors(fromServer);
+    setErrors(fromServer);
   }
 
   return (
