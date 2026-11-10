@@ -24,7 +24,7 @@ export function useFocusOnRefusal<TField extends string>(
 
   return (errors) => {
     setErrors(errors);
-    const first = order.find((field) => errors[field] !== undefined);
+    const first = [...order].reverse().find((field) => errors[field] !== undefined);
     if (first !== undefined) setRequest({ field: first });
   };
 }
