@@ -118,7 +118,7 @@ describe('@one-width allow-list (AQP-199 AC-3)', () => {
     for (const file of RULED_FILES) expect(E2E_FILES).toContain(file);
   });
 
-  it('appears in no file of tests/e2e except the nine ruled in test strategy section 10.5', () => {
+  it('appears in no file of tests/e2e except the eleven ruled in test strategy section 10.5', () => {
     const tagged = E2E_FILES.filter((file) => read(`${E2E_DIRECTORY}${file}`).includes(TAG));
     expect(tagged.filter((file) => !RULED_FILES.includes(file))).toEqual([]);
   });

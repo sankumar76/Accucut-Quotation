@@ -18,7 +18,7 @@ import { MaterialsPanel } from './materials-panel';
  * here and a `TabsContent` with its panel. The screen does not show a tab it cannot open.
  *
  * The Materials panel is part of the page (its list is rendered on the server for the first paint). The Exchange rates panel is not: its code
- * is fetched the first time the tab is opened, and it then reads its own data from its GET route (STORY-02.04; PRF-01 of GitHub #121, NFR-009),
+ * is fetched the first time the tab is opened, and it then reads its own data from its GET route (STORY-02.04; PRF-01 of GitHub issue 121, NFR-009),
  * so the first load of the page grows by the tab button and the loader and nothing else.
  */
 

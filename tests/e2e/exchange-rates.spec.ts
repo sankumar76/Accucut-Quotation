@@ -15,7 +15,7 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * the stamp are judged against PostgreSQL in `tests/integration/masters/exchange-rates.test.ts`. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format.
  *
- * Width: none of these tests is tagged `@one-width`: test strategy section 10.5 has not ruled on this file, and every test reads layout or focus.
+ * Width: none of these tests carries the one-width tag: test strategy section 10.5 has not ruled on this file, and every test reads layout or focus, so each runs at three widths.
  */
 
 test.use({ storageState: ADMIN_STATE });

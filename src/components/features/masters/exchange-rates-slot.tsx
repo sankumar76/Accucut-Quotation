@@ -12,7 +12,7 @@ import type { ExchangeRatesPanelProps } from './exchange-rates-panel';
 import { ERROR_RETRY } from './process-texts';
 
 /**
- * Where the Exchange rates panel goes in the tab shell (STORY-02.04; PRF-01 of GitHub #121): the panel's code is fetched the first time the
+ * Where the Exchange rates panel goes in the tab shell (STORY-02.04; PRF-01 of GitHub issue 121): the panel's code is fetched the first time the
  * tab is opened, through the shared first-open loader (architecture section 10, AQP-188), and is not in the first load of the page. Until the
  * code is here the slot shows the skeleton; if the request for it failed it says so, with Try again, which asks again.
  */
