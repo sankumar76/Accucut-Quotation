@@ -4774,3 +4774,38 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
   - (c) QA moves AQP-272 to Done and fills in DEF-027's Fix & Verification rows (aff4791, the two runs).
   - (d) PR #167 then merges under DL-139 (3).
 **Posted:** Jira AQP-272 comment 11393; PR #189 comment 6775228086.
+
+## G6 – Peer Review (close) — AQP-244 (STORY-10.20, CI path variance, PR #166) — 2026-11-10 (attempt 1, closed at a4eab7f)
+
+- **Decision:** **G6 closed at a4eab7f. DL-137 conditions A to C are met.** AQP-244 goes to In QA. QLT-06 (Minor) goes to tech-debt #203 (DL-141).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **Fix head a4eab7f:** one commit on 953b8ca, 5 files (`playwright.config.ts` +6 / -6; `masters-table-actions.spec.ts` +6 / -4; `tests/support/playwright-config.ts`, renamed from `own-width-files.ts`; `one-width-tag.test.ts` +3 / -3; `own-width-files.test.ts` +63 / -23). No `src/` change.
+  - **Developer:** Jira AQP-244 11384.
+  - **Re-reviews:** standards round 2 (11385): APPROVE WITH COMMENTS, Info only. Quality round 2 (review 5848133647, 11404): APPROVE WITH COMMENTS, 1 Minor (QLT-06). Reports: `docs/06-reviews/AQP-244/standards.md` and `quality.md`, round 2.
+  - **Control PRs:** #183 (P4 re-planted, red), #191 (P6, green), #192 (P7, green), #193 (P8, red).
+  - **My own checks** (API and CI logs only):
+    - **Runtime diff:** the config change is a `ReadonlyArray` annotation and a rewritten comment, with the list unchanged. In the spec, the `desktop` skip moves from the describe's `beforeEach` to a file-level `test.beforeEach`, with the same condition.
+    - **CI 42867165582** on a4eab7f: `success`, with no `flaky` or `failed` line. Per shard: 228 / 225 / 212 passed and 2 / 4 / 17 skipped. That is **identical to the measured head 953b8ca** (run 42852486467, latest attempt), so DL-137's condition holds and AC-3 is not re-measured.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Zero open Blocker or Critical findings | ✱ | ✅ | both re-reviews |
+| 2 | QLT-01 fixed | | ✅ | file-level skip; the guard pins it; P4 re-planted (#183, run 42867966691) is red |
+| 3 | STD-06 and the named Minors | | ✅ | two ruled names pinned in a test; QLT-02, STD-01 to STD-05, STD-07 and STD-08 per standards round 2 |
+| 4 | Runtime test set unchanged | | ✅ | counts per shard identical to 953b8ca |
+| 5 | G12 | | ✅ | nothing weakened (quality round 2) |
+| 6 | Residual guard gap | | ⚠️ | QLT-06: the pin reads source text, so P6 (the hook only in a block comment) and P7 (an unindented describe) stay green. These are unusual edits, and P8 (a third file) is caught. Goes to #203 |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D | qa-engineer | `docs/07-qa/AQP-244-test-report.md` | DL-137 (D), with the architect's v0.32 (AC-3 (c) reported only): AC-1 to AC-6 with evidence; AC-3 recomputed from base run 42850365032 and head run 42852486467 (median of five, slowest, hits, 0 flaky); counts per shard on the final head; P4 and one other plant (P1 or P5) re-planted by QA's own control PRs; the G12 relaxation read against the pinned names | G7 |
+| E | developer | #203 | QLT-06: a syntax-based pin; P6 and P7 must fail | Before any change to `OWN_WIDTH_FILES` or either file's skip line; at the latest G8 |
+| F | orchestrator | merge | DL-141 (4) | After G7 GO |
+
+**Accepted:** STD-10 and STD-11 (Info, optional).
+**Risks:** RISK-023 stays 6 until G7; the reading at G7 is set in DL-141 (3).
+**Rationale:** the Major is fixed and its plant is red, and the runtime is provably unchanged. The remaining gap needs a deliberately odd edit. It gets an owner and a due point tied to the only change that could exploit it.
+**Posted:** Jira AQP-244 comment 11406; PR #166 comment 6777366036; tech-debt GitHub #203 created (QLT-06).
