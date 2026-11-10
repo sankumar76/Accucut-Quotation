@@ -276,8 +276,8 @@ A key never changes after it is saved, so a bad entry falls back on every run un
 key. A maintainer deletes it with `gh cache delete <key>` (a token with `actions: write`; the pipeline cannot do it) or under
 Actions, Caches; the next run misses and saves a good entry. Caches are scoped by ref, as for the Playwright caches above: a pull
 request restores entries from its own ref or from `master` and saves for itself only, and a `master` run restores only what a
-`master` run saved. The entries every branch reads are written by `push` runs on `master`. Each entry is the size of
-`node_modules` (several hundred megabytes before compression); GitHub keeps 10 GB per repository and evicts the least recently used.
+`master` run saved. The entries every branch reads are written by `push` runs on `master`. Each entry is about 235 MiB (233.49 MiB at the first save, AQP-243); GitHub keeps 10 GB per
+repository and evicts the least recently used, so one entry per lockfile is a small share of it.
 
 ## Performance checks (NFR-009)
 
