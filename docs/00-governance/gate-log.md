@@ -4558,3 +4558,45 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - **Reading rule:** the architect's median of five (test strategy v0.30 §10.5 item 9; AQP-244 11342) applies from its merge. This reading was taken under the median-of-three rule then in force, and it holds under the new one: with 4:03, 5:05 and 5:09 already in, no two further runs can lift a median of five above 5:09. So no further runs are asked for.
 - **Next thresholds:** the register now states them (falls to 3 on AQP-244's AC-3 or a nightly median at most 5:00; back to 8 on a `master` reading, or a nightly median, over 5:30).
 **Posted:** Jira AQP-268 comment 11345; PR #160 comment 6769247675; RISK-023 on Jira AQP-1 comment 11346. No tech-debt issue created.
+
+## G7 – QA Acceptance — AQP-123 (STORY-02.04 Exchange Rate Master, PR #151) — 2026-11-10 (attempt 1)
+
+- **Decision:** **GO.** QA records are at b14f5c1, and the code is at e72e8f2, unchanged since the G6 close. AQP-123 moves to Done, and PR #151 merges under DL-135 (4). The three dialog defects that condition F found (DEF-024 to DEF-026) bind the stories that delivered those screens, not this one. They are scheduled in DL-135 (2).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-123-test-report.md`, and the evidence folder `docs/07-qa/AQP-123-evidence/` (46 text files: plant diffs and outputs, probe sources stored as `.txt`, run outputs).
+  - **Defects:** DEF-024, DEF-025 and DEF-026 (Jira AQP-269 to AQP-271, GitHub #161 to #163).
+  - **Other QA files:** `tests/acceptance/aqp-123-exchange-rates.test.ts` (60 Vitest tests) and the test plan change log 0.2.3.
+  - **QA hand-off:** Jira AQP-123 11349; PR #151 comment 6771445125.
+  - **My own checks:**
+    - **Scope** (`compare e72e8f2...b14f5c1`): 3 commits and 52 files, all added under `docs/07-qa/` or `tests/acceptance/`, plus one line in `test-plan.md`. Nothing under `src/`, `prisma/`, `.github/`, `package*.json` or `playwright.config.ts`.
+    - **Gitleaks** v8.30.1 over `git diff e72e8f2 b14f5c1` (about 281 KB): no leaks.
+    - **Local and personal data:** a grep of the added lines for local paths, connection strings and e-mail addresses finds only invented test values (`x`, `y`, E2E user names).
+    - **CI 42843822420** on b14f5c1: 5 of 5 `success`, path **4:39**, recomputed (279 s). Shards: 210, 207 and 248 passed, with no `flaky` or `failed` line. The acceptance file ran in CI (`aqp-123-exchange-rates.test.ts (60 tests)`).
+    - **Not re-run by master:** QA's browser probes and plants. Their diffs and outputs are committed in the evidence folder.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-7 pass at 360, 768 and 1366 px; AC-4 is read on the amended text; 60 acceptance tests in CI and browser probes with outputs |
+| 2 | No open Sev-1 or Sev-2 defect against the story | ✱ | ✅ | none against AQP-123; DEF-024 to DEF-026 bind AQP-122, AQP-113 and AQP-65 |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 5 of 5 on b14f5c1. QA's local load failures (six timeouts that pass alone; one count that included uncommitted probes; a grown local database) are read under DL-057, where CI is the reference run |
+| 4 | Exploratory notes present | | ✅ | condition F and the E-probes |
+| 5 | Accessibility checks for UI stories | | ✅ | axe (`wcag2a` to `wcag22aa`) 0 at three widths in four states; 44 px; keyboard only; `inputmode="decimal"` |
+| 6 | DL-131 D3 items 1 to 10 | | ✅ | all ten, including QLT-11 (QA's own keyboard save of another pair: one stamp, one entry with the fixed `object_id`, then the canary pair restored) |
+| 7 | Planted faults | | ✅ | 11 plants caught (A3, A4, Q1 to Q5, QLT-01 9 of 9, DEF-020 3 of 3, QLT-02 in two ways), each diff committed |
+| 8 | Condition F graded on the test plan scale | | ⚠️ | DEF-024 and DEF-025 are Sev-2, as QA graded them. **DEF-026 is raised to Sev-2** (DL-135 (2)) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| a | qa-engineer | DEF-026 (AQP-271, #163) | Restate it as Sev-2: Jira priority High, GitHub label `sev-2`, and the severity row in the defect file | With the next QA commit or Jira update; it does not hold the merge |
+| b | developer | DEF-024, DEF-025, DEF-026 | One fix for the three dialogs: focus moves only when a submit is refused, never on typing, as AQP-123's `useFocusOnRefusal` does, preferably as one shared hook. One browser regression test per dialog at three widths, from QA's `F-a` and `F-b` probes, shown failing with the old effect planted back. It may carry DL-131 K (the shared failed-write sentence on the same screens) | **Before AQP-130 starts G5, and at the latest before G8** |
+| c | scrum-master | AQP-130 Dev Context | Name the rule: no focus effect keyed on an errors object, and the shared hook from (b) once it exists. Reviewers at AQP-130's G6 check it | Before AQP-130 is delegated |
+| d | orchestrator | PR #151 merge | DL-135 (4) | After this GO |
+| e | orchestrator | RISK-023 reading after the merge | DL-135 (5) | After the squash |
+
+**Accepted:** the evidence folder goes into the squash, as `AQP-234-evidence` did. It is text only, about 197 KB, with no secret or personal data, and it holds the only copy of the plant diffs and probe sources. Keeping the probes as `.txt`, out of CI, is accepted for RISK-023. Folder naming drift: the test plan's evidence section names `docs/07-qa/evidence/<story-id>/`, but the last two stories used `docs/07-qa/<KEY>-evidence/`. QA aligns the test plan wording at its next change. This is not a condition.
+**Risks:** none new. RISK-023 stays at 6.
+**Rationale:** every AC is verified with independent evidence on the exact code that passed G6. Every DL-131 item is done, including the screen side of a changing save that CI cannot cover. The defects found are on other stories' screens, are already graded, and are now scheduled before the next story that would copy the pattern.
+**Posted:** Jira AQP-123 comment 11351; PR #151 comment 6771797276. No tech-debt issue created (DEF-024 to DEF-026 have their own Bugs and issues, with an owner and a due point).
