@@ -184,10 +184,13 @@ test.describe('add a rate (AC-2, AC-5, AC-7)', () => {
     await dialog.getByRole('button', { name: 'Add rate' }).click();
     await expect(dialog.getByText(NAME_TAKEN)).toBeVisible();
     await expect(dialog).toBeVisible();
+    // The server refusal takes focus to the field it names (UX spec 6.0 "Forms"; QLT-03 of AQP-269).
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
     // A valid column letter: letters move, so it is refused.
     await dialog.getByLabel('Rate name').fill('AL');
     await dialog.getByRole('button', { name: 'Add rate' }).click();
     await expect(dialog.getByText(/cannot read as column letters/)).toBeVisible();
+    await expect(dialog.getByLabel('Rate name')).toBeFocused();
     await page.keyboard.press('Escape');
     // Playwright matches text ignoring letter case, so one row for the name is one rate: the capitals did not add a second.
     await expect(rowOf(page, name)).toHaveCount(1);
