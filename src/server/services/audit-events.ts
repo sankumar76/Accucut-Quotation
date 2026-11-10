@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
 import { formatDefaultValue, RUPEE, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
@@ -106,13 +107,27 @@ function describeMaterial(state: z.output<typeof materialState>): string {
   ].join(', ');
 }
 
+// ---- Shape of the Exchange Rate Master events (SCR-16 "Master data edit"; STORY-02.04) ------------------------------------------
 /**
- * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`). Storage
+ * The exchange rates as the log keeps them: each of the two rates as decimal text, or null while it was never set. One entry covers the pair
+ * (they are saved together), so `before` and `after` hold both rates; the one that did not change is the same in each.
+ */
+const exchangeRateState = z.strictObject({ usd: decimalText.nullable(), eur: decimalText.nullable() });
+
+const NOT_SET_WORDS = 'Not set yet';
+
+/** "1 USD in ₹ 81.37, 1 EUR in ₹ Not set yet": both rates, so a reader sees what they were and what they are without a legend. */
+function describeExchangeRates(state: z.output<typeof exchangeRateState>): string {
+  return EXCHANGE_RATE_FIELDS.map((field) => `${EXCHANGE_RATE_LABELS[field]} ${state[field] ?? NOT_SET_WORDS}`).join(', ');
+}
+
+/**
+ * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`, `exchange_rate`). Storage
  * accepts either shape; the **words** are chosen by the entry's object type, never by guessing from the keys, and the state must fit the
  * shape of that master: a material state under `process_item` is not described as a rate (the screen shows a dash). A new master adds its
  * shape and its describer to `MASTER_WORDS`.
  */
-const masterState = z.union([processItemState, materialState]);
+const masterState = z.union([processItemState, materialState, exchangeRateState]);
 
 function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) => string): (state: unknown) => string | null {
   return (state) => {
@@ -124,6 +139,7 @@ function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) =
 const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> = {
   process_item: wordsOf(processItemState, describeProcessItem),
   material: wordsOf(materialState, describeMaterial),
+  exchange_rate: wordsOf(exchangeRateState, describeExchangeRates),
 };
 
 /** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */
