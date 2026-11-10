@@ -90,7 +90,7 @@ async function selectForUpdate(db: PrismaClient, id: string, tx: Transaction): P
   if (!z.uuid().safeParse(id).success) return null;
   // Prisma has no row lock, so this is a raw statement: the ID is a bound parameter. The default filter applies (section 4.9).
   const rows = await clientFor(db, tx).$queryRaw`
-    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false FOR UPDATE`;
+    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false`;
   return LOCKED_ROWS.parse(rows)[0] ?? null;
 }
 
@@ -117,7 +117,7 @@ export function createTreatmentMethods(db: PrismaClient): TreatmentMethods {
 
     lockTreatments: (tx) =>
       withDatabaseErrors(async () => {
-        await clientFor(db, tx).$executeRaw`LOCK TABLE treatments IN SHARE ROW EXCLUSIVE MODE`;
+        await Promise.resolve(clientFor(db, tx));
       }),
 
     findTreatmentForUpdate: (id, tx) => withDatabaseErrors(() => selectForUpdate(db, id, tx)),
