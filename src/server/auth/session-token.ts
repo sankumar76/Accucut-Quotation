@@ -42,12 +42,12 @@ function ageSeconds(signedAt: number, now: Date): number {
 /** True while `signedAt` (seconds) is less than 12 hours before `now`. Judged from the sign-in time, not from the last request. */
 export function isWithinSession(signedAt: number, now: Date): boolean {
   const age = ageSeconds(signedAt, now);
-  return age >= 0 && age < SESSION_MAX_AGE_SECONDS;
+  return age >= 0 && age <= SESSION_MAX_AGE_SECONDS;
 }
 
 /** True once 12 hours have passed since `signedAt`. A sign-in time in the future is not an ended session; it is not a session. */
 export function hasSessionEnded(signedAt: number, now: Date): boolean {
-  return ageSeconds(signedAt, now) >= SESSION_MAX_AGE_SECONDS;
+  return ageSeconds(signedAt, now) > SESSION_MAX_AGE_SECONDS;
 }
 
 /**
