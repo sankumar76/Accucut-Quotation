@@ -20,7 +20,7 @@ export default async function Unauthorized() {
   return (
     <SystemPageFrame>
       <FocusMainHeading />
-      <SystemPageCard kind="session-ended" action={<SignInAgainAction href={signInPathFor(asked)} />} />
+      <SystemPageCard kind="session-ended" action={<SignInAgainAction href={asked === SIGN_IN_PATH ? signInPathFor(asked) : `${SIGN_IN_PATH}?callbackUrl=${encodeURIComponent(asked)}`} />} />
     </SystemPageFrame>
   );
 }
