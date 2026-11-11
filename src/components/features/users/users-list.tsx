@@ -7,10 +7,12 @@ import { Icon } from '@/components/shared/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { roleLabel } from '@/lib/auth/roles';
+import { cn } from '@/lib/cn';
 import type { UserRow } from '@/lib/users/users-client';
 
+import { BREAK_LONG_NAMES } from '../masters/process-texts';
 import { isOpener, type Opener } from './opener';
 import { OWN_PASSWORD_NAME } from './texts';
 
@@ -75,7 +77,7 @@ function RowActions({ user, currentUserId, busyUserId, pendingOpener, onAction, 
   const label = (text: string, icon: LucideIcon) => (compact ? <Icon icon={icon} size="large" /> : <><Icon icon={icon} />{text}</>);
 
   return (
-    <div className={compact ? 'flex items-center justify-end gap-s-1' : 'flex flex-wrap gap-s-2'}>
+    <div className={compact ? 'flex flex-nowrap items-center justify-end gap-s-2' : 'flex flex-wrap gap-s-2'}>
       <Button variant={variant} size={size} data-action="edit" aria-label={ACTION_NAMES.edit(user)} {...busyFor('edit')} onClick={press('edit')}>
         {label('Edit', Pencil)}
       </Button>
@@ -116,22 +118,20 @@ export function UsersList(props: UsersListProps) {
   return (
     <Card aria-busy={refreshing || undefined}>
       <div className="hidden md:block">
-        <Table regionLabel="Users, scrollable" caption="Users">
+        <Table regionLabel="Users, scrollable" caption="Users" actionButtons={3}>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>E-mail</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">
-                <span className="sr-only">Actions</span>
-              </TableHead>
+              <TableActionsHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id} data-user-id={user.id}>
-                <TableCell className="font-semibold text-ink">{user.name}</TableCell>
+                <TableCell className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{user.name}</TableCell>
                 <TableCell className="break-all text-ink-2">{user.email}</TableCell>
                 <TableCell>
                   <RoleText user={user} />
@@ -139,9 +139,9 @@ export function UsersList(props: UsersListProps) {
                 <TableCell>
                   <StatusBadge user={user} />
                 </TableCell>
-                <TableCell>
+                <TableActionsCell>
                   <RowActions {...props} user={user} compact />
-                </TableCell>
+                </TableActionsCell>
               </TableRow>
             ))}
           </TableBody>
