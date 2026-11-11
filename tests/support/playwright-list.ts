@@ -18,10 +18,13 @@ import { z } from 'zod';
  *
  * Every listing has a cache of its own (DEF-022, AQP-236). Playwright keeps compiled specs and their source maps in a
  * cache folder (`PWTEST_CACHE_DIR`, by default one folder per machine and user). Vitest runs those test files in separate
- * workers at the same time, so two listings on a cold cache wrote to the one folder together, and one of them could read
- * a half-written entry and report the compiled line of a test instead of its source line (`sign-in.spec.ts:46` for the
- * test at another line). The `file:line` keys of two listings then differed with no test missing. A folder per listing
- * leaves nothing to share, so no order, lock, retry or longer limit is needed.
+ * workers at the same time, so two listings on a cold cache wrote to the one folder together. The compiled `.js` entry
+ * carries a SHA-1 header, so a half-written one is caught and compiled again; the source-map `.map` file beside it is not
+ * checked in Playwright 1.64.1. A listing that misses the cache first deletes every cache file for that spec, including
+ * one a concurrent listing has just written, and then writes the `.map` unchecked. A listing that finds the `.map`
+ * missing or cut short gets no source map, and reports the compiled line of a test instead of its source line
+ * (`sign-in.spec.ts:46` for the test at another line). The `file:line` keys of two listings then differed with no test
+ * missing. A folder per listing leaves nothing to share, so no order, lock, retry or longer limit is needed.
  */
 
 const run = promisify(execFile);
@@ -87,8 +90,8 @@ export async function withPrivateListCache<T>(work: (cacheDirectory: string) => 
   try {
     return await work(cacheDirectory);
   } finally {
-    // A folder that cannot be removed is a leftover in the temp folder, which the system clears. It must not replace the
-    // listing's own result, or the error that explains why the listing failed.
+    // A folder that cannot be removed is a leftover in the temp folder (Windows does not empty it by default). It must not
+    // replace the listing's own result, or the error that explains why the listing failed.
     await rm(cacheDirectory, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
   }
 }

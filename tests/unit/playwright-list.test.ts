@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,8 +56,8 @@ describe('AQP-236 (DEF-022): each Playwright listing has a cache folder of its o
     const seen: Array<{ folder: string; existed: boolean; entries: number }> = [];
     let started = 0;
     let release: () => void = () => undefined;
-    const bothStarted = new Promise<void>((resolveBoth) => {
-      release = resolveBoth;
+    const allStarted = new Promise<void>((resolveAll) => {
+      release = resolveAll;
     });
     fake.handler = async (options) => {
       const folder = cacheFolderOf(options);
@@ -65,7 +65,7 @@ describe('AQP-236 (DEF-022): each Playwright listing has a cache folder of its o
       started += 1;
       if (started === 3) release();
       // No listing finishes until all three are in flight, as the guard files' `beforeAll` hooks overlap in the real run.
-      await bothStarted;
+      await allStarted;
       return { stdout: EMPTY_LIST };
     };
 
@@ -80,42 +80,58 @@ describe('AQP-236 (DEF-022): each Playwright listing has a cache folder of its o
     }
   });
 
-  it('removes the folder when the listing has finished', async () => {
+  it('removes the folder when the listing has finished (it existed while the listing ran)', async () => {
     let folder = '';
+    let existedDuringListing = false;
     fake.handler = async (options) => {
       folder = cacheFolderOf(options);
+      existedDuringListing = existsSync(folder);
       return { stdout: EMPTY_LIST };
     };
     await listPlaywrightSuites();
-    expect(folder).not.toBe('');
+    // Without the first check, the second would also pass for a helper that never made a folder, or that reused a fixed one
+    // some other file had already removed (QLT-01).
+    expect(existedDuringListing).toBe(true);
     expect(existsSync(folder)).toBe(false);
   });
 
-  it('removes the folder when the listing fails, and still reports why it failed', async () => {
+  it('removes the folder when the listing fails, and still reports why it failed (it existed while the listing ran)', async () => {
     let folder = '';
+    let existedDuringListing = false;
     fake.handler = async (options) => {
       folder = cacheFolderOf(options);
+      existedDuringListing = existsSync(folder);
       throw Object.assign(new Error('boom'), { code: 1, stderr: 'a spec did not compile' });
     };
     await expect(listPlaywrightSuites()).rejects.toThrow(/playwright test --list failed \(exit 1\)[\s\S]*a spec did not compile/);
+    expect(existedDuringListing).toBe(true);
     expect(existsSync(folder)).toBe(false);
   });
 
   it('keeps the rest of the environment, and takes the cache folder from the listing and not from the caller', async () => {
+    const callerFolder = 'a-shared-folder-the-caller-set';
     vi.stubEnv('AQP_236_PROBE', 'kept');
-    vi.stubEnv(CACHE_DIR_VARIABLE, 'a-shared-folder-the-caller-set');
+    vi.stubEnv(CACHE_DIR_VARIABLE, callerFolder);
     let environment: NodeJS.ProcessEnv | undefined;
+    let existedDuringListing = false;
     fake.handler = async (options) => {
       environment = options.env;
+      existedDuringListing = existsSync(cacheFolderOf(options));
       return { stdout: EMPTY_LIST };
     };
     await listPlaywrightSuites();
     expect(environment?.['AQP_236_PROBE']).toBe('kept');
-    expect(environment?.[CACHE_DIR_VARIABLE]).not.toBe('a-shared-folder-the-caller-set');
+    const folder = environment?.[CACHE_DIR_VARIABLE] ?? '';
+    // `not.toBe(callerFolder)` alone passes for any other folder, a fixed shared one included. The anchored name is the one
+    // `mkdtemp` makes for this helper: the prefix and six random characters (QLT-02).
+    expect(folder).not.toBe(callerFolder);
+    expect(basename(folder)).toMatch(/^accucut-playwright-list-[A-Za-z0-9]{6}$/);
+    expect(existedDuringListing).toBe(true);
+    expect(existsSync(folder)).toBe(false);
   });
 });
 
-describe('withPrivateListCache', () => {
+describe('AQP-236 (DEF-022): withPrivateListCache', () => {
   it('returns what the work returns, with a folder that exists while it runs and not after', async () => {
     let folder = '';
     const result = await withPrivateListCache(async (cacheDirectory) => {
