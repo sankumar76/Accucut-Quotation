@@ -10,7 +10,7 @@ import { listMaterials, type MaterialRow } from '@/lib/masters/materials-client'
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import type { MaterialFormDialogProps } from './material-form-dialog';
-import { useReadAgain } from './use-read-again';
+import { useReadAgain, type ReadStatus } from './use-read-again';
 
 /**
  * What the Materials tab of SCR-13 holds and does, apart from how it looks (STORY-02.03 AC-1, AC-2, AC-8): the list and its search, whether
@@ -19,7 +19,7 @@ import { useReadAgain } from './use-read-again';
  * opened the dialog, the same wait of 300 ms before the skeleton. Delete and its refusal are story 02.07's.
  */
 
-export type MaterialListStatus = 'ready' | 'loading' | 'error';
+export type MaterialListStatus = ReadStatus;
 
 /** The dialog's code: a bare `import()` that the loader can try again after a failure (architecture section 10, AQP-188). */
 const loadDialog = () => import('./material-form-dialog').then((module) => module.MaterialFormDialog);

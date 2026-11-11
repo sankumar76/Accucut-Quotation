@@ -1,4 +1,4 @@
-import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, NAME_TOO_LONG_MESSAGE, normaliseDecimalText } from './master-rules';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, MASTER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE, normaliseDecimalText } from './master-rules';
 
 /**
  * What the Materials tab of SCR-13 (STORY-02.03; SPEC section 4.3, architecture sections 5.1 and 6) and its routes share: the limits,
@@ -7,12 +7,12 @@ import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, NAME_TOO_LONG_MESSAGE, norm
  * which imports the limits, the words and `specificGravityProblem` from here, so a limit or a sentence is written once.
  *
  * A price, a specific gravity and a Material-Scrap-Rate are carried as **decimal text** ("7.37"), never as a JavaScript number
- * (coding standards section 10, "Money and rates"). The text of a price or a scrap rate follows the Process Master's default value
+ * (coding standards section 10, "Money and rates"). The text of a price or a scrap rate follows `DECIMAL_TEXT_PATTERN` (`master-rules.ts`)
  * (up to 12 digits, up to two decimals, 0 or more); a specific gravity follows it too and must also be above 0 (UX-37).
  */
 
-/** The longest Material in Drawing and Material Considered. The same limit as a rate's name (SCR-11). */
-export const MATERIAL_TEXT_MAX_LENGTH = 100;
+/** The longest Material in Drawing and Material Considered. The same limit as every master's name (`master-rules.ts`). */
+export const MATERIAL_TEXT_MAX_LENGTH = MASTER_NAME_MAX_LENGTH;
 
 /** The words of the fields, as the labels of SCR-13 write them (the field is named Material-Scrap-Rate, per kg: SPEC D-39). */
 export const MATERIAL_FIELD_LABELS = {

@@ -7,7 +7,7 @@
  * Each master's own words (the sentence for a name that is taken, the hint under its field) stay in its own file.
  */
 
-/** The longest name of a rate or a treatment. The formula engine states the same limit for a rate's name (`MAX_RATE_NAME_LENGTH`); a test keeps the two equal. */
+/** The longest name of any master's list entry (a rate, a material, a treatment). The formula engine states the same limit for a rate's name (`MAX_RATE_NAME_LENGTH`); a test keeps the two equal. */
 export const MASTER_NAME_MAX_LENGTH = 100;
 
 export const NAME_REQUIRED_MESSAGE = 'Enter a name.';

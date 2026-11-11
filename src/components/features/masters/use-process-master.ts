@@ -12,7 +12,7 @@ import type { PageNotice } from './master-texts';
 import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
 import { goneNotice } from './process-texts';
-import { useReadAgain } from './use-read-again';
+import { useReadAgain, type ReadStatus } from './use-read-again';
 
 /**
  * What SCR-11 holds and does, apart from how it looks (STD-01 of the G6 of AQP-113): the list and its search, which dialog is open and
@@ -20,7 +20,7 @@ import { useReadAgain } from './use-read-again';
  * the list (`useItemsList`), the dialogs (`useDialogs`) and the two together (`useProcessMaster`).
  */
 
-export type ListStatus = 'ready' | 'loading' | 'error';
+export type ListStatus = ReadStatus;
 
 /** The dialogs' code: a bare `import()` that the loader can try again after a failure. */
 const loadDialogs = () => import('./process-dialogs').then((module) => module.ProcessDialogs);

@@ -9,7 +9,7 @@ import { RUPEE } from './process-items';
  * `src/server/views/schemas/exchange-rates.ts`, which imports the words and the check from here, so a sentence is written once.
  *
  * A rate is carried as **decimal text** ("83.37"), never as a JavaScript number (coding standards section 10, "Money and rates"). It
- * follows the Process Master's default value: up to 12 digits, up to two decimals, 0 or more. Zero is accepted on purpose (assumption A-1):
+ * follows `DECIMAL_TEXT_PATTERN` (`master-rules.ts`): up to 12 digits, up to two decimals, 0 or more. Zero is accepted on purpose (assumption A-1):
  * the division-by-zero case CE-8 runs a zero rate and shows a dash.
  */
 

@@ -9,7 +9,7 @@ import { listTreatments, type TreatmentRow } from '@/lib/masters/treatments-clie
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import { treatmentGoneNotice } from './treatment-texts';
-import { useFocusAfterRead } from './use-read-again';
+import { useFocusAfterRead, type OpenerRef, type ReadStatus } from './use-read-again';
 
 /**
  * What the Treatment / Color tab of SCR-13 holds and does, apart from how it looks (STORY-02.05 AC-1, AC-4, AC-8): the list, which dialog is
@@ -26,7 +26,7 @@ import { useFocusAfterRead } from './use-read-again';
  * keystroke, and nothing is keyed on an object that typing rebuilds.
  */
 
-export type TreatmentListStatus = 'loading' | 'ready' | 'error';
+export type TreatmentListStatus = ReadStatus;
 
 export type TreatmentDialogKind = 'add' | 'rename' | 'delete';
 
@@ -37,7 +37,7 @@ export const TREATMENT_ACTIONS = { add: 'add', rename: 'rename', delete: 'delete
  * The list, reading it, and where focus goes when a read that a person asked for has finished: back to the button that opened the dialog, unless
  * the read failed (the load error owns focus, DEF-020).
  */
-function useTreatmentList(opener: { readonly current: Opener | null }) {
+function useTreatmentList(opener: OpenerRef) {
   const [items, setItems] = useState<ReadonlyArray<TreatmentRow> | null>(null);
   const [status, setStatus] = useState<TreatmentListStatus>('loading');
   // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
