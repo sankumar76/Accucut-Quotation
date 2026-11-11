@@ -2,7 +2,7 @@ import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundEr
 import type { PasswordHasher } from '../auth/password-hasher';
 import { accountThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import { createTransactionHandle, type TransactionRunner } from '../repositories/transaction';
 import {
   normaliseEmail,
   UserConstraintError,
@@ -210,3 +210,6 @@ export function createUserService({ users, throttles, hasher, transactions, audi
     },
   };
 }
+
+// PLANT P4 (never merged): a service that makes a handle of its own.
+export const plantedHandle = createTransactionHandle();
