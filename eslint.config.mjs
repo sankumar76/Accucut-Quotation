@@ -78,7 +78,10 @@ const PRESENTATION_IMPORTS = [
 // so is the schemas barrel, which re-exports the Admin-only schemas (an Engineer view imports `schemas/me` and the like directly).
 // `tests/security/engineer-import-rule.test.ts` lints a planted import of every file in both directories, so these lists cannot
 // drift from the source tree: a file in neither list fails that test. A form that needs a master's names (not its rates) gets a
-// narrow reader with a different name, added to the allow-list on purpose.
+// narrow reader with a different name, added to the allow-list on purpose. The entry `transaction` allows the NAMED imports of that
+// file except `createTransactionHandle` (refused for every file but the runner's own and the tests, see TRANSACTION_HANDLE_IMPORT); a
+// namespace import and `import()` of it are refused too. It does not make the file "types only": `clientFor` and `createTransactionRunner`
+// pass, and a view still cannot reach a client without a `PrismaClient`, which the allow-list refuses.
 const ENGINEER_ALLOWED_REPOSITORIES = ['user-repository', 'database-errors', 'transaction'];
 const ENGINEER_ALLOWED_SERVICES = ['user-service', 'auth-service'];
 const allowOnly = (directory, allowed) => ({
@@ -138,15 +141,19 @@ const NEXT_IMAGE_IMPORT = {
 
 // Only the transaction runner makes a `Transaction` handle (STORY-10.18, architecture section 6). A service that could make one
 // could write an audit entry in a transaction of its own, which commits whether or not the change does. The rule names the
-// function, so the type `Transaction` and `TransactionRunner` can still be imported from the same file by anyone. A literal
-// `import()` of that file is refused whole, because `no-restricted-syntax` cannot see which names a dynamic import uses. It is
-// listed in every group below as well as in the general block (see NEXT_IMAGE_IMPORT), and `transaction.ts` and `tests/**` are
-// left out of the one block that applies it to every other file.
+// function, so the types and the other names of that file (`Transaction`, `TransactionRunner`, `clientFor`) can still be imported
+// by anyone with a static import. A literal `import()` of that file is refused whole, because `no-restricted-syntax` cannot see
+// which names a dynamic import uses. The entry is in the block `accucut/transaction-handle-is-for-the-runner` (every file but
+// `transaction.ts` and `tests/**`) and, because a later block replaces the setting of an earlier one, in every group of
+// `restrict()` too. That block must stay above the group blocks: moved below them, `restrict([])` would replace their lists.
+// `tests/unit/lint/transaction-handle-rule.test.ts` asserts the message in every group, so dropping the entry from `restrict()` fails it.
 const TRANSACTION_HANDLE_IMPORT = {
   group: ['**/transaction', '**/transaction.*'],
   importNames: ['createTransactionHandle'],
   regex: `(^|${SLASH})transaction([.][cm]?[jt]s)?$`,
-  message: 'Only src/server/repositories/transaction.ts and tests/** may import createTransactionHandle: a service gets its Transaction from TransactionRunner.run (architecture section 6).',
+  message:
+    'Only src/server/repositories/transaction.ts and tests/** may import createTransactionHandle: a service gets its Transaction from TransactionRunner.run (architecture section 6). ' +
+    'An import() of this file is refused whole, because the lint cannot see which names it takes; use a static import of the names you need.',
 };
 
 /** The two rules for one file group: static imports by glob (by `staticRegex` where a glob cannot say it), literal `import()` by regular expression. */
@@ -209,6 +216,7 @@ export default defineConfig([
   {
     // Every file but the runner's own and the tests (which build a handle for an in-memory runner). The general block above keeps
     // the `next/image` ban for those two; this block repeats it and adds the handle, because a block replaces the setting it names.
+    // It must stay above the group blocks below (see TRANSACTION_HANDLE_IMPORT).
     name: 'accucut/transaction-handle-is-for-the-runner',
     files: [`**/*.${CODE_EXTENSIONS}`],
     ignores: ['src/server/repositories/transaction.ts', 'tests/**'],
