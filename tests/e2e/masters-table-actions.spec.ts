@@ -157,6 +157,24 @@ async function expectButtonsPerRow(page: Page, screen: Screen, expected: number,
   expect(counts.filter((count) => count !== expected), `${mode}: every row has ${expected} buttons`).toEqual([]);
 }
 
+/** Three 36 px buttons, two 8 px gaps and 16 px of padding on each side (UX spec 6.0 "Masters tables", Width: 156 px for three buttons). */
+const THREE_BUTTON_COLUMN_WIDTH = 156;
+
+/**
+ * The table was given `actionButtons={3}` (AQP-245 AC-2). The sticky class of the Actions cells alone keeps the buttons inside the region, so
+ * the positions above cannot tell a table that has the prop from one that has lost it. What the prop sets can: the width of the Actions column,
+ * the scroll padding that keeps a focused button clear of it, and wrapping headings. The plant of AQP-245 (the prop removed) fails here.
+ */
+async function expectThreeButtonColumn(region: Locator, mode: string): Promise<void> {
+  const actionsHeading = region.locator('thead th').last();
+  const width = await actionsHeading.evaluate((heading) => heading.getBoundingClientRect().width);
+  expect(width, `${mode}: the Actions column is ${THREE_BUTTON_COLUMN_WIDTH} px wide`).toBeCloseTo(THREE_BUTTON_COLUMN_WIDTH, 0);
+  const scrollPadding = await region.evaluate((element) => getComputedStyle(element).scrollPaddingInlineEnd);
+  expect(scrollPadding, `${mode}: the region keeps focus clear of the Actions column`).toBe(`${THREE_BUTTON_COLUMN_WIDTH}px`);
+  const wrapping = await region.locator('thead th').evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).whiteSpace));
+  expect(wrapping.filter((value) => value !== 'normal'), `${mode}: the headings wrap`).toEqual([]);
+}
+
 /** The Admin's own row (AC-3): Edit, then Reset password and Deactivate, disabled, with their names, in that order and inside the region. */
 async function expectOwnRowIntact(page: Page, region: Locator, mode: string): Promise<void> {
   const own = page.locator('[data-user-id]:visible').filter({ hasText: E2E_ADMIN.email });
@@ -236,6 +254,7 @@ for (const screen of SCREENS) {
         if (screen.users) {
           await expectButtonsPerRow(page, screen, 3, 'as drawn');
           await expectOwnRowIntact(page, region, 'as drawn');
+          await expectThreeButtonColumn(region, 'as drawn');
         }
 
         // 2. Forced to scroll (part 2, the guarantee): the table is made wider than the region, at its start. Only the sticky column keeps the
