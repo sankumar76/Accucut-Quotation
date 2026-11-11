@@ -174,6 +174,6 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
       withDatabaseErrors(() =>
         enforcingConstraints(async () => toMaterialRecord(await clientFor(db, tx).material.create({ data: material, select: MATERIAL_SELECT }))),
       ),
-    updateMaterial: (id, changes, tx) => withDatabaseErrors(() => enforcingConstraints(() => changeMaterial(db, id, changes, tx))),
+    updateMaterial: (id, changes, tx) => withDatabaseErrors(() => changeMaterial(db, id, changes, tx)),
   };
 }
