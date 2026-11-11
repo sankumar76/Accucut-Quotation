@@ -34,6 +34,9 @@ export interface AuditChangeText {
 /** What the screen shows when an entry cannot be described: a reserved event, or stored values that do not fit their schema. */
 export const NO_DETAIL: AuditChangeText = { before: '—', after: '—' };
 
+/** The `objectType` of the generic master events (`master.*`): the entry's own object type is then the master the caller names. */
+const GENERIC_MASTER_TYPE = 'master';
+
 /** A schema of a stored value: what it accepts is JSON, so the writer can hand what it parsed to the repository. */
 type StoredShape = z.ZodType<JsonValue>;
 
@@ -69,7 +72,10 @@ function defineEvent<Before extends StoredShape, After extends StoredShape>(
   return {
     ...definition,
     schemasFor(objectType) {
-      if (definition.forMasterShape === undefined) return { before: definition.before, after: definition.after };
+      if (definition.forMasterShape === undefined) {
+        // Deny by default (QLT-02): a generic master event declared without `forMasterShape` must not fall back to its union schemas.
+        return definition.objectType === GENERIC_MASTER_TYPE ? null : { before: definition.before, after: definition.after };
+      }
       const shape = masterShapeOf(objectType);
       return shape === undefined ? null : definition.forMasterShape(shape);
     },
@@ -150,7 +156,7 @@ function describeExchangeRates(state: z.output<typeof exchangeRateState>): strin
  * checks `before` and `after` of a generic master event against the shape of the entry's own `object_type` (`schemasFor`), so a
  * state that fits another master, or only part of this one, is refused (QLT-11, NFR-007: the log is append-only, a wrong entry cannot be
  * corrected); and `MASTER_WORDS` below describes a stored state by the same shape. A type that is not here is refused. A new master adds its
- * shape here, to `masterState` (for the types of a caller's payload) and its describer to `MASTER_WORDS`; a test pins that they agree.
+ * shape here, to `masterState` (for the types of a caller's payload) and its describer to `MASTER_WORDS`; the `satisfies` on `MASTER_WORDS` makes a master with no words a compile error, and a test pins the rest.
  */
 export const MASTER_SHAPES = {
   process_item: processItemState,
@@ -182,17 +188,23 @@ function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) =
   };
 }
 
-const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> = {
+/**
+ * The words of each master, one per key of `MASTER_SHAPES`. `satisfies` makes the two key sets one: a master with a shape and no words,
+ * and words for a master with no shape, are both compile errors (QLT-01).
+ */
+const MASTER_WORDS = {
   process_item: wordsOf(MASTER_SHAPES.process_item, describeProcessItem),
   material: wordsOf(MASTER_SHAPES.material, describeMaterial),
   exchange_rate: wordsOf(MASTER_SHAPES.exchange_rate, describeExchangeRates),
   treatment: wordsOf(MASTER_SHAPES.treatment, (state) => state.name),
-};
+} as const satisfies { readonly [K in keyof typeof MASTER_SHAPES]: (state: unknown) => string | null };
+
+/** The same table as a Map, so a stored object type such as "toString" finds nothing: a Map has no inherited members (deny by default). */
+const MASTER_WORDS_BY_TYPE: ReadonlyMap<string, (state: unknown) => string | null> = new Map(Object.entries(MASTER_WORDS));
 
 /** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */
 function describeMasterChange(objectType: string, before: unknown, after: unknown): AuditChangeText {
-  // An own property only: a stored object type such as "toString" must not find a function inherited from Object.prototype (deny by default).
-  const words = Object.hasOwn(MASTER_WORDS, objectType) ? MASTER_WORDS[objectType] : undefined;
+  const words = MASTER_WORDS_BY_TYPE.get(objectType);
   if (words === undefined) return NO_DETAIL;
   const beforeWords = before === null ? 'Not added' : words(before);
   const afterWords = after === null ? 'Deleted' : words(after);
@@ -274,7 +286,7 @@ export const AUDIT_EVENTS = {
   // Each save is one entry, whatever number of attributes it changes (AC-5). A rate's value is Restricted, and the log is
   // Admin-only (architecture section 5.3), so the entry may keep it.
   'master.created': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: z.null(),
@@ -283,7 +295,7 @@ export const AUDIT_EVENTS = {
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.edited': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: masterState,
@@ -292,7 +304,7 @@ export const AUDIT_EVENTS = {
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.deleted': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: masterState,

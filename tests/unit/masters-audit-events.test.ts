@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AUDIT_EVENTS, MASTER_SHAPES, NO_DETAIL, type AuditEventName } from '@/server/services/audit-events';
+import { AUDIT_EVENTS, auditEventNames, MASTER_SHAPES, NO_DETAIL, type AuditEventName } from '@/server/services/audit-events';
 import { createAuditService } from '@/server/services/audit-service';
 
 import { createFakeAuditWorld } from '../support/fake-audit';
@@ -191,7 +191,33 @@ describe('the state of a master entry must fit its own master (#218, NFR-007)', 
     expect(Object.keys(MASTER_SHAPES).sort()).toEqual(Object.keys(STATES).sort());
     for (const [objectType, shape] of Object.entries(MASTER_SHAPES)) {
       expect(shape.safeParse(STATES[objectType]).success, objectType).toBe(true);
+      // `describeStored` gives NO_DETAIL, not null, for a master with a shape and no words (QLT-01); `MASTER_WORDS` is also type-checked against the table.
       expect(AUDIT_EVENTS['master.created'].describeStored(null, STATES[objectType], objectType), objectType).not.toBeNull();
+      expect(AUDIT_EVENTS['master.created'].describeStored(null, STATES[objectType], objectType), objectType).not.toEqual(NO_DETAIL);
+    }
+  });
+
+  it('[QLT-02] gives every registered master event the shape of the master named, and none for a master it has no shape for', () => {
+    const masterEvents = auditEventNames().filter((name) => AUDIT_EVENTS[name].objectType === 'master');
+    expect(masterEvents.length).toBeGreaterThanOrEqual(3);
+    for (const name of masterEvents) {
+      const event = AUDIT_EVENTS[name];
+      expect(event.schemasFor('quotation'), `${name}: unknown master`).toBeNull();
+      expect(event.schemasFor('master'), `${name}: unnamed master`).toBeNull();
+      expect(event.schemasFor('constructor'), `${name}: Object.prototype member`).toBeNull();
+      for (const [objectType, own] of Object.entries(STATES)) {
+        const schemas = event.schemasFor(objectType);
+        expect(schemas, `${name} ${objectType}`).not.toBeNull();
+        for (const side of ['before', 'after'] as const) {
+          const schema = schemas?.[side];
+          // A side that accepts null holds no state (create's before, delete's after).
+          if (schema === undefined || schema.safeParse(null).success) continue;
+          expect(schema.safeParse(own).success, `${name} ${side}: own ${objectType} state`).toBe(true);
+          for (const [otherType, other] of Object.entries(STATES)) {
+            if (otherType !== objectType) expect(schema.safeParse(other).success, `${name} ${side}: ${otherType} state under ${objectType}`).toBe(false);
+          }
+        }
+      }
     }
   });
 });
