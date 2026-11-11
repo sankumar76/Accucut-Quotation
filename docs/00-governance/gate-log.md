@@ -5016,3 +5016,56 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - The Minors are cheap and fall before QA starts, so they get one named-file commit, read by master at G7 (DL-047, DL-130, DL-144). They do not go into an issue.
 - QLT-02 is ruled as the behaviour needed (the test must fail on the #221 plant), not as the reviewer's code, because that code passes on the plant. The plant is run by QA independently of the developer.
 **Posted:** Jira AQP-236 comment 11453; PR #220 comment 6789524581.
+
+## G6 – Peer Review (narrow route) — AQP-245 (STORY-10.21 Users list table actions, PR #222) — 2026-11-11 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-147).** This is the narrow reviewer-quality route set in the story's Dev Context (DL-122 (1), DL-124 (1)). There are no Blocker or Critical findings. QLT-01 (Major) and QLT-02 to QLT-04 (Minor) are fixed in one test-only round. reviewer-quality then re-reviews once, on the head that also holds the merge of `master` after #195. AQP-245 goes to Changes Requested. **PR #195 (AQP-130) merges first.**
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **PR #222, head 72d92e9,** on 1d37902, with three commits: 85e9d61 (test first, run 42959350855 red on the 11 SCR-14 cases), fbfb968 (fix) and 72d92e9 (computed-style assertions after plant #223 survived and #224 was caught). Two files: `src/components/features/users/users-list.tsx` (+9 / -9) and `tests/e2e/masters-table-actions.spec.ts`. Master read the product diff in full, and the spec's helpers and test body. Developer hand-off: Jira AQP-245 11457.
+  - **Review:** reviewer-quality round 1, PR review 5855399377 (Jira 11459), REQUEST CHANGES. The report is `docs/06-reviews/AQP-245/quality.md` (records branch `docs/AQP-1-g6-close-aqp-130`, cdeb446). Orchestrator brief: 11460.
+  - **Plants:** #226 P-GAP (66d2009, run 42980084449) and #227 P-WRAP (c86b424, run 42980091871). Master read both diffs from the compare API: one commit each, exactly as reported. Both runs are green.
+  - **CI on 72d92e9:** run 42978577848, read from the jobs API and the log by master.
+  - **PR #195:** head 6dd89b7, labels `gate:g6-pass`, G7 in progress (DL-144 (5)). Its diff to the shared spec was read by master.
+
+**Checklist (narrow route, DL-122 (1) / DL-124 (1))**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review evidence present for the route | * | ✅ | The Dev Context names reviewer-quality narrowly. The diff is UI layout and focus in the Users component plus one E2E spec. There is no data path, no `src/` outside `features/users`, and no config, `package.json` or CI change |
+| 2 | Zero open Blocker / Critical | * | ✅ | 0 / 0. One Major (QLT-01), 3 Minor, 4 Info (report, severity table) |
+| 3 | Findings cite file:line | * | ✅ | QLT-01 `masters-table-actions.spec.ts:250-251`, QLT-02 `:206-224`, QLT-03 `:168-176` and `users-list.tsx:80`, QLT-04 `:104-108, 256, 269, 288`, QLT-06 `aqp-234-qa.spec.ts:140-170`, QLT-07 `users-list.tsx:15, 80` |
+| 4 | Product code meets the ACs | * | ✅ | `actionButtons={3}`, `TableActionsHead`, `TableActionsCell`, the wrapper `flex flex-nowrap items-center justify-end gap-s-2`, and `BREAK_LONG_NAMES` on the name cell. The e-mail cell keeps `break-all`. `RowActions`, the own-row names and the `md:hidden` cards are untouched (diff) |
+| 5 | CI green on the judged head | * | ✅ | Run 42978577848 is 5 of 5, including `Stages 1 to 11` (07:23:26Z to 07:23:32Z). The path is 4:41 (07:18:51Z to 07:23:32Z). Vitest 2,799 and 4,917 are equal to `master` 225a1c9's push run, because PR CI runs the merge ref, so 0 are added. E2E is 235 / 232 / 219 passed = 686 = 674 + 12, with 2 / 4 / 17 skipped (unchanged) |
+| 6 | Secrets hygiene | * | ✅ | Master ran Gitleaks v8.30.1 (Docker, `stdin --redact`) on the PR diff: no leaks. The test password is an invented literal |
+| 7 | Tests prove what they claim | | ❌ (Major) | QLT-01: the fit is not tested. P-WRAP survived. Confirmed below |
+| 8 | Keyboard reach (AC-5) | | ⚠️ | QLT-02: only the own row's Edit is ever tabbed to |
+| 9 | Gap rule (AC-2, DL-122 condition B) | | ⚠️ | QLT-03: P-GAP survived. The 156 px width check reads 156 whatever the prop |
+| 10 | Cost (RISK-023) | | ⚠️ | QLT-04: SCR-14 cases are about 2.1 times SCR-11's (5.13 s against 2.40 s on the head run). Of the excess, about 10 s per run is axe (required) and about 20 s is avoidable. DL-144 left 6 s of margin to the item 9 line |
+| 11 | Test names cite AC IDs (`CLAUDE.md` §6 rule 3) | | ⚠️ | The 11 SCR-14 width cases inherit the describe title "… (DEF-021)" and cite no AQP-245 AC. The card case cites AC-4. Master's hygiene check on the narrow route; it is not in the report |
+| 12 | Merge path clear | | ❌ | QLT-05, confirmed below: a real conflict with #195 |
+
+**What master checked beyond the report**
+- **QLT-01 is real.** Line 251 is `expect(scrollLeft).toBe(0)`, the only step 1 fit assertion. `longName` builds a name of exactly 120 letters with no space. Without `[overflow-wrap:anywhere]`, the name column grows and the table overflows. The sticky Actions column still keeps every button inside the region, and `horizontalOverflow` reads the page, not the region. So nothing fails, as run 42980091871 shows.
+- **QLT-02 is real.** `user-repository.ts:217` orders by `isActive desc, role asc, …`. With one Admin, the own row is always first, so `enabled` is 1.
+- **QLT-05 is a real conflict.** #195's hunks in the spec (`@@ -4`, `-28`, `-57`, `-103`, `-127`, `-140`) overlap #222's (`@@ -2`, `-20`, `-35`, `-48`, `-57`, `-98`, `-108`, `-123`). #222 makes `rowSelector`, `nameLength` and `firstAction` required on `Screen`, and #195's Treatment / Color entry has none of them, so the merged file would fail type-check. #195 also changes `expectActionsInside`'s call shape and the Tab pattern (`rename`).
+- **The fit check should cover every screen.** QA's G7-1 (`aqp-234-qa.spec.ts:158`) is the only `scrollWidth <= clientWidth` check for SCR-11 and SCR-13, and #137 step 1 would delete it.
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #222, the same two files (spec changes only, unless a test exposes a real defect, which comes back to master) | **QLT-01:** in step 1, for every screen, assert `scrollWidth - clientWidth <= 0` as drawn, with no tolerance. **QLT-02:** the Tab loop runs on the long-name row, asserts it has 3 enabled buttons, and reaches Edit, Reset password and Deactivate in that order, with today's four checks each. **QLT-03:** as drawn, the gap between adjacent row buttons is 8 px (within 0.5 px) on every screen whose rows have two or more buttons. The 156 px check stays, relabelled to what it proves. **QLT-04:** filler users only for the number missing to reach six, inside each test (no shared state, no order dependence). The own row's DOM checks run as drawn only, and its position checks stay at all three points. axe stays at 768, 1024 and 1366 px. The instance count stays 12. Post the SCR-14 and SCR-11 per-case means from the shard-3 log. **Titles:** the SCR-14 cases cite AQP-245 AC IDs, in #195's STD-15 form. **Dev Record:** round-2 rows | Before the re-review |
+| B | orchestrator → developer | PR #222, merge commit | After #195 is squashed and its push run is green: update #222 from `master` by a merge commit (no rebase, no force-push), resolving the spec by hand as DL-147 (4)(b) says. Counts as DL-147 (4)(d) | Before the re-review |
+| C | reviewer-quality | PR review and `docs/06-reviews/AQP-245/quality.md` round 2 | Re-review the new diff only (A plus the merge resolution), with plants P-WRAP (Users and SCR-11), P-GAP and P-TAB red as DL-147 (5) says. The #224 form only if `expectThreeButtonColumn` changed | After A and B |
+| D | qa-engineer | `docs/07-qa/AQP-245-test-report.md` in PR #222 | The G7 route in DL-147 (6) | G7 |
+| E | orchestrator | Jira AQP-245, PR #222 | Move AQP-245 to Changes Requested (In Progress) by transition. Swap the PR label to the G6 changes state. Merge as DL-147 (7) after G7 GO | Now / after G7 |
+| F | qa-engineer | GitHub #137 | Step 1 (deleting G7-1) waits until #222 has merged with the per-screen fit check. If #222 has not merged by G8, G7-1 stays | Before #137's PR |
+| G | orchestrator → delivery lead | branches `plant/AQP-245-no-action-buttons` and `-2` | Delete them with "Delete branch" on #223 and #224 (GitHub can restore them). They hold neither G7 nor the merge | Before G8 |
+
+**Merge order:** **#195 first, then #222.** #195's route is unchanged (DL-144 (6), DL-145 (4)(e), DL-146 (4)(h)). `master` holds none of #222's changes, so #195 merges with its files unchanged. #222 takes the conflict inside the round it needs anyway. The developer resolves it, reviewer-quality reads it in the re-review, and master reads it again at G7. If #195's G7 is NO-GO, or it has not merged when #222 is otherwise ready, the orchestrator comes back to master. The order is not swapped without a ruling.
+**Accepted (Info):** QLT-07 (`#225` joins the #119 refactor PR at #119's due point, owner developer), QLT-08.
+**Risks:** none new. RISK-023: the 12 instances are stated (AC-6). The final head's path is posted, and a reading of 5:30 or more starts an item 9 median of five on that head (not a hold, DL-142 (1)).
+**Rationale:**
+- Every mandatory item passes on 72d92e9, and the product code is correct. The Major is a test that cannot fail, which master reproduced from the plant run. Under the procedure that is CONDITIONAL GO with a fix round, not NO-GO (DL-142).
+- The Minors are bundled into the round that is already required (DL-130, DL-144).
+- #195 goes first because its judged head must merge unchanged, while #222 needs a new head anyway.
+**Posted:** Jira AQP-245 comment 11462; PR #222 comment 6790381689.
