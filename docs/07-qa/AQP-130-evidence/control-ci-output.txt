@@ -1,0 +1,35 @@
+# Plant 1 (latest-read guard removed), PR #228, run 42981020973, commit 143538c: failed tests and shard totals from the three E2E shard logs
+  ✘  200 [mobile] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (18.1s)
+  ✘  226 [mobile] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (retry #1) (19.0s)
+  1 failed
+  3 skipped
+  264 passed (3.5m)
+  ✘  227 [desktop] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (17.8s)
+  ✘  253 [desktop] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (retry #1) (20.3s)
+  1 failed
+  17 skipped
+  249 passed (3.2m)
+  ✘  160 [tablet] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (18.3s)
+  ✘  184 [tablet] › tests/e2e/treatments-focus.spec.ts:213:3 › the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back (retry #1) (20.8s)
+  1 failed
+  4 skipped
+  262 passed (4.2m)
+
+# Plants 2 to 4 (an audit write skipped): Stage 6 unit test failures from the verify job logs (PRs #229, #230, #231)
+## created
+      Tests  2 failed | 2906 passed (2908)
+ FAIL  tests/unit/masters-service-treatments.test.ts > createTreatment (AC-2, AC-6) > adds the treatment, trimmed, in one transaction with exactly one master.created entry of object type treatment
+ FAIL  tests/unit/treatments-routes.test.ts > POST /api/v1/treatments (AC-2, AC-6) > adds a treatment: 201, the trimmed name, and exactly one master.created entry with object_type treatment
+ Test Files  2 failed | 148 passed (150)
+## edited
+      Tests  3 failed | 2905 passed (2908)
+ FAIL  tests/unit/masters-service-treatments.test.ts > updateTreatment, a rename (AC-2, AC-3, AC-6) > refuses a rename onto another treatment (any letter case), and allows a change of its own letter case
+ FAIL  tests/unit/masters-service-treatments.test.ts > updateTreatment, a rename (AC-2, AC-3, AC-6) > renames and writes exactly one master.edited entry with the name before and after
+ FAIL  tests/unit/treatments-routes.test.ts > PATCH /api/v1/treatments/{id} (AC-2, AC-3, AC-6) > renames: 200, the ID stays, one master.edited entry with the name before and after
+ Test Files  2 failed | 148 passed (150)
+## deleted
+      Tests  3 failed | 2905 passed (2908)
+ FAIL  tests/unit/masters-service-treatments.test.ts > deleteTreatment (AC-4, AC-6) > answers not found for an unknown ID and for one deleted already, and writes nothing
+ FAIL  tests/unit/masters-service-treatments.test.ts > deleteTreatment (AC-4, AC-6) > removes the treatment from the list and writes exactly one master.deleted entry with the name before and nothing after
+ FAIL  tests/unit/treatments-routes.test.ts > DELETE /api/v1/treatments/{id} (AC-3, AC-4, AC-6) > deletes: 204 with no body, the treatment leaves the list, and exactly one master.deleted entry
+ Test Files  2 failed | 148 passed (150)

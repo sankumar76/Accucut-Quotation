@@ -1,0 +1,226 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 <worktree>
+
+ ❯ tests/unit/masters-service-treatments.test.ts (39 tests | 1 failed) 95ms
+   ❯ createTreatment (AC-2, AC-6) (3)
+     × adds the treatment, trimmed, in one transaction with exactly one master.created entry of object type treatment 21ms
+ ❯ tests/integration/masters/treatments.test.ts (29 tests | 5 failed) 2569ms
+   ❯ AC-2, AC-6 (T2): adding a treatment (8)
+     × stores the trimmed name and writes exactly one master.created entry of object type treatment, with who, the object, and the name after 62ms
+   ❯ AC-2, AC-6 (T2): renaming a treatment (4)
+     × renames and writes exactly one master.edited entry with the name before and after 90ms
+   ❯ AC-6 (DEF-017): an entry commits with its change, or not at all (4)
+     × an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007) 58ms
+   ❯ two requests at once (2)
+     × let exactly one of several simultaneous additions of one name (in different letter case) win; the others are told the name is taken 76ms
+     × serialise a rename and a delete of one treatment: whichever comes second finds the first one's result, and each wrote its own entry or none 57ms
+ ❯ tests/acceptance/aqp-130-treatments.test.ts (105 tests | 3 failed) 8762ms
+   ❯ AQP-130 AC-2: a name is required, unique ignoring letter case and spacing, and not one the system keeps (63)
+     × [AQP-130 AC-2] two requests at once for one name, spelled in two ways: one is added, the other is refused as taken, and one row is stored (EG: race) 80ms
+   ❯ AQP-130 AC-6: exactly one audit entry per add, rename and delete (12)
+     × [AQP-130 AC-6] an add writes one master.created entry: object_type treatment, the new ID and name, the actor, the request, before null, after { name } 22ms
+     × [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST) 84ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-2: a name is required, unique ignoring letter case and spacing, and not one the system keeps > [AQP-130 AC-2] two requests at once for one name, spelled in two ways: one is added, the other is refused as taken, and one row is stored (EG: race)
+AssertionError: expected [] to deeply equal [ 'master.created' ]
+
+- Expected
++ Received
+
+- [
+-   "master.created",
+- ]
++ []
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:338:59
+    336|     expect(answers.map((answer) => answer.status).sort()).toEqual([201…
+    337|     expect((await names()).filter((name) => /race name/i.test(name))).…
+    338|     expect((await entries()).map((entry) => entry.event)).toEqual(['ma…
+       |                                                           ^
+    339|   });
+    340|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] an add writes one master.created entry: object_type treatment, the new ID and name, the actor, the request, before null, after { name }
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:490:21
+    488|     const id = idOf(answer);
+    489|     const written = await entries();
+    490|     expect(written).toHaveLength(1);
+       |                     ^
+    491|     expect(written[0]).toMatchObject({
+    492|       event: 'master.created',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST)
+AssertionError: expected [ 'master.edited', …(2) ] to deeply equal [ 'master.created', …(3) ]
+
+- Expected
++ Received
+
+  [
+-   "master.created",
+    "master.edited",
+    "master.edited",
+    "master.deleted",
+  ]
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:549:49
+    547|     await remove(id);
+    548|     const written = await entries();
+    549|     expect(written.map((entry) => entry.event)).toEqual(['master.creat…
+       |                                                 ^
+    550|     expect(written.map((entry) => entry.before)).toEqual([null, { name…
+    551|     expect(written.map((entry) => entry.after)).toEqual([{ name: 'Qa13…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/unit/masters-service-treatments.test.ts > createTreatment (AC-2, AC-6) > adds the treatment, trimmed, in one transaction with exactly one master.created entry of object type treatment
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/unit/masters-service-treatments.test.ts:149:35
+    147|     expect(created).toEqual({ id: expect.any(String), name: 'Invented …
+    148|     expect(masters.treatments.map((treatment) => treatment.id)).toCont…
+    149|     expect(world.audit.committed).toHaveLength(1);
+       |                                   ^
+    150|     expect(world.audit.committed[0]).toMatchObject({
+    151|       event: 'master.created',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-2, AC-6 (T2): adding a treatment > stores the trimmed name and writes exactly one master.created entry of object type treatment, with who, the object, and the name after
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/masters/treatments.test.ts:144:34
+    142|     expect(created).toEqual({ id: expect.any(String), name: 'Invented …
+    143|     expect(await byName('Invented powder coat')).toMatchObject({ is_sy…
+    144|     expect(await entryCount(db)).toBe(entries + 1);
+       |                                  ^
+    145|     const [entry, ...others] = await entriesFor(db, created.id);
+    146|     expect(others).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-2, AC-6 (T2): renaming a treatment > renames and writes exactly one master.edited entry with the name before and after
+AssertionError: expected [ [ 'master.edited', …(2) ] ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+@@ -1,14 +1,7 @@
+  [
+    [
+-     "master.created",
+-     null,
+-     {
+-       "name": "Invented powder coat",
+-     },
+-   ],
+-   [
+      "master.edited",
+      {
+        "name": "Invented powder coat",
+      },
+      {
+
+ ❯ tests/integration/masters/treatments.test.ts:213:105
+    211|     const updated = await db.mastersService.updateTreatment(by(), crea…
+    212|     expect(updated).toEqual({ id: created.id, name: 'Invented hard coa…
+    213|     expect((await entriesFor(db, created.id)).map((entry) => [entry.ev…
+       |                                                                                                         ^
+    214|       ['master.created', null, { name: 'Invented powder coat' }],
+    215|       ['master.edited', { name: 'Invented powder coat' }, { name: 'Inv…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-6 (DEF-017): an entry commits with its change, or not at all > an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007)
+AssertionError: promise resolved "{ …(3) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "id": "f27f2d12-1247-4102-a4eb-1fe2b98db023",
++   "locked": false,
++   "name": "Refused-add",
+  }
+
+ ❯ tests/integration/masters/treatments.test.ts:332:89
+    330|     const unrecorded = { ...by(), actorLabel: '' };
+    331|     // An empty actor label is refused by the audit service, inside th…
+    332|     await expect(db.mastersService.createTreatment(unrecorded, { name:…
+       |                                                                                         ^
+    333|     await expect(db.mastersService.updateTreatment(unrecorded, created…
+    334|     await expect(db.mastersService.deleteTreatment(unrecorded, created…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > two requests at once > let exactly one of several simultaneous additions of one name (in different letter case) win; the others are told the name is taken
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/integration/masters/treatments.test.ts:353:58
+    351|     }
+    352|     expect((await rows()).filter((row) => row.name.toLowerCase() === '…
+    353|     expect(await entriesFor(db, defined(winners[0]).id)).toHaveLength(…
+       |                                                          ^
+    354|   });
+    355|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > two requests at once > serialise a rename and a delete of one treatment: whichever comes second finds the first one's result, and each wrote its own entry or none
+AssertionError: expected 'master.deleted' to be 'master.created' // Object.is equality
+
+Expected: "master.created"
+Received: "master.deleted"
+
+ ❯ tests/integration/masters/treatments.test.ts:369:23
+    367|     expect(await byName('Race-rename-delete')).toBeUndefined();
+    368|     const events = (await entriesFor(db, created.id)).map((entry) => e…
+    369|     expect(events[0]).toBe('master.created');
+       |                       ^
+    370|     expect(events).toContain('master.deleted');
+    371|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  9 failed | 164 passed (173)
+   Start at  02:26:31
+   Duration  10.92s (tests 71%, import 21%, transform 8%)
+

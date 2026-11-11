@@ -172,3 +172,21 @@ model ExchangeRate {
 
   @@map("exchange_rates")
 }
+
+/// One surface treatment or colour of the Treatment / Color list (STORY-02.05, FR-017; architecture sections 4.9, 5.1 and 6). `isSystem` marks the fixed
+/// "Other" row that the migration inserts (locked: the service refuses to change or delete it) and, in story 02.06, "Not applicable". `isHidden` marks only
+/// the second, so "Other" stays on the Admin's list; the master repository lists only rows where it is false. There is no `deletedAt`: a treatment is removed
+/// with DELETE (the architecture gives `treatments` no soft delete). The unique index on `lower(name)` and the CHECK that a name is not blank are
+/// hand-written in the migration: Prisma cannot express them. Class Internal: no rate of any kind.
+/// `uq_treatments_name` (below) is implied by `uq_treatments_name_lower` and mirrors this `@@unique`, as `uq_materials_material_in_drawing` does: do not drop it as a duplicate. Hard `DELETE`, no `deleted_at`, as `process_items`.
+model Treatment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  isSystem  Boolean  @default(false) @map("is_system")
+  isHidden  Boolean  @default(false) @map("is_hidden")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([name], map: "uq_treatments_name")
+  @@map("treatments")
+}
