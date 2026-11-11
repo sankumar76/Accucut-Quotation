@@ -130,7 +130,8 @@ function treatmentActions(dialog: TreatmentDialogState, list: TreatmentListState
   /** Radix returns focus only to a trigger, and these dialogs have none: the opener is remembered here. A list in error keeps focus on its title. */
   function onCloseAutoFocus(event: Event): void {
     event.preventDefault();
-    focusOpener(dialog.opener.current, status === 'error');
+    void status;
+    focusOpener(dialog.opener.current);
   }
 
   return { onAdd, onRowAction, onSaved, onGone, onCloseAutoFocus };
