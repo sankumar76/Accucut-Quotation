@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
@@ -12,6 +12,7 @@ import type { PageNotice } from './master-texts';
 import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
 import { goneNotice } from './process-texts';
+import { useReadAgain } from './use-read-again';
 
 /**
  * What SCR-11 holds and does, apart from how it looks (STD-01 of the G6 of AQP-113): the list and its search, which dialog is open and
@@ -79,29 +80,6 @@ type List = ReturnType<typeof useItemsList>;
 type Dialogs = ReturnType<typeof useDialogs>;
 type SetNotice = (notice: PageNotice | null) => void;
 
-/**
- * Reading the list again after a change, and where focus goes afterwards: back to the button that opened the dialog, or to the page
- * heading when that button is gone (a deleted rate's row, ux-spec v0.17). If the list cannot be read, the error state takes focus.
- */
-function useReadAgain(list: List, opener: Dialogs['opener']) {
-  const wantsFocus = useRef(false);
-  const { refresh, status, items } = list;
-
-  useEffect(() => {
-    if (status === 'loading' || !wantsFocus.current) return;
-    wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
-  }, [status, items, opener]);
-
-  return useCallback(
-    async (returnFocus: boolean): Promise<void> => {
-      wantsFocus.current = returnFocus;
-      await refresh();
-    },
-    [refresh],
-  );
-}
-
 /** The presses that open a dialog, and the return of focus when it closes. */
 function openersFor(dialogs: Dialogs, list: List, setNotice: SetNotice) {
   function onRowAction(action: RowAction, item: ProcessItemRow, button: HTMLButtonElement, byKeyboard: boolean): void {
@@ -155,7 +133,7 @@ export function useProcessMaster(initialItems: ReadonlyArray<ProcessItemRow>) {
   const list = useItemsList(initialItems);
   const dialogs = useDialogs();
   const [notice, setNotice] = useState<PageNotice | null>(null);
-  const readAgain = useReadAgain(list, dialogs.opener);
+  const readAgain = useReadAgain({ status: list.status, result: list.items, opener: dialogs.opener, refresh: list.refresh });
   return { list, dialogs, notice, readAgain, ...openersFor(dialogs, list, setNotice), ...outcomesFor(dialogs, setNotice, readAgain) };
 }
 

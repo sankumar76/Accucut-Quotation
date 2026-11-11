@@ -9,6 +9,7 @@ import { listTreatments, type TreatmentRow } from '@/lib/masters/treatments-clie
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import { treatmentGoneNotice } from './treatment-texts';
+import { useFocusAfterRead } from './use-read-again';
 
 /**
  * What the Treatment / Color tab of SCR-13 holds and does, apart from how it looks (STORY-02.05 AC-1, AC-4, AC-8): the list, which dialog is
@@ -39,21 +40,24 @@ export const TREATMENT_ACTIONS = { add: 'add', rename: 'rename', delete: 'delete
 function useTreatmentList(opener: { readonly current: Opener | null }) {
   const [items, setItems] = useState<ReadonlyArray<TreatmentRow> | null>(null);
   const [status, setStatus] = useState<TreatmentListStatus>('loading');
-  const wantsFocus = useRef(false);
   // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
   const newest = useRef(0);
   const showSkeleton = useAfterDelay(status === 'loading' && items !== null, SKELETON_DELAY_MS);
+  const askForFocus = useFocusAfterRead({ status, result: items, opener });
 
   /** Reads the list and settles the status. Sets nothing before the answer, and nothing at all if a newer read was started meanwhile (the latest read wins). */
-  const read = useCallback(async (returnFocus: boolean): Promise<void> => {
-    wantsFocus.current = returnFocus;
-    newest.current += 1;
-    const mine = newest.current;
-    const outcome = await listTreatments();
-    if (mine !== newest.current) return;
-    if (outcome.status === 'ok') setItems(outcome.value);
-    setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-  }, []);
+  const read = useCallback(
+    async (returnFocus: boolean): Promise<void> => {
+      askForFocus(returnFocus);
+      newest.current += 1;
+      const mine = newest.current;
+      const outcome = await listTreatments();
+      if (mine !== newest.current) return;
+      if (outcome.status === 'ok') setItems(outcome.value);
+      setStatus(outcome.status === 'ok' ? 'ready' : 'error');
+    },
+    [askForFocus],
+  );
 
   /** Reads the list again because a person asked (after a change, or Try again): the status goes to `loading` at once, from an event handler. */
   const readAgain = useCallback(
@@ -63,12 +67,6 @@ function useTreatmentList(opener: { readonly current: Opener | null }) {
     },
     [read],
   );
-
-  useEffect(() => {
-    if (status === 'loading' || !wantsFocus.current) return;
-    wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
-  }, [status, items, opener]);
 
   return { items, status, showSkeleton, read, readAgain };
 }
