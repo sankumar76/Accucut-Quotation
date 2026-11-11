@@ -1,0 +1,194 @@
+################ loop.sh
+#!/bin/bash
+# usage: loop.sh <label> <runs> <fresh-cache:0|1> <files...>
+# Runs `npx vitest run <files>` <runs> times, each with (optionally) a new empty PWTEST_CACHE_DIR.
+# Never retries: every run is recorded as it is. Prints one summary line per run.
+LABEL="$1"; RUNS="$2"; FRESH="$3"; shift 3
+BASE="<qa-scratch>"
+OUT="$BASE/$LABEL"
+mkdir -p "$OUT"
+TMPD="${TEMP:-/tmp}"
+leftovers() { ls "$TMPD" 2>/dev/null | grep -c '^accucut-playwright-list-' ; }
+echo "before: leftover accucut-playwright-list-* folders in temp = $(leftovers)" | tee "$OUT/summary.txt"
+for i in $(seq 1 "$RUNS"); do
+  if [ "$FRESH" = "1" ]; then
+    CACHE="$OUT/cache-$i"; mkdir -p "$CACHE"; export PWTEST_CACHE_DIR="$(cygpath -w "$CACHE")"
+  else
+    unset PWTEST_CACHE_DIR
+  fi
+  S=$(date +%s%N)
+  HOOKLOG="$OUT/hooks-$i.json" NO_COLOR=1 FORCE_COLOR=0 npx vitest run "$@" --reporter=default --reporter=json --reporter="$BASE/hook-reporter.mjs" --outputFile.json="$OUT/run-$i.json" > "$OUT/run-$i.log" 2>&1
+  EC=$?
+  E=$(date +%s%N)
+  WALLMS=$(( (E - S) / 1000000 ))
+  TESTS=$(grep -E '^\s*Tests ' "$OUT/run-$i.log" | sed 's/^ *//')
+  FILES=$(grep -E '^\s*Test Files ' "$OUT/run-$i.log" | sed 's/^ *//')
+  LISTMS=$(node "$BASE/summarise.mjs" "$OUT/run-$i.json" "$OUT/hooks-$i.json" 2>&1)
+  echo "run $i | exit $EC | wall ${WALLMS}ms | $FILES | $TESTS | $LISTMS | leftover-after $(leftovers)" | tee -a "$OUT/summary.txt"
+done
+
+################ summarise.mjs
+// Prints, for one Vitest run: tests (from the JSON report) and every beforeAll over 500 ms (from the hook reporter),
+// largest first, plus the largest one.
+import { existsSync, readFileSync } from 'node:fs';
+
+const [jsonPath, hooksPath] = process.argv.slice(2);
+const report = JSON.parse(readFileSync(jsonPath, 'utf8'));
+const files = report.testResults.length;
+let hooks = [];
+if (existsSync(hooksPath)) hooks = JSON.parse(readFileSync(hooksPath, 'utf8'));
+const before = hooks.filter((h) => h.hook === 'beforeAll').sort((a, b) => b.ms - a.ms);
+const shown = before.filter((h) => h.ms >= 500).map((h) => `${h.file}=${h.ms}`).join(' ') || 'none over 500';
+const slowest = before[0] ? `${before[0].file} ${before[0].ms}ms` : 'n/a (no beforeAll recorded)';
+console.log(
+  `json: files ${files}, tests ${report.numTotalTests} (passed ${report.numPassedTests}, failed ${report.numFailedTests}) | beforeAll ms: ${shown} | slowest beforeAll: ${slowest}`,
+);
+
+################ hook-reporter.mjs
+// Custom Vitest reporter: records how long every beforeAll hook took, per test file, to the JSON file named by HOOKLOG.
+import { writeFileSync } from 'node:fs';
+
+export default class HookTimes {
+  starts = new Map();
+  rows = [];
+
+  keyOf(hook) {
+    const entity = hook.entity;
+    return `${hook.name}|${entity.moduleId ?? entity.module?.moduleId ?? ''}|${entity.id ?? ''}`;
+  }
+
+  onHookStart(hook) {
+    this.starts.set(this.keyOf(hook), performance.now());
+  }
+
+  onHookEnd(hook) {
+    const key = this.keyOf(hook);
+    const start = this.starts.get(key);
+    if (start === undefined) return;
+    const entity = hook.entity;
+    const moduleId = entity.moduleId ?? entity.module?.moduleId ?? '';
+    this.rows.push({
+      hook: hook.name,
+      file: moduleId.replace(/^.*[\\/]tests[\\/]unit[\\/]/, '').replace(/\.test\.ts$/, ''),
+      ms: Math.round(performance.now() - start),
+    });
+  }
+
+  onTestRunEnd() {
+    if (process.env.HOOKLOG) writeFileSync(process.env.HOOKLOG, JSON.stringify(this.rows));
+  }
+}
+
+################ plant-221.mjs
+// Re-applies PR #221's plant (every listing shares ONE fixed cache folder) to tests/support/playwright-list.ts.
+// Fails (exit 1, file untouched) unless each anchor occurs exactly once.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const file = process.argv[2];
+const raw = readFileSync(file, 'utf8');
+const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+const source = raw.replace(/\r\n/g, '\n');
+
+const anchors = [
+  {
+    name: 'prefix constant',
+    from: "const CACHE_DIR_PREFIX = 'accucut-playwright-list-';\n",
+    to: "const CACHE_DIR_PREFIX = 'accucut-playwright-list-';\nconst SHARED_CONTROL_CACHE = join(tmpdir(), 'accucut-playwright-list-shared-control');\n",
+  },
+  {
+    name: 'private-cache call',
+    from: `    ({ stdout } = await withPrivateListCache((cacheDirectory) =>
+      run(process.execPath, args, {
+        cwd: REPOSITORY_ROOT,
+        env: { ...process.env, [CACHE_DIR_VARIABLE]: cacheDirectory },
+        maxBuffer: 64 * 1024 * 1024,
+        timeout: LIST_TIMEOUT_MS,
+      }),
+    ));
+`,
+    to: `    // CONTROL (#221 plant, never merge): every listing shares ONE fixed cache folder again.
+    ({ stdout } = await run(process.execPath, args, {
+      cwd: REPOSITORY_ROOT,
+      env: { ...process.env, [CACHE_DIR_VARIABLE]: SHARED_CONTROL_CACHE },
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: LIST_TIMEOUT_MS,
+    }));
+`,
+  },
+];
+
+let out = source;
+for (const { name, from, to } of anchors) {
+  const count = out.split(from).length - 1;
+  if (count !== 1) {
+    console.error(`PLANT FAILED: anchor "${name}" occurs ${count} times (need exactly 1). File untouched.`);
+    process.exit(1);
+  }
+  out = out.replace(from, () => to);
+}
+writeFileSync(file, out.replace(/\n/g, eol));
+console.log('plant applied');
+
+################ probe.mjs
+// QA two-listing probe (equivalent of the developer's, written independently for AQP-236 G7).
+// Two concurrent `playwright test --list --reporter=json` processes, on ONE new cache folder ("shared") or on
+// two new folders ("separate"). Each listing is compared with a reference listing made alone on a new cache.
+// Usage: node probe.mjs <repoRoot> <outDir> <trialsPerMode>
+import { execFile } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+
+const run = promisify(execFile);
+const [repoRoot, outDir, trialsArg] = process.argv.slice(2);
+const trials = Number(trialsArg);
+const cli = createRequire(join(repoRoot, 'package.json')).resolve('@playwright/test/cli');
+
+let counter = 0;
+function newCache() {
+  const dir = join(outDir, `cache-${++counter}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function list(cache) {
+  const { stdout } = await run(process.execPath, [cli, 'test', '--list', '--reporter=json'], {
+    cwd: repoRoot,
+    env: { ...process.env, PWTEST_CACHE_DIR: cache },
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 170_000,
+  });
+  const keys = [];
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) for (const t of spec.tests) keys.push(`${spec.file}:${spec.line} ${spec.title} [${t.projectName}]`);
+    for (const child of suite.suites ?? []) walk(child);
+  };
+  for (const suite of JSON.parse(stdout).suites) walk(suite);
+  return keys.sort();
+}
+
+const differing = (a, b) => {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  return a.filter((k) => !sb.has(k)).length + b.filter((k) => !sa.has(k)).length;
+};
+
+const rows = [];
+for (let i = 1; i <= trials; i += 1) {
+  for (const mode of ['shared', 'separate']) {
+    const reference = await list(newCache());
+    const caches = mode === 'shared' ? (() => { const c = newCache(); return [c, c]; })() : [newCache(), newCache()];
+    const [one, two] = await Promise.all(caches.map((c) => list(c)));
+    const diffs = [differing(one, reference), differing(two, reference)];
+    const row = { trial: i, mode, entries: reference.length, diffs, raced: diffs.some((d) => d > 0) };
+    rows.push(row);
+    console.log(JSON.stringify(row));
+  }
+}
+for (const mode of ['shared', 'separate']) {
+  const mine = rows.filter((r) => r.mode === mode);
+  console.log(`${mode}: ${mine.filter((r) => r.raced).length} of ${mine.length} trials had a listing that differed from its reference`);
+}
+writeFileSync(join(outDir, 'probe-result.json'), JSON.stringify(rows, null, 2));
+
