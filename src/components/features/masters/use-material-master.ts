@@ -1,13 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
-import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listMaterials, type MaterialRow } from '@/lib/masters/materials-client';
 
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import type { MaterialFormDialogProps } from './material-form-dialog';
+import { useDialogOpener } from './use-dialog-opener';
 import { useMasterList } from './use-master-list';
 import { useReadAgain, type ReadStatus } from './use-read-again';
 
@@ -40,19 +40,13 @@ function useMaterialDialog() {
   const [open, setOpen] = useState(false);
   // The material the dialog is about stays set after it closes, so the form does not change while the panel fades out.
   const [formItem, setFormItem] = useState<MaterialRow | null>(null);
-  const [pressed, setPressed] = useState<Opener | null>(null);
-  const opener = useRef<Opener | null>(null);
-  const loader = useFirstOpen<MaterialFormDialogProps>({ id: 'material-dialog', load: loadDialog });
+  const { loader, pressed, opener, press } = useDialogOpener<MaterialFormDialogProps>({ id: 'material-dialog', load: loadDialog });
 
   function openDialog(item: MaterialRow | null, from: Opener, byKeyboard: boolean): boolean {
-    // A second press while the first is loading does nothing (UX spec 7.3.1 rule 11): no second request, no second target.
-    if (loader.pending) return false;
-    opener.current = from;
-    setPressed(from);
-    setFormItem(item);
-    setOpen(true);
-    loader.activate(byKeyboard);
-    return true;
+    return press(from, byKeyboard, () => {
+      setFormItem(item);
+      setOpen(true);
+    });
   }
 
   return { open, setOpen, formItem, pressed, opener, loader, openDialog };

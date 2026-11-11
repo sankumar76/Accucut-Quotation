@@ -1,8 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
-import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listProcessItems, type FormulaUseRow, type ProcessItemRow } from '@/lib/masters/process-items-client';
 
 import { focusOpener, type Opener } from './master-opener';
@@ -10,6 +9,7 @@ import type { PageNotice } from './master-texts';
 import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
 import { goneNotice } from './process-texts';
+import { useDialogOpener } from './use-dialog-opener';
 import { useMasterList } from './use-master-list';
 import { useReadAgain, type ReadStatus } from './use-read-again';
 
@@ -42,21 +42,15 @@ function useDialogs() {
   const [target, setTarget] = useState<ProcessItemRow | null>(null);
   const [formItem, setFormItem] = useState<ProcessItemRow | null>(null);
   const [blockedBy, setBlockedBy] = useState<ReadonlyArray<FormulaUseRow>>([]);
-  const [pressed, setPressed] = useState<Opener | null>(null);
-  const opener = useRef<Opener | null>(null);
-  const loader = useFirstOpen<ProcessDialogsProps>({ id: 'process-dialogs', load: loadDialogs });
+  const { loader, pressed, opener, press } = useDialogOpener<ProcessDialogsProps>({ id: 'process-dialogs', load: loadDialogs });
 
   function openDialog(kind: DialogKind, item: ProcessItemRow | null, from: Opener, byKeyboard: boolean): boolean {
-    // A second press while the first is loading does nothing (UX spec 7.3.1 rule 11): no second request, no second target.
-    if (loader.pending) return false;
-    opener.current = from;
-    setPressed(from);
-    setTarget(item);
-    if (kind === 'add' || kind === 'edit') setFormItem(item);
-    if (kind === 'blocked') setBlockedBy(item?.usedBy ?? []);
-    setOpen(kind);
-    loader.activate(byKeyboard);
-    return true;
+    return press(from, byKeyboard, () => {
+      setTarget(item);
+      if (kind === 'add' || kind === 'edit') setFormItem(item);
+      if (kind === 'blocked') setBlockedBy(item?.usedBy ?? []);
+      setOpen(kind);
+    });
   }
 
   return { open, setOpen, target, formItem, blockedBy, setBlockedBy, pressed, opener, loader, openDialog };

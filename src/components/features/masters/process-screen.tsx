@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Search } from 'lucide-react';
-import { useEffect, useRef, type RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
@@ -11,10 +11,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
-import { revealNearest } from '@/lib/ui/reveal';
 
+import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
+import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { ProcessResults } from './process-results';
 import {
   ADD_RATE,
@@ -54,21 +54,6 @@ function AddRateButton({ master }: { readonly master: ProcessMaster }) {
   );
 }
 
-/** The code of a dialog did not arrive: said in a notice, brought into view if it is off the screen (UX spec v0.14, SCR-25). */
-function DialogsFailed({ confirmation }: { readonly confirmation: boolean }) {
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    revealNearest(box.current);
-  }, []);
-  return (
-    <div ref={box}>
-      <Notice tone="danger" title={confirmation ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE}>
-        {FAILED_DIALOGS_MESSAGE}
-      </Notice>
-    </div>
-  );
-}
-
 /** The notice under the header. The warning and the information are statuses, not alerts: nothing failed (ux-spec v0.17). */
 function PageNoticeView({ notice }: { readonly notice: PageNotice }) {
   return (
@@ -105,7 +90,9 @@ export function ProcessScreen({ initialItems }: ProcessScreenProps) {
   return (
     <>
       <PageHeader title={PROCESS_TITLE} description={PROCESS_DESCRIPTION} actions={<AddRateButton master={master} />} />
-      {dialogs.loader.failed ? <DialogsFailed confirmation={dialogs.open === 'delete' || dialogs.open === 'blocked'} /> : null}
+      {dialogs.loader.failed ? (
+        <MasterDialogsFailed title={dialogs.open === 'delete' || dialogs.open === 'blocked' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE} />
+      ) : null}
       {notice === null ? null : <PageNoticeView notice={notice} />}
       <Card aria-busy={list.status === 'loading' || undefined}>
         <SearchBox query={list.query} onChange={list.setQuery} inputRef={search} />

@@ -1,17 +1,17 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import type { MaterialRow } from '@/lib/masters/materials-client';
-import { revealNearest } from '@/lib/ui/reveal';
 
+import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
+import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { MaterialResults } from './material-results';
 import { ADD_MATERIAL, materialSavedNotice, MATERIAL_SEARCH_LABEL, MATERIAL_SEARCH_PLACEHOLDER } from './material-texts';
 import { useMaterialMaster, type MaterialMaster } from './use-material-master';
@@ -43,21 +43,6 @@ function AddMaterialButton({ master }: { readonly master: MaterialMaster }) {
   );
 }
 
-/** The code of the dialog did not arrive: said in a notice, brought into view if it is off the screen (UX spec v0.14, SCR-25). */
-function DialogFailed() {
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    revealNearest(box.current);
-  }, []);
-  return (
-    <div ref={box}>
-      <Notice tone="danger" title={FAILED_DIALOGS_TITLE}>
-        {FAILED_DIALOGS_MESSAGE}
-      </Notice>
-    </div>
-  );
-}
-
 /** The notice above the table: a status, not an alert, because nothing failed. */
 function SavedNotice({ notice }: { readonly notice: PageNotice }) {
   return (
@@ -83,7 +68,7 @@ export function MaterialsPanel({ initialItems }: MaterialsPanelProps) {
         <div className="flex justify-end">
           <AddMaterialButton master={master} />
         </div>
-        {dialog.loader.failed ? <DialogFailed /> : null}
+        {dialog.loader.failed ? <MasterDialogsFailed title={FAILED_DIALOGS_TITLE} /> : null}
         {notice === null ? null : <SavedNotice notice={notice} />}
       </div>
       <MasterSearchBox
