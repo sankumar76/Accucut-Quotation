@@ -1,9 +1,4 @@
-import {
-  DEFAULT_VALUE_MESSAGE,
-  DEFAULT_VALUE_PATTERN,
-  NAME_TOO_LONG_MESSAGE,
-  normaliseDefaultValue,
-} from './process-items';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, NAME_TOO_LONG_MESSAGE, normaliseDecimalText } from './master-rules';
 
 /**
  * What the Materials tab of SCR-13 (STORY-02.03; SPEC section 4.3, architecture sections 5.1 and 6) and its routes share: the limits,
@@ -33,7 +28,7 @@ export const MATERIAL_NAME_TOO_LONG_MESSAGE = NAME_TOO_LONG_MESSAGE;
 /** The ux-expert's words (ux-spec v0.18, SCR-13 "The Materials tab: final words", Jira 11188): "Enter the" plus the field's label. */
 export const CONSIDERED_REQUIRED_MESSAGE = 'Enter the Material Considered.';
 export const MATERIAL_NAME_TAKEN_MESSAGE = 'A material with this name already exists. Names must be unique.';
-export const NUMBER_MESSAGE = DEFAULT_VALUE_MESSAGE;
+export const NUMBER_MESSAGE = DECIMAL_TEXT_MESSAGE;
 /** The message and the hint of UX-37 (state "Specific gravity 0"). */
 export const SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE = 'Enter a value above 0.';
 export const SPECIFIC_GRAVITY_HINT = 'Must be above 0.';
@@ -75,7 +70,7 @@ export function materialTextProblem(value: string, required: string): string | n
 
 /** The message for a price or a Material-Scrap-Rate, or null: digits, then up to two decimals, 0 or more. */
 export function materialNumberProblem(value: string): string | null {
-  return DEFAULT_VALUE_PATTERN.test(value.trim()) ? null : NUMBER_MESSAGE;
+  return DECIMAL_TEXT_PATTERN.test(value.trim()) ? null : NUMBER_MESSAGE;
 }
 
 /**
@@ -85,14 +80,14 @@ export function materialNumberProblem(value: string): string | null {
  */
 export function specificGravityProblem(value: string): string | null {
   const text = value.trim();
-  if (DEFAULT_VALUE_PATTERN.test(text)) return NONZERO_DIGIT.test(text) ? null : SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
+  if (DECIMAL_TEXT_PATTERN.test(text)) return NONZERO_DIGIT.test(text) ? null : SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
   if (LOOSE_NUMBER.test(text) && (text.startsWith('-') || !NONZERO_DIGIT.test(text))) return SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
   return SPECIFIC_GRAVITY_FORMAT_MESSAGE;
 }
 
 /** A typed number as the stored text: no leading zeros, two decimals ("003.37" is "3.37"). The text must already pass its check. */
 export function normaliseMaterialNumber(value: string): string {
-  return normaliseDefaultValue(value);
+  return normaliseDecimalText(value);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { nameProblem, PROCESS_ITEM_NAME_MAX_LENGTH } from './process-items';
+import { MASTER_NAME_MAX_LENGTH, nameProblem } from './master-rules';
 
 /**
  * What the Treatment / Color tab of SCR-13 (STORY-02.05; SPEC section 4.5, architecture sections 4.9, 5.1 and 6) and its routes share: the
@@ -10,8 +10,8 @@ import { nameProblem, PROCESS_ITEM_NAME_MAX_LENGTH } from './process-items';
  * is refused is answered with a sentence that does not name the hidden entry (architecture section 4.9).
  */
 
-/** The longest treatment name. The same limit as a rate's name (SCR-11). */
-export const TREATMENT_NAME_MAX_LENGTH = PROCESS_ITEM_NAME_MAX_LENGTH;
+/** The longest treatment name. The same limit as every master's name (`master-rules.ts`). */
+export const TREATMENT_NAME_MAX_LENGTH = MASTER_NAME_MAX_LENGTH;
 
 /** The sentence of AC-2 for a name that another treatment already has, ignoring letter case. */
 export const TREATMENT_NAME_TAKEN_MESSAGE = 'A treatment with this name already exists.';

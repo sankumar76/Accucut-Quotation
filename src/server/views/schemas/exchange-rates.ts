@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { EXCHANGE_RATE_MESSAGE } from '../../../lib/masters/exchange-rates';
-import { DEFAULT_VALUE_PATTERN } from '../../../lib/masters/process-items';
+import { DECIMAL_TEXT_PATTERN } from '../../../lib/masters/master-rules';
 
 /**
  * The contract of the Exchange Rate Master route (STORY-02.04, architecture section 6 "Exchange rates"). The body and the answer are strict
@@ -16,7 +16,7 @@ import { DEFAULT_VALUE_PATTERN } from '../../../lib/masters/process-items';
  * This is the Admin's schema and it carries both rates. Nothing an Engineer may call has a schema like it (BR-003).
  */
 
-const rate = z.string({ error: EXCHANGE_RATE_MESSAGE }).trim().regex(DEFAULT_VALUE_PATTERN, EXCHANGE_RATE_MESSAGE);
+const rate = z.string({ error: EXCHANGE_RATE_MESSAGE }).trim().regex(DECIMAL_TEXT_PATTERN, EXCHANGE_RATE_MESSAGE);
 
 /** `PUT /api/v1/exchange-rates` (AC-2, AC-3): both rates, always together. */
 export const putExchangeRatesBodySchema = z.strictObject({ usd: rate, eur: rate });
