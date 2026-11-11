@@ -122,3 +122,55 @@ n/a (round 1). Prior #119 items checked against the diff:
 ## Hand-off
 - Status: COMPLETE
 - Verdict: APPROVE WITH COMMENTS; Blocker 0, Critical 0, Major 0, Minor 4, Info 5
+
+---
+
+# Round 2
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-standards |
+| Review round | 2 (new diff only) |
+| Diff reviewed | `b2741ca..07b47b7` (PR #235; one commit `07b47b7`, 8 files, 21 insertions, 21 deletions) |
+| Commit reviewed | 07b47b791b2202e64b19e006751309e6a7db4c0b |
+| Date | 2026-11-11 |
+| Trigger | master's G6 CONDITIONAL GO (DL-150), condition A |
+| PR review | https://github.com/sankumar76/Accucut-Quotation/pull/235#pullrequestreview-5858014815 (COMMENT; replies in the STD-01, STD-02, STD-03 and STD-04 threads); PR label `review:standards-approved` kept |
+| **Verdict** | **APPROVE** (no open Blocker, Critical or Major; STD-04 stays as a deferred Minor, STD-05 to STD-08 as Info for master and the architect) |
+
+## Summary
+The push fixes STD-01, STD-02 and STD-03 and touches exactly the eight files master named: `use-read-again.ts`, `use-treatments.ts`, `use-process-master.ts`, `use-material-master.ts`, `use-exchange-rates.ts`, `master-rules.ts`, `materials.ts`, `exchange-rates.ts`. It changes types, one option's name and comments; no test, Prisma, config or other `src/` file is in the diff. No new finding.
+
+| Severity | New in round 2 |
+|----------|----------------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 0 |
+
+## Checks Run
+| Check | Command | Result |
+|-------|---------|--------|
+| Scope | `git diff --stat b2741ca 07b47b7` | The 8 named files only; one commit `refactor(masters): round 2 ... [#119]` |
+| Lint | `eslint` on the 8 files at 07b47b7 (read-only, tooling from the parent checkout) | Clean, no output |
+| Leftovers | `grep` for `whenFailed` in `src` and `tests` | None; `MATERIAL_TEXT_MAX_LENGTH` still used by `materials.ts:68`, `schemas/materials.ts`, `tests/unit/materials-lib.test.ts` with the same value 100 |
+| Import cycle | read of `materials.ts` and `master-rules.ts` | `materials.ts` imports `MASTER_NAME_MAX_LENGTH` from `master-rules.ts`, which has no imports |
+| Logic | read of the whole diff | `useFocusAfterRead`: condition and dependency list unchanged apart from the renamed option; no other function body changed |
+| CI | `get_check_runs` | 5 of 5 success on run 43011060504 (unit 2,914, full Vitest 5,277, E2E 778, per the orchestrator) |
+| Type-check | CI `tsc --noEmit` in "Stages 1 to 11b" | Success. Local `tsc` is not a gate in this worktree (no generated Prisma client), as in round 1 |
+
+## Previous Findings
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| STD-01 | Minor | **Fixed** | `ListStatus`, `MaterialListStatus`, `TreatmentListStatus`, `ExchangeRatesStatus` are `= ReadStatus` (type-only imports); `useTreatmentList(opener: OpenerRef)`. Exported names unchanged |
+| STD-02 | Minor | **Fixed** | `MASTER_NAME_MAX_LENGTH` JSDoc names rate, material and treatment; `MATERIAL_TEXT_MAX_LENGTH = MASTER_NAME_MAX_LENGTH` (100); `materials.ts` and `exchange-rates.ts` cite `DECIMAL_TEXT_PATTERN` (`master-rules.ts`). Cosmetic only: two adjacent parentheses in `materials.ts:10-11`, not worth a push |
+| STD-03 | Minor | **Fixed** | `shouldFocusWhenFailed?: boolean \| undefined`, default `false`; the destructuring, the effect condition and dependency list, the `Omit` and the call in `use-exchange-rates.ts:67` are renamed |
+| STD-04 | Minor | Not fixed, accepted as deferred | No test file changed (condition A allows it); `process-opener.test.ts` and the `master-rules` tests in `process-items-lib.test.ts` can be renamed in a later tech-debt PR |
+| STD-05 | Info | Addressed by master | DL-150 condition B: the leftover items moved to #245; #244 listed under Follow-ups |
+| STD-06, STD-07, STD-08 | Info | Open, for master and the architect | `FUTURE_IMPORTS` stale entry (G12 scope), hidden-row rule wording in architecture §6 and §4.9, `tech-debt/` branch pattern in standards §9 |
+| STD-09 | Info | n/a | Good practice; decision 1 (keep `master-constraints.ts`) |
+
+## Hand-off (round 2)
+- Status: COMPLETE
+- Verdict: APPROVE; no new finding. Blocker 0, Critical 0, Major 0, Minor 0 new (STD-04 deferred), Info 0 new
