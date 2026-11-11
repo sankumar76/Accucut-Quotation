@@ -346,6 +346,21 @@ describe('AQP-130 AC-2: a name is required, unique ignoring letter case and spac
   });
 });
 
+describe('AQP-130 AC-2: odd bodies', () => {
+  it('[AQP-130 AC-2] a 1 MB name and a "__proto__" key are refused (422, not 500), the name is not echoed back, and nothing is stored (EG)', async () => {
+    const huge = 'x'.repeat(1_000_000);
+    const tooBig = await add(huge);
+    expect(tooBig.status).toBe(422);
+    expect(tooBig.text.length).toBeLessThan(2_000);
+    const proto = await send('POST', null, undefined, { raw: '{"name":"Qa130 proto","__proto__":{"isSystem":true}}' });
+    expect(proto.status).toBe(422);
+    const patchProto = await send('PATCH', OTHER_ID, undefined, { raw: '{"__proto__":{"name":"Qa130 x"}}' });
+    expect([409, 422]).toContain(patchProto.status);
+    expect(await names()).toEqual(['Other']);
+    expect(await anyEntries()).toBe(0);
+  });
+});
+
 describe('AQP-130 AC-3: "Other" is locked, in the service and the API', () => {
   const ATTEMPTS: ReadonlyArray<readonly [string, string]> = [
     ['a new name', 'Qa130 renamed other'],
