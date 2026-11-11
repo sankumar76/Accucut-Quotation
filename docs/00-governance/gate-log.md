@@ -5142,3 +5142,67 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - Each promised audit case has its own plant that fails only its own tests, and the latest-read guard bites at three widths.
 - The new targets are needed because QA's file adds 106 to stage 11, and the G7 run's merge ref already holds 225a1c9. The base to subtract is therefore 225a1c9's push run (DL-147: a PR run counts the current `master`).
 **Posted:** Jira AQP-130 comment 11469; PR #195 comment 6790872246; GitHub #202 comment 6790874154 (owner and due point).
+
+## G7 – QA Acceptance (narrow route) — AQP-236 (DEF-022 fix, PR #220: each Playwright listing gets its own cache folder) — 2026-11-11 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-149).** The code is 5ebe3b2 (G6 head ddf6191 plus the condition A commit, read by master with no review round under DL-047), and the QA records are at bdd9a7d. Every mandatory item passes. The open items are record gaps only: the Dev Record does not yet show condition A's plant row in full, and its Gates line names the old loop (condition 1), and DEF-022's record still needs its rows (condition 2). AQP-236 moves to Done (qa-engineer). PR #220 merges under `CLAUDE.md` §8 on the DL-149 (4) steps, which confirm DL-146 (4)(c) for the current `master` and add the order with #195.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-236-test-report.md` and `docs/07-qa/AQP-236-evidence/` (8 text files, 32,649 bytes measured with `git ls-tree -r -l`), commit bdd9a7d: ACCEPT. bdd9a7d changes only `docs/07-qa/` (checked with `git diff --name-only 5ebe3b2 bdd9a7d`). QA hand-off: Jira 11471, PR #220 comment 6791506329.
+  - **Condition A commit 5ebe3b2, read in full (DL-146 (2)):** 2 files, +35 / -16.
+    - `tests/unit/playwright-list.test.ts`: QLT-01 (both removal tests record `existsSync` inside the fake listing and assert `true` before asserting removal). QLT-02 (the caller-override test asserts all four things that were ruled: not the caller's folder; `basename` matches `^accucut-playwright-list-[A-Za-z0-9]{6}$`, anchored; existed during the listing; gone after). QLT-05 (`allStarted`). The second describe title gets the `AQP-236 (DEF-022): ` prefix. The two removal tests also get a title suffix, "(it existed while the listing ran)". That is a rename, not a new test, and it states what QLT-01 added. No `it` is added or removed. The removed `expect(folder).not.toBe('')` is covered, because `existsSync('')` is false.
+    - `tests/support/playwright-list.ts`: only lines inside the header block comment and the `finally` comment change. QLT-03 now names the unchecked `.map` source map, and says the compiled `.js` has a SHA-1 header. QLT-04 drops "which the system clears". No code line changes.
+  - **Developer hand-off:** Jira 11461. Dev Record in the PR #220 body.
+  - **My own checks** (jobs API, CI logs, git):
+    - **Every run on the branch** (`gh run list --branch fix/AQP-236-list-cache-race`): three runs. 42951199191 (ddf6191, G6). 42978771784 (5ebe3b2). 42990074348 (bdd9a7d).
+    - **42978771784 on 5ebe3b2:** I read all five attempts in the attempts API. Each attempt is 5 of 5 `success` on merge ref 3082557 (5ebe3b2 into 225a1c9). Attempts 2 to 5 re-ran a green run, so no red was re-run away. The paths are 4:00, 4:53, 4:58, 5:19 and 5:13 (median 4:58). In attempts 1 and 5, Vitest is 2,805 and 4,923, and E2E is 231 / 228 / 215 passed with 2 / 4 / 17 skipped.
+    - **42990074348 on bdd9a7d (the G7 run):** merge ref 1fd502b (bdd9a7d into 225a1c9). It is 5 of 5 `success`, including `Stages 1 to 11` (08:53:11Z to 08:53:20Z), with a path of **3:58** (08:49:22Z to 08:53:20Z). Vitest is **2,805** and **4,923**. E2E is **231 / 228 / 215 = 674** passed, with 2 / 4 / 17 = 23 skipped. Gitleaks 8.30.1 in stage 2 scanned 604 commits: "no leaks found", and the secret-scan control passed.
+    - **Matched lines:** I read every `flaky` / `failed` / retry / `✘` match in both the G7 run and attempt 5. They are the two known branch names in the fetch listing, the expected Postgres auth line, the `failed=` fan-in script, and passing test titles that contain "failed". There is no `✘` and no retry line.
+    - **Counts against each run's own `master`:** ddf6191 against 1d37902 (push run 42945910485: 2,793 and 4,911) is +6 and +6. 5ebe3b2 and bdd9a7d against 225a1c9 (push run 42975598629: 2,799 and 4,917, 674 passed, 23 skipped) are +6, +6, +0 and +0. So condition A's "same counts" holds against the `master` in the merge ref. The absolute rise to 2,805 is #216's six `random-members` tests, as the developer explained (DL-147: a PR run counts the current `master`).
+    - **QA's figures recomputed** from the committed loop lines. Pair: wall median 21.7 s; slowest `beforeAll` median 15.1 s, max 19.5 s. Nine files: wall median 31.4 s; slowest `beforeAll` median 22.5 s, max 26.9 s. Baseline: 9 of 10 runs exit 1, wall median 22.7 s, slowest `beforeAll` median 15.8 s. All match the report. Every head run shows 16 of 16 or 113 of 113 tests and `leftover-after 0`.
+    - **Plant:** `plant-diff.txt` is #221's change applied to the fixed head (index a365d67, which is 5ebe3b2's helper). Alone, it fails the four named tests with the expected messages, and the caller-override test fails on `'accucut-playwright-list-shared-control'` against the anchored pattern. Beside the four listing files, the same four fail, and the real union test fails with the DEF-022 signature (`[ …(688) ]`): 5 failed, 41 passed.
+    - **Callers** (`git grep` for the helper and `--list`) on `master` 35531d5, on #195's head 78c44fc and on bdd9a7d: the same four guard files, plus `playwright-config.ts` (comment only), plus the PR's own unit test. No new caller has arrived since G6.
+    - **Overlap:** #220's 12 files share no path with `git diff --name-only 1d37902 35531d5` (15 paths) or with #195's 69 files at 78c44fc. Everything on `master` since 225a1c9 is under `docs/`.
+    - **`master` 35531d5** (#219, docs only): push run 42990715803 is 5 of 5, with a path of 4:54. Vitest is 2,799 and 4,917, E2E 674 passed, 23 skipped, with no failure marker. Those are the same counts as 225a1c9.
+    - **Hygiene:** a grep of the evidence and report for local paths, e-mail addresses, passwords and tokens finds only the repository name. QA ran Gitleaks in Docker on `docs/07-qa`, and CI stage 2 ran it on the merge ref.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every check verified with evidence (DEF-022 has no ACs; the bar is DL-120 and DL-146 (3) (a) to (e)) | ✱ | ✅ | (a) the head is 5ebe3b2, and QA adds only `docs/07-qa/`. (b) The plant fails 4 and passes 2 alone and beside the listing files, and the union test is also red. (c) The pair is 10 of 10 and the nine-file set is 10 of 10, with the same test count every run and 0 folders before or after. (d) The baseline fails 9 of 10, so the probe was not needed. (e) The rows are routed to the records PR. The DEF-022 repro set (six files) is inside the nine |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | none. DEF-022 (Sev-3) is fixed by this PR |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42990074348, 5 of 5, path 3:58, counts above. The code head's run 42978771784 is green in all five attempts |
+| 4 | Exploratory notes | | ✅ | the report's charter: plant fidelity, with the anchor check biting on CRLF, the real guard under the plant, and the QLT-06 variable. One forced stop was observed, with no folder left |
+| 5 | Accessibility checks | | n/a | test support only, no UI |
+| 6 | Condition A commit within the named files and lines | | ✅ | 2 files, the ruled assertions, comment-only helper lines, no `it` added (diff above) |
+| 7 | Condition A Dev Record row | | ⚠️ | The PR body's plant row gives 4 failed and 2 passed for the file alone, without the printed diff and without the run beside the four listing files. The Gates G7 line still says "six-file cold loop". QA's independent plant covers the substance (diff printed, alone and beside), so this is a record gap: condition 1 |
+| 8 | Runs counted honestly | | ✅ | QA discarded every run from the overlap period (all green) and the two smoke runs, and redid the 30 counted runs on a quiet machine. No failure was re-run away. The 9 baseline failures are all reported |
+| 9 | Cost within limits (DL-057 class) | | ✅ | The worst `beforeAll` is 26.9 s against 100 s (listing) and 120 s (hook). Cold per listing adds about 7 s at the median on this host. E2E is unchanged, so RISK-023 is not affected |
+| 10 | Evidence fit to commit | | ✅ | text only. The scratch path is replaced by `<qa-scratch>`. No secret or personal data |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #220 body (Dev Record) | The Gates G7 line names the condition B loops: pair 10 of 10, nine-file set 10 of 10, baseline 9 of 10 failed. The plant row adds that QA's plant was run alone and beside the four listing files, with the diff printed, and links `docs/07-qa/AQP-236-evidence/plant-diff.txt` and `plant-beside-results.txt`. Body text only, with no commit. The orchestrator checks it as merge step (a) | Before the squash |
+| 2 | qa-engineer | `docs/07-qa/defects/DEF-022-cold-cache-listing-race-between-guard-files.md` on records branch `docs/AQP-1-records-sprint1-d` | Fill the Fix & Verification rows with the three rows in the report's "Defects" section, and set the status to match. Add the merge commit row after the squash. Master's write area does not include `docs/07-qa/`, so master does not paste them | This records PR, or the next one if it has merged first |
+| 3 | orchestrator → delivery lead | branch `control/AQP-236-shared-cache` | Unchanged from DL-146 (5) / condition D: "Delete branch" on #221. It holds neither G7 nor the merge | Before G8 |
+
+**Merge (orchestrator, §8), DL-149 (4)** (confirms DL-146 (4)(c) for `master` 35531d5 and adds the order with #195):
+- (a) Condition 1 is done. The records docs PR holding DL-149 may merge before or after #220 (no shared files). #195 and #220 may merge in either order (no shared files; DL-148 (4)(a)). #222 is not merged before #195 (DL-147 (4)).
+- (b) #220 is updated from `master` by a merge commit only (no rebase, no force-push). None of its 12 files changes against bdd9a7d. A conflict comes back to master.
+- (c) **Invariant:** each count on the updated head = run 42990074348 − push run 42975598629 (225a1c9) + the `master` push run taken. That is Vitest +6 and +6, E2E passed +0 and skipped +0, over the push run taken.
+  - **#220 first** (`master` 35531d5, push run 42990715803: 2,799 / 4,917 / 674 / 23): **Vitest 2,805 and 4,923; E2E 674 passed (231 / 228 / 215 expected, reported only), 23 skipped.**
+  - **#195 first** (DL-148 (4)(c) predicts 2,908 / 5,231 / 778 / 24 at its push run): **Vitest 2,914 and 5,237; E2E 778 passed, 24 skipped.** If #195's push run differs from that prediction, the target is recomputed from it and the arithmetic is posted.
+  - Either order ends with the second push run at **2,914 / 5,237 / 778 passed / 24 skipped**, which matches DL-148 (4)(c) for the other order.
+  - Per-shard splits are reported only. Any other code PR in between comes back to master.
+- (d) 5 of 5, with `Stages 1 to 11` read from the jobs API and no failed or retried test (read the matched lines). Any red, including a listing or hook timeout, comes back to master and is not re-run.
+- (e) Head, run, commits taken, counts with the arithmetic, and path are posted on #220 and AQP-236 before the squash. A path of 5:30 or more is a test strategy item 9 reading, not a hold (DL-142 (1)).
+- (f) Squash, with the QA report and evidence. There is no "Closes #129", so the orchestrator closes #129 as completed with the merge commit (DL-146 (4)(f)).
+- (g) The `master` push run after the squash is posted on #220 and AQP-236. A red comes back to master.
+
+**Risks:** none new. RISK-023 is unaffected: there is no E2E change, the G7 run reads 3:58, and the five code-head attempts have a median of 4:58. Residuals carried to G8: CI cannot show the race (the evidence is the Windows loops plus the plant-red unit test), and a force-killed listing can leave a `%TEMP%` folder (QLT-04, accepted at DL-146).
+**Rationale:**
+- Every mandatory item holds on the head that passed G6 plus one commit that I read line by line. The plant is independent of the developer and bites both in the unit test and in the real guard. The before/after loops (9 of 10 failed against 0 of 20) show that the loop can see the race and that the fix removes it.
+- CONDITIONAL GO, not GO, because the Dev Record (the system of record for the fix, §7.1) misstates the loop and leaves out the "beside" plant run that DL-146 (2) asked for. Correcting it is a body edit before the squash, with no user risk. That puts it in the procedure's CONDITIONAL GO class, not NO-GO.
+- The DEF-022 rows stay QA's to write (DL-146 (3)(e), write areas). They are not pasted by master.
+**Posted:** Jira AQP-236 comment 11473; PR #220 comment 6791687199.
