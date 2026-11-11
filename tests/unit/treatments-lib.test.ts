@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  deleteTreatmentDescription,
+  OTHER_LOCKED_REASON,
+  treatmentNotice,
+  treatmentRenamedNotice,
+} from '@/components/features/masters/treatment-texts';
+import {
   initialTreatmentValues,
   newTreatmentBody,
   TREATMENT_NAME_MAX_LENGTH,
@@ -9,12 +15,6 @@ import {
   treatmentFormProblems,
   withoutTreatmentError,
 } from '@/lib/masters/treatments';
-import {
-  deleteTreatmentDescription,
-  OTHER_LOCKED_REASON,
-  treatmentNotice,
-  treatmentRenamedNotice,
-} from '@/components/features/masters/treatment-texts';
 import { createTreatment, deleteTreatment, listTreatments, toTreatmentRow, updateTreatment } from '@/lib/masters/treatments-client';
 
 /**

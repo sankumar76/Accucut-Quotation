@@ -94,12 +94,12 @@ function useTreatmentDialog() {
   return { open, setOpen, target, formItem, opener, openDialog, forgetOpener };
 }
 
-type TreatmentList = ReturnType<typeof useTreatmentList>;
-type TreatmentDialog = ReturnType<typeof useTreatmentDialog>;
+type TreatmentListState = ReturnType<typeof useTreatmentList>;
+type TreatmentDialogState = ReturnType<typeof useTreatmentDialog>;
 type SetNotice = (notice: PageNotice | null) => void;
 
 /** The presses that open a dialog, what the server's answer does to the screen, and where focus goes when a dialog closes. */
-function useTreatmentActions(dialog: TreatmentDialog, list: TreatmentList, setNotice: SetNotice) {
+function treatmentActions(dialog: TreatmentDialogState, list: TreatmentListState, setNotice: SetNotice) {
   const { readAgain, status } = list;
 
   function onAdd(): void {
@@ -154,7 +154,7 @@ export function useTreatments() {
     showSkeleton: list.showSkeleton,
     notice,
     dialog,
-    ...useTreatmentActions(dialog, list, setNotice),
+    ...treatmentActions(dialog, list, setNotice),
     retry: () => void readAgain(false),
   };
 }
