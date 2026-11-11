@@ -3,6 +3,7 @@ import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createLateFailingRunner } from '../support/late-failure-runner';
 import { world, db, adminId, leadId, engineerId, openWorld, closeWorld, setUserId, ORIGIN, FOREIGN_ORIGIN } from '../support/process-master-api';
 import type { Answer } from '../support/process-master-api';
+import { withoutRequestId } from '../support/random-members';
 
 /**
  * QA acceptance, AQP-123 (STORY-02.04 Exchange Rate Master), AC-1 to AC-6, through the real route handlers (`GET` and `PUT /api/v1/exchange-rates`),
@@ -397,7 +398,8 @@ describe('AQP-123 AC-6: only the Admin; nobody else receives a rate (BR-003, BR-
       expect([who, read.status]).toEqual([who, status]);
       expect([who, write.status]).toEqual([who, status]);
       for (const answer of [read, write]) {
-        expect(answer.text).not.toMatch(/838|839|1\.23|4\.56|inr|usd|eur/i);
+        // The body holds one random member, `requestId` (`req-` and 8 hex digits), that can hold "838" or "839" by chance (DEF-028); only that member is left out.
+        expect(withoutRequestId(answer.text)).not.toMatch(/838|839|1\.23|4\.56|inr|usd|eur/i);
         expect(answer.headers.get('cache-control')).toContain('no-store');
       }
       seen[who] = read.text.replace(/"requestId":"[^"]*"/, '');
@@ -414,7 +416,7 @@ describe('AQP-123 AC-6: only the Admin; nobody else receives a rate (BR-003, BR-
     for (const origin of [FOREIGN_ORIGIN, null]) {
       const answer = await putRates({ usd: '838.37', eur: '839.73' }, { origin });
       expect(answer.status).toBe(403);
-      expect(answer.text).not.toMatch(/838|839/);
+      expect(withoutRequestId(answer.text)).not.toMatch(/838|839/);
     }
     expect(await stored()).toHaveLength(0);
   });

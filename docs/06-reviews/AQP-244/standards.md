@@ -80,3 +80,56 @@ Not applicable to this review (quality and performance reviews are separate).
 
 ## Previous Findings (re-review only)
 First round; none.
+
+---
+
+# Round 2
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-standards |
+| Review round | 2 (new diff only) |
+| Diff reviewed | `953b8ca..a4eab7f` (5 files); CI run 42867165582 green |
+| Date | 2026-11-10 |
+| **Verdict** | **APPROVE WITH COMMENTS** (Info only) |
+
+## Summary
+All nine round-1 items are closed. The developer also fixed QLT-01 (the skip in `masters-table-actions.spec.ts` moved to file level and pinned by a column-0 regex) and QLT-02 (the listing check now covers every test outside the list). The new code follows the standards: `ReadonlyArray`, a module named for what it reads, the ruled names pinned in the test, one config reader, and a comment on the file-level hook that names its guard. Two optional Info points remain.
+
+| Severity | New in round 2 | Open after round 2 |
+|----------|----------------|--------------------|
+| Blocker | 0 | 0 |
+| Critical | 0 | 0 |
+| Major | 0 | 0 |
+| Minor | 0 | 0 |
+| Info | 2 | 2 |
+
+## Checks Run
+| Check | Command | Result |
+|-------|---------|--------|
+| Lint, type-check, unit tests | `npx eslint .`, `npx tsc --noEmit`, `npx vitest run tests/unit --coverage` in `Stages 1 to 11b` | green in CI run 42867165582 on a4eab7f (nothing run locally) |
+| Fan-in and shards | `Stages 1 to 11`, `Stage 12` shards 1 to 3 | success |
+| Version control | `get_commits` | second commit `fix(e2e): file-level skip in masters-table-actions and pin the own-width list [AQP-244]`, story key and trailer present; no unrelated files |
+
+## Previous Findings
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| STD-01 | Minor | Fixed | `OWN_WIDTH_FILES: ReadonlyArray<string>`; `ownWidthFilesOf` regex and error message accept it |
+| STD-02 | Minor | Fixed | Comment gives the durable reason (listed tests divided by `--shard`; a third file escaping the `@one-width` guard) with rulings 11342 and 11367 |
+| STD-03 | Minor | Fixed | `tests/support/playwright-config.ts`; module comment attached to `readConfig`, DEF-002 note kept; both importers updated |
+| STD-04 | Minor | Fixed | "about 108 entries"; guards named in the file; four plants named in the header |
+| STD-05 | Minor | Fixed; optional tripwire Rebuttal accepted | Pattern takes either quote and `!=`/`!==`. A missed spelling fails safe (file stays listed three times) and listed files are now also pinned at file level |
+| STD-06 | Minor | Fixed | `RULED_OWN_WIDTH_FILES` pin plus `expect(OWN_WIDTH_FILES).toEqual(...)` as the first test |
+| STD-07 | Minor | Fixed | Title ends "except the own-width files, which run in desktop only (AQP-244)" |
+| STD-08 | Minor | Fixed | `const config = readConfig();` |
+| STD-09 | Info | Done | File-level `test.beforeEach` in `masters-table-actions.spec.ts`, pinned by `FILE_LEVEL_DESKTOP_ONLY` (QLT-01); behaviour unchanged, the file had one test, inside the old describe |
+
+## New Findings
+| ID | Severity | File:line | Rule | Issue | Impact | Suggested fix |
+|----|----------|-----------|------|-------|--------|---------------|
+| STD-10 | Info | `tests/unit/own-width-files.test.ts:13-14, 80` | Coding Standards §8 | The header still says shard 3 "got the work" (the clause STD-02 removed from the config; the measured result shows shard 3 was lightest). The scan test's message (line 80) names `OWN_WIDTH_FILES` alone, while the pin test names both constants | Config comment and test header differ; small wording gap | Optional: align the clause ("so the count split balanced entries that never run"); mention `RULED_OWN_WIDTH_FILES` in the line-80 message |
+| STD-11 | Info | `tests/unit/own-width-files.test.ts:122, 135` | Coding Standards §1 (DRY, no magic strings) | The QLT-02 listing check repeats the rule of `one-width-tag.test.ts` (three projects, or desktop with `@one-width`) with its own listing walk and the literal `'one-width'` | Two copies change together if a project is added | None now (rule of three not reached). If a third caller appears, share `listTests()` from `tests/support/playwright-list.ts` with the tag as one constant |
+
+## Notes on the new code (no action)
+- `FILE_LEVEL_DESKTOP_ONLY` pins exact formatting (column 0, two-space indent, `({}, testInfo)`); a reformat fails loudly with a message that says what form is expected. That is the safe direction.
+- The new hook in `masters-table-actions.spec.ts` uses the same skip message as `aqp-234-qa.spec.ts` and its comment names the guard that protects it.
