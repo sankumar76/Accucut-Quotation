@@ -1,9 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { SKELETON_DELAY_MS } from '@/components/shared/states';
-import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listProcessItems, type FormulaUseRow, type ProcessItemRow } from '@/lib/masters/process-items-client';
 
@@ -12,6 +10,7 @@ import type { PageNotice } from './master-texts';
 import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
 import { goneNotice } from './process-texts';
+import { useMasterList } from './use-master-list';
 import { useReadAgain, type ReadStatus } from './use-read-again';
 
 /**
@@ -33,20 +32,7 @@ export function filterByName(items: ReadonlyArray<ProcessItemRow>, query: string
 
 /** The rates, the search, and reading the list again (the list that was there stays until 300 ms have passed, then the skeleton). */
 function useItemsList(initialItems: ReadonlyArray<ProcessItemRow>) {
-  const [items, setItems] = useState<ReadonlyArray<ProcessItemRow>>(initialItems);
-  const [status, setStatus] = useState<ListStatus>('ready');
-  const [query, setQuery] = useState('');
-  const showSkeleton = useAfterDelay(status === 'loading', SKELETON_DELAY_MS);
-
-  /** Reads the list again. The change itself is already saved, so a failure says so and leaves the list as it was. */
-  const refresh = useCallback(async (): Promise<void> => {
-    setStatus('loading');
-    const outcome = await listProcessItems();
-    if (outcome.status === 'ok') setItems(outcome.value);
-    setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-  }, []);
-
-  return { items, status, query, setQuery, showSkeleton, shown: filterByName(items, query), refresh };
+  return useMasterList({ readList: listProcessItems, initialItems, filter: filterByName });
 }
 
 /** Which dialog is open, for which rate, and the first-open loader that fetches their code on the first press. */

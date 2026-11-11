@@ -1,15 +1,14 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { SKELETON_DELAY_MS } from '@/components/shared/states';
-import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listMaterials, type MaterialRow } from '@/lib/masters/materials-client';
 
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import type { MaterialFormDialogProps } from './material-form-dialog';
+import { useMasterList } from './use-master-list';
 import { useReadAgain, type ReadStatus } from './use-read-again';
 
 /**
@@ -33,20 +32,7 @@ function filterMaterials(items: ReadonlyArray<MaterialRow>, query: string): Read
 
 /** The materials, the search, and reading the list again (the list that was there stays until 300 ms have passed, then the skeleton). */
 function useMaterialsList(initialItems: ReadonlyArray<MaterialRow>) {
-  const [items, setItems] = useState<ReadonlyArray<MaterialRow>>(initialItems);
-  const [status, setStatus] = useState<MaterialListStatus>('ready');
-  const [query, setQuery] = useState('');
-  const showSkeleton = useAfterDelay(status === 'loading', SKELETON_DELAY_MS);
-
-  /** Reads the list again. The change itself is already saved, so a failure says so and leaves the list as it was. */
-  const refresh = useCallback(async (): Promise<void> => {
-    setStatus('loading');
-    const outcome = await listMaterials();
-    if (outcome.status === 'ok') setItems(outcome.value);
-    setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-  }, []);
-
-  return { items, status, query, setQuery, showSkeleton, shown: filterMaterials(items, query), refresh };
+  return useMasterList({ readList: listMaterials, initialItems, filter: filterMaterials });
 }
 
 /** Whether the dialog is open, for which material (null adds), and the first-open loader that fetches its code on the first press. */
