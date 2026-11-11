@@ -12,7 +12,6 @@ import { roleLabel } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import type { UserRow } from '@/lib/users/users-client';
 
-import { BREAK_LONG_NAMES } from '../masters/process-texts';
 import { isOpener, type Opener } from './opener';
 import { OWN_PASSWORD_NAME } from './texts';
 
@@ -131,7 +130,7 @@ export function UsersList(props: UsersListProps) {
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id} data-user-id={user.id}>
-                <TableCell className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{user.name}</TableCell>
+                <TableCell className={cn('font-semibold text-ink')}>{user.name}</TableCell>
                 <TableCell className="break-all text-ink-2">{user.email}</TableCell>
                 <TableCell>
                   <RoleText user={user} />
