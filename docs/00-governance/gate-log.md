@@ -5206,3 +5206,60 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - CONDITIONAL GO, not GO, because the Dev Record (the system of record for the fix, §7.1) misstates the loop and leaves out the "beside" plant run that DL-146 (2) asked for. Correcting it is a body edit before the squash, with no user risk. That puts it in the procedure's CONDITIONAL GO class, not NO-GO.
 - The DEF-022 rows stay QA's to write (DL-146 (3)(e), write areas). They are not pasted by master.
 **Posted:** Jira AQP-236 comment 11473; PR #220 comment 6791687199.
+
+## G6 – Peer Review (two-review route, DL-142 (3)) — tech-debt #119 (PR #235: shared master screen pieces and the material-repository split) — 2026-11-11 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-150).** Both reviews approve with comments, with no Blocker, Critical or Major. One push of three Minors (STD-01 to STD-03, 8 named files, no test file) is re-read by reviewer-standards. QLT-01, STD-04 and STD-06 go to #244. The #119 leftovers (QLT-02 / STD-05) go to #245, and "Closes #119" stays. G7 is decided by master with no QA run, after condition A. AQP-142 may start now outside #235's 52 files, and does not reach G5 before #235 merges.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - PR #235 at b2741ca (7 commits, 52 files, +596 / -586, base ffc280b), body and Dev Record; developer hand-off on #119 (comment 6793392756).
+  - `docs/06-reviews/119/standards.md` (review 5857568408), `quality.md` (review 5857625090), `consolidated.md` (records branch 1f5395c).
+  - **My own checks** (git, jobs API, CI logs):
+    - **Scope:** `git diff --stat ffc280b b2741ca`: 52 files, all under `src/` and `tests/`. No `package.json`, lockfile, `prisma/`, `.github/`, route or audit file.
+    - **Read in full:** `use-read-again.ts` and `master-constraints.ts` at b2741ca, and the `engineer-import-rule.test.ts` diff (+2 lines in `REPOSITORIES.blocked`; `FUTURE_IMPORTS` still lists `material-repository`, as STD-06 says).
+    - **Every run on the branch** (`gh run list --branch tech-debt/119-shared-master-pieces`): one, 43002218101, on merge ref 352e161 (b2741ca into ffc280b). 5 of 5; path **5:22** (322 s); 18 cache hits. Vitest **2,908** and **5,271**; E2E **265 / 263 / 250** passed, skipped 3 / 4 / 17. No flaky or failed summary line.
+    - **Counts against base push run 42996054107 (ffc280b):** unit +0, full Vitest +40, E2E +0, skipped +0. The 40 are the generated cases for the two new repository files.
+    - **First-load JS** (`check-js-budget` lines in the CI log): `/masters/materials` 186,909, `/masters/process` 174,030, the rest unchanged, all within 200,000.
+    - **Plants A1 and A2:** each control head compared with b2741ca (`compare` API). A1 changes only `use-read-again.ts:41` and A2 only line 40, as described. Failed lists from `--log-failed`: A1 is red only in `exchange-rates.spec.ts:383` and `treatments-focus.spec.ts:181,197`; A2 only in `exchange-rates.spec.ts:171,370,383`, 9 each. QLT-01 is confirmed.
+    - **Overlap:** `git diff --name-only ffc280b origin/master` (b3403e3) lists 12 paths (`docs/07-qa/`, `tests/support/playwright-list.ts`, two unit tests). None is in #235.
+    - **`master` b3403e3:** push run 43004280872, attempt 1: Vitest 2,914 and 5,237, E2E 778 passed, 24 skipped.
+  - **Not re-run by me:** the developer's local loop and plants #236 to #238 (read from the Dev Record), reviewer-quality's B1 and B2 runs (read from the report), and reviewer-standards' string-literal script.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present | ✱ | ✅ | Standards and quality, as DL-142 (3) set for this refactor. reviewer-performance is not required: no route, query, schema, dependency or CI change; JS and path measured above. A recorded exception to "three reports", as at DL-124 |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in both reports and in the consolidated table |
+| 3 | Major findings fixed or accepted | | ✅ | none raised |
+| 4 | Findings cite file:line | | ✅ | every STD and QLT row |
+| 5 | Behaviour preserved | | ✅ | Strings unchanged (standards script). Moved code verbatim. Four hook copies equivalent (quality table). Counts unchanged apart from the explained +40. Plants #236 to #238, A1, A2, B1 and B2 red |
+| 6 | Regression net covers the shared hook on every screen | | ⚠️ | No: Process and Materials both branches, Treatments ready branch (QLT-01, A1 and A2 confirmed by me) → #244 |
+| 7 | #119 items done, or leftovers owned | | ⚠️ | DL-142 (3) items done. Leftovers unowned (QLT-02, STD-05) → #245 and a PR body line |
+| 8 | New shared files follow the standards | | ⚠️ | STD-01 to STD-03 → condition A |
+| 9 | Other-role documents | | ⚠️ | STD-07, the test-strategy total, QLT-13 (missed due point, re-set) → architect; ux-spec:853 → ux-expert |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer, then reviewer-standards | PR #235: one commit, 8 named files | STD-01, STD-02, STD-03 as in DL-150 (3). Same count deltas. Round-2 Dev Record row. reviewer-standards re-reads the push diff only; reviewer-quality also reads if the push leaves the stated scope | Before master's G7 |
+| B | developer | PR #235 body | The out-of-scope line naming #245, #244 under Follow-ups (DL-150 (5)) | Before the squash |
+| C | developer, reviewer-quality | #244 | Slow-read focus tests with A1 and A2 re-planted by the reviewer; STD-04; STD-06 | Before AQP-142's G6, at the latest G8 |
+| D | developer | #245 | `useMasterList`, loader wiring, `MasterSearchBox` on Process, `RUPEE`, Users copies; no copy of a list hook meanwhile | Before G8, or the G5 of the first story that would copy a list hook |
+| E | solution-architect | architecture §4.9, §6; test strategy §10 | STD-07 wording; the Vitest total; QLT-13 scope (DL-144 (3)) | Next change, at the latest before AQP-142's G6 |
+| F | ux-expert | `ux-spec.md:853` | `process-texts.ts` → `master-texts.ts` | Next change, at the latest before AQP-142's G6 |
+| G | scrum-master (with the solution-architect) | Jira AQP-142 Dev Context | The DL-150 (8) items, including where Customers' repository methods live | Before AQP-142's T1 |
+| H | orchestrator → delivery lead | branches `control/119-qlt-plant-*` (5) | Delete | Before G8; does not hold the merge |
+
+**G7 route and merge:** DL-150 (7) and (9). Invariant for `master` b3403e3: Vitest **2,914** and **5,277**, E2E **778** passed and **24** skipped; for another `master`, its push run plus +0 / +40 / +0 / +0.
+**Risks:** none new from this PR. RISK-023 is re-scored separately (DL-151), and #235 is not its cause (+0 E2E, path 5:22).
+**Rationale:** every mandatory item holds, and the open items are Minor. STD-01 to STD-03 are fixed before AQP-142 copies the new shared hook. QLT-01 cannot go in a PR that must keep its tests unchanged. Its tests, written after the merge, still detect a regression from #235 before AQP-142's G6. Until #244 merges, focus return on Process and Materials rests on reviewer-quality's equivalence table.
+**Posted:** PR #235 comment 6794325811; GitHub #119 comment 6794328843; Jira AQP-142 comment 11483. Issues created: #244, #245.
+
+## Risk re-score — RISK-023 (CI path), `master` b3403e3 — 2026-11-11
+
+- **Decision:** **RISK-023 rises, P 2 → 4, score 4 → 8 🟡, by the register's rule (DL-151).**
+- **Decided by:** master  ·  **Human override:** none
+- **Evidence (recomputed by master):** run 43004280872, attempts 1 to 5, from the attempts API: paths 334, 323, 335, 334 and 284 s. **Median 5:34**, slowest 5:35. Each attempt: 5 of 5 `success`, 18 cache restores and no miss, no flaky or failed summary line, E2E 265 / 263 / 250 passed.
+- **Rule:** DL-143 (2): rises to 8 when a median of five on a `master` head is 5:30 or more.
+- **Next step:** the fourth-shard gate (a `master` median of five and the next nightly median both over 5:00) is half met. The orchestrator posts the next nightly; the solution-architect and the product-manager act as in DL-151 (3). Not a hold. Master recommends the enabler before AQP-142's G6.
+- **Posted:** Jira AQP-1 comment 11484.
