@@ -1,8 +1,9 @@
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '../../lib/errors';
 import type { PasswordHasher } from '../auth/password-hasher';
+import type { AuditRepository, NewAuditRow } from '../repositories/audit-repository';
 import { accountThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 import {
   normaliseEmail,
   UserConstraintError,
@@ -210,3 +211,37 @@ export function createUserService({ users, throttles, hasher, transactions, audi
     },
   };
 }
+
+// PLANT P1 (never committed): the entry is written in a transaction of its own before the change.
+export async function plantedP1(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run((tx) => audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } }));
+  await transactions.run((tx) => users.update('planted', { isActive: false }, tx));
+}
+
+// PLANT P2 (never committed): the entry is written after the callback returned, with the handle kept from it.
+export async function plantedP2(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  if (kept !== undefined) await audit.record(kept, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+}
+
+// PLANT P3 (never committed): the change runs outside the transaction; the callback only records.
+export async function plantedP3(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false });
+    await audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+  });
+}
+
+// PLANT P3b (never committed): the only other call with the handle is on the AuditRepository, which is not the change.
+export async function plantedP3b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, rows: AuditRepository, row: NewAuditRow): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false });
+    await rows.append(row, tx);
+    await audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+  });
+}
+
