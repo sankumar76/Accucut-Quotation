@@ -4885,3 +4885,65 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 **Risks:** **RISK-023 falls from 6 to 4 (P 2 × I 2)** (DL-143 (2); register updated). A pending input is noted: AQP-130's single PR reading of 5:51 awaits its median of five (DL-142 (1)), and a median of 5:30 or more on a PR or `master` head raises it to 8 again.
 **Rationale:** every AC has independent evidence on the code that passed G6. The figures master recomputed match QA's. The fall rule names AC-3, and AC-3 holds.
 **Posted:** Jira AQP-244 comment 11421; PR #166 comment 6777948136; RISK-023 on Jira AQP-1 comment 11422.
+
+## G6 – Peer Review (close) — AQP-130 (STORY-02.05 Treatment / Color list, PR #195) — 2026-11-11 (attempt 1, closed at 1f978b2)
+
+- **Decision:** **CONDITIONAL GO. G6 closes at 1f978b2, and there is no further G6 round.** All DL-142 conditions A to C are met, and D and E (the items due before G7) are met too. AQP-130 goes to In QA. STD-15 (Minor) is fixed in one test-only commit before QA gathers evidence, and master reads it at G7 (DL-047). QLT-11 (Minor) goes to tech-debt #218. STD-17 and STD-18 go to the #119 refactor PR. QLT-13 goes to the architect. **RISK-023 stays at 4:** the median of five is 5:24, under the 5:30 trigger (DL-144).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **Fix head 1f978b2:** one commit on 67febe3, 27 files, +511 / -134. The PR now has 54 files. Developer: Jira AQP-130 11424. The Dev Record (round 2) is in the PR body and has a row for every fixed finding, plus the control PRs #210 and #211.
+  - **Re-reviews:**
+    - quality round 2 (review 5848801283, Jira 11426): APPROVE WITH COMMENTS. QLT-01 to QLT-05 are fixed. New: QLT-11 (Minor) and QLT-12, QLT-13 (Info).
+    - standards round 2 (review 5848733217, Jira 11425): APPROVE WITH COMMENTS. STD-01, 02, 05 to 09 and 13 are fixed. New: STD-15 (Minor) and STD-16 to 18 (Info).
+    - Reports: `docs/06-reviews/AQP-130/{quality,standards,consolidated}.md`, round 2.
+  - **Pre-G7 routing:**
+    - AC-6 is amended in the Jira description to `master.created`, `master.edited` and `master.deleted` with `object_type` `treatment` (product-owner 11431; read by master).
+    - Architecture v0.35 §6, on `master`, has 409 `TREATMENT_LOCKED`, the 422 codes and the refusal order (solution-architect 11417).
+    - The #201 words are applied in the push (ux-spec v0.22).
+  - **My own checks** (API and CI logs only; nothing run locally):
+    - **Median of five, recomputed** from `actions/runs/42891948697/attempts/1..5/jobs` (head 1f978b2; path from the first job start to the end of `Stages 1 to 11`). Paths: 326, 308, 337, 312 and 324 s, so **the median is 324 s (5:24) and the slowest is 337 s (5:37)**. Every attempt is 5 of 5 `success`.
+    - **Logs of all five attempts:** no `flaky` line and no `N failed` line. A `Cache hit for: node-modules-v1-…` line appears and no `Cache not found` line. Grepping for "miss" finds only the `fail-on-cache-miss: false` input lines. Each attempt has the same counts: E2E passed 243 / 241 / 294 and skipped 69 / 70 / 17; Vitest 2,894 and 5,111 passed.
+    - **Shard balance** (report only, v0.32): the slowest shard is 1, 2, 3, 3 and 3 across the five attempts. The median job times are 278 / 235 / 302 s, so shard 3 is about 30 s of raw job time over the mean. That is far under the 80 s host-free line, so no balance work is due.
+    - **Control PRs:** each one is a single commit on 1f978b2, and I read every plant's diff.
+      - #212, both locks removed (cc1756a, run 42894187597): `Stages 1 to 11b` is red with exactly 2 failed out of 5,111, both in `treatments-serialisation.test.ts`, each `expected { name: 'Chain-start' } to deeply equal { name: 'Chain-first' }`.
+      - #213, only `FOR UPDATE` removed (fe50f0c), and #214, only `LOCK TABLE` removed (3a588ba): `Stages 1 to 11b` is green.
+      - #210 (843ed42, both locks removed): red. #211 (112f169, latest-read guard removed): all three E2E shards red.
+    - The `password authentication failed` line in #212's log also appears in the head run's attempts 1 and 5, so the plant did not cause it.
+    - **Merge preview** (for the §8 conditions):
+      - Since the PR's base 41848eb, `master` changed 20 files. Only one of them is in the PR: `tests/e2e/masters-table-actions.spec.ts`. AQP-244 moved the skip hook to file level at base lines 88 to 99, and the PR's hunks sit at lines 7 to 63 and 103 onward.
+      - E2E passed totals: base run 42874256994 has 674, and `master` 1d37902's run 42945910485 also has 674. The Vitest totals rise by 8 in each run (2,785 to 2,793 and 4,903 to 4,911).
+    - **DEF-028:** `tests/acceptance/aqp-123-exchange-rates.test.ts` lines 400 and 417 are present on 1f978b2. Fix PR #216 (7df86ad, open) changes 5 files, none of them in #195.
+
+**Checklist (close)**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | round 1: standards, quality, performance; round 2: standards and quality on the new diff; performance's reading is item 7 |
+| 2 | Zero open Blocker or Critical findings | ✱ | ✅ | both round-2 verdicts; consolidated round 2: 0 Blocker / Critical / Major |
+| 3 | QLT-01 to QLT-04 fixed (DL-142 A) | | ✅ | quality round 2; QLT-03 bites only with both locks removed (#212 red; #213 and #214 green: either lock alone serialises, QLT-12) |
+| 4 | QLT-04 control | | ✅ | #211 red at 3 widths. Only the developer ran it, so QA reproduces it at G7 |
+| 5 | Named standards Minors (DL-142 A) | | ✅ | STD-01, 02, 05 to 08 fixed (plus 09 and 13); STD-03 and STD-04 stay on #119 |
+| 6 | G12 | | ✅ | nothing removed or weakened; `SPEC_ACCESS` moved 25 of 25 entries unchanged (quality round 2). The new location is outside the G12 scope list (QLT-13) |
+| 7 | Median of five (DL-142 C; v0.32 item 9) | | ✅ | 5:24 median, recomputed; under 5:30; all hits; 0 flaky |
+| 8 | Dev Record current | | ✅ | round 2 rows for every fixed finding and #210, #211 |
+| 9 | Traceability of test names | | ⚠️ | STD-15: describe names cite review IDs (QLT-01 to QLT-04), not AC or NFR IDs (`CLAUDE.md` §6 rule 3). Fixed in one test-only commit before G7 |
+| 10 | Audit writer shape check | | ⚠️ | QLT-11: `masterState` is a union, so a partial state under another `object_type` is stored. The gap predates this PR. Goes to #218 |
+| 11 | Pre-G7 routing (DL-142 D, E) | | ✅ | AC-6 in Jira (11431); §6 codes in architecture v0.35 on `master` (11417) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer | PR #195, one test-only commit | **STD-15:** describe and test names cite the AC or NFR (for example `AC-6, NFR-007` for the serialisation test, `AC-2` for the canonical-name tests, `AC-3` for the refusal order). Review IDs and "control PR 206" stay in header comments only. The files are `tests/integration/masters/treatments-serialisation.test.ts`, `tests/integration/masters/treatments.test.ts`, `tests/unit/masters-service-treatments.test.ts` and `tests/e2e/treatments-focus.spec.ts`. STD-16 (`defined(...)` in place of `?.id ?? ''`) may ride in the same file. Before renaming, grep each old title: a title pinned elsewhere (the one-width allow-list, a guard) is left unchanged. Add a Dev Record row. **No other file. The counts stay the same:** E2E 243 / 241 / 294 passed and 69 / 70 / 17 skipped; Vitest 2,894 and 5,111 passed; no `flaky` or `failed` line. Master reads the commit at G7 with no re-review (DL-047). Anything beyond these files or counts comes back to master | Before QA gathers evidence |
+| B | qa-engineer | `docs/07-qa/AQP-130-test-report.md` | The G7 route in DL-144 (5) | G7 |
+| C | developer | #218 | QLT-11: a per-type shape check in its own small PR (behaviour change, so not part of #119), narrow reviewer-quality review, with a control that reverts to the union | Before AQP-142 reaches G6; at the latest G8 |
+| D | developer | #119 refactor PR | DL-142 (3), plus STD-17 and STD-18 (comment 6785713900) | Before AQP-142 starts G5 (unchanged) |
+| E | solution-architect | test strategy §10 (G12 scope) | QLT-13: add `tests/support/spec-access.ts` and `tests/support/route-calls.ts` to the G12 scope list. Reviewers treat both files as in scope until then | The next change of the test strategy; at the latest before the #119 refactor PR's G6 |
+| F | product-manager | PRF-06 | A maximum treatment count (carried from DL-142 G) | Before 05.06 is Ready |
+| G | orchestrator | merge | DL-144 (6) | After G7 GO |
+
+**Accepted (Info):** QLT-12, which records that the test proves "at least one lock", the property that protects the audit `before`; the two notes in quality round 2 on the rename notice; and STD-16 if it is not taken in A.
+**Risks:** RISK-023 stays at 4 🟢. This reading resolves the input that DL-143 left pending. No new risk.
+**Rationale:**
+- Every DL-142 condition holds, with evidence master read directly. The serialisation guard now bites exactly when serialisation is lost. The median of five on the code that will merge sits under the line.
+- STD-15 is a cheap traceability Minor that falls before QA starts, so it gets one named-file commit, as at DL-047 and DL-130, and not an issue.
+- QLT-11 changes behaviour across every master and predates this PR. It gets its own owned PR, timed before the next audited story is reviewed.
+**Posted:** Jira AQP-130 comment 11436; PR #195 comment 6785764449; tech-debt GitHub #218 created (QLT-11); #119 comment 6785713900 (STD-17, STD-18).
