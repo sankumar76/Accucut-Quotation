@@ -12,7 +12,7 @@ import { z } from 'zod';
  * `materialConsidered` null, which is why the field may be null.
  */
 
-export const materialOptionSchema = z.strictObject({
+const materialOptionSchema = z.strictObject({
   id: z.string().min(1),
   /** Material in Drawing. */
   name: z.string().min(1),

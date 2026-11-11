@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { uniqueViolationOf, withDatabaseErrors } from './database-errors';
+import { isRecordNotFound, uniqueViolationOf, withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
@@ -122,9 +122,6 @@ export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** Prisma's code for "the record to update does not exist". */
-const RECORD_NOT_FOUND = 'P2025';
-
 const SUMMARY_SELECT = { id: true, name: true, email: true, role: true, isActive: true } as const;
 
 /** The rows of the locking read, checked on the way in: a raw statement is not typed by Prisma. */
@@ -139,10 +136,6 @@ const LOCKED_ACCOUNT_ROWS = z.array(
     mustChangePassword: z.boolean(),
   }),
 );
-
-function isRecordNotFound(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === RECORD_NOT_FOUND;
-}
 
 /** The rule a unique violation broke, from the column or the index it names; null for anything else. */
 function constraintOf(error: unknown): UserConstraint | null {
