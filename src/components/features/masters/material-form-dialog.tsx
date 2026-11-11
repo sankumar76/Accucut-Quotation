@@ -18,7 +18,7 @@ import {
   type FieldErrors,
 } from '@/lib/masters/material-form';
 import { createMaterial, updateMaterial, type MaterialRow } from '@/lib/masters/materials-client';
-import { RUPEE } from '@/lib/masters/process-items';
+import { RUPEE } from '@/lib/masters/master-rules';
 import {
   MATERIAL_FIELD_LABELS,
   MATERIAL_FIELD_NAMES,

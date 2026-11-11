@@ -1,6 +1,5 @@
 import type { FieldColumn } from '../fields/lookup';
-import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, normaliseDecimalText } from './master-rules';
-import { RUPEE } from './process-items';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, normaliseDecimalText, RUPEE } from './master-rules';
 
 /**
  * What the Exchange rates tab of SCR-13 (STORY-02.04; SPEC sections 4.4 and 7.4, architecture sections 5.1 and 6) and its route share: the
