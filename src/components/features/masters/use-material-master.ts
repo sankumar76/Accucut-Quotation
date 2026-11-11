@@ -24,7 +24,7 @@ export type MaterialListStatus = 'ready' | 'loading' | 'error';
 const loadDialog = () => import('./material-form-dialog').then((module) => module.MaterialFormDialog);
 
 /** Materials whose Material in Drawing or Material Considered contains what was typed, ignoring letter case and surrounding spaces. */
-export function filterMaterials(items: ReadonlyArray<MaterialRow>, query: string): ReadonlyArray<MaterialRow> {
+function filterMaterials(items: ReadonlyArray<MaterialRow>, query: string): ReadonlyArray<MaterialRow> {
   const wanted = query.trim().toLowerCase();
   if (wanted === '') return items;
   return items.filter((item) => item.materialInDrawing.toLowerCase().includes(wanted) || item.materialConsidered.toLowerCase().includes(wanted));
