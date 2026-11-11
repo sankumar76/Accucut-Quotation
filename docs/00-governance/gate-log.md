@@ -5263,3 +5263,98 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - **Rule:** DL-143 (2): rises to 8 when a median of five on a `master` head is 5:30 or more.
 - **Next step:** the fourth-shard gate (a `master` median of five and the next nightly median both over 5:00) is half met. The orchestrator posts the next nightly; the solution-architect and the product-manager act as in DL-151 (3). Not a hold. Master recommends the enabler before AQP-142's G6.
 - **Posted:** Jira AQP-1 comment 11484.
+
+## G6 – Peer Review (close) — tech-debt #119 (PR #235: shared master screen pieces and the material-repository split) — 2026-11-11 (attempt 1, closed at 07b47b7)
+
+- **Decision:** **CONDITIONAL GO, closed with no further round (DL-152).** Condition A is met in one commit, 07b47b7, which touches the 8 named files and no test file. reviewer-standards re-read the push diff only and approves, with no new finding. The trigger for a reviewer-quality read is not met. Condition B is met in substance, and one contradicting body bullet is carried to G7 as a pre-squash condition.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - PR #235 at 07b47b7 (8 commits, 52 files against ffc280b, +605 / -595). Developer hand-off: #119 comment 6794560477, Jira AQP-142 comment 11488.
+  - `docs/06-reviews/119/standards.md` "Round 2" (records branch 93f35d5). PR review 5858014815: APPROVE, STD-01 to STD-03 Fixed, STD-04 deferred to #244 (DL-150 (4)), no new finding. Thread replies are in reviews 5857963760 to 5858012438. No review requests changes. Labels: `review:standards-approved`, `review:quality-approved`.
+  - **My own checks** (git, jobs API, CI log):
+    - **Diff `b2741ca..07b47b7`, read in full:** 1 commit, 8 files, +21 / -21, exactly the files DL-150 (3) named. No file under `tests/`.
+      - STD-01: the four status unions are `= ReadStatus`, and `useTreatmentList(opener: OpenerRef)`.
+      - STD-02: three comments are reworded, and `MATERIAL_TEXT_MAX_LENGTH = MASTER_NAME_MAX_LENGTH` (both 100; its users are `materials.ts:68` and `schemas/materials.ts:30,36`).
+      - STD-03: `shouldFocusWhenFailed?: boolean | undefined`.
+    - **Scope trigger for reviewer-quality:** I mapped `shouldFocusWhenFailed` back to `whenFailed` in `use-read-again.ts` at 07b47b7 and compared the result with b2741ca: they are identical. `git grep whenFailed` at 07b47b7 finds no leftover. The only changed runtime expression in the push is the alias. So the trigger is not met, and the plants (#236 to #238; A1, A2, B1, B2) stand on unchanged logic.
+  - **Not re-run by me:** reviewer-standards' local ESLint on the 8 files (CI stages 1 to 11b lint and type-check are green).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present | ✱ | ✅ | Standards rounds 1 and 2, quality round 1 (DL-142 (3) route; DL-150 (3) asked only for standards on the push) |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | Round 2 reports 0 new findings. Round 1 had none |
+| 3 | Major findings fixed or accepted | | ✅ | none raised |
+| 4 | Condition A within the named files and lines | | ✅ | 8 files, no test file. Reverse-rename check identical |
+| 5 | Condition B (PR body) | | ⚠️ | "Closes #119" is on line 5. The out-of-scope line naming #245 is on line 10, under "What & why", not under "Decisions & deviations". I accept that placement because it is read first. #244 is under Follow-ups. One Follow-ups bullet still says the Users copies "belong with PR #222 or a later tech-debt item", which is against DL-150 (5) → G7 condition 1 |
+| 6 | Round-2 Dev Record row | | ✅ | Body rows for STD-01, STD-02 and STD-03 with 07b47b7, plus the "exactly 8 files" line |
+
+**Conditions:** none new at G6. B's remaining bullet is G7 condition 1.
+**Risks:** none new.
+**Rationale:** the push is the ruled fix, in the ruled files, re-read by the ruled reviewer, and the quality trigger is shown not to be met by a mechanical check. A further round would add nothing.
+**Posted:** with the G7 record below.
+
+## G7 – QA Acceptance (master, no QA run; DL-150 (7), DL-124 pattern) — tech-debt #119 (PR #235 at 07b47b7) — 2026-11-11 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-152).** All three G7 tests in DL-150 (7) hold on evidence I read. The open item is one PR-body bullet, which is edited before the squash without a commit. #235 merges under `CLAUDE.md` §8 on the DL-152 (6) steps. The invariant on b3403e3 is **2,914 / 5,277 / 778 passed / 24 skipped**.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:** the G6 close evidence above; PR #235 body; CI run 43011060504 (jobs API and full log); `master` push run 43004280872; Jira JQL for open Bugs.
+  - **Every run on the branch** (`gh run list --branch tech-debt/119-shared-master-pieces`): 43002218101 (b2741ca, G6) and **43011060504** (07b47b7), each with one attempt.
+  - **43011060504:** merge ref **5235dc8** (07b47b7 into b3403e3, read in every job's "HEAD is now at" line), tree 7eda7ef.
+    - 5 of 5 `success`. `Stages 1 to 11` ran from 11:25:23Z to 11:25:34Z (jobs API).
+    - Path **5:33** (333 s from 11:20:01Z). The slowest shard is 3 (ended 11:25:20Z).
+    - Unit: 151 files, **2,914**. Full Vitest: 210 files, **5,277**.
+    - E2E: **265 / 263 / 250 = 778** passed, with skipped 3 / 4 / 17 = **24**.
+    - 18 `Cache restored from key` lines and no `Cache not found`.
+    - Gitleaks 8.30.1 scanned 629 commits and found no leaks.
+    - First-load JS: `/masters/materials` 186,951 and `/masters/process` 174,037, both within 200,000.
+  - **Matched lines read:**
+    - Branch names in the fetch listing: `fix/AQP-268-flaky-g7-7`, `fix/AQP-272-flaky-aqp-122-qa-tablet` and `control/119-qlt-plant-a1-failed-read-focus`.
+    - The expected Postgres auth line.
+    - The `failed=` fan-in script.
+    - Three `Failed to save: Unable to reserve cache` lines. These are a cache key that another shard had already saved, not a test result.
+    - Passing (`✓`) titles that contain "failed".
+    - There is no `✘`, no retry line and no flaky or failed summary.
+  - **Counts against the `master` in the merge ref** (push run 43004280872 on b3403e3: 2,914 / 5,237 / 778 / 24): unit +0, full Vitest +40, E2E passed +0, skipped +0. That is exactly DL-150 (3).
+  - **Overlap:** `git diff --name-only ffc280b b3403e3` gives 12 paths. None is among #235's 52 files. `origin/master` is still b3403e3.
+  - **Defects:** JQL `project = AQP AND issuetype = Bug AND statusCategory != Done AND priority in (Highest, High)` returns none.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every acceptance item verified with evidence (no AC; the bar is DL-150 (7) (a) to (c)) | ✱ | ✅ | (a) Condition A is in the 8 files, and the standards re-read has no Blocker, Critical or Major. (b) CI 43011060504 is 5 of 5 with the ruled deltas, and the matched lines are read. (c) The plants stand, because `use-read-again.ts` logic is identical and no test changed |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | JQL: none |
+| 3 | Regression recorded and green | ✱ | ✅ | 43011060504 as above |
+| 4 | Exploratory notes | | n/a | No user-visible change by design (DL-150, "Why no QA G7") |
+| 5 | Accessibility checks | | ✅ | The axe checks inside the E2E suite are green at three widths. No markup change in the push |
+| 6 | CI path | | ✅ | 5:33 is an item 9 reading, not a hold (DL-142 (1)). No median of five is ordered: +0 E2E on the `master` already measured at 5:34 (DL-151), and its consequences are already in force |
+| 7 | PR body (Dev Record of record, §7.1) | | ⚠️ | The Follow-ups bullet on the Users copies contradicts DL-150 (5) → condition 1 |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| 1 | developer | PR #235 body, "Follow-ups and issues for other roles" | The bullet "A Users-screen copy of `opener.ts` and the Users load-error remain; they belong with PR #222 or a later tech-debt item" says instead that they moved to #245 (item 5). Body text only, no commit. The orchestrator checks it as merge step (a) | Before the squash |
+
+The DL-150 conditions C (#244), D (#245), E and F (committed at b84b9b4 and 0c628dc), G (Q3 now ruled, DL-153) and H are unchanged. STD-02's cosmetic double parentheses (`materials.ts:10-11`) are accepted. They are fixed at the next change to that file, with no issue opened.
+
+**Merge (orchestrator, `CLAUDE.md` §8), DL-152 (6), final:**
+- (a) The records docs PR from `docs/AQP-1-records-sprint1-d` (DL-150 to DL-153; not yet opened) merges first, and condition 1 is done.
+- (b) #235 is updated from `master` by a merge commit only. GitHub "Update branch" is fine.
+  - None of its 52 files changes against 07b47b7.
+  - If `master` is still b3403e3, the new head's tree should be **7eda7ef**, which CI already ran.
+  - If another PR merges first, the orchestrator re-checks the overlap, and a conflict in a #235 file comes back to master.
+- (c) **Invariant:** each count on the updated head = the push run of the `master` it takes, plus unit +0, full Vitest +40, E2E passed +0 and skipped +0.
+  - On b3403e3 (43004280872) that is **2,914 / 5,277 / 778 passed / 24 skipped**.
+  - On any other `master`, it is recomputed and the arithmetic is posted.
+- (d) 5 of 5, with `Stages 1 to 11` read from the jobs API and no failed, flaky or retried test (matched lines read). A red comes back to master and is not re-run.
+- (e) The head, run, commits taken, counts with the arithmetic, and path are posted on PR #235 and AQP-142 before the squash. A path of 5:30 or more is reported, not held.
+- (f) Squash, after the delivery lead's click on the merge prompt. #119 closes through "Closes #119". If it does not, the orchestrator closes it as completed with the merge commit.
+- (g) The `master` push run after the squash is posted. A red comes back to master.
+- **Order:** #235 before #218's PR; #222 in either order (no shared files).
+
+**Risks:** none new. RISK-023 stays at 8 (DL-151). This run's 5:33 is consistent with the 5:34 median on the same `master`, and #235 adds no E2E test.
+**Rationale:**
+- DL-150 (7) set the route and its three tests in advance, and each one is met on evidence I read myself.
+- A QA run would execute the same suite on the same tree, with no AC to verify.
+- I chose CONDITIONAL GO over GO for one reason, as at DL-149: the PR body is the system of record, and one bullet points the Users copies away from #245.
+**Posted:** PR #235 comment 6794781032; GitHub #119 comment 6794781647; Jira AQP-142 comment 11494 (with the DL-153 Q3 ruling); GitHub #245 comment 6794788810 (DL-153).
