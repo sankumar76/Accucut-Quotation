@@ -47,3 +47,32 @@
 ## For master (G6)
 
 Zero Blocker and Critical. The Major is a measurement, not a code defect: the orchestrator runs the median of five on the final head. Decide the fix scope (QLT-01 to QLT-04, STD Minors), the re-review route, the routing of #201, #202, AC-6 and the §6 code line, and whether the median of five is read before or after a fix push.
+
+## Round 2 (new diff `67febe3..1f978b2`, 2026-11-10/11; orchestrator)
+
+Narrow re-review per DL-142 (2): reviewer-quality and reviewer-standards on the new diff only; reviewer-performance's reading is DL-142 (1), the median of five below.
+
+| ID | Severity | Finding / status | Raised by |
+|----|----------|------------------|-----------|
+| QLT-01 to QLT-05 | (was Minor) | Fixed. Locks-removed control #212 red 2 of 2 on `treatments-serialisation.test.ts`; `FOR UPDATE` only removed (#213) and `LOCK TABLE` only removed (#214) green, so the test bites exactly when serialisation is lost (QLT-12) | quality |
+| STD-01, 02, 05 to 09, 13 | (was Minor) | Fixed. STD-03, STD-04 stay on #119 (DL-142 (3)) | standards |
+| QLT-11 | Minor (deferrable) | STD-14 ruling: the audit writer should check the state against the entry's own `object_type`; suggested for the #119 refactor PR or a small PR | quality |
+| STD-15 | Minor | Test names cite review IDs, not ACs | standards |
+| QLT-12, QLT-13 | Info | QLT-13: `tests/support/spec-access.ts` and `route-calls.ts` should join the G12 scope (architect) | quality |
+| STD-16 to STD-18 | Info | `?.id ?? ''` in tests; import-order slips; `useTreatmentActions` calls no hook and two local type names repeat `TreatmentList` | standards |
+
+**Blocker / Critical / Major open: 0.** Both verdicts APPROVE WITH COMMENTS (reviews 5848801283, 5848733217).
+
+### Median of five on the fix head (DL-142 (1); test strategy v0.32 §10.5 item 9)
+
+Run 42891948697 on 1f978b2, attempt 1 plus four full re-runs (attempts 2 to 5). Path = first job start to `Stages 1 to 11` end. Every attempt: 5 of 5 jobs green, 18 cache-hit lines and 0 misses, no `flaky` or `failed` line, passed 243 / 241 / 294 (shards 1 / 2 / 3), skipped 69 / 70 / 17. CPU model is written to each job summary only (not the log API).
+
+| Attempt | Path | Slowest shard (duration) | Fan-in runner |
+|---|---|---|---|
+| 1 | 5:26 (326 s) | shard 1, 5:13 | GitHub Actions 1000002103 |
+| 2 | 5:08 (308 s) | shard 2, 4:58 | GitHub Actions 1000002132 |
+| 3 | 5:37 (337 s) | shard 3, 5:28 | GitHub Actions 1000002137 |
+| 4 | 5:12 (312 s) | shard 3, 5:02 | GitHub Actions 1000002142 |
+| 5 | 5:24 (324 s) | shard 3, 5:15 | GitHub Actions 1000002155 |
+
+**Median 5:24 (324 s), slowest 5:37.** Below the 5:30 line, with 6 s to spare.

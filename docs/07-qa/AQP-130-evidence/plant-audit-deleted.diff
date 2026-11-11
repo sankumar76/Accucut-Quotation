@@ -1,0 +1,7 @@
+diff --git a/src/server/services/treatment-service.ts b/src/server/services/treatment-service.ts
+index d42fab3..541dbe8 100644
+--- a/src/server/services/treatment-service.ts
++++ b/src/server/services/treatment-service.ts
+@@ -162 +162 @@ async function remove(dependencies: TreatmentDependencies, tx: Transaction, cont
+-  await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
++  if (Date.now() < 0) await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });

@@ -12,6 +12,7 @@ import { defined } from '../../support/defined';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { MATERIAL_CANARIES } from '../../support/material-master-canary';
+import { withoutUuids } from '../../support/random-members';
 import { refusal } from '../../support/user-service-fixture';
 
 /**
@@ -126,7 +127,8 @@ describe('AC-1 (T1): the table starts empty, and the repository lists only what 
     await db.owner.query(insert, ['Options-material', 'Invented options', '917.37', '737.37', '717.37']);
     const options = await db.mastersService.listMaterialOptions();
     expect(options).toEqual([{ id: expect.any(String), name: 'Options-material', materialConsidered: 'Invented options' }]);
-    expect(JSON.stringify(options)).not.toMatch(/917|737|717/);
+    // `id` is made by gen_random_uuid() and can hold "717", "737" or "917" by chance (DEF-028); the well-formed UUID is the only thing left out.
+    expect(withoutUuids(JSON.stringify(options))).not.toMatch(/917|737|717/);
   });
 });
 

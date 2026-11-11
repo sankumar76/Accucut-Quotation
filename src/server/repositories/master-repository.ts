@@ -4,6 +4,7 @@ import { uniqueViolationOf, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
 import { createExchangeRateMethods, type ExchangeRateMethods } from './exchange-rate-repository';
 import type { PrismaClient } from './prisma-client';
+import { createTreatmentMethods, type TreatmentMethods } from './treatment-repository';
 import { clientFor, type Transaction } from './transaction';
 
 /**
@@ -90,7 +91,7 @@ export class MasterConstraintError extends Error {
   }
 }
 
-export interface MasterRepository extends ExchangeRateMethods {
+export interface MasterRepository extends ExchangeRateMethods, TreatmentMethods {
   /** Every rate, in the order of SPEC section 4.1 (the seed items) and then in the order they were added. */
   listProcessItems(): Promise<ReadonlyArray<ProcessItemRecord>>;
   /**
@@ -136,6 +137,8 @@ function isRecordNotFound(error: unknown): boolean {
 
 export { trimDecimalText };
 export type { ExchangeRateMethods, ExchangeRateStamp, ExchangeRatesRecord, NewExchangeRateStamp } from './exchange-rate-repository';
+export { TreatmentNameTakenError } from './treatment-repository';
+export type { TreatmentMethods, TreatmentOptionRecord, TreatmentRecord } from './treatment-repository';
 
 function toRecord(row: { readonly id: string; readonly name: string; readonly unit: string; readonly defaultValue: { toFixed(places: number): string } }): ProcessItemRecord {
   return { id: row.id, name: row.name, unit: row.unit, defaultValue: trimDecimalText(row.defaultValue.toFixed(STORED_DECIMALS)) };
@@ -288,6 +291,7 @@ export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     ...createMaterialMethods(db),
     ...createExchangeRateMethods(db),
+    ...createTreatmentMethods(db),
 
     listProcessItems() {
       return withDatabaseErrors(async () => {

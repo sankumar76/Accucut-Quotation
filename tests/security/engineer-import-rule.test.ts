@@ -56,6 +56,7 @@ const REPOSITORIES = {
     'master-repository',
     'prisma-client',
     'throttle-repository',
+    'treatment-repository',
   ],
 } as const;
 
@@ -72,6 +73,7 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'rate-name-rules',
+    'treatment-service',
   ],
 } as const;
 

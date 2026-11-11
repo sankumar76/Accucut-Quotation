@@ -41,7 +41,8 @@ describe('master.created / master.edited / master.deleted (AC-5)', () => {
 
   it('gives no words for stored values that do not fit (an older shape, a damaged row), and the screen shows a dash', () => {
     expect(wordsOf('master.created', FOAM, FOAM)).toBeNull();
-    expect(wordsOf('master.edited', { name: 'Foam Cost' }, FOAM)).toBeNull();
+    // A name and a unit with no default value: an older shape. (A name alone is the Treatment / Color state since STORY-02.05, so it is not used here.)
+    expect(wordsOf('master.edited', { name: 'Foam Cost', unit: 'per sq ft' }, FOAM)).toBeNull();
     expect(wordsOf('master.edited', FOAM, { ...FOAM, defaultValue: 'many' })).toBeNull();
     expect(wordsOf('master.deleted', FOAM, FOAM)).toBeNull();
     expect(NO_DETAIL).toEqual({ before: '—', after: '—' });

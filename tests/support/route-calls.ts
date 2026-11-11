@@ -2,6 +2,7 @@ import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest'
 
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
+import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
 /**
  * What a **valid, allowed** call to each implemented API route looks like, so the role matrix can show that the role the
@@ -61,6 +62,25 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. Empty until one is implemented. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {};
 
+/**
+ * STORY-02.05: the Treatment routes. The ID is a canary treatment (`treatment-canary.ts`), which the in-memory repository of the security tests holds; the bodies
+ * are invented. `GET /api/v1/treatments` and `GET /api/v1/options/treatments` have no ID or body: the default call is their valid call. Kept apart so
+ * `validCallFor` does not grow with each master.
+ */
+function treatmentCall(method: HttpMethod, path: string): ValidCall | undefined {
+  switch (`${method} ${path}`) {
+    case 'POST /api/v1/treatments':
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-treatment-Z' }, status: 201 };
+    case 'PATCH /api/v1/treatments/[id]':
+      return { id: TREATMENT_RECIPE_ID, body: { name: 'Invented-renamed-treatment' }, status: 200 };
+    case 'DELETE /api/v1/treatments/[id]':
+      return { id: TREATMENT_RECIPE_ID, status: 204 };
+    default:
+      return undefined;
+  }
+}
+
+// Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
     case 'GET /api/v1/users':
@@ -102,7 +122,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return DEFAULT_CALL;
+      return treatmentCall(method, path) ?? DEFAULT_CALL;
   }
 }
 

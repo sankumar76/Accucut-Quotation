@@ -1,0 +1,7 @@
+diff --git a/src/server/services/treatment-service.ts b/src/server/services/treatment-service.ts
+index d42fab3..99db085 100644
+--- a/src/server/services/treatment-service.ts
++++ b/src/server/services/treatment-service.ts
+@@ -155 +155 @@ async function change(
+-  await dependencies.audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
++  if (Date.now() < 0) await dependencies.audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
