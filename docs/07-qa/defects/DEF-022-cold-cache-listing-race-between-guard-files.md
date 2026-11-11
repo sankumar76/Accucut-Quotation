@@ -39,3 +39,4 @@ Runs 7, 8 and 9 of 10 fail with 1 failed, 82 passed: `e2e-shards.test.ts > the u
 | Fixed | developer | 2026-11-11 | PR #220: `ddf6191` (own cache folder per listing), `5ebe3b2` (G6 condition A: QLT-01 to QLT-05) |
 | Regression test added | developer | 2026-11-11 | `tests/unit/playwright-list.test.ts` (6 tests; 4 fail under the #221 plant) |
 | Verified | qa-engineer | 2026-11-11 | `docs/07-qa/AQP-236-test-report.md` (PR #220, `bdd9a7d`): pair 10 of 10, nine files 10 of 10, baseline on `master`'s helper 9 of 10 failed, plant 4 failed / 2 passed alone and beside the listing files. G7 CONDITIONAL GO, DL-149 |
+| Merged | orchestrator | 2026-11-11 | PR #220 squash-merged as `b3403e3` (update head `58b95cc`, run 42997227851, 5 of 5). `master` push run 43004280872 green: Vitest 2,914 / 5,237, E2E 778 / 24. #129 closed |
