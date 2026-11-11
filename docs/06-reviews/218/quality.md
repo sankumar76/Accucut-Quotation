@@ -95,3 +95,48 @@ n/a (first round).
 ## Issues for other roles
 - **solution-architect:** add one sentence to architecture §8 on refusing an unnamed or unknown master type (QLT-03).
 - **developer / AQP-142:** when adding `customer`, update `MASTER_SHAPES`, `masterState` and `MASTER_WORDS` together. With QLT-01 fixed, the test enforces this.
+
+---
+
+## Round 2
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (re-review of the push only, condition A of master's CONDITIONAL GO, DL-154) |
+| Diff reviewed | d833f47..9e98dca (`src/server/services/audit-events.ts` +20/-10, `tests/unit/masters-audit-events.test.ts` +27/-1) |
+| Commit reviewed | 9e98dca22e992d43ac60bce72c79c76bc359c848 |
+| Date | 2026-11-11 |
+| **Verdict** | **APPROVE** (label `review:quality-approved` kept) |
+
+PR review: https://github.com/sankumar76/Accucut-Quotation/pull/247#pullrequestreview-5859759729
+
+**Counts (new diff):** Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 1 (QLT-05)
+
+### Previous findings
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-01 | Minor | **Fixed** | The test also asserts `.not.toEqual(NO_DETAIL)`. `MASTER_WORDS` is `as const satisfies { readonly [K in keyof typeof MASTER_SHAPES]: … }`, so a missing key and an extra key are both compile errors, with no type assertion. P1 and P2 are red on both the unit test and tsc (below). Thread reply: https://github.com/sankumar76/Accucut-Quotation/pull/247#discussion_r4538673295 |
+| QLT-02 | Minor | **Fixed** | `schemasFor` returns `null` when `objectType` is `GENERIC_MASTER_TYPE` and `forMasterShape` is missing. A new `[QLT-02]` test loops over every registered `master` event. P3 and P3b are red (below). Thread reply: https://github.com/sankumar76/Accucut-Quotation/pull/247#discussion_r4538674447 |
+| QLT-03 | Info | Unchanged | Ruling stands |
+| QLT-04 | Info | Unchanged; now guarded | AQP-142 `customer` drift in any of the three places is now caught (P2) |
+
+### Checks run (all local on 9e98dca; each plant's diff printed before it ran, DL-091; all reverted, nothing committed or pushed)
+| Check | Result |
+|-------|--------|
+| CI 43028036603 on 9e98dca | 5 of 5 green |
+| Baseline: `vitest run tests/unit/masters-audit-events.test.ts` | 24 of 24 passed |
+| No #218 `expect` removed or loosened | Met. The only removed test line is the import, which was replaced. `expect(` count 38 to 46; existing matchers unchanged |
+| **P1**: `treatment` line removed from `MASTER_WORDS` | Unit **red**, 1 of 24 (`treatment: expected { before: '—', after: '—' } to not deeply equal …`). tsc **TS1360** at `audit-events.ts:199` |
+| **P2**: `customer` added to `MASTER_SHAPES`, `masterState` and `STATES`, not to `MASTER_WORDS` | Unit **red**, 1 of 24 (`customer: …`). tsc **TS1360** at `audit-events.ts:201` |
+| **P3**: refusal removed (fallback to the union) and `'master.planted'` registered (`objectType: GENERIC_MASTER_TYPE`, union schemas, no `forMasterShape`) | `[QLT-02]` test **red** (`master.planted: unknown master: expected { before: ZodUnion… } to be null`) |
+| **P3b** (extra): refusal kept, only `'master.planted'` registered | `[QLT-02]` test **red** (`master.planted process_item: expected null not to be null`) |
+
+tsc note: this worktree has no generated Prisma client (`src/generated/prisma`), and some `next-auth` paths do not resolve, so `tsc --noEmit` already reports unrelated module and implicit-`any` errors without any plant. A plant's tsc result counts only errors in `audit-events.ts` and `masters-audit-events.test.ts`; there are none without a plant. CI's type-check stage is green on 9e98dca.
+
+### New findings
+| ID | Severity | File:line | Issue | Suggested fix |
+|----|----------|-----------|-------|---------------|
+| QLT-05 | Info | `src/server/services/audit-events.ts:38`, `src/server/services/audit-service.ts:108` | `GENERIC_MASTER_TYPE = 'master'` is declared privately in both files: the two "generic master" signals from QLT-02 now share a literal, but not one declaration | Optional: export it from `audit-events.ts` and import it in `audit-service.ts`; or fold it into the QLT-03 follow-up (make `objectType` required for `master.*`) |
+
+### Notes
+The design is sound. `satisfies` with a mapped type ties the key sets in both directions while keeping the literal types. The `Map` view (`MASTER_WORDS_BY_TYPE`) replaces `Object.hasOwn` and matches `MASTER_SHAPES_BY_TYPE`, so `toString` and `constructor` stay denied. The `[QLT-02]` test covers every registered master event, including future ones, not only the three that exist today.
