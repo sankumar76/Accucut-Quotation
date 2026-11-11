@@ -1,0 +1,13 @@
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > gives listings that run at the same time different, new and empty folders under the temp folder 19ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > removes the folder when the listing has finished (it existed while the listing ran) 2ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > removes the folder when the listing fails, and still reports why it failed (it existed while the listing ran) 6ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > keeps the rest of the environment, and takes the cache folder from the listing and not from the caller 3ms
+ ✓ tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): withPrivateListCache > returns what the work returns, with a folder that exists while it runs and not after 4ms
+ ✓ tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): withPrivateListCache > passes on the error the work threw, and removes the folder 2ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 1 to be 3 // Object.is equality
+AssertionError: expected false to be true // Object.is equality
+AssertionError: expected false to be true // Object.is equality
+AssertionError: expected 'accucut-playwright-list-shared-control' to match /^accucut-playwright-list-[A-Za-z0-9]{…/
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
