@@ -5069,3 +5069,76 @@ Both are cheap and are fixed with the Minors in one push, re-reviewed by the fin
 - The Minors are bundled into the round that is already required (DL-130, DL-144).
 - #195 goes first because its judged head must merge unchanged, while #222 needs a new head anyway.
 **Posted:** Jira AQP-245 comment 11462; PR #222 comment 6790381689.
+
+## G7 – QA Acceptance — AQP-130 (STORY-02.05 Treatment / Color list, PR #195) — 2026-11-11 (attempt 1)
+
+- **Decision:** **GO.** The code is 6dd89b7 (G6 head 1f978b2 plus two test-only commits read by master), and the QA records are at 1528f7a. AQP-130 moves to Done (qa-engineer). PR #195 merges under `CLAUDE.md` §8 on the DL-148 (4) steps, which replace the count targets of DL-144 (6)(e), DL-145 (4)(e) and DL-146 (4)(h).
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-130-test-report.md` (1528f7a): ACCEPT, AC-1 to AC-8 pass, 0 defects. Evidence `docs/07-qa/AQP-130-evidence/` (12 text files, 74,519 bytes, measured with `git ls-tree -r -l`). Acceptance file `tests/acceptance/aqp-130-treatments.test.ts` (106 tests, run in CI stage 11). `docs/07-qa/test-plan.md` 0.2.4 (the evidence path wording, as DL-135 (1) asked).
+  - **Commits after G6, read in full (DL-047, DL-144 (3); test strategy v0.33 §10.5 item 10, architect comment 11446):**
+    - eb61fa0: the four named test files only. Describe and test titles cite AC and NFR IDs, the finding IDs move to header comments, and `defined()` replaces `?.id ?? ''` (STD-16). No `it` is added or removed.
+    - 6dd89b7: the three ruled files only. I extracted the 22 removed lines of the "(e)" test from `treatments-focus.spec.ts` and the 22 added lines in `masters-table-actions.spec.ts`, and they are identical. `actionsOf` moved verbatim into `support/treatments.ts`. The one extra change, the unused `Locator` import, is needed for lint and is recorded as a deviation in the round-3 Dev Record, which also names the move.
+    - CI 42951532964 on eb61fa0 was red only at `own-width-files.test.ts:80` (AQP-244's guard, once the merge ref took 1d37902). 6dd89b7 is the ruled fix, and the guard is green from there on.
+  - **My own checks** (CI logs and the jobs API, git, Gitleaks):
+    - **CI 42983928247** on 1528f7a, merge ref 3f0c129 (1528f7a into 225a1c9): 5 of 5 `success`, with `Stages 1 to 11` read from the jobs API; path **4:51** (08:02:48Z to 08:07:39Z). Vitest **2,908** and **5,231**; E2E **265 / 263 / 250 = 778** passed, 3 / 4 / 17 skipped. I read all 34 `flaky` / `failed` / retry matches: passing test titles that contain "failed", the two known branch names, the expected Postgres auth line and the `failed=` fan-in script. No `✘` and no retry line.
+    - **Counts against each run's own `master`:**
+
+      | Head (`master` in the merge ref) | Vitest stage 6 | Vitest stage 11 | E2E passed | E2E skipped |
+      |---|---|---|---|---|
+      | 1f978b2 (41848eb, push run 42874256994: 2,785 / 4,903 / 674 / 131) | +109 | +208 | +104 | +25 |
+      | eb61fa0 (1d37902, push run 42945910485: 2,793 / 4,911 / 674 / 23) | (stage 6 red on the guard) | n/a | +104 | +3 |
+      | 6dd89b7 (225a1c9, push run 42975598629: 2,799 / 4,917 / 674 / 23) | +109 | +208 | +104 | +1 |
+      | 1528f7a (225a1c9) | +109 | **+314** (208 + 106) | +104 | +1 |
+
+      The passed counts do not change across the two commits. The move removed exactly the two non-desktop skip entries, as the architect said. The earlier +25 fell with AQP-244's own-width listing. QA's file adds exactly 106 to stage 11.
+    - **Scope:** 1f978b2..1528f7a has 21 files. After 6dd89b7, everything is under `docs/07-qa/` except the acceptance test. Nothing under `src/`, `tests/e2e`, `prisma/`, `.github/` or the package files changed after G6. The PR holds 69 files in all (GitHub and `git diff --name-only origin/master...1528f7a` agree), 29 of them under `src/` or `prisma/`.
+    - **Gitleaks v8.30.1** on `git diff 1f978b2 1528f7a`: no leaks. A grep of the evidence for local paths and personal data finds none (the repository name, and a note that a master-data file was *not* opened, are the only matches).
+    - **Controls:** I printed each plant diff (one line each, against 195eecf) and read each failed list from CI:
+      - #228: `if (mine !== newest.current) return;` removed. Exactly `treatments-focus.spec.ts:213` "the latest read wins (AC-1, AC-8)" fails at mobile, tablet and desktop, 1 failed per shard (264 / 262 / 249 passed).
+      - #229, #230 and #231 each skip one audit write behind `if (Date.now() < 0)`. They fail 2, 3 and 3 unit tests (stage 6 stops before stage 11), each only about its own event.
+      - QA's committed local outputs show its acceptance file failing 3, 3 and 2 tests under the same plants (9, 8 and 7 of 173 with the developer's files). The clean control is 173 of 173.
+    - **Not re-run by master:** QA's local acceptance runs and the browser probe (#232, run 42982426395, 33 of 33). I read the probe only through QA's committed output.
+  - **Jira:** QA hand-off 11464, orchestrator brief 11467, architect ruling 11446, developer hand-offs 11440 and 11454. PR #195 body: Dev Record round 3. PR #195 QA comment 6790641898.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC verified with evidence | ✱ | ✅ | QA report matrix AC-1 to AC-8. AC-6 is verified on the amended text (one entry per add, rename and delete; none for a refusal, a same-canonical rename, a read, a refused caller or a late failure). DL-144 (5) checklist 11 of 11 |
+| 2 | No open Sev-1 or Sev-2 defect | ✱ | ✅ | none against AQP-130. DEF-028 closed with #216 (225a1c9) |
+| 3 | Regression recorded and green | ✱ | ✅ | CI 42983928247, 5 of 5, path 4:51, counts above |
+| 4 | Exploratory testing notes | | ✅ | a 90-minute charter, with areas and findings in the report |
+| 5 | Accessibility checks for the UI | | ✅ | axe (wcag2a to wcag22aa) 0 at 3 widths in every state; 44 px; keyboard add, rename and delete; the alertdialog focus cycle |
+| 6 | Post-G6 commits within the named files, test-only, counts unchanged | | ✅ | eb61fa0 (4 files), 6dd89b7 (3 files, move identical); table above |
+| 7 | One planted fault per promised case (DL-107) | | ✅ | the latest-read guard, plus each of the three audit events |
+| 8 | NFR-009 first-load JS | | ✅ | `/masters/materials` 187,566 B of 200,000 B (+451 B against AQP-123, under the +1,500 B tripwire) |
+| 9 | Evidence fit to commit | | ✅ | text only, no secret, local path or personal data |
+
+**Observations routed**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| OBS-1 | scrum-master | STORY-02.06 Dev Context (backlog row 31; no Jira story yet) | `listTreatmentOptions` returns the hidden "Not applicable" entry, as architecture v0.35 §6 (Safe options) states. AQP-130's options tests (QA's AC-1 and AC-5 cases, the developer's AC-5 test and the route comment) change in the same PR to expect it | before 02.06 is Ready |
+| OBS-1 | solution-architect | `architecture.md` §6 | one sentence: the hidden entry joins the options route in STORY-02.06 | next architecture change |
+| OBS-2 | developer (scrum-master names it in the Dev Context) | GitHub #202 (database guard on "Other") | the trigger of architecture v0.35 §5.1 | STORY-02.06's G6. If 02.06 is not in the release G8 judges, #202 is listed as open at that G8 |
+| OBS-3 | developer | #218 (QLT-11) | unchanged (DL-144 (3)) | before AQP-142's G6, at the latest G8 |
+
+**Merge (orchestrator, §8), DL-148 (4):**
+- (a) The records docs PR holding DL-148 merges first. #216 has merged (225a1c9), so DL-144 (6)(c) is met. #222 must not merge before #195 (DL-147 (4)). #220 may merge before or after.
+- (b) #195 is updated from `master` by a merge commit only (no rebase, no force-push). None of the PR's 69 files changes against 1528f7a. A conflict comes back to master.
+- (c) **Invariant:** each count on the updated head = run 42983928247 − push run 42975598629 (225a1c9) + the `master` push run taken. That is Vitest +109 and +314, E2E passed +104 and skipped +1 over the push run taken.
+  - With only docs PRs merged since 225a1c9: **Vitest 2,908 and 5,231; E2E 778 passed, 24 skipped.**
+  - With #220 merged first (DL-146 predicts 2,805 and 4,923 Vitest and 674 E2E at its push run): **Vitest 2,914 and 5,237; E2E 778 passed**; skipped is that push run's + 1. If the push run differs from the prediction, the target is recomputed from it and the arithmetic is posted.
+  - Per-shard splits are reported only. Any other code PR in between comes back to master.
+- (d) 5 of 5, with `Stages 1 to 11` read from the jobs API and no failed or retried test (read the matched lines). DEF-028 is closed, so any red is a finding. A red comes back to master and is not re-run.
+- (e) Head, run, commits taken, counts with the arithmetic, and path are posted on #195 and AQP-130 before the squash. A path of 5:30 or more is an item 9 reading, not a hold (DL-142 (1)).
+- (f) Squash, with the QA evidence and the acceptance test (DL-135 (1)).
+- (g) Then DL-144 (4) applies (the first `master` push run's path on AQP-1; a first attempt of 5:30 or more starts a median of five; a red comes back to master). Then #222 per DL-147 (4)(b).
+
+**Branches:** `control/AQP-130-g7-*` (five: no-latest-read-guard, no-audit-created, no-audit-edited, no-audit-deleted, qa-probe; PRs #228 to #232, closed unmerged). The delivery lead deletes them with "Delete branch" on each PR, which GitHub can restore, as at DL-146 (5). The plant diffs, the outputs and the probe source are committed in the evidence, so the branches hold neither G7 nor the merge.
+
+**Risks:** none new. RISK-023 is unchanged at 4: the G7 run reads 4:51, and the G6 median of five was 5:24 (DL-144 (2)). RISK-015's residual (no real phone or screen reader) stands for G8.
+**Rationale:**
+- Every mandatory item holds on the code that passed G6, plus two test-only commits that I read line by line.
+- Each promised audit case has its own plant that fails only its own tests, and the latest-read guard bites at three widths.
+- The new targets are needed because QA's file adds 106 to stage 11, and the G7 run's merge ref already holds 225a1c9. The base to subtract is therefore 225a1c9's push run (DL-147: a PR run counts the current `master`).
+**Posted:** Jira AQP-130 comment 11469; PR #195 comment 6790872246; GitHub #202 comment 6790874154 (owner and due point).
