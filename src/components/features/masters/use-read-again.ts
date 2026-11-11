@@ -38,7 +38,7 @@ export function useFocusAfterRead({ status, result, opener, whenFailed = false }
     if (status === 'loading' || !wantsFocus.current) return;
     wantsFocus.current = false;
     if (status === 'ready') focusOpener(opener.current);
-    else if (whenFailed) focusOpener(opener.current, true);
+    else focusOpener(opener.current);
   }, [status, result, opener, whenFailed]);
 
   return useCallback((returnFocus: boolean): void => {
