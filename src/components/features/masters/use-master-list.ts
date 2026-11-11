@@ -9,7 +9,7 @@ import type { Outcome } from '@/lib/api-client';
 import type { ReadStatus } from './use-read-again';
 
 /**
- * The list of a masters screen and everything the screen holds about it (DL-150 (5), DL-153; tech-debt #245): the rows, the search text, the
+ * The list of a masters screen and everything the screen holds about it (DL-150 (5), DL-153; GitHub issue 245): the rows, the search text, the
  * status of the last read, the skeleton that waits 300 ms, and reading the list from the server. The Process Master (SCR-11), the Materials tab
  * and the Treatment / Color tab of SCR-13 each wrote this by hand; a screen that lists one master and reads it from its client module composes
  * this hook and does not write a fourth copy.
