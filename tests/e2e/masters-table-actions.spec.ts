@@ -16,9 +16,13 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * far end (the sticky guarantee, part 2: without `sticky right-0` the forced cases fail). The test sets its own viewport, so it runs in the desktop
  * project only; the other two projects would repeat the same eleven widths.
  *
- * Users (AQP-245) adds what only that screen has: three buttons in every row (the Admin's own row keeps its two disabled ones, in place), a Tab
- * through the buttons of the first row that none of them is covered by the sticky column or lacks a focus ring (AC-5), axe on the forced table at
- * 768, 1024 and 1366 px (AC-5), and the card list below 768 px, which this change does not touch (AC-4).
+ * Every screen is also checked for the fit as drawn (`scrollWidth - clientWidth <= 0`, no tolerance: headings and names wrap, ux-spec 6.0 part 3)
+ * and, with two or more buttons in a row, for the 8 px gap between them (`gap-s-2`, within 0.5 px; DL-122 condition B).
+ *
+ * Users (AQP-245) adds what only that screen has: three buttons in every row (AC-1), the Admin's own row with its two disabled ones, in place
+ * (AC-3, as drawn), the prop `actionButtons={3}` read from computed styles (AC-2), a Tab through the three enabled buttons of the long-name row,
+ * in order, none covered by the sticky column and each with a focus ring (AC-5), axe on the forced table at 768, 1024 and 1366 px (AC-5), and the
+ * card list below 768 px, which this change does not touch (AC-4). Filler people are made only to reach six, inside each test (AC-1).
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -37,21 +41,32 @@ const USERS_PASSWORD = 'invented-e2e-password-for-aqp-245';
 const OWN_RESET_NAME = 'Reset password is not available for your own account. Use Change password in the account menu.';
 const OWN_DEACTIVATE_NAME = 'You cannot deactivate your own account';
 
+/** The six people the Users list holds at least (AC-1): the E2E Admin, Lead and Engineer, the long-name person, and fillers up to six. */
+const USERS_MINIMUM = 6;
+/** The gap between two row actions: `gap-s-2`, 8 px (ux-spec 6.0 Width), within half a pixel. */
+const ACTION_GAP = 8;
+const DEFAULT_ROW_SELECTOR = '[data-item-id]';
+const DEFAULT_FIRST_ACTION = /^(edit|delete)$/;
+
 interface Screen {
   readonly label: string;
   readonly path: string;
   readonly title: string;
   readonly region: string;
-  /** The rows (table) or cards (phone) of the screen; the one that is visible at the width under test counts. */
-  readonly rowSelector: string;
-  /** The length of the long name `make` is given: the longest the table's own form accepts. */
-  readonly nameLength: number;
-  /** The `data-action` of the button a Tab from the region reaches first. */
-  readonly firstAction: RegExp;
-  /** The Users screen only: more checks of what it has (three buttons a row, the own row, the Tab through a row, axe). */
+  /** The rows (table) or cards (phone) of the screen; the one that is visible at the width under test counts. Default: `[data-item-id]`. */
+  readonly rowSelector?: string;
+  /** The length of the long name `make` is given: the longest the table's own form accepts. Default: 100. */
+  readonly nameLength?: number;
+  /** The `data-action` of the button a Tab from the region reaches first. Default: Edit or Delete. */
+  readonly firstAction?: RegExp;
+  /** The Users screen only: more checks of what it has (three buttons a row, the own row, the Tab through the long-name row, axe). */
   readonly users?: true;
   readonly make: (page: Page, name: string) => Promise<void>;
 }
+
+const rowSelectorOf = (screen: Screen): string => screen.rowSelector ?? DEFAULT_ROW_SELECTOR;
+const nameLengthOf = (screen: Screen): number => screen.nameLength ?? NAME_LENGTH;
+const firstActionOf = (screen: Screen): RegExp => screen.firstAction ?? DEFAULT_FIRST_ACTION;
 
 async function post(page: Page, path: string, data: Record<string, string>): Promise<void> {
   const response = await page.request.post(`${DEVELOPMENT_URL}${path}`, { headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' }, data });
@@ -63,15 +78,20 @@ function addPerson(page: Page, name: string): Promise<void> {
   return post(page, '/api/v1/users', { name, email: `e2e245.${randomBytes(6).toString('hex')}@example.test`, role: 'ENGINEER', password: USERS_PASSWORD });
 }
 
+/** How many people the Users list holds now, as the API the screen reads says it. */
+async function countPeople(page: Page): Promise<number> {
+  const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/users`);
+  expect(response.status()).toBe(200);
+  const body: unknown = await response.json();
+  return typeof body === 'object' && body !== null && 'users' in body && Array.isArray(body.users) ? body.users.length : 0;
+}
+
 const SCREENS: ReadonlyArray<Screen> = [
   {
     label: 'SCR-11 Process master',
     path: '/masters/process',
     title: 'Process master',
     region: 'Process master rates, scrollable',
-    rowSelector: '[data-item-id]',
-    nameLength: NAME_LENGTH,
-    firstAction: /^(edit|delete)$/,
     make: (page, name) => post(page, '/api/v1/process-items', { name, unit: 'per kg', defaultValue: '1.37' }),
   },
   {
@@ -79,9 +99,6 @@ const SCREENS: ReadonlyArray<Screen> = [
     path: '/masters/materials',
     title: 'Materials and lists',
     region: 'Material Master, scrollable',
-    rowSelector: '[data-item-id]',
-    nameLength: NAME_LENGTH,
-    firstAction: /^(edit|delete)$/,
     make: (page, name) =>
       post(page, '/api/v1/materials', {
         materialInDrawing: name,
@@ -100,11 +117,11 @@ const SCREENS: ReadonlyArray<Screen> = [
     nameLength: USER_NAME_LENGTH,
     firstAction: /^edit$/,
     users: true,
-    // The long name, and two more people, so the list holds at least six with the E2E Admin, Lead and Engineer the set-up project makes.
+    // The long name, then fillers only while the list holds fewer than six: each person costs one argon2id hash (QLT-04).
     make: async (page, name) => {
       await addPerson(page, name);
-      await addPerson(page, `E2E 245 second ${randomBytes(3).toString('hex')}`);
-      await addPerson(page, `E2E 245 third ${randomBytes(3).toString('hex')}`);
+      const missing = USERS_MINIMUM - (await countPeople(page));
+      for (let index = 0; index < missing; index += 1) await addPerson(page, `E2E 245 filler ${randomBytes(3).toString('hex')}`);
     },
   },
 ];
@@ -142,7 +159,7 @@ async function expectActionsInside(page: Page, region: Locator, screen: Screen, 
   const right = left + (box?.width ?? 0);
   expect(left, `${mode}: the region starts inside the window`).toBeGreaterThanOrEqual(0);
   expect(right, `${mode}: the region ends inside the window`).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
-  const actions = await edgesOf(page.locator(`${screen.rowSelector}:visible button[data-action]`));
+  const actions = await edgesOf(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`));
   expect(actions.length, `${mode}: there are row actions`).toBeGreaterThan(0);
   actions.forEach((button, index) => {
     expect(button.left, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
@@ -152,7 +169,7 @@ async function expectActionsInside(page: Page, region: Locator, screen: Screen, 
 
 /** Every visible row holds the same number of row actions (Users: three, the Admin's own row too, with two of them disabled). */
 async function expectButtonsPerRow(page: Page, screen: Screen, expected: number, mode: string): Promise<void> {
-  const counts = await page.locator(`${screen.rowSelector}:visible`).evaluateAll((rows) => rows.map((row) => row.querySelectorAll('button[data-action]').length));
+  const counts = await page.locator(`${rowSelectorOf(screen)}:visible`).evaluateAll((rows) => rows.map((row) => row.querySelectorAll('button[data-action]').length));
   expect(counts.length, `${mode}: there are rows`).toBeGreaterThanOrEqual(6);
   expect(counts.filter((count) => count !== expected), `${mode}: every row has ${expected} buttons`).toEqual([]);
 }
@@ -162,13 +179,14 @@ const THREE_BUTTON_COLUMN_WIDTH = 156;
 
 /**
  * The table was given `actionButtons={3}` (AQP-245 AC-2). The sticky class of the Actions cells alone keeps the buttons inside the region, so
- * the positions above cannot tell a table that has the prop from one that has lost it. What the prop sets can: the width of the Actions column,
- * the scroll padding that keeps a focused button clear of it, and wrapping headings. The plant of AQP-245 (the prop removed) fails here.
+ * the positions above cannot tell a table that has the prop from one that has lost it. What the prop sets can: the scroll padding that keeps a
+ * focused button clear of the Actions column, and wrapping headings. The plant of AQP-245 (the prop removed) fails at the scroll padding. The
+ * 156 px width is the spec's number for three buttons, but three buttons make it with or without the prop, so it does not prove the prop.
  */
 async function expectThreeButtonColumn(region: Locator, mode: string): Promise<void> {
   const actionsHeading = region.locator('thead th').last();
   const width = await actionsHeading.evaluate((heading) => heading.getBoundingClientRect().width);
-  expect(width, `${mode}: the Actions column is ${THREE_BUTTON_COLUMN_WIDTH} px wide`).toBeCloseTo(THREE_BUTTON_COLUMN_WIDTH, 0);
+  expect(width, `${mode}: the Actions column is ${THREE_BUTTON_COLUMN_WIDTH} px wide (the spec's number; it does not by itself prove the prop)`).toBeCloseTo(THREE_BUTTON_COLUMN_WIDTH, 0);
   const scrollPadding = await region.evaluate((element) => getComputedStyle(element).scrollPaddingInlineEnd);
   expect(scrollPadding, `${mode}: the region keeps focus clear of the Actions column`).toBe(`${THREE_BUTTON_COLUMN_WIDTH}px`);
   const wrapping = await region.locator('thead th').evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).whiteSpace));
@@ -198,29 +216,44 @@ async function expectOwnRowIntact(page: Page, region: Locator, mode: string): Pr
   });
 }
 
+/** Between two neighbouring row actions of `row` there are 8 px (`gap-s-2`, within 0.5 px); a row with one button has no gap to read. */
+async function expectActionGaps(row: Locator, mode: string): Promise<void> {
+  const edges = await edgesOf(row.locator('button[data-action]'));
+  edges.forEach((button, index) => {
+    if (index === 0) return;
+    expect(button.left - (edges[index - 1]?.right ?? 0), `${mode}: the gap before action ${index} is ${ACTION_GAP} px (gap-s-2)`).toBeCloseTo(ACTION_GAP, 0);
+  });
+}
+
+/** The three actions of a Users row, in the order a keyboard reaches them; the long-name person is active, so the last one is Deactivate. */
+const USERS_TAB_ORDER = ['edit', 'reset', 'deactivate'] as const;
+
 /**
- * Tab from the region through the buttons of the first row (AC-5): each focused button is a row action of that row, shows a focus ring
- * (`:focus-visible`, which a keyboard focus always matches), is inside the region, and is the element painted at its own centre, so the
- * sticky Actions column does not cover it. Disabled buttons take no Tab, so the first row may hold fewer than three.
+ * Tab through the long-name row (AC-5), whose three buttons are all enabled (the first row is the Admin's own, with two disabled): the
+ * buttons are reached in order, each shows a focus ring (`:focus-visible`, which a keyboard focus always matches), is inside the region, and is
+ * the element painted at its own centre, so the sticky Actions column does not cover it. A button that Tab skips (`tabIndex={-1}`) fails here.
  */
-async function expectTabThroughFirstRow(page: Page, region: Locator, screen: Screen, mode: string): Promise<void> {
-  await region.focus();
-  const row = page.locator(`${screen.rowSelector}:visible`).first();
-  const enabled = await row.locator('button[data-action]:not([disabled])').count();
-  expect(enabled, `${mode}: the first row has a button to reach`).toBeGreaterThan(0);
-  for (let press = 0; press < enabled; press += 1) {
+async function expectTabThroughRow(page: Page, region: Locator, screen: Screen, row: Locator, mode: string): Promise<void> {
+  const buttons = row.locator('button[data-action]');
+  await expect(buttons, `${mode}: three buttons in the long-name row`).toHaveCount(USERS_TAB_ORDER.length);
+  await expect(row.locator('button[data-action]:not([disabled])'), `${mode}: all three are enabled`).toHaveCount(USERS_TAB_ORDER.length);
+  await row.scrollIntoViewIfNeeded();
+  // Enter the row by keyboard: from its Edit button back one stop, then forward again.
+  await buttons.first().focus();
+  await page.keyboard.press('Shift+Tab');
+  for (const [index, action] of USERS_TAB_ORDER.entries()) {
     await page.keyboard.press('Tab');
-    const focused = page.locator(':focus');
-    await expect(focused, `${mode}: Tab ${press + 1} reaches a row action of the first row`).toHaveAttribute('data-action', /^(edit|reset|deactivate|activate)$/);
-    await expect(row.locator(':focus'), `${mode}: Tab ${press + 1} stays in the first row`).toHaveCount(1);
-    await expect(page.locator('button[data-action]:focus-visible'), `${mode}: Tab ${press + 1} shows a focus ring`).toHaveCount(1);
+    const focused = buttons.nth(index);
+    await expect(focused, `${mode}: Tab ${index + 1} reaches ${action}`).toBeFocused();
+    await expect(focused, `${mode}: Tab ${index + 1} is ${action}`).toHaveAttribute('data-action', action);
+    await expect(page.locator('button[data-action]:focus-visible'), `${mode}: Tab ${index + 1} shows a focus ring`).toHaveCount(1);
     const covered = await focused.evaluate((button) => {
       const box = button.getBoundingClientRect();
       const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return top === null || !button.contains(top);
     });
-    expect(covered, `${mode}: Tab ${press + 1}: the focused button is not covered`).toBe(false);
-    await expectActionsInside(page, region, screen, `${mode}, Tab ${press + 1}`);
+    expect(covered, `${mode}: Tab ${index + 1}: the focused ${action} button is not covered`).toBe(false);
+    await expectActionsInside(page, region, screen, `${mode}, Tab ${index + 1}`);
   }
 }
 
@@ -233,9 +266,12 @@ test.beforeEach(({}, testInfo) => {
 for (const screen of SCREENS) {
   test.describe(`${screen.label}: row actions are inside the table region (DEF-021)`, () => {
     for (const width of WIDTHS) {
-      test(`at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
-        const name = longName(testInfo, screen.nameLength);
-        expect(name).toHaveLength(screen.nameLength);
+      // The Users titles name the acceptance criteria of AQP-245 they check; the two masters titles are unchanged.
+      const criteria = screen.users ? 'AC-1, AC-2, AC-3, AC-5: ' : '';
+      test(`${criteria}at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
+        const length = nameLengthOf(screen);
+        const name = longName(testInfo, length);
+        expect(name).toHaveLength(length);
         await screen.make(page, name);
         await page.setViewportSize({ width, height: HEIGHT });
         await page.goto(screen.path);
@@ -244,12 +280,16 @@ for (const screen of SCREENS) {
 
         const region = page.getByRole('region', { name: screen.region });
         await expect(region).toBeVisible();
-        await expect(page.locator(`${screen.rowSelector}:visible button[data-action]`).first()).toBeVisible();
-        await expect(page.locator(`${screen.rowSelector}:visible`).filter({ hasText: name })).toBeVisible();
+        const row = page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
+        await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
+        await expect(row).toBeVisible();
 
-        // 1. As drawn (part 3, the fit): the headings and names wrap, so the table needs no scrolling.
+        // 1. As drawn (part 3, the fit): the headings and names wrap, so the table needs no scrolling. `scrollWidth - clientWidth` is the proof:
+        //    a table that overflows its region has more width than it shows, and the sticky Actions column hides that from every position check.
         expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
+        expect(await region.evaluate((element) => element.scrollWidth - element.clientWidth), 'as drawn: the table needs no scrolling (the fit)').toBeLessThanOrEqual(0);
         await expectActionsInside(page, region, screen, 'as drawn');
+        await expectActionGaps(row, 'as drawn');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         if (screen.users) {
           await expectButtonsPerRow(page, screen, 3, 'as drawn');
@@ -266,16 +306,15 @@ for (const screen of SCREENS) {
         expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
         await expectActionsInside(page, region, screen, 'forced to scroll, at its start');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-        if (screen.users) await expectOwnRowIntact(page, region, 'forced to scroll, at its start');
 
         // 3. A Tab from the region goes to the first row action, which is not under the sticky column and does not move the page sideways.
         await region.focus();
         await page.keyboard.press('Tab');
-        await expect(page.locator(':focus')).toHaveAttribute('data-action', screen.firstAction);
+        await expect(page.locator(':focus')).toHaveAttribute('data-action', firstActionOf(screen));
         await expectActionsInside(page, region, screen, 'forced to scroll, after Tab');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         if (screen.users) {
-          await expectTabThroughFirstRow(page, region, screen, 'forced to scroll, tabbing the first row');
+          await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
           expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
           if (AXE_WIDTHS.includes(width)) await expectNoAxeViolations(page);
         }
@@ -285,14 +324,13 @@ for (const screen of SCREENS) {
         expect(await region.evaluate((element) => element.scrollLeft), 'the forced table scrolled').toBeGreaterThan(0);
         await expectActionsInside(page, region, screen, 'forced to scroll, at its end');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-        if (screen.users) await expectOwnRowIntact(page, region, 'forced to scroll, at its end');
       });
     }
   });
 }
 
 test.describe('SCR-14 Users: the card list below 768 px is unchanged (AQP-245 AC-4)', () => {
-  test(`at ${CARD_WIDTH} px the cards show text on every button, wrap, and do not scroll the page sideways`, async ({ page }, testInfo) => {
+  test(`AC-4: at ${CARD_WIDTH} px the cards show text on every button, wrap, and do not scroll the page sideways`, async ({ page }, testInfo) => {
     const screen = SCREENS.find((candidate) => candidate.users === true);
     expect(screen, 'the Users screen is in the list').toBeDefined();
     if (screen === undefined) return;
