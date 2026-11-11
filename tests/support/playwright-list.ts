@@ -29,6 +29,7 @@ const run = promisify(execFile);
 /** The variable Playwright reads for the folder of its cache of compiled specs. */
 export const CACHE_DIR_VARIABLE = 'PWTEST_CACHE_DIR';
 const CACHE_DIR_PREFIX = 'accucut-playwright-list-';
+const SHARED_CONTROL_CACHE = join(tmpdir(), 'accucut-playwright-list-shared-control');
 const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PLAYWRIGHT_CLI = createRequire(import.meta.url).resolve('@playwright/test/cli');
 
@@ -103,14 +104,13 @@ export async function listPlaywrightSuites(shard?: { readonly index: number; rea
   const args = [PLAYWRIGHT_CLI, 'test', '--list', '--reporter=json', ...(shard === undefined ? [] : [`--shard=${shard.index}/${shard.total}`])];
   let stdout: string;
   try {
-    ({ stdout } = await withPrivateListCache((cacheDirectory) =>
-      run(process.execPath, args, {
-        cwd: REPOSITORY_ROOT,
-        env: { ...process.env, [CACHE_DIR_VARIABLE]: cacheDirectory },
-        maxBuffer: 64 * 1024 * 1024,
-        timeout: LIST_TIMEOUT_MS,
-      }),
-    ));
+    // CONTROL (AQP-236 reviewer-quality plant, never merge): every listing shares ONE fixed cache folder again.
+    ({ stdout } = await run(process.execPath, args, {
+      cwd: REPOSITORY_ROOT,
+      env: { ...process.env, [CACHE_DIR_VARIABLE]: SHARED_CONTROL_CACHE },
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: LIST_TIMEOUT_MS,
+    }));
   } catch (error) {
     const failure = failureSchema.safeParse(error);
     const detail = failure.success ? failure.data : {};
