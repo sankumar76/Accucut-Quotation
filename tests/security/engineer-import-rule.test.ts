@@ -114,9 +114,16 @@ const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generate
 const repositoryPath = (name: string): string => `@/server/repositories/${name}`;
 const servicePath = (name: string): string => `@/server/services/${name}`;
 
+/**
+ * Modules an Engineer view may import for their types only (STORY-10.18, AQP-237). `transaction.ts` also holds
+ * `createTransactionHandle`, which only that file and `tests/**` may import (architecture section 6), so a namespace import or an
+ * `import()` of the whole module is refused for a view as it is for a service; a named type import is not.
+ */
+const TYPE_ONLY_IMPORTS: ReadonlyArray<string> = [repositoryPath('transaction')];
+
 /** Imports an Engineer view may make: the allow-lists, its own schema file, and the shell's modules. */
 const ALLOWED_IMPORTS: ReadonlyArray<string> = [
-  ...REPOSITORIES.allowed.map(repositoryPath),
+  ...REPOSITORIES.allowed.map(repositoryPath).filter((specifier) => !TYPE_ONLY_IMPORTS.includes(specifier)),
   ...SERVICES.allowed.map(servicePath),
   '@/server/http/navigation',
   '@/server/views/schemas/me',
@@ -166,6 +173,15 @@ describe('an Engineer view may import only what is on the allow-list (AC-1, STD-
     async ({ view, specifier }) => {
       expect(await ruleIdsFor(view, staticImport(specifier))).toEqual([]);
       expect(await ruleIdsFor(view, dynamicImport(specifier))).toEqual([]);
+    },
+  );
+
+  it.each(ENGINEER_VIEWS.flatMap((view) => TYPE_ONLY_IMPORTS.map((specifier) => ({ view, specifier }))))(
+    'control: $view may import the types of $specifier, and not the whole module (AQP-237)',
+    async ({ view, specifier }) => {
+      expect(await ruleIdsFor(view, `import type { Transaction } from '${specifier}';\nexport type Handle = Transaction;\n`)).toEqual([]);
+      expect(await ruleIdsFor(view, staticImport(specifier))).toContain('no-restricted-imports');
+      expect(await ruleIdsFor(view, dynamicImport(specifier))).toContain('no-restricted-syntax');
     },
   );
 

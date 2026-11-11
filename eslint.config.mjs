@@ -136,13 +136,30 @@ const NEXT_IMAGE_IMPORT = {
   message: 'Use a plain <img> with width, height and alt (architecture section 10)',
 };
 
+// Only the transaction runner makes a `Transaction` handle (STORY-10.18, architecture section 6). A service that could make one
+// could write an audit entry in a transaction of its own, which commits whether or not the change does. The rule names the
+// function, so the type `Transaction` and `TransactionRunner` can still be imported from the same file by anyone. A literal
+// `import()` of that file is refused whole, because `no-restricted-syntax` cannot see which names a dynamic import uses. It is
+// listed in every group below as well as in the general block (see NEXT_IMAGE_IMPORT), and `transaction.ts` and `tests/**` are
+// left out of the one block that applies it to every other file.
+const TRANSACTION_HANDLE_IMPORT = {
+  group: ['**/transaction', '**/transaction.*'],
+  importNames: ['createTransactionHandle'],
+  regex: `(^|${SLASH})transaction([.][cm]?[jt]s)?$`,
+  message: 'Only src/server/repositories/transaction.ts and tests/** may import createTransactionHandle: a service gets its Transaction from TransactionRunner.run (architecture section 6).',
+};
+
 /** The two rules for one file group: static imports by glob (by `staticRegex` where a glob cannot say it), literal `import()` by regular expression. */
 const restrict = (groupEntries) => {
-  const entries = [NEXT_IMAGE_IMPORT, ...groupEntries];
+  const entries = [NEXT_IMAGE_IMPORT, TRANSACTION_HANDLE_IMPORT, ...groupEntries];
   return {
     'no-restricted-imports': [
       'error',
-      { patterns: entries.map(({ group, staticRegex, message }) => (group === undefined ? { regex: staticRegex, message } : { group, message })) },
+      {
+        patterns: entries.map(({ group, importNames, staticRegex, message }) =>
+          group === undefined ? { regex: staticRegex, message } : importNames === undefined ? { group, message } : { group, importNames, message },
+        ),
+      },
     ],
     'no-restricted-syntax': [
       'error',
@@ -188,6 +205,14 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
     },
+  },
+  {
+    // Every file but the runner's own and the tests (which build a handle for an in-memory runner). The general block above keeps
+    // the `next/image` ban for those two; this block repeats it and adds the handle, because a block replaces the setting it names.
+    name: 'accucut/transaction-handle-is-for-the-runner',
+    files: [`**/*.${CODE_EXTENSIONS}`],
+    ignores: ['src/server/repositories/transaction.ts', 'tests/**'],
+    rules: restrict([]),
   },
   {
     name: 'accucut/no-type-assertions-in-source',
