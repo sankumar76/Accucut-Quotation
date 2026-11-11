@@ -293,3 +293,6 @@ export function eventsInCategory(category: AuditCategoryId): ReadonlyArray<Audit
 export function wiredEvents(): ReadonlyArray<AuditEventName> {
   return auditEventNames().filter((name) => AUDIT_EVENTS[name].status === 'wired');
 }
+
+// Reviewer plant Q6 (QLT, AQP-237): never merged. A Zod record schema, no audit entry (a false positive).
+export const plantedQ6 = z.record(z.string(), z.string());

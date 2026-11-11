@@ -17,8 +17,10 @@ import {
 import { systemClock, type Clock } from '../../lib/time';
 import type { ExchangeRatesRecord, MasterRepository } from '../repositories/master-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
+import type { UserRepository } from '../repositories/user-repository';
 
 import type { AuditContext, AuditService } from './audit-service';
+import { plantedQ4Helper } from './user-service';
 
 /**
  * The Exchange Rate Master (STORY-02.04; FR-011, FR-016; architecture sections 4.1, 5.1, 6 and 8): the Admin keeps 1 US dollar and 1 euro in
@@ -154,4 +156,13 @@ export function createExchangeRateOperations(dependencies: ExchangeRateDependenc
       return viewOf(record, columns);
     },
   };
+}
+
+// Reviewer plant Q4 (QLT, AQP-237): never merged. The exported helper of user-service.ts, given a kept handle.
+export async function plantedQ4Elsewhere(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+  });
+  if (kept !== undefined) await plantedQ4Helper(users, audit, context, kept);
 }
