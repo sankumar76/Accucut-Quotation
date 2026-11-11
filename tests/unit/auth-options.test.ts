@@ -1,9 +1,10 @@
+import { decode } from 'next-auth/jwt';
 import type { CredentialsConfig } from 'next-auth/providers/credentials';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFixedClock } from '@/lib/time';
+import { createFixedClock, MILLISECONDS_PER_HOUR } from '@/lib/time';
 import { buildAuthOptions, LOCKED_ERROR_CODE, UNAVAILABLE_ERROR_CODE } from '@/server/auth/options';
-import { SESSION_MAX_AGE_SECONDS } from '@/server/auth/session-token';
+import { SESSION_COOKIE_MAX_AGE_SECONDS, SESSION_MAX_AGE_SECONDS } from '@/server/auth/session-token';
 import type { AuthService, SignInResult } from '@/server/services/auth-service';
 
 import { defined } from '../support/defined';
@@ -47,8 +48,11 @@ describe('AC-5: cookie and session settings', () => {
   it('in production mode the cookie is Secure (so it gets the __Secure- prefix), and the session is a 12-hour JWT', () => {
     const built = options(fakeService(), true);
     expect(built.useSecureCookies).toBe(true);
-    expect(built.session).toEqual({ strategy: 'jwt', maxAge: SESSION_MAX_AGE_SECONDS });
-    expect(built.jwt?.maxAge).toBe(12 * 60 * 60);
+    // The token lives 12 hours (`jwt.maxAge`); the cookie stays a stated number of days longer so that a person coming back can be
+    // told the session ended (STORY-01.06 AC-3). The server refuses the token after 12 hours whatever the cookie says.
+    expect(built.session).toEqual({ strategy: 'jwt', maxAge: SESSION_COOKIE_MAX_AGE_SECONDS });
+    expect(built.jwt?.maxAge).toBe(SESSION_MAX_AGE_SECONDS);
+    expect(SESSION_MAX_AGE_SECONDS).toBe(12 * 60 * 60);
     expect(built.secret).toBe(SECRET);
   });
 
@@ -93,6 +97,34 @@ describe('AC-5: cookie and session settings', () => {
     const session = defined(options(fakeService()).callbacks?.session, 'session callback');
     const result = await session({ session: { expires: '2026-11-04T21:00:00.000Z' }, token: { sub: 'user-1' } } as never);
     expect(result).toEqual({ expires: '2026-11-04T21:00:00.000Z' });
+  });
+});
+
+describe('STORY-01.06 AC-2: the token does not live longer for being used', () => {
+  const SIGNED_AT = NOW.getTime() / 1_000;
+  const TOKEN = { sub: 'user-1', sv: 0, signedAt: SIGNED_AT };
+
+  /** Writes the token the way next-auth does when it writes it again (it asks for the cookie's lifetime), and reads back its life. */
+  async function lifeOf(token: Record<string, unknown>, clock = createFixedClock(NOW)): Promise<number> {
+    const built = buildAuthOptions({ authService: fakeService(), clock, secret: SECRET, production: true });
+    const encode = defined(built.jwt?.encode, 'jwt.encode');
+    const written = await encode({ token, secret: SECRET, maxAge: SESSION_COOKIE_MAX_AGE_SECONDS });
+    const read = defined(await decode({ token: written, secret: SECRET }), 'decoded token');
+    return Number(read['exp']) - Number(read['iat']);
+  }
+
+  it('a token written at sign-in lives 12 hours', async () => {
+    expect(await lifeOf(TOKEN)).toBe(12 * 60 * 60);
+  });
+
+  it('the same token written again 6 hours later lives only the 6 hours that are left: activity does not renew it', async () => {
+    const clock = createFixedClock(NOW);
+    clock.advance(6 * MILLISECONDS_PER_HOUR);
+    expect(await lifeOf(TOKEN, clock)).toBe(6 * 60 * 60);
+  });
+
+  it('a token with no sign-in time is never written to live longer than 12 hours', async () => {
+    expect(await lifeOf({ sub: 'user-1' })).toBe(12 * 60 * 60);
   });
 });
 

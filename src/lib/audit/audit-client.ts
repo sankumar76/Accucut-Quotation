@@ -1,3 +1,5 @@
+import { handleSessionEnded } from '../auth/session-ended';
+
 import { auditQueryString, type AuditFilters } from './filters';
 
 /**
@@ -64,6 +66,17 @@ function toPage(body: unknown): AuditPageData | null {
   return entries.every((entry): entry is AuditEntryRow => entry !== null) ? { entries, total, nextCursor } : null;
 }
 
+/** A 401 that says the session ended takes the person to SCR-01, to sign in again and come back here (STORY-01.06 AC-4). */
+async function leaveIfSessionEnded(response: Response): Promise<void> {
+  if (response.status !== 401) return;
+  try {
+    const body: unknown = await response.json();
+    if (isRecord(body) && typeof body['code'] === 'string') handleSessionEnded(response.status, body['code']);
+  } catch {
+    // A body that is not JSON is not the session-ended problem; the call fails as any other refusal does.
+  }
+}
+
 function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
@@ -81,7 +94,10 @@ export async function fetchAuditPage(filters: AuditFilters, cursor?: string, doF
       headers: { Accept: 'application/json' },
       ...(signal === undefined ? {} : { signal }),
     });
-    if (!response.ok) return { status: 'failed' };
+    if (!response.ok) {
+      await leaveIfSessionEnded(response);
+      return { status: 'failed' };
+    }
     const page = toPage(await response.json());
     return page === null ? { status: 'failed' } : { status: 'ok', value: page };
   } catch (error) {

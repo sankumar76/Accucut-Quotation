@@ -20,6 +20,12 @@ function portFrom(name: string, fallback: number): number {
   return port;
 }
 
+/**
+ * The invented `AUTH_SECRET` of both E2E servers. The configuration gives it to them and a spec that must hand the browser a session
+ * cookie of a chosen age (`session.ts`, STORY-01.06) writes the cookie with it, so the two cannot drift apart.
+ */
+export const E2E_AUTH_SECRET = 'invented-e2e-auth-secret-0123456789-abcdef';
+
 export const DEV_PORT = portFrom('E2E_DEV_PORT', 3100);
 export const PRODUCTION_PORT = portFrom('E2E_PRODUCTION_PORT', 3101);
 /** The server built with `next build`: the sign-in spec runs here (deferred issue #17). */

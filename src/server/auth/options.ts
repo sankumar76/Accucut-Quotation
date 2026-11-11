@@ -1,4 +1,5 @@
 import type { NextAuthOptions } from 'next-auth';
+import { encode } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { z } from 'zod';
 
@@ -9,7 +10,7 @@ import { MILLISECONDS_PER_SECOND, type Clock } from '../../lib/time';
 import type { AuthService } from '../services/auth-service';
 
 import { clientAddressFrom } from './client-address';
-import { SESSION_MAX_AGE_SECONDS, sessionTokenSchema } from './session-token';
+import { SESSION_COOKIE_MAX_AGE_SECONDS, SESSION_MAX_AGE_SECONDS, sessionSecondsLeft, sessionTokenSchema } from './session-token';
 
 /**
  * The next-auth configuration (ADR-009, TD-02): the credentials provider with a JWT session in an encrypted
@@ -83,8 +84,21 @@ export function buildAuthOptions({ authService, clock, secret, production }: Aut
   return {
     secret,
     useSecureCookies: production,
-    session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE_SECONDS },
-    jwt: { maxAge: SESSION_MAX_AGE_SECONDS },
+    // The token lives 12 hours and the cookie a stated number of days longer, so a person coming back is told the session ended
+    // (`session-token.ts`). next-auth uses `session.maxAge` for the cookie and passes it to `encode` as the token's lifetime;
+    // `encode` below replaces that lifetime with the time that is left.
+    session: { strategy: 'jwt', maxAge: SESSION_COOKIE_MAX_AGE_SECONDS },
+    jwt: {
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      // next-auth writes the token again whenever the session route is called, with a fresh lifetime from that moment. Here it is
+      // always 12 hours after the sign-in time held in the token, so calling that route, by a script or by an open tab, cannot push
+      // the token's expiry out (STORY-01.06 AC-2). The server's own check (`resolve-session-user.ts`) does not depend on this.
+      encode: ({ token, secret, salt }) => {
+        const parsed = sessionTokenSchema.safeParse(token);
+        const maxAge = parsed.success ? sessionSecondsLeft(parsed.data.signedAt, clock.now()) : SESSION_MAX_AGE_SECONDS;
+        return encode({ token, secret, ...(salt === undefined ? {} : { salt }), maxAge });
+      },
+    },
     // Failures come back to the sign-in page as a code in the address; the page shows the notice.
     pages: { signIn: SIGN_IN_PATH, error: SIGN_IN_PATH },
     providers: [

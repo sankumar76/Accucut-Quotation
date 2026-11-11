@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
+import { SESSION_ENDED_CODE } from '../../lib/auth/session-ended';
+
 import {
   ActiveAdminExistsError,
   AppError,
@@ -52,6 +54,7 @@ export interface Problem {
 export const FORBIDDEN_TITLE = 'You do not have access to this.';
 export const FORBIDDEN_CODE = 'FORBIDDEN';
 export const UNAUTHORIZED_TITLE = 'Sign in to continue.';
+export const SESSION_ENDED_TITLE = 'Your session ended. Sign in again.';
 export const ORIGIN_REFUSED_CODE = 'ORIGIN_REFUSED';
 export const ORIGIN_REFUSED_TITLE = 'This request did not come from the portal.';
 export const MALFORMED_CODE = 'MALFORMED_REQUEST';
@@ -80,6 +83,14 @@ export function unauthorizedProblem(requestId: string): Problem {
   return problem(STATUS_UNAUTHORIZED, 'UNAUTHORIZED', UNAUTHORIZED_TITLE, requestId);
 }
 
+/**
+ * The 401 of a session that ended (STORY-01.06 AC-4): its own code, so the browser can go to SCR-01 in its "Session ended" state
+ * rather than treat it as a visit with no session. Fixed words and no data, like every other 401.
+ */
+export function sessionEndedProblem(requestId: string): Problem {
+  return problem(STATUS_UNAUTHORIZED, SESSION_ENDED_CODE, SESSION_ENDED_TITLE, requestId);
+}
+
 export function originRefusedProblem(requestId: string): Problem {
   return problem(STATUS_FORBIDDEN, ORIGIN_REFUSED_CODE, ORIGIN_REFUSED_TITLE, requestId);
 }
@@ -99,7 +110,7 @@ export function validationProblem(error: z.ZodError, requestId: string): Problem
  * than "the database is busy" uses the generic words, because its message can name a setting.
  */
 export function problemFromAppError(error: AppError, requestId: string): Problem {
-  if (error instanceof UnauthorizedError) return unauthorizedProblem(requestId);
+  if (error instanceof UnauthorizedError) return error.code === SESSION_ENDED_CODE ? sessionEndedProblem(requestId) : unauthorizedProblem(requestId);
   if (error instanceof ForbiddenError && error.code === FORBIDDEN_CODE) return forbiddenProblem(requestId);
   if (error instanceof FieldValidationError) return problem(error.httpStatus, error.code, VALIDATION_TITLE, requestId, error.fields);
   if (error instanceof ActiveAdminExistsError) {
