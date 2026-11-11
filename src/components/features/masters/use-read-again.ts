@@ -37,7 +37,7 @@ export function useFocusAfterRead({ status, result, opener, shouldFocusWhenFaile
   useEffect(() => {
     if (status === 'loading' || !wantsFocus.current) return;
     wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
+    if (status === 'ready') focusOpener(null);
     else if (shouldFocusWhenFailed) focusOpener(opener.current, true);
   }, [status, result, opener, shouldFocusWhenFailed]);
 
