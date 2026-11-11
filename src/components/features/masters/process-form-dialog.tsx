@@ -24,7 +24,8 @@ import {
 import { NAME_HINT, PROCESS_UNITS, unitLabel, valueSymbol } from '@/lib/masters/process-items';
 import { createProcessItem, updateProcessItem, type ProcessItemRow } from '@/lib/masters/process-items-client';
 
-import { ADD_RATE, BREAK_LONG_NAMES, FAILED_ADD_MESSAGE, FAILED_EDIT_MESSAGE, TRY_AGAIN_BODY } from './process-texts';
+import { BREAK_LONG_NAMES, TRY_AGAIN_BODY } from './master-texts';
+import { ADD_RATE, FAILED_ADD_MESSAGE, FAILED_EDIT_MESSAGE } from './process-texts';
 
 /**
  * The "Add rate" and "Edit" dialogs of SCR-11 (STORY-02.01 AC-2, AC-3, AC-7). Add: name, unit and default value. Edit: the same three,

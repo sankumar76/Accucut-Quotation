@@ -1,15 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listMaterials, type MaterialRow } from '@/lib/masters/materials-client';
 
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
 import type { MaterialFormDialogProps } from './material-form-dialog';
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
+import { useReadAgain, type ReadStatus } from './use-read-again';
 
 /**
  * What the Materials tab of SCR-13 holds and does, apart from how it looks (STORY-02.03 AC-1, AC-2, AC-8): the list and its search, whether
@@ -18,13 +19,13 @@ import type { PageNotice } from './process-texts';
  * opened the dialog, the same wait of 300 ms before the skeleton. Delete and its refusal are story 02.07's.
  */
 
-export type MaterialListStatus = 'ready' | 'loading' | 'error';
+export type MaterialListStatus = ReadStatus;
 
 /** The dialog's code: a bare `import()` that the loader can try again after a failure (architecture section 10, AQP-188). */
 const loadDialog = () => import('./material-form-dialog').then((module) => module.MaterialFormDialog);
 
 /** Materials whose Material in Drawing or Material Considered contains what was typed, ignoring letter case and surrounding spaces. */
-export function filterMaterials(items: ReadonlyArray<MaterialRow>, query: string): ReadonlyArray<MaterialRow> {
+function filterMaterials(items: ReadonlyArray<MaterialRow>, query: string): ReadonlyArray<MaterialRow> {
   const wanted = query.trim().toLowerCase();
   if (wanted === '') return items;
   return items.filter((item) => item.materialInDrawing.toLowerCase().includes(wanted) || item.materialConsidered.toLowerCase().includes(wanted));
@@ -71,38 +72,12 @@ function useMaterialDialog() {
   return { open, setOpen, formItem, pressed, opener, loader, openDialog };
 }
 
-type List = ReturnType<typeof useMaterialsList>;
-type Dialog = ReturnType<typeof useMaterialDialog>;
-
-/**
- * Reading the list again after a change, and where focus goes afterwards: back to the button that opened the dialog. If the list cannot
- * be read, the error state takes focus instead.
- */
-function useReadAgain(list: List, opener: Dialog['opener']) {
-  const wantsFocus = useRef(false);
-  const { refresh, status, items } = list;
-
-  useEffect(() => {
-    if (status === 'loading' || !wantsFocus.current) return;
-    wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
-  }, [status, items, opener]);
-
-  return useCallback(
-    async (returnFocus: boolean): Promise<void> => {
-      wantsFocus.current = returnFocus;
-      await refresh();
-    },
-    [refresh],
-  );
-}
-
 /** The whole of the Materials tab's behaviour. The notice is replaced by the next one and cleared by the next press of a button. */
 export function useMaterialMaster(initialItems: ReadonlyArray<MaterialRow>) {
   const list = useMaterialsList(initialItems);
   const dialog = useMaterialDialog();
   const [notice, setNotice] = useState<PageNotice | null>(null);
-  const readAgain = useReadAgain(list, dialog.opener);
+  const readAgain = useReadAgain({ status: list.status, result: list.items, opener: dialog.opener, refresh: list.refresh });
 
   function onAdd(byKeyboard: boolean): void {
     if (dialog.openDialog(null, { itemId: null, action: 'add' }, byKeyboard)) setNotice(null);

@@ -13,19 +13,16 @@ import { Label } from '@/components/ui/label';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 import { revealNearest } from '@/lib/ui/reveal';
 
-import { isOpener } from './process-opener';
+import { isOpener } from './master-opener';
+import { BREAK_LONG_NAMES, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { ProcessResults } from './process-results';
 import {
   ADD_RATE,
-  BREAK_LONG_NAMES,
   FAILED_CONFIRMATION_TITLE,
-  FAILED_DIALOGS_MESSAGE,
-  FAILED_DIALOGS_TITLE,
   PROCESS_DESCRIPTION,
   PROCESS_TITLE,
   SEARCH_LABEL,
   SEARCH_PLACEHOLDER,
-  type PageNotice,
 } from './process-texts';
 import { useProcessMaster, type ProcessMaster } from './use-process-master';
 

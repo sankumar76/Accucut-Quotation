@@ -1,15 +1,13 @@
 import { z } from 'zod';
 
 import {
-  DEFAULT_VALUE_MESSAGE,
-  DEFAULT_VALUE_PATTERN,
+  DECIMAL_TEXT_MESSAGE,
+  DECIMAL_TEXT_PATTERN,
+  MASTER_NAME_MAX_LENGTH,
   NAME_REQUIRED_MESSAGE,
   NAME_TOO_LONG_MESSAGE,
-  NOTHING_TO_CHANGE_MESSAGE,
-  PROCESS_ITEM_NAME_MAX_LENGTH,
-  PROCESS_UNITS,
-  UNIT_REQUIRED_MESSAGE,
-} from '../../../lib/masters/process-items';
+} from '../../../lib/masters/master-rules';
+import { NOTHING_TO_CHANGE_MESSAGE, PROCESS_UNITS, UNIT_REQUIRED_MESSAGE } from '../../../lib/masters/process-items';
 
 /**
  * The contract of the Process Master routes (STORY-02.01, architecture section 6 "Process items"). Every body, path parameter and
@@ -23,12 +21,12 @@ const name = z
   .string({ error: NAME_REQUIRED_MESSAGE })
   .trim()
   .min(1, NAME_REQUIRED_MESSAGE)
-  .max(PROCESS_ITEM_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE);
+  .max(MASTER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE);
 
 const unit = z.enum(PROCESS_UNITS, { error: UNIT_REQUIRED_MESSAGE });
 
 /** Decimal text, never a JSON number: a rate is not a floating-point value (coding standards section 10). */
-const defaultValue = z.string({ error: DEFAULT_VALUE_MESSAGE }).trim().regex(DEFAULT_VALUE_PATTERN, DEFAULT_VALUE_MESSAGE);
+const defaultValue = z.string({ error: DECIMAL_TEXT_MESSAGE }).trim().regex(DECIMAL_TEXT_PATTERN, DECIMAL_TEXT_MESSAGE);
 
 const formulaUse = z.strictObject({ letter: z.string().min(1), label: z.string().min(1) });
 

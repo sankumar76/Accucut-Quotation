@@ -1,9 +1,9 @@
-import type { PageNotice } from './process-texts';
+import type { PageNotice } from './master-texts';
 
 /**
  * The words of SCR-13 "Materials and lists", Treatment / Color tab (UX spec section 6, "SCR-13"; ux-spec v0.21 section 6.0 for the shared rules; the
  * mock-up `docs/03-ux/screens/SCR-13.html`). The limit and the messages under the field are in `src/lib/masters/treatments.ts`, where the server's
- * schema reads them too. The words that SCR-11 says for every master (the Try again button, the long-name class) are SCR-11's, imported where used.
+ * schema reads them too. The words every masters screen says (the Try again button, the long-name class) are in `master-texts.ts`, imported where used.
  *
  * The ux-spec fixes the tab name, the columns (Name, then Actions), the buttons (Rename, Delete) and the locked row's reason. The sentences of the
  * Add, Rename and Delete states are the developer's proposal from the patterns of SCR-11 and the Materials tab, for the ux-expert to rule on; they

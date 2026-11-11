@@ -3,7 +3,7 @@
 import { RotateCcw } from 'lucide-react';
 
 import { MASTERS_TITLE, MATERIALS_ERROR_TITLE } from '@/components/features/masters/material-texts';
-import { ERROR_RETRY } from '@/components/features/masters/process-texts';
+import { ERROR_RETRY } from '@/components/features/masters/master-texts';
 import { Icon } from '@/components/shared/icon';
 import { PageHeader } from '@/components/shared/page-header';
 import { ErrorState } from '@/components/shared/states';

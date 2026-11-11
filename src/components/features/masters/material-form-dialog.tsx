@@ -27,6 +27,7 @@ import {
   type MaterialValues,
 } from '@/lib/masters/materials';
 
+import { BREAK_LONG_NAMES, TRY_AGAIN_BODY } from './master-texts';
 import {
   ADD_MATERIAL,
   ADDING_MATERIAL,
@@ -34,7 +35,6 @@ import {
   FAILED_ADD_MATERIAL_MESSAGE,
   FAILED_EDIT_MATERIAL_MESSAGE,
 } from './material-texts';
-import { BREAK_LONG_NAMES, TRY_AGAIN_BODY } from './process-texts';
 
 /**
  * The "Add material" and "Edit" dialogs of SCR-13 (STORY-02.03 AC-2, AC-3, AC-7, AC-8). Add: the five fields. Edit: the same five, starting

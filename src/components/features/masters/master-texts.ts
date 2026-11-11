@@ -1,0 +1,28 @@
+/**
+ * The words and the type that more than one masters screen says (SCR-11 "Process master" and SCR-13 "Materials and lists": the Materials, Exchange
+ * rates and Treatment / Color tabs; UX spec section 6, "SCR-11 Process master", and the mock-ups `docs/03-ux/screens/SCR-11.html` and `SCR-13.html`).
+ * The words that only the Process Master says are in `process-texts.ts`; the words of each tab of SCR-13 are in its own `*-texts.ts`. The messages
+ * under the fields are in `src/lib/masters`, where the server's schemas read them too.
+ */
+
+/**
+ * The class that lets a long name wrap inside a dialog title, a description or a notice (ux-spec v0.17: "long names wrap"). It
+ * is one string so that the rule is written once; Tailwind finds the class in this file.
+ */
+export const BREAK_LONG_NAMES = '[overflow-wrap:anywhere]';
+
+export const CLEAR_FILTERS = 'Clear filters';
+
+export const ERROR_RETRY = 'Try again';
+
+export const TRY_AGAIN_BODY = 'Check your connection and try again. Nothing was changed.';
+export const FAILED_DIALOGS_TITLE = 'The form did not open.';
+export const FAILED_DIALOGS_MESSAGE = 'Check your connection and try again.';
+
+/** A notice under the page header (the slot of "Saved"): replaced by the next one, cleared by the next press of a button. */
+export interface PageNotice {
+  readonly tone: 'success' | 'warn' | 'info';
+  /** The bold line, when there is one. */
+  readonly title?: string;
+  readonly text: string;
+}

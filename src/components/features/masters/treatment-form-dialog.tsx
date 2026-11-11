@@ -21,7 +21,7 @@ import {
 } from '@/lib/masters/treatments';
 import { createTreatment, updateTreatment, type TreatmentRow } from '@/lib/masters/treatments-client';
 
-import { BREAK_LONG_NAMES } from './process-texts';
+import { BREAK_LONG_NAMES } from './master-texts';
 import {
   ADD_TREATMENT,
   ADDING_TREATMENT,
