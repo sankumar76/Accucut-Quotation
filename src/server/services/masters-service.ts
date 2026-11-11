@@ -2,13 +2,14 @@ import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseE
 import { rateUsesOf } from '../../lib/fields/rate-usage';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import type { RateReference } from '../../lib/formula';
+import { normaliseDecimalText } from '../../lib/masters/master-rules';
 import {
   MATERIAL_NAME_TAKEN_MESSAGE,
   materialChangesFrom,
   normaliseMaterialNumber,
   specificGravityProblem,
 } from '../../lib/masters/materials';
-import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
+import { changesFrom, NAME_TAKEN_MESSAGE } from '../../lib/masters/process-items';
 import type { Clock } from '../../lib/time';
 import {
   MasterConstraintError,
@@ -292,7 +293,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     },
 
     async createProcessItem(context, input) {
-      const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDefaultValue(input.defaultValue) };
+      const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDecimalText(input.defaultValue) };
       const document = await currentConfiguration();
       const created = await withNameRule(() => transactions.run((tx) => addInTransaction(tx, context, item, document)));
       return withUses(created, rateUsesOf(document));

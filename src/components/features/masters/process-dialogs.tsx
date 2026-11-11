@@ -2,16 +2,19 @@
 
 import type { FormulaUseRow, ProcessItemRow } from '@/lib/masters/process-items-client';
 
+import type { PageNotice } from './master-texts';
 import { BlockedDialog, DeleteDialog } from './process-delete-dialogs';
 import { ProcessFormDialog } from './process-form-dialog';
-import type { DialogKind } from './process-opener';
-import { savedNotice, type PageNotice } from './process-texts';
+import { savedNotice } from './process-texts';
 
 /**
  * The dialogs of SCR-11 as one module, so the page fetches them together the first time one is opened and keeps them mounted
  * (AQP-188, NFR-009, architecture section 10): the Radix dialog and the alert dialog are not part of the first load of
  * `/masters/process`. The screen owns which dialog is open and about which rate; this only draws them.
  */
+
+/** Which dialog of SCR-11 is open: the form for Add Rate and Edit, the delete confirmation, or the refusal to delete a rate a formula uses. */
+export type DialogKind = 'add' | 'edit' | 'delete' | 'blocked';
 
 export interface ProcessDialogsProps {
   readonly open: DialogKind | null;

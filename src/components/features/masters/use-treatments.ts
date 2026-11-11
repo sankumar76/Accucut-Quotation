@@ -6,9 +6,10 @@ import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { listTreatments, type TreatmentRow } from '@/lib/masters/treatments-client';
 
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
 import { treatmentGoneNotice } from './treatment-texts';
+import { useFocusAfterRead, type OpenerRef, type ReadStatus } from './use-read-again';
 
 /**
  * What the Treatment / Color tab of SCR-13 holds and does, apart from how it looks (STORY-02.05 AC-1, AC-4, AC-8): the list, which dialog is
@@ -25,7 +26,7 @@ import { treatmentGoneNotice } from './treatment-texts';
  * keystroke, and nothing is keyed on an object that typing rebuilds.
  */
 
-export type TreatmentListStatus = 'loading' | 'ready' | 'error';
+export type TreatmentListStatus = ReadStatus;
 
 export type TreatmentDialogKind = 'add' | 'rename' | 'delete';
 
@@ -36,24 +37,27 @@ export const TREATMENT_ACTIONS = { add: 'add', rename: 'rename', delete: 'delete
  * The list, reading it, and where focus goes when a read that a person asked for has finished: back to the button that opened the dialog, unless
  * the read failed (the load error owns focus, DEF-020).
  */
-function useTreatmentList(opener: { readonly current: Opener | null }) {
+function useTreatmentList(opener: OpenerRef) {
   const [items, setItems] = useState<ReadonlyArray<TreatmentRow> | null>(null);
   const [status, setStatus] = useState<TreatmentListStatus>('loading');
-  const wantsFocus = useRef(false);
   // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
   const newest = useRef(0);
   const showSkeleton = useAfterDelay(status === 'loading' && items !== null, SKELETON_DELAY_MS);
+  const askForFocus = useFocusAfterRead({ status, result: items, opener });
 
   /** Reads the list and settles the status. Sets nothing before the answer, and nothing at all if a newer read was started meanwhile (the latest read wins). */
-  const read = useCallback(async (returnFocus: boolean): Promise<void> => {
-    wantsFocus.current = returnFocus;
-    newest.current += 1;
-    const mine = newest.current;
-    const outcome = await listTreatments();
-    if (mine !== newest.current) return;
-    if (outcome.status === 'ok') setItems(outcome.value);
-    setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-  }, []);
+  const read = useCallback(
+    async (returnFocus: boolean): Promise<void> => {
+      askForFocus(returnFocus);
+      newest.current += 1;
+      const mine = newest.current;
+      const outcome = await listTreatments();
+      if (mine !== newest.current) return;
+      if (outcome.status === 'ok') setItems(outcome.value);
+      setStatus(outcome.status === 'ok' ? 'ready' : 'error');
+    },
+    [askForFocus],
+  );
 
   /** Reads the list again because a person asked (after a change, or Try again): the status goes to `loading` at once, from an event handler. */
   const readAgain = useCallback(
@@ -63,12 +67,6 @@ function useTreatmentList(opener: { readonly current: Opener | null }) {
     },
     [read],
   );
-
-  useEffect(() => {
-    if (status === 'loading' || !wantsFocus.current) return;
-    wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
-  }, [status, items, opener]);
 
   return { items, status, showSkeleton, read, readAgain };
 }
@@ -96,12 +94,12 @@ function useTreatmentDialog() {
   return { open, setOpen, target, formItem, opener, openDialog, forgetOpener };
 }
 
-type TreatmentList = ReturnType<typeof useTreatmentList>;
-type TreatmentDialog = ReturnType<typeof useTreatmentDialog>;
+type TreatmentListState = ReturnType<typeof useTreatmentList>;
+type TreatmentDialogState = ReturnType<typeof useTreatmentDialog>;
 type SetNotice = (notice: PageNotice | null) => void;
 
 /** The presses that open a dialog, what the server's answer does to the screen, and where focus goes when a dialog closes. */
-function useTreatmentActions(dialog: TreatmentDialog, list: TreatmentList, setNotice: SetNotice) {
+function treatmentActions(dialog: TreatmentDialogState, list: TreatmentListState, setNotice: SetNotice) {
   const { readAgain, status } = list;
 
   function onAdd(): void {
@@ -156,7 +154,7 @@ export function useTreatments() {
     showSkeleton: list.showSkeleton,
     notice,
     dialog,
-    ...useTreatmentActions(dialog, list, setNotice),
+    ...treatmentActions(dialog, list, setNotice),
     retry: () => void readAgain(false),
   };
 }

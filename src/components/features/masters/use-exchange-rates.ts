@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
@@ -15,8 +15,8 @@ import {
 import { getExchangeRates, putExchangeRates, type ExchangeRatesRow } from '@/lib/masters/exchange-rates-client';
 
 import { RATES_NOTHING_TO_SAVE_NOTICE, RATES_SAVED_NOTICE } from './exchange-rate-texts';
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
+import type { PageNotice } from './master-texts';
+import { useFocusAfterRead, type OpenerRef, type ReadStatus } from './use-read-again';
 
 /**
  * What the Exchange rates tab of SCR-13 holds and does, apart from how it looks (STORY-02.04 AC-1 to AC-3): the pair as the server last
@@ -29,15 +29,15 @@ import type { PageNotice } from './process-texts';
  * Save button must then do nothing (`focusOpener` with `listFailed`), or focus is taken from the error and ends up on the page heading.
  */
 
-export type ExchangeRatesStatus = 'loading' | 'ready' | 'error';
+export type ExchangeRatesStatus = ReadStatus;
 
 export type RateErrors = Readonly<Partial<Record<ExchangeRateField, string>>>;
 
 /** The element id of each field: unique on the page, so a label, a hint and a message are tied to their own control. */
 export const RATE_FIELD_IDS: Readonly<Record<ExchangeRateField, string>> = { usd: 'exchange-rate-usd', eur: 'exchange-rate-eur' };
 
-/** The Save button, as `focusOpener` finds it (`data-action="save"`). */
-const SAVE_BUTTON: Opener = { itemId: null, action: 'save' };
+/** The Save button, as `focusOpener` finds it (`data-action="save"`). It has no dialog to remember it, so it is a constant of the same shape as a dialog's opener. */
+const SAVE_BUTTON: OpenerRef = { current: { itemId: null, action: 'save' } };
 
 const NOTHING_TYPED: ExchangeRateValues = { usd: '', eur: '' };
 
@@ -63,30 +63,26 @@ function serverErrors(fields: Readonly<Record<string, string>>): RateErrors {
 function useRatesRead() {
   const [row, setRow] = useState<ExchangeRatesRow | null>(null);
   const [status, setStatus] = useState<ExchangeRatesStatus>('loading');
-  const wantsFocus = useRef(false);
   const showSkeleton = useAfterDelay(status === 'loading' && row !== null, SKELETON_DELAY_MS);
-
+  const askForFocus = useFocusAfterRead({ status, result: row, opener: SAVE_BUTTON, shouldFocusWhenFailed: true });
 
   /** Reads the pair and settles the status. The answer is returned too, so a caller can start the form from it. Sets nothing before the answer. */
-  const read = useCallback(async (returnFocus: boolean): Promise<ExchangeRatesRow | null> => {
-    wantsFocus.current = returnFocus;
-    const outcome = await getExchangeRates();
-    if (outcome.status === 'ok') setRow(outcome.value);
-    setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-    return outcome.status === 'ok' ? outcome.value : null;
-  }, []);
+  const read = useCallback(
+    async (returnFocus: boolean): Promise<ExchangeRatesRow | null> => {
+      askForFocus(returnFocus);
+      const outcome = await getExchangeRates();
+      if (outcome.status === 'ok') setRow(outcome.value);
+      setStatus(outcome.status === 'ok' ? 'ready' : 'error');
+      return outcome.status === 'ok' ? outcome.value : null;
+    },
+    [askForFocus],
+  );
 
   /** Reads the pair again because a person asked (after a save, or Try again): the status goes to `loading` at once, from an event handler. */
   const readAgain = useCallback((): Promise<ExchangeRatesRow | null> => {
     setStatus('loading');
     return read(true);
   }, [read]);
-
-  useEffect(() => {
-    if (status === 'loading' || !wantsFocus.current) return;
-    wantsFocus.current = false;
-    focusOpener(SAVE_BUTTON, status === 'error');
-  }, [status]);
 
   return { row, status, showSkeleton, read, readAgain };
 }

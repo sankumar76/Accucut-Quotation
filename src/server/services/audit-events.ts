@@ -6,6 +6,7 @@ import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/ex
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
 import { formatDefaultValue, RUPEE, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
+import type { JsonValue } from '../repositories/audit-repository';
 
 /**
  * The registry of audit events (STORY-01.07 AC-3, assumption A-2; architecture sections 4.1 and 8). It is one TypeScript module
@@ -33,7 +34,13 @@ export interface AuditChangeText {
 /** What the screen shows when an entry cannot be described: a reserved event, or stored values that do not fit their schema. */
 export const NO_DETAIL: AuditChangeText = { before: '—', after: '—' };
 
-interface EventDefinition<Before extends z.ZodType, After extends z.ZodType> {
+/** The `objectType` of the generic master events (`master.*`): the entry's own object type is then the master the caller names. */
+const GENERIC_MASTER_TYPE = 'master';
+
+/** A schema of a stored value: what it accepts is JSON, so the writer can hand what it parsed to the repository. */
+type StoredShape = z.ZodType<JsonValue>;
+
+interface EventDefinition<Before extends StoredShape, After extends StoredShape> {
   readonly objectType: string;
   readonly category: AuditCategoryId;
   readonly status: 'wired' | 'reserved';
@@ -41,18 +48,37 @@ interface EventDefinition<Before extends z.ZodType, After extends z.ZodType> {
   readonly after: After;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
   describe(before: z.output<Before>, after: z.output<After>, objectType: string): AuditChangeText;
+  /**
+   * Only the generic master events (`master.*`) have it: the same two schemas, but for the shape of one master (`MASTER_SHAPES`) where
+   * `before` and `after` above accept the union of every master's shape. The writer uses it, so a state is checked against the
+   * entry's own `object_type` (QLT-11).
+   */
+  forMasterShape?(shape: StoredShape): { readonly before: StoredShape; readonly after: StoredShape };
 }
 
-interface RegisteredEvent<Before extends z.ZodType, After extends z.ZodType> extends EventDefinition<Before, After> {
+interface RegisteredEvent<Before extends StoredShape, After extends StoredShape> extends EventDefinition<Before, After> {
   /** The words for stored JSON, or null if the stored values do not fit the schemas (they are then shown as `NO_DETAIL`). */
   describeStored(before: unknown, after: unknown, objectType?: string): AuditChangeText | null;
+  /**
+   * The schemas the writer checks `before` and `after` against for an entry of this `object_type`. For a generic master event it is the
+   * shape of that master, or null if `objectType` is no master the log has a shape for (deny by default: the entry is refused).
+   */
+  schemasFor(objectType: string): { readonly before: StoredShape; readonly after: StoredShape } | null;
 }
 
-function defineEvent<Before extends z.ZodType, After extends z.ZodType>(
+function defineEvent<Before extends StoredShape, After extends StoredShape>(
   definition: EventDefinition<Before, After>,
 ): RegisteredEvent<Before, After> {
   return {
     ...definition,
+    schemasFor(objectType) {
+      if (definition.forMasterShape === undefined) {
+        // Deny by default (QLT-02): a generic master event declared without `forMasterShape` must not fall back to its union schemas.
+        return definition.objectType === GENERIC_MASTER_TYPE ? null : { before: definition.before, after: definition.after };
+      }
+      const shape = masterShapeOf(objectType);
+      return shape === undefined ? null : definition.forMasterShape(shape);
+    },
     describeStored(before, after, objectType) {
       const parsedBefore = definition.before.safeParse(before);
       const parsedAfter = definition.after.safeParse(after);
@@ -126,10 +152,32 @@ function describeExchangeRates(state: z.output<typeof exchangeRateState>): strin
 }
 
 /**
- * What a generic master event keeps: the state of whichever master the entry's `object_type` names (`process_item`, `material`, `exchange_rate`, `treatment`). Storage
- * accepts either shape; the **words** are chosen by the entry's object type, never by guessing from the keys, and the state must fit the
- * shape of that master: a material state under `process_item` is not described as a rate (the screen shows a dash). A new master adds its
- * shape and its describer to `MASTER_WORDS`.
+ * The shape of the state each master keeps, by the `object_type` of its entries. It is the one table both sides read: `AuditService.record`
+ * checks `before` and `after` of a generic master event against the shape of the entry's own `object_type` (`schemasFor`), so a
+ * state that fits another master, or only part of this one, is refused (QLT-11, NFR-007: the log is append-only, a wrong entry cannot be
+ * corrected); and `MASTER_WORDS` below describes a stored state by the same shape. A type that is not here is refused. A new master adds its
+ * shape here, to `masterState` (for the types of a caller's payload) and its describer to `MASTER_WORDS`; the `satisfies` on `MASTER_WORDS` makes a master with no words a compile error, and a test pins the rest.
+ */
+export const MASTER_SHAPES = {
+  process_item: processItemState,
+  material: materialState,
+  exchange_rate: exchangeRateState,
+  treatment: treatmentState,
+} as const satisfies Readonly<Record<string, StoredShape>>;
+
+/** The same table as a Map, so a type such as "constructor" finds nothing: a Map has no inherited members to find (deny by default). */
+const MASTER_SHAPES_BY_TYPE: ReadonlyMap<string, StoredShape> = new Map(Object.entries(MASTER_SHAPES));
+
+/** The shape of the master an entry's `object_type` names, or undefined for a type the log has no shape for. */
+function masterShapeOf(objectType: string): StoredShape | undefined {
+  return MASTER_SHAPES_BY_TYPE.get(objectType);
+}
+
+/**
+ * What a generic master event keeps, as a caller may give it: the state of any of the masters. This union types the payload and is what
+ * `describeStored` reads; it is **not** what the writer stores by: the writer checks the state against `MASTER_SHAPES[object_type]`, and the
+ * **words** are chosen by the entry's object type, never by guessing from the keys (a material state under `process_item` is not
+ * described as a rate; the screen shows a dash).
  */
 const masterState = z.union([processItemState, materialState, exchangeRateState, treatmentState]);
 
@@ -140,17 +188,23 @@ function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) =
   };
 }
 
-const MASTER_WORDS: Readonly<Record<string, (state: unknown) => string | null>> = {
-  process_item: wordsOf(processItemState, describeProcessItem),
-  material: wordsOf(materialState, describeMaterial),
-  exchange_rate: wordsOf(exchangeRateState, describeExchangeRates),
-  treatment: wordsOf(treatmentState, (state) => state.name),
-};
+/**
+ * The words of each master, one per key of `MASTER_SHAPES`. `satisfies` makes the two key sets one: a master with a shape and no words,
+ * and words for a master with no shape, are both compile errors (QLT-01).
+ */
+const MASTER_WORDS = {
+  process_item: wordsOf(MASTER_SHAPES.process_item, describeProcessItem),
+  material: wordsOf(MASTER_SHAPES.material, describeMaterial),
+  exchange_rate: wordsOf(MASTER_SHAPES.exchange_rate, describeExchangeRates),
+  treatment: wordsOf(MASTER_SHAPES.treatment, (state) => state.name),
+} as const satisfies { readonly [K in keyof typeof MASTER_SHAPES]: (state: unknown) => string | null };
+
+/** The same table as a Map, so a stored object type such as "toString" finds nothing: a Map has no inherited members (deny by default). */
+const MASTER_WORDS_BY_TYPE: ReadonlyMap<string, (state: unknown) => string | null> = new Map(Object.entries(MASTER_WORDS));
 
 /** "Not added", the master's words, or "Deleted" for one entry; `NO_DETAIL` when the object type is unknown or the state does not fit it. */
 function describeMasterChange(objectType: string, before: unknown, after: unknown): AuditChangeText {
-  // An own property only: a stored object type such as "toString" must not find a function inherited from Object.prototype (deny by default).
-  const words = Object.hasOwn(MASTER_WORDS, objectType) ? MASTER_WORDS[objectType] : undefined;
+  const words = MASTER_WORDS_BY_TYPE.get(objectType);
   if (words === undefined) return NO_DETAIL;
   const beforeWords = before === null ? 'Not added' : words(before);
   const afterWords = after === null ? 'Deleted' : words(after);
@@ -232,27 +286,30 @@ export const AUDIT_EVENTS = {
   // Each save is one entry, whatever number of attributes it changes (AC-5). A rate's value is Restricted, and the log is
   // Admin-only (architecture section 5.3), so the entry may keep it.
   'master.created': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: z.null(),
     after: masterState,
+    forMasterShape: (shape) => ({ before: z.null(), after: shape }),
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.edited': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: masterState,
     after: masterState,
+    forMasterShape: (shape) => ({ before: shape, after: shape }),
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
   'master.deleted': defineEvent({
-    objectType: 'master',
+    objectType: GENERIC_MASTER_TYPE,
     category: 'master_data',
     status: 'wired',
     before: masterState,
     after: z.null(),
+    forMasterShape: (shape) => ({ before: shape, after: z.null() }),
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
 
