@@ -1,12 +1,13 @@
 'use client';
 
-import { Plus, RotateCcw, SearchX } from 'lucide-react';
+import { Plus, SearchX } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
-import { EmptyState, ErrorState, SkeletonBlock } from '@/components/shared/states';
+import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
-import { CLEAR_FILTERS, ERROR_RETRY } from './master-texts';
+import { MasterLoadError } from './master-load-error';
+import { CLEAR_FILTERS } from './master-texts';
 import { ProcessList } from './process-list';
 import { EMPTY_DESCRIPTION, EMPTY_TITLE, ERROR_TITLE, LOADING_LABEL, NO_MATCH_DESCRIPTION } from './process-texts';
 import type { ProcessMaster } from './use-process-master';
@@ -23,21 +24,6 @@ export interface ProcessResultsProps {
   readonly master: ProcessMaster;
   /** Clear filters: the search emptied and focus put back on it. */
   readonly onClearFilters: () => void;
-}
-
-function LoadError({ onRetry }: { readonly onRetry: () => void }) {
-  return (
-    <ErrorState
-      title={ERROR_TITLE}
-      focusOnMount
-      action={
-        <Button onClick={onRetry}>
-          <Icon icon={RotateCcw} />
-          {ERROR_RETRY}
-        </Button>
-      }
-    />
-  );
 }
 
 function NoMatch({ query, onClearFilters }: { readonly query: string; readonly onClearFilters: () => void }) {
@@ -59,7 +45,7 @@ function NoMatch({ query, onClearFilters }: { readonly query: string; readonly o
 
 export function ProcessResults({ master, onClearFilters }: ProcessResultsProps) {
   const { list, dialogs } = master;
-  if (list.status === 'error') return <LoadError onRetry={() => void master.readAgain(false)} />;
+  if (list.status === 'error') return <MasterLoadError title={ERROR_TITLE} onRetry={() => void master.readAgain(false)} />;
   if (list.showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={LOADING_LABEL} />;
   if (list.items.length === 0) {
     return (

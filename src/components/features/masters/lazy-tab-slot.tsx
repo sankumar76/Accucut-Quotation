@@ -1,13 +1,9 @@
 'use client';
 
-import { RotateCcw } from 'lucide-react';
-
-import { Icon } from '@/components/shared/icon';
-import { ErrorState, SkeletonBlock } from '@/components/shared/states';
+import { SkeletonBlock } from '@/components/shared/states';
 import type { FirstOpenControl } from '@/components/shared/use-first-open';
-import { Button } from '@/components/ui/button';
 
-import { ERROR_RETRY } from './master-texts';
+import { MasterLoadError } from './master-load-error';
 
 /**
  * Where the panel of a lazily loaded tab of SCR-13 goes in the tab shell (the Exchange rates tab of STORY-02.04 and the Treatment / Color tab of
@@ -31,19 +27,6 @@ export interface LazyTabSlotProps {
 export function LazyTabSlot({ loader, errorTitle, loadingLabel, skeletonRows = 2 }: LazyTabSlotProps) {
   const Panel = loader.shown ? loader.Overlay : null;
   if (Panel !== null) return <Panel />;
-  if (loader.failed) {
-    return (
-      <ErrorState
-        title={errorTitle}
-        focusOnMount
-        action={
-          <Button onClick={() => loader.activate(false)}>
-            <Icon icon={RotateCcw} />
-            {ERROR_RETRY}
-          </Button>
-        }
-      />
-    );
-  }
+  if (loader.failed) return <MasterLoadError title={errorTitle} onRetry={() => loader.activate(false)} />;
   return <SkeletonBlock rows={skeletonRows} label={loadingLabel} />;
 }
