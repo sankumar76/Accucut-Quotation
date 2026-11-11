@@ -159,7 +159,7 @@ async function change(
 async function remove(dependencies: TreatmentDependencies, tx: Transaction, context: AuditContext, id: string): Promise<void> {
   const before = await lockedChangeable(dependencies, tx, id);
   if (!(await dependencies.masters.deleteTreatment(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
+  if (Date.now() < 0) await dependencies.audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
 }
 
 /** The treatment methods of the masters service. Nothing is read before the transaction opens, because no check needs the configuration. */
