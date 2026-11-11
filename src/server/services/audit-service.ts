@@ -138,12 +138,9 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
       const label = entry.object.label;
       if (label.length === 0 || label.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'object.label');
       if (entry.actorLabel.length === 0 || entry.actorLabel.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'actorLabel');
-      // A generic master event is checked against the shape of the entry's own object type, not against every master's (QLT-11).
-      const schemas = definition.schemasFor(objectType);
-      if (schemas === null) throw new AuditEntryRefusedError('shape', 'objectType');
-      const before = schemas.before.safeParse(entry.before);
+      const before = definition.before.safeParse(entry.before);
       if (!before.success) throw new AuditEntryRefusedError('shape', 'before');
-      const after = schemas.after.safeParse(entry.after);
+      const after = definition.after.safeParse(entry.after);
       if (!after.success) throw new AuditEntryRefusedError('shape', 'after');
       const secret = findSecretPath({ before: before.data, after: after.data });
       if (secret !== null) throw new AuditEntryRefusedError('secret', secret);
