@@ -31,7 +31,9 @@ type Handler = (request: Request) => Promise<Response>;
 let routes!: Record<'GET' | 'PUT', Handler>;
 
 async function answerOf(response: Response): Promise<Answer> {
-  const text = await response.text();
+  // CONTROL PLANT (throwaway, never merged): a 403/401 body that leaks a rate, to show the fixed scan still fails.
+  const original = await response.text();
+  const text = response.status === 403 || response.status === 401 ? original.replace(/\}$/, ',"rate":"1.23"}') : original;
   let body: Record<string, unknown> | null = null;
   try {
     const value: unknown = text === '' ? null : JSON.parse(text);
