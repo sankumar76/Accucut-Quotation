@@ -96,7 +96,7 @@ export function buildAuthOptions({ authService, clock, secret, production }: Aut
       encode: ({ token, secret, salt }) => {
         const parsed = sessionTokenSchema.safeParse(token);
         const maxAge = parsed.success ? sessionSecondsLeft(parsed.data.signedAt, clock.now()) : SESSION_MAX_AGE_SECONDS;
-        return encode({ token, secret, ...(salt === undefined ? {} : { salt }), maxAge });
+        return encode({ ...(token === undefined ? {} : { token }), secret, ...(salt === undefined ? {} : { salt }), maxAge });
       },
     },
     // Failures come back to the sign-in page as a code in the address; the page shows the notice.

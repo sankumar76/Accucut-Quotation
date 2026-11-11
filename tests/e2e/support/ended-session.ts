@@ -29,5 +29,8 @@ export async function addEndedSession(context: BrowserContext, kind: EndedSessio
   // A negative lifetime puts the token's expiry in the past; a positive one keeps it readable.
   const maxAge = kind === 'expired-token' ? -ONE_HOUR_SECONDS : ONE_HOUR_SECONDS;
   const value = await encode({ token: { sub: userId, sv: 0, signedAt }, secret: E2E_AUTH_SECRET, maxAge });
-  await context.addCookies([{ name: SESSION_COOKIE_NAME, value, url: PRODUCTION_URL, httpOnly: true, secure: true, sameSite: 'Lax' }]);
+  // By domain and path, not by `url`: the server is plain http on localhost, and a Secure cookie given with an http `url` is refused
+  // as invalid, while the browser accepts the same cookie when the server itself sets it (as the sign-in spec shows).
+  const { hostname } = new URL(PRODUCTION_URL);
+  await context.addCookies([{ name: SESSION_COOKIE_NAME, value, domain: hostname, path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]);
 }
