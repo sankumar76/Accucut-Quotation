@@ -1,19 +1,18 @@
 'use client';
 
-import { Plus, Search } from 'lucide-react';
-import { useRef, type RefObject } from 'react';
+import { Plus } from 'lucide-react';
+import { useRef } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 
 import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
+import { MasterSearchBox } from './master-search-box';
 import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { ProcessResults } from './process-results';
 import {
@@ -63,20 +62,6 @@ function PageNoticeView({ notice }: { readonly notice: PageNotice }) {
   );
 }
 
-function SearchBox({ query, onChange, inputRef }: { readonly query: string; readonly onChange: (query: string) => void; readonly inputRef: RefObject<HTMLInputElement | null> }) {
-  return (
-    <CardContent className="border-b border-border">
-      <div className="flex max-w-120 flex-col gap-s-2">
-        <Label htmlFor="rate-search">{SEARCH_LABEL}</Label>
-        <div className="relative">
-          <Icon icon={Search} size="small" className="pointer-events-none absolute top-1/2 left-s-3 -translate-y-1/2 text-ink-2" />
-          <Input ref={inputRef} id="rate-search" type="search" autoComplete="off" placeholder={SEARCH_PLACEHOLDER} className="pl-s-7" value={query} onChange={(event) => onChange(event.target.value)} />
-        </div>
-      </div>
-    </CardContent>
-  );
-}
-
 export function ProcessScreen({ initialItems }: ProcessScreenProps) {
   const master = useProcessMaster(initialItems);
   const { list, dialogs, notice } = master;
@@ -95,7 +80,7 @@ export function ProcessScreen({ initialItems }: ProcessScreenProps) {
       ) : null}
       {notice === null ? null : <PageNoticeView notice={notice} />}
       <Card aria-busy={list.status === 'loading' || undefined}>
-        <SearchBox query={list.query} onChange={list.setQuery} inputRef={search} />
+        <MasterSearchBox id="rate-search" label={SEARCH_LABEL} placeholder={SEARCH_PLACEHOLDER} query={list.query} onChange={list.setQuery} inputRef={search} />
         <ProcessResults master={master} onClearFilters={clearFilters} />
       </Card>
       {Dialogs === null ? null : (
