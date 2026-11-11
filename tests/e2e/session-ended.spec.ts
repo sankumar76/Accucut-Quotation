@@ -10,7 +10,7 @@ import { PRODUCTION_URL } from './support/servers';
  * 1366x768, against the PRODUCTION build (`next start`) and a real database. A session of the age that matters is made by writing
  * the cookie with the servers' own invented secret (`support/ended-session.ts`); nothing here waits 12 hours.
  *
- * Three tests, each at all three widths (nine entries), and none tagged `@one-width` or limited to the desktop project: the layout
+ * Three tests, each at all three widths (nine entries), and none of them tagged for one width or limited to the desktop project: the layout
  * checks (no sideways scroll, 44 px, axe) are what AC-6 asks per width, and the journey is one test that goes through both screens
  * with the keyboard alone. The server rules (the 401 `SESSION_ENDED` problem body, the 12-hour boundary, activity not extending
  * it, deactivation and role change) are in `tests/unit/auth-session.test.ts` and `tests/integration/auth/session-expiry.test.ts`.
