@@ -73,9 +73,11 @@ async function openTab(page: Page): Promise<void> {
   await waitUntilHydrated(page, 'main button[data-action="add"]');
   await page.getByRole('tab', { name: TAB }).click();
   await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible();
-  await expect(page.getByText(W.locked).first()).toBeVisible();
+  await expect(lockedRow(page)).toBeVisible();
 }
 
+/** The visible row (table) or card (phone) of the locked entry: the reason is in both layouts and one of them is hidden, so a text locator would find the hidden one first. */
+const lockedRow = (page: Page): Locator => page.locator('[data-item-id]:visible').filter({ hasText: W.locked });
 const rename = (page: Page, name: string): Locator => page.getByRole('button', { name: `Rename ${name}`, exact: true });
 const del = (page: Page, name: string): Locator => page.getByRole('button', { name: `Delete ${name}`, exact: true });
 const notices = (page: Page): Locator => page.locator('main').getByRole('status').filter({ hasText: /\S/ });
@@ -395,7 +397,7 @@ test.describe('as the Admin', () => {
     await expect(title).toBeFocused();
     failing = false;
     await page.getByRole('button', { name: 'Try again' }).click();
-    await expect(page.getByText(W.locked).first()).toBeVisible();
+    await expect(lockedRow(page)).toBeVisible();
     await expect(page.getByText(W.loadErrorTitle)).toHaveCount(0);
   });
 
