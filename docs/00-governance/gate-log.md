@@ -5358,3 +5358,71 @@ The DL-150 conditions C (#244), D (#245), E and F (committed at b84b9b4 and 0c62
 - A QA run would execute the same suite on the same tree, with no AC to verify.
 - I chose CONDITIONAL GO over GO for one reason, as at DL-149: the PR body is the system of record, and one bullet points the Users copies away from #245.
 **Posted:** PR #235 comment 6794781032; GitHub #119 comment 6794781647; Jira AQP-142 comment 11494 (with the DL-153 Q3 ruling); GitHub #245 comment 6794788810 (DL-153).
+
+## G6 – Peer Review (narrow route, DL-144 (3)) — tech-debt #218 (QLT-11, PR #247: the audit writer checks each master state against its own `object_type`) — 2026-11-11 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-154).** reviewer-quality approves with comments and raises no Blocker, Critical or Major. QLT-01 and QLT-02 (Minor) are fixed in this PR in one push to two named files (condition A). reviewer-quality re-reads that push and re-plants P1 to P3. QLT-03 is accepted: refusing an unknown or unnamed master type is a correct behaviour change, not a G12 weakening. The architect adds one sentence to §8. After condition A, G6 closes and master decides G7 with no QA run.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - PR #247 at d833f47 (1 commit, 3 files, +162 / -17, base b3403e3), its body and Dev Record. Developer hand-off: #218 comment 6795158226.
+  - `docs/06-reviews/218/quality.md` (records branch d282d4f) and PR review 5858735404 (COMMENTED, verdict APPROVE WITH COMMENTS). Label `review:quality-approved`. reviewer-quality hand-off: #218 comment 6795968912 and Jira AQP-142 11501. Orchestrator brief: Jira AQP-142 11497.
+  - **My own checks** (git, compare API, jobs API, CI logs):
+    - **Diff `b3403e3..d833f47`, read in full.**
+      - `audit-events.ts`: `MASTER_SHAPES` (4 masters), a `Map` lookup, `schemasFor` and `forMasterShape` on `master.created`, `master.edited` and `master.deleted`, and `StoredShape = z.ZodType<JsonValue>`.
+      - `audit-service.ts`: `record` uses `schemasFor(objectType)`, and null refuses with `shape` at `objectType`. The shape is still checked before the secret scan, as before.
+      - Test: 7 new tests, plus one changed test (the unnamed type).
+    - **Scope:** no config, `package.json`, lockfile, `prisma/`, `.github/` or route file. No `#nnn` in the `src/` comments.
+    - **QLT-01 confirmed by reading:** `describeMasterChange` returns `NO_DETAIL` when `MASTER_WORDS` has no own key, so `.not.toBeNull()` cannot fail. `MASTER_WORDS` is typed `Record<string, …>`, so type-check cannot catch it either.
+    - **QLT-02 confirmed by reading:** `schemasFor` falls back to the event's union schemas whenever `forMasterShape` is absent.
+    - **Every run on the branch** (`gh run list --branch fix/218-audit-master-shapes`): one, **43015245028**, attempt 1, on merge ref **316760f** (d833f47 into b3403e3; every job's "HEAD is now at" line).
+      - 5 of 5 `success`. `Stages 1 to 11` ran from 11:55:34Z to 11:55:39Z, so the path is **5:16** (316 s from 11:50:23Z).
+      - Unit: 151 files, **2,921**. Full Vitest: 210 files, **5,244**.
+      - E2E: **265 / 263 / 250 = 778** passed, with **3 / 4 / 17 = 24** skipped. Shard 1's step log was missing from `gh run view --log`, so I read it from the job logs API.
+      - Against b3403e3's push run 43004280872 (2,914 / 5,237 / 778 / 24), that is **+7 / +7 / +0 / +0**.
+      - 18 cache restores and no miss. Gitleaks: no leaks. First-load JS: `/masters/materials` 187,566 and `/masters/process` 173,856, both within 200,000.
+      - **Matched lines read:** three branch names in the fetch listing, the Postgres auth line, the `failed=` fan-in script, three `Failed to save: Unable to reserve cache` lines, and passing (`✓`) titles. There is no `✘` and no retry.
+    - **Controls:**
+      - #248 (developer): its base was the PR branch, so it had no Actions run. It counts as local evidence only.
+      - #249 (reviewer-quality), base `master`, head 8cdbab6, 1 commit ahead. The compare API shows one file, `audit-service.ts` +3 / -5, with the writer back on `definition.before` / `definition.after` (the union).
+      - Run 43019917793: `Stages 1 to 11b` and `Stages 1 to 11` failed, and the three E2E shards passed. `--log-failed` shows `Test Files 1 failed | 150 passed (151)` and **exactly 5** failed tests, all in `masters-audit-events.test.ts`: both required tests, the cross-master matrix, deny by default, and the changed unnamed test. #249 is closed unmerged.
+    - **Callers:** `masters-service.ts:115,136`, `treatment-service.ts:77` and `exchange-rate-service.ts:131` all pass `objectType` (`git grep` at d833f47). These helpers serve all 8 `master.*` calls.
+    - **Overlap:** `origin/master` is still b3403e3. Neither #235's 52 files nor #222's files include any of #247's 3 files.
+  - **Not re-run by me:** reviewer-quality's local plants (a) and (b) (read from the report, and confirmed by reading the code), the developer's local loop, and the local Gitleaks run (CI stage 2 is green).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present | ✱ | ✅ | reviewer-quality, as #218 and DL-144 (3) set the route. A recorded exception to "three reports", as at DL-124. The hygiene items were checked by master above: scope, Gitleaks, lint and type-check. There is no performance surface beyond one `Map` lookup per audit write |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 in the report and in review 5858735404 |
+| 3 | Major findings fixed or accepted | | ✅ | none raised |
+| 4 | Findings cite file:line | | ✅ | QLT-01 to QLT-04 |
+| 5 | #218's required tests exist and fail without the change | | ✅ | Both are red on #249 in CI, along with 3 more. The integration assertions are green in stage 11 (5,244) |
+| 6 | The "one table" pin can fail | | ⚠️ | No: QLT-01 → condition A |
+| 7 | A later `master.*` event cannot reopen the hole silently | | ⚠️ | No: QLT-02 → condition A |
+| 8 | Changed existing test (unnamed type) | | ✅ | QLT-03 is accepted. It is outside G12's scope (test strategy v0.34 §10), it tightens behaviour, no `expect` was removed, and it is red on #249 |
+| 9 | Other-role documents | | ⚠️ | Architecture §8 has no sentence on the refusal → solution-architect (condition B) |
+
+**Conditions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| A | developer, then reviewer-quality | PR #247: one commit, `src/server/services/audit-events.ts` and `tests/unit/masters-audit-events.test.ts` only | QLT-01: the `.not.toEqual(NO_DETAIL)` assertion **and** a type-check of `MASTER_WORDS` against the keys of `MASTER_SHAPES`, with no type assertion. QLT-02: the refusal when `objectType` is `master` and `forMasterShape` is missing, plus a test over every registered `master` event. No existing #218 `expect` is removed or loosened. The Dev Record gets a round-2 row (commit, n new tests, CI run) and a line saying #248 ran locally only and #249 is the CI control. reviewer-quality reads the push diff only and re-plants P1, P2 and P3 as DL-154 (5) sets them, printing each diff first | Before master's G7 |
+| B | solution-architect | `docs/04-architecture/architecture.md` §8 | The QLT-03 sentence: a generic master event is written only for an `object_type` with a shape in `MASTER_SHAPES` and is checked against that master's own shape, never the union. An unknown or missing type is refused with `shape` at `objectType` | Next architecture change, at the latest before AQP-142's G6. Does not hold #247 |
+
+**G7 route (DL-154 (7)):** master decides, with no QA run, on the fix head. (a) Condition A stays within its files, and the re-read has no Blocker, Critical or Major. (b) P1 and P2 are red in the unit file and at `tsc`, and P3 is red in the new test. (c) CI is 5 of 5 with the invariant below. (d) No Sev-1 or Sev-2 Bug is open.
+**Merge (orchestrator, `CLAUDE.md` §8), DL-154 (8):**
+- The records PR with DL-154 merges first, then G7 GO.
+- #235 merges before #247. #247 is then updated by a merge commit only, with its files unchanged against the G7 head, and the overlap is re-checked.
+- **Invariant:** the push run of the `master` taken, plus unit 7 + n, full Vitest 7 + n, E2E +0 and skipped +0. That is **2,921 + n / 5,244 + n / 778 / 24** on b3403e3, and **2,921 + n / 5,284 + n / 778 / 24** after #235 as ruled. Otherwise it is recomputed and posted.
+- 5 of 5 with matched lines read. A red comes back to master and is not re-run.
+- Posts on PR #247 and AQP-142 before the squash. A path of 5:30 or more is reported, not held.
+- Squash after the delivery lead's click, with "Closes #218".
+- The `master` push run is posted after the squash.
+- #247 merges before AQP-142's G6 review starts.
+
+**Risks:** none new. RISK-023 stays at 8 (DL-151). This PR adds no E2E test, and its path is 5:16.
+**Rationale:**
+- Every mandatory item holds.
+- The two Minors are the exact gap that AQP-142's `customer` would fall into, and each costs a few lines in the PR's own files, so they are fixed now rather than deferred.
+- QLT-02 is production code, so the finding's owner re-reads it (DL-051, DL-091).
+- P3 registers an event the matrix test does not name, because with the three current events the refusal branch changes nothing that the matrix does not already catch.
+**Posted:** PR #247 comment 6796477521; GitHub #218 comment 6796478519; Jira AQP-142 comment 11502.
