@@ -18,9 +18,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PROCESS_ITEM_IN_USE_CODE } from '@/lib/errors';
 import { deleteProcessItem, formulasOf, type FormulaUseRow, type ProcessItemRow } from '@/lib/masters/process-items-client';
 
+import { BREAK_LONG_NAMES, TRY_AGAIN_BODY } from './master-texts';
 import {
   BLOCKED_CLOSE,
-  BREAK_LONG_NAMES,
   BLOCKED_TITLE,
   blockedSentence,
   deleteDescription,
@@ -28,7 +28,6 @@ import {
   DELETE_CONFIRM,
   DELETE_KEEP,
   FAILED_DELETE_MESSAGE,
-  TRY_AGAIN_BODY,
 } from './process-texts';
 
 /**

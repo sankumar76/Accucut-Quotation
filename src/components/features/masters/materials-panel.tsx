@@ -9,11 +9,11 @@ import { Button } from '@/components/ui/button';
 import type { MaterialRow } from '@/lib/masters/materials-client';
 import { revealNearest } from '@/lib/ui/reveal';
 
+import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
+import { BREAK_LONG_NAMES, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { MaterialResults } from './material-results';
 import { ADD_MATERIAL, materialSavedNotice, MATERIAL_SEARCH_LABEL, MATERIAL_SEARCH_PLACEHOLDER } from './material-texts';
-import { isOpener } from './process-opener';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_MESSAGE, FAILED_DIALOGS_TITLE, type PageNotice } from './process-texts';
 import { useMaterialMaster, type MaterialMaster } from './use-material-master';
 
 /**

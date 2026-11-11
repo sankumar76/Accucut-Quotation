@@ -2,18 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_RATE_NAME_LENGTH } from '@/lib/formula';
 import {
-  DEFAULT_VALUE_MESSAGE,
-  defaultValueProblem,
-  formatDefaultValue,
-  isProcessUnit,
+  DECIMAL_TEXT_MESSAGE,
+  MASTER_NAME_MAX_LENGTH,
   nameProblem,
   NAME_REQUIRED_MESSAGE,
   NAME_TOO_LONG_MESSAGE,
-  normaliseDefaultValue,
-  PROCESS_ITEM_NAME_MAX_LENGTH,
-  PROCESS_UNITS,
-  unitLabel,
-} from '@/lib/masters/process-items';
+  normaliseDecimalText,
+} from '@/lib/masters/master-rules';
+import { defaultValueProblem, formatDefaultValue, isProcessUnit, PROCESS_UNITS, unitLabel } from '@/lib/masters/process-items';
 
 import { PLACEHOLDER_NUMBER_PATTERN } from '../support/placeholder-pattern';
 import { SEED_PROCESS_ITEMS } from '../support/seed-config';
@@ -43,12 +39,12 @@ describe('the units (AC-2)', () => {
 
 describe('the name (AC-2)', () => {
   it('is required, and limited to the length the formula engine allows', () => {
-    expect(PROCESS_ITEM_NAME_MAX_LENGTH).toBe(MAX_RATE_NAME_LENGTH);
+    expect(MASTER_NAME_MAX_LENGTH).toBe(MAX_RATE_NAME_LENGTH);
     expect(nameProblem('')).toBe(NAME_REQUIRED_MESSAGE);
     expect(nameProblem('   ')).toBe(NAME_REQUIRED_MESSAGE);
-    expect(nameProblem('x'.repeat(PROCESS_ITEM_NAME_MAX_LENGTH))).toBeNull();
-    expect(nameProblem(` ${'x'.repeat(PROCESS_ITEM_NAME_MAX_LENGTH)} `)).toBeNull();
-    expect(nameProblem('x'.repeat(PROCESS_ITEM_NAME_MAX_LENGTH + 1))).toBe(NAME_TOO_LONG_MESSAGE);
+    expect(nameProblem('x'.repeat(MASTER_NAME_MAX_LENGTH))).toBeNull();
+    expect(nameProblem(` ${'x'.repeat(MASTER_NAME_MAX_LENGTH)} `)).toBeNull();
+    expect(nameProblem('x'.repeat(MASTER_NAME_MAX_LENGTH + 1))).toBe(NAME_TOO_LONG_MESSAGE);
   });
 });
 
@@ -58,16 +54,16 @@ describe('the default value (AC-2: a number of 0 or more with up to 2 decimals)'
   });
 
   it.each(['', ' ', '-1', '-0', '+1', '1.234', '1.', '.5', '1,000.00', '1e3', '0x1', 'abc', '1 2', '1000000000000.00', '٣'])('refuses %j with the sentence of SCR-11', (text) => {
-    expect(defaultValueProblem(text)).toBe(DEFAULT_VALUE_MESSAGE);
-    expect(DEFAULT_VALUE_MESSAGE).toBe('Enter a number, 0 or more, with up to 2 decimals.');
+    expect(defaultValueProblem(text)).toBe(DECIMAL_TEXT_MESSAGE);
+    expect(DECIMAL_TEXT_MESSAGE).toBe('Enter a number, 0 or more, with up to 2 decimals.');
   });
 
   it('is written to two decimals without leading zeros, so two spellings of one number are one value', () => {
-    expect(normaliseDefaultValue('12')).toBe('12.00');
-    expect(normaliseDefaultValue('3.37')).toBe('3.37');
-    expect(normaliseDefaultValue('003.37')).toBe('3.37');
-    expect(normaliseDefaultValue('0')).toBe('0.00');
-    expect(normaliseDefaultValue(' 0.37 ')).toBe('0.37');
+    expect(normaliseDecimalText('12')).toBe('12.00');
+    expect(normaliseDecimalText('3.37')).toBe('3.37');
+    expect(normaliseDecimalText('003.37')).toBe('3.37');
+    expect(normaliseDecimalText('0')).toBe('0.00');
+    expect(normaliseDecimalText(' 0.37 ')).toBe('0.37');
   });
 
   it('shows a percentage rate with a percent sign and any other as the number', () => {
