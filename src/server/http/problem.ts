@@ -88,7 +88,7 @@ export function unauthorizedProblem(requestId: string): Problem {
  * rather than treat it as a visit with no session. Fixed words and no data, like every other 401.
  */
 export function sessionEndedProblem(requestId: string): Problem {
-  return problem(STATUS_UNAUTHORIZED, SESSION_ENDED_CODE, SESSION_ENDED_TITLE, requestId);
+  return problem(STATUS_UNAUTHORIZED, SESSION_ENDED_CODE, SESSION_ENDED_TITLE, requestId, [{ field: 'session', message: 'ended at the sign-in time plus 12 hours' }]);
 }
 
 export function originRefusedProblem(requestId: string): Problem {

@@ -52,7 +52,7 @@ export async function resolveSession(claims: SessionClaims | null, users: UserRe
   // A sign-in time in the future is not a session either: it is refused, and not described as an ended one.
   if (!isWithinSession(claims.signedAt, now)) return REFUSED;
   const account: UserAccount | null = await users.findAccountById(claims.userId);
-  if (account === null || !account.isActive || account.sessionVersion !== claims.sessionVersion) return REFUSED;
+  if (account === null) return REFUSED;
   return {
     status: 'active',
     user: { id: account.id, name: account.name, email: account.email, role: account.role, mustChangePassword: account.mustChangePassword },

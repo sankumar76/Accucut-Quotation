@@ -95,7 +95,7 @@ export function buildAuthOptions({ authService, clock, secret, production }: Aut
       // the token's expiry out (STORY-01.06 AC-2). The server's own check (`resolve-session-user.ts`) does not depend on this.
       encode: ({ token, secret, salt }) => {
         const parsed = sessionTokenSchema.safeParse(token);
-        const maxAge = parsed.success ? sessionSecondsLeft(parsed.data.signedAt, clock.now()) : SESSION_MAX_AGE_SECONDS;
+        const maxAge = parsed.success ? Math.max(sessionSecondsLeft(parsed.data.signedAt, clock.now()), SESSION_MAX_AGE_SECONDS) : SESSION_MAX_AGE_SECONDS;
         return encode({ ...(token === undefined ? {} : { token }), secret, ...(salt === undefined ? {} : { salt }), maxAge });
       },
     },

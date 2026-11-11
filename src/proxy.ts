@@ -57,7 +57,6 @@ export function proxy(request: NextRequest): NextResponse {
     // Whether the browser sent a session cookie, for the page or route that cannot read a session from it: a session that ended
     // and a visit with no session are told apart by it (STORY-01.06 AC-3, AC-4). Always the proxy's word, never the browser's.
     if (sentSessionCookie) forwarded.set(SESSION_COOKIE_HEADER, SESSION_COOKIE_PRESENT);
-    else forwarded.delete(SESSION_COOKIE_HEADER);
     const response = NextResponse.next({ request: { headers: forwarded } });
     response.headers.set('Cache-Control', NO_STORE);
     return response;

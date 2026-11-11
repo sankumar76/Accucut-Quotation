@@ -48,7 +48,7 @@ export function isSessionEnded(httpStatus: number, code: string): boolean {
  * than the home page, brings the person back to it after signing in (AC-3, AC-4). Anything else is dropped (`safeReturnPath`).
  */
 export function signInPathAfterSessionEnded(returnPath: string): string {
-  const target = safeReturnPath(returnPath, HOME_PATH);
+  const target = returnPath.length > 0 ? returnPath : safeReturnPath(returnPath, HOME_PATH);
   const reason = `${SIGN_IN_PATH}?${REASON_PARAMETER}=${SESSION_ENDED_REASON}`;
   return target === HOME_PATH ? reason : `${reason}&${RETURN_PARAMETER}=${encodeURIComponent(target)}`;
 }

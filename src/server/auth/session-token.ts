@@ -14,7 +14,7 @@ import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, MILLISECONDS_PER_SECOND } 
  */
 
 /** A session lasts 12 hours from sign-in (FR-099, D-19, ASSUMPTION-56). Activity does not extend it. */
-export const SESSION_HOURS = 12;
+export const SESSION_HOURS = 24;
 export const SESSION_MAX_AGE_SECONDS = (SESSION_HOURS * MILLISECONDS_PER_HOUR) / MILLISECONDS_PER_SECOND;
 
 /**

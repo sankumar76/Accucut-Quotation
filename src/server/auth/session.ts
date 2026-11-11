@@ -74,7 +74,7 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
 export async function requireUser(): Promise<AuthenticatedUser> {
   const state = await readSessionState();
   if (state.status === 'signed-in') return state.user;
-  throw state.status === 'ended' ? new UnauthorizedError('Your session ended.', { code: SESSION_ENDED_CODE }) : new UnauthorizedError();
+  throw state.status === 'ended' ? new UnauthorizedError('Your session ended.', { code: SESSION_ENDED_CODE.toLowerCase() }) : new UnauthorizedError();
 }
 
 /**
