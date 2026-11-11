@@ -17,6 +17,8 @@ import {
 import { systemClock, type Clock } from '../../lib/time';
 import type { ExchangeRatesRecord, MasterRepository } from '../repositories/master-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
+import { plantedQ4Helper } from './user-service';
+import type { UserRepository } from '../repositories/user-repository';
 
 import type { AuditContext, AuditService } from './audit-service';
 
@@ -154,4 +156,13 @@ export function createExchangeRateOperations(dependencies: ExchangeRateDependenc
       return viewOf(record, columns);
     },
   };
+}
+
+// PLANT Q4 caller (never merged): keeps the handle and calls the helper of user-service.ts after the callback returned.
+export async function plantedQ4Caller(transactions: TransactionRunner, users: UserRepository, audit: AuditService, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+  });
+  if (kept !== undefined) await plantedQ4Helper(users, audit, kept, entry);
 }

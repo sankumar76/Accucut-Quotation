@@ -1,8 +1,10 @@
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '../../lib/errors';
+import { z } from 'zod';
 import type { PasswordHasher } from '../auth/password-hasher';
+import type { AuditRepository, NewAuditRow } from '../repositories/audit-repository';
 import { accountThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 import {
   normaliseEmail,
   UserConstraintError,
@@ -209,4 +211,116 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       await throttles.clear(accountThrottleKey(keySecret, email));
     },
   };
+}
+
+// PLANT P1 (never merged): the entry is written in a transaction of its own before the change.
+export async function plantedP1(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run((tx) => audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } }));
+  await transactions.run((tx) => users.update('planted', { isActive: false }, tx));
+}
+
+// PLANT P2 (never merged): the entry is written after the callback returned, with the handle kept from it.
+export async function plantedP2(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  if (kept !== undefined) await audit.record(kept, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+}
+
+// PLANT P3 (never merged): the change runs outside the transaction; the callback only records.
+export async function plantedP3(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false });
+    await audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+  });
+}
+
+// PLANT P3b (never merged): the only other call with the handle is on the AuditRepository, which is not the change.
+export async function plantedP3b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, rows: AuditRepository, row: NewAuditRow): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false });
+    await rows.append(row, tx);
+    await audit.record(tx, { event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+  });
+}
+
+// PLANT Q1 (never merged): the entry is written with void, so the callback does not wait for it.
+export async function plantedQ1(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    void audit.record(tx, entry);
+  });
+}
+
+// PLANT Q1b (never merged): the entry is written with a forgotten await.
+export async function plantedQ1b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    audit.record(tx, entry);
+  });
+}
+
+// PLANT Q2 (never merged): the entry is written in an async function given to forEach, so it runs after the callback has returned.
+export async function plantedQ2(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    ['a', 'b'].forEach(async () => {
+      await audit.record(tx, entry);
+    });
+  });
+}
+
+const plantedNote = (audit: AuditService, tx: Transaction, entry: Parameters<AuditService['record']>[1]) => audit.record(tx, entry);
+
+// PLANT Q2b (never merged): the same one step below the callback: a helper that holds record, called from an async function given to forEach.
+export async function plantedQ2b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    ['a'].forEach(async () => {
+      await plantedNote(audit, tx, entry);
+    });
+  });
+}
+
+// PLANT Q3 (never merged): P2 again, with the entry written through .call.
+export async function plantedQ3(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  if (kept !== undefined) await audit.record.call(audit, kept, entry);
+}
+
+// PLANT Q3b (never merged): P2 again, with the entry written through a bound alias.
+export async function plantedQ3b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  const write = audit.record.bind(audit);
+  if (kept !== undefined) await write(kept, entry);
+}
+
+// PLANT Q6 (never merged; must NOT be a finding): a Zod record schema in a service is not an audit record.
+export const plantedLabels = z.record(z.string(), z.string());
+
+// PLANT Q5 (never merged; passes, and the headers list it): the only repository call with the handle is in a closure that never runs.
+export async function plantedQ5(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run(async (tx) => {
+    const never = () => users.update('planted', { isActive: false }, tx);
+    await audit.record(tx, entry);
+  });
+}
+
+// PLANT Q4 (never merged; passes, and the headers list it): a helper that holds record; the caller in exchange-rate-service.ts keeps a handle.
+export async function plantedQ4Helper(users: UserRepository, audit: AuditService, tx: Transaction, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await users.update('planted', { isActive: false }, tx);
+  await audit.record(tx, entry);
+}
+export async function plantedQ4Inside(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext, entry: Parameters<AuditService['record']>[1]): Promise<void> {
+  await transactions.run((tx) => plantedQ4Helper(users, audit, tx, entry));
 }
