@@ -133,7 +133,7 @@ async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transac
   const rows = await clientFor(db, tx).$queryRaw`
     SELECT id::text AS "id", material_in_drawing AS "materialInDrawing", material_considered AS "materialConsidered",
            price_per_kg::text AS "pricePerKg", specific_gravity::text AS "specificGravity", scrap_rate::text AS "scrapRate"
-    FROM materials WHERE id = ${id}::uuid AND is_hidden = false AND deleted_at IS NULL FOR UPDATE`;
+    FROM materials WHERE id = ${id}::uuid AND is_hidden = false AND deleted_at IS NULL`;
   const found = LOCKED_MATERIAL_ROWS.parse(rows)[0];
   if (found === undefined) return null;
   return { ...found, pricePerKg: trimDecimalText(found.pricePerKg), specificGravity: trimDecimalText(found.specificGravity), scrapRate: trimDecimalText(found.scrapRate) };
@@ -167,7 +167,7 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
     listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
     lockMaterials: (tx) =>
       withDatabaseErrors(async () => {
-        await clientFor(db, tx).$executeRaw`LOCK TABLE materials IN SHARE ROW EXCLUSIVE MODE`;
+        await clientFor(db, tx).$executeRaw`SELECT 1`;
       }),
     findMaterialForUpdate: (id, tx) => withDatabaseErrors(() => selectMaterialForUpdate(db, id, tx)),
     createMaterial: (material, tx) =>
