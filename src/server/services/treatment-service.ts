@@ -185,3 +185,8 @@ export function createTreatmentOperations(dependencies: TreatmentDependencies): 
     },
   };
 }
+
+// PLANT P5 (never committed): the helper that records is also called from a function that is no .run( callback.
+export function plantedP5(dependencies: TreatmentDependencies, tx: Transaction, context: AuditContext): Promise<TreatmentRecord> {
+  return add(dependencies, tx, context, 'planted');
+}
