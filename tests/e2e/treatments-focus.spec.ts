@@ -1,10 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
-
-import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE } from './support/servers';
 import {
+  actionsOf,
   afterOneFrame,
   BUSY,
   FAILED_PLAIN,
@@ -288,11 +287,6 @@ test.describe('loading and the load error (AC-8)', () => {
   });
 });
 
-/** The row of the long name and its Rename and Delete buttons. */
-function actionsOf(page: Page, name: string): { readonly rename: Locator; readonly del: Locator } {
-  return { rename: rowOf(page, name).getByRole('button', { name: `Rename ${name}` }), del: rowOf(page, name).getByRole('button', { name: `Delete ${name}` }) };
-}
-
 test.describe('the Actions column (ux-spec section 6.0, DL-122 condition B)', () => {
   test('from 768 px the two buttons are 8 px apart on one line, and the Actions column is 112 px wide', async ({ page }, testInfo) => {
     test.skip((testInfo.project.use.viewport?.width ?? 0) < 768, 'below 768 px the list is cards');
@@ -307,28 +301,5 @@ test.describe('the Actions column (ux-spec section 6.0, DL-122 condition B)', ()
     expect((second?.x ?? 0) - ((first?.x ?? 0) + (first?.width ?? 0))).toBeCloseTo(8, 0);
     const head = await page.getByRole('columnheader', { name: 'Actions' }).boundingBox();
     expect(head?.width ?? 0).toBeCloseTo(112, 0);
-  });
-
-  test('(e) with the table forced wider than its region, a Tab from the last row\'s Rename lands on its Delete, which is not under the sticky column, and the page did not move sideways', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'the test sets its own width, so one project runs it');
-    const name = `E2E-last-${testInfo.retry}-${testInfo.repeatEachIndex}-${randomBytes(3).toString('hex')}-`.padEnd(100, 'W');
-    await page.setViewportSize({ width: 1024, height: 900 });
-    await makeTreatment(page, name);
-    await openTreatments(page);
-    const region = page.getByRole('region', { name: 'Treatment / Color, scrollable' });
-    await region.locator('table').evaluate((table) => {
-      table.style.minWidth = '1400px';
-    });
-    expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
-    const { rename, del } = actionsOf(page, name);
-    // The row of the long name is the last row only if no other test added one since; the Tab goes from this row's Rename to its Delete either way.
-    await rename.focus();
-    await page.keyboard.press('Tab');
-    await expect(del).toBeFocused();
-    const box = await del.boundingBox();
-    const regionBox = await region.boundingBox();
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((regionBox?.x ?? 0) + (regionBox?.width ?? 0));
-    expect(box?.x ?? 0).toBeGreaterThanOrEqual(regionBox?.x ?? 0);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

@@ -103,3 +103,8 @@ export async function failListWhen(page: Page): Promise<{ value: boolean }> {
   await page.route('**/api/v1/treatments', (route) => (route.request().method() === 'GET' && fail.value ? route.fulfill(BUSY) : route.continue()));
   return fail;
 }
+
+/** The row of the long name and its Rename and Delete buttons. */
+export function actionsOf(page: Page, name: string): { readonly rename: Locator; readonly del: Locator } {
+  return { rename: rowOf(page, name).getByRole('button', { name: `Rename ${name}` }), del: rowOf(page, name).getByRole('button', { name: `Delete ${name}` }) };
+}
