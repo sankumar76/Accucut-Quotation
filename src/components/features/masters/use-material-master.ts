@@ -7,9 +7,9 @@ import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listMaterials, type MaterialRow } from '@/lib/masters/materials-client';
 
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
 import type { MaterialFormDialogProps } from './material-form-dialog';
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
 
 /**
  * What the Materials tab of SCR-13 holds and does, apart from how it looks (STORY-02.03 AC-1, AC-2, AC-8): the list and its search, whether

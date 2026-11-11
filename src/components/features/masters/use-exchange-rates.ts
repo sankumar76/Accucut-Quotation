@@ -15,8 +15,8 @@ import {
 import { getExchangeRates, putExchangeRates, type ExchangeRatesRow } from '@/lib/masters/exchange-rates-client';
 
 import { RATES_NOTHING_TO_SAVE_NOTICE, RATES_SAVED_NOTICE } from './exchange-rate-texts';
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
 
 /**
  * What the Exchange rates tab of SCR-13 holds and does, apart from how it looks (STORY-02.04 AC-1 to AC-3): the pair as the server last

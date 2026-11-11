@@ -6,8 +6,8 @@ import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { listTreatments, type TreatmentRow } from '@/lib/masters/treatments-client';
 
-import { focusOpener, type Opener } from './process-opener';
-import type { PageNotice } from './process-texts';
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
 import { treatmentGoneNotice } from './treatment-texts';
 
 /**

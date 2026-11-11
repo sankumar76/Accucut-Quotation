@@ -7,7 +7,7 @@ import { ErrorState, SkeletonBlock } from '@/components/shared/states';
 import type { FirstOpenControl } from '@/components/shared/use-first-open';
 import { Button } from '@/components/ui/button';
 
-import { ERROR_RETRY } from './process-texts';
+import { ERROR_RETRY } from './master-texts';
 
 /**
  * Where the panel of a lazily loaded tab of SCR-13 goes in the tab shell (the Exchange rates tab of STORY-02.04 and the Treatment / Color tab of

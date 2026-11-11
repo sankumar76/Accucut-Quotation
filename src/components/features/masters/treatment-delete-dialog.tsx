@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { deleteTreatment, type TreatmentRow } from '@/lib/masters/treatments-client';
 
-import { BREAK_LONG_NAMES } from './process-texts';
+import { BREAK_LONG_NAMES } from './master-texts';
 import {
   DELETE_CONFIRM_TREATMENT,
   DELETE_KEEP_TREATMENT,

@@ -7,7 +7,7 @@ import { Notice } from '@/components/shared/notice';
 import { ErrorState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
-import { BREAK_LONG_NAMES, ERROR_RETRY } from './process-texts';
+import { BREAK_LONG_NAMES, ERROR_RETRY } from './master-texts';
 import { TreatmentDeleteDialog } from './treatment-delete-dialog';
 import { TreatmentFormDialog } from './treatment-form-dialog';
 import { TreatmentList } from './treatment-list';

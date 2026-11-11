@@ -7,10 +7,11 @@ import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { listProcessItems, type FormulaUseRow, type ProcessItemRow } from '@/lib/masters/process-items-client';
 
-import type { ProcessDialogsProps } from './process-dialogs';
+import { focusOpener, type Opener } from './master-opener';
+import type { PageNotice } from './master-texts';
+import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
-import { focusOpener, type DialogKind, type Opener } from './process-opener';
-import { goneNotice, type PageNotice } from './process-texts';
+import { goneNotice } from './process-texts';
 
 /**
  * What SCR-11 holds and does, apart from how it looks (STD-01 of the G6 of AQP-113): the list and its search, which dialog is open and

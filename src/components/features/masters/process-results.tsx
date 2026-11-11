@@ -6,16 +6,9 @@ import { Icon } from '@/components/shared/icon';
 import { EmptyState, ErrorState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
+import { CLEAR_FILTERS, ERROR_RETRY } from './master-texts';
 import { ProcessList } from './process-list';
-import {
-  CLEAR_FILTERS,
-  EMPTY_DESCRIPTION,
-  EMPTY_TITLE,
-  ERROR_RETRY,
-  ERROR_TITLE,
-  LOADING_LABEL,
-  NO_MATCH_DESCRIPTION,
-} from './process-texts';
+import { EMPTY_DESCRIPTION, EMPTY_TITLE, ERROR_TITLE, LOADING_LABEL, NO_MATCH_DESCRIPTION } from './process-texts';
 import type { ProcessMaster } from './use-process-master';
 
 /**

@@ -25,7 +25,7 @@ import {
   SAVE_EXCHANGE_RATES,
   SAVING_EXCHANGE_RATES,
 } from './exchange-rate-texts';
-import { ERROR_RETRY } from './process-texts';
+import { ERROR_RETRY } from './master-texts';
 import { RATE_FIELD_IDS, useExchangeRates, type ExchangeRatesState } from './use-exchange-rates';
 
 /**

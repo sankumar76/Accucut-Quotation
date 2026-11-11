@@ -6,6 +6,7 @@ import { Icon } from '@/components/shared/icon';
 import { EmptyState, ErrorState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
+import { BREAK_LONG_NAMES, CLEAR_FILTERS, ERROR_RETRY } from './master-texts';
 import { MaterialList } from './material-list';
 import {
   MATERIALS_EMPTY_DESCRIPTION,
@@ -15,7 +16,6 @@ import {
   MATERIALS_NO_MATCH_DESCRIPTION,
   noMaterialMatchTitle,
 } from './material-texts';
-import { BREAK_LONG_NAMES, CLEAR_FILTERS, ERROR_RETRY } from './process-texts';
 import type { MaterialMaster } from './use-material-master';
 
 /**
