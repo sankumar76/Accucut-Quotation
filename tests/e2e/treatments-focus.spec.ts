@@ -34,6 +34,7 @@ import {
  *     focus sequence is recorded, and `tests/unit/treatments-focus-rule.test.ts` holds the source to the rule.
  *   - DEF-020: an add, a rename and a delete each succeed and the read after them answers 503; the load error's title has focus and keeps it.
  *   - A failed write never says "Nothing was changed." (ux-spec v0.21, section 6.0).
+ *   - The latest read wins (G6 finding QLT-04): a first read that answers after the list was read again does not bring the older list back.
  *
  * Each test works on treatments it makes for itself. The words are written out in `support/treatments.ts`.
  */
@@ -209,7 +210,7 @@ test.describe('DEF-020 guard: a change succeeds and the read after it fails', ()
   });
 });
 
-test.describe('the latest read wins (QLT-04)', () => {
+test.describe('the latest read wins (AC-1, AC-8)', () => {
   test('a first read that answers after the list was read again does not bring the older list back', async ({ page }, testInfo) => {
     const name = newTreatmentName(testInfo);
     let release: () => void = () => undefined;

@@ -16,6 +16,9 @@ import { refusal } from '../../support/user-service-fixture';
  * in one transaction with its audit entry, a refused change writing none, the locked "Other" entry untouched, and two requests at once. Names are
  * invented.
  *
+ * The block "AC-2, AC-3 (T2): one canonical form ..." holds the G6 findings QLT-01 (one canonical form of a name) and QLT-02 (the resource answers before the
+ * name does). A test title names the AC, not the review finding (STD-15).
+ *
  * The audit entry commits with its change or not at all (DEF-017): the late-failure tests use the shared runner of tech-debt #130
  * (`tests/support/late-failure-runner.ts`), which fails only the outermost transaction, so an entry written in a second transaction inside the
  * change would stay behind and fail the test. Plants A3 (such an entry on an add) and A4 (on a rename and on a delete) each fail this file.
@@ -175,7 +178,7 @@ describe('AC-2, AC-6 (T2): adding a treatment', () => {
   });
 });
 
-describe('QLT-01, QLT-02 (T2): one canonical form of a name, and the resource answers before the name', () => {
+describe('AC-2, AC-3 (T2): one canonical form of a name, and the resource answers before the name', () => {
   afterEach(emptyTable);
 
   it('stores spaces collapsed and full-width letters folded, and refuses the near-duplicate with NAME_TAKEN, on an add and on a rename', async () => {

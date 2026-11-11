@@ -48,7 +48,7 @@ async function someoneIsWaitingForALock(): Promise<boolean> {
   return defined(rows[0]).waiting > 0;
 }
 
-describe('QLT-03: a second change waits for the first, so its audit "before" is the first one\'s "after"', () => {
+describe('AC-6, NFR-007 (T2): a second change waits for the first, so its audit "before" is the first one\'s "after"', () => {
   it.each([
     ['a second rename', 'master.edited', (id: string) => db.mastersService.updateTreatment(by(), id, { name: 'Chain-second' })],
     ['a delete', 'master.deleted', (id: string) => db.mastersService.deleteTreatment(by(), id)],

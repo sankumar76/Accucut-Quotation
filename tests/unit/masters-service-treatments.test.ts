@@ -5,6 +5,7 @@ import { createAuditService } from '@/server/services/audit-service';
 import { createMastersService } from '@/server/services/masters-service';
 import { isReservedTreatmentName } from '@/server/services/treatment-service';
 
+import { defined } from '../support/defined';
 import { createFakeAuditWorld } from '../support/fake-audit';
 import { createFakeMasterRepository } from '../support/fake-masters';
 import { seedConfig } from '../support/seed-config';
@@ -15,10 +16,13 @@ import { refusal } from '../support/user-service-fixture';
  * STORY-02.05 T2 (AC-1 to AC-4, AC-6): the rules of the Treatment / Color service over in-memory storage and the real audit service. The real
  * storage, the table lock, the constraints and the late failure of a transaction are tested against PostgreSQL in
  * `tests/integration/masters/treatments.test.ts`. Every name is invented.
+ *
+ * The blocks "AC-2: one canonical form of a name" and "AC-3: the resource answers before the name does" hold the G6 findings QLT-01 and QLT-02.
+ * A test title names the AC, not the review finding (STD-15).
  */
 
-const ALPHA = TREATMENT_CANARIES[0];
-const BETA = TREATMENT_CANARIES[1];
+const ALPHA = defined(TREATMENT_CANARIES[0]);
+const BETA = defined(TREATMENT_CANARIES[1]);
 const CONTEXT = { actorId: '00000000-0000-4000-8000-abcdef000001', actorLabel: 'Invented Admin', requestId: 'req-0a0b0c0d' } as const;
 
 function build() {
@@ -59,7 +63,7 @@ describe('the names the system keeps (AC-2)', () => {
       const added = await refusal(service.createTreatment(CONTEXT, { name }));
       expect(added).toBeInstanceOf(FieldValidationError);
       expect(added).toMatchObject({ code: NAME_RESERVED_CODE, httpStatus: 422, fields: [{ field: 'name', message: 'That name cannot be used.' }] });
-      const renamed = await refusal(service.updateTreatment(CONTEXT, ALPHA?.id ?? '', { name }));
+      const renamed = await refusal(service.updateTreatment(CONTEXT, ALPHA.id, { name }));
       expect(renamed).toMatchObject({ code: NAME_RESERVED_CODE, fields: [{ field: 'name', message: 'That name cannot be used.' }] });
       expect(world.audit.committed).toHaveLength(0);
       expect(masters.treatments).toHaveLength(3);
@@ -83,7 +87,7 @@ describe('the names the system keeps (AC-2)', () => {
   });
 });
 
-describe('one canonical form of a name (QLT-01)', () => {
+describe('AC-2: one canonical form of a name', () => {
   it('stores a name with its spaces collapsed and trimmed, and a full-width spelling folded', async () => {
     const { service, masters } = build();
     const spaced = await service.createTreatment(CONTEXT, { name: '  Invented   powder\tcoat ' });
@@ -99,7 +103,7 @@ describe('one canonical form of a name (QLT-01)', () => {
       await service.createTreatment(CONTEXT, { name: 'Invented powder coat' });
       const entries = world.audit.committed.length;
       expect(await refusal(service.createTreatment(CONTEXT, { name }))).toMatchObject({ code: NAME_TAKEN_CODE });
-      expect(await refusal(service.updateTreatment(CONTEXT, BETA?.id ?? '', { name }))).toMatchObject({ code: NAME_TAKEN_CODE });
+      expect(await refusal(service.updateTreatment(CONTEXT, BETA.id, { name }))).toMatchObject({ code: NAME_TAKEN_CODE });
       expect(world.audit.committed).toHaveLength(entries);
     },
   );
@@ -115,7 +119,7 @@ describe('one canonical form of a name (QLT-01)', () => {
   });
 });
 
-describe('the resource answers before the name does (QLT-02)', () => {
+describe('AC-3: the resource answers before the name does', () => {
   it.each(['Other', 'OTHER', 'Not applicable', 'Invented new name'])('a rename of the locked "Other" to %j is 409 TREATMENT_LOCKED, never 422', async (name) => {
     const { service, world } = build();
     expect(await refusal(service.updateTreatment(CONTEXT, OTHER_TREATMENT_ID, { name }))).toMatchObject({ code: TREATMENT_LOCKED_CODE, httpStatus: 409 });
@@ -129,10 +133,10 @@ describe('the resource answers before the name does (QLT-02)', () => {
 
   it('a rename of a real treatment to a name the system keeps is still 422 NAME_RESERVED, after the lock, and writes nothing', async () => {
     const { service, world, masters } = build();
-    expect(await refusal(service.updateTreatment(CONTEXT, ALPHA?.id ?? '', { name: 'other' }))).toMatchObject({ code: NAME_RESERVED_CODE });
+    expect(await refusal(service.updateTreatment(CONTEXT, ALPHA.id, { name: 'other' }))).toMatchObject({ code: NAME_RESERVED_CODE });
     expect(masters.treatmentLockCount()).toBe(1);
     expect(world.audit.committed).toHaveLength(0);
-    expect(masters.treatments.find((treatment) => treatment.id === ALPHA?.id)?.name).toBe('Canary-Treatment-Alpha');
+    expect(masters.treatments.find((treatment) => treatment.id === ALPHA.id)?.name).toBe('Canary-Treatment-Alpha');
   });
 });
 
@@ -174,7 +178,7 @@ describe('createTreatment (AC-2, AC-6)', () => {
 });
 
 describe('updateTreatment, a rename (AC-2, AC-3, AC-6)', () => {
-  const id = ALPHA?.id ?? '';
+  const id = ALPHA.id;
 
   it('renames and writes exactly one master.edited entry with the name before and after', async () => {
     const { service, world } = build();
@@ -191,7 +195,7 @@ describe('updateTreatment, a rename (AC-2, AC-3, AC-6)', () => {
     });
   });
 
-  it('takes the table lock before the row lock, as PRF-01 fixed it', async () => {
+  it('takes the table lock before the row lock, in the order architecture section 6 fixes', async () => {
     const { service, masters } = build();
     const lock = vi.spyOn(masters, 'lockTreatments');
     const find = vi.spyOn(masters, 'findTreatmentForUpdate');
@@ -210,7 +214,7 @@ describe('updateTreatment, a rename (AC-2, AC-3, AC-6)', () => {
 
   it('refuses a rename onto another treatment (any letter case), and allows a change of its own letter case', async () => {
     const { service, world } = build();
-    const error = await refusal(service.updateTreatment(CONTEXT, id, { name: BETA?.name.toUpperCase() ?? '' }));
+    const error = await refusal(service.updateTreatment(CONTEXT, id, { name: BETA.name.toUpperCase() }));
     expect(error).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'name', message: 'A treatment with this name already exists.' }] });
     expect(world.audit.committed).toHaveLength(0);
     await service.updateTreatment(CONTEXT, id, { name: 'canary-treatment-alpha' });
@@ -252,7 +256,7 @@ describe('the locked "Other" entry (AC-3), in the service and not only on the sc
 });
 
 describe('deleteTreatment (AC-4, AC-6)', () => {
-  const id = ALPHA?.id ?? '';
+  const id = ALPHA.id;
 
   it('removes the treatment from the list and writes exactly one master.deleted entry with the name before and nothing after', async () => {
     const { service, world, masters } = build();
