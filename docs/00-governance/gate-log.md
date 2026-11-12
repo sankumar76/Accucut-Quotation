@@ -6834,3 +6834,55 @@ Alternatives considered:
 **Risks:** none new.
 
 **Posted:** PR #334 comment 6821446985; Jira AQP-275 comment 11661; #225 scope comment 6821451017.
+
+## G6 – Peer Review — AQP-142 (STORY-02.02 Customers, PR #297 at H1 = cb95102 = alignment commit on 2cee960 = F1 b9f36fa + `master` 3f22672) — 2026-11-12 (attempt 2)
+
+- **Decision:** **GO (DL-184).** It closes DL-172's CONDITIONAL GO under DL-172 (8)(d). AQP-142 goes to **In QA** (orchestrator), and G7 (qa-engineer) is set below. The median of five on H1, 5:57, is a RISK-023 reading and holds nothing (DL-173 (3)).
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2
+- **Artefacts evaluated:** PR #297 (b9f36fa, 2cee960, cb95102) and its Dev Record; round-2 reviews 5872281163 (performance), 5872361768 (standards), 5872432837 (quality); `docs/06-reviews/AQP-142/{standards,quality,performance,consolidated}.md`; controls #332, #333; runs 43200501126 (attempts 1 to 6), 43197966408, 43194372418, 43194383200; ux-spec v0.26; Jira AQP-142 11640 to 11665
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present (round 2, new diff efcf768..b9f36fa) | ✱ | ✅ | All three APPROVE WITH COMMENTS; labels `review:*-approved` |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0; new Minors STD-12, QLT-09, PRF-06; Info PRF-07 |
+| 3 | Majors fixed or accepted | | ✅ | QLT-01 and STD-01 fixed (round 2); 0 open Major |
+| 4 | Findings cite file:line | | ✅ | the three reports, round 2 |
+| 5 | Re-plants red as DL-172 (5) asked (read by master) | ✱ | ✅ | #332 = one A1 line: red at `customers-focus.spec.ts:131` × 3 widths (run 43194372418), not at `:105`. #333 = one A2 line: red at `:105` × 3 (43194383200), not at `:131`. The guard files do not change from b9f36fa to H1 |
+| 6 | Update U has no hunk of its own | | ✅ | 2cee960 parents b9f36fa and 3f22672; `git show --cc` 0 lines |
+| 7 | Alignment diff read (DL-172 (8)(b)) | ✱ | ✅ | cb95102: 8 files +57 / -38. Customers table-actions entry (11 cases); shared `SAVED_NOT_SHOWN_BODY` (identical string); QLT-06 header; STD-12 move; QLT-09 words = ux-spec v0.26. Extra items (c) to (e) accepted (DL-184 (3)) |
+| 8 | CI on H1 5 of 5, deltas as stated | ✱ | ✅ | 43200501126 attempt 1; merge ref 321905e (cb95102 into 3f22672); 3,327 / 5,812 / 876 / 24 = **+133 / +254 / +56 / +0** against 43197966408; 0 flaky; no leaks |
+| 9 | Every base E2E name present | | ✅ | 838 base names, 0 missing; 56 new = the story's specs at three widths + 11 table-actions cases |
+| 10 | Median of five on H1 (DL-173) | | ✅ read | 6:30, 5:43, 5:53, 5:57, 6:10 → **5:57**; no cache miss or fallback; slack 1:54 to 2:20 (shards set the path); attempt 6 (5:48) not counted, same result either way |
+| 11 | Dev Record current | | ✅ | rows for the alignment items and PRF-06; counts per shard |
+
+**Conditions / remediation (G7, qa-engineer, on H1)**
+| # | Owner agent | Artefact | Required change | Due gate |
+|---|-------------|----------|-----------------|----------|
+| a | qa-engineer | test report | All eight ACs at 360 / 768 / 1366 px; AC-2 per DL-177 (`12.5` → `12.50`; `11.555` refused; untouched value not re-judged) | G7 |
+| b | qa-engineer | test report | ux-spec v0.24 to v0.26 words string by string. Reset paragraphs reported (Should, no fail). QLT-09: reproduce case (5) or (6) in a browser if feasible (title focused, no "Nothing was changed"); else say why and cite the unit cases | G7 |
+| c | qa-engineer | throwaway PR | One control: a plant in the Customers table only turns the 11 SCR-12 table-actions cases red, others green; diff printed; closed unmerged | G7 |
+| d | qa-engineer | test report | Canary scan covers customer rates and phone (Engineer 0); Engineer 403 on the five customer routes | G7 |
+| e | qa-engineer | test report | axe (full NFR-018 tags incl. `wcag21a`) on list, edit page, Add and Reset dialogs; keyboard and focus after good and failed reads | G7 |
+| f | qa-engineer | test report | Regression by name against the merge-ref `master` push run, as a delta; 0 flaky | G7 |
+| g | qa-engineer | PR #297 | Report as one commit (H2 = H1 + report). Any test file makes a new head: CI 5 of 5, delta stated, master reads it | G7 |
+
+**Merge prerequisites (DL-172 (9), in full; DL-184 (9))**
+- **Records first:** the records PR with ux-spec v0.24 to v0.26, PRD v0.24, DL-177 and DL-184 merges before #297's final update.
+- **Hold:** #336 (AQP-276) does not merge before #297 (DL-180).
+- **#334:** may merge first. The only shared file is `masters-table-actions.spec.ts`, with disjoint hunks; a conflict comes back to master.
+- **Update:** by update-branch, merge method. On H3: parents H2 and the tip; `--cc` with no hunk; `git diff H2 H3` over #297's files empty; `git diff --stat <tip> H3` = #297's files. All posted.
+- **CI on H3:** 5 of 5, every attempt read, at the merge-ref `master` push run +133 / +254 / +56 / +0 plus any QA delta; every base name present; 0 flaky.
+- **Body and squash:** add "Refs #326" to the PR body, with no closing keyword. The orchestrator writes the squash body itself. Title "AQP-142: STORY-02.02: Customers".
+- **After:** the `master` push run read and posted; AQP-142 Done (qa-engineer, on G7 GO); then #336.
+
+**Findings disposition:**
+- **Fixed:** STD-12, QLT-06, QLT-09 in H1.
+- **Closed:** PRF-06 by the Dev Record (baseline 180,854 B); PRF-02 by DL-178; QLT-07 by DL-177.
+- **Accepted:** PRF-07, STD-10, STD-11, QLT-08, PRF-03 to PRF-05.
+- **Elsewhere:** #326 cross-screen follow-up (due G8); #297's two `BREAK_LONG_NAMES` props go to #225 (DL-183).
+
+**Risks registered:** none new. RISK-023 reading recorded (median of five 5:57 on H1; stays at 8).
+**Rationale:** Every mandatory G6 item is met on the head QA will test, with re-plants, alignment diff, counts and median read by master. The three items added to the alignment commit are small and owner-proposed, or ux-expert words; CI is green on them and QA tests them, so no round 3 is needed. CI time is a trigger for the next step, which is already placed, not a hold.
+
+**Posted:** PR #297 comment 6823683085; Jira AQP-142 comment 11670.
