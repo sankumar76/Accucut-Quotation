@@ -211,7 +211,7 @@ test.describe('a tap before the page is interactive (AC-10, DEF-013)', () => {
     await expect(trigger).toHaveAttribute('aria-busy', 'true');
 
     gate.release();
-    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
   });
 
   test('Space on the account trigger is kept', async ({ page }) => {
@@ -224,7 +224,7 @@ test.describe('a tap before the page is interactive (AC-10, DEF-013)', () => {
     await expect(trigger).toHaveAttribute('aria-busy', 'true');
 
     gate.release();
-    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
   });
 
   test('Escape before the scripts arrive cancels: no pending look, and the menu stays closed', async ({ page }) => {
