@@ -338,15 +338,21 @@ test.describe('search and states (AC-1, AC-8)', () => {
 
   test('DEF-035 (AQP-289): a 100-character search with no space shows the "No rate matches" title wrapped inside the window, and the page does not scroll sideways', async ({ page }) => {
     await openProcessMaster(page);
-    const query = 'abcdefghij'.repeat(LONG_SEARCH_LENGTH / 10);
+    // A wide letter with no break point: 100 of them are wider than the box at every project width, 1366 px included.
+    const query = 'W'.repeat(LONG_SEARCH_LENGTH);
     await page.getByLabel('Search').fill(query);
     const title = page.getByRole('heading', { level: 2, name: `No rate matches "${query}"` });
     await expect(title).toBeVisible();
     const width = page.viewportSize()?.width ?? 0;
     const box = await title.boundingBox();
+    const lineHeight = await title.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight));
+    // Line 1 is "No rate matches". Without the wrap rule the title still breaks at the spaces of `No rate matches "..."`, into two lines, so the
+    // check is for a third: it shows only when the search text itself was wider than the box and was broken inside the word.
+    expect(box?.height ?? 0, 'the search text itself wrapped onto more than one line').toBeGreaterThan(lineHeight * 2.5);
     expect(box?.x ?? -1, 'the title starts inside the window').toBeGreaterThanOrEqual(0);
     expect((box?.x ?? 0) + (box?.width ?? Number.POSITIVE_INFINITY), 'the title ends inside the window').toBeLessThanOrEqual(width);
     expect(await horizontalOverflow(page), 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 
   test('shows the skeleton after 300 ms while the list is read again, with the card busy, and the list when it arrives', async ({ page }, testInfo) => {
