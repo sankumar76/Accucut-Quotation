@@ -107,7 +107,7 @@ describe('AC-3: only one active Admin', () => {
       })(),
       create: () => Promise.reject(new UserConstraintError('single-active-admin', { cause: new Error('uq_users_single_active_admin') })),
     };
-    const error = await refusal(build(racing).create(by(adminId), { name: 'Second Admin', email: 'second@example.test', role: 'ADMIN', password: 'x1!' }));
+    const error = await refusal(build(racing).create(by(adminId), { name: 'Second Admin', email: 'second@example.test', role: 'ADMIN', password: 'Racing-pass-7!' }));
     expect(error).toBeInstanceOf(ActiveAdminExistsError);
     expect(error).toMatchObject({ currentAdmin: { id: adminId, name: 'Invented Admin' } });
   });
@@ -133,14 +133,14 @@ describe('AC-3: only one active Admin', () => {
       ...users,
       create: () => Promise.reject(new UserConstraintError('email', { cause: new Error('uq_users_email') })),
     };
-    const error = await refusal(build(racing).create(by(adminId), { name: 'Rohan Das', email: 'rohan@example.test', role: 'ENGINEER', password: 'x1!' }));
+    const error = await refusal(build(racing).create(by(adminId), { name: 'Rohan Das', email: 'rohan@example.test', role: 'ENGINEER', password: 'Racing-pass-7!' }));
     expect(error).toBeInstanceOf(FieldValidationError);
   });
 
   it('passes on any other failure of the database untouched', async () => {
     const broken = new Error('connection lost');
     const failing: UserRepository = { ...users, create: () => Promise.reject(broken) };
-    expect(await refusal(build(failing).create(by(adminId), { name: 'Rohan Das', email: 'rohan@example.test', role: 'ENGINEER', password: 'x1!' }))).toBe(broken);
+    expect(await refusal(build(failing).create(by(adminId), { name: 'Rohan Das', email: 'rohan@example.test', role: 'ENGINEER', password: 'Racing-pass-7!' }))).toBe(broken);
   });
 });
 
