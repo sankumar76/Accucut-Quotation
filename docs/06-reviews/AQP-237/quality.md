@@ -3,6 +3,97 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
+| Review round | **2** (re-review, DL-156 condition R) |
+| Base…branch | `87465b6..57acbae` (PR #250); merge `2c543cd` (`master` 2891457) read with `git show --cc` |
+| Commit reviewed | 57acbae |
+| Date | 2026-11-11 |
+| **Verdict** | **APPROVE WITH COMMENTS** |
+
+PR review, round 2 (system of record): https://github.com/sankumar76/Accucut-Quotation/pull/250#pullrequestreview-5867152081
+
+## Round 2
+
+### Summary
+
+The fix round closes both gaps that blocked G6. The function that lexically holds the call must own the `tx` parameter, at the `record` call and at every helper step (QLT-01). Each call on the chain must be awaited, returned or an arrow body (QLT-02). `record` is selected by its receiver type, so `.call`, `.bind` and aliases fail, and `z.record` is not visited (QLT-03). The lint test asserts the rule's own message (QLT-05). Both headers list each form the check does not close (QLT-06). All six required reviewer plants are red on a `master`-based control, each with exactly one finding at the right line. Q6 is green with no finding, and Q4 and Q5 pass as the headers say. I ran the `restrict()` mutation myself: every refusal row fails. The merge `2c543cd` is clean (`git show --cc` prints no hunk). The only new note is an optional Info (QLT-08).
+
+| Severity | New in round 2 |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 1 |
+
+### Previous Findings (re-review only)
+
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-01 | Critical | **Fixed** | `problemWithPlacement` (`audit-transaction-check.ts:189-194`) requires `holderOf(call) === parameter.fn`. It is applied at the `record` call (`problemWithRecord`, :311-315) and at every helper call (`problemWithUse`, :300-309). FAILING cases Q2, Q2 `Promise.all(map)` and Q2b. Control #272: Q2 red at `user-service.ts:239`, Q2b red at `:245`. Thread reply r4544752203 |
+| QLT-02 | Major | **Fixed** | `isAwaitedOrReturned` (:181-186) is applied through `problemWithPlacement` to `record` and every helper call. FAILING cases Q1, Q1b, Q1c; PASSING "returned". Control #272: Q1 red at `:222`, Q1b red at `:230`. r4544752704 |
+| QLT-03 | Minor | **Fixed** | `verdictOn` / `isAuditServiceRecord` (:318-340): selection by the `AuditService` member in `audit-service.ts`; an `any` receiver fails; a use that is not the callee fails. Control #272: Q3 `:262`, Q3b `:272` red; Q6 not visited (`checked: 24` = 15 + 9 planted uses, so Q6 is not counted). r4544753177 |
+| QLT-04 | Minor | **Deferred** (DL-156 (4), #259); accepted | Listed as ACCEPTED in both headers; `OPEN_LIMITS` Q5 case. Q5 passes on #272. r4544753602 |
+| QLT-05 | Minor | **Fixed**, verified | Every refusal row asserts the rule's own message. My mutation (`TRANSACTION_HANDLE_IMPORT` removed from `restrict()`, `eslint.config.mjs:161`, local, reverted): **81 failed / 30 passed of 111**, with **27 of 27** lib, page and component rows failing (round 1: 22 of 27 stayed green). The 30 passes are the 27 allowed-file rows and 3 other-rule rows. r4544753967 |
+| QLT-06 | Minor | **Fixed** | Check header :28-40 lists ACCEPTED and FAILS forms; test header :19-21 summarises them and points to it; each ACCEPTED form is pinned by an `OPEN_LIMITS` case. r4544754418 |
+| QLT-07 | Info | **Accepted** | Q4 passes on #272, as documented; `OPEN_LIMITS` Q4 (two files). r4544754776 |
+
+### Checks Run
+
+| Check | Command / source | Result |
+|-------|------------------|--------|
+| Merge commit | `git show --cc 2c543cd` | no combined hunk (clean merge). `master`'s side changes to PR files: `engineer-import-rule.test.ts` +2 (`master-constraints`, `material-repository` from #235) |
+| CI on fix head | run 43056524392, attempt 1 (57acbae) | 5 of 5 green; unit 3,078 (= 2,922 + 140 + 16), full 5,441, E2E 778, skipped 24 |
+| Test counts | the case tables, read | architecture test 45 = 4 + 11 PASSING + 26 FAILING + 4 OPEN_LIMITS (n_u = 45 − 29 = 16, matching the Dev Record) |
+| Local test run | `npx vitest run` on the architecture, lint-rule and Engineer-import test files, on the plant branch | 809 of 810 pass; the only failure is the planted AC-4 row, so the fix head is 810 of 810 |
+| Reviewer plants | control **PR #272**, branch `chore/AQP-237-r3-qlt-plants` (57acbae + 2e8d999), base `master`; diff printed in the PR body before the result; plants applied by a script that fails unless each anchor occurs exactly once; **CI run 43126285285**, attempt 1, read in full | Stage 4 lint green; stage 6 **3 failed of 3,079**: the AC-4 row and the probe (exactly 6 findings, `checked: 24`), plus `tokens.test.ts` reading the text `#259` in my plant comment as a hex colour (an artefact of the plant); E2E green. Result comment 6810619265; PR closed unmerged |
+| `restrict()` mutation | see QLT-05 | killed in every group |
+
+### Plant results (control #272, run 43126285285)
+
+| Plant | Form | Required | Result (CI, quoted) |
+|---|---|---|---|
+| Q1 | `void audit.record(tx, e)` in the callback | red | `user-service.ts:222: the record call is not awaited or returned, so it can run after the .run( callback has returned` |
+| Q1b | `audit.record(tx, e)` with no `await` | red | `user-service.ts:230: the record call is not awaited or returned, …` |
+| Q2 | `['a','b'].forEach(async () => { await audit.record(tx, e) })` | red | `user-service.ts:239: the record call sits in a nested function, not in the function at line 236, whose parameter it passes` |
+| Q2b | `['a'].forEach(async () => { await plantedQ2bNote(audit, context, tx) })` | red | `user-service.ts:245: the call to plantedQ2bNote at line 250 sits in a nested function, not in the function at line 247, whose parameter it passes` |
+| Q3 | kept handle, `audit.record.call(audit, kept, e)` | red | `user-service.ts:262: AuditService.record is used other than as the callee of a direct call (.call, .bind or an alias), which the check cannot follow` |
+| Q3b | kept handle, `const write = audit.record.bind(audit); await write(kept, e)` | red | `user-service.ts:272: AuditService.record is used other than as the callee …` |
+| Q6 | `export const plantedQ6 = z.record(z.string(), z.string())` in `audit-events.ts` | green, no finding | not visited; no finding |
+| Q4 | exported helper; a correct caller in its own file, a kept-handle caller in `exchange-rate-service.ts` | passes (listed) | no finding |
+| Q5 | P3 with (b) met by a closure that never runs | passes (listed, #259) | no finding |
+| X1 (exploratory) | awaited `record` inside `try { } catch { }` that drops the error | — | no finding (QLT-08) |
+
+### Findings (round 2)
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-08 | Info | `tests/support/audit-transaction-check.ts:34-37` | AC-5 (list); architecture §6 "or not at all" | An awaited `record` whose error is caught and not rethrown inside the callback passes (X1). This is correct for AC-2, because the entry is in the change's transaction, but the header does not list it | If `record` throws before it reaches the database, the change commits without its entry. No real call sits in a `try` today | Optional: add `ACCEPTED: a record whose error is caught and not rethrown inside the callback (error handling is outside this check)`, and optionally an `OPEN_LIMITS` case with the X1 body |
+
+**New-code review notes (no finding).** `holderOf` uses `ts.isFunctionLike`, so a `record` inside a constructor, an accessor, a class-field arrow or an IIFE fails closed. Either its parameter is not a `FunctionNode`, or the function is not a named helper. Some legitimate shapes are refused with a "not awaited" message, for example `await (audit.record(tx, e) as Promise<void>)`, `await Promise.all([repo.add(tx), audit.record(tx, e)])` and `repo.add(tx).then(() => audit.record(tx, e))`. DL-156 accepted this strictness, and AC-4 routes any real case to the solution-architect. A receiver typed as an intersection, a `Pick<AuditService, 'record'>` or `AuditService | undefined` is still visited. A wrapper class inside `src/server/services` that delegates to `AuditService.record` is caught at the delegation, which is not a named helper. No new defect found.
+
+### AC conformance (fix head 57acbae)
+
+| AC | Implemented in | Tested by | Result |
+|----|----------------|-----------|--------|
+| AC-1 import rule | `eslint.config.mjs` (`TRANSACTION_HANDLE_IMPORT`, block `accucut/transaction-handle-is-for-the-runner`, `restrict()`) | `transaction-handle-rule.test.ts` (111, message asserted); Engineer controls | **Met**; P4 red on #264 (developer); mutation killed in every group |
+| AC-2 (a) lexical holder F, chain ≤ 3, no cycles | `problemWithRecord`, `problemWithPlacement`, `chainProblem`, `problemWithCallers`, `problemWithUse` | 11 PASSING, 26 FAILING | **Met** (QLT-01 and QLT-02 closed; Q1 to Q3b red on #272) |
+| AC-2 (b) another repository call | `callsAnotherRepository`, `isRepositoryCallWith`, `isAnotherRepository` | P3, P3b, local store, stray handle | **Met** as written; dead-closure limit deferred (#259) |
+| AC-3 plants | the two checks | P1 to P5 on #263 and #264 (developer); Q1 to Q3b on #272 (reviewer) | **Met**; every diff printed before its result |
+| AC-4 today's code passes, no escape hatch | no allow-list, no `eslint-disable` | AC-4 row: 15 checked, no finding, pinned at ≥ 15 | **Met**; count of 15 explained (PO change note, 2026-11-11) |
+| AC-5 cost, stage, header | existing stages; both headers | CI stage 6 | Header list **met**. Time: **10.5 s in stage 6 on the fix-head run, over the 10 s report line**. The developer reported it. → reviewer-performance (DL-156 (7) re-run trigger, over 8 s) and the solution-architect. Not a quality finding |
+
+### Issues for other roles (round 2)
+
+- **reviewer-performance / solution-architect:** stage 6 file time 10,515 ms (run 43056524392) is over AC-5's 10 s line and DL-156 (7)'s 8 s re-run trigger.
+- **orchestrator / delivery lead:** delete the remote branch `chore/AQP-237-r3-qlt-plants`. PR #272 is closed unmerged. My session does not delete branches.
+
+---
+
+## Round 1
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality |
 | Review round | 1 |
 | Base…branch | `master...feat/AQP-237-audit-record-tx-checks` (PR #250) |
 | Commit reviewed | 87465b6 |
