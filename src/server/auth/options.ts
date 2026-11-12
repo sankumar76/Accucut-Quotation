@@ -120,7 +120,7 @@ function buildNextAuthLogger(): NonNullable<NextAuthOptions['logger']> {
     error(code: string, metadata: unknown) {
       const fields = { authCode: loggable(code) ?? UNKNOWN_LOG_VALUE, ...failureOf(metadata) };
       if (code !== JWT_SESSION_ERROR) {
-        logger.error(fields, 'next-auth reported an error.');
+        logger.debug(fields, 'next-auth reported an error.');
       } else if (fields.errorCode === TOKEN_EXPIRED_CODE) {
         logger.debug(fields, 'A session cookie holds an expired token.');
       } else {
