@@ -51,7 +51,8 @@ async function expectNotice(page: Page, title: string): Promise<void> {
 }
 
 /**
- * The code is slow: `first` is pressed, then `others` and `first` again. Only `first` is pending, nobody asked for the code twice, and when the code
+ * The code is slow: `first` is pressed, then `first` again, then each of `others` (the last press is on another button, because a press that is
+ * not ignored moves the pending look and the target to the button pressed last). Only `first` is pending, nobody asked for the code twice, and when the code
  * arrives the dialog is the one `first` opens; Escape closes it and focus returns to `first`.
  */
 async function expectSecondPressesDoNothing(page: Page, gate: ScriptGate, first: Locator, others: ReadonlyArray<Locator>, dialogName: string): Promise<void> {
@@ -61,8 +62,8 @@ async function expectSecondPressesDoNothing(page: Page, gate: ScriptGate, first:
   await expect(first).toHaveAttribute('aria-busy', 'true');
   await expect(first).toBeEnabled();
   await expect(noticeOf(page), 'pressing again clears the notice').toHaveCount(0);
-  for (const other of others) await other.click();
   await first.click();
+  for (const other of others) await other.click();
   await expect(first, 'the first press is still the pending one').toHaveAttribute('aria-busy', 'true');
   for (const other of others) await expect(other, 'a second press does not move the pending look').not.toHaveAttribute('aria-busy', 'true');
   const requested = gate.urls.slice(before);
