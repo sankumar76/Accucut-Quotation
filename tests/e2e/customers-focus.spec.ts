@@ -133,8 +133,17 @@ test.describe('the read after an add (DL-153, DEF-020)', () => {
     await openCustomers(page);
     const fail = await failListWhen(page, BUSY);
     fail.value = true;
+    // CONTROL (reviewer-quality): hold the failing read until the Add dialog has closed, as the #244 slow-read failure tests do.
+    const gate = aGate();
+    await page.route('**/api/v1/customers', async (route: Route) => {
+      if (route.request().method() === 'GET') await gate.passed;
+      return route.fallback();
+    });
     const focusLog = await recordFocus(page);
     await addByKeyboard(page, name);
+    await expect(page.getByRole('dialog', { name: ADD })).toHaveCount(0);
+    await afterOneFrame(page);
+    gate.release();
 
     const title = page.getByRole('heading', { name: LOAD_ERROR_TITLE });
     await expect(title).toBeVisible();
