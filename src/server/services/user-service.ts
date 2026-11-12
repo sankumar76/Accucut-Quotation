@@ -13,6 +13,7 @@ import {
 } from '../repositories/user-repository';
 
 import type { AuditContext, AuditService } from './audit-service';
+import { assertPasswordRule } from './password-policy';
 
 /**
  * User management by the Admin (STORY-01.04; FR-004, FR-005; architecture sections 5.1, 6 and 8): add, edit, deactivate,
@@ -24,8 +25,9 @@ import type { AuditContext, AuditService } from './audit-service';
  *   - **The Admin cannot lock themself out** (AC-4, architecture section 8 "Admin guards"): not their own deactivation, not
  *     their own role. A server rule; a disabled button is not enough.
  *   - **A password the Admin sets is temporary** (AC-1, AC-5, FR-004): it is stored as an argon2id hash only, `must_change_password`
- *     is set (the forced page is story 01.05), a reset ends the person's open sessions and lifts their sign-in block.
- *     The password rule (FR-098) is story 01.05's; until then a non-empty password is accepted (assumption A-1).
+ *     is set (the person is sent to "Set a new password", STORY-01.05), a reset ends the person's open sessions and lifts their
+ *     sign-in block. The password meets the rule (FR-098, STORY-01.05 AC-4) or the change is refused with 422 `PASSWORD_RULE`
+ *     naming the failing part, before any hash is made.
  *
  * Each change is one method here, and **one transaction** (STORY-01.07 AC-2, AC-3): the change and its audit entry are written
  * together, so the entry exists exactly when the change does. A change that is refused for a rule, or whose entry is refused
@@ -118,6 +120,7 @@ export function createUserService({ users, throttles, hasher, transactions, audi
     },
 
     async create(context, { name, email, role, password }) {
+      assertPasswordRule(password, { email, subject: 'other', field: 'password' });
       if (role === 'ADMIN' && (await users.findActiveAdmin()) !== null) throw await activeAdminExists();
       const passwordHash = await hasher.hash(password);
       const normalisedEmail = normaliseEmail(email);
@@ -187,6 +190,7 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       if (isSamePerson(context.actorId, asked.id)) {
         throw new ConflictError('You cannot reset your own password here.', { code: CANNOT_RESET_OWN_PASSWORD_CODE });
       }
+      assertPasswordRule(password, { email: asked.email, subject: 'other', field: 'password' });
       // Hashed before the transaction opens (PRF-03): argon2id takes about 350 ms, and the row lock and a pool connection
       // must not be held for that.
       const passwordHash = await hasher.hash(password);
