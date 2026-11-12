@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label';
 
 /**
  * The search box above a master's list (SCR-11 "Search", SCR-13): one labelled search field in the card's top band, 44 px high, that
- * filters the list as the person types. It holds no state; the screen owns the query. A master that is not the Process Master uses it
- * with its own id, label and placeholder.
+ * filters the list as the person types. It holds no state; the screen owns the query. Every master that has a search (the Process Master and the
+ * Materials tab) uses it with its own id, label and placeholder.
  */
 
 export interface MasterSearchBoxProps {

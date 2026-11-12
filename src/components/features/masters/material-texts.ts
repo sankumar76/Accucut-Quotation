@@ -1,5 +1,5 @@
+import { RUPEE } from '@/lib/masters/master-rules';
 import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
-import { RUPEE } from '@/lib/masters/process-items';
 
 import type { PageNotice } from './master-texts';
 

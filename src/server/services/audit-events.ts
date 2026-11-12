@@ -3,8 +3,9 @@ import { z } from 'zod';
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
+import { RUPEE } from '../../lib/masters/master-rules';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
-import { formatDefaultValue, RUPEE, unitLabel } from '../../lib/masters/process-items';
+import { formatDefaultValue, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 import type { JsonValue } from '../repositories/audit-repository';
 

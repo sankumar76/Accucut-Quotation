@@ -1,0 +1,45 @@
+# QA browser control (PR #292, branch control/AQP-89-qa-browser, head a12872d), run 43155026763, attempt 1: lines the spec printed, read from the CI log (invented data only)
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 alerts-in-document=[{"text":"Your session ended. Sign in again to continue where you left off.","inMain":true,"tag":"div"}]
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 aria-snapshot-main=
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 ax-alert name="" props={"live":"assertive","atomic":true,"relevant":"additions text"}
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 ax-order=["link","heading","alert","alert","button","button"]
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 events=["30ms[loading] added body","30ms[loading] added div","30ms[loading] added main","30ms[loading] added div[role=alert]","198ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 events=["34ms[loading] added body","34ms[loading] added div","34ms[loading] added main","34ms[loading] added div[role=alert]","202ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-01 raw-html status=200 role-alert-in-initial-html=true h1-before-alert=true
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 alerts-in-document=[{"text":"Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.","inMain":true,"tag":"p"}]
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 aria-snapshot-main=
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 ax-alert name="" props={"live":"assertive","atomic":true,"relevant":"additions text"}
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 ax-order=["link","heading","alert","link","alert"]
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 events=["216ms[interactive] added div","226ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 events=["232ms[interactive] added div","254ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 1 of 3) | QA-A11Y SCR-26 raw-html status=401 role-alert-in-initial-html=false h1-before-alert=false
+Stage 12: E2E (shard 1 of 3) | QA-HOP expired-token api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-c9094327"}
+Stage 12: E2E (shard 1 of 3) | QA-HOP expired-token api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-ce4700ab"}
+Stage 12: E2E (shard 1 of 3) | QA-HOP expired-token landed=/sign-in?reason=session-ended&callbackUrl=%2Faudit
+Stage 12: E2E (shard 1 of 3) | QA-HOP old-sign-in api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-32ac59ad"}
+Stage 12: E2E (shard 1 of 3) | QA-HOP old-sign-in api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-410a6419"}
+Stage 12: E2E (shard 1 of 3) | QA-HOP old-sign-in landed=/sign-in?reason=session-ended&callbackUrl=%2Faudit
+Stage 12: E2E (shard 1 of 3) | QA-NOSESSION api status=401 code=UNAUTHORIZED
+Stage 12: E2E (shard 1 of 3) | QA-SIGNOUT landed=/sign-in
+Stage 12: E2E (shard 1 of 3) | QA-SIGNOUT stale api status=401 code=UNAUTHORIZED
+Stage 12: E2E (shard 1 of 3) | QA-SIGNOUT stale page landed=/sign-in
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 alerts-in-document=[{"text":"Your session ended. Sign in again to continue where you left off.","inMain":true,"tag":"div"}]
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 aria-snapshot-main=
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 ax-alert name="" props={"live":"assertive","atomic":true,"relevant":"additions text"}
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 ax-order=["link","heading","alert","alert","button","button"]
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 events=["59ms[loading] added body","59ms[loading] added div","59ms[loading] added main","59ms[loading] added div[role=alert]","248ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-01 raw-html status=200 role-alert-in-initial-html=true h1-before-alert=true
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 alerts-in-document=[{"text":"Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.","inMain":true,"tag":"p"}]
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 aria-snapshot-main=
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 ax-alert name="" props={"live":"assertive","atomic":true,"relevant":"additions text"}
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 ax-order=["link","heading","alert","link","alert"]
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 events=["257ms[complete] added div","291ms[complete] focusin h1"] active=h1
+Stage 12: E2E (shard 2 of 3) | QA-A11Y SCR-26 raw-html status=401 role-alert-in-initial-html=false h1-before-alert=false
+Stage 12: E2E (shard 2 of 3) | QA-HOP expired-token api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-dc3b92d6"}
+Stage 12: E2E (shard 2 of 3) | QA-HOP expired-token landed=/sign-in?reason=session-ended&callbackUrl=%2Faudit
+Stage 12: E2E (shard 2 of 3) | QA-HOP old-sign-in api=401 body={"type":"about:blank","title":"Your session ended. Sign in again.","status":401,"code":"SESSION_ENDED","requestId":"req-9b722f9f"}
+Stage 12: E2E (shard 2 of 3) | QA-HOP old-sign-in landed=/sign-in?reason=session-ended&callbackUrl=%2Faudit
+Stage 12: E2E (shard 2 of 3) | QA-NOSESSION api status=401 code=UNAUTHORIZED
+Stage 12: E2E (shard 2 of 3) | QA-SIGNOUT landed=/sign-in
+Stage 12: E2E (shard 2 of 3) | QA-SIGNOUT stale api status=401 code=UNAUTHORIZED
+Stage 12: E2E (shard 2 of 3) | QA-SIGNOUT stale page landed=/sign-in

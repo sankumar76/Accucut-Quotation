@@ -1,4 +1,4 @@
-import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, normaliseDecimalText } from './master-rules';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, normaliseDecimalText, RUPEE } from './master-rules';
 
 /**
  * What the Process Master screen (SCR-11) and its routes share (STORY-02.01; SPEC section 4.1, architecture sections 5.1 and 6):
@@ -22,8 +22,6 @@ export function isProcessUnit(value: string): value is ProcessUnit {
 
 /** The unit of the three percentage rates, whose values are typed as whole percentages (12 means 12%). */
 export const PERCENT_UNIT: ProcessUnit = '%';
-/** The rupee sign: the one place it is written for every master's screens and the audit log. */
-export const RUPEE = '₹';
 
 /** The sign beside a value: "%" for a percentage rate, the rupee sign for any other (the one place this rule is written). */
 export function valueSymbol(unit: string): string {

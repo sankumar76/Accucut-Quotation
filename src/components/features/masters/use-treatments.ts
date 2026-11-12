@@ -1,15 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { SKELETON_DELAY_MS } from '@/components/shared/states';
-import { useAfterDelay } from '@/components/shared/use-after-delay';
 import { listTreatments, type TreatmentRow } from '@/lib/masters/treatments-client';
 
 import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import { treatmentGoneNotice } from './treatment-texts';
-import { useFocusAfterRead, type OpenerRef, type ReadStatus } from './use-read-again';
+import { useMasterList } from './use-master-list';
+import { useReadAgain, type OpenerRef, type ReadStatus } from './use-read-again';
 
 /**
  * What the Treatment / Color tab of SCR-13 holds and does, apart from how it looks (STORY-02.05 AC-1, AC-4, AC-8): the list, which dialog is
@@ -38,35 +37,10 @@ export const TREATMENT_ACTIONS = { add: 'add', rename: 'rename', delete: 'delete
  * the read failed (the load error owns focus, DEF-020).
  */
 function useTreatmentList(opener: OpenerRef) {
-  const [items, setItems] = useState<ReadonlyArray<TreatmentRow> | null>(null);
-  const [status, setStatus] = useState<TreatmentListStatus>('loading');
-  // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
-  const newest = useRef(0);
-  const showSkeleton = useAfterDelay(status === 'loading' && items !== null, SKELETON_DELAY_MS);
-  const askForFocus = useFocusAfterRead({ status, result: items, opener });
-
-  /** Reads the list and settles the status. Sets nothing before the answer, and nothing at all if a newer read was started meanwhile (the latest read wins). */
-  const read = useCallback(
-    async (returnFocus: boolean): Promise<void> => {
-      askForFocus(returnFocus);
-      newest.current += 1;
-      const mine = newest.current;
-      const outcome = await listTreatments();
-      if (mine !== newest.current) return;
-      if (outcome.status === 'ok') setItems(outcome.value);
-      setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-    },
-    [askForFocus],
-  );
-
-  /** Reads the list again because a person asked (after a change, or Try again): the status goes to `loading` at once, from an event handler. */
-  const readAgain = useCallback(
-    (returnFocus: boolean): Promise<void> => {
-      setStatus('loading');
-      return read(returnFocus);
-    },
-    [read],
-  );
+  // The tab is not in the first load of the page, so there is no list to start from: the rows are `null` and the status `loading` until the first read.
+  const { items, status, showSkeleton, read, refresh } = useMasterList({ readList: listTreatments, initialItems: null });
+  // A read that a person asked for (after a change, or Try again): the status goes to `loading` at once, from an event handler.
+  const readAgain = useReadAgain({ status, result: items, opener, refresh });
 
   return { items, status, showSkeleton, read, readAgain };
 }
@@ -145,7 +119,7 @@ export function useTreatments() {
 
   // The first activation of the tab: the list is read. The status starts as `loading`, so nothing is set before the answer.
   useEffect(() => {
-    void read(false);
+    void read();
   }, [read]);
 
   return {

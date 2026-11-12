@@ -1,0 +1,16 @@
+diff --git a/src/app/api/auth/[...nextauth]/route.ts b/src/app/api/auth/[...nextauth]/route.ts
+index 017c770..b1e1e43 100644
+--- a/src/app/api/auth/[...nextauth]/route.ts
++++ b/src/app/api/auth/[...nextauth]/route.ts
+@@ -18,11 +18,8 @@ type RouteContext = { readonly params: Promise<{ readonly nextauth: string[] }>
+  * `POST /api/auth/_log` with no sign-in and no CSRF token, passing the body to that logger at a level the caller picks. Nothing in the
+  * portal uses it, so it is closed here, before the request reaches next-auth (SEC-01). Both exported methods get the same plain 404.
+  */
+-const LOG_RELAY_ACTION = '_log';
+-const NOT_FOUND_STATUS = 404;
+ 
+ async function handle(request: Request, context: RouteContext): Promise<Response> {
+-  if ((await context.params).nextauth[0] === LOG_RELAY_ACTION) return new Response(null, { status: NOT_FOUND_STATUS });
+   const handler = NextAuth(getAuthOptions());
+   return withSignInStatus(await handler(request, context));
+ }
