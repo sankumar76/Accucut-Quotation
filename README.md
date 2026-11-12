@@ -41,6 +41,14 @@ never prints it. It refuses, and changes nothing, if any Admin already exists, o
 rule (it exits with an error that names the part that failed, for example "Add at least one number."). Remove the
 password from `.env` afterwards.
 
+**Enter all 15 rates before any estimate is calculated.** The portal starts with the 15 named rates of the Process master
+(cutting, bending, drilling, welding, galvanizing, primer, shot blasting, polishing, plating, powder coating, foam,
+soft anodize, overhead profit, transport and inspection and packing), each with its name and unit and a value of 0. The
+Admin types the real values on **Masters, Process master** (http://localhost:3000/masters/process) before anyone calculates
+an estimate. Do this first because a rate left at 0 is a valid value: an estimate calculated before it is entered prices
+that process at 0, and the portal shows no message. A rate whose name ends in % is typed as a whole percentage (12 means
+12%). The values stay in your own database; they are never put in this repository (ADR-014).
+
 **The password rule** (one rule wherever a password is set: this command, the Admin adding a user or resetting a
 password, and a person changing their own): 10 to 128 characters, at least one number, at least one symbol (any character
 that is not a letter or a number, a space included), not the person's e-mail address, and not a common password (a bundled
@@ -50,14 +58,6 @@ password set before it existed still works. A person whose password the Admin se
 to "Set a new password" at their next sign-in and can open no other page until they have chosen their own. Everyone changes
 their own password with **Change password** in the account menu (**http://localhost:3000/account**); five wrong current
 passwords there block that form, and only that form, for 15 minutes.
-
-**Enter all 15 rates before any estimate is calculated.** The portal starts with the 15 named rates of the Process master
-(cutting, bending, drilling, welding, galvanizing, primer, shot blasting, polishing, plating, powder coating, foam,
-soft anodize, overhead profit, transport and inspection and packing), each with its name and unit and a value of 0. The
-Admin types the real values on **Masters, Process master** (http://localhost:3000/masters/process) before anyone calculates
-an estimate. Do this first because a rate left at 0 is a valid value: an estimate calculated before it is entered prices
-that process at 0, and the portal shows no message. A rate whose name ends in % is typed as a whole percentage (12 means
-12%). The values stay in your own database; they are never put in this repository (ADR-014).
 
 Then open **http://localhost:3000/sign-in** in a browser and sign in. You land on the task queue ("Task queue"
 for a Lead or an Admin, "My tasks" for an Engineer; a placeholder until the task list is built). **Sign out** is in
