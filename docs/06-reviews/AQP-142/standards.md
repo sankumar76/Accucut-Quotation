@@ -107,3 +107,73 @@ Not applicable (round 1).
 - **Planned, not counted:** `tests/e2e/masters-table-actions.spec.ts` (header wording "UX spec v0.19" and the Customers entry) and the `tests/security/engineer-import-rule.test.ts` header ("a customer, material or exchange-rate reader" is now stale for customers) are to be re-committed after #222 merges, per master's overlap ruling.
 - **For reviewer-quality / reviewer-performance (cross-reference only):** the `customer-rates-table.tsx` row header re-styles `TableHead` with a long class override to look like a cell; the Process Master lock taken by every customer change (PRF-01) serialises customer edits against item adds. Both are in those reviewers' lanes.
 - **CI path:** 6:37 against the 5:30 median trigger is recorded in the PR as a measurement; not a standards matter.
+
+---
+
+## Round 2 — new diff `efcf768..b9f36fa` (31 files, +405 / -178)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-standards |
+| Review round | 2 |
+| Commit reviewed | b9f36fa03711fcec765159ee08f1129368d58ec2 (F1 fix round: 18ea370 JS budget, 580ba03 review round F1 and the amended AC-2, b9f36fa master's header line in `engineer-import-rule.test.ts`) |
+| Date | 2026-11-12 |
+| Basis | master's G6 CONDITIONAL GO (DL-172, PR comment 6818172998); DL-177 (AC-2 percent rates take up to 2 decimals); ux-spec v0.24 and v0.25 (read from the working copy at v0.25) |
+| **Verdict** | **APPROVE WITH COMMENTS** (one new Minor). GitHub review 5872361768 submitted as COMMENT; label `review:standards-approved`. |
+
+### Checks run
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Lint | `npx eslint .` (developer worktree, head b9f36fa) | exit 0, no problems |
+| Type-check | `npx tsc --noEmit` | exit 0, no errors |
+| Risky-construct scan of the new diff | `any`, `!`, `console.*`, `eslint-disable`, `@ts-*`, TODO, `.only`, `waitForTimeout`, `as {` | none (grep hits were words inside comments and strings) |
+| Function size | awk scan of the new or changed files | `ResetBody` 45 lines, unjustified (STD-12). `useCustomerEdit` 28, `useCustomerFields` 29, `useCustomerSave` 40. `createCustomerMethods` justified |
+| CI (not re-run by me) | run 43191052265 | 5 of 5 per the brief |
+
+### Previous Findings
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| STD-01 | Major | **Fixed** | `use-customer-edit.ts`: `useCustomerEdit` 28 lines (166-193) over `useCustomerFields` (135-163) and `useCustomerSave` (89-128, exactly 40) with a documented `SaveContext`; behaviour unchanged in the diff |
+| STD-02 | Minor | **Fixed** | "Over 40 lines on purpose" comment above `createCustomerMethods`, with reason (nine methods). Wording nit, no action: the `listCustomers` SQL is still inline |
+| STD-03 | Minor | **Fixed** | `check-js-budget.ts`: records only when `given === undefined` or `--make-records`; header and Usage say it is the one writer and that the audit entry cannot be removed; `js-budget.test.ts` counts POSTs (1 with the flag, 0 without) and checks the failing dynamic row's reason |
+| STD-04 | Minor | **Fixed** | `FormProps` is `Pick<..., 'onSaved'>`; `onClose` no longer passed |
+| STD-05 | Minor | **Fixed** | `customer-texts.ts` header cites ux-spec v0.24 "The Customers words: final words"; unreachable `customerCreatedNotice` and `?added=1` removed, with `customers-error-pages.test.ts` guarding it |
+| STD-06 | Minor | **Fixed** | `tests/support/customer-audit-side.ts` (`customerSide`, `MASTER_SHAPES.customer.parse`); no `as {` left in the three files |
+| STD-07 | Minor | **Fixed** | `toRate` narrows with `typeof`, no `String()` |
+| STD-08 | Minor | **Fixed** | doc comments on `customerNameProblem`, `phoneProblem`, `emailProblem`, `addressProblem`, `toCustomerSummaryRow`, `toCustomerRow`; the limits quoted match the constants |
+| STD-09 | Minor | **Fixed** | `./customer-repository` first in `master-repository.ts`; `./fake-customers` after `./fake-audit` in `session-harness.ts` |
+| STD-10 | Info | Acknowledged | no action |
+| STD-11 | Info | Stands | |
+
+### New findings
+
+| ID | Severity | File:line | Rule | Issue | Suggested fix |
+|----|----------|-----------|------|-------|---------------|
+| STD-12 | Minor | `src/components/features/masters/customer-reset-dialog.tsx:68-112` | Coding Standards §1 | `ResetBody` is 45 lines (33 before the v0.25 paragraphs) with no inline justification | Lift the description block (first paragraph, `<ul>`, `RESET_TYPED_NOTE`) into a small `ResetDescription` component, or add the "Over 40 lines on purpose" comment |
+
+### User-visible messages against ux-spec v0.24 and v0.25
+
+Compared string by string with `customer-texts.ts`, `master-rules.ts` and the components. All match.
+
+| Spec | Words | Code | Result |
+|------|-------|------|--------|
+| v0.24 load error, edit page | Title `We could not load this customer`, header `Customers`, standard sentence, own `error.tsx` under `[id]` | `CUSTOMER_PAGE_ERROR_TITLE`, `CustomerLoadError` (header `CUSTOMERS_TITLE`, `ErrorState` default sentence), `[id]/error.tsx` | Match; `customers-error-pages.test.ts` asserts title, sentence, Try again, and that the list title is absent |
+| v0.24 load error, list | `We could not load customers` | unchanged | Match |
+| v0.24 Added (edit page, `?added=1`) | remove if no flow sets it | removed (`customerCreatedNotice`, `useSearchParams`, `useForgetAddedFlag`) | Match |
+| v0.25 hint | `Percent rates are typed as plain numbers: 12 means 12%, 12.5 means 12.5%` | `RATES_HINT`, identical, no full stop | Match |
+| v0.25 rate message, any rate | `Enter a number, 0 or more, with up to 2 decimals.` | `DECIMAL_TEXT_MESSAGE`; `rateProblem(value)` has no unit branch; server schema uses the same constant | Match |
+| v0.25 Reset paragraph 1, none differ | `All N rates already equal the current Process master values, so no saved value will be replaced.` | `resetDescription` | Match |
+| v0.25 Reset paragraph 1, some differ | `All N rates return to the current Process master values. The M values this customer has now are replaced:` ("value ... is" for one) | `resetDescription` | Match |
+| v0.25 Reset paragraph 2, always | `A rate value you have typed on this page and not yet saved is replaced too. The details (name, phone, e-mail, address) stay as typed.` | `RESET_TYPED_NOTE`, shown in every case, same `AlertDialogDescription` as paragraph 1 and the list | Match |
+| v0.25 notice, none replaced | Title `<name> is already at the defaults.`, sentence `Every saved rate already equals its current default, so no saved value was replaced. The rate boxes show the defaults.` | `resetNotice(name, 0)` | Match |
+| v0.25 notice, N replaced | `<name> was reset to the defaults. N rates were replaced.` | unchanged | Match |
+
+Tests asserting them: `tests/unit/customers-texts.test.ts`, `tests/unit/customers-error-pages.test.ts`, `tests/e2e/customers.spec.ts` (accessible description, zero notice, typed rate replaced and phone kept).
+
+### Notes
+
+- **Planned, not counted:** at b9f36fa `tests/e2e/masters-table-actions.spec.ts` is master's version, so the Customers entry (AC-8, Jira Dev Context D) is absent until the post-#222 alignment commit. The same commit carries the `engineer-import-rule.test.ts` reword (QLT-06). The Customers table-actions entry must be back before G7 and the merge.
+- **Process slip by this reviewer (corrected):** when applying `review:standards-approved` I replaced the PR's whole label set with a list that did not include `review:performance-approved` and `review:quality-changes-requested`, then re-applied both. If the quality reviewer changed its label in that window, check it.
+- **For other lanes (cross-reference only):** PRF-06 (first-load JS of `/masters/customers/[id]` +3,471 B) is reviewer-performance's.
