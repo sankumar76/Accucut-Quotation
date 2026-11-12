@@ -26,7 +26,9 @@ const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800
  *   view would ask for it again (PRF-02). It gets a day.
  * - `experimental.authInterrupts`: lets a page call `forbidden()`, which renders `(portal)/forbidden.tsx` (SCR-26 "no
  *   access") with status 403 (STORY-01.02 AC-4). `authorizePage` is the only caller. It is Next.js's flag for exactly this
- *   and the version is pinned; it has no effect on the other rules (no Server Actions, ADR-010).
+ *   and the version is pinned; it has no effect on the other rules (no Server Actions, ADR-010). The same flag lets a page
+ *   call `unauthorized()`, which renders `app/unauthorized.tsx` (SCR-26 "Session ended") with status 401 when the session
+ *   has ended; `requireUserOrRedirect` is the only caller (STORY-01.06 AC-3).
  * - `agentRules: false`: `next dev` would otherwise write an AGENTS.md into the working tree. This
  *   project's agent instructions are in CLAUDE.md.
  */

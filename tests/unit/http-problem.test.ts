@@ -52,6 +52,22 @@ describe('the problem of an application error', () => {
     });
   });
 
+  it('STORY-01.06 AC-4: a session that ended is a 401 with its own code and fixed words, and nothing else in the body', () => {
+    const ended = problemFromAppError(new UnauthorizedError('the token of user 42 ended at 09:00', { code: 'SESSION_ENDED' }), ID);
+    expect(ended).toEqual({ type: 'about:blank', title: 'Your session ended. Sign in again.', status: 401, code: 'SESSION_ENDED', requestId: ID });
+    expect(JSON.stringify(ended)).not.toContain('42');
+  });
+
+  it('STORY-01.06 AC-4: the answer is application/problem+json, no-store, with the request ID in a header', async () => {
+    const response = problemResponse(problemFromAppError(new UnauthorizedError('x', { code: 'SESSION_ENDED' }), ID));
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Content-Type')).toBe(PROBLEM_CONTENT_TYPE);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Request-Id')).toBe(ID);
+    const body = z.record(z.string(), z.unknown()).parse(await response.json());
+    expect(Object.keys(body).sort()).toEqual(['code', 'requestId', 'status', 'title', 'type']);
+  });
+
   it('a role refusal is the fixed 403, the same for every route and every message (CR-33, AC-4)', () => {
     const fixed = forbiddenProblem(ID);
     expect(fixed).toEqual({ type: 'about:blank', title: FORBIDDEN_TITLE, status: 403, code: FORBIDDEN_CODE, requestId: ID });
