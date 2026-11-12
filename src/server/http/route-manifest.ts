@@ -150,7 +150,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
     screen: 'SCR-16',
     nav: { group: 'Administration', label: 'Audit log', order: 30, icon: 'scroll-text' },
   },
-  { path: '/api/v1/audit', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/audit', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1', mustChangeAllowed: true },
   // STORY-02.01 (SCR-11). The Admin only (BR-004). The default-change routes (`/process-items/{id}/default-change`) are story 02.08's.
   {
     path: '/masters/process',
