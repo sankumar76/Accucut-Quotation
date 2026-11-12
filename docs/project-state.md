@@ -8,92 +8,97 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Sprint 1, story cycles (G5 to G7). PAUSED 2026-11-11 at the delivery lead's request: see "Resume point (2026-11-11)" below. Open: #250 (AQP-237, G6 attempt 2 pending), #253 (AQP-89, G6 pending the cookie decision), #265 (#245, review pending), #222 (AQP-245, condition B blocked) |
-| Last gate passed   | G7 GO for #218 / PR #247 (DL-155), merged as 2891457. G6 NO-GO attempt 1 for AQP-237 (DL-156) |
-| Next gate          | See "Resume point (2026-11-11)", ordered next steps. Code merges by the orchestrator after G7 GO (CLAUDE.md §8; each merge needs the delivery lead's permission click this session); Dependabot #146, #147, #149, #150 stay with the delivery lead |
+| Current phase      | Sprint 1, story cycles (G5 to G7). PAUSED 2026-11-12 at the delivery lead's request: see "Resume point (2026-11-12)" below. Open: #253 (AQP-89, G7 GO, squash pending), #291 (#244/#277, review in, G6/G7 pending), #297 (AQP-142, part-built), #222 (AQP-245, condition B blocked) |
+| Last gate passed   | G7 GO for AQP-89 (DL-167; not yet merged). Merged this run: #265 (#245, DL-164) as b25891b, #250 (AQP-237, DL-165) as abdac01 |
+| Next gate          | See "Resume point (2026-11-12)", ordered next steps. Code merges by the orchestrator after G7 GO (CLAUDE.md §8). Dependabot #146, #149, #150 merged and #147 closed by the delivery lead (DL-163) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
-| Overall health     | 🟡 Amber (RISK-016 at 16; RISK-023 at 8 since DL-151, master median of five 5:34 on b3403e3, fourth-shard gate half met; local disk at 99 %; way 5 since 2026-11-09 (DL-118); no date adopted) |
-| Last updated       | 2026-11-11 by orchestrator (graceful pause; resume point written) |
+| Overall health     | 🟡 Amber (RISK-016 at 16; RISK-023 at 8 (DL-151), AQP-89 median of five 5:16, nightly reading still pending; #222 blocked by the `git merge` deny rule; free disk about 30 GB; no date adopted) |
+| Last updated       | 2026-11-12 by orchestrator (graceful pause; resume point written) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
-## Resume point (2026-11-11)
+## Resume point (2026-11-12)
 
-> Written by the orchestrator at a graceful pause requested by the delivery lead. A new session starts here: read this section, then the decision log from DL-144 on. `master` = **2891457**, whose push run 43053208506 is green: unit 2,922, full Vitest 5,285, E2E 778 passed, 24 skipped. RISK-023 = 8 (DL-151); the fourth-shard gate waits for the first nightly on b3403e3 or later. Free disk on C: is about 4.5 GB (99 %), with about 40 agent worktrees under `.claude/worktrees`; agents must not run `npm ci`.
+> Written by the orchestrator at a graceful pause requested by the delivery lead on 2026-11-12 (about 05:45 UTC; the delivery lead resumes in about two hours). It replaces the 2026-11-11 resume point. A new session starts here: read this section, then the decision log from DL-157 on. `master` = **abdac01** (AQP-237 squash), whose push run 43148695027 is green: unit 3,081, full Vitest 5,444, E2E 265 / 263 / 250 = 778 passed, 3 / 4 / 17 = 24 skipped. RISK-023 stays at 8 (DL-151). Free disk on C: is about 30 GB after the delivery lead's clean-up; still no `npm ci`, and `npm install` only in a worktree whose lockfile changed (DL-163).
 
-**Merged since 2026-11-10:**
+**Merged since the 2026-11-11 pause:**
 
-| PR | Item | Merge commit |
-|---|---|---|
-| #166 | AQP-244 | 1d37902 |
-| #216 | DEF-028 | 225a1c9 |
-| #219 | records | 35531d5 |
-| #195 | AQP-130 | ffc280b |
-| #220 | DEF-022 | b3403e3 |
-| #246 | records, DL-149 to DL-154 | c6b9074 |
-| #235 | #119 refactor | 8ae01ef |
-| #258 | records, DL-155 | f42e333 |
-| #247 | #218 | 2891457 |
+| PR | Item | Merge commit | Decision |
+|---|---|---|---|
+| #270 | records, resume point 2026-11-11 | cdb5dec | docs-auto |
+| #271 | records: DL-157 to DL-160, ADR-009 amendment 2, architecture v0.39 | 46f56d6 | docs-auto |
+| #146 | Dependabot tailwindcss 4.3.5 | 8ebe529 | delivery lead (DL-163) |
+| #149 | Dependabot @playwright/test 1.65.0 | 5b4e6e9 | delivery lead (DL-163) |
+| #150 | Dependabot next 16.4.5 | 774eff8 | delivery lead (DL-163) |
+| #285 | records: DL-161 to DL-164, AQP-237 condition D (architecture v0.40, test strategy v0.35) | 8536f6c | docs-auto |
+| #265 | #245 items 1 to 4, shared `useMasterList` (Refs #245; #245 stays open for item 5) | b25891b | G7 GO, DL-164 |
+| #250 | AQP-237 (STORY-10.18), Closes #104 | abdac01 | G7 GO, DL-165 |
+
+- **#147** (@vitest/coverage-v8 5.1.0) was **closed** by the delivery lead: it needs vitest 5.1.0, to be bumped as a pair later (DL-163; no owner yet).
+- **Delivery lead clean-up (2026-11-12):** 55 finished-story control and review branches deleted; 27 finished worktrees removed; their agent memories archived in the main copy at `.claude/agent-memory/_archive-2026-11-12/`.
+
+**Decisions recorded this run:**
+- DL-157: AQP-89 KEEP the 7-day cookie.
+- DL-158: #222 local merge allowed, but still blocked by the deny rule.
+- DL-159: Dependabot stays with the delivery lead.
+- DL-160: AQP-89 G6 CONDITIONAL GO.
+- DL-161: AQP-237 G6 attempt 2 CONDITIONAL GO, then the A-check closed it.
+- DL-162: #245 G6 CONDITIONAL GO, latest-read-wins IN.
+- DL-163: the Dependabot merges and the new base rule.
+- DL-164: #245 G7 GO.
+- DL-165: AQP-237 G7 GO.
+- DL-166: AQP-89 G6 closed, SEC-01 files accepted, condition S.
+- DL-167: AQP-89 G7 GO; OBS-1, so log-line conditions need a piped run.
 
 ### Open PRs: state and next action
 
 | PR | Story / item | Head | State | Next action |
 |---|---|---|---|---|
-| #250 | AQP-237 (STORY-10.18), Jira In Review | 57acbae (fix push over merge 2c543cd from 2891457) | G6 attempt 1 **NO-GO** (DL-156). Conditions A, A2, P and C were done by the developer (Jira 11523): CI 43056524392 green; unit 3,078, full 5,441, E2E 778, skipped 24; controls #263 and #264 red as required, Q6 green. Product-owner Q1 and Q2 answered (11521). The architecture test takes 10.5 s (over the 10 s AC-5 line; a report to the architect) | **Condition R:** reviewer-quality and reviewer-standards re-review `87465b6..57acbae` (`git show --cc` for the merge). reviewer-performance re-runs, because stage 6 is over 8 s. Then master decides G6 attempt 2. **Condition D** (architect: §6 and §10 as built, count 15, STD-08, the PRF-01 baseline, the 10.5 s time) goes in a docs PR before the squash. Condition H (branch deletions) is the delivery lead's |
-| #253 | AQP-89 (STORY-01.06), Jira In Review | c4055f7, behind `master` | G5 passed (CI 43039133074; unit 3,005, full 5,337, E2E 787). The three G6 reviews are in: standards **REQUEST CHANGES** (STD-01 Major = the 7-day cookie; 7 Minor; Jira 11517); quality **REQUEST CHANGES** (QLT-01 Major = the same cookie decision; QLT-02 Minor: no test for a missing sign-in time, plant P2 #261 survived; QLT-03 Minor: AC-4 not end to end; Jira 11522); performance **APPROVE WITH COMMENTS** (PRF-01 Major: first-load JS +4.5 KB on shared routes, to be attributed before G7; Jira 11518). Master's G6 is **not yet decided** | The **delivery lead decides KEEP or DROP for the 7-day cookie** (`SESSION_ENDED_NOTICE_DAYS`; AQP-89 comment 11520). Then the orchestrator writes the consolidated review and master decides G6. If KEEP, the architect amends ADR-009 and §8 in a docs PR before the merge |
-| #265 | #245 (`useMasterList`), tech-debt | dcdad49 (on 2891457) | Ready. CI 43058209908 green, counts equal to `master`, path 4:45. Items 1 to 4 done; item 5 (Users) not done, held by #222 and #171 ("Refs #245"). Latest-read-wins now applies to all three screens (a decision to rule). Controls #268 (A1) and #269 (A2) are caught only by Exchange rates and Treatment, not Process or Materials (the #244 gap). Hand-off on #245, comment 6801489471 | **Not reviewed.** Next: reviewer-standards and reviewer-quality (DL-153), then master G6 and G7. AQP-142 does not reach G5 before this merges (DL-153) |
-| #222 | AQP-245 (STORY-10.21), Jira In Review | c9c8de7, behind `master` | G6 CONDITIONAL GO (DL-147). Condition A done (CI 42983616937). **Condition B BLOCKED:** the developer's local `git merge origin/master` was refused twice by the permission system. It needs a hand-resolved conflict in `tests/e2e/masters-table-actions.spec.ts` | **Delivery lead:** allow that local merge, or do it. Then the developer resolves the spec as DL-147 says (target Vitest = the `master` push run, E2E = `master` + 12), reviewer-quality round 2 with P-WRAP, P-GAP and P-TAB, then G7 by QA |
-| #146, #147, #149, #150 | Dependabot | — | Not story PRs (DL-119, DL-127) | **Delivery lead only** |
+| #253 | AQP-89 (STORY-01.06), Jira **In QA** | 12cadd9 (cbbb61b + QA report; base abdac01) | **G7 GO (DL-167)**, master Jira 11574, PR 6815326942. QA ACCEPT (11572). CI 43157645758 5 of 5: 3,185 / 5,557 / 268 / 266 / 253 / 24 = abdac01 + 104 / 113 / 9 / 0; 0 `JWT_SESSION_ERROR`. Median of five on e84c073 = **5:16** (PR comment 6813809345). SEC-01 (next-auth `_log` endpoint) fixed and verified | (1) qa-engineer moves AQP-89 to **Done** (not yet done: pause). (2) The median of five is posted on AQP-1 in the resume-point comment. (3) Merge under DL-167 (a) to (g): if `master` is still abdac01, run 43157645758 is the run of record; otherwise update by merge commit (44 files unchanged), counts = merge-ref push run + 104 / 113 / 9 / 0, 5 of 5, posts on #253 and AQP-89, squash body "Closes #255" and "Refs #256" (no closing keyword for #256), then post the `master` push run. **#253 squashes before the records PR, #291 and #222** (DL-167 (g)) |
+| #291 | #244 + #277 (tech-debt) | 41e5fd4 (base abdac01) | Developer done; CI 43155701604 5 of 5: unit +0, full -8 (duplicate `material-repository` entry removed; reviewer-quality confirmed nothing weakened), E2E +7 / +7 / +7, skipped +0, path 5:38. **reviewer-quality APPROVE WITH COMMENTS** (review 5869724916; report `docs/06-reviews/244/quality.md`): QLT-01 Minor = a defect already on `master` (Process and Materials say "Nothing was changed." after a successful save when the re-read fails; `process-results.tsx:48`, `material-results.tsx:56`), QLT-02 Minor (duplicated test helpers), Info QLT-03 to 06. Controls #300 to #304 red as predicted, closed | Master decides **G6 and G7** on the narrow route (DL-124 pattern), and routes QLT-01: qa-engineer reproduces and grades it (Jira Bug + GitHub issue), ux-expert confirms the two sentences, a developer writes a small `src/` fix PR with N1's assertion as its regression test, before G8; AQP-142 must not copy it. Then update by merge commit and squash "Closes #244, Closes #277" |
+| #297 | AQP-142 (STORY-02.02 Customers), Jira **In Progress** | 78cb2e9 (draft; two pushed commits: 177b247 feature, 78cb2e9 tests) | **Part-built.** The developer agent stopped on a network error (API server unreachable), not a code failure, and was not relaunched because of the pause. Its worktree `.claude/worktrees/agent-a0b3fcd9a9e09301f` (branch `feat/AQP-142-customers`) holds **about 15 to 20 uncommitted changes** (15 at the orchestrator's last check), including the audit-state work (`masters-audit-events` STATES, `customers-audit-events.test.ts`). They are **kept, not discarded** | Developer resumes in that same worktree: `git status` first, finish the build (DL-153 list-hook rule; AQP-237 checks; the #218 `customer` audit shape; do not copy the QLT-01 wording defect), CI 5 of 5, G5, In Review. G6 waits for #244 (#291) merging, and RISK-023's fourth-shard enabler only if the nightly calls for it (DL-151) |
+| #222 | AQP-245 (STORY-10.21), Jira In Review | c9c8de7 | G6 CONDITIONAL GO (DL-147); condition A done. **Condition B BLOCKED (DL-158):** the delivery lead allowed the local `git merge origin/master` in chat, but the project deny rule `Bash(git merge*)` in `.claude/settings.json` refused it again (Jira AQP-245 11532). The worktree for that branch may have been removed in the clean-up; the branch is on the remote | **Delivery lead:** run `git merge origin/master` on `fix/AQP-245-users-table-actions` yourself and push (conflict in `tests/e2e/masters-table-actions.spec.ts` left for the developer or resolved per DL-147 (4)(b)), or lift the deny entry for that one step. Then the developer resolves the spec, reviewer-quality round 2 (P-WRAP, P-GAP, P-TAB), QA G7, merge |
+| records | `docs/AQP-1-records-sprint1-i` (this PR, left open) | see PR | DL-165 to DL-167, AQP-89 round-2 reviews, `docs/06-reviews/244/quality.md`, this resume point | Merge under docs-auto **after** #253 squashes (DL-167 (g)); then update it by merge commit if needed |
 
-**Closed control PRs whose branches still exist** (delete refused for agents; the delivery lead uses "Delete branch"; never merge any of them):
-- `control/AQP-236-shared-cache` (#221; flagged by the security review);
-- `control/119-qlt-plant-*` (5);
-- `control/AQP-130-*` (14);
-- `control/AQP-269-*` (6);
-- `control/AQP-273-def-028-planted-rate`;
-- `control/AQP-89-plants` and `control/AQP-89-qlt-p1-boundary`, `-p2-no-signedat`, `-p3-scr26-return`;
-- `chore/AQP-237-plants-control`, `-b`, `chore/AQP-237-qlt-plants-control`, `chore/AQP-237-r2-plants-a`, `-b`;
-- `plant/AQP-245-*` (4) and `plant/AQP-269-*` (8);
-- duplicate review branches `docs/<story>-review-*`, whose reports are already on `master` or in the records PRs.
+**Closed control PRs whose branches still exist** (new since the clean-up; the delivery lead deletes before G8; never merge any of them):
+- `control/AQP-89-r2-{l1,l2,l3,p2,sec01}`, `control/AQP-89-qlt-r2-*`, `control/AQP-89-qa-{sec01,sec01-logs,browser,sec01-segment}`;
+- `control/AQP-237-qa-plants`, `chore/AQP-237-r3-qlt-plants`;
+- `control/245-qlt-r2-*`;
+- `control/244-*` (developer) and `control/244-qlt-*` (reviewer-quality, #300 to #304).
 
-### Stories and items in progress (Jira status)
+### Stories and items (Jira status)
 
-- **AQP-237:** In Review (see #250).
-- **AQP-89:** In Review (see #253).
-- **AQP-245:** In Review (see #222).
-- **AQP-142 (STORY-02.02 Customers):** Ready for Dev and prepared.
-  - AC-6 amended to `master.created` / `master.edited` with `object_type` `customer` (11493).
-  - Dev Context updated (11495): storage in `customer-repository.ts` / `customer-service.ts`; SCR-12 Actions column Edit only, 68 px; the DL-153 list-hook rule.
-  - Before G5: #265 merged and the branch has taken `master`.
-  - Before G6: #244, and RISK-023's fourth-shard enabler if the nightly calls for it.
+- **AQP-237:** Done; PR #250 merged as abdac01; #104 closed. PRF-03 not triggered (post-squash stage 6 = 7,294 ms, under 8 s; #259 comment 6813666249; master to confirm).
+- **AQP-89:** In QA, G7 GO; Done transition and squash pending (see #253).
+- **AQP-142:** In Progress, part-built (see #297).
+- **AQP-245:** In Review, condition B blocked (see #222).
+- **#245:** open for item 5 (Users), held by #222 and #171, due G8.
 - **AQP-81, AQP-90, AQP-148:** Ready for Dev, not started.
-- **Tech-debt issues:**
-  - #244 (QLT-01 slow-read tests on Process and Materials; due before AQP-142's G6; start after #265);
-  - #245 (in #265);
-  - #259 (QLT-04 code and the older STD-05 tests; before G8);
-  - #255, #256 (AQP-89 follow-ups);
-  - #203, #171, #137.
-- **Done today:** AQP-130, AQP-236, AQP-244, AQP-273; #119 and #218 closed.
-- **Half-done Jira transitions:** none. AQP-237 is In Review after the developer's fix push.
+- **Before G8, not holding any merge:**
+  - solution-architect: STD-15 (a sentence on the `_log` closure in architecture §6 or §8), the OBS-1 choice (pipe the web server's stdout in CI or not), OBS-5 of AQP-237 to #259;
+  - ux-expert: #256 (second SCR-26 wording, QLT-04, OBS-2, OBS-3);
+  - delivery lead: the QLT-09 screen-reader check on a real device (steps in `docs/07-qa/AQP-89-test-report.md`);
+  - scrum-master: the AQP-89 description's "Status: Draft" header and T1 wording (cosmetic);
+  - #259 (QLT-04 code, STD-05 older tests, X1 header line, PRF-03 conditional), #255 closes with #253, #203, #171, #137.
+- **Half-done Jira transitions:** AQP-89 is **In QA** with G7 GO; the qa-engineer's move to Done is pending. No others.
 
 ### Uncommitted or unpushed work
 
-- **Main working copy:** branch `docs/AQP-1-records-sprint1-f` (records PR below); only `.claude/agent-memory/` is untracked.
-- **Local branches with commits not on any remote:** all superseded, so nothing is lost.
-  - `tech-debt/245-use-master-list` (3): pre-rebase copies of #265.
-  - `docs/AQP-1-arch-aqp-244-r2` and `-r3`: architecture v0.31 and v0.32, superseded by v0.38 on `master`.
-  - `feat/AQP-74-audit` (3): AQP-74, merged as #97.
-- **Agent worktrees:** about 40, all with their branches pushed.
+- **Main working copy:** branch `docs/AQP-1-records-sprint1-i` (the open records PR), everything committed and pushed; only `.claude/agent-memory/` is untracked (includes the delivery lead's `_archive-2026-11-12/`).
+- **AQP-142 worktree** `.claude/worktrees/agent-a0b3fcd9a9e09301f`: about 15 to 20 uncommitted changes on `feat/AQP-142-customers`; keep them.
+- No other agent is running. All other branches with work are pushed.
 
 ### Ordered next steps on resume
 
-1. Records PR from `docs/AQP-1-records-sprint1-f` (DL-156 and this resume point): read CI, merge under docs-auto (the merge needs the delivery lead's click).
-2. **AQP-89:** get the delivery lead's KEEP or DROP. Then the consolidated review and master's G6; then the developer's fix push (STD Minors, QLT-02 and QLT-03 tests, PRF-01 attribution); then QA G7.
-3. **AQP-237:** condition R, the round-2 reviews (and performance), then master's G6 attempt 2. Then G7 by master or QA as ruled, condition D docs PR, update by merge commit, merge.
-4. **#265:** standards and quality reviews, master G6 and G7, merge. Then #244 (developer, narrow quality review).
-5. **#222:** after the delivery lead unblocks the local merge, condition B, re-review, QA G7, merge.
-6. **AQP-142:** start after #265 merges (DL-150, DL-153), with the three reviews and QA.
-7. Post the first nightly median on b3403e3 or later for DL-151; if over 5:00, the architect applies the fourth-shard rule and the product-manager places the enabler before AQP-142's G6.
-8. Then the stretch stories in plan order: AQP-81, AQP-90, AQP-148. AQP-236 (DEF-022) is done.
+1. **AQP-89:** qa-engineer moves AQP-89 to Done. The orchestrator checks `master`, and squashes #253 under DL-167 (a) to (g). Then the `master` push run is posted, and #255 is checked closed.
+2. **Records PR** (`docs/AQP-1-records-sprint1-i`, left open): merge under docs-auto after #253, with an update by merge commit first if needed.
+3. **#291 (#244, #277):** master decides G6 and G7 on the narrow route, and routes QLT-01 as a defect. Then the update, the counts check and the squash with "Closes #244" and "Closes #277".
+4. **QLT-01 defect:** qa-engineer grades it, ux-expert confirms the wording, and a developer fixes it in a small PR before G8.
+5. **AQP-142:** the developer resumes in the same worktree. It needs G5, three reviews, G6 after #291 merges, QA G7 and a merge.
+6. **#222:** waits for the delivery lead to unblock the merge (DL-158). After that come condition B, reviewer-quality round 2, QA G7 and the merge.
+7. **DL-151 nightly:**
+   - No nightly has run yet on b3403e3 or later; the latest is 42981687193 on 225a1c9. Scheduled runs have started between 07:00 and 08:30 UTC.
+   - Post the first one's median. If it is over 5:00, the architect applies the fourth-shard rule and the product-manager places the enabler before AQP-142's G6.
+8. **Stretch stories** in plan order: AQP-81, AQP-90, AQP-148.
 
 ## Request (G0 Intake)
 
@@ -228,6 +233,7 @@ Status from Jira (JQL, 2026-11-10 by master). Each gate decision is in `docs/00-
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
+| 2026-11-12 | orchestrator | Graceful pause at the delivery lead's request. Run since 2026-11-11: DL-157 to DL-167 recorded; #271, #285 (records), #265 (#245) and #250 (AQP-237) merged; AQP-89 G7 GO (squash pending); #291 reviewed; AQP-142 part-built (#297); #222 still blocked (DL-158); SEC-01 found and fixed in AQP-89. Resume point written | docs/project-state.md "Resume point (2026-11-12)"; Jira AQP-1 |
 | 2026-11-12 | master | G7 for AQP-89 / PR #253 (STORY-01.06) at 12cadd9 (cbbb61b + QA report; 34 code files unchanged since 81ba5ec): **GO** (DL-167, attempt 1) on QA's ACCEPT. AC-1 to AC-6 pass (AC-2 with Q's note). The AC-4 hop passes in QA's own run (#292, 18/18). SEC-01 plants #289 / #290 / #298 are red as ruled (diffs printed by master). S (81ba5ec) was read under DL-047. CI 43157645758 is 5/5, 3,185 / 5,557 / 268+266+253 / 24 = abdac01 push run 43148695027 +104 / +113 / +9 / +0, with 0 `JWT_SESSION_ERROR` lines; path 5:15. Median of five on e84c073: 5:16. No Sev-1 or Sev-2. OBS-1: pino lines need piped stdout; #292 shows them clean; the config choice goes to the architect before G8. QLT-09: the device session before G8. QA moves AQP-89 to Done. Merge: no update while `master` = abdac01, otherwise merge commit plus the recomputed invariant; median posted on AQP-1; squash body "Closes #255" / "Refs #256"; the records PR does not merge first. #291's "Nothing was changed." report is routed (not AQP-89). | `docs/00-governance/gate-log.md`, `decision-log.md` (DL-167); Jira AQP-89 11574; PR #253 6815326942 |
 | 2026-11-11 | master | G6 close for AQP-89 / PR #253 (STORY-01.06) at e84c073 (= cf42f87 + `master` 8536f6c by merge commit, 34 files unchanged): **CONDITIONAL GO stands, G6 closed** (DL-166, attempt 2). Three round-2 reviews approve (0 Blocker / Critical / Major). SEC-01 is fixed, and its two files (`[...nextauth]/route.ts`, `auth-log-route.test.ts`) are accepted into scope. CI 43143807315 is 5/5, 3,026 / 5,398 / 787 / 24 = 8536f6c push run +104 / +113 / +9 / +0, with 0 `JWT_SESSION_ERROR` lines; path 5:16. **Before QA:** Q (product-owner's AC-2 note, still missing) and S (QLT-11: two `_log` 404 requests in E2E test 2, developer, E2E +0). Median of five on e84c073: the orchestrator runs attempts 2 to 5 of 43143807315, posted before the squash, not a hold. STD-15 goes to the architect before G8. G7 by qa-engineer, with the SEC-01 plant and QLT-09 steps | `docs/00-governance/gate-log.md`, `decision-log.md` (DL-166); Jira AQP-89 11563; PR #253 comment 6813067748 |
 | 2026-11-11 | master | G7 for AQP-237 / PR #250 (STORY-10.18) at 531fa7d (ea9aaab + QA report): **GO** (DL-165, attempt 1) on QA's ACCEPT. AC-1 to AC-5 pass. QA plants (i) to (iii) on #288 are red (stage 4; stage 6 ×2), read by master. CI 43136706441 and 43141712018 are 5/5, at 3,081 / 5,444 / 778 / 24 = 774eff8 +159 / +159 / +0 / +0; path 4:30. No Sev-1 or Sev-2. D is on `master` 8536f6c. PRF-03: QA's run stays 43136706441 (9,863 ms); 531fa7d's 7,482 ms is recorded only, and the post-squash `master` run decides. OBS-5 and OBS-4 go to #259. Merge: update from 8536f6c by merge commit, target 3,081 / 5,444 / 265 / 263 / 250 / 24, then squash with "Closes #104". #250 merges before #253. QA moves AQP-237 to Done | `docs/00-governance/gate-log.md`, `decision-log.md` (DL-165); Jira AQP-237 11562; PR #250 comment 6813057397; #259 comment 6813060055 |
