@@ -2,7 +2,7 @@ import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundEr
 import type { PasswordHasher } from '../auth/password-hasher';
 import { accountThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 import {
   normaliseEmail,
   UserConstraintError,
@@ -209,4 +209,97 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       await throttles.clear(accountThrottleKey(keySecret, email));
     },
   };
+}
+
+// Reviewer plants, round 2 (QLT, AQP-237, DL-156): never merged.
+type PlantEntry = Parameters<AuditService['record']>[1];
+const plantEntry = (context: AuditContext): PlantEntry => ({ event: 'user.deactivated', ...context, object: { id: 'planted', label: 'planted' }, before: { isActive: true }, after: { isActive: false } });
+
+/** Q1: a floating record (`void`) inside the callback. Expected: finding "not awaited or returned". */
+export async function plantedQ1(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    void audit.record(tx, plantEntry(context));
+  });
+}
+
+/** Q1b: a forgotten `await`. Expected: finding "not awaited or returned". */
+export async function plantedQ1b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    audit.record(tx, plantEntry(context));
+  });
+}
+
+/** Q2: an async forEach in the callback. Expected: finding "sits in a nested function". */
+export async function plantedQ2(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    ['a', 'b'].forEach(async () => {
+      await audit.record(tx, plantEntry(context));
+    });
+  });
+}
+
+/** Q2b: the same one step down: an awaited helper call inside an async forEach. Expected: finding "sits in a nested function". */
+const plantedQ2bNote = (audit: AuditService, context: AuditContext, tx: Transaction): Promise<void> => audit.record(tx, plantEntry(context));
+export async function plantedQ2b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    ['a'].forEach(async () => {
+      await plantedQ2bNote(audit, context, tx);
+    });
+  });
+}
+
+/** Q3: P2 (handle kept, entry after the callback returned) written as `record.call`. Expected: finding "other than as the callee". */
+export async function plantedQ3(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  if (kept !== undefined) await audit.record.call(audit, kept, plantEntry(context));
+}
+
+/** Q3b: P2 through an alias made with `bind`. Expected: finding "other than as the callee". */
+export async function plantedQ3b(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  let kept: Transaction | undefined;
+  await transactions.run(async (tx) => {
+    kept = tx;
+    await users.update('planted', { isActive: false }, tx);
+  });
+  const write = audit.record.bind(audit);
+  if (kept !== undefined) await write(kept, plantEntry(context));
+}
+
+/** Q4: an exported helper, used correctly here, and with a kept handle from exchange-rate-service.ts. Expected: passes (open limit). */
+export async function plantedQ4Helper(users: UserRepository, audit: AuditService, context: AuditContext, tx: Transaction): Promise<void> {
+  await users.update('planted', { isActive: false }, tx);
+  await audit.record(tx, plantEntry(context));
+}
+export async function plantedQ4(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run((tx) => plantedQ4Helper(users, audit, context, tx));
+}
+
+/** Q5: P3 (the change outside the transaction) where (b) is met by a closure that never runs. Expected: passes (open limit, #259). */
+export async function plantedQ5(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    const never = (): Promise<unknown> => users.update('planted', { isActive: false }, tx);
+    await users.update('planted', { isActive: false });
+    await audit.record(tx, plantEntry(context));
+    return never;
+  });
+}
+
+/** X1 (exploratory): an awaited record whose failure is caught and dropped, so the change commits without its entry. Expected: passes. */
+export async function plantedX1(transactions: TransactionRunner, users: UserRepository, audit: AuditService, context: AuditContext): Promise<void> {
+  await transactions.run(async (tx) => {
+    await users.update('planted', { isActive: false }, tx);
+    try {
+      await audit.record(tx, plantEntry(context));
+    } catch {
+      // dropped on purpose (plant)
+    }
+  });
 }
