@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { SKELETON_DELAY_MS } from '@/components/shared/states';
 import { useAfterDelay } from '@/components/shared/use-after-delay';
@@ -21,8 +21,10 @@ import type { ReadStatus } from './use-read-again';
  *     `null` until the first read answers, and that first load shows no skeleton of its own (the screen shows its own loading state for `null`).
  *     The screen starts the first read with `read()`.
  *
- * Latest read wins (QLT-04): a read that answers after a newer one was started changes nothing. Treatment / Color had this rule; Process and
- * Materials did not, and with this hook they have it too. It only matters when two reads overlap and the older one answers last.
+ * Latest read wins (QLT-04): any read that is not the newest one when it answers is dropped, whichever of the two answers first. While two reads
+ * overlap the status therefore stays `loading` until the newest one answers. If the older read succeeds and the newest fails, the older rows are
+ * not applied: the rows stay as they were before both reads and the status is `error`. Treatment / Color had this rule; Process and Materials
+ * did not, and with this hook they have it too. A single read, or two reads that do not overlap, behave as before.
  *
  * What the hook does not do: move focus (that is `useReadAgain`, which takes this hook's `status`, `items` and `refresh`), hold the notice, or
  * know any dialog.
@@ -30,8 +32,8 @@ import type { ReadStatus } from './use-read-again';
 
 export interface MasterListOptions<Row, Initial extends ReadonlyArray<Row> | null> {
   /**
-   * Reads the whole list from the server (the master's `list*` function in its client module). It must be the same function on every render, such
-   * as an import: the hook's `read` and `refresh` keep their identity only while it does, and a screen puts `read` in an effect's dependencies.
+   * Reads the whole list from the server (the master's `list*` function in its client module). It may be a different function on each render,
+   * such as an inline arrow: the hook's `read` and `refresh` keep their identity whatever is passed, and each call uses the latest function given.
    */
   readonly readList: () => Promise<Outcome<ReadonlyArray<Row>>>;
   /** The list the page rendered, or `null` for a list that is read after the screen has opened. */
@@ -56,6 +58,11 @@ export interface MasterList<Row, Items extends ReadonlyArray<Row> | null> {
   readonly refresh: () => Promise<void>;
 }
 
+/**
+ * The list of a masters screen: pass `initialItems` when the page rendered the list, or `null` when the screen reads it itself (then call `read()`
+ * once, for example in an effect). `read` and `refresh` are stable and call the latest `readList`. A failed read sets `status` to `'error'` and
+ * keeps the rows; nothing throws. Reads follow latest-read-wins, described in the module comment above.
+ */
 export function useMasterList<Row, Initial extends ReadonlyArray<Row> | null>({
   readList,
   initialItems,
@@ -66,16 +73,22 @@ export function useMasterList<Row, Initial extends ReadonlyArray<Row> | null>({
   const [query, setQuery] = useState('');
   // The number of the newest read: an older read that answers late must not replace what a newer one showed (QLT-04).
   const newest = useRef(0);
+  // The latest `readList`, so that `read` does not depend on it: an inline function cannot make `read` change on every render and loop an effect.
+  const readListRef = useRef(readList);
   const showSkeleton = useAfterDelay(status === 'loading' && items !== null, SKELETON_DELAY_MS);
+
+  useEffect(() => {
+    readListRef.current = readList;
+  });
 
   const read = useCallback(async (): Promise<void> => {
     newest.current += 1;
     const mine = newest.current;
-    const outcome = await readList();
+    const outcome = await readListRef.current();
     if (mine !== newest.current) return;
     if (outcome.status === 'ok') setItems(outcome.value);
     setStatus(outcome.status === 'ok' ? 'ready' : 'error');
-  }, [readList]);
+  }, []);
 
   const refresh = useCallback((): Promise<void> => {
     setStatus('loading');
