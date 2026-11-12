@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_STATE } from './support/servers';
 import {
   expectLoadErrorHoldsFocus,
+  expectSavedNotShown,
   gateListReads,
   type ListGate,
   makeMaterial,
@@ -82,6 +83,7 @@ test.describe('the Process master (SCR-11)', () => {
 
     gate.release('busy');
     await expectLoadErrorHoldsFocus(page, focusLog, PROCESS_LOAD_ERROR);
+    await expectSavedNotShown(page);
   });
 });
 
@@ -109,6 +111,7 @@ test.describe('the Materials tab (SCR-13)', () => {
 
     gate.release('busy');
     await expectLoadErrorHoldsFocus(page, focusLog, MATERIALS_LOAD_ERROR);
+    await expectSavedNotShown(page);
   });
 });
 

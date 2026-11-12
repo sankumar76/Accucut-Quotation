@@ -4,7 +4,7 @@ import { expect, type Locator, type Page, type TestInfo } from '@playwright/test
 
 import { waitUntilHydrated } from './design-system';
 import { DEVELOPMENT_URL } from './servers';
-import { afterOneFrame, BUSY, JSON_HEADERS } from './treatments';
+import { afterOneFrame, BUSY, JSON_HEADERS, SAVED_BUT_NOT_SHOWN } from './treatments';
 
 /**
  * What the two masters specs of the shared pieces share (GitHub issues 244 and 277): `masters-slow-read.spec.ts` (where focus goes when the
@@ -136,4 +136,15 @@ export async function expectLoadErrorHoldsFocus(page: Page, focusLog: ReadonlyAr
   expect(focusLog.at(-1), 'the last element to take focus is the title').toBe(`H2:${errorTitle}`);
   await expect(title).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? ''), { message: 'focus stays on the error title' }).toBe(errorTitle);
+}
+
+/**
+ * DEF-029 (AQP-274): the same moment, read for its words. A success notice ("... saved.") is on the page, so the load error says the change was saved
+ * and never "Nothing was changed." (ux-spec v0.23, SCR-11 "The Error (load) after a change that was saved" and SCR-13 "Loading and Error (load) of the Materials
+ * tab"). The notice is checked first, so the test cannot pass on a page where the save did not happen or the notice never showed.
+ */
+export async function expectSavedNotShown(page: Page): Promise<void> {
+  await expect(page.getByRole('status').filter({ hasText: 'The change is in the audit log.' }), 'the success notice is still on the page').toBeVisible();
+  await expect(page.getByText(SAVED_BUT_NOT_SHOWN), 'the load error says the change was saved').toBeVisible();
+  await expect(page.getByText('Nothing was changed.'), 'a save that succeeded never reads "Nothing was changed."').toHaveCount(0);
 }
