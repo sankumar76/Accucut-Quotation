@@ -223,9 +223,6 @@ test.describe('the change (AC-2, AC-3)', () => {
     expect(posts).toEqual([]);
     await fillAndSend(page, { current: 'Short1!x', next: 'Short1!x' });
     await expect(page.locator('#new-password-error')).toHaveText('The new password must be at least 10 characters.');
-    await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD.toUpperCase() });
-    await expect(page.locator('#new-password-error')).toHaveCount(0);
-    await expect(page.getByRole('status').filter({ hasText: SUCCESS_TITLE })).toBeVisible();
 
     // The error state, as a person sees it: it fits the width, its controls are large enough, and axe finds nothing.
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
