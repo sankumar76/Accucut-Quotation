@@ -1,0 +1,13 @@
+diff --git a/src/components/features/masters/use-exchange-rates.ts b/src/components/features/masters/use-exchange-rates.ts
+index 5ed42e9..ba0827f 100644
+--- a/src/components/features/masters/use-exchange-rates.ts
++++ b/src/components/features/masters/use-exchange-rates.ts
+@@ -85,7 +85,7 @@ function useRatesRead() {
+   useEffect(() => {
+     if (status === 'loading' || !wantsFocus.current) return;
+     wantsFocus.current = false;
+-    focusOpener(SAVE_BUTTON, status === 'error');
++    focusOpener(SAVE_BUTTON);
+   }, [status]);
+ 
+   return { row, status, showSkeleton, read, readAgain };

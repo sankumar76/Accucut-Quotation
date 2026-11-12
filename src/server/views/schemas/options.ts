@@ -8,11 +8,11 @@ import { z } from 'zod';
  * Engineer-reachable route imports only a file that has no rate field in it. `tests/security/strict-schema.test.ts` and the cost scan hold
  * every such route to it.
  *
- * The stories for customers and treatments add their lists here. The "Not applicable" entry joins the materials list in story 02.06, with
+ * The story for customers adds its list here (treatments joined in STORY-02.05). The "Not applicable" entry joins the materials list in story 02.06, with
  * `materialConsidered` null, which is why the field may be null.
  */
 
-export const materialOptionSchema = z.strictObject({
+const materialOptionSchema = z.strictObject({
   id: z.string().min(1),
   /** Material in Drawing. */
   name: z.string().min(1),
@@ -21,3 +21,8 @@ export const materialOptionSchema = z.strictObject({
 });
 
 export const materialOptionsResponseSchema = z.strictObject({ options: z.array(materialOptionSchema).readonly() });
+
+/** A treatment as a choice (STORY-02.05 AC-5): an ID and a name, "Other" included, and nothing else. The table has no rate of any kind, and the schema is strict. */
+export const treatmentOptionSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1) });
+
+export const treatmentOptionsResponseSchema = z.strictObject({ options: z.array(treatmentOptionSchema).readonly() });

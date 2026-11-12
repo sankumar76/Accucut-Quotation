@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { focusOpener, type Opener } from '../../src/components/features/masters/process-opener';
+import { focusOpener, type Opener } from '../../src/components/features/masters/master-opener';
 
 /**
  * DEF-020 (AQP-235): when the list cannot be read right after a saved change, the load error title takes focus, and the close handler of

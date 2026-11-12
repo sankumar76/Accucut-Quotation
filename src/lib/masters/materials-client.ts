@@ -15,7 +15,7 @@ export interface MaterialRow extends MaterialValues {
 
 const MATERIALS_PATH = '/api/v1/materials';
 
-export function toMaterialRow(value: unknown): MaterialRow | null {
+function toMaterialRow(value: unknown): MaterialRow | null {
   if (!isRecord(value)) return null;
   const { id, materialInDrawing, materialConsidered, pricePerKg, specificGravity, scrapRate } = value;
   if (typeof id !== 'string' || typeof materialInDrawing !== 'string' || typeof materialConsidered !== 'string') return null;

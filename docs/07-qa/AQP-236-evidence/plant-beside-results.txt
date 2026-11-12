@@ -1,0 +1,54 @@
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > is exactly the two files ruled in test strategy 10.5 item 9, and no other 10ms
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > names spec files of tests/e2e, once each, by file name 4ms
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > holds every spec that skips every non-desktop project, and only those 36ms
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > skips outside desktop at file level in each own-width file, so a test added to it cannot lose a width by accident 3ms
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > keeps the partly desktop-only files out of the list, and they still use the pattern 5ms
+ ✓ tests/unit/own-width-files.test.ts > OWN_WIDTH_FILES in playwright.config.ts (AQP-244 AC-2) > is added to the testIgnore of mobile and tablet, and of no other project 1ms
+ ✓ tests/unit/one-width-tag.test.ts > @one-width allow-list (AQP-199 AC-3) > finds the E2E files it is meant to guard 15ms
+ ✓ tests/unit/one-width-tag.test.ts > @one-width allow-list (AQP-199 AC-3) > appears in no file of tests/e2e except the eleven ruled in test strategy section 10.5 42ms
+ ✓ tests/unit/one-width-tag.test.ts > @one-width allow-list (AQP-199 AC-3) > is spelled the same everywhere, so grepInvert matches every use of it 28ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > has no skip, fixme, fail, slow, only or todo in the scan, the production-route spec or any file of tests/security 33ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the marker pattern can fail: it matches each way of switching a test off 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan spec has no early exit: no bare return, no read of the environment, and every test asserts (QLT-10) 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan helper function scanAsEngineer has no early exit and no read of the environment (QLT-17) 3ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan helper function openEngineerPages has no early exit and no read of the environment (QLT-17) 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan helper function callEngineerRoutes has no early exit and no read of the environment (QLT-17) 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan helper function expectScanSawEnough has no early exit and no read of the environment (QLT-17) 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the scan helper function fetchReferencedFiles has no early exit and no read of the environment (QLT-17) 1ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the guard that judges a scan is really there: expectScanSawEnough asserts, and scanAsEngineer opens the pages and calls the routes 3ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the helper check can fail: it finds a function body and sees an early return in it (the planted N12) 4ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the early-exit check can fail: it names each way of leaving a scan test before it asserts (the planted F14) 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > the Playwright configuration does not ignore the scan and does not turn retries up 2ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > stage 12 runs the whole suite: no path, no --grep and no --project on the command 1ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is not quarantined (AC-8) > stage 11 runs tests/security, which holds the role matrix, the import rule, the strict schemas and the scanner tests 0ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > gives listings that run at the same time different, new and empty folders under the temp folder 66ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > removes the folder when the listing has finished (it existed while the listing ran) 8ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > removes the folder when the listing fails, and still reports why it failed (it existed while the listing ran) 41ms
+ × tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): each Playwright listing has a cache folder of its own > keeps the rest of the environment, and takes the cache folder from the listing and not from the caller 9ms
+ ✓ tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): withPrivateListCache > returns what the work returns, with a folder that exists while it runs and not after 30ms
+ ✓ tests/unit/playwright-list.test.ts > AQP-236 (DEF-022): withPrivateListCache > passes on the error the work threw, and removes the folder 5ms
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is in the Playwright list at three widths (AC-8) > lists the nine tests of the scan: the Engineer scan, the refusals, the real-data controls (the rates, the materials of STORY-02.03 and the exchange rates of ST
+ ✓ tests/unit/canary-scan-gate.test.ts > the scan is in the Playwright list at three widths (AC-8) > runs every one of them in the mobile, tablet and desktop projects (a width is never skipped) 37ms
+ ✓ tests/unit/one-width-tag.test.ts > the tests that carry @one-width, as Playwright lists them (AQP-199 AC-3) > are exactly the 52 tests ruled in test strategy section 10.5, by title 40ms
+ ✓ tests/unit/one-width-tag.test.ts > the tests that carry @one-width, as Playwright lists them (AQP-199 AC-3) > run in the desktop project only, and every other test runs in all three width projects, except the own-width files, which run in desktop only (AQP-
+ ✓ tests/unit/one-width-tag.test.ts > the tests that carry @one-width, as Playwright lists them (AQP-199 AC-3) > keep the layout tests of the ruled files at three widths 9ms
+ ✓ tests/unit/one-width-tag.test.ts > Playwright projects and the tag (AQP-199 AC-3) > hides the tagged tests from mobile and tablet, and runs everything in desktop 8ms
+ ✓ tests/unit/one-width-tag.test.ts > Playwright projects and the tag (AQP-199 AC-3) > keeps one retry and forbidOnly in CI, and runs four workers in CI and two elsewhere 2ms
+ ✓ tests/unit/one-width-tag.test.ts > Playwright projects and the tag (AQP-199 AC-3) > widens no timeout: the expectation timeout is still 15 s and no test timeout is set here 2ms
+ ✓ tests/unit/one-width-tag.test.ts > set-up warm-up (AQP-199 AC-1) > opens /, /queue and /design-system on the development server before the width projects start 2ms
+ ✓ tests/unit/own-width-files.test.ts > the listing, as Playwright makes it (AQP-244 AC-2) > lists the tests of each own-width file in desktop only, and each file has tests 5ms
+ ✓ tests/unit/own-width-files.test.ts > the listing, as Playwright makes it (AQP-244 AC-2) > lists every test outside the own-width files in all three width projects, or in desktop only with @one-width 26ms
+ ✓ tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > has the shard count of the workflow matrix 17ms
+ × tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards 129ms
+ ✓ tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the set-up project runs once in each shard, with the same tests as in the whole list 6ms
+ ✓ tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > fullyParallel stays on, so --shard divides the tests and not the files 2ms
+ ✓ tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the shards differ by at most one mobile, tablet and desktop test 3ms
+ ✓ tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > each shard holds a number of mobile, tablet and desktop tests within 10 % of the mean over the shards 4ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+AssertionError: expected 1 to be 3 // Object.is equality
+AssertionError: expected false to be true // Object.is equality
+AssertionError: expected false to be true // Object.is equality
+AssertionError: expected 'accucut-playwright-list-shared-control' to match /^accucut-playwright-list-[A-Za-z0-9]{…/
+ Test Files  2 failed | 3 passed (5)
+      Tests  5 failed | 41 passed (46)

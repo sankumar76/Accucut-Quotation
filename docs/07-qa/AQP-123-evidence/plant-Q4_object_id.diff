@@ -1,0 +1,13 @@
+diff --git a/src/lib/masters/exchange-rates.ts b/src/lib/masters/exchange-rates.ts
+index 27720c5..b20d184 100644
+--- a/src/lib/masters/exchange-rates.ts
++++ b/src/lib/masters/exchange-rates.ts
+@@ -28,7 +28,7 @@ export type StoredExchangeRates = { readonly [Field in ExchangeRateField]: strin
+  * pair has one fixed ID). One save is one entry, whatever number of the two rates it changes.
+  */
+ export const EXCHANGE_RATES_OBJECT_TYPE = 'exchange_rate';
+-export const EXCHANGE_RATES_OBJECT_ID = '00000000-0000-4000-8000-000600000001';
++export const EXCHANGE_RATES_OBJECT_ID = '00000000-0000-4000-8000-000600000002';
+ export const EXCHANGE_RATES_LABEL = 'Exchange rates';
+ 
+ /** The labels of AC-1. */

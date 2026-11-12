@@ -1,0 +1,12 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 <worktree>
+
+
+ Test Files  3 passed (3)
+      Tests  173 passed (173)
+   Start at  02:26:09
+   Duration  10.22s (tests 74%, import 19%, transform 6%)
+

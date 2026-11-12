@@ -1,0 +1,13 @@
+diff --git a/tests/e2e/support/auth.ts b/tests/e2e/support/auth.ts
+index b964dc5..ec632d3 100644
+--- a/tests/e2e/support/auth.ts
++++ b/tests/e2e/support/auth.ts
+@@ -232,7 +232,7 @@ export async function ensureCanaryExchangeRates(): Promise<void> {
+     if (admin === undefined) throw new Error('The E2E Admin does not exist yet: the set-up project makes it.');
+     const upsert = `INSERT INTO exchange_rates (currency, inr_value, updated_by) VALUES ($1, $2, $3)
+       ON CONFLICT (currency) DO UPDATE SET inr_value = EXCLUDED.inr_value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+-    await client.query(upsert, ['USD', EXCHANGE_RATE_CANARIES.usd, admin.id]);
++    await client.query(upsert, ['USD', '1.00', admin.id]);
+     await client.query(upsert, ['EUR', EXCHANGE_RATE_CANARIES.eur, admin.id]);
+   } finally {
+     await client.end();

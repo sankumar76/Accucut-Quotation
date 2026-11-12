@@ -1,0 +1,14 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 2 failed) 4829ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] first save: exactly one entry, with the fixed object_id, the label, the actor, the request ID of the response, befo
+AssertionError: expected { event: 'master.edited', …(7) } to match object { event: 'master.edited', …(7) }
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] a change of one currency is one entry holding both before and after; a chain: each before is the previous after
+AssertionError: expected Set{ '00000000-0000-4000-8000-000600…' } to deeply equal Set{ '00000000-0000-4000-8000-000600…' }
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  2 failed | 58 passed (60)
+   Duration  6.37s (tests 80%, import 11%, transform 8%)

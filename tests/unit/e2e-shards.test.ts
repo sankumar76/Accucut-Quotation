@@ -51,14 +51,15 @@ describe('AQP-208 AC-3: the shards together run every E2E test once, in near-equ
   let shards: string[][] = [];
 
   beforeAll(async () => {
-    // The whole suite is listed first and alone, then the shards together (QLT-04, AQP-227). Playwright keeps compiled specs
-    // in a cache (`PWTEST_CACHE_DIR`). On a cold cache, listings that run at the same time race on it, and some report the
-    // compiled line of a test instead of its source line (`design-system.spec.ts:112` for the test at line 100). The
-    // `file:line` keys then differ between the whole list and a shard, and the union test fails with nothing missing. Once
-    // the first listing has filled the cache, the shards only read it. Cold cache, listed together: 4 of 4 probe runs failed;
-    // listed in this order: 6 of 6 passed.
-    const all = await listPlaywrightSuites();
-    const each = await Promise.all(Array.from({ length: SHARD_COUNT }, (_, index) => listPlaywrightSuites({ index: index + 1, total: SHARD_COUNT })));
+    // The whole suite and every shard are listed at the same time. Each listing has a Playwright cache folder of its own
+    // (tests/support/playwright-list.ts, DEF-022), so none of them can read another's half-written entry and report the
+    // compiled line of a test instead of its source line (`design-system.spec.ts:112` for the test at line 100), which made
+    // the `file:line` keys of the whole list and a shard differ with nothing missing (QLT-04, AQP-227). Listing the whole
+    // suite first, to fill a shared cache, was a workaround for that and is no longer needed.
+    const [all, ...each] = await Promise.all([
+      listPlaywrightSuites(),
+      ...Array.from({ length: SHARD_COUNT }, (_, index) => listPlaywrightSuites({ index: index + 1, total: SHARD_COUNT })),
+    ]);
     whole = entriesOf(all);
     shards = each.map(entriesOf);
   });

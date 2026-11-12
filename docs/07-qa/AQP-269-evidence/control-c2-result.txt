@@ -1,0 +1,39 @@
+Control c2: PR #187, CI run 42867587822 (QA probe spec included; plant diff in plant-c2.diff where there is one)
+
+Jobs:
+  Stages 1 to 11b: success
+  Stage 12: E2E (shard 2 of 3): failure
+  Stage 12: E2E (shard 1 of 3): failure
+  Stage 12: E2E (shard 3 of 3): failure
+  Stages 1 to 11: failure
+
+Tests failed on every attempt (unique, project and test):
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Material (SCR-13, AQP-122): typing 3 letters into the second refused field 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Process (SCR-11, AQP-113): typing 3 letters into the second refused field 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Users (SCR-14, AQP-65): typing 3 letters into the second refused field 
+[desktop] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, an
+[desktop] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so d
+[desktop] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Material (SCR-13, AQP-122): typing 3 letters into the second refused field 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Process (SCR-11, AQP-113): typing 3 letters into the second refused field 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Users (SCR-14, AQP-65): typing 3 letters into the second refused field 
+[mobile] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and
+[mobile] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so do
+[mobile] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Material (SCR-13, AQP-122): typing 3 letters into the second refused field 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Process (SCR-11, AQP-113): typing 3 letters into the second refused field 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:66:3 › F-b Users (SCR-14, AQP-65): typing 3 letters into the second refused field 
+[tablet] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and
+[tablet] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so do
+[tablet] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-
+
+QA probe tests passed: 0

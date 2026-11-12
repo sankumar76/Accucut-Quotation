@@ -1,0 +1,14 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 2 failed) 5070ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] idempotent: the same body gives the same answer (stamp included); "83.5" and "083.50" are one value
+AssertionError: expected { usd: '83.50', eur: '88.37', …(3) } to deeply equal { usd: '83.50', eur: '88.37', …(3) }
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] no entry for a save that changes nothing, for any refusal, for a GET, or for a refused caller
+AssertionError: expected 2 to be 1 // Object.is equality
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  2 failed | 58 passed (60)
+   Duration  7.26s (tests 74%, import 15%, transform 11%)

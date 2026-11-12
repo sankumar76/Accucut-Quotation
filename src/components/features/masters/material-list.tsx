@@ -10,9 +10,9 @@ import { cn } from '@/lib/cn';
 import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
 import type { MaterialRow } from '@/lib/masters/materials-client';
 
+import { isOpener, type Opener } from './master-opener';
+import { BREAK_LONG_NAMES } from './master-texts';
 import { editMaterialLabel, PRICE_HEADING, SCRAP_HEADING } from './material-texts';
-import { isOpener, type Opener } from './process-opener';
-import { BREAK_LONG_NAMES } from './process-texts';
 
 /**
  * The materials of SCR-13 (STORY-02.03 AC-1, AC-7): a table from 768 px, where it scrolls inside its own container only, and a card for

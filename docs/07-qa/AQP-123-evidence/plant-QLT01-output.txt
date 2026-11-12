@@ -1,0 +1,67 @@
+  ✓   1 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (20.9s)
+  ✓   2 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (36.6s)
+  ✘   4 [mobile] › tests\e2e\exchange-rates.spec.ts:227:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01): after a refusal of both fields, typing a fix into the first keeps focus and the text there, and writes nothing into the second (20.5s)
+  ✘   3 [mobile] › tests\e2e\exchange-rates.spec.ts:247:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, mirror): after a refusal of both fields, Tab to the second and typing a fix keeps focus and the text there (20.7s)
+  ✘   6 [tablet] › tests\e2e\exchange-rates.spec.ts:227:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01): after a refusal of both fields, typing a fix into the first keeps focus and the text there, and writes nothing into the second (21.2s)
+  ✘   5 [mobile] › tests\e2e\exchange-rates.spec.ts:267:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, server): after the server refuses both fields, typing a fix into the first keeps focus and the text there (21.5s)
+  ✘   7 [tablet] › tests\e2e\exchange-rates.spec.ts:247:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, mirror): after a refusal of both fields, Tab to the second and typing a fix keeps focus and the text there (22.8s)
+  ✘   8 [tablet] › tests\e2e\exchange-rates.spec.ts:267:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, server): after the server refuses both fields, typing a fix into the first keeps focus and the text there (22.7s)
+  ✘   9 [desktop] › tests\e2e\exchange-rates.spec.ts:227:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01): after a refusal of both fields, typing a fix into the first keeps focus and the text there, and writes nothing into the second (23.2s)
+  ✘  10 [desktop] › tests\e2e\exchange-rates.spec.ts:247:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, mirror): after a refusal of both fields, Tab to the second and typing a fix keeps focus and the text there (23.1s)
+  ✘  11 [desktop] › tests\e2e\exchange-rates.spec.ts:267:3 › saving (AC-2, AC-3, AC-7) › AC-3, AC-7 (QLT-01, server): after the server refuses both fields, typing a fix into the first keeps focus and the text there (18.9s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 EUR in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 EUR in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 EUR in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 EUR in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 EUR in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 EUR in ₹')
+           - unexpected value "inactive"
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+      - Expect "toBeFocused" getByLabel('1 USD in ₹') with timeout 15000ms
+      - waiting for getByLabel('1 USD in ₹')
+           - unexpected value "inactive"
+  9 failed
+  2 passed (3.1m)

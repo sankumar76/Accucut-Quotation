@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { DECIMAL_TEXT_MESSAGE, NAME_REQUIRED_MESSAGE } from '@/lib/masters/master-rules';
 import { editChanges, formProblems, initialValues, newRateBody, withoutError, type FormValues } from '@/lib/masters/process-form';
-import { changesFrom, DEFAULT_VALUE_MESSAGE, NAME_REQUIRED_MESSAGE, UNIT_REQUIRED_MESSAGE, unitLabel, valueSymbol } from '@/lib/masters/process-items';
+import { changesFrom, UNIT_REQUIRED_MESSAGE, unitLabel, valueSymbol } from '@/lib/masters/process-items';
 
 /**
  * STORY-02.01 (AC-2, AC-3; QLT-12 and STD-05 of the G6): what the add and edit form checks and sends, without a browser. The
@@ -19,7 +20,7 @@ describe('what the form starts with', () => {
 
 describe('the checks before anything is sent', () => {
   it('asks for a name, a unit and a value, each in its own words, when a new rate is empty', () => {
-    expect(formProblems(initialValues(null), null)).toEqual({ name: NAME_REQUIRED_MESSAGE, unit: UNIT_REQUIRED_MESSAGE, defaultValue: DEFAULT_VALUE_MESSAGE });
+    expect(formProblems(initialValues(null), null)).toEqual({ name: NAME_REQUIRED_MESSAGE, unit: UNIT_REQUIRED_MESSAGE, defaultValue: DECIMAL_TEXT_MESSAGE });
   });
 
   it('accepts a complete new rate', () => {
@@ -29,7 +30,7 @@ describe('the checks before anything is sent', () => {
   it('QLT-12: in an edit the default value is checked only when it was changed: a value stored with more than two decimals does not stop a rename', () => {
     const stored: FormValues = { name: 'Foam Cost', unit: 'per sq ft', defaultValue: '21.3745' };
     expect(formProblems({ ...stored, name: 'Foam-Cost-per-sqft' }, stored)).toEqual({});
-    expect(formProblems({ ...stored, defaultValue: '21.3746' }, stored)).toEqual({ defaultValue: DEFAULT_VALUE_MESSAGE });
+    expect(formProblems({ ...stored, defaultValue: '21.3746' }, stored)).toEqual({ defaultValue: DECIMAL_TEXT_MESSAGE });
     expect(formProblems({ ...stored, defaultValue: '21.37' }, stored)).toEqual({});
   });
 

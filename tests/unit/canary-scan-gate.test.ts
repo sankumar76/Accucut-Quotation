@@ -182,7 +182,7 @@ describe('the scan is in the Playwright list at three widths (AC-8)', () => {
     tests = [...found].map(([title, projects]) => ({ title, projects }));
   });
 
-  it('lists the eight tests of the scan: the Engineer scan, the refusals, the real-data controls (the rates, and the materials of STORY-02.03), the options list, two planted-leak controls, the absent route', () => {
+  it('lists the nine tests of the scan: the Engineer scan, the refusals, the real-data controls (the rates, the materials of STORY-02.03 and the exchange rates of STORY-02.04), the options list, two planted-leak controls, the absent route', () => {
     expect(tests.map((test) => test.title.split(':')[0]).sort()).toEqual([
       'AC-3',
       'AC-3, AC-4 (control with real data)',
@@ -192,6 +192,7 @@ describe('the scan is in the Playwright list at three widths (AC-8)', () => {
       'AC-4, AC-6 (STORY-02.03)',
       'AC-5',
       'AC-6 (control with real data, STORY-02.03)',
+      'AC-6 (control with real data, STORY-02.04)',
     ]);
   });
 

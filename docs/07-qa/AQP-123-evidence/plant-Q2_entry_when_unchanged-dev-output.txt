@@ -1,0 +1,20 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/unit/masters-service-exchange-rates.test.ts (20 tests | 1 failed) 372ms
+ ❯ tests/unit/exchange-rates-routes.test.ts (16 tests | 1 failed) 569ms
+ ❯ tests/integration/masters/exchange-rates.test.ts (26 tests | 1 failed) 14992ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/unit/exchange-rates-routes.test.ts > PUT /api/v1/exchange-rates (AC-2, AC-4) > is idempotent: the same body twice gives the same answer and only the first writes an entry
+AssertionError: expected [ { …(10) }, { …(10) }, { …(10) } ] to have a length of 2 but got 3
+- Expected
++ Received
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > writes no stamp, no row and no entry for a save that changes nothing, however the same numbers are written (idempotent)
+AssertionError: expected { usd: '83.37', eur: '90.37', …(3) } to deeply equal { usd: '83.37', eur: '90.37', …(3) }
+- Expected
++ Received
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > is idempotent: the same body again gives the same state, the same stamp and no second entry
+AssertionError: expected { usd: '83.37', eur: '90.37', …(3) } to deeply equal { usd: '83.37', eur: '90.37', …(3) }
+- Expected
++ Received
+ Test Files  3 failed | 16 passed (19)
+      Tests  3 failed | 1079 passed (1082)
+   Duration  31.03s (tests 58%, import 38%, transform 4%)

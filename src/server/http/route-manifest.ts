@@ -174,6 +174,14 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/materials', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-02.04 (SCR-13, the Exchange rates tab). The Admin only (BR-004); an Engineer never receives a rate (BR-003), so the route is in no Engineer list.
+  // The tab is in the page of the Materials row above: no new page, no new menu entry.
+  { path: '/api/v1/exchange-rates', kind: 'api', methods: ['GET', 'PUT'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-02.05 (SCR-13, the Treatment / Color tab). The Admin only (BR-004); the tab is in the page of the Materials row above. `/api/v1/options/treatments` is
+  // the one route of the story that every role may call (AC-5): IDs and names, "Other" included, and no rate of any kind, so the cost scan covers it as an Engineer route.
+  { path: '/api/v1/treatments', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/treatments/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/options/treatments', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },

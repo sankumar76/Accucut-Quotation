@@ -4,15 +4,19 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
+import { actionsOf, makeTreatment, openTreatments } from './support/treatments';
 
 /**
  * DEF-021 (AQP-234): the row actions of a masters table are inside the table's visible box, without scrolling it, at every width from 768 to
- * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master and for Materials, with one row whose name is
+ * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master, for Materials and, since STORY-02.05, for the
+ * Treatment / Color tab (Rename and Delete, 112 px), with one row whose name is
  * 100 characters with no space (the longest the form allows), at the eleven widths of the spec's table of regions.
  *
  * Each width is checked three ways: as drawn (the fit), with the table forced wider than the region, at its start and after a Tab, and scrolled to its
  * far end (the sticky guarantee, part 2: without `sticky right-0` the forced cases fail). The test sets its own viewport, so it runs in the desktop
- * project only; the other two projects would repeat the same eleven widths.
+ * project only; the other two projects would repeat the same eleven widths. The last block holds one more test of that kind, for STORY-02.05: the
+ * Treatment / Color tab's "(e)" test (a Tab from the last row's Rename lands on its Delete with the table forced wider), moved here from
+ * `treatments-focus.spec.ts` unchanged because it sets its own width (test strategy 10.5 item 10).
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -28,6 +32,8 @@ interface Screen {
   readonly title: string;
   readonly region: string;
   readonly make: (page: Page, name: string) => Promise<void>;
+  /** Brings the table on screen when it is not on the page's first tab. */
+  readonly open?: (page: Page) => Promise<void>;
 }
 
 async function post(page: Page, path: string, data: Record<string, string>): Promise<void> {
@@ -56,6 +62,17 @@ const SCREENS: ReadonlyArray<Screen> = [
         specificGravity: '7.37',
         scrapRate: '22.37',
       }),
+  },
+  {
+    label: 'SCR-13 Treatment / Color',
+    path: '/masters/materials',
+    title: 'Materials and lists',
+    region: 'Treatment / Color, scrollable',
+    make: (page, name) => post(page, '/api/v1/treatments', { name }),
+    open: async (page) => {
+      await page.getByRole('tab', { name: 'Treatment / Color' }).click();
+      await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible();
+    },
   },
 ];
 
@@ -88,12 +105,14 @@ async function expectActionsInside(page: Page, region: Locator, mode: string): P
   }
 }
 
+// File level on purpose (AQP-244, QLT-01): this file is in OWN_WIDTH_FILES, so only `desktop` lists it, and every test in it, present or
+// future, sets its own width. tests/unit/own-width-files.test.ts fails if this hook moves into a describe block.
+test.beforeEach(({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'each test sets its own width, so one project runs it');
+});
+
 for (const screen of SCREENS) {
   test.describe(`${screen.label}: row actions are inside the table region (DEF-021)`, () => {
-    test.beforeEach(({}, testInfo) => {
-      test.skip(testInfo.project.name !== 'desktop', 'the test sets its own widths, so one project runs it');
-    });
-
     for (const width of WIDTHS) {
       test(`at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
         const name = longName(testInfo);
@@ -103,6 +122,7 @@ for (const screen of SCREENS) {
         await page.goto(screen.path);
         await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
         await waitUntilHydrated(page, 'main button[data-action="add"]');
+        await screen.open?.(page);
 
         const region = page.getByRole('region', { name: screen.region });
         await expect(region).toBeVisible();
@@ -127,7 +147,7 @@ for (const screen of SCREENS) {
         // 3. A Tab from the region goes to the first row action, which is not under the sticky column and does not move the page sideways.
         await region.focus();
         await page.keyboard.press('Tab');
-        await expect(page.locator(':focus')).toHaveAttribute('data-action', /^(edit|delete)$/);
+        await expect(page.locator(':focus')).toHaveAttribute('data-action', /^(edit|rename|delete)$/);
         await expectActionsInside(page, region, 'forced to scroll, after Tab');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
@@ -140,3 +160,28 @@ for (const screen of SCREENS) {
     }
   });
 }
+
+test.describe('SCR-13 Treatment / Color: the Actions column (ux-spec section 6.0, DL-122 condition B)', () => {
+  test('(e) with the table forced wider than its region, a Tab from the last row\'s Rename lands on its Delete, which is not under the sticky column, and the page did not move sideways', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the test sets its own width, so one project runs it');
+    const name = `E2E-last-${testInfo.retry}-${testInfo.repeatEachIndex}-${randomBytes(3).toString('hex')}-`.padEnd(100, 'W');
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await makeTreatment(page, name);
+    await openTreatments(page);
+    const region = page.getByRole('region', { name: 'Treatment / Color, scrollable' });
+    await region.locator('table').evaluate((table) => {
+      table.style.minWidth = '1400px';
+    });
+    expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
+    const { rename, del } = actionsOf(page, name);
+    // The row of the long name is the last row only if no other test added one since; the Tab goes from this row's Rename to its Delete either way.
+    await rename.focus();
+    await page.keyboard.press('Tab');
+    await expect(del).toBeFocused();
+    const box = await del.boundingBox();
+    const regionBox = await region.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((regionBox?.x ?? 0) + (regionBox?.width ?? 0));
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual(regionBox?.x ?? 0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+});

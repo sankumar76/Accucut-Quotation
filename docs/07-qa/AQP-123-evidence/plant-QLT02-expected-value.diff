@@ -1,0 +1,13 @@
+diff --git a/tests/e2e/canary-scan.spec.ts b/tests/e2e/canary-scan.spec.ts
+index da266e2..1aff6d0 100644
+--- a/tests/e2e/canary-scan.spec.ts
++++ b/tests/e2e/canary-scan.spec.ts
+@@ -103,7 +103,7 @@ async function prepare(
+ async function expectCanaryRatesStillStored(): Promise<void> {
+   const stored = await readExchangeRatesFromDatabase();
+   expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+-    USD: Number(EXCHANGE_RATE_CANARIES.usd).toFixed(4),
++    USD: '838.3701',
+     EUR: Number(EXCHANGE_RATE_CANARIES.eur).toFixed(4),
+   });
+ }

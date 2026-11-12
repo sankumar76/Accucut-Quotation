@@ -259,6 +259,45 @@ the job prints a warning that names the key. There are two ways to replace the e
 Caches are scoped by ref: a pull request restores entries from its own ref or from `master`, and what it saves is visible
 to that pull request only. The entries every branch reads are written only by `push` runs on `master`.
 
+### node_modules cache
+
+The install in each CI job (`Stages 1 to 11b` and the three E2E shards) does not run `npm ci` on every run (AQP-243, test
+strategy 10.5 item 7). `node_modules` is restored from a cache whose key is `node-modules-v<N>-` plus the runner OS, architecture
+and image (`ImageOS`), the Node and npm versions of `ci.yml`, and a hash of `package-lock.json`, `package.json` and `.npmrc`.
+`<N>` is `NODE_MODULES_CACHE_FORMAT` in the `env:` block at the top of `ci.yml`: the format of the integrity record kept
+inside the entry. There is no `restore-keys`: only an exact match restores, so a changed lockfile, a changed install-script
+allow-list (`allowScripts`, `strict-allow-scripts`) or a new npm is always a miss and installs exactly what the files say.
+
+A hit runs `scripts/ci/node-modules-integrity.sh check`, which compares the restored files and sizes with the record made
+when the entry was saved (it takes about a second). If the check fails, the job deletes `node_modules`, runs a clean `npm ci`
+and saves nothing (the **fallback**), so a bad cache costs time and never a red run or a stale install. On a miss `npm ci`
+runs, the record is written, and the entry is saved only if all of that succeeded; four jobs may race to save one key, and a
+lost race is only a warning. `prisma generate` runs every time. The job summary of each run shows, for each job, its install
+time and whether it was a hit, a miss or a fallback, and the slowest shard (`scripts/lib/ci-run-summary.ts`). Each install job
+also writes its CPU count and model to its own job summary.
+
+A key never changes after it is saved, so a bad entry falls back on every run until it is replaced. The warning in the log
+names the key. There are two ways to replace it:
+
+- **Delete it.** A maintainer runs `gh cache delete <key>` (a token with `actions: write`; the pipeline cannot do it), or
+  removes it under Actions, Caches. That removes the entry in every ref; add `--ref refs/pull/<n>/merge` to remove one pull
+  request's copy only. The next run misses and saves a good entry.
+- **Start a new key.** Raise `NODE_MODULES_CACHE_FORMAT` (a quoted number in the `env:` block at the top of `ci.yml`) by one,
+  in a reviewed pull request, also with any change to what `record` writes. Do this only when the entry cannot be deleted, or
+  to retire entries on every branch at once. The old entries are left to expire.
+
+Caches are scoped by ref, as for the Playwright caches above: a pull request restores entries from its own ref or from
+`master` and saves for itself only, and a `master` run restores only what a `master` run saved. The entries every branch reads
+are written by `push` runs on `master`.
+
+**Budget.** An entry is about 235 MiB (233.49 MiB at the first save, AQP-243), per key and per ref: every open pull request holds
+its own copy, and a pull request that changes the lockfile, `package.json` or `.npmrc` adds another. It sits beside the
+258 MiB npm cache that `setup-node` keeps and the 74 to 142 MiB Next.js build caches. GitHub allows 10 GB per repository and
+evicts the least recently used entries when it is full; a closed pull request keeps its caches until then. At the AQP-243
+review (2026-11-10) the repository held 10.89 GB in 76 entries, 1.40 GB of them the six entries made while building this story,
+so expect evictions. An evicted entry is a miss (time only), never a failure. Read the usage with
+`gh api repos/<owner>/<repo>/actions/cache/usage`, and delete throwaway entries of closed pull requests with `gh cache delete`.
+
 ## Performance checks (NFR-009)
 
 **First-load JavaScript budget (CI stage 11b, every pull request).** Each route's first load may download at most

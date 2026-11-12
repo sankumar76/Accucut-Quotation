@@ -48,7 +48,18 @@ const ENGINEER_VIEWS: ReadonlyArray<string> = [
 /** What an Engineer view may import from `src/server/repositories`, and what it may not. Both lists together are the directory. */
 const REPOSITORIES = {
   allowed: ['user-repository', 'database-errors', 'transaction'],
-  blocked: ['audit-repository', 'config-repository', 'master-repository', 'prisma-client', 'throttle-repository'],
+  blocked: [
+    'audit-repository',
+    'config-repository',
+    'decimal-text',
+    'exchange-rate-repository',
+    'master-constraints',
+    'master-repository',
+    'material-repository',
+    'prisma-client',
+    'throttle-repository',
+    'treatment-repository',
+  ],
 } as const;
 
 /** The same for `src/server/services`. Audit and config modules hold the rate before and after, and the formula text. */
@@ -61,8 +72,10 @@ const SERVICES = {
     'audit-service',
     'bootstrap-admin-service',
     'config-service',
+    'exchange-rate-service',
     'masters-service',
     'rate-name-rules',
+    'treatment-service',
   ],
 } as const;
 
@@ -72,7 +85,6 @@ const FUTURE_IMPORTS: ReadonlyArray<string> = [
   '@/server/repositories/approval-repository',
   '@/server/repositories/customer-rate-repository',
   '@/server/repositories/material-repository',
-  '@/server/repositories/exchange-rate-repository',
   '@/server/repositories/task-repository',
   '../repositories/master-repository',
   '../../server/repositories/calculation-repository',
@@ -80,7 +92,6 @@ const FUTURE_IMPORTS: ReadonlyArray<string> = [
   '@/server/services/approval-service',
   '@/server/services/customers-service',
   '@/server/services/materials-service',
-  '@/server/services/exchange-rate-service',
 ];
 
 /** The service container, and the barrel that re-exports the Admin schemas. */

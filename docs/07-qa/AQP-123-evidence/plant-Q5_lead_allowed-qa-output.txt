@@ -1,0 +1,14 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 2 failed) 6155ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] no entry for a save that changes nothing, for any refusal, for a GET, or for a refused caller
+AssertionError: expected 2 to be 1 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-6: only the Admin; nobody else receives a rate (BR-003, BR-004) > [AQP-123 AC-6] decision table: Lead 403, Engineer 403, signed out 401, on GET and on PUT; the bodies are identical for Lead and Engineer and hold no rate
+AssertionError: expected [ 'lead', 200 ] to deeply equal [ 'lead', 403 ]
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  2 failed | 58 passed (60)
+   Duration  8.40s (tests 78%, import 14%, transform 8%)
