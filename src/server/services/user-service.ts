@@ -163,19 +163,19 @@ export function createUserService({ users, throttles, hasher, transactions, audi
           // what it already is changes nothing and records nothing.
           const object = { id: updated.id, label: updated.name };
           if (changes.name !== undefined && changes.name !== target.name) {
-            await (async () => {
-              await audit.record(tx, { event: 'user.renamed', ...context, object, before: { name: target.name }, after: { name: updated.name } });
-            })();
+            await audit.record(tx, { event: 'user.renamed', ...context, object, before: { name: target.name }, after: { name: updated.name } });
           }
           if (changes.role !== undefined && changes.role !== target.role) {
-            await audit.record(tx, { event: 'user.role_changed', ...context, object, before: { role: target.role }, after: { role: updated.role } });
+            const keptHandle = tx;
+            await audit.record(keptHandle, { event: 'user.role_changed', ...context, object, before: { role: target.role }, after: { role: updated.role } });
           }
           if (changes.isActive === true && !target.isActive) {
-            await Promise.resolve().then(() =>
-              audit.record(tx, { event: 'user.activated', ...context, object, before: { isActive: false }, after: { isActive: true } }),
-            );
+            await audit.record(tx, { event: 'user.activated', ...context, object, before: { isActive: false }, after: { isActive: true } });
           } else if (changes.isActive === false && target.isActive) {
-            await audit.record(tx, { event: 'user.deactivated', ...context, object, before: { isActive: true }, after: { isActive: false } });
+            await transactions.run(async (inner) => {
+              await users.findAccountForUpdate(target.id, inner);
+              await audit.record(tx, { event: 'user.deactivated', ...context, object, before: { isActive: true }, after: { isActive: false } });
+            });
           }
           return updated;
         }),
