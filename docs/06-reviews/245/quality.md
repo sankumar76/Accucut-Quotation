@@ -1,5 +1,7 @@
 # Review Report — #245 (tech-debt refactor, PR #265) — Quality
 
+> **Round 2 (DL-162 condition R) is at the end of this file:** APPROVE WITH COMMENTS at `aad53e9`. QLT-02 is Fixed. P1 is red 3 and P3 is red 9 again. The round-1 text below is unchanged.
+
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
@@ -125,3 +127,93 @@ const read = useCallback(async (): Promise<void> => {
 - **master:** (1) rule latest-read-wins on Process and Materials **in** (QLT-03); (2) #244 neither before nor with this PR, but after it, still due before AQP-142's G6 (QLT-07); (3) route QLT-01 (into #244 or a new `tech-debt` issue) and QLT-02 (this PR, or an AQP-142 Dev Context line).
 - **scrum-master (if master routes QLT-02 to AQP-142):** in AQP-142's Dev Context C, `readList` must be a module import.
 - **orchestrator or a human:** delete the four `control/245-qlt-*` branches; the permission system refused it.
+
+---
+
+# Round 2 — DL-162 condition R
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality |
+| Review round | 2 (narrow: the condition-A push and the branch update; DL-091, DL-162 (4)) |
+| Diff reviewed | `dcdad49..65af06b` (condition A); merge commit `aad53e9` (65af06b + `master` 774eff8) |
+| Commit reviewed | `aad53e9` |
+| Date | 2026-11-11 |
+| **Verdict** | **APPROVE WITH COMMENTS** |
+
+PR review (system of record): https://github.com/sankumar76/Accucut-Quotation/pull/265#pullrequestreview-5867836989
+
+## Summary
+Condition A is one commit, `65af06b`, in one file: `use-master-list.ts`, +20/-7. It makes three changes. The module comment now states latest-read-wins exactly (STD-01). The exported hook gets a doc comment (STD-02). The latest `readList` is held in a ref, so `read` is `useCallback(…, [])` (QLT-02). The PR body's row, decision 2 and the round-2 Dev Record row match the code. The push stays inside DL-162 (3), and nothing else changes behaviour.
+
+The orchestrator's update is a GitHub merge commit, `aad53e9`. `git show --cc aad53e9` prints no hunks, so there was no conflict resolution. `git diff 65af06b aad53e9 -- src tests` is empty. The PR's 16 files against 774eff8 are the same set as in round 1. Master's side of the merge brings only Dependabot bumps (tailwindcss 4.3.5, @playwright/test 1.65.0, next 16.4.5) and docs.
+
+**QLT-02 is Fixed.** P1 is red 3 and P3 is red 9 again, on `master`-based controls from `aad53e9`, with the same failing tests as round 1. CI on `aad53e9` is 5 of 5, with counts +0 / +0 / +0 / +0 against the `master` commit in its merge ref. One new Info (QLT-08).
+
+| Severity | Count (round 2, open on this PR) |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 (QLT-01 is carried by #277, DL-162 (5)) |
+| Info | 1 (QLT-08) |
+
+## Checks Run (round 2)
+| Check | Command | Result |
+|-------|---------|--------|
+| Push diff | `git diff dcdad49 65af06b` | 1 file, `use-master-list.ts`: comments (:24-27, :35-36, :61-65, :76), `import { useEffect }`, `readListRef` and its effect (:77, :80-82), `await readListRef.current()` and deps `[]` (:87, :91). No test change |
+| Merge commit | `git show --cc aad53e9`; `git diff 65af06b aad53e9 -- src tests`; `git diff --stat 774eff8 aad53e9` | no resolution hunks; empty; the same 16 files (218+/165-) |
+| CI on the PR head | run 43136387943 (jobs and log read), the only run on aad53e9, attempt 1 | merge ref 3c18dcd (aad53e9 into **774eff8**), 5 of 5 success. Unit **2,922**, full Vitest **5,285**, E2E **265 / 263 / 250 = 778**, skipped **3 + 4 + 17 = 24**. That equals 774eff8's push run 43135619452 (2,922 / 5,285 / 265 / 263 / 250 / 24): **+0 / +0 / +0 / +0**. JS budget: `/masters/materials` 186,501, `/masters/process` 174,153 (limit 200,000). Gitleaks: 701 commits, no leaks. 0 failed and 0 flaky lines |
+| Previous push run | 43135407890 on 65af06b | success (the developer's evidence; not re-read in detail) |
+| Type-check | `npx tsc --noEmit` (worktree `agent-a38dd44fc18d3f035` at 65af06b; `src` identical to aad53e9) | exit 0 |
+| Lint | `npx eslint src/components/features/masters/use-master-list.ts` (same worktree, and on each plant) | clean ×3 |
+| Plants | 2 control PRs from aad53e9 against `master` | both red, with the same lists as round 1 |
+
+## Round-1 findings, verified
+| ID | Round 1 | Round 2 status | Evidence |
+|---|---|---|---|
+| QLT-01 | Minor | **Not fixed here, as ruled.** Routed to #277 by DL-162 (5) | `use-dialog-opener.ts:25` unchanged; thread reply r4545291226 |
+| QLT-02 | Minor | **Fixed** | Below; thread reply r4545290661 |
+| QLT-03 | Info | Ruled IN (DL-162 (2)); still pinned | P1 red 3 (#278); the comment (:24-27) matches the code; thread reply r4545315210 |
+| QLT-04 | Info | Still pinned | P3 red 9 (#279); thread reply r4545315516 |
+| QLT-05 | Info | Holds, and is stronger | An inline `readList` such as `() => listCustomers()` is now safe for AQP-142. No Dev Context line is needed (DL-162 (7)) |
+| QLT-06, QLT-07 | Info | Unchanged | — |
+
+### QLT-02: why the loop can no longer happen
+- `read` (`use-master-list.ts:84-91`) is `useCallback(…, [])`. Everything it uses is a ref (`newest`, `readListRef`) or a state setter (`setItems`, `setStatus`), and React keeps all of those stable. So `read` has one identity for the life of the component, whatever `readList` is passed.
+- `refresh` (:93-96) depends only on `[read]`, so it is stable too. `useReadAgain` receives a stable `refresh`.
+- `use-treatments.ts:121-123`, `useEffect(() => void read(), [read])`, therefore runs once on mount, plus React's StrictMode re-run in development, as before. A settled read re-renders the screen but cannot re-run the effect. The endless loop of round 1 cannot happen.
+- **Latest function.** `readListRef` starts as the first `readList` (:77) and is overwritten after every commit by a no-deps effect (:80-82). This is the same pattern as `use-first-open.ts:65-68`. The hook's effect is declared before the caller's effects in the same component, so in the commit where `readList` changes, it runs before the screen's own effect. Event-handler calls (Try again, a saved change) always come after the commit.
+- **For the three callers** (`listProcessItems`, `listMaterials`, `listTreatments`, all module imports), `readListRef.current` is always the same function. The guard, the setters and the `loading` step are untouched, so behaviour is identical, and CI's +0 counts and the two red plants agree.
+- The option doc (:35-36) now says that `readList` "may be a different function on each render" and that `read` / `refresh` "keep their identity whatever is passed". Both are true of the code. The new doc comment (:61-65) is accurate too. "A failed read … keeps the rows; nothing throws" holds because the three `list*` client functions return an `Outcome` rather than throwing. That is unchanged from round 1.
+
+## Plants (round 2; DL-091, DL-162 (4))
+Each plant is a one-line diff from `aad53e9`, on a branch `control/245-qlt-r2-*`. The script fails unless its anchor occurs exactly once and keeps the file's line endings. Each diff was printed before the push and is in its PR body. Lint was clean on each planted file, so a plant can fail only in a test. CI runs on the merge with `master` 774eff8. Both PRs were opened as drafts and closed unmerged after their runs had been read.
+
+| Plant | Diff | PR, run | Result | Caught by |
+|---|---|---|---|---|
+| **P1** the newest-read guard never fires | `use-master-list.ts:88` `if (mine !== newest.current) return;` → `if (mine > newest.current) return;` | #278, 43137195323 (merge ref cccbf95) | **red, 3** (one per shard; Stages 1 to 11b green) | `treatments-focus.spec.ts:213` "the latest read wins (AC-1, AC-8) › a first read that answers after the list was read again does not bring the older list back" at mobile, tablet and desktop. It fails at `:249` `await expect(rowOf(page, name)).toBeVisible();` with "element(s) not found". The same as round 1's #273 |
+| **P3** `refresh` does not set `loading` | `use-master-list.ts:94` drop `setStatus('loading');` | #279, 43137205416 (merge ref 0d0b507) | **red, 9** (4 + 3 + 2 by shard; Stages 1 to 11b green) | `process-master.spec.ts:337` (`:355` 'Loading the rates' not attached), `materials.spec.ts:335` (`:353` 'Loading the materials') and `aqp-122-qa.spec.ts:277` (`:299` `WORDS.loading`), each at three widths. The same as round 1's #275 |
+
+The new mechanism has no plant of its own. A plant that put `[readList]` back would stay green, because every caller passes an import, so it would show nothing. The guarantee is structural (deps `[]`) and is argued above. P1 and P3 show that the ref did not disconnect the read path: through `readListRef.current()`, both the guard and the `loading` step are still pinned.
+
+## Findings (round 2)
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-08 | Info | `src/components/features/masters/use-master-list.ts:80-82` | maintainability; DL-153 (2) | `readListRef` is set in a passive effect, as `use-first-open.ts` does for `load`. A call made during the commit that changed `readList`, before that effect runs, uses the previous function. Such a call comes from a child component's passive effect (children's effects run first) or from any layout effect | None today: all three callers pass imports, and the screen's own `read` effect runs after the hook's. It would matter only if a future caller both passed an inline `readList` closing over changing props and started a read from a child's mount effect or a layout effect | No action in this PR (it keeps the house pattern). If that case ever arises, change this effect to `useLayoutEffect` |
+
+## Reviewer-specific tables (round 2)
+**Condition A against DL-162 (3)**
+
+| DL-162 (3) item | In 65af06b | Result |
+|---|---|---|
+| STD-01: comment and body row state the rule as in (2) | :24-27 "any read that is not the newest one when it answers is dropped, whichever … answers first … status therefore stays `loading` … older rows are not applied … status is `error`"; the body row "Treatments' latest-read-wins" says the same | Met (reviewer-standards owns the wording; master checks at G7, DL-047) |
+| STD-02: doc comment on `useMasterList` | :61-65 | Met |
+| QLT-02: identity whatever is passed, latest one called | `readListRef`, deps `[]`; option doc and decision 2 reworded | Met (above) |
+| `use-master-list.ts` and the body only; no test change | 1 file; `tests/` diff empty | Met |
+| Counts +0 against the merge-ref `master` push run | 43136387943 against 43135619452 (774eff8) | Met |
+| Dev Record round-2 row; "Refs #245" stays | PR body round-2 table; "Refs #245" opens the body's first paragraph; no closing keyword found | Met |
+
+## Issues for other roles (round 2)
+- **master:** condition R is met. DL-162 (8)(b) is satisfied: round 2 has no Blocker, Critical or Major, and P1 and P3 are red. reviewer-standards is not needed: the push stays within comments, the latest-function mechanism and `read`'s deps (DL-162 (4)).
+- **orchestrator:** commit this file. Under DL-162 H, the delivery lead deletes the two new control branches, `control/245-qlt-r2-p1-no-latest-read-wins` and `control/245-qlt-r2-p3-refresh-no-loading`, together with the round-1 `control/245-qlt-*` branches. Local branches of the same names also exist in the shared repository; worktree `agent-a38dd44fc18d3f035` is back on `tech-debt/245-rebased` at 65af06b.
