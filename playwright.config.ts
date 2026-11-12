@@ -114,6 +114,7 @@ export default defineConfig({
     {
       // CI stage 9 has built the sources already; a developer's run builds first, so it never tests a stale build.
       command: IN_CI ? `npx next start --port ${PRODUCTION_PORT}` : `npx next build && npx next start --port ${PRODUCTION_PORT}`,
+      stdout: 'pipe',
       url: `http://localhost:${PRODUCTION_PORT}/sign-in`,
       reuseExistingServer: !IN_CI,
       timeout: 300_000,
