@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_STATE } from './support/servers';
 import {
   expectLoadErrorHoldsFocus,
+  expectSavedNotShown,
   gateListReads,
   type ListGate,
   makeMaterial,
@@ -73,7 +74,7 @@ test.describe('the Process master (SCR-11)', () => {
     await expect(edit).toBeFocused();
   });
 
-  test('a slow read that fails after a save: the load error\'s title keeps focus and the page heading never takes it (DEF-020)', async ({ page }, testInfo) => {
+  test('a slow read that fails after a save: the load error\'s title keeps focus and the page heading never takes it (DEF-020), and the sentence says the change was saved (DEF-029)', async ({ page }, testInfo) => {
     const name = await makeRate(page, testInfo);
     await openProcessMaster(page);
     const gate = await gateListReads(page, PROCESS_LIST_PATH);
@@ -82,6 +83,7 @@ test.describe('the Process master (SCR-11)', () => {
 
     gate.release('busy');
     await expectLoadErrorHoldsFocus(page, focusLog, PROCESS_LOAD_ERROR);
+    await expectSavedNotShown(page);
   });
 });
 
@@ -100,7 +102,7 @@ test.describe('the Materials tab (SCR-13)', () => {
     await expect(edit).toBeFocused();
   });
 
-  test('a slow read that fails after a save: the load error\'s title keeps focus and the page heading never takes it (DEF-020)', async ({ page }, testInfo) => {
+  test('a slow read that fails after a save: the load error\'s title keeps focus and the page heading never takes it (DEF-020), and the sentence says the change was saved (DEF-029)', async ({ page }, testInfo) => {
     const name = await makeMaterial(page, testInfo);
     await openMaterials(page);
     const gate = await gateListReads(page, MATERIALS_LIST_PATH);
@@ -109,6 +111,7 @@ test.describe('the Materials tab (SCR-13)', () => {
 
     gate.release('busy');
     await expectLoadErrorHoldsFocus(page, focusLog, MATERIALS_LOAD_ERROR);
+    await expectSavedNotShown(page);
   });
 });
 
