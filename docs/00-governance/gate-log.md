@@ -5745,6 +5745,74 @@ Alternatives considered:
 
 **Posted:** Jira AQP-237 comment 11542; PR #250 comment 6811556723; GitHub #259 comment 6811493411.
 
+## G6 – Peer Review — AQP-237 (STORY-10.18) — A-check: condition A of DL-161 against commit d447e18, and condition D — 2026-11-11
+
+- **Decision:** **condition A is MET.** Commit d447e18 stays inside the four named files, its two lines in `audit-transaction-check.ts` are comments, and both CI runs read the DL-161 (7)(c) invariant with k = 3. No line goes beyond the named scope, so reviewer-standards does not re-read. **G6 is closed. The CONDITIONAL GO (DL-161) stands with no open developer condition. AQP-237 may go to In QA now, for G7 by qa-engineer on head ea9aaab.** **Condition D is MET in content** (architecture v0.40 §6 and test strategy v0.35 §10 match DL-161 (5) item by item). **Its due point is still open:** b28c1b2 is on the records branch, which has no PR yet, and D must be on `master` before #250's final update and squash (DL-161 (7)(a)). D does not hold G7.
+- **Decided by:** master  ·  **Human override:** none
+- **Artefacts evaluated:**
+  - **Commit A** (`git show d447e18`, read in full). Its parent is 57acbae. 4 files, +36 / -2: `tests/support/lint-fixture.ts` (+9 / -2), `tests/unit/lint/transaction-handle-rule.test.ts` (+10), `tests/support/audit-transaction-check.ts` (+2), `tests/support/audit-transaction-cases.ts` (+15). Nothing under `src/`, and no change to `eslint.config.mjs`, a workflow or a dependency.
+  - **Head ea9aaab** (`git log -1 --format=%P`): a merge of 774eff8 into d447e18. `git show --cc ea9aaab` has no combined hunk. `git diff d447e18 ea9aaab` over the PR's 8 files is empty. What the merge brings is `master`'s 5b4e6e9..774eff8: `package.json` and `package-lock.json` only (#150, next 16.4.5).
+  - **CI on d447e18:** run **43135521817**, attempt 1, the only run on that head. Its merge ref is **f171796** (d447e18 into `master` **5b4e6e9**), read from "HEAD is now at" in all five jobs. Jobs API: 5 of 5 `success`.
+  - **CI on ea9aaab:** run **43136706441**, attempt 1, the only run on that head. Its merge ref is **4909bca** (ea9aaab into `master` **774eff8**). Jobs API: 5 of 5 `success`.
+  - **Base runs:** push run **43134732280** on 5b4e6e9, whose log I read for this check, and push run **43135619452** on 774eff8 (read for DL-163). Each reads unit 2,922, full 5,285, E2E 265 / 263 / 250 = 778, skipped 3 / 4 / 17 = 24.
+  - **Developer:** PR #250 comment 6811921021; Jira 11549; the PR body's round-3 section (lines 62 to 85). The orchestrator's brief: Jira 11550.
+  - **Condition D:** `git show b28c1b2`. In architecture v0.40 I read §6 "The two checks as built", the §10 rows and the change-log row. In test strategy v0.35 I read the §10 totals, the time range, and §10.5 item 11. solution-architect's hand-off is Jira 11547. `git ls-remote`: `docs/AQP-1-records-sprint1-h` is at dca1e78 (it holds b28c1b2) and `master` is at 774eff8. `gh pr list --head docs/AQP-1-records-sprint1-h`: no PR.
+  - **Not re-run by me:** the developer's local STD-13 control (2 failed of 113 against the old helper, PR body line 72), and the local `tsc` and ESLint runs. CI stages 4, 5 and 6 are green on both heads.
+
+**Checks of condition A** (DL-161 condition A and the A-check row)
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | One commit, the 4 named files only | ✅ | `git show --stat d447e18`: 4 files, +36 / -2. The commit before it is 57acbae. There is no other commit between 57acbae and ea9aaab except the merge, which leaves the PR's files unchanged |
+| 2 | Every changed line in `audit-transaction-check.ts` is a comment | ✅ | Two added lines. `:38` is a JSDoc header line: "ACCEPTED: a `record` whose error is caught and not rethrown inside the callback; error handling is outside this check (X1, QLT-08)". `:233` is a `//` comment on the `forEachChild(...) \|\| undefined` idiom (STD-15 (2)). Nothing is deleted |
+| 3 | STD-13 behaviour | ✅ | `lint-fixture.ts:30-40`. `messagesFor` checks `eslint.isPathIgnored` first and throws "`<path>`: ESLint ignores this path…". It throws "…returned no result" when `result` is undefined. On a `fatal` message it throws "…the fixture does not parse: `<ESLint's message>`". Other `ruleId: null` messages are still dropped. The comment above it names STD-13 |
+| 4 | Two new tests, shown red against the old helper | ✅ | `transaction-handle-rule.test.ts:103-111`: a syntax error (`export const = ;`) rejects, and `src/generated/example.ts` rejects. `src/generated/**` is in `globalIgnores` (`eslint.config.mjs:189`), so the second test does reach the ignore branch. The red control is the developer's local run, with the diff shown (PR body line 72). I did not re-run it. The "no result" branch has no test, and DL-161 did not ask for one |
+| 5 | If an existing row throws, the fixture is fixed, not the helper | ✅ | `transaction-handle-rule.test.ts` is the only user of `createLintFixture` (`git grep` at d447e18). It reads 113 of 113 green on both runs (111 earlier rows plus 2), so no row threw and no fixture changed |
+| 6 | QLT-08: the header line and one pinned `OPEN_LIMITS` case | ✅ | `audit-transaction-cases.ts:251-264`, X1: `try { await audit.record(tx, entry) } catch { }` after `things.add('a', tx)`, with `records: 1` and `findings: []`. It runs through `it.each(OPEN_LIMITS)` (`audit-transaction-architecture.test.ts:88`), and the file reads 46 tests where it read 45. So QLT-06's rule that every ACCEPTED form is pinned still holds |
+| 7 | STD-14, STD-15 (1) and PRF-03 unchanged | ✅ | No change to `parameterOf`. No `tsconfig` or program-option change. `aqp-27-scaffold.test.ts` is untouched |
+| 8 | CI 43135521817 (d447e18 on 5b4e6e9) | ✅ | 5 of 5, attempt 1. Unit **3,081**, full **5,444**, E2E **265 / 263 / 250 = 778**, skipped **24**. That is 43134732280 **+159 / +159 / +0 / +0** = (156 + k), with **k = 3** (2 lint-fixture tests and 1 `OPEN_LIMITS` case, which counts against the diff). 18 cache restores, no `Cache not found`. Gitleaks: 699 commits, no leaks. Path **4:52**: first job at 01:35:19Z, `Stages 1 to 11` ended 01:40:11Z, and the fan-in waited 3 s. Slack +43 s (shard 3, 283 s, minus `Stages 1 to 11b`, 240 s) |
+| 9 | CI 43136706441 (ea9aaab on 774eff8) | ✅ | 5 of 5, attempt 1. **3,081 / 5,444 / 778 / 24** = 43135619452 **+159 / +159 / +0 / +0**, so the invariant holds on the new base too. Playwright 1.65.0 moves no E2E count on this branch (DL-163 (4)(b)). 18 cache restores, no miss. Gitleaks: 702 commits, no leaks. Slack +83 s (shard 2, 314 s, minus 231 s). **Path 8:17:** the slowest shard ended at 5:15, and then `Stages 1 to 11` waited **2:54 in the queue** (01:50:57Z to 01:53:51Z) before running for 8 s. That wait is runner queue, not the PR's work. It is reported, not held (DL-151), and it is not a RISK-023 reading |
+| 10 | Matched lines read, every attempt | ✅ | One attempt on each head. The `flaky` matches are the `fix/AQP-268-flaky…` and `fix/AQP-272-flaky…` branch names in the fetch output. `failed=1` at line 5955 is the fan-in script's source text, which the log echoes. The one `FATAL: password authentication failed for user "accucut_owner"` line in the container log is also in base run 43134732280, so it was there before this PR. No retry and no `✘` |
+| 11 | Overlap since 57acbae | ✅ | `master` 5b4e6e9..774eff8 is `package.json` and the lockfile only. #250 changes neither file |
+
+**Condition D** (DL-161 (5); DL-156 (8))
+| Item DL-161 (5) names | Result | Where in v0.40 / v0.35 |
+|---|---|---|
+| The lexical holder at the call and at each step | ✅ | §6 "The lexical holder…" |
+| The awaited / returned / arrow-body chain | ✅ | §6 "Awaited, returned or an arrow body" |
+| Receiver type `AuditService`; a non-callee use refused; `z.record` not visited | ✅ | §6 "Check 2, which calls it visits" |
+| The product-owner's step count | ✅ | §6 "The step count": 3 calls below the callback pass, 4 fail |
+| The count 15 | ✅ | §6 "The count (AC-4)": 5 + 6 + 3 + 1, with "at least 15" pinned |
+| The ACCEPTED forms | ✅ | §6 L1 to L5. L2 is Q5 / QLT-04 → #259, and L5 is QLT-08, now true at d447e18 |
+| STD-08, the Engineer `transaction` entry | ✅ | §6 "What the Engineer allow-list entry `transaction` means", plus the §10 row |
+| The PRF-01 baseline as a range with a host factor | ✅ | Test strategy §10: 5.2 / 4.1, 4.4 / 3.4, 10.5 / 10.6 and 7.7 s, with a host factor and a normalised value for each |
+| The §10 Vitest totals | ✅ | Test strategy §10, "Vitest totals of record" (57acbae, plus k from condition A) |
+| **On `master` before #250's final update and squash** | ⏳ open | Records branch only (b28c1b2 under dca1e78). There is no PR, and `master` is 774eff8 |
+
+One sentence in D is out of date, and it does not need a fix before the squash. Test strategy v0.35 §10 says "`master` has since moved to 8ebe529… read for the update". `master` is now 774eff8, and DL-163 (4)(a) governs which base is read. The architect corrects it at the next edit of §10, together with the readings below.
+
+**Rulings**
+1. **A is met, and G6 is closed.** The orchestrator moves AQP-237 to In QA (DL-161 (8)). No review round and no reviewer re-read are needed. **The G7 head is ea9aaab**, and its run is 43136706441. If the head changes before G7, QA gathers the evidence on the new head, and the invariant is recomputed against that merge ref's `master` push run.
+2. **X1 is missing from the test file's header** (`tests/unit/audit-transaction-architecture.test.ts:19-21`, which the developer raised). **No change in #250, and no defect.** That header is a summary, marked "in short". It names `audit-transaction-check.ts` as the file that holds "the list of what it does not see" (lines 15-16), and that list does carry X1 (line 38). The rule that every ACCEPTED form is pinned is met by the `OPEN_LIMITS` case. The file was outside A's four files by my own condition, so the developer was right to leave it. **It goes to #259 as one line:** the next change to that header adds X1, or replaces the short list with a pointer to the full one. #259 already reopens the same file for QLT-04 (L2). Master posts this on #259.
+3. **PRF-03 trigger.** The trigger is stage 6 **over 8 s**, not 10 s, on **both** QA's G7 run and the first `master` push run after the squash (DL-161 (4); test strategy v0.35 §10). If the G7 head stays ea9aaab, QA's G7 run is 43136706441, and its stage 6 reads **9,863 ms**. That is over 8 s, so the trigger then depends on the post-squash `master` push run alone. The orchestrator posts both readings on #259, as DL-161 (7)(g) already says.
+4. **Time readings for the record** (host factor = the median, over the other stage files over 1 s, of their time against reference run 43053208506, by the test strategy §10 definition; computed by me from the logs). On d447e18 (43135521817): stage 6 **10,579 ms**, factor 1.07, normalised 9.9 s; stage 11 **10,373 ms**, factor 1.14, normalised 9.1 s. On ea9aaab (43136706441): stage 6 **9,863 ms**, factor 1.06, normalised 9.3 s; stage 11 **13,825 ms**, factor 1.10, **normalised 12.6 s**. The stage 6 readings are inside the normalised range of 4.5 to 9.9 s. **Stage 11 on ea9aaab is above it.** AC-5's line is the unit stage, so this is not an AC-5 report. It is an observation: QA reads stage 11 again on the G7 run, and the architect adds all four readings to the §10 range at the next edit. A new high is evidence for #259's PRF-03 item, not a finding against #250. The test keeps its 120 s hook limit (DL-057).
+5. **The merge pre-rulings of DL-161 (7) are unchanged**, with DL-163 (4)(a) for the base. ea9aaab is an update by merge commit, which (7)(b) allows. The "final update" before the squash is the one after the records PR, which carries D, DL-161, DL-162, DL-163 and this record, has merged.
+
+**G7 brief points for qa-engineer** (adding to DL-161 (6)):
+- **Head and run:** ea9aaab, run 43136706441 (merge ref 4909bca on 774eff8), 5 of 5.
+- **Count invariant on ea9aaab:** unit **3,081**, full **5,444**, E2E **778** (265 / 263 / 250), skipped **24** (3 / 4 / 17). That is 774eff8's push run 43135619452 + (156 + 3) / (156 + 3) / +0 / +0. A different head is recomputed against its own merge ref's `master` push run.
+- **AC-4:** "at least 15" with `checked` read on the G7 run, and `git grep -c "\.record(" -- src/server/services` = 15 at ea9aaab.
+- **AC-5:** the stage 6 file time on the G7 run is 9,863 ms with host factor 1.06. That is under the 10 s report line and over the PRF-03 8 s line, which you state. Stage 11 reads 13,825 ms (normalised 12.6 s), which you note. QA reports the readings and does not rule on PRF-03.
+- **Header lists:** QLT-08 / X1 must be in `audit-transaction-check.ts:38` and pinned in `OPEN_LIMITS`. The missing X1 in the test file's header summary (`:19-21`) is ruled in ruling 2 above: #259, not a defect.
+- **STD-13:** if your plants use the lint fixture, an ignored path or a fixture that does not parse now throws. Read a throw as the fixture refusing an unread file, not as a rule finding.
+- **Plants (i) to (iii) of DL-161 (6)** go on one `master`-based control PR (from 774eff8 or later), with each diff printed first. Your plants on that PR run in CI. If you run anything locally on ea9aaab, the lockfile changed when the branch took `master`, so DL-163 (4)(d) applies: check free disk first, run `npm install` (never `npm ci`) only in that worktree, and report a full disk as a blocker.
+- **Path:** 8:17 on 43136706441, of which 2:54 was the fan-in waiting in the queue. Report the path, the queue wait and the slack together, and do not hold on them (DL-151). If you need a reading for RISK-023, use a run with no queue wait.
+- **Regression:** CI 5 of 5 on the G7 head. JQL for open Sev-1 or Sev-2 Bugs.
+
+**Risks registered:** none new. RISK-023 stays at 8: the 8:17 path is queue time, not work.
+**Rationale:** Commit A matches its condition line by line: the four files, comments only in the check, the reviewer's behaviour for STD-13 with two tests, and the pinned X1 case. The count delta is exactly what the diff predicts (k = 3) on two different bases, and on the second base the merge leaves the PR's files unchanged. Master's reading therefore stands in for a re-review, as DL-047 and DL-124 allow and as at AQP-227 (2026-11-09). D's text matches every item DL-161 (5) named. Only its route to `master` is outstanding, and that is a pre-squash item, not a G7 one.
+
+**Posted:** Jira AQP-237 comment 11551; PR #250 comment 6812109459; GitHub #259 comment 6812110618.
+
 ## G6 – Peer Review — tech-debt #245 (`useMasterList`, the shared dialog opener, Process on `MasterSearchBox`, `RUPEE` in `master-rules.ts`; PR #265 at dcdad49) — 2026-11-11 (attempt 1)
 
 - **Decision:** **CONDITIONAL GO (DL-162)**, on the two-review route of DL-153 (2) (reviewer-standards and reviewer-quality).
