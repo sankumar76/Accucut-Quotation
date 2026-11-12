@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
-import { NAME_REQUIRED_MESSAGE, NAME_TOO_LONG_MESSAGE } from '../../../lib/masters/process-items';
+import { NAME_REQUIRED_MESSAGE, NAME_TOO_LONG_MESSAGE } from '../../../lib/masters/master-rules';
 import { NOTHING_TO_CHANGE_TREATMENT_MESSAGE, TREATMENT_NAME_MAX_LENGTH } from '../../../lib/masters/treatments';
 
 /**
  * The contract of the Treatment routes (STORY-02.05, architecture section 6 "Treatments"). Every body, path parameter and answer is a strict
  * object: a key that is not named is an error, so nothing is sent that is not meant to be, and a client cannot set a field the route does not
- * offer (NFR-002). The limit and the messages are the ones the screen uses (`src/lib/masters/treatments.ts`, `process-items.ts`) and are shown
+ * offer (NFR-002). The limit and the messages are the ones the screen uses (`src/lib/masters/treatments.ts`, `master-rules.ts`) and are shown
  * under the field they name. Whether a name is free, and whether it is one the system keeps (422 `NAME_RESERVED`), is the service's: a schema
  * cannot see the other treatments, and the reserved names belong on the server only.
  *

@@ -1,13 +1,14 @@
 'use client';
 
-import { Plus, RotateCcw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
-import { ErrorState, SkeletonBlock } from '@/components/shared/states';
+import { SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
-import { BREAK_LONG_NAMES, ERROR_RETRY } from './process-texts';
+import { MasterLoadError } from './master-load-error';
+import { BREAK_LONG_NAMES } from './master-texts';
 import { TreatmentDeleteDialog } from './treatment-delete-dialog';
 import { TreatmentFormDialog } from './treatment-form-dialog';
 import { TreatmentList } from './treatment-list';
@@ -15,8 +16,8 @@ import {
   ADD_TREATMENT,
   TREATMENT_ERROR_TITLE,
   TREATMENT_LOADING_LABEL,
-  TREATMENT_SKELETON_ROWS,
   TREATMENT_SAVED_NOT_SHOWN_BODY,
+  TREATMENT_SKELETON_ROWS,
   treatmentNotice,
   treatmentRenamedNotice,
 } from './treatment-texts';
@@ -55,27 +56,14 @@ function Notices({ state }: { readonly state: TreatmentsState }) {
   );
 }
 
-/** The load error. While a success notice is on the page its sentence says the change happened, so it never reads "Nothing was changed" under "X was added.". */
-function LoadError({ onRetry, saved }: { readonly onRetry: () => void; readonly saved: boolean }) {
-  return (
-    <ErrorState
-      title={TREATMENT_ERROR_TITLE}
-      {...(saved ? { description: TREATMENT_SAVED_NOT_SHOWN_BODY } : {})}
-      focusOnMount
-      action={
-        <Button onClick={onRetry}>
-          <Icon icon={RotateCcw} />
-          {ERROR_RETRY}
-        </Button>
-      }
-    />
-  );
-}
-
 /** What the tab shows below the notices: the error with "Try again", the skeleton, or the list. */
 function Body({ state }: { readonly state: TreatmentsState }) {
   const { items, status, showSkeleton, notice } = state;
-  if (status === 'error') return <LoadError onRetry={state.retry} saved={notice?.tone === 'success'} />;
+  if (status === 'error') {
+    // While a success notice is on the page its sentence says the change happened, so the error never reads "Nothing was changed" under "X was added.".
+    const saved = notice?.tone === 'success';
+    return <MasterLoadError title={TREATMENT_ERROR_TITLE} onRetry={state.retry} description={saved ? TREATMENT_SAVED_NOT_SHOWN_BODY : undefined} />;
+  }
   // The first read has no list to keep on screen: the skeleton appears after 300 ms. A later read keeps the list until 300 ms have passed.
   if (items === null) return <SkeletonBlock rows={TREATMENT_SKELETON_ROWS} label={TREATMENT_LOADING_LABEL} />;
   if (showSkeleton) return <SkeletonBlock rows={TREATMENT_SKELETON_ROWS} delayMs={0} label={TREATMENT_LOADING_LABEL} />;

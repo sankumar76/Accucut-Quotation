@@ -1,5 +1,6 @@
 import type { FieldColumn } from '../fields/lookup';
-import { DEFAULT_VALUE_MESSAGE, DEFAULT_VALUE_PATTERN, normaliseDefaultValue, RUPEE } from './process-items';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, normaliseDecimalText } from './master-rules';
+import { RUPEE } from './process-items';
 
 /**
  * What the Exchange rates tab of SCR-13 (STORY-02.04; SPEC sections 4.4 and 7.4, architecture sections 5.1 and 6) and its route share: the
@@ -8,7 +9,7 @@ import { DEFAULT_VALUE_MESSAGE, DEFAULT_VALUE_PATTERN, normaliseDefaultValue, RU
  * `src/server/views/schemas/exchange-rates.ts`, which imports the words and the check from here, so a sentence is written once.
  *
  * A rate is carried as **decimal text** ("83.37"), never as a JavaScript number (coding standards section 10, "Money and rates"). It
- * follows the Process Master's default value: up to 12 digits, up to two decimals, 0 or more. Zero is accepted on purpose (assumption A-1):
+ * follows `DECIMAL_TEXT_PATTERN` (`master-rules.ts`): up to 12 digits, up to two decimals, 0 or more. Zero is accepted on purpose (assumption A-1):
  * the division-by-zero case CE-8 runs a zero rate and shows a dash.
  */
 
@@ -37,16 +38,16 @@ export const EXCHANGE_RATE_LABELS: Readonly<Record<ExchangeRateField, string>> =
   eur: `1 EUR in ${RUPEE}`,
 };
 
-export const EXCHANGE_RATE_MESSAGE = DEFAULT_VALUE_MESSAGE;
+export const EXCHANGE_RATE_MESSAGE = DECIMAL_TEXT_MESSAGE;
 
 /** The message for a typed rate, or null: digits, then up to two decimals, 0 or more. Spaces around the text are ignored. */
 export function exchangeRateProblem(value: string): string | null {
-  return DEFAULT_VALUE_PATTERN.test(value.trim()) ? null : EXCHANGE_RATE_MESSAGE;
+  return DECIMAL_TEXT_PATTERN.test(value.trim()) ? null : EXCHANGE_RATE_MESSAGE;
 }
 
 /** A typed rate as the stored text: no leading zeros, two decimals ("083.5" is "83.50"). The text must already pass its check. */
 export function normaliseExchangeRate(value: string): string {
-  return normaliseDefaultValue(value.trim());
+  return normaliseDecimalText(value.trim());
 }
 
 /** The message under each field that has one. */
