@@ -12,7 +12,7 @@ import { roleLabel } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import type { UserRow } from '@/lib/users/users-client';
 
-import { BREAK_LONG_NAMES } from '../masters/process-texts';
+import { BREAK_LONG_NAMES } from '../masters/master-texts';
 import { isOpener, type Opener } from './opener';
 import { OWN_PASSWORD_NAME } from './texts';
 

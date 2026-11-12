@@ -1,0 +1,42 @@
+# CI run 42976748978 on 6dd89b7 (PR #195, event pull_request, attempt 1): the numbers QA was asked to confirm
+## Jobs (conclusion, start, end)
+Stages 1 to 11b success 07:03:48Z 07:06:23Z; Stage 12 shard 1 success 07:03:49Z 07:07:44Z; shard 2 success 07:03:48Z 07:07:57Z; shard 3 success 07:03:48Z 07:08:23Z; Stages 1 to 11 success 07:08:26Z 07:08:34Z. Path = first start 07:03:48Z to end of Stages 1 to 11 07:08:34Z = 4:46
+## Vitest (verify job)
+ Test Files  150 passed (150)
+      Tests  2908 passed (2908)
+ Test Files  208 passed (208)
+      Tests  5125 passed (5125)
+## E2E shard totals (shards 1, 2, 3)
+  3 skipped
+  265 passed (2.9m)
+--
+  4 skipped
+  263 passed (3.3m)
+--
+  17 skipped
+  250 passed (3.7m)
+--
+## First-load JavaScript (stage 11b)
+PASS  /  gzip 162,504 (162.5 KB)  limit 200,000  headroom 37,496
+PASS  /audit  gzip 172,076 (172.1 KB)  limit 200,000  headroom 27,924
+PASS  /design-system  gzip n/a  limit n/a  headroom n/a  answers 404 as required (hidden in production); not measured
+PASS  /masters/materials  gzip 187,566 (187.6 KB)  limit 200,000  headroom 12,434
+PASS  /masters/process  gzip 173,856 (173.9 KB)  limit 200,000  headroom 26,144
+PASS  /queue  gzip 163,663 (163.7 KB)  limit 200,000  headroom 36,337
+PASS  /sign-in  gzip 166,327 (166.3 KB)  limit 200,000  headroom 33,673
+PASS  /users  gzip 170,120 (170.1 KB)  limit 200,000  headroom 29,880
+PASS  not-found  gzip 155,829 (155.8 KB)  limit 200,000  headroom 44,171
+JS budget: all 9 rows are within their limit (default 200,000 bytes gzip).
+## treatments specs per width (passed counts, from the shard logs)
+treatments.spec mobile passed=18
+treatments.spec tablet passed=18
+treatments.spec desktop passed=18
+treatments-focus.spec mobile passed=12
+treatments-focus.spec tablet passed=13
+treatments-focus.spec desktop passed=13
+masters-table-actions.spec mobile passed=0
+masters-table-actions.spec tablet passed=0
+masters-table-actions.spec desktop passed=34
+canary-scan.spec mobile passed=9
+canary-scan.spec tablet passed=9
+canary-scan.spec desktop passed=9

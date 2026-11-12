@@ -1,0 +1,26 @@
+# Plant 2 (control #290, run 43153090153, head e783b2b; guard removed + stdout piped): lines read from the CI log
+Stages 1 to 11b |  FAIL  tests/unit/auth-log-route.test.ts > SEC-01: the log relay of next-auth is closed > POST /api/auth/_log with an error line forged as the expired-token code answers 404 and writes nothing at any level
+Stages 1 to 11b |  FAIL  tests/unit/auth-log-route.test.ts > SEC-01: the log relay of next-auth is closed > POST /api/auth/_log with a warning answers 404 and writes nothing at any level
+Stages 1 to 11b |  FAIL  tests/unit/auth-log-route.test.ts > SEC-01: the log relay of next-auth is closed > POST /api/auth/_log with a debug line answers 404 and writes nothing at any level
+Stages 1 to 11b |  FAIL  tests/unit/auth-log-route.test.ts > SEC-01: the log relay of next-auth is closed > GET /api/auth/_log answers 404 as well
+Stages 1 to 11b |  Test Files  1 failed | 156 passed (157)
+Stages 1 to 11b |       Tests  4 failed | 3181 passed (3185)
+Stage 12: E2E (shard 2 of 3) |   ✘  101 [tablet] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 2 of 3) |   ✘  106 [tablet] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 2 of 3) |   1 failed
+Stage 12: E2E (shard 2 of 3) |   4 skipped
+Stage 12: E2E (shard 3 of 3) |   ✘  156 [desktop] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an
+Stage 12: E2E (shard 3 of 3) |   ✘  161 [desktop] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an
+Stage 12: E2E (shard 3 of 3) |   1 failed
+Stage 12: E2E (shard 3 of 3) |   17 skipped
+Stage 12: E2E (shard 1 of 3) |   ✘  141 [mobile] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 1 of 3) |   ✘  146 [mobile] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 1 of 3) |   1 failed
+Stage 12: E2E (shard 1 of 3) |   3 skipped
+-- SEC01_E2E_PROBE lines:
+Stage 12: E2E (shard 2 of 3) | [WebServer] {"level":50,"time":1794456844162,"pid":3929,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}
+Stage 12: E2E (shard 2 of 3) | [WebServer] {"level":50,"time":1794456846837,"pid":3929,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}
+Stage 12: E2E (shard 3 of 3) | [WebServer] {"level":50,"time":1794456844066,"pid":3685,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}
+Stage 12: E2E (shard 3 of 3) | [WebServer] {"level":50,"time":1794456846187,"pid":3685,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}
+Stage 12: E2E (shard 1 of 3) | [WebServer] {"level":50,"time":1794456806287,"pid":3732,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}
+Stage 12: E2E (shard 1 of 3) | [WebServer] {"level":50,"time":1794456807969,"pid":3732,"hostname":"runnervmwuk1x","authCode":"SEC01_E2E_PROBE","msg":"next-auth reported an error."}

@@ -1,0 +1,207 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 <worktree>
+
+ ❯ tests/unit/masters-service-treatments.test.ts (39 tests | 2 failed) 93ms
+   ❯ updateTreatment, a rename (AC-2, AC-3, AC-6) (5)
+     × renames and writes exactly one master.edited entry with the name before and after 17ms
+     × refuses a rename onto another treatment (any letter case), and allows a change of its own letter case 4ms
+ ❯ tests/integration/masters/treatments.test.ts (29 tests | 3 failed) 4141ms
+   ❯ AC-2, AC-6 (T2): renaming a treatment (4)
+     × renames and writes exactly one master.edited entry with the name before and after 95ms
+     × writes no entry for a rename that changes nothing, and allows a change of its own letter case 116ms
+   ❯ AC-6 (DEF-017): an entry commits with its change, or not at all (4)
+     × an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007) 95ms
+ ❯ tests/acceptance/aqp-130-treatments.test.ts (105 tests | 3 failed) 11589ms
+   ❯ AQP-130 AC-6: exactly one audit entry per add, rename and delete (12)
+     × [AQP-130 AC-6] a rename writes one master.edited entry: before { name } and after { name }, both names, the same object ID 53ms
+     × [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST) 102ms
+     × [AQP-130 AC-6] six renames at once of one treatment: one entry each, and the entries form one chain, each before being the previous after (EG: race, DL-142 QLT-03) 157ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] a rename writes one master.edited entry: before { name } and after { name }, both names, the same object ID
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:510:21
+    508|     const answer = await rename(id, 'Qa130 textured grey');
+    509|     const written = (await entries()).filter((entry) => entry.event ==…
+    510|     expect(written).toHaveLength(1);
+       |                     ^
+    511|     expect(written[0]).toMatchObject({
+    512|       event: 'master.edited',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST)
+AssertionError: expected [ 'master.created', 'master.deleted' ] to deeply equal [ 'master.created', …(3) ]
+
+- Expected
++ Received
+
+  [
+    "master.created",
+-   "master.edited",
+-   "master.edited",
+    "master.deleted",
+  ]
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:549:49
+    547|     await remove(id);
+    548|     const written = await entries();
+    549|     expect(written.map((entry) => entry.event)).toEqual(['master.creat…
+       |                                                 ^
+    550|     expect(written.map((entry) => entry.before)).toEqual([null, { name…
+    551|     expect(written.map((entry) => entry.after)).toEqual([{ name: 'Qa13…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] six renames at once of one treatment: one entry each, and the entries form one chain, each before being the previous after (EG: race, DL-142 QLT-03)
+AssertionError: expected [] to have a length of 6 but got +0
+
+- Expected
++ Received
+
+- 6
++ 0
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:651:20
+    649|     expect(answers.map((answer) => answer.status)).toEqual([200, 200, …
+    650|     const edited = (await entries()).filter((entry) => entry.event ===…
+    651|     expect(edited).toHaveLength(6);
+       |                    ^
+    652|     const afterOf = new Map(edited.map((entry) => [(entry.before as { …
+    653|     expect(afterOf.size).toBe(6);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/unit/masters-service-treatments.test.ts > updateTreatment, a rename (AC-2, AC-3, AC-6) > renames and writes exactly one master.edited entry with the name before and after
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/unit/masters-service-treatments.test.ts:187:35
+    185|     const updated = await service.updateTreatment(CONTEXT, id, { name:…
+    186|     expect(updated).toEqual({ id, name: 'Invented hard coat', locked: …
+    187|     expect(world.audit.committed).toHaveLength(1);
+       |                                   ^
+    188|     expect(world.audit.committed[0]).toMatchObject({
+    189|       event: 'master.edited',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/unit/masters-service-treatments.test.ts > updateTreatment, a rename (AC-2, AC-3, AC-6) > refuses a rename onto another treatment (any letter case), and allows a change of its own letter case
+AssertionError: expected [] to deeply equal [ 'master.edited' ]
+
+- Expected
++ Received
+
+- [
+-   "master.edited",
+- ]
++ []
+
+ ❯ tests/unit/masters-service-treatments.test.ts:221:59
+    219|     expect(world.audit.committed).toHaveLength(0);
+    220|     await service.updateTreatment(CONTEXT, id, { name: 'canary-treatme…
+    221|     expect(world.audit.committed.map((row) => row.event)).toEqual(['ma…
+       |                                                           ^
+    222|   });
+    223|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-2, AC-6 (T2): renaming a treatment > renames and writes exactly one master.edited entry with the name before and after
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+@@ -4,15 +4,6 @@
+      null,
+      {
+        "name": "Invented powder coat",
+      },
+    ],
+-   [
+-     "master.edited",
+-     {
+-       "name": "Invented powder coat",
+-     },
+-     {
+-       "name": "Invented hard coat",
+-     },
+-   ],
+  ]
+
+ ❯ tests/integration/masters/treatments.test.ts:213:105
+    211|     const updated = await db.mastersService.updateTreatment(by(), crea…
+    212|     expect(updated).toEqual({ id: created.id, name: 'Invented hard coa…
+    213|     expect((await entriesFor(db, created.id)).map((entry) => [entry.ev…
+       |                                                                                                         ^
+    214|       ['master.created', null, { name: 'Invented powder coat' }],
+    215|       ['master.edited', { name: 'Invented powder coat' }, { name: 'Inv…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-2, AC-6 (T2): renaming a treatment > writes no entry for a rename that changes nothing, and allows a change of its own letter case
+AssertionError: expected 6 to be 7 // Object.is equality
+
+- Expected
++ Received
+
+- 7
++ 6
+
+ ❯ tests/integration/masters/treatments.test.ts:225:34
+    223|     expect(await entryCount(db)).toBe(entries);
+    224|     await db.mastersService.updateTreatment(by(), created.id, { name: …
+    225|     expect(await entryCount(db)).toBe(entries + 1);
+       |                                  ^
+    226|     expect(await byName('INVENTED POWDER COAT')).toBeDefined();
+    227|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-6 (DEF-017): an entry commits with its change, or not at all > an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007)
+AssertionError: promise resolved "{ …(3) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "id": "b17ea59c-51a0-453f-b807-d27bdcc7c764",
++   "locked": false,
++   "name": "Refused-rename",
+  }
+
+ ❯ tests/integration/masters/treatments.test.ts:333:104
+    331|     // An empty actor label is refused by the audit service, inside th…
+    332|     await expect(db.mastersService.createTreatment(unrecorded, { name:…
+    333|     await expect(db.mastersService.updateTreatment(unrecorded, created…
+       |                                                                                                        ^
+    334|     await expect(db.mastersService.deleteTreatment(unrecorded, created…
+    335|     expect((await rows()).map((row) => row.name)).toEqual(['Other', 'R…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  8 failed | 165 passed (173)
+   Start at  02:27:04
+   Duration  13.06s (tests 83%, import 13%, transform 4%)
+

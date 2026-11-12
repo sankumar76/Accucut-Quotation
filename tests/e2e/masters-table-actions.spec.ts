@@ -5,16 +5,19 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { E2E_ADMIN } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
+import { actionsOf, makeTreatment, openTreatments } from './support/treatments';
 
 /**
  * DEF-021 (AQP-234) and GitHub #134 (AQP-245): the row actions of a masters table are inside the table's visible box, without scrolling it, at
- * every width from 768 to 1440 px (UX spec v0.20 section 6.0 "Masters tables", SCR-11, SCR-13 and SCR-14). Run for Process master, for Materials
- * and for Users, each with one row whose name is the longest the table's own form allows with no space (100 characters; 120 for a user), at the
- * eleven widths of the spec's table of regions.
+ * every width from 768 to 1440 px (UX spec v0.20 section 6.0 "Masters tables", SCR-11, SCR-13 and SCR-14). Run for Process master, for Materials,
+ * since STORY-02.05 for the Treatment / Color tab (Rename and Delete, 112 px) and, since AQP-245, for Users, each with one row whose name is the
+ * longest the table's own form allows with no space (100 characters; 120 for a user), at the eleven widths of the spec's table of regions.
  *
  * Each width is checked three ways: as drawn (the fit), with the table forced wider than the region, at its start and after a Tab, and scrolled to its
  * far end (the sticky guarantee, part 2: without `sticky right-0` the forced cases fail). The test sets its own viewport, so it runs in the desktop
- * project only; the other two projects would repeat the same eleven widths.
+ * project only; the other two projects would repeat the same eleven widths. The last block holds one more test of that kind, for STORY-02.05: the
+ * Treatment / Color tab's "(e)" test (a Tab from the last row's Rename lands on its Delete with the table forced wider), moved here from
+ * `treatments-focus.spec.ts` unchanged because it sets its own width (test strategy 10.5 item 10).
  *
  * Every screen is also checked for the fit as drawn (`scrollWidth - clientWidth <= 0`, no tolerance: headings and names wrap, ux-spec 6.0 part 3)
  * and, with two or more buttons in a row, for the 8 px gap between them (`gap-s-2`, within 0.5 px; DL-122 condition B).
@@ -62,6 +65,8 @@ interface Screen {
   /** The Users screen only: more checks of what it has (three buttons a row, the own row, the Tab through the long-name row, axe). */
   readonly users?: true;
   readonly make: (page: Page, name: string) => Promise<void>;
+  /** Brings the table on screen when it is not on the page's first tab. */
+  readonly open?: (page: Page) => Promise<void>;
 }
 
 const rowSelectorOf = (screen: Screen): string => screen.rowSelector ?? DEFAULT_ROW_SELECTOR;
@@ -107,6 +112,21 @@ const SCREENS: ReadonlyArray<Screen> = [
         specificGravity: '7.37',
         scrapRate: '22.37',
       }),
+  },
+  {
+    label: 'SCR-13 Treatment / Color',
+    path: '/masters/materials',
+    title: 'Materials and lists',
+    region: 'Treatment / Color, scrollable',
+    // Treatment rows and cards carry `data-item-id` (treatment-list.tsx), like the default; the first button a Tab reaches is the first row's Rename.
+    rowSelector: '[data-item-id]',
+    nameLength: NAME_LENGTH,
+    firstAction: /^rename$/,
+    make: (page, name) => post(page, '/api/v1/treatments', { name }),
+    open: async (page) => {
+      await page.getByRole('tab', { name: 'Treatment / Color' }).click();
+      await expect(page.getByRole('button', { name: 'Add treatment' })).toBeVisible();
+    },
   },
   {
     label: 'SCR-14 Users',
@@ -277,10 +297,11 @@ for (const screen of SCREENS) {
         await page.goto(screen.path);
         await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
         await waitUntilHydrated(page, 'main button[data-action="add"]');
+        await screen.open?.(page);
 
         const region = page.getByRole('region', { name: screen.region });
         await expect(region).toBeVisible();
-        const row = page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
+        const row =page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
         await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
         await expect(row).toBeVisible();
 
@@ -362,5 +383,30 @@ test.describe('SCR-14 Users: the card list below 768 px is unchanged (AQP-245 AC
     await expect(ownButtons.nth(2)).toBeDisabled();
     const labelled = await cards.locator('button[data-action]').evaluateAll((buttons) => buttons.filter((button) => (button.textContent ?? '').trim() === '').length);
     expect(labelled, 'no card button is icon-only').toBe(0);
+  });
+});
+
+test.describe('SCR-13 Treatment / Color: the Actions column (ux-spec section 6.0, DL-122 condition B)', () => {
+  test('(e) with the table forced wider than its region, a Tab from the last row\'s Rename lands on its Delete, which is not under the sticky column, and the page did not move sideways', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the test sets its own width, so one project runs it');
+    const name = `E2E-last-${testInfo.retry}-${testInfo.repeatEachIndex}-${randomBytes(3).toString('hex')}-`.padEnd(100, 'W');
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await makeTreatment(page, name);
+    await openTreatments(page);
+    const region = page.getByRole('region', { name: 'Treatment / Color, scrollable' });
+    await region.locator('table').evaluate((table) => {
+      table.style.minWidth = '1400px';
+    });
+    expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
+    const { rename, del } = actionsOf(page, name);
+    // The row of the long name is the last row only if no other test added one since; the Tab goes from this row's Rename to its Delete either way.
+    await rename.focus();
+    await page.keyboard.press('Tab');
+    await expect(del).toBeFocused();
+    const box = await del.boundingBox();
+    const regionBox = await region.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((regionBox?.x ?? 0) + (regionBox?.width ?? 0));
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual(regionBox?.x ?? 0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

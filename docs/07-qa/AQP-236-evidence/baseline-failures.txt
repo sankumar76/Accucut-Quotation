@@ -1,0 +1,32 @@
+== baseline run 1
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 2
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 3
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 4
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 5
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 6
+ FAIL  tests/unit/own-width-files.test.ts > the listing, as Playwright makes it (AQP-244 AC-2)
+      "message": "Error: EPERM: operation not permitted, open '<qa-scratch>\\base-eight\\cache-6\\e8\\e8716f1d24_58db58e_auditspec.map'",
+      "stack": "Error: EPERM: operation not permitted, open '<qa-scratch>\\base-eight\\cache-6\\e8\\e8716f1d24_58db58e_auditspec.map'\n    at eval (<anony
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 7
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 8
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]
+== baseline run 9
+
+== baseline run 10
+ FAIL  tests/unit/e2e-shards.test.ts > AQP-208 AC-3: the shards together run every E2E test once, in near-equal counts (AQP-227 AC-2) > the union of the shards' mobile, tablet and desktop lists is the whole list, with none missing and none in two shards
+AssertionError: expected [ …(688) ] to deeply equal [ …(688) ]

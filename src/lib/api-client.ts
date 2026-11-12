@@ -8,6 +8,8 @@
  * answer came (the network, a server fault, an answer of the wrong shape).
  */
 
+import { handleSessionEnded } from './auth/session-ended';
+
 /** Why the server said no, in the words it gave: a message for each field, and the whole problem body for an extension member. */
 export interface Refusal {
   readonly status: 'refused';
@@ -72,7 +74,10 @@ export async function sendJson<T>(doFetch: Fetch, path: string, init: RequestIni
       const value = read(response.status === NO_CONTENT ? undefined : await readJson(response));
       return value === null ? { status: 'failed' } : { status: 'ok', value };
     }
-    return refusalFrom(response.status, await readJson(response));
+    const refusal = refusalFrom(response.status, await readJson(response));
+    // A session that ended (401 SESSION_ENDED) takes the person to SCR-01, to sign in again and come back here (STORY-01.06 AC-4).
+    if (refusal.status === 'refused') handleSessionEnded(refusal.httpStatus, refusal.code);
+    return refusal;
   } catch {
     return { status: 'failed' };
   }

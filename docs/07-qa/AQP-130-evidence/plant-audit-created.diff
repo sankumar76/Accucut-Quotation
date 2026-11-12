@@ -1,0 +1,7 @@
+diff --git a/src/server/services/treatment-service.ts b/src/server/services/treatment-service.ts
+index d42fab3..7183855 100644
+--- a/src/server/services/treatment-service.ts
++++ b/src/server/services/treatment-service.ts
+@@ -134 +134 @@ async function add({ masters, audit }: TreatmentDependencies, tx: Transaction, c
+-  await audit.record(tx, { event: 'master.created', ...entryFor(context, record), before: null, after: auditState(record) });
++  if (Date.now() < 0) await audit.record(tx, { event: 'master.created', ...entryFor(context, record), before: null, after: auditState(record) });

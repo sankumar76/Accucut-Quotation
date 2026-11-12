@@ -1,31 +1,27 @@
 'use client';
 
-import { Plus, Search } from 'lucide-react';
-import { useEffect, useRef, type RefObject } from 'react';
+import { Plus } from 'lucide-react';
+import { useRef } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
-import { revealNearest } from '@/lib/ui/reveal';
 
-import { isOpener } from './process-opener';
+import { MasterDialogsFailed } from './master-dialogs-failed';
+import { isOpener } from './master-opener';
+import { MasterSearchBox } from './master-search-box';
+import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { ProcessResults } from './process-results';
 import {
   ADD_RATE,
-  BREAK_LONG_NAMES,
   FAILED_CONFIRMATION_TITLE,
-  FAILED_DIALOGS_MESSAGE,
-  FAILED_DIALOGS_TITLE,
   PROCESS_DESCRIPTION,
   PROCESS_TITLE,
   SEARCH_LABEL,
   SEARCH_PLACEHOLDER,
-  type PageNotice,
 } from './process-texts';
 import { useProcessMaster, type ProcessMaster } from './use-process-master';
 
@@ -57,41 +53,12 @@ function AddRateButton({ master }: { readonly master: ProcessMaster }) {
   );
 }
 
-/** The code of a dialog did not arrive: said in a notice, brought into view if it is off the screen (UX spec v0.14, SCR-25). */
-function DialogsFailed({ confirmation }: { readonly confirmation: boolean }) {
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    revealNearest(box.current);
-  }, []);
-  return (
-    <div ref={box}>
-      <Notice tone="danger" title={confirmation ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE}>
-        {FAILED_DIALOGS_MESSAGE}
-      </Notice>
-    </div>
-  );
-}
-
 /** The notice under the header. The warning and the information are statuses, not alerts: nothing failed (ux-spec v0.17). */
 function PageNoticeView({ notice }: { readonly notice: PageNotice }) {
   return (
     <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
       {notice.text}
     </Notice>
-  );
-}
-
-function SearchBox({ query, onChange, inputRef }: { readonly query: string; readonly onChange: (query: string) => void; readonly inputRef: RefObject<HTMLInputElement | null> }) {
-  return (
-    <CardContent className="border-b border-border">
-      <div className="flex max-w-120 flex-col gap-s-2">
-        <Label htmlFor="rate-search">{SEARCH_LABEL}</Label>
-        <div className="relative">
-          <Icon icon={Search} size="small" className="pointer-events-none absolute top-1/2 left-s-3 -translate-y-1/2 text-ink-2" />
-          <Input ref={inputRef} id="rate-search" type="search" autoComplete="off" placeholder={SEARCH_PLACEHOLDER} className="pl-s-7" value={query} onChange={(event) => onChange(event.target.value)} />
-        </div>
-      </div>
-    </CardContent>
   );
 }
 
@@ -108,10 +75,12 @@ export function ProcessScreen({ initialItems }: ProcessScreenProps) {
   return (
     <>
       <PageHeader title={PROCESS_TITLE} description={PROCESS_DESCRIPTION} actions={<AddRateButton master={master} />} />
-      {dialogs.loader.failed ? <DialogsFailed confirmation={dialogs.open === 'delete' || dialogs.open === 'blocked'} /> : null}
+      {dialogs.loader.failed ? (
+        <MasterDialogsFailed title={dialogs.open === 'delete' || dialogs.open === 'blocked' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE} />
+      ) : null}
       {notice === null ? null : <PageNoticeView notice={notice} />}
       <Card aria-busy={list.status === 'loading' || undefined}>
-        <SearchBox query={list.query} onChange={list.setQuery} inputRef={search} />
+        <MasterSearchBox id="rate-search" label={SEARCH_LABEL} placeholder={SEARCH_PLACEHOLDER} query={list.query} onChange={list.setQuery} inputRef={search} />
         <ProcessResults master={master} onClearFilters={clearFilters} />
       </Card>
       {Dialogs === null ? null : (

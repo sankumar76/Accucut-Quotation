@@ -24,9 +24,9 @@ const NO_ACCESS_TITLE = 'You do not have access to this page';
 
 // The words, from ux-spec v0.18 SCR-13.
 const WORDS = {
-  // Two tabs are in the bar since STORY-02.04, so the page names exactly those two (ux-spec v0.18 "The page description until ...").
-  description: 'Material prices and exchange rates.',
-  metaDescription: 'Manage materials and exchange rates used in estimates.',
+  // Three tabs are in the bar since STORY-02.05, so the page names exactly those three (ux-spec v0.18 "The page description until ...", last row).
+  description: 'Material prices, exchange rates and the treatment and colour list.',
+  metaDescription: 'Manage materials, exchange rates and the treatment and colour list used in estimates.',
   placeholder: 'Material in Drawing or Considered',
   nameRequired: 'Enter the Material in Drawing.',
   oldNameRequired: 'Enter a name.',
@@ -114,7 +114,7 @@ test.describe('as the Admin', () => {
     await expect(page.locator('main h1 + p')).toHaveText(WORDS.description);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', WORDS.metaDescription);
     await expect(page).toHaveTitle(/Materials and lists/);
-    await expect(page.getByRole('tablist', { name: 'Lists' }).getByRole('tab')).toHaveText(['Materials', 'Exchange rates']);
+    await expect(page.getByRole('tablist', { name: 'Lists' }).getByRole('tab')).toHaveText(['Materials', 'Exchange rates', 'Treatment / Color']);
     await expect(page.getByLabel('Search materials')).toHaveAttribute('placeholder', WORDS.placeholder);
     const row = rowOf(page, name);
     if ((page.viewportSize()?.width ?? 0) >= 768) {

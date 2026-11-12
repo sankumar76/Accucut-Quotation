@@ -1,16 +1,13 @@
 'use client';
 
-import { RotateCcw } from 'lucide-react';
-
 import { FormField } from '@/components/shared/form-field';
-import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
-import { ErrorState, SkeletonBlock } from '@/components/shared/states';
+import { SkeletonBlock } from '@/components/shared/states';
 import { UnitInput } from '@/components/shared/unit-input';
 import { Button } from '@/components/ui/button';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS, exchangeRateHint, type ExchangeRateField } from '@/lib/masters/exchange-rates';
 import type { ExchangeRatesRow } from '@/lib/masters/exchange-rates-client';
-import { RUPEE } from '@/lib/masters/process-items';
+import { RUPEE } from '@/lib/masters/master-rules';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -25,7 +22,7 @@ import {
   SAVE_EXCHANGE_RATES,
   SAVING_EXCHANGE_RATES,
 } from './exchange-rate-texts';
-import { ERROR_RETRY } from './process-texts';
+import { MasterLoadError } from './master-load-error';
 import { RATE_FIELD_IDS, useExchangeRates, type ExchangeRatesState } from './use-exchange-rates';
 
 /**
@@ -106,27 +103,14 @@ function Notices({ state }: { readonly state: ExchangeRatesState }) {
   );
 }
 
-/** The load error. While the Saved notice is on the page, its sentence says the save happened, so it never reads "Nothing was changed" under "Exchange rates saved.". */
-function LoadError({ onRetry, saved }: { readonly onRetry: () => void; readonly saved: boolean }) {
-  return (
-    <ErrorState
-      title={EXCHANGE_ERROR_TITLE}
-      {...(saved ? { description: RATES_SAVED_NOT_SHOWN_BODY } : {})}
-      focusOnMount
-      action={
-        <Button onClick={onRetry}>
-          <Icon icon={RotateCcw} />
-          {ERROR_RETRY}
-        </Button>
-      }
-    />
-  );
-}
-
 /** What the tab shows below the notices: the error with "Try again", the skeleton, or the form. */
 function Body({ state }: { readonly state: ExchangeRatesState }) {
   const { row, status, showSkeleton } = state;
-  if (status === 'error') return <LoadError onRetry={state.retry} saved={state.notice === RATES_SAVED_NOTICE} />;
+  if (status === 'error') {
+    // While the Saved notice is on the page, its sentence says the save happened, so the error never reads "Nothing was changed" under "Exchange rates saved.".
+    const saved = state.notice === RATES_SAVED_NOTICE;
+    return <MasterLoadError title={EXCHANGE_ERROR_TITLE} onRetry={state.retry} description={saved ? RATES_SAVED_NOT_SHOWN_BODY : undefined} />;
+  }
   // The first read has no form to keep on screen: the skeleton appears after 300 ms. A later read keeps the form until 300 ms have passed.
   if (row === null) return <SkeletonBlock rows={2} label={EXCHANGE_LOADING_LABEL} />;
   if (showSkeleton) return <SkeletonBlock rows={2} delayMs={0} label={EXCHANGE_LOADING_LABEL} />;

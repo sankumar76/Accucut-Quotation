@@ -2,13 +2,14 @@ import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseE
 import { rateUsesOf } from '../../lib/fields/rate-usage';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import type { RateReference } from '../../lib/formula';
+import { normaliseDecimalText } from '../../lib/masters/master-rules';
 import {
   MATERIAL_NAME_TAKEN_MESSAGE,
   materialChangesFrom,
   normaliseMaterialNumber,
   specificGravityProblem,
 } from '../../lib/masters/materials';
-import { changesFrom, NAME_TAKEN_MESSAGE, normaliseDefaultValue } from '../../lib/masters/process-items';
+import { changesFrom, NAME_TAKEN_MESSAGE } from '../../lib/masters/process-items';
 import type { Clock } from '../../lib/time';
 import {
   MasterConstraintError,
@@ -26,6 +27,7 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
 import type { AuditContext, AuditService } from './audit-service';
 import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';
 import { assertNameUsable } from './rate-name-rules';
+import { createTreatmentOperations, type TreatmentOperations } from './treatment-service';
 
 /**
  * The Process Master (STORY-02.01; FR-011, FR-012; architecture sections 4.1, 5.1 and 6): the Admin adds, changes and deletes
@@ -56,6 +58,9 @@ import { assertNameUsable } from './rate-name-rules';
  *
  * **The Exchange Rate Master** (STORY-02.04; FR-016) is `exchange-rate-service.ts`: the pair of rates is saved together, in one transaction with
  * one `master.edited` entry of `object_type` `exchange_rate`.
+ *
+ * **The Treatment / Color list** (STORY-02.05; FR-017) is `treatment-service.ts`: a name (unique ignoring letter case, never one the system keeps), the locked
+ * "Other" entry, and one audit entry per change with `object_type` `treatment`.
  */
 
 const NOT_FOUND_MESSAGE = 'Rate not found.';
@@ -83,7 +88,7 @@ export interface MastersServiceDependencies {
  * Every change takes the `AuditContext` first: `actorId` is the Admin making the change and `requestId` the request it came in
  * on. Both go into the audit entry.
  */
-export interface MastersService extends ExchangeRateOperations {
+export interface MastersService extends ExchangeRateOperations, TreatmentOperations {
   listProcessItems(): Promise<ReadonlyArray<ProcessItemView>>;
   createProcessItem(context: AuditContext, input: NewProcessItem): Promise<ProcessItemView>;
   /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. */
@@ -279,6 +284,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
   return {
     ...createMaterialOperations({ masters, transactions, audit }),
     ...createExchangeRateOperations({ masters, transactions, audit, currentConfiguration, clock }),
+    ...createTreatmentOperations({ masters, transactions, audit }),
 
     async listProcessItems() {
       const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);
@@ -287,7 +293,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     },
 
     async createProcessItem(context, input) {
-      const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDefaultValue(input.defaultValue) };
+      const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDecimalText(input.defaultValue) };
       const document = await currentConfiguration();
       const created = await withNameRule(() => transactions.run((tx) => addInTransaction(tx, context, item, document)));
       return withUses(created, rateUsesOf(document));

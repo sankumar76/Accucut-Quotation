@@ -103,6 +103,29 @@ describe('STORY-01.02 AC-4: the address asked for, and API routes', () => {
   });
 });
 
+describe('STORY-01.06 AC-3 and AC-4: telling the page that the browser sent a session cookie', () => {
+  it('sets the header for a request that carries the cookie, whatever the browser sent under that name', () => {
+    const response = proxy(new NextRequest('http://localhost:3000/queue', { headers: { cookie: 'next-auth.session-token=abc', 'x-session-cookie': '0' } }));
+    expect(response.headers.get('x-middleware-request-x-session-cookie')).toBe('1');
+  });
+
+  it('sets it for a cookie split in chunks and for the production cookie', () => {
+    const chunked = proxy(request('/queue', '__Secure-next-auth.session-token.0=abc; __Secure-next-auth.session-token.1=def'));
+    expect(chunked.headers.get('x-middleware-request-x-session-cookie')).toBe('1');
+  });
+
+  it('removes it from an API call that carries no cookie, so a browser cannot claim to have had a session', () => {
+    const response = proxy(new NextRequest('http://localhost:3000/api/v1/me', { headers: { 'x-session-cookie': '1' } }));
+    expect(response.headers.get('x-middleware-request-x-session-cookie')).toBeNull();
+    expect(response.headers.get('x-middleware-override-headers')).not.toContain('x-session-cookie');
+  });
+
+  it('does not set it for a cookie of another name', () => {
+    const response = proxy(new NextRequest('http://localhost:3000/api/v1/me', { headers: { cookie: 'other=1' } }));
+    expect(response.headers.get('x-middleware-request-x-session-cookie')).toBeNull();
+  });
+});
+
 describe('what the proxy covers', () => {
   const pattern = new RegExp(`^${config.matcher[0] ?? ''}$`);
 

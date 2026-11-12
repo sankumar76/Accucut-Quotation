@@ -109,6 +109,16 @@ describe('AC-4: signed out, and a role the row does not list', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it('STORY-01.06 AC-4: a caller whose session ended gets 401 with the code SESSION_ENDED, no data and no-store, and the handler never runs', async () => {
+    mocks.requireUser.mockRejectedValue(new UnauthorizedError('Your session ended.', { code: 'SESSION_ENDED' }));
+    const handler = vi.fn(() => ({ greeting: 'x' }));
+    const response = await withRoute({ route: '/api/v1/test-all', method: 'GET', output, handler })(get());
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await problemOf(response)).toMatchObject({ status: 401, code: 'SESSION_ENDED', title: 'Your session ended. Sign in again.' });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('a role the row does not list gets 403 before anything is parsed or looked up', async () => {
     mocks.requireUser.mockResolvedValue(ENGINEER);
     const queryCheck = vi.fn((value: string) => value.length > 0);

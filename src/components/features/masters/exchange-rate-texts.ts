@@ -1,9 +1,9 @@
-import type { PageNotice } from './process-texts';
+import type { PageNotice } from './master-texts';
 
 /**
  * The words of SCR-13 "Materials and lists", Exchange rates tab (UX spec section 6, "SCR-13"; the mock-up `docs/03-ux/screens/SCR-13.html`).
  * The labels, the hints and the message under a field are in `src/lib/masters/exchange-rates.ts`, where the server's schema reads them too.
- * The words that SCR-11 says for every master (the failure line, Try again) are SCR-11's, imported where used.
+ * The words every masters screen says (the failure line, Try again) are in `master-texts.ts`, imported where used.
  *
  * The ux-spec fixes the tab name, the two labels, the hints, the stamp line and the Save button's name. The sentences of the states below
  * (Saved, Nothing to save, Failed, Loading, Error) are the ux-expert's ruling on QLT-06 and STD-13 (ux-spec v0.21, SCR-13 "The Exchange rates tab:

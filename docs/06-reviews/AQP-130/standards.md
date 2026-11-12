@@ -86,3 +86,49 @@ The change follows the rule-book where it matters most. The treatment methods ar
 
 ## Tooling gaps
 No local lint, type-check or tests (machine memory limit; CI run 42881974487 is the evidence). `gitleaks` is not installed on this machine, so the secret scan was not repeated (CI stage 2 is the evidence). No format-check command exists.
+
+---
+
+# Round 2
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (new diff only: `67febe3..1f978b2`, one commit, 27 files, +511 / -134) |
+| Commit reviewed | 1f978b27f7918c7475ed5e91de6445703f6d2f2f (CI run 42891948697, green) |
+| Date | 2026-11-10 |
+| PR review | https://github.com/sankumar76/Accucut-Quotation/pull/195#pullrequestreview-5848733217 (4 inline comments; 10 replies in the round-1 threads), COMMENT; label `review:standards-approved` kept |
+| **Verdict** | **APPROVE WITH COMMENTS** (no Blocker, Critical or Major; one new Minor and three new Info) |
+
+## Round-1 findings
+| ID | Status | Evidence |
+|----|--------|----------|
+| STD-01 | Fixed | `useTreatments` is a short composition; handlers are in `useTreatmentActions` (35 lines) |
+| STD-02 | Fixed (this file) | `isRecordNotFound` exported from `database-errors.ts` and imported; the two older copies (`master-repository.ts`, `user-repository.ts`) remain for the #119 refactor PR |
+| STD-03 | Rebuttal accepted (re-routed) | DL-142: the neutral-names rename goes to one refactor PR on #119 before AQP-142 starts G5 |
+| STD-04 | Rebuttal accepted (re-routed) | DL-142: load-error component and read-again hook extracted in the same PR; this PR's copies belong on its list |
+| STD-05 | Fixed | `CANCEL_TREATMENT`, `SAVE_TREATMENT`, `RENAME_ACTION`, `DELETE_ACTION`, `OTHER_LOCKED_REASON`, `TREATMENT_SKELETON_ROWS` in `treatment-texts.ts` and used; `renameTreatmentLabel = renameTreatmentTitle` |
+| STD-06 | Fixed | `SPEC_ACCESS` in `tests/support/spec-access.ts`, one route per line; `role-matrix.test.ts` 371 lines |
+| STD-07 | Fixed | `masters-screen.tsx`, `session-harness.ts`, `schemas/treatments.ts` reordered (new slips: STD-17) |
+| STD-08 | Fixed | inline "Over 40 lines on purpose" on `createFakeMasterRepository` and `validCallFor`; treatment cases moved to `treatmentCall` |
+| STD-09 | Fixed | comment on `NAME_TAKEN_CODE` names the treatment |
+| STD-10, 11, 12, 14 | Info, no code | STD-11 and STD-12 wait for the product-owner (AC-6) and the architect (§6 codes) |
+| STD-13 | Fixed | model comment in `schema.prisma` (comment only; migration untouched) |
+
+## New code checked
+- `canonicalTreatmentName` (`lib/masters/treatments.ts`): pure, no zod, used by the service; `shapedName` and `assertNotReserved` split cleanly; on a rename the reserved check runs after the lookup (404 and 409 before 422).
+- `useTreatmentList` keeps the latest read (`newest` ref); comment says why.
+- Word changes (rename notice with no audit clause, delete description) are in `treatment-texts.ts` and pinned by `treatments-lib.test.ts`.
+- `tests/support/hold-before-commit.ts`: 30 lines, documented, defines no late-failure runner (its header says why it is in `tests/support`), commits normally once released.
+- `treatments-serialisation.test.ts` (90 lines): polls `pg_locks` with `expect.poll`, no fixed wait, parameterised delete in `afterEach`, invented names. File sizes: `treatments.test.ts` 369, `fake-masters.ts` 267.
+- Added lines contain no `any`, cast, `console`, TODO, suppression, dependency or secret.
+
+## New findings
+| ID | Severity | File:line | Rule | Issue | Suggested fix |
+|----|----------|-----------|------|-------|---------------|
+| STD-15 | Minor | `tests/integration/masters/treatments-serialisation.test.ts:51`; also `treatments-focus.spec.ts`, `treatments.test.ts`, `masters-service-treatments.test.ts` | Coding Standards §6; CLAUDE.md §6 rule 3 (tests reference AC IDs) | Describe names cite review IDs (`QLT-01` to `QLT-04`); the header names "control PR 206". | Name the AC or NFR (`AC-6, NFR-007`, `AC-2`, `AC-3`); keep the finding ID in the header comment. |
+| STD-16 | Info | `tests/unit/masters-service-treatments.test.ts:102,132` (also 177, 255) | Coding Standards §6 | `ALPHA?.id ?? ''` turns a missing fixture into "not found". | `const ALPHA = defined(TREATMENT_CANARIES[0])`. |
+| STD-17 | Info | `treatment-panel.tsx:18-19`; `role-matrix.test.ts:9-10`; `treatments-lib.test.ts:3-17` | Coding Standards §2 | Import-order slips in new lines. | Swap the lines. |
+| STD-18 | Info | `use-treatments.ts:99-104` | Coding Standards §2 | `useTreatmentActions` calls no hook; local types `TreatmentList` and `TreatmentDialog` repeat the component name `TreatmentList`. | `treatmentActions(...)`; `TreatmentListState`, `TreatmentDialogState`. |
+
+## Tooling gaps
+Same as round 1: nothing run locally; CI run 42891948697 is the evidence; `gitleaks` not installed.

@@ -19,4 +19,5 @@ export * from './materials';
 export * from './me';
 export * from './options';
 export * from './process-items';
+export * from './treatments';
 export * from './users';

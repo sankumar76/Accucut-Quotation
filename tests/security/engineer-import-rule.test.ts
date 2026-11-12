@@ -53,9 +53,12 @@ const REPOSITORIES = {
     'config-repository',
     'decimal-text',
     'exchange-rate-repository',
+    'master-constraints',
     'master-repository',
+    'material-repository',
     'prisma-client',
     'throttle-repository',
+    'treatment-repository',
   ],
 } as const;
 
@@ -72,6 +75,7 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'rate-name-rules',
+    'treatment-service',
   ],
 } as const;
 
@@ -112,9 +116,17 @@ const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generate
 const repositoryPath = (name: string): string => `@/server/repositories/${name}`;
 const servicePath = (name: string): string => `@/server/services/${name}`;
 
+/**
+ * Modules an Engineer view may import by NAME only (STORY-10.18, AQP-237). `transaction.ts` also holds `createTransactionHandle`, which
+ * only that file and `tests/**` may import (architecture section 6), so a namespace import or an `import()` of the whole module is refused
+ * for a view as it is for a service, and so is the name `createTransactionHandle`. Every other name passes, the types and also
+ * `clientFor` and `createTransactionRunner`: the lint does not make the file "types only" (a view still has no way to a `PrismaClient`).
+ */
+const NAMED_IMPORTS_ONLY: ReadonlyArray<string> = [repositoryPath('transaction')];
+
 /** Imports an Engineer view may make: the allow-lists, its own schema file, and the shell's modules. */
 const ALLOWED_IMPORTS: ReadonlyArray<string> = [
-  ...REPOSITORIES.allowed.map(repositoryPath),
+  ...REPOSITORIES.allowed.map(repositoryPath).filter((specifier) => !NAMED_IMPORTS_ONLY.includes(specifier)),
   ...SERVICES.allowed.map(servicePath),
   '@/server/http/navigation',
   '@/server/views/schemas/me',
@@ -164,6 +176,19 @@ describe('an Engineer view may import only what is on the allow-list (AC-1, STD-
     async ({ view, specifier }) => {
       expect(await ruleIdsFor(view, staticImport(specifier))).toEqual([]);
       expect(await ruleIdsFor(view, dynamicImport(specifier))).toEqual([]);
+    },
+  );
+
+  it.each(ENGINEER_VIEWS.flatMap((view) => NAMED_IMPORTS_ONLY.map((specifier) => ({ view, specifier }))))(
+    'control: $view may import names from $specifier, but not createTransactionHandle and not the whole module (AQP-237)',
+    async ({ view, specifier }) => {
+      expect(await ruleIdsFor(view, `import type { Transaction } from '${specifier}';\nexport type Handle = Transaction;\n`)).toEqual([]);
+      expect(await ruleIdsFor(view, `import { clientFor } from '${specifier}';\nexport const reach = clientFor;\n`)).toEqual([]);
+      expect(await ruleIdsFor(view, `import { createTransactionHandle } from '${specifier}';\nexport const make = createTransactionHandle;\n`)).toContain(
+        'no-restricted-imports',
+      );
+      expect(await ruleIdsFor(view, staticImport(specifier))).toContain('no-restricted-imports');
+      expect(await ruleIdsFor(view, dynamicImport(specifier))).toContain('no-restricted-syntax');
     },
   );
 

@@ -3,11 +3,11 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | 1 |
+| Review round | 2. Round 1 is below; round 2 is at the end of this file |
 | Base…branch | `master...feat/AQP-130-treatment-color-list` (PR #195; base `master` 41848eb) |
-| Commit reviewed | 67febe3 |
+| Commit reviewed | Round 1: 67febe3. Round 2: `67febe3..1f978b2` |
 | Date | 2026-11-10 |
-| **Verdict** | **APPROVE WITH COMMENTS** (no Blocker, Critical or Major; 4 Minor, 6 Info) |
+| **Verdict** | Round 2: **APPROVE WITH COMMENTS** (QLT-01 to QLT-05 fixed; 1 new deferrable Minor, QLT-11; 2 new Info). Round 1: APPROVE WITH COMMENTS (4 Minor, 6 Info) |
 
 ## Summary
 
@@ -208,3 +208,74 @@ const read = useCallback(async (returnFocus: boolean): Promise<void> => {
 ## Verdict
 
 **APPROVE WITH COMMENTS.** There is no Blocker, Critical or Major finding. Every AC is met, with tests that fail when the behaviour breaks (A3, A4, focus and DEF-020 plants). QLT-01 to QLT-04 are cheap to fix in this PR, or can be deferred to a tech-debt issue at master's choice. On re-review I will check each fix and only the new diff.
+
+## Round 2 — `67febe3..1f978b2` (new diff only)
+
+| Field | Value |
+|-------|-------|
+| Commit reviewed | 1f978b2 (one commit, "fix(masters): G6 round 1 of the Treatment / Color list"; 27 files, +511 / -134) |
+| Gate record | DL-142 (G6 CONDITIONAL GO, attempt 1): one fix push, re-reviewed on the new diff only, with a locks-removed control PR and a ruling on STD-14 |
+| Date | 2026-11-10 |
+| **Verdict (round 2)** | **APPROVE WITH COMMENTS** (QLT-01 to QLT-05 Fixed; no Blocker, Critical or Major; 1 new Minor, QLT-11, from STD-14 and deferrable; 2 new Info, QLT-12 and QLT-13) |
+
+### Checks run (round 2)
+
+Nothing was run locally, because of the machine's memory limits. The new diff was read with `git diff 67febe3 1f978b2`, and full files with `git show 1f978b2:<file>`. The plants ran in CI on throwaway control PRs (head 1f978b2 plus one commit). I read each one once, with a single status and log call, then closed it unmerged.
+
+| Check | Evidence | Result |
+|-------|----------|--------|
+| PR CI on 1f978b2 | run 42891948697 | Green, 5 of 5 |
+| Developer controls | #210 (both locks removed), #211 (latest read no longer wins) | #210: `Stages 1 to 11b` red. #211: all three E2E shards red. Both closed |
+| **My plant: both locks removed** | #212 (cc1756a), run 42894187597 | **Red, exactly 2 of 2** in `treatments-serialisation.test.ts`, the second rename and the delete, each with `expected { name: 'Chain-start' } to deeply equal { name: 'Chain-first' }` at `:82`. Overall 2 failed, 5,109 passed. Closed unmerged |
+| **My variant: only `FOR UPDATE` removed** | #213 (fe50f0c), run 42894193380 | **Green**: `treatments-serialisation.test.ts` 2 of 2; overall 5,111 of 5,111. As predicted (QLT-12). Closed unmerged |
+| **My variant: only `LOCK TABLE` removed** | #214 (3a588ba), run 42894203418 | **Green**: `treatments-serialisation.test.ts` 2 of 2; overall 5,111 of 5,111. As predicted (QLT-12). Closed unmerged |
+| G12 (`tests/security/**`, scan spec, gate) | diff read line by line | Nothing removed or weakened. `SPEC_ACCESS` moved from `role-matrix.test.ts` to `tests/support/spec-access.ts` with the **same 25 entries and the same roles**, which I compared one by one; the two materials rows are split again. In `route-calls.ts` the treatment recipes moved into `treatmentCall()`, with the same three recipes, and `GET /api/v1/treatments` falls through to `DEFAULT_CALL` as before. See QLT-13 for the scope |
+
+Plant diffs (`src/server/repositories/treatment-repository.ts`). #212 is both hunks, #213 is the first hunk only, and #214 is the second hunk only:
+
+```diff
+-  // Prisma has no row lock, so this is a raw statement: the ID is a bound parameter. The default filter applies (section 4.9).
++  // QUALITY PLANT (round 2): no row lock (FOR UPDATE removed; control PR, never merged).
+   const rows = await clientFor(db, tx).$queryRaw`
+-    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false FOR UPDATE`;
++    SELECT id::text AS "id", name, is_system AS "locked" FROM treatments WHERE id = ${id}::uuid AND is_hidden = false`;
+@@
+     lockTreatments: (tx) =>
+       withDatabaseErrors(async () => {
+-        await clientFor(db, tx).$executeRaw`LOCK TABLE treatments IN SHARE ROW EXCLUSIVE MODE`;
++        // QUALITY PLANT (round 2): no table lock (control PR, never merged).
++        await Promise.resolve(clientFor(db, tx));
+       }),
+```
+
+### Round-1 findings
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Minor | **Fixed** | `canonicalTreatmentName` (NFKC, trim, runs of white space made one space) lives in `src/lib/masters/treatments.ts`. `shapedName` stores the canonical form and checks length on it, and both the reserved check and the unique index see the same form. Integration covers inner spaces, full-width letters (`Ｉｎｖｅｎｔｅｄ anodised` is stored as `Invented anodised`) and a rename onto a near-duplicate, each answered `NAME_TAKEN` with no entry written. I checked the edge cases by reading: NBSP and tabs are folded (`\s`, and NFKC maps NBSP to a space); a full-width "ＯＴＨＥＲ" is reserved; the length check runs after NFKC, so a 100-character input that NFKC lengthens is refused with the length message (correct, if rare). Zero-width characters are not folded; that is homoglyph territory and out of scope |
+| QLT-02 | Minor | **Fixed** | `assertNotReserved` now runs inside `change`, after `lockedChangeable`. Integration loops over "Other", "OTHER" and "Not applicable": "Other" gets 409 and an unknown ID gets 404, with no entry written. An add still refuses a reserved name before any transaction opens. The shape errors (blank, too long) still come first, as for every route schema |
+| QLT-03 | Minor | **Fixed** | The new `treatments-serialisation.test.ts` uses `createServiceHoldingBeforeCommit`. The first rename stays uncommitted until a second change (a rename, or a delete) is seen waiting for a lock or has finished. The test then asserts that the second entry's `before` equals the first entry's `after`, and that there are exactly two change entries. This bites with both locks removed (#210 and my #212). For what the variants show, see QLT-12 |
+| QLT-04 | Minor | **Fixed** | In `read`, the newest call wins: a counter in a ref, and an older answer is dropped. The new Playwright test fetches the first `GET`, holds it until an add and its re-read have finished, then delivers it. The new row and the focus on "Add treatment" must survive. Proven by #211 (red at 3 widths) |
+| QLT-05 | Info | **Fixed** (note taken) | The guard now covers every `treatment-*` file plus `use-treatments.ts`, read from the folder. It checks `useEffect`, `useLayoutEffect` and `useInsertionEffect`, and any dependency named `*Errors`. A plant per hook and a false-positive check (`terrorist`) are included. The header says to add the two-field test when a second field appears |
+| QLT-06 | Info | Routed | DL-142 (4): the product-owner amends AC-6 before G7 |
+| QLT-07 | Info | Routed | DL-142 (4): the architect adds 409 `TREATMENT_LOCKED` and the 422 codes to §6 |
+| QLT-08 | Info | Routed | DL-142 (4): the architect rules on #202 before 05.06 is Ready |
+| QLT-09 | Info | Routed | DL-142 (4): the architect rules before 05.06 is Ready |
+| QLT-10 | Info | — | Praise; nothing to do |
+
+### New findings (round 2)
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-11 | Minor (deferrable) | `src/server/services/audit-events.ts:134` with `audit-service.ts:137-143` | NFR-007; STD-14, the ruling DL-142 asked for | **Ruling on STD-14: yes, storage should check the state against the entry's own `object_type`.** The writer checks `before` and `after` against `masterState`, a union of every master's shape, and ignores `objectType`. Since this story, `{ name }` alone is a valid state under `process_item`, `material` or `exchange_rate`. The union already let a material state be stored under `process_item`, so this is not new to this PR, but the treatment shape is the loosest yet. The words are chosen by `object_type`, so the screen shows a dash, never wrong words | Low. Every master's service is tested to write its full state (integration before/after assertions). But a future bug that writes a partial state would be stored silently instead of refused, and the append-only log could not be corrected | One table, `MASTER_SHAPES: Record<objectType, ZodType>`, used by both `MASTER_WORDS` and the writer. When the definition is the generic master, parse `before` and `after` with `MASTER_SHAPES[objectType]` (an unknown type is already refused by `objectTypeOf`). Test (unit): "a `process_item` entry whose state is `{ name }` is refused with reason `shape`", plus the same for a `treatment` entry carrying a rate's state. It touches every master, so it fits the #119 refactor PR (due before AQP-142's G5) or its own small PR. Not a hold for this story |
+| QLT-12 | Info | `tests/integration/masters/treatments-serialisation.test.ts` | QLT-03 follow-through | **The test proves "at least one lock", and that is the right thing to prove.** With only `FOR UPDATE` removed (#213), the second change waits on the table lock (`SHARE ROW EXCLUSIVE` conflicts with itself) before it reads. With only `LOCK TABLE` removed (#214), its `SELECT … FOR UPDATE` waits on the first change's row and then, in READ COMMITTED, reads the committed row. Either lock alone keeps the audit `before` true, so both variants are green, and only removing both (#212) is red. A regression that drops one lock is therefore not detected, but no behaviour is lost with it | — | None for this PR. If performance later wants one lock fewer (the table lock serialises reads of the whole table for every change), this test is the safety net that makes the change safe: it fails only if both are gone |
+| QLT-13 | Info | `tests/support/spec-access.ts` (new) | Test strategy v0.32 §10, G12 scope | The SCR/API access table the role matrix checks against now lives under `tests/support/`, which is outside the G12 scope list (scan spec, scan helper, gate test, `tests/security/**`). Removing or weakening an entry there would weaken the role matrix without falling under the G12 review rule | Low today: the move is exact | The architect adds `tests/support/spec-access.ts` (and `route-calls.ts`, which feeds the same matrix) to the §10 G12 scope at the next change of the test strategy. Reviewers treat it as in scope meanwhile |
+
+Two more notes from the new diff, both correct and needing no change:
+
+- **Rename notice.** A rename that only changes inner spacing or full-width letters is now a server no-op (200, no entry). The screen still sends it, because `treatmentEditChanges` trims but does not canonicalise, and then says "X was renamed to X." That is true, if odd. The v0.22 sentence no longer claims an audit entry, so nothing false is said.
+- **Old name in the notice.** The rename notice's old name comes from `dialog.formItem`, which is kept until the next dialog opens, so it is still the opened row when the answer arrives.
+
+### Verdict (round 2)
+
+**APPROVE WITH COMMENTS.** QLT-01 to QLT-04 are fixed, each with a test shown to bite (#210, #211 and my #212), and QLT-05's note is taken. No Blocker, Critical or Major remains. QLT-11 (the STD-14 ruling) is a deferrable Minor for the #119 refactor or a small PR of its own. QLT-12 and QLT-13 are Info.
