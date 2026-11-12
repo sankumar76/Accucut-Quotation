@@ -6989,3 +6989,62 @@ Alternatives considered:
 **Risks registered:** none (RISK-027 unchanged).
 
 **Posted:** Jira AQP-275 comment 11692; PR #334 comment 6826309200.
+
+## G6 – Peer Review — AQP-81 (STORY-01.05 password rule and own-password change, PR #341 at c4517e6, base `master` 3f22672; full three-reviewer route) — 2026-11-12 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-191).** Both mandatory items are met: three reports, and 0 Blocker or Critical. Three Majors (QLT-01, QLT-02, STD-01) are not yet fixed or accepted, so one developer fix round (H2) follows, together with the cheap Minors. reviewer-quality and reviewer-standards re-review H2's diff with plants. AQP-81 goes to **Changes Requested** (orchestrator). G6 attempt 2 is decided on H2.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** `docs/06-reviews/AQP-81/{standards,quality,performance,consolidated}.md`; PR #341 body (Dev Record, open questions 1 to 5), review 5876524066 and the standards and performance reviews; control PR #343 (CLOSED, unmerged); Jira AQP-81 description (AC-1 to AC-7, A-1 to A-3) and comments 11690, 11691, 11694, 11697, 11700, 11701; FR-004, FR-098; architecture §8 (lines 1011 and 1019) and §6; ADR-009; test strategy §10.5 item 2; DL-188, DL-190
+- **My own checks** (read-only; no CI started, re-run or cancelled):
+  - **QLT-01:** `git show c4517e6:src/server/services/account-service.ts`. After `matches`, the code runs `throttles.clear`, then `hasher.hash(newPassword)`, then `changeOwnPassword`, with no comparison of new and current. `change-password.ts` `changePasswordProblems` has none either. `route-calls.ts:88` sends `HARNESS_PASSWORD` as both values and expects 204.
+  - **QLT-02:** a Node probe over the list extracted from c4517e6 (10,001 entries). The head accepts `1234567890!`, `!1234567890`, `123456789!` and `1qaz2wsx!!`; their bases `1234567890`, `123456789` and `1qaz2wsx` are entries. With the symbols-only candidate added, all four are TOO_COMMON, and `Password1!`, `Welcome@123` and `qwerty123!` stay TOO_COMMON. 1,590 entries begin or end with a digit or hold no letter. `11111111111!` is accepted either way because `11111111111` is not an entry, so the reviewer's probe list overstates that one case. `P@ssw0rd123` (leetspeak) is accepted either way and is outside the spec (QLT-12).
+  - **STD-01:** `git ls-tree c4517e6 src/lib/auth` has no licence file, and `src/app/fonts` has two `LICENSE-*-OFL.txt`. `scripts/lib/data-files.ts` lists no `.txt`, so stage 3 passes a `.txt` licence file.
+  - **QLT-03:** the reset path in `user-service.ts` ends with `throttles.clear(accountThrottleKey(keySecret, email))` only.
+  - **QLT-06, control C2:** `git diff c4517e6 913eb2a` is one line, `mustChangeAllowed: true` on `/api/v1/options/materials`. Run 43240917570 (`pull_request`, attempt 1): `Stages 1 to 11b`, shards 1 to 3 and `Stages 1 to 11` are all `success`.
+  - **STD-03:** `scripts/bootstrap-admin.ts` imports `bootstrap-admin-service`, which imports `password-policy`, which imports `common-passwords`. `node_modules/server-only/index.js` throws unless resolved under `react-server`, and `scripts/ensure-seed-version.ts:13` documents this. The README runs `npx tsx scripts/bootstrap-admin.ts`. So the suggested `import 'server-only'` would break AC-4's bootstrap entry point.
+  - **Median of five (DL-190 (5)):** run 43235390390 is at `run_attempt` 4, `in_progress`. #297 is OPEN at f269b05, and `origin/master` is 3f22672.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present (standards, quality, performance) | ✱ | ✅ | `docs/06-reviews/AQP-81/`: REQUEST CHANGES, REQUEST CHANGES, APPROVE WITH COMMENTS; PR labels match |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 in all three reports |
+| 3 | Majors fixed or explicitly accepted | | ❌ → fix round | QLT-01, QLT-02, STD-01 open, each reproduced by master (above) |
+| 4 | Findings cite file:line | | ✅ | All 3 Majors and 12 Minors cite file:line; PRF-03 cites the run |
+| 5 | AC conformance | | ✅ with notes | AC-1 to AC-7 and T7 met as written (quality AC table). The purpose of AC-5 is defeated by QLT-01, and the intent of AC-1 by QLT-02. "One zod rule" is a deviation (QLT-05) |
+| 6 | Developer's open questions routed | | ✅ | Q1 and Q5 to the ux-expert, Q4 to the solution-architect, Q2 and Q3 to the product-manager (DL-191 (6)) |
+| 7 | CI on the head | | ✅ | 43235390390 attempt 1: 5 of 5, +156 / +200 / +15 / +0 against 3f22672's push run (G5, 11691). Path 6:08 at three shards (DL-190 (5)) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| F1 | developer | `account-service.ts`, `change-password.ts`, tests, `route-calls.ts`, `harness-password.ts` | QLT-01: refuse new = current with 422 under `newPassword`, in both states, on the server and the page. No hash written; flag and `session_version` unchanged. Tests at service, route and page-helper level, plus one step in the existing E2E "Set a new password" test. The recipe stays repeatable for every role, and the Dev Record states it with the case counts | H2 |
+| F2 | developer | `common-passwords.ts`, `password-rule.test.ts` | QLT-02: add the symbols-only-stripped candidate; refused cases `1234567890!`, `!1234567890`, `123456789!`, `1qaz2wsx!!`; 100 % branches kept | H2 |
+| F3 | developer | `src/lib/auth/LICENSE-SecLists-MIT.txt`, list header | STD-01: upstream MIT text unchanged; the header points to it | H2 |
+| F4 | developer | `user-service.ts` + test | QLT-03: the reset also clears `passwordChangeThrottleKey` | H2 |
+| F5 | developer | `change-password-form.tsx` + test | QLT-04: a refusal with no field messages shows the server's `title` (stubbed 409 test) | H2 |
+| F6 | developer | `http-route-manifest.test.ts` | QLT-06: pin exactly `['/account', '/api/v1/account/password']` | H2 |
+| F7 | developer | list header, `account-client.ts`, `errors.ts`, form, texts | STD-02 note; STD-05 (drop the unused constant, `TOO_MANY_ATTEMPTS_CODE`); STD-06 for this PR's three copies (derived, or pinned by a test to `THROTTLE_POLICY.blockMilliseconds`); STD-04 split, or the §1 justification (split if F5 lengthens it) | H2 |
+| F8 | developer | PR #341 Dev Record | QLT-05 deviation row; round 2 rows per finding (commit, test), the CI table and the counts | H2 |
+| F9 | solution-architect, then developer | test strategy §10.5 ruling on AQP-81; `account.spec.ts:218`, `one-width-tag.test.ts` | PRF-02 is in the round only if the architect's ruling is posted before the push. Otherwise the orchestrator adds it to #346 | H2 or #346 |
+| F10 | developer | merge commit | If #297 is squashed and its push run is 5 of 5 before the push, DL-190 (3)'s merge of `master` goes first in the round | H2 |
+| T | orchestrator, developer | — | No push until attempt 5 of run 43235390390 is complete | Before H2 |
+| R1 | reviewer-quality | PR #341 threads, `quality.md` round 2 | Re-review `git diff c4517e6 H2`. Plants P1a, P1b, P2, P3, P4 (C2's line), P5, each red on a named test, by a Node plant script that throws unless each anchor occurs exactly once, with each diff printed. Read the recipe change, and F10's `git show --cc` if present | G6 attempt 2 |
+| R2 | reviewer-standards | PR #341 threads, `standards.md` round 2 | Re-review F3 (compare the text with upstream), F7 and the hygiene of the new code; Gitleaks on the new commits | G6 attempt 2 |
+| R3 | reviewer-performance | AQP-81 comment | Post the median of five on c4517e6 (DL-190 (5)) and H2's first-attempt path with base commit and shard count; confirm the E2E delta if F9 is taken. No re-review | G6 attempt 2 |
+| C | orchestrator | H2's CI | 5 of 5, Stage 2 green, 0 flaky. Counts against the push run of the merge-ref `master`: **+(156 + u) / +(200 + a) / +15 / +0** (E2E **+13** with F9). u and a are named by file. Every base name and every c4517e6 run name is present (except F9's two). With F10, DL-190 (3)'s target applies | G6 attempt 2 |
+| U | ux-expert | AQP-81 comment; ux-spec SCR-23 | The QLT-01 message on AQP-81 before the push (otherwise the reviewer's proposal is used as an assumption). Q1, Q5 and F5's refused case go into SCR-23 before G7. A later change is a text-and-assertion commit verified by master (DL-047) | Push / G7 |
+| A | solution-architect | ADR-009, architecture §8 | Q4 / QLT-07 (`signedAt` = last proof of the password; A-3 replaced); §8 "one rule" (QLT-05); §8 "Common" names the new candidate (QLT-02); the #346 item 1 choice | Next records PR, by G8 (no G7 hold) |
+| P | product-manager | PRD / decision on AQP-81 | Q2 (audit follow-up, or STD-07 `logger.info`) and PRF-01 (NFR-010 line for password routes, with the architect) by G8. Q3 (`quotation`) before the push if possible; the default keeps it, and a later drop is a commit verified by master (DL-047) before G7 | G8 / push |
+| O | product-owner | Jira AQP-81 change note | Wording only: AC-1 "one rule" and the four cases; new = current refused (AC-5 / AC-3); A-3 replaced | Before In QA |
+
+**What closes G6 attempt 2:** R1 and R2 mark QLT-01, QLT-02 and STD-01 Fixed, with every plant red as ruled. No open Blocker, Critical or Major remains. F4 to F8 are done, C is met, #346 exists and R3 is posted. **In QA** additionally needs DL-190 (3)'s integration update with its CI (under DL-190 (3)'s G6-GO path if it is not in the round), and O and U's QLT-01 message.
+
+**Unchanged from DL-190:** AQP-142 merges before AQP-81 in every case; the (4) triggers, never inside an open T6 window; the 2026-11-16 12:00 UTC re-ask; the (5) path reading (H2's first attempt is read at its own base and shard count).
+
+**Findings disposition:** **Fix round:** QLT-01 to QLT-06, STD-01, STD-02, STD-04 to STD-06 (this PR's copies), PRF-02 (conditional, F9). **Deferred to GitHub #346 (`tech-debt`):** STD-03, the sign-in remainder of STD-06, and PRF-02 if F9 is not met. **To #59:** PRF-04 (the orchestrator adds a comment). **To owners:** PRF-01, STD-07 / Q2 (product-manager); QLT-07 / Q4 (solution-architect); QLT-08, QLT-11 (ux-expert); QLT-09 (product-manager); QLT-10 / Q3 (product-manager). **Optional:** STD-08, STD-09, STD-10. **At merge:** STD-11 (the orchestrator's squash subject). **Not a finding:** QLT-12 (praise; leetspeak outside the spec). **Measurement:** PRF-03 (DL-190 (5), holds nothing).
+
+**Risks registered:** none new. RISK-023 stays at 8; RISK-027 is unchanged.
+**Rationale:** Majors with no Critical give CONDITIONAL GO under the procedure. F1, F2 and F4 change production behaviour on an authentication path, so the round needs a re-review, not master's own verification (DL-051). Because that round is required anyway, the cheap Minors ride in it. STD-03's suggested fix would break the bootstrap entry point, so it needs a design choice and is deferred with an owner and a due point.
+
+**Posted:** Jira AQP-81 comment 11704; PR #341 comment 6827270628; GitHub #346 created (tech-debt).
