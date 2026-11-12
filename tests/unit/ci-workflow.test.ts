@@ -181,7 +181,7 @@ describe('CI workflow', () => {
     expect(step).not.toMatch(/^\s*if:/m);
   });
 
-  it('AQP-227 AC-1 (AQP-208 AC-1): the shard count is one constant, the length of the matrix, and it is exactly [1, 2, 3, 4]', () => {
+  it('AQP-276 AC-2 (AQP-227 AC-1): the shard count is one constant, the length of the matrix, and it is exactly [1, 2, 3, 4]', () => {
     const list = /^ {8}shard: \[([\d, ]+)\]$/m.exec(jobText('e2e'))?.[1];
     expect(list, 'e2e job: matrix.shard must stay a one-line list at 8 spaces').toBeDefined();
     const shards = (list ?? '').split(',').map((entry) => Number(entry.trim()));
