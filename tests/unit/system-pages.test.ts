@@ -26,7 +26,10 @@ import { buttonVariants } from '@/components/ui/button';
 import { homeActionLabel, type RoleName } from '@/lib/auth/roles';
 
 // `headers()` is only available inside a request; the page for unauthorized() reads the address the proxy recorded from it.
-const mocks = vi.hoisted(() => ({ returnPath: null as string | null }));
+const mocks = vi.hoisted(() => {
+  const state: { returnPath: string | null } = { returnPath: null };
+  return state;
+});
 vi.mock('next/headers', () => ({
   headers: () => Promise.resolve(new Headers(mocks.returnPath === null ? {} : { 'x-return-path': mocks.returnPath })),
 }));

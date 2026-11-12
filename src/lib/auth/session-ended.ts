@@ -12,6 +12,9 @@ import { HOME_PATH, RETURN_PARAMETER, SIGN_IN_PATH, safeReturnPath } from './ret
 /** The `code` of the 401 problem body for a session that ended. Every other 401 keeps `UNAUTHORIZED`. */
 export const SESSION_ENDED_CODE = 'SESSION_ENDED';
 
+/** The status of a refusal for want of a session. In `lib`, so the browser clients and the server read one number. */
+export const HTTP_UNAUTHORIZED = 401;
+
 /** The query parameter of the sign-in address that asks SCR-01 for its "Session ended" state, and its one value. */
 export const REASON_PARAMETER = 'reason';
 export const SESSION_ENDED_REASON = 'session-ended';
@@ -34,13 +37,16 @@ export function hasSessionCookie(cookies: ReadonlyArray<{ readonly name: string 
  * The request header in which `proxy.ts` tells the page or route whether the browser sent a session cookie. The proxy always
  * sets it (or removes what the browser sent under that name) for every request it handles, so it is the proxy's word. It only
  * decides which words a refused person sees (a session that ended, or a visit with no session at all), never who they are.
+ *
+ * Trust it only on a path the proxy handles. The proxy matcher leaves out `/sign-in`, `/api/auth/*` and the static paths, and
+ * on those the browser's own header passes through unchecked.
  */
 export const SESSION_COOKIE_HEADER = 'x-session-cookie';
 export const SESSION_COOKIE_PRESENT = '1';
 
 /** Is this refusal the one that says the session ended? */
 export function isSessionEnded(httpStatus: number, code: string): boolean {
-  return httpStatus === 401 && code === SESSION_ENDED_CODE;
+  return httpStatus === HTTP_UNAUTHORIZED && code === SESSION_ENDED_CODE;
 }
 
 /**

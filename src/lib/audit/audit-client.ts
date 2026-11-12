@@ -1,4 +1,4 @@
-import { handleSessionEnded } from '../auth/session-ended';
+import { handleSessionEnded, HTTP_UNAUTHORIZED } from '../auth/session-ended';
 
 import { auditQueryString, type AuditFilters } from './filters';
 
@@ -68,7 +68,7 @@ function toPage(body: unknown): AuditPageData | null {
 
 /** A 401 that says the session ended takes the person to SCR-01, to sign in again and come back here (STORY-01.06 AC-4). */
 async function leaveIfSessionEnded(response: Response): Promise<void> {
-  if (response.status !== 401) return;
+  if (response.status !== HTTP_UNAUTHORIZED) return;
   try {
     const body: unknown = await response.json();
     if (isRecord(body) && typeof body['code'] === 'string') handleSessionEnded(response.status, body['code']);

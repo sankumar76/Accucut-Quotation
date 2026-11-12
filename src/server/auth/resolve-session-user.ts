@@ -62,6 +62,8 @@ export async function resolveSession(claims: SessionClaims | null, users: UserRe
 /**
  * The user for a set of claims, or null if the session must not be honoured: no such user, deactivated, a
  * `session_version` that no longer matches, or 12 hours or more from sign-in.
+ *
+ * Kept for tests that need only the user; production uses `resolveSession`.
  */
 export async function resolveSessionUser(claims: SessionClaims | null, users: UserRepository, now: Date): Promise<AuthenticatedUser | null> {
   const resolution = await resolveSession(claims, users, now);

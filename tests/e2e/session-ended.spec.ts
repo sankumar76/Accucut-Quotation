@@ -12,8 +12,10 @@ import { PRODUCTION_URL } from './support/servers';
  *
  * Three tests, each at all three widths (nine entries), and none of them tagged for one width or limited to the desktop project: the layout
  * checks (no sideways scroll, 44 px, axe) are what AC-6 asks per width, and the journey is one test that goes through both screens
- * with the keyboard alone. The server rules (the 401 `SESSION_ENDED` problem body, the 12-hour boundary, activity not extending
- * it, deactivation and role change) are in `tests/unit/auth-session.test.ts` and `tests/integration/auth/session-expiry.test.ts`.
+ * with the keyboard alone. The second test also asks the real server for data with an ended session and checks the 401 `SESSION_ENDED`
+ * answer (proxy header, session state, route, response), which no unit test runs end to end. The other server rules (the 12-hour
+ * boundary, activity not extending it, deactivation and role change) are in `tests/unit/auth-session.test.ts` and
+ * `tests/integration/auth/session-expiry.test.ts`.
  */
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
@@ -21,6 +23,7 @@ test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } }
 const SESSION_ENDED_TITLE = 'Your session ended';
 const SESSION_ENDED_TEXT = 'Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.';
 const SIGN_IN_NOTICE = 'Your session ended. Sign in again to continue where you left off.';
+const SESSION_ENDED_PROBLEM_TITLE = 'Your session ended. Sign in again.';
 
 test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
@@ -47,7 +50,24 @@ test.describe('AC-3 and AC-6: SCR-26 "Session ended"', () => {
 });
 
 test.describe('AC-4 and AC-6: SCR-01 in its "Session ended" state', () => {
-  test('shows the notice as an alert above the form: no sideways scroll, 44 px controls, axe clean, focus on the heading', async ({ page }) => {
+  test('an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an alert: no sideways scroll, 44 px controls, axe clean, focus on the heading', async ({ page, context }) => {
+    // What a tab left open overnight sends: the cookie is still there, the token inside it has expired. The browser's next call for data
+    // gets this answer, and `handleSessionEnded` takes it from here to the address below (QLT-03).
+    await addEndedSession(context, 'expired-token');
+    const refusal = await context.request.get('/api/v1/users');
+    expect(refusal.status()).toBe(401);
+    expect(refusal.headers()['content-type']).toContain('application/problem+json');
+    expect(refusal.headers()['cache-control']).toBe('private, no-store');
+    const refusalBody: unknown = await refusal.json();
+    // Exactly these members: the code that makes the browser leave, fixed words, and nothing about people or records.
+    expect(refusalBody).toEqual({
+      type: 'about:blank',
+      title: SESSION_ENDED_PROBLEM_TITLE,
+      status: 401,
+      code: 'SESSION_ENDED',
+      requestId: expect.any(String),
+    });
+
     await page.goto('/sign-in?reason=session-ended');
 
     const heading = page.getByRole('heading', { level: 1, name: 'Sign in' });

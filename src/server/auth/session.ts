@@ -33,7 +33,10 @@ type SessionState = { readonly status: 'signed-in'; readonly user: Authenticated
 const ENDED: SessionState = { status: 'ended' };
 const SIGNED_OUT: SessionState = { status: 'signed-out' };
 
-/** Did the browser send a session cookie? `proxy.ts` says so in a header it always sets itself. */
+/**
+ * Did the browser send a session cookie? `proxy.ts` says so in a header it always sets itself. The header is trusted only on a path
+ * inside the proxy matcher (not `/sign-in`, `/api/auth/*` or the static paths, where the browser's own header passes through).
+ */
 async function browserSentSessionCookie(): Promise<boolean> {
   return (await headers()).get(SESSION_COOKIE_HEADER) === SESSION_COOKIE_PRESENT;
 }

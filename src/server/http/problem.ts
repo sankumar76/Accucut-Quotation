@@ -54,7 +54,7 @@ export interface Problem {
 export const FORBIDDEN_TITLE = 'You do not have access to this.';
 export const FORBIDDEN_CODE = 'FORBIDDEN';
 export const UNAUTHORIZED_TITLE = 'Sign in to continue.';
-export const SESSION_ENDED_TITLE = 'Your session ended. Sign in again.';
+export const SESSION_ENDED_PROBLEM_TITLE = 'Your session ended. Sign in again.';
 export const ORIGIN_REFUSED_CODE = 'ORIGIN_REFUSED';
 export const ORIGIN_REFUSED_TITLE = 'This request did not come from the portal.';
 export const MALFORMED_CODE = 'MALFORMED_REQUEST';
@@ -88,7 +88,7 @@ export function unauthorizedProblem(requestId: string): Problem {
  * rather than treat it as a visit with no session. Fixed words and no data, like every other 401.
  */
 export function sessionEndedProblem(requestId: string): Problem {
-  return problem(STATUS_UNAUTHORIZED, SESSION_ENDED_CODE, SESSION_ENDED_TITLE, requestId);
+  return problem(STATUS_UNAUTHORIZED, SESSION_ENDED_CODE, SESSION_ENDED_PROBLEM_TITLE, requestId);
 }
 
 export function originRefusedProblem(requestId: string): Problem {

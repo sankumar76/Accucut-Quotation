@@ -64,7 +64,8 @@ describe('the problem of an application error', () => {
     expect(response.headers.get('Content-Type')).toBe(PROBLEM_CONTENT_TYPE);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Request-Id')).toBe(ID);
-    expect(Object.keys((await response.json()) as object).sort()).toEqual(['code', 'requestId', 'status', 'title', 'type']);
+    const body = z.record(z.string(), z.unknown()).parse(await response.json());
+    expect(Object.keys(body).sort()).toEqual(['code', 'requestId', 'status', 'title', 'type']);
   });
 
   it('a role refusal is the fixed 403, the same for every route and every message (CR-33, AC-4)', () => {

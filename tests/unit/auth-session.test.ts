@@ -16,19 +16,23 @@ import { defined } from '../support/defined';
  * `tests/integration/auth/session-resolution.test.ts`.
  */
 
-const mocks = vi.hoisted(() => ({
-  getServerSession: vi.fn(),
-  redirect: vi.fn((path: string): never => {
-    throw new Error(`NEXT_REDIRECT:${path}`);
-  }),
-  unauthorized: vi.fn((): never => {
-    throw new Error('NEXT_UNAUTHORIZED');
-  }),
-  users: { current: undefined as unknown },
-  returnPath: { current: null as string | null },
-  /** What the proxy tells the page about the browser's cookie: the header's value, or null for no header. */
-  sessionCookie: { current: null as string | null },
-}));
+const mocks = vi.hoisted(() => {
+  // A typed holder, not `null as string | null`: no cast to hide a wrong shape (STD-14).
+  const sessionCookie: { current: string | null } = { current: null };
+  return {
+    getServerSession: vi.fn(),
+    redirect: vi.fn((path: string): never => {
+      throw new Error(`NEXT_REDIRECT:${path}`);
+    }),
+    unauthorized: vi.fn((): never => {
+      throw new Error('NEXT_UNAUTHORIZED');
+    }),
+    users: { current: undefined as unknown },
+    returnPath: { current: null as string | null },
+    /** What the proxy tells the page about the browser's cookie: the header's value, or null for no header. */
+    sessionCookie,
+  };
+});
 
 vi.mock('next-auth', () => ({ getServerSession: mocks.getServerSession }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect, unauthorized: mocks.unauthorized }));
@@ -226,6 +230,16 @@ describe('STORY-01.06 AC-3 and AC-4: a session that ended is not a visit with no
     await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_UNAUTHORIZED');
   });
 
+  it('QLT-02: a session with the user and the version but no sign-in time is nobody, and with the cookie it has ended', async () => {
+    const { users, id } = await repositoryWithOneUser();
+    mocks.users.current = users;
+    mocks.getServerSession.mockResolvedValue({ expires: 'x', userId: id, sessionVersion: 0 });
+    expect(await getCurrentUser()).toBeNull();
+    mocks.sessionCookie.current = SESSION_COOKIE_PRESENT;
+    await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_UNAUTHORIZED');
+    expect(await requireUser().catch((error: unknown) => error)).toMatchObject({ code: SESSION_ENDED_CODE });
+  });
+
   it('a visit with no cookie is not: it gets the plain 401 and the redirect to sign in', async () => {
     mocks.users.current = createFakeUserRepository();
     mocks.getServerSession.mockResolvedValue(null);
@@ -265,9 +279,11 @@ describe('STORY-01.06 AC-3 and AC-4: a session that ended is not a visit with no
   });
 
   it('AC-5: a session version that no longer matches inside the 12 hours is refused, not "ended"', async () => {
-    const id = await signedInAt(SIGNED_AT);
+    const { users, id } = await repositoryWithOneUser();
+    mocks.users.current = users;
+    mocks.getServerSession.mockResolvedValue({ expires: 'x', userId: id, sessionVersion: 0, signedAt: SIGNED_AT });
     mocks.sessionCookie.current = SESSION_COOKIE_PRESENT;
-    await (mocks.users.current as FakeUserRepository).raiseSessionVersion(id, 0);
+    await users.raiseSessionVersion(id, 0);
     await expect(requireUserOrRedirect()).rejects.toThrow('NEXT_REDIRECT:/sign-in');
   });
 
