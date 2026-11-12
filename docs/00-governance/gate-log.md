@@ -5506,3 +5506,70 @@ The DL-150 conditions C (#244), D (#245), E and F (committed at b84b9b4 and 0c62
 - There is no AC, no user-visible change and no change to a production caller's write.
 - GO and not CONDITIONAL GO: the PR body is accurate for round 2, and nothing is left to do before the merge steps.
 **Posted:** PR #247 comment 6798679111; GitHub #218 comment 6798681892; Jira AQP-142 comment 11509.
+
+## G6 – Peer Review — AQP-237 (STORY-10.18: static checks that `audit.record` uses the change's transaction; PR #250 at 87465b6) — 2026-11-11 (attempt 1)
+
+- **Decision:** **NO-GO (DL-156).** There is one open Critical, QLT-01. AC-2 (a) is implemented differently from its text: the check accepts a `tx` that is a parameter of *any* enclosing function, not of the function F that holds the call. So a `record` inside `forEach(async () => …)` in the callback passes, and that entry is written after the callback returned. QLT-02 (Major) and STD-01 (Major) are fixed in the same round. Every Minor is fixed now except QLT-04 (code) and STD-05 (older files), which go to tech-debt #259. reviewer-quality and reviewer-standards re-read the round-2 diff, then attempt 2 follows.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - PR #250 at 87465b6: 2 commits (c6ade88, 87465b6) and 5 files, +859 / -3. Nothing under `src/`, no `package.json`, no workflow file. Read its body, its Dev Record and Decisions 1 to 4.
+  - Jira AQP-237: the description (AC-1 to AC-5, Dev Context, T1 to T6), and its 8 comments as summarised in the reports.
+  - `docs/06-reviews/AQP-237/standards.md`, `quality.md`, `performance.md` and `consolidated.md` on the records branch. The side branches `docs/AQP-237-review-{standards,quality,performance}` are identical to those copies (`git diff --stat` is empty for each), so the records branch is the copy of record.
+  - PR review 5860664620 (quality); Jira 11510, 11511, 11513.
+  - **My own checks:**
+    - **The check source, read in full** (`git show origin/feat/AQP-237-audit-record-tx-checks:tests/support/audit-transaction-check.ts`, 280 lines).
+      - `parameterOf` (136-144) returns `declaration.parent` for any parameter. `problemWithRecord` (259-263) never compares that function with the one that lexically holds the call. **QLT-01 is confirmed by reading.**
+      - `checkAuditTransactions` spans 129-280 and holds ten inner functions, with no justification comment. **STD-01 is confirmed.**
+      - Record calls are selected by member name only (270). **QLT-03 is confirmed.**
+      - Nothing reads whether a call is awaited. **QLT-02 is confirmed.**
+      - The PASSING table holds "a record inside a nested arrow function in the callback" (`Promise.all([...].map((event) => audit.record(tx, …)))`). That is the developer's Decision 4 ("it is inside F"), and no architect or product-owner ruling backs it.
+    - **Reviewer control #257:** run 43042052703, head 4f5e9b0, attempt 1, failure.
+      - I printed the `user-service.ts` diff first. Q1 is `void audit.record`, Q1b a missing `await`, Q2 `['a','b'].forEach(async () => { await audit.record(tx, …) })`, and Q3 and Q3b `.call` and `.bind` on a kept handle.
+      - `--log-failed`: the AC-4 test fails only on `audit-events.ts:298: the transaction passed to record is not a parameter of a function around the call` (Q6, the `z.record` false positive). The probe prints `checked: 21` with that one finding. So Q1, Q1b, Q2, Q4 and Q5 pass and Q3 and Q3b are not visited, as reported.
+    - **Real calls on `origin/master` 8ae01ef** (`git grep`), 15 in all: exchange-rate 1, masters 5, treatment 3, user 6.
+      - Every `record` is `await`ed and sits in the function whose parameter it uses.
+      - Every helper is called as the arrow body of its `.run(` callback: `(tx) => helper(…, tx, …)`.
+      - So the lexical rule at the call and at each helper step, plus "awaited or returned", passes all 15. This confirms reviewer-quality's probe for the call and extends it to the steps.
+    - **CI on the branch** (`gh run list --branch feat/AQP-237-audit-record-tx-checks`): one run, 43027184210, attempt 1, 5 of 5. Unit 3,054, full 5,377, E2E 778, each +140 / +140 / +0 against base b3403e3. I took the per-file times from the performance report and did not re-read them.
+    - **Overlap with `master`:** #235 (8ae01ef) touched `tests/security/engineer-import-rule.test.ts` at `@@ -53` only, and PR #250 touches it at `@@ -114` and `@@ -169`. The hunks do not overlap. reviewer-quality merged #235 and #247 locally: 15 calls, 0 findings.
+    - **PR labels:** `review:quality-changes-requested` and `review:performance-approved` are present. **`review:standards-changes-requested` is missing** (single-token overwrite).
+  - **Not re-run by me:** the developer's plants #251 and #252 (read from the reports), the local lint mutation (QLT-05), and Gitleaks (CI stage 2 is green).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present (standards, quality, performance) | ✱ | ✅ | The `docs/06-reviews/AQP-237/` files and `consolidated.md`; review 5860664620 |
+| 2 | Zero open Blocker or Critical | ✱ | ❌ | **QLT-01 Critical, upheld.** AC-2 (a): "the function F that holds the call qualifies if `record`'s `tx` argument resolves to a parameter P of F". The code resolves P to any enclosing function (`audit-transaction-check.ts:136-144, 259-263`). The reviewer-quality scale says "an AC implemented differently is at least Critical", and Q2 is the third form section 6 forbids. The reviewer's plant and my reading of the code both confirm it |
+| 3 | Major findings fixed or accepted | | ❌ | QLT-02 (un-awaited `record` passes; Q1 and Q1b red only with the fix) and STD-01 (152-line function, Coding Standards §1) → condition A |
+| 4 | Findings cite file:line | | ✅ | All 23 findings do |
+| 5 | AC-3 plants proven red with diffs printed | | ✅ | #251 (P4, lint), #252 (P1, P2, P3, P3b and P5: five findings), as both reviewers report |
+| 6 | AC-4: no allow-list, no `eslint-disable`; count stated | | ✅ | 15 calls, explained in the PR as 11 at 023e17d plus AQP-123 and AQP-130. AC-4 itself says "any other number is explained", so no AC change is needed |
+| 7 | AC-5: no new job; time stated; header limits | | ⚠️ | 5.2 s in stage 6 and 4.1 s in stage 11, under the 10 s line. The header list is incomplete (QLT-06) → condition A |
+| 8 | G12-scope test change (`engineer-import-rule.test.ts`) | | ✅ | STD-10: stricter, not weaker, and disclosed. The "types only" wording overstates what is enforced (STD-08) → condition A |
+| 9 | CI time | | ✅ | Off the path. Slack is 106 s or more on every run read; RISK-023 stays at 8 (PRF, DL-151) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| U | developer | PR #250 | **Update from `master` first:** one merge commit from the current `origin/master` (8ae01ef or newer; take #247 too if it has squashed by then). No rebase and no force-push. A conflict outside `engineer-import-rule.test.ts` comes back to master | Before condition A's commits |
+| A | developer | PR #250: the 5 PR files, plus new `tests/support/audit-transaction-cases.ts` and `tests/support/lint-fixture.ts` | **QLT-01:** the function that lexically holds `record` must own the `tx` parameter. The same lexical rule applies at each helper step: the call to F must sit in the function whose parameter it passes. The nested `Promise.all(… .map(…))` case moves to FAILING, and a step-level case (`forEach(async () => { await helper(tx) })`) is added. **QLT-02:** the `record` call and every helper call on the chain must be awaited, returned, or an arrow body. **QLT-03:** visit `record` by the receiver's type (`AuditService`, declared in `audit-service.ts`), so `z.record` is no longer flagged. Report any use of `AuditService`'s `record` that is not the callee of a direct call (`.call`, `.bind`, alias). **QLT-05 + STD-07:** the lint tests also assert that the message names `createTransactionHandle`, and the `import()` message says the whole module is refused. **QLT-06:** both headers list every form still open (Q4 cross-file helper, Q5 dead closure → #259, destructuring, a chain over 3, a callback not typed as `TransactionRunner`, no write or order required). **STD-01 + STD-02:** lift the helpers to module level with a context, so the top function is ≤ 40 lines and complexity ≤ 10 everywhere. **STD-03:** move the case tables to `tests/support/audit-transaction-cases.ts`, so each file is ≤ 400 lines. **STD-04:** `PROGRAM_BUILD_TIMEOUT`. **STD-05:** use `tests/support/lint-fixture.ts` in the new lint test only. **STD-06:** the true comment, plus "this block must stay above the group blocks". **STD-08:** state what is enforced, rename to `NAMED_IMPORTS_ONLY`, and add one `import { clientFor }` control that expects `[]`. **STD-09:** the names. If any real call fails the stricter rules, stop and report it to the solution-architect (AC-4). Do not suppress it | Before attempt 2 |
+| A2 | developer | PR #250 body | A Dev Record round-2 row per finding, the commit SHAs, the counts n_u and n_s, and Decision 4 rewritten to the ruled rule. Add the line "Closes #104" (otherwise the orchestrator closes #104 as completed with the merge commit). Follow-ups: #259 | With A |
+| P | developer, then reviewer-quality | Control PRs **based on `master`**, each diff printed before its result (DL-091) | On the fix head, **red:** P1, P2, P3, P3b, P4, P5 (developer) and Q1, Q1b, Q2, Q2b (new: the step-level `forEach`), Q3, Q3b (reviewer-quality). **Green, with no finding:** Q6 (`z.record`). **Pass, and listed in the header:** Q4 and Q5. **Lint mutation** (`restrict()` without the entry): every lib, page and feature-component row that stayed green (22 of 27) now fails | Before attempt 2 |
+| C | developer, read by master | CI on the fix head | 5 of 5, every attempt read. Counts = the push run of the `master` commit in the run's merge ref + unit (140 + n_u) and full Vitest (140 + n_u + n_s), E2E +0, skipped +0. Here n_u counts the new tests under `tests/unit` and n_s those under `tests/security`. The architecture test's stage 6 file time is reported (> 10 s → architect, AC-5) | Before attempt 2 |
+| R | reviewer-quality and reviewer-standards | PR #250 reviews, round 2 | Both read `87465b6..<fix head>` only, with the merge commit read by `git show --cc`. reviewer-quality covers QLT-01 to QLT-06 and the plants; reviewer-standards covers STD-01 to STD-09. reviewer-performance does not re-run, unless `createServicesProgram` or the `beforeAll` set-up changes beyond moving code, or the stage 6 file time is over 8 s. Each reviewer changes only their own PR label. reviewer-standards restores `review:standards-changes-requested` now | After A, C, P |
+| Q1 | product-owner | Jira AQP-237 | Step count: confirm "the callback is not a step; 3 calls below pass, 4 fail" (header lines 20-21; matches §6 "at most three steps from the callback"). If you read it otherwise, the constant changes in condition A | Before A's push; at the latest before G7 |
+| Q2 | product-owner | Jira AQP-237 description | AC-4 count: a change note that 15 at b3403e3 is the explained number (AC-4 permits it). Leave the AC text unchanged | Before G7. Does not hold attempt 2 |
+| D | solution-architect | `architecture.md` §6 "The two checks as built"; `test-strategy.md` §10 | Record the rules as built after A: lexical holder at each step, awaited or returned, receiver type `AuditService`, a non-callee use refused, and the count 15 instead of "eight" or 11. Record the real meaning of the Engineer allow-list entry `transaction` (STD-08). Add PRF-01 (the architecture test's stage 6 and stage 11 times from the fix-head run as the baseline) and the Vitest totals of record after the merge | Docs PR merged before #250's squash. Does not hold attempt 2 |
+| H | delivery lead | Remote branches | Delete `chore/AQP-237-plants-control`, `-b`, `chore/AQP-237-qlt-plants-control`, the round-2 control branches, and `docs/AQP-237-review-{standards,quality,performance}` (identical to the records branch) | Before G8. Does not hold the merge |
+
+**Deferred (tech-debt #259, created by master):** QLT-04 code (count a repository call in a nested function only when that function is awaited or returned) and STD-05 for `layer-rules.test.ts` and `engineer-import-rule.test.ts`. Owner: developer, on the narrow reviewer-quality route. Due before G8, and before any story whose callback passes `tx` into a nested function. **Accepted (Info), no issue:** QLT-07, STD-10, STD-11, STD-12 (→ H), PRF-02. PRF-01 → D.
+**G7 route:** decided at attempt 2.
+**Risks registered:** none new. RISK-023 stays at 8. Until #250 merges, reviewers keep checking each `record` call against section 6 by eye. AQP-142 edits `audit-events.ts`, so a `z.record` there would trip the unfixed check; QLT-03 now closes that.
+**Rationale:**
+- **NO-GO.** The procedure gives NO-GO for any open Critical. QLT-01 is an AC implemented differently, in the story's main purpose, and Decision 4 widened it without the ruling AC-4 asks for ("report to the solution-architect, do not suppress").
+- **No architect ruling is needed.** The fix restores the AC text, and the only form it removes, `Promise.all(map)`, is used by no real call. The step-level rule is the same defect one level down.
+- **Why the Minors now.** They sit in the same three files being rewritten, cost one push, and QLT-03 would otherwise trip AQP-142.
+- **Why two deferrals.** QLT-04 needs a design (when a nested function counts) and is a deliberate-dead-code form. STD-05 touches a G12 file outside the story.
+- **Why update from `master` first.** The control plants and counts should run on the `master` that will be merged, and #235's change to the shared G12 file is merged once, read with `--cc`.
+**Posted:** Jira AQP-237 comment 11516; PR #250 comment 6800369342; tech-debt #259 (created by master).
