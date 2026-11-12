@@ -43,15 +43,26 @@ for (const kind of ['expired-token', 'old-sign-in'] as const) {
     await context.clearCookies();
     await addEndedSession(context, kind, kind === 'old-sign-in' ? '00000000-0000-4000-8000-000000000001' : undefined);
 
-    const answer = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/audit');
+    // The page's own request goes to the real server; the answer is read here before it is handed on, because the page leaves for
+    // SCR-01 as soon as it has it and a body read after that fails (a race of the first version of this spec, a test defect).
+    const seen: { status?: number; contentType?: string; cacheControl?: string; body?: unknown } = {};
+    await page.route(
+      (url) => url.pathname === '/api/v1/audit',
+      async (route) => {
+        const real = await route.fetch();
+        seen.status = real.status();
+        seen.contentType = real.headers()['content-type'] ?? '';
+        seen.cacheControl = real.headers()['cache-control'] ?? '';
+        seen.body = await real.json();
+        await route.fulfill({ response: real });
+      },
+    );
     await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
-    const response = await answer;
-    expect(response.status()).toBe(401);
-    expect(response.headers()['content-type']).toContain('application/problem+json');
-    expect(response.headers()['cache-control']).toBe('private, no-store');
-    const body: unknown = await response.json();
-    expect(body).toEqual({ type: 'about:blank', title: 'Your session ended. Sign in again.', status: 401, code: 'SESSION_ENDED', requestId: expect.any(String) });
-    console.log(`QA-HOP ${kind} api=${response.status()} body=${JSON.stringify(body)}`);
+    await expect.poll(() => seen.status).toBe(401);
+    expect(seen.contentType).toContain('application/problem+json');
+    expect(seen.cacheControl).toBe('private, no-store');
+    expect(seen.body).toEqual({ type: 'about:blank', title: 'Your session ended. Sign in again.', status: 401, code: 'SESSION_ENDED', requestId: expect.any(String) });
+    console.log(`QA-HOP ${kind} api=${seen.status} body=${JSON.stringify(seen.body)}`);
 
     // Then the browser's client code takes the person to SCR-01 in its "Session ended" state, with the audit page kept as the way back.
     await expect(page).toHaveURL(/\/sign-in\?reason=session-ended&callbackUrl=%2Faudit$/);
@@ -144,6 +155,12 @@ async function probe(page: Page, label: string, context: BrowserContext, url: st
   const alertAt = html.indexOf('role="alert"');
   const headingAt = html.indexOf('<h1');
   console.log(`QA-A11Y ${label} raw-html status=${raw.status()} role-alert-in-initial-html=${alertAt >= 0} h1-before-alert=${headingAt >= 0 && headingAt < alertAt}`);
+  // Where the words are in the first response, if anywhere (SCR-26 is drawn by Next.js's unauthorized boundary).
+  const wordsAt = html.indexOf('Sessions last 12 hours');
+  const escapedRoleAt = html.indexOf('\\"role\\":\\"alert\\"');
+  console.log(
+    `QA-A11Y ${label} raw-html words-at=${wordsAt} escaped-role-alert-at=${escapedRoleAt} length=${html.length} snippet=${JSON.stringify(wordsAt >= 0 ? html.slice(Math.max(0, wordsAt - 260), wordsAt + 40) : '')}`,
+  );
 
   await recordAnnouncementEvents(page);
   await page.goto(url);
