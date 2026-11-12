@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-19) and v0.4 (PRD v0.7 FR-004, FR-006). **Amended 2026-11-04: sign-out (amendment 1, at the end; AQP-38).** The session measured from sign-in and the meaning of "symbol" **rest on ASSUMPTION-56** |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-19) and v0.4 (PRD v0.7 FR-004, FR-006). **Amended 2026-11-04: sign-out (amendment 1, at the end; AQP-38). Amended 2026-11-11: the cookie outlives the token by 7 days so an ended session can be named (amendment 2, at the end; AQP-89, delivery-lead ruling KEEP).** The session measured from sign-in and the meaning of "symbol" **rest on ASSUMPTION-56** |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-001 to 006, 080, 098, 099; NFR-003, 004; SPEC §2, §12, §18 D-19; BR-049, BR-050; ASSUMPTION-56; ADR-010 |
@@ -39,7 +39,7 @@ Whether Auth.js supports database sessions with the credentials provider could n
 - Cost / effort: medium
 
 ## Decision
-We will use **next-auth 4.24.15** with the credentials provider, narrowly, behind `src/server/auth/session.ts`. The session is an encrypted JWT in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie that lasts 12 hours from sign-in (D-19, ASSUMPTION-56), holding only the user ID, `session_version` and the sign-in time. `requireUser()` refuses it past 12 hours, so activity does not extend it. Version 0.2 had a rolling 12 hours of inactivity, which an open tab could extend for days. `requireUser()` reads `users` on each request. Role and active flag always come from the database, and a mismatch in `session_version` ends the session. This gives server-side revocation without a sessions table, at the cost of one indexed read per request.
+We will use **next-auth 4.24.15** with the credentials provider, narrowly, behind `src/server/auth/session.ts`. The session is an encrypted JWT in a `__Secure-` HttpOnly, Secure, SameSite=Lax cookie. The token lasts 12 hours from sign-in (D-19, ASSUMPTION-56) and holds only the user ID, `session_version` and the sign-in time. *(Amendment 2: the cookie that carries it stays 7 days longer, and adds no access.)* The server refuses the token at 12 hours, so activity does not extend it. *(As built in STORY-01.01 and STORY-01.06: the one check is `resolveSession` in `src/server/auth/resolve-session-user.ts`, over `SESSION_HOURS` in `session-token.ts`; `requireUser()` and `requireUserOrRedirect()` in `session.ts` reach it.)* Version 0.2 had a rolling 12 hours of inactivity, which an open tab could extend for days. Each request reads `users`. Role and active flag always come from the database, and a mismatch in `session_version` ends the session. This gives server-side revocation without a sessions table, at the cost of one indexed read per request.
 
 Passwords use argon2id through `@node-rs/argon2`. Sign-in goes through `login_throttles`: 5 consecutive failures block the key for 15 minutes (NFR-003, Proposed). An unknown e-mail takes the same path with a dummy hash, so responses do not reveal which part was wrong.
 
@@ -115,3 +115,63 @@ The other events that end every session are unchanged: password change (FR-002),
 - Sign-out raises the version by one, and a copied cookie is refused afterwards (in PR #58).
 - A sign-out request with a bad CSRF token changes nothing (in PR #58).
 - **New:** a sign-out with a token whose version is out of date leaves the stored version unchanged, and the person's current session still works.
+
+
+## Amendment 2 — The cookie outlives the token by 7 days, so an ended session can be named (2026-11-11)
+
+| Field | Value |
+|-------|-------|
+| Status | Accepted. The delivery lead ruled **KEEP** on 2026-11-11 (in chat, recorded on Jira AQP-89; `master` records it in the decision log, DL-157 expected). It closes G6 findings STD-01 and QLT-01 of AQP-89 by documentation, with no code change |
+| Trigger | PR #253 (AQP-89, STORY-01.06), head `c4055f7`. `SESSION_ENDED_NOTICE_DAYS = 7` in `src/server/auth/session-token.ts:26`, used as the cookie's `maxAge` in `src/server/auth/options.ts:90`. The Decision above said the cookie "lasts 12 hours from sign-in", and nothing recorded the change |
+| Related | FR-099, BR-050, NFR-003; STORY-01.06 AC-2, AC-3, AC-4; SCR-26, SCR-01; architecture section 8 and A-23; review findings STD-01, STD-05, STD-08, STD-10, QLT-01, QLT-04, QLT-06, QLT-07, QLT-08, PRF-02; GitHub #255, #256 |
+
+### Context
+STORY-01.06 AC-3 asks that a person whose session ended sees SCR-26 "Session ended", not a plain sign-in page. A browser deletes a cookie when its `maxAge` runs out. A request with no cookie looks exactly like a visit from someone who never signed in. With a cookie of 12 hours, SCR-26 could appear only in the last moment of a session. The realistic case, an open tab used again the next morning or after a weekend, would never see it.
+
+As built on `c4055f7`, three lifetimes are set apart:
+
+| What | Where | Lifetime |
+|------|-------|----------|
+| The token's `exp` claim | `jwt.maxAge` and the custom `jwt.encode` in `options.ts`, through `sessionSecondsLeft` | Sign-in time plus `SESSION_HOURS` (12). A rewrite later in the session keeps the same end (AC-2) |
+| The server's own check | `resolveSession` in `resolve-session-user.ts`, through `hasSessionEnded` and `isWithinSession` in `session-token.ts` | Sign-in time plus 12 hours, from the `signedAt` claim, whatever the cookie or `exp` says |
+| The cookie | `session.maxAge` = `SESSION_COOKIE_MAX_AGE_SECONDS` | 12 hours plus `SESSION_ENDED_NOTICE_DAYS` (7 days) from when it was written |
+
+A request whose cookie is present but whose token cannot be read counts as "ended". `proxy.ts` sets the `x-session-cookie` header on every request it handles, and `session.ts` uses that header to tell this case apart from "signed out". A page then calls `unauthorized()` and shows SCR-26, and an API route answers 401 `SESSION_ENDED`.
+
+### Options
+**A. Keep the cookie 7 days longer than the token (as built).**
+- Pros: SCR-26 shows for the case it exists for. It is one constant, and setting it to 0 reverses it. Cookie flags and token contents do not change.
+- Cons: next-auth logs a dead token at error level on each request for up to about 7.5 days (see Consequences). The cookie's presence is visible to a later user of the same browser profile.
+
+**B. A 12-hour cookie (the constant set to 0).**
+- Pros: matches this ADR's original text. No extra log lines.
+- Cons: SCR-26 almost never shows, so AC-3 would have to be re-scoped by the product owner.
+
+**C. A separate, content-free "had a session" cookie next to a 12-hour session cookie.**
+- Pros: the session cookie stays at 12 hours.
+- Cons: another cookie to set, clear and test. next-auth's `signOut` event cannot clear a second cookie. Without that, a person who signed out on purpose would later read "Your session ended", which is untrue.
+
+### Decision
+**Option A, as built: `SESSION_ENDED_NOTICE_DAYS = 7`.** The token and the server check stay at 12 hours from sign-in. Only the cookie lives longer, so the portal can say the session ended.
+
+**Why this has no replay or disclosure risk**
+- **No added access.** The cookie carries the token, and the token is dead. `resolveSession` refuses any `signedAt` 12 hours old or more, exactly and without reading the database. The token's own `exp` is set to the same instant, and next-auth stops decoding it 15 seconds later (its `jose` clock tolerance), so two independent checks agree. Keeping, copying or replaying the cookie gives nothing that the token did not already lose at 12 hours. Signing in again writes a new cookie in its place.
+- **No added disclosure.** The value is still a JWE (`dir` with A256GCM, keyed from `AUTH_SECRET`), so nobody without the secret can read it. The flags are unchanged: `__Secure-` prefix, HttpOnly, Secure, SameSite=Lax. What the cookie still holds is the user ID, `session_version` and the sign-in time, nothing more. The one new fact is that the cookie exists: a later user of the same browser profile can learn that someone used the portal in the last 7.5 days or so. That is low, and an OS account per person removes it.
+- **Sign-out is unchanged.** It still clears the cookie (`maxAge` 0, tested) and raises `session_version` (amendment 1), so a person who signs out on purpose never sees SCR-26.
+- **The limit of the extension.** next-auth moves the *cookie's* expiry to "now plus `session.maxAge`" whenever `/api/auth/session` is called directly. The *token's* expiry does not move. The app does not load `next-auth/react` (`src/lib/auth/auth-client.ts` stands in for it), so only a script can make that call. Once the token is dead, the same route fails to decode it and clears the cookie. So the cookie lasts at most about 12 hours plus 7 days after the last such call inside the 12 hours, which is about 7.5 days after sign-in.
+
+### Consequences
+- **Log noise (QLT-08, PRF-02, STD-05): GitHub #255.** For each request that carries a dead cookie, next-auth decrypts the token, finds `exp` passed and writes `[next-auth][error][JWT_SESSION_ERROR]` with a stack. This can go on for up to about 7.5 days per browser. The cost is about 0.2 to 0.5 ms of CPU and 1 to 2 KB of log per request (PRF-02, an estimate). It stops quickly in practice: the first 401 or SCR-26 sends the person to sign in, and signing in replaces the cookie. The cost is not CPU. It is an `error` line for a routine event, which can hide real errors and would page anyone who alerts on `error`. **#255 must be fixed before production:** a next-auth `logger` in `buildAuthOptions` sends `JWT_SESSION_ERROR` to pino at `debug`, with name and code only, and leaves other codes at their level. `master` assigns its owner and due point (consolidated review, STD-05).
+- **After an `AUTH_SECRET` rotation (QLT-04).** Every cookie in every browser becomes unreadable. Because the cookie is present, each person is told their session *ended*, with SCR-26's words "Sessions last 12 hours from the time you sign in". That reason is untrue in this case. Signing everyone out is the right behaviour; only the reason given is wrong. Accepted: rotation is a rare, planned operation. The secret-rotation runbook says that everyone will see "Session ended" and must sign in again (architecture section 8). Whether SCR-26 needs neutral words for this case is the ux-expert's call in #256.
+- **No clock-skew tolerance (QLT-06).** A `signedAt` in the future is refused (`refused`, sent to sign in), with no allowance. On one `app` container there is one clock, so this cannot happen. If the app is ever run on more than one host, a person who has just signed in could be bounced to SCR-01 by a host whose clock is behind. Before any scale-out, add a small allowance to `isWithinSession` (for example 60 seconds, with NTP on every host), recorded as a further amendment. Not built now.
+- **Order of states past 12 hours (QLT-07).** "Ended" is decided before the database read. A deactivated person whose token is 12 hours old or more therefore sees SCR-26, then the usual single sign-in error. This reveals nothing about the account.
+- **Amendment 1's "second wording" is still owed (STD-08, QLT-07).** Amendment 1 asked the ux-expert for SCR-26 words for a session ended inside its 12 hours, by a sign-out elsewhere or a password change, "before AQP-89 reaches G5". It does not exist in ux-spec v0.22. The build correctly did not invent it: such a token is `refused`, and the person goes to the sign-in page with no explanation, as before AQP-89. **This amendment does not supply the wording.** It remains owed by the **ux-expert through GitHub #256**. `master` records a waiver or a needed-by date. When the wording exists, the server already tells the case apart: the token is within 12 hours and its version does not match.
+- **Reversal is one line.** Setting `SESSION_ENDED_NOTICE_DAYS` to 0 returns to option B. AC-3 would then be re-scoped.
+
+### Verification (tests on `c4055f7`)
+- The constant is 7, and the cookie lifetime is the token's 12 hours plus 7 days: `tests/unit/auth-small-modules.test.ts`.
+- `session.maxAge` is the cookie lifetime and `jwt.maxAge` is 12 hours. A token written later in the session keeps its 12-hour end: `tests/unit/auth-options.test.ts`.
+- The cookie written at sign-in expires 12 hours plus 7 days later, a token rewritten 6 hours in keeps only the 6 hours left, and the session is refused at 12 hours: `tests/integration/auth/session-expiry.test.ts`.
+- A browser with an expired token, and one with a sign-in 12 hours old or more, sees SCR-26 at three widths: `tests/e2e/session-ended.spec.ts`.
+- Sign-out still clears the cookie: `tests/integration/auth/sign-in-handler.test.ts`, `tests/acceptance/aqp-38-sign-in.test.ts`.
+- Owed by #255: a unit test that `JWT_SESSION_ERROR` is logged at `debug`, not `error`.
