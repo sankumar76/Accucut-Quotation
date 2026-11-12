@@ -17,7 +17,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-s-4">
       <div className="flex min-w-0 flex-col gap-s-2">
-        <h1 tabIndex={-1} className="text-heading font-semibold tracking-tight text-ink [overflow-wrap:anywhere]">{title}</h1>
+        <h1 tabIndex={-1} className="text-heading font-semibold tracking-tight text-ink">{title}</h1>
         {description === undefined ? null : <p className="max-w-prose text-ink-2">{description}</p>}
       </div>
       {actions}
