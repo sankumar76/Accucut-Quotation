@@ -11,6 +11,7 @@ import type { RouteRow } from '../../scripts/lib/js-budget-check';
 import { runBudgetCheck } from '../../scripts/lib/js-budget-run';
 import {
   STUB_EMAIL,
+  STUB_CUSTOMER_ID,
   STUB_PASSWORD,
   createStubBuild,
   incompressible,
@@ -43,6 +44,8 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/queue': { signedIn: { status: 200, html: pageNaming('shell.js', 'queue.js') } },
   '/users': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/process': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/design-system': { signedIn: { status: 404, html: NOT_FOUND } },
@@ -204,15 +207,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/audit', '/design-system', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 9 rows are within their limit');
+    for (const route of ['/', '/audit', '/design-system', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 11 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 9 rows failed');
+    expect(overrun.output).toContain('1 of 11 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {

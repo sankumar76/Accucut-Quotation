@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 
 export const STUB_EMAIL = 'stub-admin@example.test';
 export const STUB_PASSWORD = 'invented-stub-password';
+export const STUB_CUSTOMER_ID = 'invented-stub-customer';
 const SESSION = 'invented-stub-session';
 
 /** Bytes that gzip cannot shrink (a hash chain), so the compressed size is about the raw size and a test can plant an overrun. */
@@ -86,6 +87,12 @@ export async function startStubPortal(pages: Readonly<Record<string, StubPage>>,
         return;
       }
       const signedIn = (request.headers.cookie ?? '').includes(`session-token=${SESSION}`);
+      if (url.pathname === '/api/v1/customers' && request.method === 'POST') {
+        // The record the budget check opens `/masters/customers/[id]` at (STORY-02.02): a signed-in caller gets a customer's ID back.
+        response.writeHead(signedIn ? 201 : 401, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(signedIn ? { id: STUB_CUSTOMER_ID } : {}));
+        return;
+      }
       const page = pages[url.pathname];
       if (!signedIn) {
         const anonymous = page?.anonymous ?? { status: 307, location: '/sign-in' };

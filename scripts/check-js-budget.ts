@@ -7,7 +7,8 @@
  * route manifest (`src/server/http/route-manifest.ts`, STORY-01.02) and the not-found page, signed in as a role the
  * manifest allows on that page where the page asks for sign-in, counts the scripts each page names from `.next/static`,
  * writes one row per route to the job summary, and stops the server. A page the build serves that the manifest does not
- * list fails the check.
+ * list fails the check. A page with a dynamic segment is opened at a record the script makes from invented data
+ * (`scripts/lib/js-budget-records.ts`: one customer, added through the portal's API as the invented Admin).
  *
  * Usage: npx tsx scripts/check-js-budget.ts [--build-dir <folder>] [--base-url <url>]
  *   --build-dir  the folder that holds `.next` (default: the current folder).
@@ -23,6 +24,7 @@ import { ROUTE_MANIFEST } from '../src/server/http/route-manifest';
 import { ROUTE_LIMITS, limitTableProblems } from './lib/js-budget';
 import { failedRows, headline, rowsAsMarkdown, rowsAsText } from './lib/js-budget-check';
 import type { Credentials, CredentialsProvider } from './lib/js-budget-http';
+import { makeRecordPaths } from './lib/js-budget-records';
 import { pageRoutesFromManifest, unlistedBuildRoutes, type RouteSource } from './lib/js-budget-routes';
 import { routesOfBuild, runBudgetCheck } from './lib/js-budget-run';
 import { startNextServer, type RunningServer } from './next-server';
@@ -73,7 +75,8 @@ async function run(): Promise<number> {
   try {
     server = given === undefined ? await startNextServer(buildDir, process.env) : undefined;
     const baseUrl = (given ?? server?.baseUrl ?? '').replace(/\/+$/, '');
-    const rows = await runBudgetCheck({ buildDir, baseUrl, credentialsFor, source });
+    const recordPaths = await makeRecordPaths({ baseUrl, credentialsFor });
+    const rows = await runBudgetCheck({ buildDir, baseUrl, credentialsFor, source, recordPaths });
     writeReport(rows);
     return failedRows(rows).length === 0 ? 0 : 1;
   } finally {
