@@ -8,11 +8,15 @@
  * manifest allows on that page where the page asks for sign-in, counts the scripts each page names from `.next/static`,
  * writes one row per route to the job summary, and stops the server. A page the build serves that the manifest does not
  * list fails the check. A page with a dynamic segment is opened at a record the script makes from invented data
- * (`scripts/lib/js-budget-records.ts`: one customer, added through the portal's API as the invented Admin).
+ * (`scripts/lib/js-budget-records.ts`). **That is the one thing in this script that writes:** one customer, with one `master.created` audit entry that
+ * cannot be removed, added through the portal's API as the invented Admin. It is done only when the script started its own server (the throwaway database
+ * of the job, on which the Admin was made) or when `--make-records` is given. With `--base-url` and no flag nothing is written, and the dynamic route
+ * fails with "a dynamic segment needs a record made from invented data, and none could be made".
  *
- * Usage: npx tsx scripts/check-js-budget.ts [--build-dir <folder>] [--base-url <url>]
- *   --build-dir  the folder that holds `.next` (default: the current folder).
- *   --base-url   use a server that is already running instead of starting one (a build served elsewhere).
+ * Usage: npx tsx scripts/check-js-budget.ts [--build-dir <folder>] [--base-url <url> [--make-records]]
+ *   --build-dir     the folder that holds `.next` (default: the current folder).
+ *   --base-url      use a server that is already running instead of starting one (a build served elsewhere). Read-only unless --make-records is given.
+ *   --make-records  add the invented records to the database behind --base-url. Use it only for a portal on a throwaway database.
  * Sign-in (only when a route asks for it): MEASUREMENT_ADMIN_EMAIL and MEASUREMENT_ADMIN_PASSWORD, an invented Admin made
  * by `npx tsx scripts/ensure-measurement-user.ts`. Both are read once and never printed. The Admin may open every page,
  * so every page is measured as the Admin; a page the Admin could not open would fail with a message saying so.
@@ -75,7 +79,8 @@ async function run(): Promise<number> {
   try {
     server = given === undefined ? await startNextServer(buildDir, process.env) : undefined;
     const baseUrl = (given ?? server?.baseUrl ?? '').replace(/\/+$/, '');
-    const recordPaths = await makeRecordPaths({ baseUrl, credentialsFor });
+    // Records are written only for a server this script started, or when the person asked for them (see the header).
+    const recordPaths = given === undefined || args.includes('--make-records') ? await makeRecordPaths({ baseUrl, credentialsFor }) : {};
     const rows = await runBudgetCheck({ buildDir, baseUrl, credentialsFor, source, recordPaths });
     writeReport(rows);
     return failedRows(rows).length === 0 ? 0 : 1;

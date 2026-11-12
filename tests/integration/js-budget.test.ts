@@ -163,10 +163,10 @@ describe('the entry point scripts/check-js-budget.ts', () => {
   const passedThrough = (): Record<string, string> =>
     Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'HOME', 'USERPROFILE'].flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]]])));
 
-  function runScript(baseUrl: string, buildDir: string, summaryFile: string, withCredentials: boolean): Promise<CliRun> {
+  function runScript(baseUrl: string, buildDir: string, summaryFile: string, withCredentials: boolean, makeRecords = false): Promise<CliRun> {
     return new Promise((resolve, reject) => {
       const credentials = withCredentials ? { MEASUREMENT_ADMIN_EMAIL: STUB_EMAIL, MEASUREMENT_ADMIN_PASSWORD: STUB_PASSWORD } : {};
-      const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/check-js-budget.ts', '--build-dir', buildDir, '--base-url', baseUrl], {
+      const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/check-js-budget.ts', '--build-dir', buildDir, '--base-url', baseUrl, ...(makeRecords ? ['--make-records'] : [])], {
         cwd: ROOT,
         env: { NODE_ENV: 'test', ...passedThrough(), GITHUB_STEP_SUMMARY: summaryFile, ...credentials },
       });
@@ -190,15 +190,23 @@ describe('the entry point scripts/check-js-budget.ts', () => {
   let passing: CliRun;
   let overrun: CliRun;
   let noCredentials: CliRun;
+  let noRecords: CliRun;
+  let noRecordsAdded = -1;
+  let recordsAdded = -1;
 
   beforeAll(async () => {
     scratch = mkdtempSync(join(tmpdir(), 'js-budget-cli-'));
     const good = await startStubPortal(healthyPages(), NOT_FOUND);
     const over = await startStubPortal({ ...healthyPages(), '/queue': { signedIn: { status: 200, html: pageNaming('shell.js', 'huge.js') } } }, NOT_FOUND);
     portals.push(good, over);
-    passing = await runScript(good.baseUrl, build.directory, join(scratch, 'pass.md'), true);
-    overrun = await runScript(over.baseUrl, build.directory, join(scratch, 'over.md'), true);
+    passing = await runScript(good.baseUrl, build.directory, join(scratch, 'pass.md'), true, true);
+    overrun = await runScript(over.baseUrl, build.directory, join(scratch, 'over.md'), true, true);
     noCredentials = await runScript(good.baseUrl, build.directory, join(scratch, 'none.md'), false);
+    const readOnly = await startStubPortal(healthyPages(), NOT_FOUND);
+    portals.push(readOnly);
+    noRecords = await runScript(readOnly.baseUrl, build.directory, join(scratch, 'read-only.md'), true);
+    noRecordsAdded = readOnly.customersAdded();
+    recordsAdded = good.customersAdded();
   });
 
   afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -223,5 +231,14 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noCredentials.output).toContain('no credentials were provided for the role ADMIN');
     expect(noCredentials.output).toContain('/queue: the route manifest allows ADMIN, LEAD, ENGINEER on it, but the check has no sign-in for any of those roles');
     expect(`${noCredentials.output}${noCredentials.summary}${passing.output}${passing.summary}`).not.toContain(STUB_PASSWORD);
+  });
+
+  it('writes nothing to a server it did not start unless --make-records is given (QLT-05): one customer with the flag, none without, and the dynamic route says why it failed', () => {
+    expect(recordsAdded).toBe(1);
+    expect(noRecordsAdded).toBe(0);
+    expect(noRecords.code).toBe(1);
+    expect(noRecords.output).toContain('/masters/customers/[id]');
+    expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
+    expect(noRecords.output).toContain('1 of 11 rows failed');
   });
 });
