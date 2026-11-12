@@ -91,7 +91,6 @@ export function useMasterList<Row, Initial extends ReadonlyArray<Row> | null>({
   }, []);
 
   const refresh = useCallback((): Promise<void> => {
-    setStatus('loading');
     return read();
   }, [read]);
 
