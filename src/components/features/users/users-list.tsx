@@ -101,6 +101,7 @@ function RowActions({ user, currentUserId, busyUserId, pendingOpener, onAction, 
           variant={variant}
           size={size}
           data-action={toggle}
+          {...(compact ? { tabIndex: -1 } : {})}
           aria-label={ACTION_NAMES[toggle](user)}
           loading={busyUserId === user.id}
           {...busyFor(toggle)}
