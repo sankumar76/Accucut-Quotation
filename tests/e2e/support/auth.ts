@@ -11,6 +11,7 @@ import { displayFormOf } from '../../support/formula-display';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
+import { HARNESS_PASSWORD } from '../../support/harness-password';
 
 import { waitUntilHydrated } from './design-system';
 
@@ -20,7 +21,7 @@ import { waitUntilHydrated } from './design-system';
  */
 
 /** Invented people for the journey. `.test` is a reserved domain; the password exists only here. */
-export const E2E_PASSWORD = 'invented-e2e-password-for-aqp-38';
+export const E2E_PASSWORD = HARNESS_PASSWORD;
 
 export interface E2eUser {
   readonly name: string;

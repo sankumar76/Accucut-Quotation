@@ -58,6 +58,8 @@ export interface PortalFrameUser {
   readonly name: string;
   readonly email: string;
   readonly role: RoleName;
+  /** The person has to set a new password first: the frame has no menu (STORY-01.05 AC-5). */
+  readonly mustChangePassword: boolean;
 }
 
 /** What the server layout hands to the client components of the frame (AQP-188 AC-9, NFR-001, NFR-002, BR-003). */
@@ -65,17 +67,21 @@ export interface PortalFrameProps {
   readonly navGroups: ReadonlyArray<NavGroup>;
   /** Name, e-mail and role label, for the account menu. */
   readonly account: AccountUser;
+  /** False in the "Set a new password" state, where the side menu and the drawer are not offered (SCR-23). */
+  readonly withMenu: boolean;
 }
 
 /**
  * The one place that builds the props of the page frame's client components. Everything that reaches the browser
  * through the frame passes through here, so a field added to `AuthenticatedUser` (the id, `mustChangePassword`)
- * cannot leak into the page by being spread: the output holds only the name, the e-mail, the role label and the role's
- * navigation entries (label, address, icon). `tests/unit/portal-frame-props.test.ts` gives it a user with every field.
+ * cannot leak into the page by being spread: the output holds only the name, the e-mail, the role label, the role's
+ * navigation entries (label, address, icon) and whether the menu is offered. A person who has to set a new password gets no entries
+ * at all, not a hidden list (STORY-01.05 AC-5). `tests/unit/portal-frame-props.test.ts` gives it a user with every field.
  */
 export function portalFrameProps(user: PortalFrameUser): PortalFrameProps {
   return {
-    navGroups: navGroups(user.role),
+    navGroups: user.mustChangePassword ? [] : navGroups(user.role),
     account: { name: user.name, email: user.email, role: roleLabel(user.role) },
+    withMenu: !user.mustChangePassword,
   };
 }

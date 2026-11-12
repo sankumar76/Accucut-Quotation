@@ -77,6 +77,14 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
           : { id: found.id, passwordHash: found.passwordHash, isActive: found.isActive, sessionVersion: found.sessionVersion },
       );
     },
+    findCredentialsById(id): Promise<UserCredentials | null> {
+      const found = records.find((record) => sameUuid(record.id, id));
+      return Promise.resolve(
+        found === undefined
+          ? null
+          : { id: found.id, passwordHash: found.passwordHash, isActive: found.isActive, sessionVersion: found.sessionVersion },
+      );
+    },
     findAccountById(id): Promise<UserAccount | null> {
       const found = records.find((record) => sameUuid(record.id, id));
       return Promise.resolve(
@@ -138,6 +146,13 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       Object.assign(found, { passwordHash, mustChangePassword: true });
       found.sessionVersion += 1;
       return Promise.resolve(found.email);
+    },
+    changeOwnPassword(id, expectedHash, newHash) {
+      const found = records.find((record) => sameUuid(record.id, id));
+      if (found === undefined || found.passwordHash !== expectedHash) return Promise.resolve(null);
+      Object.assign(found, { passwordHash: newHash, mustChangePassword: false });
+      found.sessionVersion += 1;
+      return Promise.resolve(found.sessionVersion);
     },
     raiseSessionVersion(id, expectedVersion) {
       const found = records.find((record) => sameUuid(record.id, id));

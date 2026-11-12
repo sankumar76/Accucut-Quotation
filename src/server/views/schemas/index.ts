@@ -13,6 +13,7 @@ import 'server-only';
  * `engineer-*` view may not import the barrel at all (`eslint.config.mjs`): it re-exports the Admin schemas, which pull in the audit
  * service. `server-only` keeps a client component from carrying zod and those services into the first-load bundle (NFR-009).
  */
+export * from './account';
 export * from './audit';
 export * from './exchange-rates';
 export * from './materials';
