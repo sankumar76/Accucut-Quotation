@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 0.35 (section 10, DL-161 condition D for AQP-237: the Vitest totals of record, `master` 2891457 at 2,922 / 5,285 / 778 / 24, and PR #250's fix head 57acbae at 3,078 / 5,441, +156 / +156 / +0 / +0; the architecture test's PRF-01 baseline as a range with a host factor, 4.4 to 10.5 s observed, with reviewer-performance's attribution, the meaning of AC-5's 10 s line and the PRF-03 trigger; section 10.5 item 11: the main job's slack is reported beside the path; listed in the change log). Earlier, 0.34 (section 10: `tests/support/spec-access.ts` and `tests/support/route-calls.ts` join the G12 scope, QLT-13 of AQP-130, DL-144 (3) and DL-150 (6); the Vitest totals of record, 5,237 on `master` b3403e3 and 5,277 with PR #235, and how many cases a new blocked repository or service file generates; listed in the change log). Earlier, 0.33 (section 10.5, new item 10: AQP-130's own-width test "(e)" moves, unchanged, from `treatments-focus.spec.ts` into the ruled own-width file `masters-table-actions.spec.ts`. No guard, pinned list or configuration changes, the E2E passed total stays 778, and master reads the commit at G7 with no review round; listed in the change log). Earlier, 0.32 (section 10.5, item 9: the 35 s balance line is withdrawn (PRF-01, DL-137) and balance is reported only, by counts, step times and host-free work. A balance story is worth it only at 80 s or more of host-free excess. The v0.31 claim about the model is corrected, the cut is credited with structural value only, and the skip marker is file-level (QLT-01); listed in the change log). Earlier, 0.31 (section 10.5, item 9: AQP-244's result. The measured per-shard reading governs AC-3 (c), and the modelled figure is reported, not judged. The cut is kept, shard-balance changes are judged on measured step times, and AC-3 (c) wording is proposed to the product-owner; listed in the change log). Earlier, 0.30 (section 10.5, item 9: AQP-244's stop-and-decide ruling. The cut is the own-width files listed in `desktop` only (about 12 s, public API, with a guard), and internal Playwright variables are refused. AC-3's lines become absolute ceilings, with AC wording proposed to the product-owner. The reading rule is the median of five full hit runs, and the fourth-shard gate and cost limit are set; listed in the change log). Earlier, 0.29 (section 10.5, G6 of AQP-243, DL-128: item 3, a run with a `miss` or `fallback` is replaced before it is read; item 7, the `node-modules-v<N>` format number and when N is raised, the AC-2 window named step by step without `Use the pinned npm`, `setup-node`'s `cache: npm` to be removed in a later story with its pass line, a bad entry deleted only with the delivery lead's approval, and the RISK-023 reading rule; listed in the change log). Earlier, 0.28 (section 10.5, item 7: the `node_modules` cache key adds the pinned npm version and hashes `package.json` and `.npmrc` with the lockfile, AQP-243 A-2; item 8: past per-test durations come from the `list` reporter lines in the job logs, because no JSON or blob report was kept, AQP-244 AC-1). Earlier, 0.27 (section 10.5, items 6 to 8: the RISK-023 trigger fired early at 7b1cf7f, median 5:53 (5:53, 4:53, 6:14; run 42733858791), with the per-job evidence: host speed outside the repository's control and shard 3 imbalance inside it; STORY-10.19 (AQP-243) confirmed at 3 points, with the `node_modules` cache, AC-2 defined, AC-4 corrected to a pooled median of 12 job runs plus no job worse, AC-3 (c) confirmed and a host line added to AC-5; STORY-10.20 (AQP-244) confirmed at 3 points, with 5:00 and 5:30 confirmed, the cut named conditionally and the 2.5 times guard restated as 1.30 times billed against the three-shard base). Earlier, 0.26 (section 10.5, corrections for G6 of AQP-227, DL-117 condition 7: the balance guard asserts `fullyParallel: true` and counts that differ by at most one, and the 10 % backstop is stated as not catching a per-file split; the AC-1 pin anchors the whole `strategy` block; the result of PR #124 with the slowest shard as the planning figure; headroom to the 5:30 trigger 53 s, about two stories; the fourth-shard figures, 15 to 25 s for about 22 % more runner time). Earlier, 0.25 (section 10.5: three shards for the enabler story, presumed STORY-10.17: the sharding rule, the guards, the measure (three full runs of the head, median at most 4:45), the runner-minutes guard with the 2.2 times estimate corrected, the next trigger and what follows; `@one-width` rulings on the canary scan (stays at three widths), three `process-master.spec.ts` tests and two `materials.spec.ts` tests; section 10: the G12 review rule, DL-114; DL-116, PRD v0.20 13.15, release plan v0.20 3.13). Earlier, 0.24 (section 10.6: `apt-get update --error-on=any` against an apt view holding only the Ubuntu mirror being tried, QLT-95). Earlier, 0.23 (section 10.6: the AQP-216 bounds, 90 s, 4 minutes and 8 minutes with their assumptions, and the DL-105 evidence rule; CR-49, CR-50). Earlier, 0.22 (section 10.5: the AQP-74 one-width ruling and the rule on counting `:visible` entries; section 10.6: a failed `apt-get update` skips its download, and a parser fallback, for AQP-216). Earlier, 0.21 (section 10.6: #93 and #99 as one fix, a master-side warm job on the CI runner label and a bounded download-only install with a mirror fallback). Earlier, 0.20 (section 10.5: `aqp-65-qa.spec.ts` joins the one-width allow-list for one test; the definition takes in a client rule with the same result at every width). Earlier, 0.19 (sections 10.3 and 10.5: the shard step's jobs, order, names and test split; the measure across jobs; a proposed lasting wording for the 9-minute line; what to do if the pull request misses 6:00; AQP-208, CR-44 to CR-46). Earlier, 0.18 (section 10.5: the AQP-199 result, three workers not better than four, the order DEF-015 first and then the shard step as its own story, and the one-width ruling for AQP-65's two specs). Earlier, 0.17 (section 10.6: browser system packages cached by runner image and Playwright version, a bounded download on a miss, the browser cache kept and re-keyed, stage 12a split out; DEF-015, DL-100). Earlier, 0.16 (section 10.5: stage 12 time, four CI workers and `@one-width` for tests that read no layout, AQP-199, DL-095). Earlier, 0.15 (the production check of `/design-system` moves to stage 12, `tests/e2e/production-routes.spec.ts`, and that spec is never quarantined, section 10; architecture v0.16). Earlier, 0.14 (master's rule on tests and machine load, DL-057, GitHub #24, section 10; the not-found row of the JS budget check, section 10.1; the path-limited pull-request trigger of the Lighthouse run, section 10.2, AQP-169 A-2. Earlier, 0.13: PRD NFR-009: the office Wi-Fi pass/fail profile, Slow 4G as report only, 200 KB gzip first-load JS per route, and CI feedback time, PROPOSED; AQP-1 comments 10712, 10713; GitHub #36; RISK-020; sections 2, 8 and 10. Earlier, 0.12: SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
+| Version | 0.36 (DL-176, DL-178 and DL-167 (2), routed by master on AQP-1 11630 and briefed in 11632. Section 10.3: the nightly window rule for GitHub #328 (deliverable branches only, first attempts whose required job succeeded, paged until 20 qualify within 72 hours, floor 13 kept). Section 10.5, new item 12: the manual gate-(b) reading by that rule, 20 runs, median 5:18, p95 5:50, so the fourth-shard gate is met and the rule is applied, with what the enabler must contain. Section 8.1, new: the NFR-011 master-data volume check, 500 customers × 50 items, seeded through the API, p95 at 25 virtual users, nightly and on demand, feasible with no product code. Section 10.7, new: OBS-1, the E2E web servers pipe stdout in every run; listed in the change log). Earlier, 0.35 (section 10, DL-161 condition D for AQP-237: the Vitest totals of record, `master` 2891457 at 2,922 / 5,285 / 778 / 24, and PR #250's fix head 57acbae at 3,078 / 5,441, +156 / +156 / +0 / +0; the architecture test's PRF-01 baseline as a range with a host factor, 4.4 to 10.5 s observed, with reviewer-performance's attribution, the meaning of AC-5's 10 s line and the PRF-03 trigger; section 10.5 item 11: the main job's slack is reported beside the path; listed in the change log). Earlier, 0.34 (section 10: `tests/support/spec-access.ts` and `tests/support/route-calls.ts` join the G12 scope, QLT-13 of AQP-130, DL-144 (3) and DL-150 (6); the Vitest totals of record, 5,237 on `master` b3403e3 and 5,277 with PR #235, and how many cases a new blocked repository or service file generates; listed in the change log). Earlier, 0.33 (section 10.5, new item 10: AQP-130's own-width test "(e)" moves, unchanged, from `treatments-focus.spec.ts` into the ruled own-width file `masters-table-actions.spec.ts`. No guard, pinned list or configuration changes, the E2E passed total stays 778, and master reads the commit at G7 with no review round; listed in the change log). Earlier, 0.32 (section 10.5, item 9: the 35 s balance line is withdrawn (PRF-01, DL-137) and balance is reported only, by counts, step times and host-free work. A balance story is worth it only at 80 s or more of host-free excess. The v0.31 claim about the model is corrected, the cut is credited with structural value only, and the skip marker is file-level (QLT-01); listed in the change log). Earlier, 0.31 (section 10.5, item 9: AQP-244's result. The measured per-shard reading governs AC-3 (c), and the modelled figure is reported, not judged. The cut is kept, shard-balance changes are judged on measured step times, and AC-3 (c) wording is proposed to the product-owner; listed in the change log). Earlier, 0.30 (section 10.5, item 9: AQP-244's stop-and-decide ruling. The cut is the own-width files listed in `desktop` only (about 12 s, public API, with a guard), and internal Playwright variables are refused. AC-3's lines become absolute ceilings, with AC wording proposed to the product-owner. The reading rule is the median of five full hit runs, and the fourth-shard gate and cost limit are set; listed in the change log). Earlier, 0.29 (section 10.5, G6 of AQP-243, DL-128: item 3, a run with a `miss` or `fallback` is replaced before it is read; item 7, the `node-modules-v<N>` format number and when N is raised, the AC-2 window named step by step without `Use the pinned npm`, `setup-node`'s `cache: npm` to be removed in a later story with its pass line, a bad entry deleted only with the delivery lead's approval, and the RISK-023 reading rule; listed in the change log). Earlier, 0.28 (section 10.5, item 7: the `node_modules` cache key adds the pinned npm version and hashes `package.json` and `.npmrc` with the lockfile, AQP-243 A-2; item 8: past per-test durations come from the `list` reporter lines in the job logs, because no JSON or blob report was kept, AQP-244 AC-1). Earlier, 0.27 (section 10.5, items 6 to 8: the RISK-023 trigger fired early at 7b1cf7f, median 5:53 (5:53, 4:53, 6:14; run 42733858791), with the per-job evidence: host speed outside the repository's control and shard 3 imbalance inside it; STORY-10.19 (AQP-243) confirmed at 3 points, with the `node_modules` cache, AC-2 defined, AC-4 corrected to a pooled median of 12 job runs plus no job worse, AC-3 (c) confirmed and a host line added to AC-5; STORY-10.20 (AQP-244) confirmed at 3 points, with 5:00 and 5:30 confirmed, the cut named conditionally and the 2.5 times guard restated as 1.30 times billed against the three-shard base). Earlier, 0.26 (section 10.5, corrections for G6 of AQP-227, DL-117 condition 7: the balance guard asserts `fullyParallel: true` and counts that differ by at most one, and the 10 % backstop is stated as not catching a per-file split; the AC-1 pin anchors the whole `strategy` block; the result of PR #124 with the slowest shard as the planning figure; headroom to the 5:30 trigger 53 s, about two stories; the fourth-shard figures, 15 to 25 s for about 22 % more runner time). Earlier, 0.25 (section 10.5: three shards for the enabler story, presumed STORY-10.17: the sharding rule, the guards, the measure (three full runs of the head, median at most 4:45), the runner-minutes guard with the 2.2 times estimate corrected, the next trigger and what follows; `@one-width` rulings on the canary scan (stays at three widths), three `process-master.spec.ts` tests and two `materials.spec.ts` tests; section 10: the G12 review rule, DL-114; DL-116, PRD v0.20 13.15, release plan v0.20 3.13). Earlier, 0.24 (section 10.6: `apt-get update --error-on=any` against an apt view holding only the Ubuntu mirror being tried, QLT-95). Earlier, 0.23 (section 10.6: the AQP-216 bounds, 90 s, 4 minutes and 8 minutes with their assumptions, and the DL-105 evidence rule; CR-49, CR-50). Earlier, 0.22 (section 10.5: the AQP-74 one-width ruling and the rule on counting `:visible` entries; section 10.6: a failed `apt-get update` skips its download, and a parser fallback, for AQP-216). Earlier, 0.21 (section 10.6: #93 and #99 as one fix, a master-side warm job on the CI runner label and a bounded download-only install with a mirror fallback). Earlier, 0.20 (section 10.5: `aqp-65-qa.spec.ts` joins the one-width allow-list for one test; the definition takes in a client rule with the same result at every width). Earlier, 0.19 (sections 10.3 and 10.5: the shard step's jobs, order, names and test split; the measure across jobs; a proposed lasting wording for the 9-minute line; what to do if the pull request misses 6:00; AQP-208, CR-44 to CR-46). Earlier, 0.18 (section 10.5: the AQP-199 result, three workers not better than four, the order DEF-015 first and then the shard step as its own story, and the one-width ruling for AQP-65's two specs). Earlier, 0.17 (section 10.6: browser system packages cached by runner image and Playwright version, a bounded download on a miss, the browser cache kept and re-keyed, stage 12a split out; DEF-015, DL-100). Earlier, 0.16 (section 10.5: stage 12 time, four CI workers and `@one-width` for tests that read no layout, AQP-199, DL-095). Earlier, 0.15 (the production check of `/design-system` moves to stage 12, `tests/e2e/production-routes.spec.ts`, and that spec is never quarantined, section 10; architecture v0.16). Earlier, 0.14 (master's rule on tests and machine load, DL-057, GitHub #24, section 10; the not-found row of the JS budget check, section 10.1; the path-limited pull-request trigger of the Lighthouse run, section 10.2, AQP-169 A-2. Earlier, 0.13: PRD NFR-009: the office Wi-Fi pass/fail profile, Slow 4G as report only, 200 KB gzip first-load JS per route, and CI feedback time, PROPOSED; AQP-1 comments 10712, 10713; GitHub #36; RISK-020; sections 2, 8 and 10. Earlier, 0.12: SPEC v1.13, D-38 to D-40: 15 seed Process Master items and the Material-Scrap-Rate name, sections 6 and 9; G6 of AQP-27, QLT-05: where the coverage gates sit, sections 10 and 11; CR-33, seed items, `clear-copies.sh`, AQP-1 comments 10546 to 10560, the quantity rule, Q-35 (b), Q-41, Q-37) |
 | Owner | solution-architect |
 | Status | Accepted at G3 as CONDITIONAL GO. Version 0.7 replaces the every-level rule and the parent figures on the delivery lead's answers (AQP-26 comment 10537; AQP-1 comment 10542; AQP-15 comment 10543), which changes what G3 accepted. Versions 0.8 and 0.9 add the tests for their later answers. For `master` to record and check at G4 |
-| Date | 2026-11-11 |
+| Date | 2026-11-12 |
 | Inputs | SPEC v1.13 §4.1, §4.3, §14, §18 D-38 to D-40, §18.5; PRD v0.11; `architecture.md` v0.14; PRD NFR-009 (AQP-1 comments 10712, 10713; GitHub #36); gate log G6 AQP-27 attempt 1 and review 5746060549 (QLT-05); DL-012, DL-021, DL-022, DL-024; AQP-1 comment 10542; AQP-14 comment 10510; AQP-15 comments 10511, 10527, 10543; AQP-26 comments 10530 to 10537; `coding-standards.md` |
 | Used by | `qa-engineer`, whose test plan builds on this; `developer` |
 
@@ -288,8 +288,57 @@ The generator must make top-level items with their own cost, with no children an
 | NFR-010 | Export of 50 nodes with 50 images | p95 ≤ 10 s | k6 | Staging, before release |
 | NFR-010 | Page latency while a 500-node export runs | p95 ≤ 500 ms | k6 | Staging, before release |
 | NFR-011 | 25 and 50 virtual users | No errors; targets hold at 25 | k6 | Staging, before release |
+| NFR-011 | Master-data volume: 500 customers × 50 Process Master items, Customers list read and one-customer read at 25 virtual users; `/masters/customers` on the same data | p95 ≤ 500 ms per read, no errors; LCP ≤ 2 s and TBT ≤ 200 ms, median of 5 | Node script under `tests/perf/`, Lighthouse CI (8.1) | Nightly; on demand; pre-release (8.1) |
 
 The pre-design benchmark (architecture section 4.6, ADR-005, ADR-012) only shows feasibility. It does not replace these tests. Those numbers came from a laptop on Node 24, with no database.
+
+### 8.1 Master-data volume check (NFR-011; PRD v0.23 ASSUMPTION-62; DL-178 (6); v0.36, 2026-11-12)
+
+**What it proves.** On a database holding the PRD's planning volume, the two customer reads stay inside NFR-010 at 25 concurrent users, and the Customers list screen stays inside NFR-009. The figures are PROPOSED planning figures (ASSUMPTION-62), not limits the portal enforces. The real counts are OQ-PM-08.
+
+| Line | Judged or reported | Target |
+|------|--------------------|--------|
+| (a) Customers list read, `GET /api/v1/customers` (the service call the SCR-12 page makes for its first paint) | Judged | p95 ≤ 500 ms over 1,000 samples at 25 virtual users; no response other than 200 |
+| (b) One-customer read, `GET /api/v1/customers/{id}`, cycling through all 500 ids | Judged | The same |
+| (c) `/masters/customers` on the same database, signed in as the Admin | Judged | NFR-009 Wi-Fi profile of 10.2: LCP ≤ 2,000 ms and TBT ≤ 200 ms, each the median of 5 runs |
+| (d) p50 and maximum of (a) and (b); the list's response size, raw and gzip; the seeding time | Reported | PRF-02 estimated about 125 KB raw and 15 to 20 KB gzip for the list |
+| (e) The same reads at 25 virtual users with no think time (saturation): requests per second and p95 | Reported | Shows the headroom; not a pass line, because 25 people do not re-read a list back to back |
+
+**Seeding.** On the job's own throwaway database, never stage 12's shared one: 500 customers would change what the customers specs see and add E2E time (RISK-023). The data goes in through the public API as the invented Admin, in this order, because a new Process Master item adds one rate row to every existing customer (FR-012, FR-013):
+1. 35 Process Master items (`POST /api/v1/process-items`), so that with the 15 seed items (D-38) there are 50.
+2. 500 customers (`POST /api/v1/customers`), each given its 50 rates at their defaults by the service: 25,000 rate rows.
+3. On every fifth customer (100 customers), 5 rates changed, so the list's "differs" count is not always 0.
+4. 200 materials and 50 Treatment / Color entries (`POST /api/v1/materials`, `POST /api/v1/treatments`), so the database holds every count NFR-011 names. Only (a) to (c) are judged.
+
+Names follow one invented pattern (`Volume customer 001` and so on). Every rate, price and contact field is an invented placeholder (NFR-006, ADR-014). Before the load starts, the script checks the counts: the list returns 500 rows, one customer returns 50 rates, and a read-only `SELECT count(*) FROM customer_rates` in the job returns 25,000. A wrong count fails the job before any figure is taken.
+
+**Load model and measure.**
+- **25 virtual users.** Each signs in once as the invented Admin through next-auth's credentials callback, so there are 25 sessions. Only failed sign-ins are rate-limited (architecture section 6), so this is allowed.
+- **Closed loop with 1 s think time.** Each user sends a request, reads the whole body, then waits 1 s before the next one. That is the k6 convention for NFR-010's 25 virtual users, and it means about 20 to 25 requests per second in total.
+- **Warm-up, then 1,000 samples per read.** The first 25 requests of each read are a warm-up and are dropped, because `next start` loads a route's module on its first request. Then each user makes 40 requests per read, giving 1,000 samples.
+- **Latency** is the client's round trip on `localhost`: `performance.now()` from just before `fetch` until the body has been read. It includes all server time, so it is conservative.
+- **The p95 is nearest-rank**, as in section 10.3.
+- **Tool.** A Node 22 script under `tests/perf/`, run with `tsx` (already a dev dependency), using `fetch` only. No new dependency. k6 stays the tool for the full NFR-010 and NFR-011 load tests in staging.
+- **Line (c)** is a Lighthouse run with the 10.2 settings and the same `puppeteerScript` sign-in. It points at `/masters/customers` only, and only in this job, through a URL override. The main Lighthouse run's URL list and baseline do not change.
+
+**Where and when.**
+- **Nightly**, as its own job in `nightly.yml`, named `Master-data volume (NFR-011)`. It runs on the 10.2 reference runner (`ubuntu-24.04`, standard size) against the production build (`next start`), with a Postgres service, migrated, and the invented Admin made as the Lighthouse job makes it. Expected cost is about 4 to 6 minutes: build, about 1 minute of seeding, about 2 minutes of load and one Lighthouse collect (estimate).
+- **On demand** (`workflow_dispatch`, which the nightly already has). reviewer-performance asks for it at the G6 of any story that changes the customers list or the one-customer read: `listCustomers` or `findCustomer` in `customer-repository.ts`, their routes or view schemas, or the `/masters/customers` page. The pull request links the run. The same applies to a story that changes how adding a Process Master item writes customer rates.
+- **Pre-release**, at G8.
+- **Not in the required pull-request job.** It would add minutes to every run (RISK-023, section 10.3), and the reads change rarely.
+
+**A breach** fails that nightly job with a message naming the line and the figure, and never blocks a merge (as in section 10.3). The orchestrator raises it. A miss of (a), (b) or (c) at the planning figures goes to the product-manager as a scope-change proposal for paging and name search (PRD NFR-011; DL-178 (3)), not as a defect in the tests.
+
+**Feasibility: confirmed, with no product code** (estimates, not measured).
+- **(a) Customers list read.** The list read is one statement: customers left-joined to their rates and the items, grouped by customer. It runs as a hash join and aggregate over 25,000 rows. PRF-02 put that at 15 to 40 ms. Serialisation and the two schema passes over 500 rows add a few milliseconds. At about 25 requests per second, one Node process keeps well under saturation, so the expected p95 is well under 200 ms.
+- **(b) One-customer read.** Two indexed reads (one customer, then its 50 rates), so the expected p95 is under 50 ms.
+- **(c) The list screen** is the line with the least margin. It renders 500 rows on a 4× slowed processor, and its data travels as RSC payload, which the 200 KB JavaScript budget does not count (10.1). If it misses, that is the paging proposal above.
+- **What it needs.**
+  - The script under `tests/perf/`, from the qa-engineer, who also puts the check in the test plan.
+  - The nightly job and the Lighthouse URL override, from the developer. This touches only `.github/workflows/nightly.yml` and `lighthouserc.cjs`, never `src/`.
+  - No scope proposal is needed.
+- **Precondition.** AQP-142 (PR #297) is merged, because the customer routes exist only there today.
+- **Follow-up.** GitHub issue, `architecture` label (see the 0.36 change-log row). Due before G8.
 
 ## 9. Other Non-Functional Verification
 
@@ -489,6 +538,56 @@ The nightly workflow reads the GitHub API. It measures the duration of the requi
 **The line's wording from AQP-208 on (decided by master, DL-103; proposed by the solution-architect).** "Before AQP-199 merges" and "the shard step is due" both go stale once AQP-208 merges. The line states the fact and points to the current step, exactly: `p95 over 9 minutes (DL-095, DL-102): CI feedback is too slow; the next step is named in test strategy 10.5.` Section 10.5 keeps that step up to date. AQP-208 changes the text and its unit tests to match; the rest of the rule below is unchanged.
 
 **The 9-minute line (DL-095; AQP-199 AC-7; ruling 2026-11-05, CR-42).** When the p95 is over 540 seconds, the step writes one line to the job summary, **whatever has been merged**: "p95 over 9 minutes (DL-095): before AQP-199 merges, stories that add E2E specs are held at G6; after it, the shard step of test strategy 10.5 is due." At exactly 540 seconds it writes nothing. The step does not try to detect a merge; master and the orchestrator know whether AQP-199 is in `master`. It fails nothing, and the 10-minute and 6-minute failures above are unchanged. **The step also reports which runs it used:** the count, and the start time and head commit of the oldest and the newest. A reader can then see whether a report covers only runs made after a given merge, such as AQP-199 AC-1.
+
+**The window (v0.36, 2026-11-12; GitHub #328; DL-176).** This rule replaces "the last 20 pull-request runs" above. **Why.** The code read one API page of the newest 20 completed runs and then dropped the red ones (`ci-feedback-time.ts:224`, `:104-124`). On a day of plant and control PRs, that left 11 runs from one hour, and it counted green control runs as if they were story runs. A window is built as follows:
+
+1. **Population: deliverable pull requests only.** A run counts only when it meets all three conditions:
+   - it is a `pull_request` run of `ci.yml`;
+   - its status is `completed`;
+   - its head branch starts with `feat/`, `fix/`, `tech-debt/`, `docs/` or `dependabot/`. These are the naming rules of `CLAUDE.md` §7.3, plus the tech-debt branches in use and Dependabot's.
+
+   Every other head is left out:
+   - **Which heads.** `control/`, `ctl/`, `ci-control/`, `plant/`, the `chore/…-plants…` branches, and any prefix not on that list.
+   - **Why.** These are throwaway PRs, closed unmerged. Some are red by design, and the green ones re-run a story head's code with a probe. Neither is the wait of a change that merges.
+   - **Why an allow-list and not a deny-list.** A throwaway branch with a new prefix stays out by default. A new deliverable prefix comes in only by an edit here.
+   - **Docs-only runs count.** CI has no `paths` filter, so a records PR waits for the full required check on the base's code. That wait is real NFR-009 feedback, and it reads the level of the suite on `master` itself.
+2. **First attempts that succeeded.**
+   - **Which runs qualify.** Only attempt 1 is read (`/attempts/1/jobs`). It qualifies when its `Stages 1 to 11` job concluded `success`.
+   - **Skipped and replaced.** A first attempt that is red, cancelled (including by the concurrency group) or skipped is passed over, and an older run takes its place. It does not shrink the window.
+   - **Re-run attempts never count**, not even when attempt 1 was cancelled. They are deliberate repeats of one commit, such as the medians of five.
+   - **Cache misses.** A run with a cache `miss` or `fallback` is not replaced: a slow install is part of the feedback a person waits for. DL-128 (4) applies to medians of five, not to this window.
+3. **Paging.**
+   - **Order.** The runs API is read newest first, by creation time, 100 runs per page (`per_page=100&page=<n>`).
+   - **When reading stops.** At the first of three limits:
+     - 20 runs qualify;
+     - a run was created more than **72 hours** before the reading;
+     - **5 pages** have been read.
+   - **API cost.** Jobs are fetched only for allow-listed runs, so a busy day costs about 30 to 60 calls. The worst case stays under the `GITHUB_TOKEN` hourly limit.
+   - **Why 72 hours.** On a working day, 20 runs qualify within about six hours: 03:02Z to 08:28Z on 2026-11-12, item 12 of 10.5. Three days covers a weekend or a pause, and limits the window to about three days of merged code.
+4. **The floor stays at 13.**
+   - **Fewer than 13 runs.** If fewer than 13 qualify inside the limits, the report says that it is **not a reading**, with the count. It is not used for any CI-time decision (§10.5 item 9; RISK-023's fall-back).
+   - **Why 13.** A median of 13 or more has a standard error under about 10 s at today's spread.
+   - **Between 13 and 19 runs.** The report is a reading, and it states the count.
+5. **Measure: unchanged.** A run lasts from the first job's start to the end of `Stages 1 to 11` in attempt 1. The median and the nearest-rank p95 are taken as above. The 6-, 9- and 10-minute lines do not change.
+6. **What the report says.** It gives:
+   - the count, and the oldest and newest run, as now;
+   - the branch prefixes that were counted;
+   - how many runs were passed over, and why: a throwaway branch, or red or cancelled;
+   - which limit ended the window: 20 reached, 72 hours or 5 pages.
+
+   A reader can then check the window without the API.
+
+**Tests (the developer, #328 item 2; narrow route if only `scripts/` and `tests/` change).**
+- **The window keeps its size.** A page of 20 runs with 9 red ones still gives 20 qualifying runs when older runs exist on page 2. A reviewer's control that reads one page only must turn this test red.
+- **Excluded runs.**
+  - A `control/` run and a `plant/` run are not counted, even when green.
+  - An unlisted prefix is not counted.
+  - A `docs/` run and a `dependabot/` run are counted.
+- **Limits.**
+  - A run created 72 hours and one second before the reading is not counted.
+  - Reading stops after 5 pages.
+  - With 12 qualifying runs, the report says "not a reading".
+- **Attempts.** A cancelled attempt 1 followed by a green attempt 2 is not counted.
 
 ### 10.4 Who builds it, and by when
 
@@ -778,6 +877,104 @@ It goes in the next pull request that touches either spec after the three-shard 
   - **It is reported, not a pass line.** One run's slack moves with host draw: the main job read 164 to 243 s on the runs above.
 - **When it changes the next step.** If a median of five reads slack at 20 s or less (inside one standard deviation of the path, which item 9 measured at 16 to 26 s), the next CI-time proposal looks at the main job first, before a fourth shard: the stage 6 and stage 11 test files, and PRF-03-type program costs. RISK-023's trigger (5:30) is unchanged.
 
+**12. The gate-(b) reading taken by hand, and the fourth shard applied (v0.36, 2026-11-12; DL-176 (4), DL-151 (3), DL-173 (4); GitHub #328; orchestrator brief AQP-1 11632).**
+- **Why a reading by hand.** Nightly 43181928062 (6b1883f) counted only 11 runs, so it was a report, not a reading (DL-176). Until #328 merges, master ruled that a reading taken by hand under the window rule of section 10.3 counts as gate (b) of item 9.
+- **How it was taken.**
+  - **Source.** The Actions API through `gh api`, read-only. The runs list for `ci.yml` came from `event=pull_request&status=completed&per_page=100`, pages 1 to 3, and the jobs from each run's `/attempts/1/jobs`.
+  - **Reading time.** 2026-11-12T08:50:00Z.
+  - **Path.** Measured as in section 10.3: from the earliest `started_at` of any job in attempt 1 to the `completed_at` of `Stages 1 to 11`.
+  - **Cross-checks.** The figures were checked against two paths already on record: 43170187169 reads 6:37, as in DL-173 (1), and 43157645758 reads 5:15, as in DL-167 (1).
+  - **Cache.** In every job of all 20 runs, the `npm ci (cache miss)` and `(cache fallback)` steps were skipped, so every run is a hit.
+- **The window.**
+  - **Span.** 20 qualifying runs, from 03:02:35Z to 08:28:52Z on 2026-11-12.
+  - **Passed over inside that span.** 11 allow-listed runs and 29 throwaway-branch runs:
+    - of the 11 allow-listed runs, 4 were red, 6 were cancelled by the concurrency group, and 1 (43146266250) had attempt 1 cancelled before a green re-run;
+    - of the 29 throwaway-branch runs, 24 were red and 5 green, by each run's latest result.
+  - **Limit reached.** 20 runs, well inside 72 hours.
+
+| # | Run | Created (UTC) | Head branch | Head | Path | Slowest shard | Slack (s, item 11) |
+|---|-----|---------------|-------------|------|------|---------------|--------------------|
+| 1 | 43183277581 | 08:28:52 | `docs/AQP-1-records-sprint1-j` | a11215b | 4:52 | 3 | 35 |
+| 2 | 43181104468 | 08:12:52 | `docs/AQP-1-records-sprint1-j` | b0ac62a | 5:49 | 1 | 128 |
+| 3 | 43179793942 | 08:03:00 | `fix/AQP-245-users-table-actions` | 6422ea4 | 4:24 | 3 | 11 |
+| 4 | 43179008751 | 07:56:46 | `fix/AQP-274-saved-not-shown` | e6e1c14 | 5:23 | 1 | 69 |
+| 5 | 43178048821 | 07:49:00 | `docs/AQP-1-records-sprint1-j` | 54d612f | 5:39 | 1 | 154 |
+| 6 | 43176620135 | 07:37:21 | `docs/AQP-1-records-sprint1-j` | f61ce78 | 5:36 | 2 | 83 |
+| 7 | 43175554097 | 07:28:48 | `docs/AQP-1-records-sprint1-j` | 17de043 | 5:50 | 1 | 121 |
+| 8 | 43175448561 | 07:27:53 | `fix/AQP-245-users-table-actions` | 03e21f2 | 5:20 | 2 | 98 |
+| 9 | 43173595283 | 07:12:52 | `fix/AQP-274-saved-not-shown` | 356e9d6 | 5:23 | 2 | 101 |
+| 10 | 43170187169 | 06:43:53 | `feat/AQP-142-customers` | efcf768 | 6:37 | 2 | 132 |
+| 11 | 43169604615 | 06:38:59 | `fix/AQP-245-users-table-actions` | d59e8ea | 4:42 | 1 | 78 |
+| 12 | 43168169673 | 06:26:36 | `tech-debt/244-slow-read-tests` | ef36c28 | 5:35 | 3 | 116 |
+| 13 | 43165419621 | 06:03:07 | `docs/AQP-1-records-sprint1-i` | 38e7c84 | 5:10 | 1 | 58 |
+| 14 | 43164274656 | 05:52:38 | `docs/AQP-1-records-sprint1-i` | 740fac2 | 5:10 | 1 | 105 |
+| 15 | 43157645758 | 04:52:51 | `feat/AQP-89-twelve-hour-session` | 12cadd9 | 5:15 | 2 | 103 |
+| 16 | 43155701604 | 04:34:36 | `tech-debt/244-slow-read-tests` | 41e5fd4 | 5:38 | 2 | 117 |
+| 17 | 43153303209 | 04:12:52 | `tech-debt/244-slow-read-tests` | 8829c53 | 5:11 | 3 | 83 |
+| 18 | 43150655651 | 03:48:40 | `feat/AQP-89-twelve-hour-session` | cbbb61b | 4:37 | 3 | 36 |
+| 19 | 43147801239 | 03:22:46 | `feat/AQP-237-audit-record-tx-checks` | 26eca57 | 5:12 | 1 | 80 |
+| 20 | 43145482012 | 03:02:35 | `feat/AQP-237-audit-record-tx-checks` | 0af7efe | 5:01 | 3 | 126 |
+
+- **Reading: n = 20, median 5:18, p95 5:50, mean 5:19.**
+  - **Median.** The exact median is 5:17.5, the mean of 5:15 and 5:20; it is rounded here to 5:18.
+  - **Spread.** The range is 4:24 to 6:37. With a standard deviation of about 30 s, the median's standard error is about 8 s, so 5:18 is about two standard errors over 5:00.
+- **Sensitivity, so the rule's choices do not decide the result.** Every variant also reads over 5:00:
+  - without `docs/` runs: median 5:16 (p95 6:37, 01:35Z to 08:03Z);
+  - with every branch, throwaway runs included, but paged: median 5:29;
+  - limited to 24 hours: the same 20 runs as the reading.
+- **Gate (b) is met.**
+  - **Gate (a)** has been met since DL-151: a median of five of 5:34 on `master` b3403e3.
+  - **Gate (b).** This window's median, 5:18 over at least 13 runs, is over 5:00.
+  - **Result.** Both halves of item 9's fourth-shard gate hold, **so the fourth-shard step is due.** RISK-023 stays at 8 (DL-151 (5)).
+  - **AQP-142.** Its median of five on H1 (DL-173 (2)) is a separate trigger-(a) reading. It neither adds to this decision nor holds it.
+- **Item 11 points to the shards, not the main job.** The window's slack has a median of 99.5 s (range 11 to 154 s), far above the 20 s at which the main job would be looked at first. A shard sets the path, so a fourth shard shortens it.
+- **Expected effect, from these 20 runs (estimates, not measured).**
+  - **Measured at N = 3 in this window.**
+    - The shard test step has a median of 225.5 s (146 to 299 s).
+    - The rest of a shard (set-up on a hit, build, migrations, stage 12a) has a median of 54 s.
+    - The slowest shard has a median of 308 s, and the path is about the slowest shard plus 10 s.
+    - `Stages 1 to 11b` has a median of 216 s.
+  - **Modelled for N = 4.** With item 5's `f + W/N` (`f` about 68 s), `W` is about 472 s. At N = 4 the test step is about 186 s, about 39 s less per shard.
+  - **Result.** The path should fall by about **30 to 45 s**, to about **4:35 to 4:50**, in line with item 9's modelled 35 to 50 s.
+  - **Main job.** `Stages 1 to 11b`, at about 216 s, stays under the new slowest shard (about 270 s). Slack falls to about 50 to 60 s, so a shard still sets the path.
+  - **Runner time.** Raw runner time rises by about 11 %. Billed minutes rise by about 5 to 25 %, depending on rounding up to whole minutes per job.
+- **The fourth-shard rule, applied.** These are the contents of the EPIC-10 enabler. The product-manager places it with the scrum-master through the DL-084 and DL-116 route, and master recommends that it merges before the next E2E-adding story after AQP-142 (DL-173 (4)). **Points: 2** (estimate; the same shape as STORY-10.17).
+  1. **The sharding rule.**
+     - **The matrix.** `ci.yml` sets `matrix.shard: [1, 2, 3, 4]`. The `strategy` block holds nothing else but `fail-fast: false`: no `include`, `exclude` or `max-parallel`.
+     - **Unchanged.** The command still reads N from `strategy.job-total`. The fan-in keeps the name `Stages 1 to 11` and stays the only job with `needs`. Each shard still builds for itself, migrates its own throwaway database, runs stage 12a and uses 4 workers. Comments that say "three" are updated.
+     - **Not in this story.** No `PWTEST_*` variable and no custom or weighted split. No test is dropped, moved to one width, retried or given a wider timeout (DL-057). The `@one-width` allow-list, `OWN_WIDTH_FILES` and `PARTLY_DESKTOP_ONLY` are not edited.
+  2. **Guards.**
+     - **The `ci-workflow` pin.** `tests/unit/ci-workflow.test.ts` pins exactly `[1, 2, 3, 4]`, with the whole `strategy` block anchored as before. A silent return to three, or a silent fifth shard, fails it.
+     - **The shard-balance guard.** `tests/unit/e2e-shards.test.ts` reads N from the matrix, and none of its assertions changes. At four shards it shows four things:
+       - the union of the shards equals the whole list;
+       - no test is in two shards;
+       - `setup` is the same in every shard;
+       - `fullyParallel: true` holds, and the width-test counts differ by at most one, with the 10 % backstop.
+     - **Unchanged.** `ci-fan-in.test.ts` and `own-width-files.test.ts` do not change. `ci-feedback-time.ts` measures any number of jobs, and #328 changes only its window.
+     - **Branch protection.** It is read back with `gh api`, read-only. The required checks must be exactly `Stages 1 to 11`, because the shard jobs' names change from "of 3" to "of 4".
+  3. **Live controls.** These run on a throwaway PR closed unmerged, on a `control/` branch so that section 10.3's window leaves them out. There are two controls, with the fault in shard 4:
+     - a test that fails only in shard 4;
+     - shard 4 cancelled while it runs.
+
+     Each must turn the fan-in red, naming the job and the result.
+  4. **The measure (the new guard figure).**
+     - **Runs.** Five full hit runs of the head and five of a same-day `master` base at three shards, with DL-128 (4) replacements. No test-adding merge may land between the two sets; if one does, both are run again.
+     - **Pass lines.** The head's **median of five is at most 5:00, and its slowest run at most 5:30.** These are AQP-244 AC-3 (a)'s ceilings, which the step exists to restore.
+     - **Host-draw exit.** If the head's median is over 5:00 but at most 5:15, and the base's median of five is at least 20 s slower, the line takes the exit with the figures. 20 s is about the standard error of a difference between two medians of five. Any other miss is reported BLOCKED to the solution-architect, who reports to the product-manager.
+     - **Reported, not judged.** The PR also gives:
+       - the head-minus-base difference (expected 30 to 45 s);
+       - for each shard, the listed and active counts and the test-step time;
+       - the five slacks and their median (item 11);
+       - each job's queue wait (five jobs before the fan-in);
+       - each run's slowest shard and that shard's host line.
+     - **Flaky tests.** None in the head's five runs.
+  5. **The cost limit (item 9).** Billed and raw runner minutes, each a median of five, must be at most **1.30 times** the same-day three-shard base. Expected about 1.05 to 1.25 billed and about 1.11 raw.
+  6. **Order and route.**
+     - **Its own story,** never inside a feature PR (DL-116).
+     - **Narrow review route.** reviewer-performance and reviewer-standards, because it changes only `.github/workflows/ci.yml`, `tests/unit/ci-workflow.test.ts` and comments.
+     - **Afterwards.** RISK-023 falls to 4 under DL-151 (5): when a median of five on a `master` head reads 5:00 or less, or a nightly window of at least 13 runs, built by section 10.3's rule, reads a median of 5:00 or less.
+- **What does not change.** The 5:30 trigger, the 6:00 warning, the 9- and 10-minute lines, the item 9 statistic, and "a fifth shard is not pre-ruled".
+
 ### 10.6 Browser system packages (DEF-015; DL-100; ruling 2026-11-05)
 
 **The fault.** `npx playwright install --with-deps chromium` runs `apt-get` against the runner's Ubuntu mirror on every run. The browser itself is cached already; its system packages are not. In run 42061753504 (attempt 3) the mirror served 20.5 MB at 35.9 kB/s, single packages stalled for up to 170 s, and stage 12 spent about 9.5 minutes installing, with no bound on how long that could take.
@@ -827,6 +1024,45 @@ It goes in the next pull request that touches either spec after the three-shard 
   - evidence: a nightly or `workflow_dispatch` run on `master` that saves the key, then a pull request that hits it; and a negative control, never merged, with an unreachable first mirror, showing the fallback.
 
 **Fits AQP-199's single job.** Every change is a step inside the one job named `Stages 1 to 11`, so the required check and branch protection do not change. **Estimate: 2 points.** That covers the steps and one small script (`scripts/ci/playwright-system-deps.sh`, a suggested name), the workflow test, and evidence: one miss run and two hit runs, with the times of steps 12a and 12. Expected on a hit: stage 12a in well under a minute (an estimate, not measured).
+
+### 10.7 The E2E web servers' stdout (OBS-1; DL-167 (2); ruling v0.36, 2026-11-12)
+
+**The question.** Playwright keeps a web server's stderr by default but drops its stdout unless the entry sets `stdout: 'pipe'`. pino writes to stdout (architecture section 9.4). So a run of record carries next-auth's own stderr lines, but none of the portal's log lines. Since #255, every "0 `JWT_SESSION_ERROR`" reading covered stderr only, and DL-167 needed a separate piped control (#292) to show what pino wrote.
+
+**Ruling: both `webServer` entries in `playwright.config.ts` set `stdout: 'pipe'`, in every run, CI and local.** It is one form with no `IN_CI` branch, so a local run and a CI run show the same lines. stderr stays piped, which is already Playwright's default.
+
+**The two sides, measured.** Three shard jobs of piped control #292 (run 43155026763) were compared with three of the unpiped run of record 43157645758. The two runs test nearly the same code: a12872d on cbbb61b, and 12cadd9.
+- **Log volume (cost).**
+  - Lines: 1,280, 1,399 and 1,208 per shard piped, against 1,154, 1,302 and 1,142 unpiped. That is +66 to +126 lines per shard.
+  - Size: +20 to +31 KB per shard, or +9 to +14 %.
+  - The added lines are 31 to 47 pino `warn` lines per shard (`route refused`, from tests that provoke 4xx on purpose), Next.js start-up lines, and no `info` or `error` line. The portal logs nothing per request at `info`: `with-route.ts` logs only refusals and failures, and `logger.ts` forbids per-row logging at `info`.
+  - No job time is added that this sample can show.
+- **Assertions it makes possible (value).** Without a special piped control:
+  - Every run of record can then answer a log-line condition:
+    - 0 `JWT_SESSION_ERROR` at `error`;
+    - 0 `route failed` (pino level 50);
+    - a probe or plant that writes to the log.
+  - SEC-01 is the case in point. A `_log` relay that wrote through pino was visible only in piped plant #290 (6 level-50 lines).
+  - A log condition on a G6 or G7 can be read on the run that is being judged.
+- **Security.** The repository is public, so job logs are public (architecture section 8, TB-6).
+  - The added lines pass through pino's redaction (`REDACTED_PATHS`: cookies, authorisation headers, credentials, e-mail, rates, `inputs` and `outputs`).
+  - E2E data is invented (NFR-006).
+  - next-auth's own stderr lines were already public.
+  - No secret enters the log that was not reachable before.
+
+The cost is small and the value is evidence on every run, so the pipe is ruled in.
+
+**How the lines are read.**
+- **Reported, not a pass line.** No CI step fails on a log line, because some tests provoke refusals or failures on purpose.
+- **Who reads them.** reviewer-performance or QA quote the counts where a condition names them: `[WebServer]` lines at level 50, `JWT_SESSION_ERROR`, `[next-auth][`. An unexplained level-50 line in a green run is a finding to read, not a red.
+- **DL-167's rule.** "A master condition that relies on pino lines names a piped run" is met by the run of record once this merges. Until then, a piped control is still named.
+
+**The change (developer; GitHub follow-up issue, `tech-debt`; narrow route, reviewer-standards).**
+- **The config.** In `playwright.config.ts`, add `stdout: 'pipe'` to both entries, with a one-line comment pointing here.
+- **A unit guard.** It asserts that every `webServer` entry pipes stdout, beside the existing unit tests that read `playwright.config.ts`, so that a later edit cannot drop the evidence silently. A reviewer's plant that removes one entry's `stdout` must turn it red.
+- **Evidence.** One CI run whose shard logs show `[WebServer]` pino lines.
+- **Expected counts.** The E2E and Vitest counts move only by the new unit test.
+- **Due.** Before G8. It holds no story.
 
 ## 11. Coverage Targets
 
@@ -898,6 +1134,7 @@ The seed configuration is data with no lines to measure, so its 95 % target is d
 | 0.1 | 2026-11-01 | First draft for G3 |
 | 0.2 | 2026-11-01 | UX reconciliation: tests for one route one schema, uniform not-found, typed values in the canary scan, Admin guards, system fields, open redirect, reset page, override rounding, renames after approval, undo of a revert, printed workings, sticky offsets and the ₹ glyph. PRD reference and FR-056 note updated |
 | 0.3 | 2026-11-01 | SPEC v1.4 and PRD v0.6. Section 5 rewritten for every level's quantity: CE-1 is now 30 (24 lids), CE-6 246, CE-7 BN 6; CE-2 pending Q-35; CE-9 to CE-11 added; own-quantity-once test; property tests compare at 2 decimals; rule-change rehearsal retired. Added tests for cleared totals, the export markers and footer, optional reason, hidden entries, Scrap Weight, password rule, session, backup retention and watch, mail sign-in modes. Accessibility gate moves to WCAG 2.2 AA with PRD v0.6 |
+| 0.36 | 2026-11-12 | DL-176, DL-178 (6) and DL-167 (2), routed by master (AQP-1 11630; brief 11632).<br>**Section 10.3, the nightly window rule (GitHub #328):**<br>• Only deliverable heads count (`feat/`, `fix/`, `tech-debt/`, `docs/`, `dependabot/`).<br>• Only attempt 1 counts, and only when `Stages 1 to 11` succeeded. A red or cancelled first attempt is replaced by an older run.<br>• The runs API is paged, 100 per page, until 20 runs qualify, with stops at 72 hours and 5 pages.<br>• The floor of 13 stays. Below it, the report is "not a reading".<br>• The report names the window and the runs passed over. The tests for the developer are listed.<br>**Section 10.5, new item 12: the gate-(b) reading taken by hand.**<br>• The reading is 20 runs from 03:02:35Z to 08:28:52Z, every run a cache hit: **median 5:18, p95 5:50**. The run list is in the item.<br>• Every variant also reads over 5:00 (5:16, 5:29).<br>• Both halves of the fourth-shard gate are met, so the rule is applied. Slack has a median of 99.5 s, so a shard sets the path.<br>• Expected gain 30 to 45 s, about 11 % more raw runner time (estimates).<br>• The enabler's contents: the matrix `[1, 2, 3, 4]`, the guards, the shard-4 controls, a median of five of 5:00 or less with a host-draw exit, the 1.30 times cost limit, the order and route, and 2 points.<br>**Section 8 and new section 8.1: the NFR-011 volume check.**<br>• 500 customers × 50 items, seeded through the API on the job's own database.<br>• Customers list read and one-customer read: p95 of 500 ms or less at 25 virtual users, 1 s think time, 1,000 samples. `/masters/customers` on the Wi-Fi profile.<br>• Runs nightly, on demand and at G8. It is not in the required job.<br>• Feasible with no product code. The follow-up is GitHub #330.<br>**New section 10.7, OBS-1:**<br>• Both web servers set `stdout: 'pipe'`. Measured cost: +9 to +14 % log size per shard, no `info` or `error` lines.<br>• The lines are reported, not a pass line. A unit guard is added.<br>• The follow-up is GitHub #331. |
 | 0.35 | 2026-11-11 | DL-156 (8) and DL-161 condition D (G6 of AQP-237, PR #250 at 57acbae; brief: AQP-237 comment 11544). **Section 10, Vitest totals of record:** `master` 2891457 (push run 43053208506) reads 2,922 unit, 5,285 full, 778 E2E and 24 skipped. 46f56d6 changed docs only since then. PR #250's fix head (run 43056524392, merge ref d928c6a) reads 3,078 and 5,441, which is +156 / +156 / +0 / +0 (140 + n_u 16, n_s 0). Condition A adds k to both. The squash figure follows DL-161 (7)(c), and `master` 8ebe529 (a Dependabot bump) is read, not assumed. **Section 10, new paragraph: the architecture test's time is a range with a host factor (PRF-01).** It reads 5.2 / 4.1 s, 4.4 / 3.4 s, 10.5 / 10.6 s (slow runner) and 7.7 s (control B), which is 4.4 to 10.5 s observed in stage 6 and 4.5 to 9.9 s normalised. reviewer-performance's attribution is accepted: about half is host speed, a residue of 1.2 to 1.5 times is unassigned, the local A/B shows no change (5.3 against 5.5 s), and the file ran last in stage 6. AC-5's 10 s line means the program build, and CI's file time is its upper bound. The PRF-03 trigger is DL-161 (4). No wall-clock limit is added to the test. **Section 10.5, new item 11:** the main job's slack (slowest shard minus `Stages 1 to 11b`) is reported beside every posted path. It read 101 to 139 s on eight runs and 8 s on 43056524392. It is not a pass line. A median-of-five slack of 20 s or less sends the next CI-time proposal to the main job before a fourth shard. No gate, FR, NFR or dependency change |
 | 0.34 | 2026-11-11 | Items routed to the architect by DL-150 (6) (G6 of tech-debt #119, PR #235; brief AQP-142 comment 11485). **Section 10, G12 scope (QLT-13 of AQP-130):** `tests/support/spec-access.ts` and `tests/support/route-calls.ts` join it, with a sentence that adding a row for a new route is not a weakening. DL-144 (3) set this "at the latest before the #119 PR's G6"; that point was missed, and DL-150 re-set it to the next change, at the latest before AQP-142's G6. Reviewers already treated both files as in scope, so no past review is reopened. **Section 10, Vitest totals of record:** 2,914 and 5,237 on `master` b3403e3 (push run 43004280872), and 5,277 with #235 (+40 generated `engineer-import-rule` cases). The total the #235 reviews quoted, 5,231 to 5,271, was on the PR's older base ffc280b; nothing in this document had quoted a current total, so no figure is replaced. The per-file formula (20 per blocked repository file, 8 per blocked service file, today) is added. **Not changed:** section 10.5 item 9. RISK-023 is 8 (DL-151) and the fourth-shard gate is half met (median of five on b3403e3, 5:34); the other half is the first nightly after b3403e3, and the architect applies item 9's rule only when that reading is posted. No guard, stage, configuration or count rule changes |
 | 0.33 | 2026-11-10 | Section 10.5, new item 10, on CI run 42951532964 (eb61fa0 on PR #195 failed `own-width-files.test.ts:80` once AQP-244 was in the merge ref; brief AQP-130 comment 11442). **The flagged line is the "(e)" sticky-column test** (it sets 1024 px itself), not QLT-04's latest-read test, which runs at three widths. **Ruling:** move that one test, with its title and body unchanged, into `masters-table-actions.spec.ts`, the ruled own-width file for masters-table geometry, which already covers Treatment / Color. Move `actionsOf` to `support/treatments.ts`, keep the inline skip until #195 takes `master`, and add the test at the end of the file so that DL-144 (6)(d)'s separate-regions condition holds. No change to `OWN_WIDTH_FILES`, `RULED_OWN_WIDTH_FILES`, `PARTLY_DESKTOP_ONLY`, the `@one-width` list or the config. **Rejected:** `PARTLY_DESKTOP_ONLY` (whole-file exemption, QLT-01's blind spot, and a file not on the branch), a new ruled file (heavier, and it edits files the branch lacks), `@one-width` (the test reads layout), a viewport-width gate (evades the scan) and three-width runs (they change what G6 approved). **Counts:** E2E passed total 778; only skipped entries fall (2 from this change); per-shard counts are reported only. No CI-time effect and no median of five. **Route:** master reads the commit at G7 with no review round (DL-047), on five checks; anything beyond them goes to a narrow reviewer-quality re-review. No NFR, dependency or code change |
