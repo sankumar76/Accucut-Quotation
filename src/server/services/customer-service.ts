@@ -38,7 +38,7 @@ import type { AuditContext, AuditService } from './audit-service';
  *     runs of spaces made one). The database's index is the judge of uniqueness, so two requests that race for one name cannot both win. The phone, the
  *     e-mail address and the address are optional; an e-mail address, if given, must look like one.
  *   - **A new customer copies the Process Master's current defaults** (SPEC section 4.2 rule 1, AC-1): one rate row per item, in the same transaction.
- *   - **A rate is a number of 0 or more with up to 2 decimals, and a whole number for a percent item** (AC-2). A rate that is not one of the customer's
+ *   - **A rate is a number of 0 or more with up to 2 decimals, a percent rate included** (AC-2 as amended, SPEC D-24). A rate that is not one of the customer's
  *     (an item deleted since the page was read) is a 409; nothing is written.
  *   - **Reset to defaults** (AC-3) sets every rate that differs back to the item's current default and answers with the count; a customer that already
  *     has every default is a count of 0 and writes nothing. It is idempotent.
@@ -146,7 +146,7 @@ function ratesToWrite(current: ReadonlyArray<CustomerRateRecord>, wanted: Readon
   (wanted ?? []).forEach((entry, index) => {
     const rate = byItem.get(entry.processItemId.toLowerCase());
     if (rate === undefined) throw new ConflictError(RATES_CHANGED_MESSAGE, { code: RATES_CHANGED_CODE });
-    const problem = rateProblem(entry.value, rate.unit);
+    const problem = rateProblem(entry.value);
     if (problem !== null) problems.push({ field: `rates.${index}.value`, message: problem });
     else if (rateText(entry.value) !== rateText(rate.value)) writes.push({ processItemId: rate.processItemId, value: rateText(entry.value) });
   });

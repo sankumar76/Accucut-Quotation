@@ -4,6 +4,7 @@ import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError } from '@/lib/erro
 import { MasterConstraintError } from '@/server/repositories/master-repository';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
+import { customerSide } from '../../support/customer-audit-side';
 import { defined } from '../../support/defined';
 import { refusal } from '../../support/user-service-fixture';
 
@@ -111,7 +112,7 @@ describe('AC-1, AC-6 (T2): adding a customer', () => {
     expect(others).toEqual([]);
     expect(entry).toMatchObject({ event: 'master.created', actor_id: adminId, object_type: 'customer', object_id: created.id, object_label: 'Invented Works', before: null });
     expect(entry?.after).toMatchObject({ name: 'Invented Works', contact: [] });
-    expect((entry?.after as { rates: unknown[] }).rates).toHaveLength(15);
+    expect(customerSide(entry?.after).rates).toHaveLength(15);
   });
 
   it('keeps the contact details given and names only the fields given in the entry, never their values', async () => {
@@ -164,7 +165,7 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
       ],
     });
     const entry = defined((await entriesFor(db, customer.id)).at(-1));
-    const sides = [entry.before, entry.after].map((side) => (side as { rates: { processItemId: string }[] }).rates.map((rate) => rate.processItemId));
+    const sides = [entry.before, entry.after].map((side) => customerSide(side).rates.map((rate) => rate.processItemId));
     expect(sides[0]).toEqual([FIRST_ITEM, PERCENT_ITEM]);
     expect(sides[1]).toEqual(sides[0]);
   });
@@ -193,7 +194,7 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
     expect(await entryCount(db)).toBe(entries);
   });
 
-  it('refuses a rate with three decimals, a negative rate and a percent rate with decimals, naming the rate, and writes nothing', async () => {
+  it('refuses a rate with three decimals and a percent rate with three decimals, naming the rate, and writes nothing', async () => {
     const customer = await created();
     const entries = await entryCount(db);
     const bad = await refusal(
@@ -201,7 +202,7 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
         rates: [
           { processItemId: FIRST_ITEM, value: '1.234' },
           { processItemId: SECOND_ITEM, value: '2.5' },
-          { processItemId: PERCENT_ITEM, value: '11.5' },
+          { processItemId: PERCENT_ITEM, value: '11.555' },
         ],
       }),
     );
@@ -209,7 +210,7 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
     expect(bad).toMatchObject({
       fields: [
         { field: 'rates.0.value', message: 'Enter a number, 0 or more, with up to 2 decimals.' },
-        { field: 'rates.2.value', message: 'Enter a whole number, 0 or more.' },
+        { field: 'rates.2.value', message: 'Enter a number, 0 or more, with up to 2 decimals.' },
       ],
     });
     expect((await rateRows(customer.id)).find((row) => row.processItemId === SECOND_ITEM)?.value).not.toBe('2.5000');
@@ -254,13 +255,13 @@ describe('AC-3, AC-6 (T3): reset to defaults', () => {
     expect(await entryCount(db)).toBe(entries + 1);
     const entry = defined((await entriesFor(db, customer.id)).at(-1));
     expect(entry).toMatchObject({ event: 'master.edited', object_type: 'customer' });
-    expect((entry.before as { contact: string[] }).contact).toEqual([]);
-    expect((entry.after as { contact: string[] }).contact).toEqual([]);
-    expect((entry.before as { rates: { processItemId: string; value: string }[] }).rates.map((rate) => [rate.processItemId, rate.value])).toEqual([
+    expect(customerSide(entry.before).contact).toEqual([]);
+    expect(customerSide(entry.after).contact).toEqual([]);
+    expect(customerSide(entry.before).rates.map((rate) => [rate.processItemId, rate.value])).toEqual([
       [FIRST_ITEM, '9.50'],
       [PERCENT_ITEM, '30.00'],
     ]);
-    expect((entry.after as { rates: { processItemId: string }[] }).rates.map((rate) => rate.processItemId)).toEqual([FIRST_ITEM, PERCENT_ITEM]);
+    expect(customerSide(entry.after).rates.map((rate) => rate.processItemId)).toEqual([FIRST_ITEM, PERCENT_ITEM]);
   });
 
   it('follows a changed default: a reset after the Admin changed an item\'s default sets the rate to the new default', async () => {

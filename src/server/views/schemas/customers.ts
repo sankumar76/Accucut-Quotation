@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   addressProblem,
+  canonicalCustomerName,
   CUSTOMER_NAME_MAX_LENGTH,
   CUSTOMER_NAME_REQUIRED_MESSAGE,
   emailProblem,
@@ -14,14 +15,18 @@ import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, NAME_TOO_LONG_MESSAGE } fro
  * The contract of the Customer routes (STORY-02.02, architecture section 6 "Customers" and "Reset customer"). Every body, path parameter and answer is
  * a strict object: a key that is not named is an error, so nothing is sent that is not meant to be, and a client cannot set a field the route does not
  * offer (NFR-002). The limits and the messages are the ones the screen uses (`src/lib/masters/customers.ts`) and are shown under the field they name.
- * Whether a name is free, and whether a typed rate fits its item (a whole number for a percent item; the item is the service's to look up), are the
+ * Whether a name is free, and whether a typed rate belongs to the customer (the item is the service's to look up), are the
  * service's: a schema cannot see the other customers or the Process Master.
  *
  * These are the Admin's schemas, and they carry the contact details and the rates. The estimate form's list is `schemas/options.ts`, which carries an
  * ID and a name and nothing else.
  */
 
-const name = z.string({ error: CUSTOMER_NAME_REQUIRED_MESSAGE }).trim().min(1, CUSTOMER_NAME_REQUIRED_MESSAGE).max(CUSTOMER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE);
+/** The name in its stored (canonical) form, and the limits are checked on that form, as the screen and the service check them (QLT-04): one rule in one place. */
+const name = z
+  .string({ error: CUSTOMER_NAME_REQUIRED_MESSAGE })
+  .transform(canonicalCustomerName)
+  .pipe(z.string().min(1, CUSTOMER_NAME_REQUIRED_MESSAGE).max(CUSTOMER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE));
 
 /** A check of the screen's (`phoneProblem`, `emailProblem`, `addressProblem`) as a zod refinement, so the schema and the form say the same words. */
 function contactField(problemOf: (value: string) => string | null) {

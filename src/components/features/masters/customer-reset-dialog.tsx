@@ -21,6 +21,7 @@ import {
   RESET_CONFIRM,
   RESET_FAILED_MESSAGE,
   RESET_KEEP,
+  RESET_TYPED_NOTE,
   resetDescription,
   resetTitle,
   RESETTING,
@@ -32,7 +33,8 @@ import { BREAK_LONG_NAMES } from './master-texts';
  * The reset dialog of SCR-12 (STORY-02.02 AC-3, AC-8): "Reset <customer> to defaults?". It is an alert dialog, because the action replaces values; focus
  * starts on the safe choice ("Keep current rates"), and Escape closes it with nothing sent. It **names the rates that will be replaced**, each with the value
  * the customer has now, from the customer as the server last sent it. The request stays out until the server has answered, and the dialog closes then,
- * handing the screen the customer as it is now and how many rates were replaced. A failed reset keeps the dialog open with the sentence for a write
+ * handing the screen the customer as it is now and how many rates were replaced. A rate typed on the page and not saved is replaced too, and the dialog
+ * says so (ux-spec v0.25). A failed reset keeps the dialog open with the sentence for a write
  * with nothing typed, which never says "Nothing was changed." (ux-spec v0.21, section 6.0).
  */
 
@@ -69,17 +71,23 @@ function ResetBody({ customer, request }: { readonly customer: CustomerRow; read
     <>
       <AlertDialogHeader>
         <AlertDialogTitle className={BREAK_LONG_NAMES}>{resetTitle(customer.name)}</AlertDialogTitle>
-        <AlertDialogDescription>{resetDescription(customer.rates.length, differing.length)}</AlertDialogDescription>
       </AlertDialogHeader>
-      {differing.length === 0 ? null : (
-        <ul aria-label="Rates that will be replaced" className="flex max-h-60 flex-col gap-s-1 overflow-y-auto pl-s-5 text-body list-disc">
-          {differing.map((rate) => (
-            <li key={rate.processItemId} className={BREAK_LONG_NAMES}>
-              {rate.name} <span className="tabular-nums">{rateWords(rate, rate.value)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* One description holds both paragraphs and the list, so a screen reader reads all of what the reset replaces (ux-spec v0.25). */}
+      <AlertDialogDescription asChild>
+        <div className="flex flex-col gap-s-3">
+          <p>{resetDescription(customer.rates.length, differing.length)}</p>
+          {differing.length === 0 ? null : (
+            <ul aria-label="Rates that will be replaced" className="flex max-h-60 flex-col gap-s-1 overflow-y-auto pl-s-5 text-body text-ink list-disc">
+              {differing.map((rate) => (
+                <li key={rate.processItemId} className={BREAK_LONG_NAMES}>
+                  {rate.name} <span className="tabular-nums">{rateWords(rate, rate.value)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p>{RESET_TYPED_NOTE}</p>
+        </div>
+      </AlertDialogDescription>
       {request.failed ? (
         <Notice tone="danger" title={RESET_FAILED_MESSAGE}>
           {FAILED_WRITE_BODY}

@@ -60,6 +60,7 @@ function toDetails(value: Record<string, unknown>): CustomerDetails | null {
   return { name, phone, email, address };
 }
 
+/** One row of `GET /api/v1/customers` as the list holds it, or `null` when the value is not that shape (the answer is never trusted blindly). */
 export function toCustomerSummaryRow(value: unknown): CustomerSummaryRow | null {
   if (!isRecord(value)) return null;
   const details = toDetails(value);
@@ -70,10 +71,11 @@ export function toCustomerSummaryRow(value: unknown): CustomerSummaryRow | null 
 function toRate(value: unknown): CustomerRate | null {
   if (!isRecord(value)) return null;
   const { processItemId, name, unit, defaultValue, value: own } = value;
-  if ([processItemId, name, unit, defaultValue, own].some((part) => typeof part !== 'string')) return null;
-  return { processItemId: String(processItemId), name: String(name), unit: String(unit), defaultValue: String(defaultValue), value: String(own) };
+  if (typeof processItemId !== 'string' || typeof name !== 'string' || typeof unit !== 'string' || typeof defaultValue !== 'string' || typeof own !== 'string') return null;
+  return { processItemId, name, unit, defaultValue, value: own };
 }
 
+/** A customer with every rate, from `GET`, `PATCH` and the reset answer, or `null` when the value is not that shape. */
 export function toCustomerRow(value: unknown): CustomerRow | null {
   if (!isRecord(value) || !Array.isArray(value['rates'])) return null;
   const details = toDetails(value);

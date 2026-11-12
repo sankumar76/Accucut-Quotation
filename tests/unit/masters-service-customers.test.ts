@@ -4,6 +4,7 @@ import { NAME_TAKEN_CODE, NotFoundError } from '@/lib/errors';
 import { createAuditService } from '@/server/services/audit-service';
 import { createMastersService } from '@/server/services/masters-service';
 
+import { customerSide } from '../support/customer-audit-side';
 import { defined } from '../support/defined';
 import { createFakeAuditWorld } from '../support/fake-audit';
 import { fakeCustomer } from '../support/fake-customers';
@@ -87,7 +88,7 @@ describe('the audit entry of a change (AC-6)', () => {
       ],
     });
     const entry = defined(world.audit.committed[entries]);
-    const ids = (side: unknown) => (side as { rates: { processItemId: string }[] }).rates.map((rate) => rate.processItemId);
+    const ids = (side: unknown) => customerSide(side).rates.map((rate) => rate.processItemId);
     expect(ids(entry.before)).toEqual([FIRST_ITEM, SECOND_ITEM]);
     expect(ids(entry.after)).toEqual([FIRST_ITEM, SECOND_ITEM]);
     expect(defined(masters.customers[0]).values.get(FIRST_ITEM)).toBe('8.25');

@@ -16,7 +16,6 @@ import {
   openCustomers,
   PERCENT_RATE,
   RATE_DECIMALS,
-  RATE_WHOLE,
   rateInput,
   rateRow,
   rowOf,
@@ -186,26 +185,26 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     expect(patches).toBe(0);
   });
 
-  test('AC-2: a rate with three decimals and a percent rate with decimals are refused under the rate, in words, with focus on the first; typing a fix saves', async ({ page }, testInfo) => {
+  test('AC-2: a rate with three decimals and a percent rate with three decimals are each refused under their own rate, in words, with focus on the first; a percent rate with one decimal is accepted; typing a fix saves', async ({ page }, testInfo) => {
     const customer = await makeCustomer(page, newCustomerName(testInfo));
     await openCustomer(page, customer);
     await rateInput(page, customer, FIRST_RATE).fill('1.234');
-    await rateInput(page, customer, PERCENT_RATE).fill('11.5');
+    await rateInput(page, customer, PERCENT_RATE).fill('11.555');
     await page.getByLabel('E-mail', { exact: true }).fill('not-an-address');
     await page.getByRole('button', { name: 'Save customer' }).click();
-    await expect(page.getByText(RATE_DECIMALS)).toBeVisible();
-    await expect(page.getByText(RATE_WHOLE)).toBeVisible();
+    await expect(rateRow(page, FIRST_RATE).getByText(RATE_DECIMALS)).toBeVisible();
+    await expect(rateRow(page, PERCENT_RATE).getByText(RATE_DECIMALS)).toBeVisible();
     await expect(page.getByText(EMAIL_FORMAT)).toBeVisible();
     // The first control with a message in the order of the page is the e-mail address (the details come before the rates).
     await expect(page.getByLabel('E-mail', { exact: true })).toBeFocused();
 
     await page.getByLabel('E-mail', { exact: true }).fill('');
     await rateInput(page, customer, FIRST_RATE).fill('2.25');
-    await rateInput(page, customer, PERCENT_RATE).fill('12');
+    await rateInput(page, customer, PERCENT_RATE).fill('12.5');
     await page.getByRole('button', { name: 'Save customer' }).click();
     await expect(page.getByRole('status').filter({ hasText: `${customer.name} was saved.` })).toBeVisible();
     await expect(page.getByText(RATE_DECIMALS)).toHaveCount(0);
-    await expect(page.getByText(RATE_WHOLE)).toHaveCount(0);
+    await expect(rateInput(page, customer, PERCENT_RATE)).toHaveValue('12.50');
   });
 });
 
@@ -259,8 +258,29 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: '1 rate was replaced.' })).toBeVisible();
     await page.getByRole('button', { name: 'Reset to defaults' }).click();
-    await expect(dialog.getByText(/already equal the current Process master values/)).toBeVisible();
+    await expect(dialog.getByText(/All \d+ rates already equal the current Process master values, so no saved value will be replaced\./)).toBeVisible();
+    // One accessible description holds both paragraphs (ux-spec v0.25).
+    await expect(dialog).toHaveAccessibleDescription(
+      /so no saved value will be replaced\..*A rate value you have typed on this page and not yet saved is replaced too\. The details \(name, phone, e-mail, address\) stay as typed\./,
+    );
     await dialog.getByRole('button', { name: 'Reset to defaults' }).click();
     await expect(page.getByText(`${customer.name} is already at the defaults.`)).toBeVisible();
+    await expect(page.getByText('Every saved rate already equals its current default, so no saved value was replaced. The rate boxes show the defaults.')).toBeVisible();
+  });
+
+  test('a rate typed and not saved is replaced by a reset, and the details typed stay (ux-spec v0.25)', async ({ page }, testInfo) => {
+    const customer = await makeCustomer(page, newCustomerName(testInfo));
+    await openCustomer(page, customer);
+    const defaultRate = await rateInput(page, customer, FIRST_RATE).inputValue();
+    await rateInput(page, customer, FIRST_RATE).fill(otherThan(defaultRate, '8.5', '7.5'));
+    await page.getByLabel('Phone').fill('+99 555 0142');
+    await page.getByRole('button', { name: 'Reset to defaults' }).click();
+    const dialog = page.getByRole('alertdialog', { name: `Reset ${customer.name} to defaults?` });
+    await expect(dialog).toHaveAccessibleDescription(/A rate value you have typed on this page and not yet saved is replaced too\./);
+    await dialog.getByRole('button', { name: 'Reset to defaults' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(`${customer.name} is already at the defaults.`)).toBeVisible();
+    await expect(rateInput(page, customer, FIRST_RATE)).toHaveValue(defaultRate);
+    await expect(page.getByLabel('Phone')).toHaveValue('+99 555 0142');
   });
 });

@@ -35,7 +35,7 @@ import { useCustomerEdit, type CustomerEditState } from './use-customer-edit';
 /**
  * SCR-12 "Customer master", the edit page (STORY-02.02 AC-1 to AC-3, AC-8): the Details card, the rates of this customer against the defaults, Save
  * customer, and Reset to defaults with its confirmation. It lays out the page and hands everything else to `useCustomerEdit`. It decides nothing: every
- * rule (a name that is free, an e-mail address that looks like one, a rate that is a whole number for a percent item, the audit entry) is the server's,
+ * rule (a name that is free, an e-mail address that looks like one, a rate that is a number with up to 2 decimals, the audit entry) is the server's,
  * and this screen puts the server's reason under the control it names. A save that changes nothing sends nothing and says so.
  *
  * The reset dialog is not in the first load of the page (NFR-009): it is fetched the first time the button opens it, through the shared first-open

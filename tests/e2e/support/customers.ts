@@ -19,7 +19,6 @@ export const NAME_REQUIRED = 'Enter the customer name.';
 export const NAME_TAKEN = 'A customer with this name already exists.';
 export const EMAIL_FORMAT = 'Enter an e-mail address like name@company.com.';
 export const RATE_DECIMALS = 'Enter a number, 0 or more, with up to 2 decimals.';
-export const RATE_WHOLE = 'Enter a whole number, 0 or more.';
 export const LOAD_ERROR_TITLE = 'We could not load customers';
 export const SAVED_BUT_NOT_SHOWN = 'The change was saved, but we could not show the list. Check your connection and try again.';
 export const DIFFERS = 'Differs from default';

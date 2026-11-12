@@ -37,7 +37,7 @@ export interface CustomerFormDialogProps {
   readonly onCloseAutoFocus: (event: Event) => void;
 }
 
-type FormProps = Pick<CustomerFormDialogProps, 'onClose' | 'onSaved'>;
+type FormProps = Pick<CustomerFormDialogProps, 'onSaved'>;
 type SaveOutcome = Awaited<ReturnType<typeof createCustomer>>;
 
 /** The messages the server gave for the fields this form has, and nothing for any other field. */
@@ -114,7 +114,7 @@ export function CustomerFormDialog({ open, onClose, onSaved, onCloseAutoFocus }:
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogContent aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
-        <CustomerForm onClose={onClose} onSaved={onSaved} />
+        <CustomerForm onSaved={onSaved} />
       </DialogContent>
     </Dialog>
   );

@@ -14,8 +14,8 @@ import {
   openCustomers,
   PERCENT_RATE,
   RATE_DECIMALS,
-  RATE_WHOLE,
   rateInput,
+  rateRow,
   rowOf,
   SAVED_BUT_NOT_SHOWN,
 } from './support/customers';
@@ -61,15 +61,15 @@ test.describe('focus moves only on a refusal (DL-135)', () => {
     expect(focusLog).toEqual([]);
   });
 
-  test("on the customer's page: after a refusal naming two rates, typing in the first keeps focus there and every letter; no element takes focus while typing", async ({ page }, testInfo) => {
+  test("on the customer's page: after a refusal naming two rates (three decimals on each), typing in the first keeps focus there and every letter; no element takes focus while typing", async ({ page }, testInfo) => {
     const customer = await makeCustomer(page, newCustomerName(testInfo));
     await openCustomer(page, customer);
     const first = rateInput(page, customer, FIRST_RATE);
     await first.fill('1.234');
-    await rateInput(page, customer, PERCENT_RATE).fill('11.5');
+    await rateInput(page, customer, PERCENT_RATE).fill('11.555');
     await page.getByRole('button', { name: 'Save customer' }).click();
-    await expect(page.getByText(RATE_DECIMALS)).toBeVisible();
-    await expect(page.getByText(RATE_WHOLE)).toBeVisible();
+    await expect(rateRow(page, FIRST_RATE).getByText(RATE_DECIMALS)).toBeVisible();
+    await expect(rateRow(page, PERCENT_RATE).getByText(RATE_DECIMALS)).toBeVisible();
     await expect(first).toBeFocused();
 
     const focusLog = await recordFocus(page);
@@ -77,8 +77,8 @@ test.describe('focus moves only on a refusal (DL-135)', () => {
     await page.keyboard.type('2.5');
     await expect(first).toBeFocused();
     await expect(first).toHaveValue('2.5');
-    await expect(page.getByText(RATE_DECIMALS)).toHaveCount(0);
-    await expect(page.getByText(RATE_WHOLE)).toBeVisible();
+    await expect(rateRow(page, FIRST_RATE).getByText(RATE_DECIMALS)).toHaveCount(0);
+    await expect(rateRow(page, PERCENT_RATE).getByText(RATE_DECIMALS)).toBeVisible();
     await afterOneFrame(page);
     expect(focusLog).toEqual([]);
   });
@@ -133,8 +133,20 @@ test.describe('the read after an add (DL-153, DEF-020)', () => {
     await openCustomers(page);
     const fail = await failListWhen(page, BUSY);
     fail.value = true;
+    // The failing read is held until the Add dialog has closed, so what the log holds after that point is the answer to the failed read and nothing else.
+    // "Add customer" stays visible in the error state, so a hook that sent focus back to the opener after a failed read (control A1) would not be seen by
+    // looking at the last entry alone: the title's own mount takes focus back a moment later (QLT-01, AQP-142 G6).
+    const gate = aGate();
+    await page.route('**/api/v1/customers', async (route: Route) => {
+      if (route.request().method() === 'GET') await gate.passed;
+      return route.fallback();
+    });
     const focusLog = await recordFocus(page);
     await addByKeyboard(page, name);
+    await expect(page.getByRole('dialog', { name: ADD })).toHaveCount(0);
+    await afterOneFrame(page);
+    const fromTheRead = focusLog.length;
+    gate.release();
 
     const title = page.getByRole('heading', { name: LOAD_ERROR_TITLE });
     await expect(title).toBeVisible();
@@ -142,6 +154,8 @@ test.describe('the read after an add (DL-153, DEF-020)', () => {
     expect(focusLog).toContain(`H2:${LOAD_ERROR_TITLE}`);
     expect(focusLog.filter((entry) => entry.startsWith('H1:'))).toEqual([]);
     expect(focusLog.at(-1)).toBe(`H2:${LOAD_ERROR_TITLE}`);
+    // Only the error title takes focus after the read: not the heading, and not the button that opened the dialog.
+    expect(focusLog.slice(fromTheRead).filter((entry) => entry !== `H2:${LOAD_ERROR_TITLE}`)).toEqual([]);
     await expect(title).toBeFocused();
     // Polled at the three widths of the projects (360, 768 and 1366 px): the element with focus is the title, and stays it.
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? ''), { message: 'focus stays on the error title' }).toBe(LOAD_ERROR_TITLE);

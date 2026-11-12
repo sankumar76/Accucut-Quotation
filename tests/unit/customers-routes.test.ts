@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { customerSide } from '../support/customer-audit-side';
 import { CUSTOMER_CANARIES, CUSTOMER_CANARY_PHONE, CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
 import { fakeCustomer } from '../support/fake-customers';
@@ -115,6 +116,18 @@ describe('POST /api/v1/customers (AC-1, AC-6)', () => {
     expect(JSON.stringify(entry)).not.toMatch(/555 0142|invented\.example/);
   });
 
+  it('checks the 100-character limit on the stored (canonical) name, as the form does: 101 characters with one double space is 100 once stored (QLT-04)', async () => {
+    const response = await POST(request('POST', { name: `${'A'.repeat(49)}  ${'B'.repeat(50)}` }));
+    expect(response.status).toBe(201);
+    expect(record.parse(await response.json())['name']).toBe(`${'A'.repeat(49)} ${'B'.repeat(50)}`);
+  });
+
+  it('still refuses a name that is over 100 characters in its stored form (QLT-04)', async () => {
+    const response = await POST(request('POST', { name: `${'A'.repeat(50)} ${'B'.repeat(50)}` }));
+    expect(response.status).toBe(422);
+    expect((await fieldMessages(response))['name']).toBe('Use 100 characters or fewer.');
+  });
+
   it.each([
     ['a blank name', { name: '   ' }, 'name', 'Enter the customer name.'],
     ['a missing name', {}, 'name', 'Enter the customer name.'],
@@ -184,7 +197,7 @@ describe('PATCH /api/v1/customers/{id} (AC-2, AC-6)', () => {
     ['three decimals', { processItemId: FIRST_ITEM, value: '1.234' }, 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['a negative number', { processItemId: FIRST_ITEM, value: '-1' }, 'Enter a number, 0 or more, with up to 2 decimals.'],
     ['text', { processItemId: FIRST_ITEM, value: 'many' }, 'Enter a number, 0 or more, with up to 2 decimals.'],
-    ['decimals on a percent rate', { processItemId: PERCENT_ITEM, value: '11.5' }, 'Enter a whole number, 0 or more.'],
+    ['three decimals on a percent rate', { processItemId: PERCENT_ITEM, value: '11.555' }, 'Enter a number, 0 or more, with up to 2 decimals.'],
   ])('refuses a rate with %s with 422 under the rate, and changes nothing', async (_what, rate, message) => {
     const entries = harness.auditWorld.audit.committed.length;
     const response = await PATCH(request('PATCH', { rates: [rate] }), withId(ALPHA));
@@ -193,11 +206,11 @@ describe('PATCH /api/v1/customers/{id} (AC-2, AC-6)', () => {
     expect(harness.auditWorld.audit.committed).toHaveLength(entries);
   });
 
-  it('accepts a whole number on a percent rate, and zero on any rate', async () => {
-    const response = await PATCH(request('PATCH', { rates: [{ processItemId: PERCENT_ITEM, value: '12' }, { processItemId: FIRST_ITEM, value: '0' }] }), withId(ALPHA));
+  it('accepts a whole number and a number with decimals on a percent rate, and zero on any rate', async () => {
+    const response = await PATCH(request('PATCH', { rates: [{ processItemId: PERCENT_ITEM, value: '12.5' }, { processItemId: FIRST_ITEM, value: '0' }] }), withId(ALPHA));
     expect(response.status).toBe(200);
     const rates = z.array(record).parse(record.parse(await response.json())['rates']);
-    expect(rates.find((rate) => rate['processItemId'] === PERCENT_ITEM)?.['value']).toBe('12.00');
+    expect(rates.find((rate) => rate['processItemId'] === PERCENT_ITEM)?.['value']).toBe('12.50');
     expect(rates.find((rate) => rate['processItemId'] === FIRST_ITEM)?.['value']).toBe('0.00');
   });
 
@@ -228,7 +241,7 @@ describe('POST /api/v1/customers/{id}/reset-rates (AC-3, AC-6)', () => {
     expect(rates.every((rate) => rate['value'] === rate['defaultValue'])).toBe(true);
     const entry = defined(entriesSince(before)[0]);
     expect(entry).toMatchObject({ event: 'master.edited', objectType: 'customer', before: { contact: [] }, after: { contact: [] } });
-    expect((entry.before as { rates: unknown[] }).rates).toHaveLength(2);
+    expect(customerSide(entry.before).rates).toHaveLength(2);
   });
 
   it('is idempotent: the second reset is a count of 0 and writes no entry', async () => {

@@ -1,5 +1,4 @@
 import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, MASTER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE, normaliseDecimalText } from './master-rules';
-import { PERCENT_UNIT } from './process-items';
 
 /**
  * What the Customers screens (SCR-12) and their routes share (STORY-02.02; SPEC section 4.2, architecture sections 5.1 and 6): the limits, the
@@ -24,9 +23,6 @@ export const CUSTOMER_NAME_TAKEN_MESSAGE = 'A customer with this name already ex
 export const EMAIL_FORMAT_MESSAGE = 'Enter an e-mail address like name@company.com.';
 export const NOTHING_TO_CHANGE_CUSTOMER_MESSAGE = 'Change at least one of the details or a rate.';
 
-/** AC-2: a percent rate is a whole number; any other rate has up to two decimals (`DECIMAL_TEXT_MESSAGE`). */
-export const WHOLE_NUMBER_MESSAGE = 'Enter a whole number, 0 or more.';
-const WHOLE_NUMBER_PATTERN = /^\d{1,12}$/;
 
 export const tooLongMessage = (limit: number): string => `Use ${limit} characters or fewer.`;
 
@@ -70,12 +66,14 @@ export function contactValue(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+/** The message under the name field, or `null`: required, and at most 100 characters in the stored (canonical) form (AC-1). */
 export function customerNameProblem(value: string): string | null {
   const trimmed = canonicalCustomerName(value);
   if (trimmed === '') return CUSTOMER_NAME_REQUIRED_MESSAGE;
   return trimmed.length > CUSTOMER_NAME_MAX_LENGTH ? NAME_TOO_LONG_MESSAGE : null;
 }
 
+/** The message under the phone field, or `null`: at most 30 characters; a phone number is otherwise free text (AC-1). */
 export function phoneProblem(value: string): string | null {
   return value.trim().length > PHONE_MAX_LENGTH ? tooLongMessage(PHONE_MAX_LENGTH) : null;
 }
@@ -83,6 +81,7 @@ export function phoneProblem(value: string): string | null {
 /** One `@` between two parts without spaces, and a dot in the part after it: "looks like an address", the whole of the check (AC-1). */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
+/** The message under the e-mail field, or `null`: optional, at most 254 characters, and it must look like an address (AC-1). */
 export function emailProblem(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed === '') return null;
@@ -90,6 +89,7 @@ export function emailProblem(value: string): string | null {
   return EMAIL_PATTERN.test(trimmed) ? null : EMAIL_FORMAT_MESSAGE;
 }
 
+/** The message under the address field, or `null`: optional, at most 300 characters (AC-1). */
 export function addressProblem(value: string): string | null {
   return value.trim().length > ADDRESS_MAX_LENGTH ? tooLongMessage(ADDRESS_MAX_LENGTH) : null;
 }
@@ -162,11 +162,9 @@ export interface CustomerRate {
   readonly value: string;
 }
 
-/** The message for a typed rate, or null: 0 or more with up to 2 decimals, and a whole number for a percent rate (AC-2). */
-export function rateProblem(value: string, unit: string): string | null {
-  const trimmed = value.trim();
-  if (unit === PERCENT_UNIT) return WHOLE_NUMBER_PATTERN.test(trimmed) ? null : WHOLE_NUMBER_MESSAGE;
-  return DECIMAL_TEXT_PATTERN.test(trimmed) ? null : DECIMAL_TEXT_MESSAGE;
+/** The message for a typed rate, or null: a number of 0 or more with up to 2 decimals, for every rate, a percent rate included (AC-2 as amended, SPEC D-24). */
+export function rateProblem(value: string): string | null {
+  return DECIMAL_TEXT_PATTERN.test(value.trim()) ? null : DECIMAL_TEXT_MESSAGE;
 }
 
 /** A typed rate as the stored text: no leading zeros and two decimals, so "0.5" and "00.50" are one value. Must satisfy `rateProblem` first. */

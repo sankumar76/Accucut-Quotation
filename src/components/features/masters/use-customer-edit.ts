@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type RefObject } from 'react';
 
 import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
@@ -23,7 +23,6 @@ import { CUSTOMER_FIELD_IDS } from './customer-details-fields';
 import type { CustomerResetDialogProps } from './customer-reset-dialog';
 import { rateInputId } from './customer-rates-table';
 import {
-  customerCreatedNotice,
   customerSavedNotice,
   FAILED_SAVE_CUSTOMER_MESSAGE,
   FAILED_WRITE_KEEPS_FORM_BODY,
@@ -70,51 +69,32 @@ function useResetDialog() {
   return { open, setOpen, loader, pressed, opener, press };
 }
 
-/** Takes the `?added=1` that follows an add off the address once the page has shown its notice, so a reload does not say it again. */
-function useForgetAddedFlag(added: boolean): void {
-  const pathname = usePathname();
-  useEffect(() => {
-    if (added) window.history.replaceState(window.history.state, '', pathname);
-  }, [added, pathname]);
+/** What the save needs from the page: what is typed, the server's customer, and the ways to show its answer. */
+interface SaveContext {
+  readonly customer: CustomerRow;
+  readonly values: CustomerValues;
+  readonly inputs: RateInputs;
+  readonly saveButton: RefObject<HTMLButtonElement | null>;
+  readonly setNotice: (notice: PageNotice | null) => void;
+  /** Shows the messages of a refusal and moves focus to the first field that has one (`useFocusOnRefusal`). */
+  readonly showErrors: (errors: EditErrors) => void;
+  /** Replaces what is on screen with the customer the server sent, and refreshes the router's cached copies of the page. */
+  readonly adopt: (next: CustomerRow) => void;
 }
 
-/** `saveButton` is the screen's ref to its Save button, so the screen can attach it and this hook can return focus to it. */
-export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTMLButtonElement | null>) {
-  const added = useSearchParams().get('added') === '1';
-  useForgetAddedFlag(added);
-  const [customer, setCustomer] = useState<CustomerRow>(initial);
-  const [values, setValues] = useState<CustomerValues>(() => initialCustomerValues(initial));
-  const [inputs, setInputs] = useState<RateInputs>(() => initialRateInputs(initial.rates));
-  const [errors, setErrors] = useState<EditErrors>({});
-  const [notice, setNotice] = useState<PageNotice | null>(() => (added ? customerCreatedNotice(initial.name) : null));
+/**
+ * The save: the request, the failure under it and where focus goes afterwards. Nothing is sent when nothing changed (a sentence says so), a refusal that
+ * names fields goes to `showErrors`, and any other failure keeps what was typed and says so (ux-spec v0.21, section 6.0).
+ */
+function useCustomerSave({ customer, values, inputs, saveButton, setNotice, showErrors, adopt }: SaveContext) {
   const [failure, setFailure] = useState<SaveFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saveFocusRequest, setSaveFocusRequest] = useState(0);
-  const reset = useResetDialog();
-  const showErrors = useFocusOnRefusal<string>(editFieldOrder(customer.rates), (key) => document.getElementById(controlId(key))?.focus(), setErrors);
 
   // The Save button is disabled while the request is out, which takes focus off it; once it is enabled again, focus goes back to it.
   useEffect(() => {
     if (saveFocusRequest > 0) saveButton.current?.focus();
   }, [saveFocusRequest, saveButton]);
-
-  /** The server's customer replaces what is on screen: the details and every rate start again from it. */
-  function adopt(next: CustomerRow, keepDetails = false): void {
-    setCustomer(next);
-    setInputs(initialRateInputs(next.rates));
-    if (!keepDetails) setValues(initialCustomerValues(next));
-    setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(RATE_KEY_PREFIX))));
-  }
-
-  function setField(field: CustomerFieldName, value: string): void {
-    setValues((current) => ({ ...current, [field]: value }));
-    setErrors((current) => withoutEditError(current, field));
-  }
-
-  function setRate(processItemId: string, value: string): void {
-    setInputs((current) => ({ ...current, [processItemId]: value }));
-    setErrors((current) => withoutEditError(current, rateErrorKey(processItemId)));
-  }
 
   async function save(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -144,12 +124,56 @@ export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTML
     );
     setSaveFocusRequest((count) => count + 1);
   }
+  return { failure, clearFailure: () => setFailure(null), submitting, save };
+}
+
+/**
+ * What is typed and what the server last sent: the customer, the details, every rate and the messages under them. `adopt` replaces all of it with a
+ * customer the server sent, and refreshes the router so the browser's Back button, which reuses cached pages, shows what was saved and not the page as it
+ * was opened (QLT-02, AQP-142 G6).
+ */
+function useCustomerFields(initial: CustomerRow) {
+  const router = useRouter();
+  const [customer, setCustomer] = useState<CustomerRow>(initial);
+  const [values, setValues] = useState<CustomerValues>(() => initialCustomerValues(initial));
+  const [inputs, setInputs] = useState<RateInputs>(() => initialRateInputs(initial.rates));
+  const [errors, setErrors] = useState<EditErrors>({});
+  const showErrors = useFocusOnRefusal<string>(editFieldOrder(customer.rates), (key) => document.getElementById(controlId(key))?.focus(), setErrors);
+
+  /** The details are kept when `keepDetails` is set (a reset changes rates only). */
+  function adopt(next: CustomerRow, keepDetails = false): void {
+    setCustomer(next);
+    setInputs(initialRateInputs(next.rates));
+    if (!keepDetails) setValues(initialCustomerValues(next));
+    setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(RATE_KEY_PREFIX))));
+    router.refresh();
+  }
+
+  function setField(field: CustomerFieldName, value: string): void {
+    setValues((current) => ({ ...current, [field]: value }));
+    setErrors((current) => withoutEditError(current, field));
+  }
+
+  function setRate(processItemId: string, value: string): void {
+    setInputs((current) => ({ ...current, [processItemId]: value }));
+    setErrors((current) => withoutEditError(current, rateErrorKey(processItemId)));
+  }
+
+  return { customer, values, inputs, errors, showErrors, adopt, setField, setRate };
+}
+
+/** `saveButton` is the screen's ref to its Save button, so the screen can attach it and the save can return focus to it. */
+export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTMLButtonElement | null>) {
+  const { customer, values, inputs, errors, showErrors, adopt, setField, setRate } = useCustomerFields(initial);
+  const [notice, setNotice] = useState<PageNotice | null>(null);
+  const reset = useResetDialog();
+  const { failure, clearFailure, submitting, save } = useCustomerSave({ customer, values, inputs, saveButton, setNotice, showErrors, adopt });
 
   function onReset(byKeyboard: boolean): void {
     const opened = reset.press({ itemId: null, action: 'reset' }, byKeyboard, () => reset.setOpen(true));
     if (!opened) return;
     setNotice(null);
-    setFailure(null);
+    clearFailure();
   }
 
   /** The server reset the rates: close, adopt its customer (what was typed in a rate is replaced; the details stay), and say how many were replaced. */

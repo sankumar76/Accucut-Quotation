@@ -174,6 +174,7 @@ async function setRates(db: PrismaClient, customerId: string, values: ReadonlyAr
 }
 
 /** Builds the customer methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
+// Over 40 lines on purpose (coding standards section 1): one flat object of the nine customer methods, each about 15 lines or fewer; the longer statements are the named functions above.
 export function createCustomerMethods(db: PrismaClient): CustomerMethods {
   return {
     listCustomers: () =>

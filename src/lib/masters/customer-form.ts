@@ -32,7 +32,7 @@ export const RATE_KEY_PREFIX = 'rate:';
 
 export const rateErrorKey = (processItemId: string): string => `${RATE_KEY_PREFIX}${processItemId}`;
 
-/** A percent rate is typed as a whole number (AC-2), so a stored "11.00" starts in its input as "11"; any other value is the text the server sent. */
+/** A percent rate starts without its trailing ".00" ("11.00" is typed as 11, "12.50" stays 12.50); any other value is the text the server sent. */
 function startingText(rate: CustomerRate): string {
   return rate.unit === PERCENT_UNIT ? rate.value.replace(/\.00$/, '') : rate.value;
 }
@@ -52,7 +52,7 @@ export function editFieldOrder(rates: ReadonlyArray<CustomerRate>): ReadonlyArra
   return [...CUSTOMER_FIELD_NAMES, ...rates.map((rate) => rateErrorKey(rate.processItemId))];
 }
 
-/** The messages for what was typed: the four details, and each rate against its own unit (a whole number for a percent rate). */
+/** The messages for what was typed: the four details, and each rate (a number of 0 or more with up to 2 decimals, a percent rate included). */
 export function customerEditProblems(values: CustomerValues, rates: ReadonlyArray<CustomerRate>, inputs: RateInputs): EditErrors {
   const found: Record<string, string> = {};
   for (const field of CUSTOMER_FIELD_NAMES) {
@@ -61,7 +61,7 @@ export function customerEditProblems(values: CustomerValues, rates: ReadonlyArra
   }
   for (const rate of rates) {
     const typed = inputs[rate.processItemId] ?? '';
-    const problem = isUnchanged(rate, typed) ? null : rateProblem(typed, rate.unit);
+    const problem = isUnchanged(rate, typed) ? null : rateProblem(typed);
     if (problem !== null) found[rateErrorKey(rate.processItemId)] = problem;
   }
   return found;
@@ -101,6 +101,6 @@ export function withoutEditError(errors: EditErrors, key: string): EditErrors {
 
 /** Does the rate, as typed, differ from its default? A value that is not a number yet is judged by what the server holds. */
 export function typedDiffers(rate: CustomerRate, typed: string | undefined): boolean {
-  if (typed === undefined || rateProblem(typed, rate.unit) !== null) return differsFromDefault(rate);
+  if (typed === undefined || rateProblem(typed) !== null) return differsFromDefault(rate);
   return differsFromDefault({ defaultValue: rate.defaultValue, value: typed });
 }

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
+import { createCustomerMethods, type CustomerMethods } from './customer-repository';
 import { isRecordNotFound, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
-import { createCustomerMethods, type CustomerMethods } from './customer-repository';
 import { createExchangeRateMethods, type ExchangeRateMethods } from './exchange-rate-repository';
 import { enforcingConstraints } from './master-constraints';
 import { createMaterialMethods, type MaterialMethods } from './material-repository';

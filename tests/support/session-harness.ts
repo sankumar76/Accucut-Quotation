@@ -8,9 +8,9 @@ import { createUserService, type UserService } from '../../src/server/services/u
 
 import { CUSTOMER_CANARIES } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
-import { fakeCustomer } from './fake-customers';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { fakeCustomer } from './fake-customers';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';

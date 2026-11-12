@@ -10,9 +10,10 @@ import type { PageNotice } from './master-texts';
  * read them too. The words every masters screen says (the Try again button, the long-name class, the failure lines) are in `master-texts.ts`.
  *
  * The mock-up fixes the title, the description, the columns, the buttons, the empty, no-match and error states and the reset dialog. The sentences it
- * does not give (the notices after an add, a save and a reset, the failed writes) are the developer's proposal from the patterns of SCR-11 and the
- * Treatment / Color tab, for the ux-expert to rule on; they follow the shared rule of ux-spec v0.21 section 6.0 that a failed write never says
- * "Nothing was changed.". Delete and Delete blocked are story 02.07's.
+ * does not give (the notices after a save and a reset, the failed writes) were the developer's proposal from the patterns of SCR-11 and the
+ * Treatment / Color tab. The ux-expert confirmed them in ux-spec v0.24, SCR-12 "The Customers words: final words", and ruled the customer's page its own
+ * load-error title. They follow the shared rule of ux-spec v0.21 section 6.0 that a failed write never says "Nothing was changed.". Delete and
+ * Delete blocked are story 02.07's.
  */
 
 export const CUSTOMERS_TITLE = 'Customers';
@@ -31,6 +32,8 @@ export const CUSTOMER_HEADINGS = { name: 'Customer', phone: 'Phone', email: 'E-m
 
 export const CUSTOMERS_LOADING_LABEL = 'Loading customers';
 export const CUSTOMERS_ERROR_TITLE = 'We could not load customers';
+/** The customer's own page has its own load-error title (ux-spec v0.24), with the same sentence under it. */
+export const CUSTOMER_PAGE_ERROR_TITLE = 'We could not load this customer';
 /** The load error's sentence while a success notice is on the page: the change happened, and the read after it failed (the DEF-020 case; ux-spec v0.21). */
 export const CUSTOMERS_SAVED_NOT_SHOWN_BODY = 'The change was saved, but we could not show the list. Check your connection and try again.';
 
@@ -61,7 +64,7 @@ export const customerAddedNotice = (name: string): PageNotice => ({
 
 export const DETAILS_TITLE = 'Details';
 export const RATES_TITLE = 'Rates for this customer';
-export const RATES_HINT = 'Percent rates are whole numbers: 11 means 11%';
+export const RATES_HINT = 'Percent rates are typed as plain numbers: 12 means 12%, 12.5 means 12.5%';
 export const BREADCRUMB_LABEL = 'Breadcrumb';
 
 export const FIELD_LABELS = { name: 'Customer name', phone: 'Phone', email: 'E-mail', address: 'Address' } as const;
@@ -85,18 +88,12 @@ export const editDescription = (differ: number): string =>
 /** After a save that changed something. A save that finds nothing changed writes no entry on the server, so the sentence makes no claim about the audit log. */
 export const customerSavedNotice = (name: string): PageNotice => ({ tone: 'success', text: `${name} was saved.` });
 
-/** The page was opened right after an add (`?added=1`). */
-export const customerCreatedNotice = (name: string): PageNotice => ({
-  tone: 'success',
-  text: `${name} was added with every rate at the current default. Change any rate below, then save.`,
-});
-
 /** A save with nothing changed sends no request (the same rule as every master's form). */
 export const NOTHING_TO_SAVE_NOTICE: PageNotice = { tone: 'info', title: 'Nothing to save.', text: 'You have not changed any detail or rate.' };
 
 export const resetNotice = (name: string, count: number): PageNotice =>
   count === 0
-    ? { tone: 'info', title: `${name} is already at the defaults.`, text: 'Every rate equals its current default, so nothing was replaced.' }
+    ? { tone: 'info', title: `${name} is already at the defaults.`, text: 'Every saved rate already equals its current default, so no saved value was replaced. The rate boxes show the defaults.' }
     : { tone: 'success', text: `${name} was reset to the defaults. ${count} ${count === 1 ? 'rate was' : 'rates were'} replaced.` };
 
 // ---- The reset dialog (AC-3) ---------------------------------------------------------------------------------------------------
@@ -114,7 +111,11 @@ export function rateWords(rate: Pick<CustomerRate, 'unit'>, value: string): stri
 /** The sentence above the list of rates the reset replaces. A customer with none that differ is told so, and the confirm button is still offered (a reset is idempotent). */
 export const resetDescription = (total: number, differing: number): string =>
   differing === 0
-    ? `All ${total} rates already equal the current Process master values, so nothing will be replaced.`
+    ? `All ${total} rates already equal the current Process master values, so no saved value will be replaced.`
     : `All ${total} rates return to the current Process master values. The ${differing} ${differing === 1 ? 'value' : 'values'} this customer has now ${differing === 1 ? 'is' : 'are'} replaced:`;
 
 export const RESET_FAILED_MESSAGE = 'We could not reset the rates.';
+
+/** The second paragraph of the reset dialog, always shown: what is typed and not saved is replaced too, and the details are not (ux-spec v0.25). */
+export const RESET_TYPED_NOTE =
+  'A rate value you have typed on this page and not yet saved is replaced too. The details (name, phone, e-mail, address) stay as typed.';

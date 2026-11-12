@@ -27,7 +27,7 @@ import type { CustomerRow } from '@/lib/masters/customers-client';
 
 /**
  * STORY-02.02 T2, T5 (AC-1, AC-2): the pure rules the Customers screens and routes share: the words of the refusals, the e-mail check, the check of a
- * rate against its unit (a whole number for a percent rate), what really changes in a save, and the page's map of messages. Every value is invented.
+ * rate against its unit (up to 2 decimals for every rate, a percent rate included), what really changes in a save, and the page's map of messages. Every value is invented.
  */
 
 const CUTTING: CustomerRate = { processItemId: '00000000-0000-4000-8000-000400000001', name: 'Cutting-Rate-per-Sec', unit: 'per second', defaultValue: '1.37', value: '1.37' };
@@ -81,19 +81,19 @@ describe('what a save really changes (AC-2, AC-6)', () => {
 
 describe('a rate (AC-2)', () => {
   it.each(['0', '0.5', '12.34', '007.50', ' 3 '])('accepts %j on a rate in rupees', (value) => {
-    expect(rateProblem(value, 'per kg')).toBeNull();
+    expect(rateProblem(value)).toBeNull();
   });
 
   it.each(['', '-1', '1.234', '1,5', 'abc', '1e3', '.5', '1.'])('refuses %j on a rate in rupees in the words of AC-2', (value) => {
-    expect(rateProblem(value, 'per kg')).toBe('Enter a number, 0 or more, with up to 2 decimals.');
+    expect(rateProblem(value)).toBe('Enter a number, 0 or more, with up to 2 decimals.');
   });
 
-  it.each(['0', '11', ' 12 '])('accepts %j on a percent rate', (value) => {
-    expect(rateProblem(value, '%')).toBeNull();
+  it.each(['0', '11', ' 12 ', '12.5', '12.55', '007.50'])('accepts %j on a percent rate: like every other rate, up to 2 decimals (AC-2 as amended, SPEC D-24)', (value) => {
+    expect(rateProblem(value)).toBeNull();
   });
 
-  it.each(['', '11.5', '11.0', '-1', 'x'])('refuses %j on a percent rate: a whole number is asked for', (value) => {
-    expect(rateProblem(value, '%')).toBe('Enter a whole number, 0 or more.');
+  it.each(['', '12.555', '-1', 'x', '12.'])('refuses %j on a percent rate in the words of AC-2 (a number with up to 2 decimals)', (value) => {
+    expect(rateProblem(value)).toBe('Enter a number, 0 or more, with up to 2 decimals.');
   });
 
   it('compares values as stored text, so "11" and "11.00", and "0.5" and "0.50", are one value', () => {
@@ -107,18 +107,18 @@ describe('a rate (AC-2)', () => {
 describe("the edit page's map of messages and changes (AC-1, AC-2, AC-8)", () => {
   const inputs = initialRateInputs(CUSTOMER.rates);
 
-  it('starts from the server\'s values (a percent rate as a whole number, "11" for "11.00") and lists the controls in the order of the page: the four details, then the rates in table order', () => {
+  it('starts from the server\'s values (a percent rate without its trailing .00: "11" for "11.00", "12.50" stays) and lists the controls in the order of the page: the four details, then the rates in table order', () => {
     expect(inputs).toEqual({ [CUTTING.processItemId]: '1.37', [OH_PROFIT.processItemId]: '11' });
     expect(editFieldOrder(CUSTOMER.rates)).toEqual(['name', 'phone', 'email', 'address', rateErrorKey(CUTTING.processItemId), rateErrorKey(OH_PROFIT.processItemId)]);
   });
 
   it('finds a message for each control that has one, a rate judged against its own unit', () => {
-    const problems = customerEditProblems({ ...VALUES, name: '', email: 'x' }, CUSTOMER.rates, { ...inputs, [CUTTING.processItemId]: '1.234', [OH_PROFIT.processItemId]: '11.5' });
+    const problems = customerEditProblems({ ...VALUES, name: '', email: 'x' }, CUSTOMER.rates, { ...inputs, [CUTTING.processItemId]: '1.234', [OH_PROFIT.processItemId]: '11.555' });
     expect(problems).toEqual({
       name: 'Enter the customer name.',
       email: 'Enter an e-mail address like name@company.com.',
       [rateErrorKey(CUTTING.processItemId)]: 'Enter a number, 0 or more, with up to 2 decimals.',
-      [rateErrorKey(OH_PROFIT.processItemId)]: 'Enter a whole number, 0 or more.',
+      [rateErrorKey(OH_PROFIT.processItemId)]: 'Enter a number, 0 or more, with up to 2 decimals.',
     });
     expect(customerEditProblems(VALUES, CUSTOMER.rates, inputs)).toEqual({});
   });
@@ -128,8 +128,8 @@ describe("the edit page's map of messages and changes (AC-1, AC-2, AC-8)", () =>
     const startingInputs = initialRateInputs([odd]);
     expect(startingInputs[odd.processItemId]).toBe('11.50');
     expect(customerEditProblems(VALUES, [odd], startingInputs)).toEqual({});
-    expect(customerEditProblems(VALUES, [odd], { [odd.processItemId]: '11.6' })).toEqual({ [rateErrorKey(odd.processItemId)]: 'Enter a whole number, 0 or more.' });
-    expect(customerEditProblems(VALUES, [odd], { [odd.processItemId]: '' })).toEqual({ [rateErrorKey(odd.processItemId)]: 'Enter a whole number, 0 or more.' });
+    expect(customerEditProblems(VALUES, [odd], { [odd.processItemId]: '11.666' })).toEqual({ [rateErrorKey(odd.processItemId)]: 'Enter a number, 0 or more, with up to 2 decimals.' });
+    expect(customerEditProblems(VALUES, [odd], { [odd.processItemId]: '' })).toEqual({ [rateErrorKey(odd.processItemId)]: 'Enter a number, 0 or more, with up to 2 decimals.' });
   });
 
   it('sends nothing for an untouched page, and only what changed otherwise: details as null or text, rates as stored text', () => {
@@ -143,10 +143,10 @@ describe("the edit page's map of messages and changes (AC-1, AC-2, AC-8)", () =>
   });
 
   it('turns the server\'s messages into the page\'s keys: a detail by name, rates.<index>.value as the rate that was at that index of what was sent', () => {
-    const sent = [{ processItemId: OH_PROFIT.processItemId, value: '11.5' }];
-    expect(serverEditErrors({ name: 'A customer with this name already exists.', 'rates.0.value': 'Enter a whole number, 0 or more.', 'rates.5.value': 'stray', other: 'x' }, sent)).toEqual({
+    const sent = [{ processItemId: OH_PROFIT.processItemId, value: '11.555' }];
+    expect(serverEditErrors({ name: 'A customer with this name already exists.', 'rates.0.value': 'Enter a number, 0 or more, with up to 2 decimals.', 'rates.5.value': 'stray', other: 'x' }, sent)).toEqual({
       name: 'A customer with this name already exists.',
-      [rateErrorKey(OH_PROFIT.processItemId)]: 'Enter a whole number, 0 or more.',
+      [rateErrorKey(OH_PROFIT.processItemId)]: 'Enter a number, 0 or more, with up to 2 decimals.',
     });
   });
 
