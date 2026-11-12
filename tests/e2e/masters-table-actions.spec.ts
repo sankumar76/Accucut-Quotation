@@ -26,6 +26,11 @@ import { actionsOf, makeTreatment, openTreatments } from './support/treatments';
  * (AC-3, as drawn), the prop `actionButtons={3}` read from computed styles (AC-2), a Tab through the three enabled buttons of the long-name row,
  * in order, none covered by the sticky column and each with a focus ring (AC-5), axe on the forced table at 768, 1024 and 1366 px (AC-5), and the
  * card list below 768 px, which this change does not touch (AC-4). Filler people are made only to reach six, inside each test (AC-1).
+ *
+ * AQP-275 (DEF-030) adds the Users notice "<name> can sign in again.": after Activate on a person with a 120-character name the notice stays inside the
+ * window and the page does not scroll sideways, at 360 and 768 px (two tests, desktop project only, so two E2E instances in all). The wrapping rule is
+ * `Notice` itself (`BREAK_LONG_NAMES`, `src/components/shared/break-long-names.ts`); the notices of the other screens are unit-tested in
+ * `tests/unit/notice-wraps-long-names.test.ts`.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -89,6 +94,18 @@ async function countPeople(page: Page): Promise<number> {
   expect(response.status()).toBe(200);
   const body: unknown = await response.json();
   return typeof body === 'object' && body !== null && 'users' in body && Array.isArray(body.users) ? body.users.length : 0;
+}
+
+/** The person with exactly this name, as the API the Users screen reads lists them (the name is unique to the test). */
+async function findPerson(page: Page, name: string): Promise<{ readonly id: string }> {
+  const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/users`);
+  expect(response.status()).toBe(200);
+  const body: unknown = await response.json();
+  const users: ReadonlyArray<unknown> = typeof body === 'object' && body !== null && 'users' in body && Array.isArray(body.users) ? body.users : [];
+  for (const user of users) {
+    if (typeof user === 'object' && user !== null && 'name' in user && user.name === name && 'id' in user && typeof user.id === 'string') return { id: user.id };
+  }
+  throw new Error('the person made for the test is not in the Users list');
 }
 
 const SCREENS: ReadonlyArray<Screen> = [
@@ -384,6 +401,38 @@ test.describe('SCR-14 Users: the card list below 768 px is unchanged (AQP-245 AC
     const labelled = await cards.locator('button[data-action]').evaluateAll((buttons) => buttons.filter((button) => (button.textContent ?? '').trim() === '').length);
     expect(labelled, 'no card button is icon-only').toBe(0);
   });
+});
+
+/** The widths of DEF-030's measurements that a phone and a tablet have: the notice must not push the page sideways at either. */
+const NOTICE_WIDTHS = [360, 768] as const;
+
+test.describe('SCR-14 Users: the "can sign in again" notice wraps a long name (AQP-275, DEF-030)', () => {
+  for (const width of NOTICE_WIDTHS) {
+    test(`after Activate, the notice holds a ${USER_NAME_LENGTH}-character name inside the window and the page does not scroll sideways at ${width} px`, async ({ page }, testInfo) => {
+      const name = longName(testInfo, USER_NAME_LENGTH);
+      await addPerson(page, name);
+      const person = await findPerson(page, name);
+      const deactivated = await page.request.patch(`${DEVELOPMENT_URL}/api/v1/users/${person.id}`, {
+        headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+        data: { isActive: false },
+      });
+      expect(deactivated.status()).toBe(200);
+
+      await page.setViewportSize({ width, height: HEIGHT });
+      await page.goto('/users');
+      await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+      await waitUntilHydrated(page, 'main button[data-action="add"]');
+      expect(await horizontalOverflow(page), 'before Activate the page does not scroll sideways').toBeLessThanOrEqual(0);
+
+      await page.locator('[data-user-id]:visible').filter({ hasText: name }).getByRole('button', { name: `Activate ${name}` }).click();
+      const notice = page.getByRole('status').filter({ hasText: `${name} can sign in again.` });
+      await expect(notice).toBeVisible();
+      const box = await notice.boundingBox();
+      expect(box?.x ?? -1, 'the notice starts inside the window').toBeGreaterThanOrEqual(0);
+      expect((box?.x ?? 0) + (box?.width ?? Number.POSITIVE_INFINITY), 'the notice ends inside the window').toBeLessThanOrEqual(width);
+      expect(await horizontalOverflow(page), 'after the notice the page does not scroll sideways').toBeLessThanOrEqual(0);
+    });
+  }
 });
 
 test.describe('SCR-13 Treatment / Color: the Actions column (ux-spec section 6.0, DL-122 condition B)', () => {
