@@ -7,7 +7,7 @@ import { Icon } from '@/components/shared/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { roleLabel } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import type { UserRow } from '@/lib/users/users-client';
@@ -139,9 +139,9 @@ export function UsersList(props: UsersListProps) {
                 <TableCell>
                   <StatusBadge user={user} />
                 </TableCell>
-                <TableActionsCell>
+                <TableCell>
                   <RowActions {...props} user={user} compact />
-                </TableActionsCell>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
