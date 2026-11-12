@@ -8,8 +8,8 @@ import { actionsOf, makeTreatment, openTreatments } from './support/treatments';
 
 /**
  * DEF-021 (AQP-234): the row actions of a masters table are inside the table's visible box, without scrolling it, at every width from 768 to
- * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master, for Materials and, since STORY-02.05, for the
- * Treatment / Color tab (Rename and Delete, 112 px), with one row whose name is
+ * 1440 px (UX spec v0.19 section 6.0 "Masters tables", SCR-11 and SCR-13). Run for Process master, for Materials, for Customers (STORY-02.02: Edit only,
+ * 68 px, ux-spec v0.22) and, since STORY-02.05, for the Treatment / Color tab (Rename and Delete, 112 px), with one row whose name is
  * 100 characters with no space (the longest the form allows), at the eleven widths of the spec's table of regions.
  *
  * Each width is checked three ways: as drawn (the fit), with the table forced wider than the region, at its start and after a Tab, and scrolled to its
@@ -62,6 +62,13 @@ const SCREENS: ReadonlyArray<Screen> = [
         specificGravity: '7.37',
         scrapRate: '22.37',
       }),
+  },
+  {
+    label: 'SCR-12 Customers',
+    path: '/masters/customers',
+    title: 'Customers',
+    region: 'Customers, scrollable',
+    make: (page, name) => post(page, '/api/v1/customers', { name }),
   },
   {
     label: 'SCR-13 Treatment / Color',
