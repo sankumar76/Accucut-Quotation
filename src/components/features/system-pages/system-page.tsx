@@ -1,6 +1,7 @@
 import { Clock, Lock, Search, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { FocusMainHeading } from '@/components/shared/focus-main-heading';
 import { Icon } from '@/components/shared/icon';
 import { Card } from '@/components/ui/card';
 import { assertNever } from '@/lib/assert-never';
@@ -96,6 +97,7 @@ export function SystemPageCard({ kind, action, reference, hasMenu }: SystemPageC
   return (
     <Card>
       <div className="flex flex-col items-center gap-s-3 px-s-5 py-s-7 text-center">
+        {kind === 'session-ended' ? <FocusMainHeading /> : null}
         <span aria-hidden="true" className="flex h-s-7 w-s-7 items-center justify-center rounded-full bg-surface-2 text-ink-2">
           <KindIcon kind={kind} />
         </span>
