@@ -6960,3 +6960,32 @@ Alternatives considered:
 **Risks registered:** RISK-027 (secret-shaped test fixtures stop every PR's Stage 2), 9.
 
 **Posted:** Jira AQP-275 comment 11682, AQP-276 comment 11683, AQP-1 comment 11684 (RISK-027).
+
+## Condition records — AQP-275 condition M and CI count condition (DL-189); AQP-275 to In QA — 2026-11-12
+
+**AQP-275 (DEF-030, PR #334 at e438ed9), DL-183 (5): ALL CONDITIONS MET** (U by DL-186; M and the CI count here). The fix-up e438ed9 (a one-line comment reword) is accepted without a re-review (DL-047). AQP-275 goes to **In QA** (the orchestrator transitions it), and G7 follows DL-183 (6) on e438ed9.
+
+| # | Check (DL-183 (5)) | Result | Evidence (read by master after `git fetch`) |
+|---|--------------------|--------|---------------------------------------------|
+| 1 | M sits on U's head | ✅ | `git log 327955c..e438ed9`: cfb05a8 (parent 327955c), e438ed9 (parent cfb05a8); `git log e438ed9..3f22672` empty; `origin/master` = 3f22672 |
+| 2 | Diff = the spec line, the unit-test import and title, and the `master-texts.ts` doc line | ✅ | `git diff --stat 327955c e438ed9`: 3 files, +5 / -4. The spec's line 416 plus the one-name import extension it needs (STD-04; `JSON_HEADERS` at `support/treatments.ts:26` equals the replaced literal); the unit test import moved to `shared/break-long-names` (STD-02) and the `describe` cites DEF-030 (STD-03); one `@deprecated` JSDoc line |
+| 3 | Fix-up e438ed9 | ✅ accepted, no re-review | `git diff cfb05a8 e438ed9`: one comment line, "#225" to "issue 225". The cause was read in run 43229728771 attempt 2, job 131226106980, Stage 6: `tokens.test.ts` AC-1 hex-colour check (`:121`) failed on that line, 1 of 3,200. `tokens.test.ts` and `globals.css` are unchanged |
+| 4 | CI on the M head: 5 of 5 (jobs API) | ✅ | 43233600652 attempt 1 (the only run on e438ed9), merge ref cb4045f = e438ed9 into 3f22672: all 5 jobs `success`; head check runs the same |
+| 5 | Stage 2 green (DL-188 (4)) | ✅ | "713 commits scanned", "no leaks found" |
+| 6 | Counts against 3f22672's push run 43197966408: **+6 / +6 / +2 / +0** | ✅ | Vitest 3,194 to 3,200 and 5,558 to 5,564; E2E 820 to 822 passed; skipped 24 to 24 (files 158 to 159, 218 to 219) |
+| 7 | Every base name present | ✅ | E2E: all 844 base lines (passed and skipped) present among 846; added = the 360 and 768 px SCR-14 notice cases. Vitest: all 376 base file lines present with the same counts; added = `notice-wraps-long-names.test.ts (6 tests)` ×2. 0 failed, 0 flaky |
+| 8 | Dev Record current (round 2) | ✅ | PR #334 "Round 2": rows for 327955c, cfb05a8 and e438ed9, the CI table, and the fix-up cause |
+
+**G7 scope for qa-engineer, DL-183 (6) verbatim:** "**G7 (qa-engineer, on the M head, DL-174 (3)(d)):** AQP-275's expected result at 360, 768 and 1024 px. Activate a person with a 120-character name and confirm there is no page overflow, and that the notice and the Admin-name notice title wrap. Then sweep every notice that repeats a user-entered name, at 360 px, on Users, Process, Materials and Treatment / Color, and record any other overflow as its own defect. Run axe at 3 widths and read the regression by name. The report is one commit." The M head is **e438ed9**. The regression baseline is run 43233600652 against push run 43197966408. The report commit makes H2 = e438ed9 + the report alone, which needs CI 5 of 5 with its delta stated.
+
+**Merge order relative to #297:** DL-184 (9)(c) stands, so #334 may merge first. M added an import hunk at line 8 of `masters-table-actions.spec.ts`. #297 changes lines 12 and 13 and adds at line 116. `git apply --check` of each PR's diff of that file onto the other PR's version is clean both ways. No other file is shared. No deprecation lint rule exists, so #297's re-export imports are unaffected. Whichever PR merges second takes a GitHub update-branch with empty-diff checks (DL-183 (7)). DL-185 (4) binds: #334 merges before AQP-276's measure window or after both sets.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| Q1 | orchestrator | Jira AQP-275 | Transition In Review to In QA; brief qa-engineer with DL-183 (6) on e438ed9 | Now |
+| Q2 | qa-engineer | `docs/07-qa/AQP-275-test-report.md` | DL-183 (6) as quoted above; report as one commit on #334 | G7 |
+
+**Risks registered:** none (RISK-027 unchanged).
+
+**Posted:** Jira AQP-275 comment 11692; PR #334 comment 6826309200.
