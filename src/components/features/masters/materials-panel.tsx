@@ -11,7 +11,7 @@ import type { MaterialRow } from '@/lib/masters/materials-client';
 import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
+import { FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { MaterialResults } from './material-results';
 import { ADD_MATERIAL, materialSavedNotice, MATERIAL_SEARCH_LABEL, MATERIAL_SEARCH_PLACEHOLDER } from './material-texts';
 import { useMaterialMaster, type MaterialMaster } from './use-material-master';
@@ -46,7 +46,7 @@ function AddMaterialButton({ master }: { readonly master: MaterialMaster }) {
 /** The notice above the table: a status, not an alert, because nothing failed. */
 function SavedNotice({ notice }: { readonly notice: PageNotice }) {
   return (
-    <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
+    <Notice tone={notice.tone} role="status" {...(notice.title === undefined ? {} : { title: notice.title })}>
       {notice.text}
     </Notice>
   );

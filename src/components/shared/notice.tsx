@@ -2,7 +2,9 @@ import { CircleCheck, CircleX, Clock, Info, type LucideIcon } from 'lucide-react
 import type { ReactNode } from 'react';
 
 import { Alert, AlertDescription, AlertTitle, type AlertTone } from '@/components/ui/alert';
+import { cn } from '@/lib/cn';
 
+import { BREAK_LONG_NAMES } from './break-long-names';
 import { Icon } from './icon';
 
 const TONE_ICON: Readonly<Record<AlertTone, LucideIcon>> = {
@@ -33,13 +35,14 @@ export interface NoticeProps {
 /**
  * A notice (UX spec section 6.0 "States", STORY-10.02 AC-5): an icon, a thick left border and written text,
  * so an error or a warning is never shown by colour alone. Danger announces itself with `role="alert"` and
- * success with `role="status"`.
+ * success with `role="status"`. Every notice wraps an unbroken name (`BREAK_LONG_NAMES`, ux-spec 6.0 "Names wrap"; AQP-275, DEF-030), so no
+ * caller adds the class.
  */
 export function Notice({ tone, title, children, role, className }: NoticeProps) {
   const glyph = TONE_ICON[tone];
   const liveRole = role ?? TONE_ROLE[tone];
   return (
-    <Alert tone={tone} role={liveRole} {...(className === undefined ? {} : { className })}>
+    <Alert tone={tone} role={liveRole} className={cn(BREAK_LONG_NAMES, className)}>
       <Icon icon={glyph} className="mt-s-1 shrink-0" />
       <AlertDescription>
         {title === undefined ? null : <AlertTitle>{title}</AlertTitle>}

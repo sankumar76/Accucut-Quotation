@@ -6,7 +6,7 @@
 | Severity | Sev-3 Moderate (test plan section 6; DL-094: the scale decides severity, who owns the code decides only the owner) |
 | Priority | P3 |
 | Type | Product |
-| Status | New |
+| Status | Closed |
 | Jira / GitHub | [AQP-274](https://sankumar76.atlassian.net/browse/AQP-274) / [#308](https://github.com/sankumar76/Accucut-Quotation/issues/308); relates to AQP-113, AQP-122, AQP-1. Related, separate: #307 (DL-131 condition K, failed writes) |
 | Found by / date | reviewer-quality on PR #291 (QLT-01, probe N1 = control PR #304); routed by master in DL-169; reproduced and graded by qa-engineer, 2026-11-12 |
 | Build / commit | `origin/master` 8f07c17 (code as of abdac01) |
@@ -37,6 +37,7 @@ Sev-3: wrong wording that does not mislead about a price (scale example: "Messag
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | `fix/AQP-274-...` from `master` after #291 merges |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-12 | PR #309 `fix/AQP-274-saved-not-shown`: `b22f735` (the sentence under a success notice on Process and Materials, one shared `SAVED_NOT_SHOWN_BODY`), `86d7108` (AQP-122 AC-8 load-error test) |
+| Regression test added | developer | 2026-11-12 | `masters-slow-read.spec.ts` (`expectSavedNotShown`, two failed-read tests, DEF-029 in the titles); `tests/unit/masters-load-error-words.test.ts` (9 cases, H1 `e6e1c14`) |
+| Verified | qa-engineer | 2026-11-12 | G7 on H1 `e6e1c14`: `docs/07-qa/AQP-274-test-report.md` (H2 `a7f1a2d`): CI run 43179008751 5 of 5 at +9 / +9 / +0 / +0; Process Add, Edit, Delete and Materials Add, Edit at 360, 768, 1366 px show the v0.23 sentence; the standard line after a deleted-elsewhere notice and a refused Delete; Treatment / Color unchanged; axe 0 |
+| Closed | qa-engineer | 2026-11-12 | master G7 GO, DL-181; closes with the squash of #309 (`Closes #308`) |

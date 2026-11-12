@@ -13,7 +13,7 @@ import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
+import { FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { ProcessResults } from './process-results';
 import {
   ADD_RATE,
@@ -56,7 +56,7 @@ function AddRateButton({ master }: { readonly master: ProcessMaster }) {
 /** The notice under the header. The warning and the information are statuses, not alerts: nothing failed (ux-spec v0.17). */
 function PageNoticeView({ notice }: { readonly notice: PageNotice }) {
   return (
-    <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
+    <Notice tone={notice.tone} role="status" {...(notice.title === undefined ? {} : { title: notice.title })}>
       {notice.text}
     </Notice>
   );

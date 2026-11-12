@@ -8,7 +8,7 @@ import { SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
 import { MasterLoadError } from './master-load-error';
-import { BREAK_LONG_NAMES, SAVED_NOT_SHOWN_BODY } from './master-texts';
+import { SAVED_NOT_SHOWN_BODY } from './master-texts';
 import { TreatmentDeleteDialog } from './treatment-delete-dialog';
 import { TreatmentFormDialog } from './treatment-form-dialog';
 import { TreatmentList } from './treatment-list';
@@ -49,7 +49,7 @@ function Notices({ state }: { readonly state: TreatmentsState }) {
   const { notice } = state;
   if (notice === null) return null;
   return (
-    <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
+    <Notice tone={notice.tone} role="status" {...(notice.title === undefined ? {} : { title: notice.title })}>
       {notice.text}
     </Notice>
   );
