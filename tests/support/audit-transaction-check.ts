@@ -35,6 +35,7 @@ import ts from 'typescript';
  *    change inside the same callback. The late-failure runner of tests/support (#130) is what forces a failure at that point;
  *  - ACCEPTED: `record` reached through destructuring (`const { record } = audit`) or a computed key (`audit[name]`), which are not
  *    uses of the member that the check looks at;
+ *  - ACCEPTED: a `record` whose error is caught and not rethrown inside the callback; error handling is outside this check (X1, QLT-08);
  *  - FAILS: a chain longer than `MAX_HELPER_STEPS`, a cycle, a helper that is never called in its file or is used other than by a direct
  *    call, a `.run(` callback the checker does not type as `TransactionRunner` (an `any`, a class that only implements the interface, a
  *    callback given by name), a `record` in a nested function, a call that is not awaited or returned (`void`, a forgotten `await`).
@@ -229,6 +230,7 @@ function isRepositoryCallWith(context: Context, node: ts.Node, symbol: ts.Symbol
 
 /** Whether `fn` makes "another repository call" with the parameter `symbol` among its arguments (anywhere inside it). */
 function callsAnotherRepository(context: Context, fn: FunctionNode, symbol: ts.Symbol): boolean {
+  // forEachChild stops at the first truthy result, so `false` is mapped to `undefined` to keep scanning
   const visit = (node: ts.Node): boolean => isRepositoryCallWith(context, node, symbol) || ts.forEachChild(node, (child) => visit(child) || undefined) === true;
   return fn.body !== undefined && visit(fn.body);
 }

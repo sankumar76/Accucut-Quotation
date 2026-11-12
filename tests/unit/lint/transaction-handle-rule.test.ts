@@ -99,3 +99,13 @@ describe('AC-1 / AC-3 (P4): createTransactionHandle is for the transaction runne
     expect(await ruleIdsFor('scripts/example.ts', 'export async function load(name: string) {\n  return import(name);\n}\n')).toContain('no-restricted-syntax');
   });
 });
+
+describe('the lint fixture refuses a fixture that ESLint did not read (STD-13)', { timeout: 30_000 }, () => {
+  it('rejects a source that does not parse, naming the path and ESLint\'s text', async () => {
+    await expect(messagesFor('src/server/services/example.ts', 'export const = ;\n')).rejects.toThrow(/src\/server\/services\/example\.ts: the fixture does not parse: .+/);
+  });
+
+  it('rejects a path that ESLint ignores, naming it', async () => {
+    await expect(messagesFor('src/generated/example.ts', 'export const x = 1;\n')).rejects.toThrow(/src\/generated\/example\.ts: ESLint ignores this path/);
+  });
+});

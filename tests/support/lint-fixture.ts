@@ -28,8 +28,15 @@ export function createLintFixture(root: string): LintFixture {
   const eslint = new ESLint({ cwd: root });
 
   async function messagesFor(filePath: string, code: string): Promise<LintedMessage[]> {
-    const [result] = await eslint.lintText(code, { filePath: `${root}${filePath}` });
-    return (result?.messages ?? []).flatMap(({ ruleId, message }) => (ruleId === null ? [] : [{ ruleId, message }]));
+    const absolutePath = `${root}${filePath}`;
+    // An ignored path or a fixture that does not parse comes back as `[]` too, which would turn every "allows" test into a no-op (STD-13).
+    if (await eslint.isPathIgnored(absolutePath)) throw new Error(`${filePath}: ESLint ignores this path, so the fixture would not be linted`);
+    const [result] = await eslint.lintText(code, { filePath: absolutePath });
+    if (result === undefined) throw new Error(`${filePath}: ESLint returned no result for the fixture`);
+    return result.messages.flatMap(({ ruleId, message, fatal }) => {
+      if (fatal === true) throw new Error(`${filePath}: the fixture does not parse: ${message}`);
+      return ruleId === null ? [] : [{ ruleId, message }];
+    });
   }
 
   async function ruleIdsFor(filePath: string, code: string): Promise<string[]> {

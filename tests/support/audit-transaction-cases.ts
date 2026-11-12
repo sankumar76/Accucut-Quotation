@@ -249,6 +249,21 @@ export const OPEN_LIMITS: readonly Case[] = [
     findings: [],
   },
   {
+    name: 'X1: a record whose error is caught and not rethrown inside the callback passes (QLT-08)',
+    code: `export async function swallowed() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        try {
+          await audit.record(tx, entry);
+        } catch {
+          // dropped: the change commits without its entry
+        }
+      });
+    }`,
+    records: 1,
+    findings: [],
+  },
+  {
     name: 'a record reached through a computed key is not seen',
     code: `export async function computed() {
       await transactions.run(async (tx) => {
