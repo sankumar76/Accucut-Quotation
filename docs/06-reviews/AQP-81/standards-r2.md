@@ -88,6 +88,10 @@ Tests (checklist 9): AAA shape and descriptive names kept; the new `describe` ti
 
 Version control (checklist 10): four focused commits, all with `[AQP-81]`; all 29 changed files belong to F1 to F11; no generated file or lockfile change.
 
+## Update after H3 (condition L, DL-196 / DL-198)
+
+STD-12 is **Fixed** at H3 ff4e193: `git show ff4e193:src/app/api/v1/account/password/route.ts` shows `PASSWORD_CHANGED_LOG_MESSAGE` as a plain `const` (line 11), used only at line 28. Replied "Fixed (H3 ff4e193, DL-196 / DL-198)" in the STD-12 thread. No new review, no label change. The H3 diff `a7186f2..ff4e193` was not otherwise reviewed by standards (3 files: `route.ts`, `account.spec.ts`, `harness-password.ts`). The verdict stays APPROVE WITH COMMENTS; STD-13 and STD-14 remain Info.
+
 ## Issues for other roles
 
 - **orchestrator:** STD-11, the squash subject at merge (`feat(...)` with `[AQP-81]`). Also #346 must stay open and due before G8 (STD-03, sign-in 15-minute wording, and STD-14 can ride on it).

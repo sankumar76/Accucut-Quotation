@@ -154,3 +154,4 @@ await expect(page.getByRole('status').filter({ hasText: SUCCESS_TITLE })).toBeVi
 - Label: `review:quality-changes-requested` kept.
 - Jira AQP-81 hand-off: comment 11732.
 - Plant and control PRs (draft, closed unmerged; branches left on origin): #351 to #356 (P1a, P1b, P2, P3, P4, P5), #357 (C3).
+- **Closure (DL-198, condition L):** master verified H3 ff4e193 and closed G6 attempt 2 with GO. QLT-13 and QLT-14 are Fixed (thread replies discussion_r4553998836, r4553999621), and the label is now `review:quality-approved`.
