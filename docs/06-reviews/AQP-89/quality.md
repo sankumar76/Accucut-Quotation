@@ -3,12 +3,110 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | 1 |
-| Base…branch | `master...feat/AQP-89-twelve-hour-session` (PR #253; PR base `master` b3403e3) |
-| Commit reviewed | c4055f7 |
-| Date | 2026-11-11 |
-| **Verdict** | **REQUEST CHANGES**: 1 Major (QLT-01, needs a recorded decision, not code), 2 Minor, 7 Info |
-| PR review | https://github.com/sankumar76/Accucut-Quotation/pull/253#pullrequestreview-5861690717 (COMMENT, single-token; label `review:quality-changes-requested`) |
+| Review round | **2** (DL-160 condition R), on the fix diff only. Round 1 is kept below as written |
+| Base…branch | `master...feat/AQP-89-twelve-hour-session` (PR #253) |
+| Commits reviewed | Round 1: c4055f7. **Round 2: `git show --cc e3cd1d4` (merge of `master` 46f56d6) and `git diff e3cd1d4 cf42f87`** (9b1df51, cf42f87) |
+| Date | 2026-11-11 (round 1), 2026-11-12 UTC (round 2) |
+| **Verdict** | Round 1: REQUEST CHANGES. **Round 2: APPROVE WITH COMMENTS.** 0 Blocker, 0 Critical, 0 Major; 1 Minor (QLT-11); new Info QLT-12 to QLT-14; carried Info QLT-04 to QLT-07 and QLT-09 |
+| PR review | Round 1: https://github.com/sankumar76/Accucut-Quotation/pull/253#pullrequestreview-5861690717. Round 2: https://github.com/sankumar76/Accucut-Quotation/pull/253#pullrequestreview-5868016435 (COMMENT on cf42f87, single-token; label `review:quality-approved`; replies in the QLT-01, 02, 03, 08 and 09 threads) |
+
+# Round 2 (fix head cf42f87)
+
+## Summary
+
+The fix push does what DL-160 asked of it, and SEC-01 is closed.
+
+- **QLT-02 is fixed.** Two tests were added: `auth-session.test.ts`, and the `session` callback case in `auth-options.test.ts`. My DL-160 (5) re-plant of P2 (#287), the exact mutation that survived round 1, is now **red**: 1 failed / 3,025.
+- **QLT-03 is fixed.** E2E test 2 now asks the real server for `/api/v1/users` with an ended cookie and checks the exact problem body. My plant E1 (#286) breaks the one link no unit test covers: the proxy stops forwarding `x-session-cookie` on API paths. With it, every Vitest stage stays **green**, and E2E test 2 is **red at all three widths**, receiving `UNAUTHORIZED` instead of `SESSION_ENDED`. The new check therefore closes the gap QLT-03 named.
+- **QLT-08 / #255 is fixed.** The fix-head E2E logs hold no `[next-auth][` line and no `JWT_SESSION_ERROR` line (DL-160 (5)). The logger is wired: `warn` `NEXTAUTH_URL` appears once per server start. The developer's plants L1 to L3 are each red on the intended test.
+- **SEC-01 is closed correctly.** The guard reads the same value next-auth's App Router adapter uses as `action` (`context.params.nextauth[0]`; `next-auth/next/index.js:54,64`). It compares it exactly, as next-auth's case-sensitive `switch` does. So no path, casing, encoding, query or method variant reaches the relay (table below). The test spies pino at all four levels, and the developer's plant #284 turns all four `_log` cases red.
+
+The one Minor (QLT-11) is that the SEC-01 test drives next-auth's core through a stand-in for the adapter. So the guard and next-auth reading the same value is shown by reading the source, not by a real request. One request in an existing E2E test would pin it. It does not block.
+
+| Severity (open after round 2) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 (QLT-01 resolved by documentation, DL-157) |
+| Minor | 1 (QLT-11, new) |
+| Info | 8: QLT-12 to QLT-14 (new); QLT-04, QLT-05, QLT-06, QLT-07, QLT-09 (carried, owners named) |
+
+## Checks run (round 2)
+
+| Check | Command / evidence | Result |
+|-------|--------------------|--------|
+| Merge commit | `git show --cc e3cd1d4` (parents c4055f7, 46f56d6) | **Empty**: clean merge, no conflict hunks. `git diff c4055f7 e3cd1d4 -- <32 PR files>` = 0 lines (DL-160 (3)) |
+| Fix diff | `git diff e3cd1d4 cf42f87`: 15 files, +360 / −31 | 13 in the round-1 set. **Two outside it:** `src/app/api/auth/[...nextauth]/route.ts` and the new `tests/unit/auth-log-route.test.ts` (SEC-01; named in the PR body). See "Issues for other roles" |
+| PR CI at cf42f87 | run 43137162924, merge ref b9bdec6 = cf42f87 into `master` 774eff8, 5 of 5 | Green. Unit **3,026**, full Vitest **5,398**, E2E 268 + 266 + 253 = **787**, skipped 3 + 4 + 17 = **24**. Against 774eff8 (2,922 / 5,285 / 778 / 24, DL-163): **+104 / +113 / +9 / +0**. That is DL-160 (7) with n_u = 13 (I counted the `it` cases: 1 + 1 + 6 + 5), n_i = 0, e = 0. Changed-code coverage **100 %** (94 of 94) |
+| Local unit run | `npx vitest run` over `auth-log-route`, `auth-options`, `auth-session`, `system-pages`, `http-problem` in the developer worktree at cf42f87 (existing `node_modules`, no install) | **126 / 126 passed** |
+| next-auth log lines in E2E | `gh run view 43137162924 --log`, grep | 0 `[next-auth][` lines, 0 `JWT_SESSION_ERROR`; 3 pino `warn` `NEXTAUTH_URL` lines (one per server start) |
+| Developer plants | #280 L1, #281 L2, #282 L3, #283 P2, #284 SEC-01; each one commit on cf42f87, diff read | **All red, on the intended tests only** (1 failed file of 155 each, E2E green): L1 → `auth-options` (iii) and the hostile-value case; L2 → (i); L3 → (i), (iii), (iv) and the hostile-value case; P2 → the QLT-02 case; SEC-01 → `auth-log-route` all three POST cases and GET |
+| **QLT plant E1** (proxy forwards no `x-session-cookie` on an API path) | #286, run 43139690868 | **RED, E2E only.** `Stages 1 to 11b` green (no unit test sees it); `session-ended.spec.ts:53` test 2 red at mobile, tablet and desktop (also on retry): `code: "UNAUTHORIZED"`, `title: "Sign in to continue."`. `Stages 1 to 11` red only as the E2E aggregate (`RESULT_VERIFY: success`, `RESULT_E2E: failure`) |
+| **QLT plant P2 re-plant** (DL-160 (5)) | #287, run 43139857014 | **RED**: 1 failed / 3,025 passed, `auth-session.test.ts` "QLT-02: …". E2E green |
+| Secret scan before each push (DL-094) | `gitleaks dir` v8.30.1 (Docker) on the planted files | No leaks |
+| ADR-009 amendment 2 on `master` (condition M, for QLT-01) | `git show origin/master:docs/04-architecture/adr/ADR-009-…md` | Present (Status line and §"Amendment 2") |
+| Branch currency | `git rev-list --count cf42f87..origin/master` | 3 (the Dependabot squashes of DL-163; only `package.json` and `package-lock.json`, no overlap with the PR). The CI merge ref already includes 774eff8 |
+| Control PRs | #286, #287 | Closed unmerged, with a result comment. Branches `control/AQP-89-qlt-r2-e2e-api` and `control/AQP-89-qlt-r2-p2` remain for the delivery lead (DL-160 (12)) |
+
+## SEC-01 verification
+
+**Source read:** next-auth 4.24.15 (`package.json` version), `core/index.js` (`_log` at l.285–297, gated by `authOptions.logger`, POST branch only), `next/index.js` (both adapters, the `NextAuth` dispatcher), `utils/logger.js` (`setLogger`, `proxyLogger`).
+
+| Question | Finding |
+|----------|---------|
+| Does the guard depend on next-auth's action parsing? | It uses **the same value**. `NextAuth(options)` returns `(req, ctx) => ctx.params ? NextAuthRouteHandler : NextAuthApiHandler`. The route passes `context`, which always has `params`, so the App Router adapter runs, and it sets `action = (await context.params).nextauth[0]` (l.54, 64). The guard reads the same expression. Neither the core nor the adapter changes case (`grep toLowerCase` gives nothing), and the core's `switch` is exact. So the guard is equivalent to next-auth's dispatch, not a parallel parser |
+| `/api/auth/_log/` (trailing slash) | `next.config.ts` has no `trailingSlash`, so Next answers 308 to `/api/auth/_log` with the method kept. Either way `params.nextauth` is `['_log']` → 404 |
+| `/api/auth/_log/x` | `['_log', 'x']`: the guard checks `[0]` → 404 |
+| `/api/auth/_LOG`, `/api/auth/%5Flog` | `_LOG` passes the guard, but next-auth's POST `switch` has no `_LOG` case → its 400 "not supported", nothing logged. `%5Flog`: whatever string Next gives in `params`, the guard and next-auth see the same one: either `_log` (404) or not the action |
+| `?nextauth=_log` on another action | The App Router adapter takes `query` only from `req.nextUrl.searchParams` for `query` and `error`, never for `action`. `req.query.nextauth` is read only by the Pages API adapter (l.14), which never runs here: there is no `pages/` directory, and `NextAuth(` has one caller, `route.ts` |
+| GET, HEAD, other methods | GET and POST share `handle` → 404. Next answers HEAD with the GET handler → 404. OPTIONS is Next's automatic answer and never reaches the handler. Other methods → 405. The core handles `_log` for POST only in any case |
+| Other ways into next-auth's core | `getServerSession` runs the core with `action: "session"` only. The portal does not use `next-auth/react` (`src/lib/auth/auth-client.ts` stands in for it), so no browser beacon goes to `_log`, and the 404 breaks nothing |
+| Does `logger` switch on anything else? | `authOptions.logger` is read in three places: `setLogger` (core l.58), the internal logger handed to `SessionStore` (l.121), and `_log` (l.287). Only `_log` is an endpoint. Side effect: `setLogger` lets a supplied `debug` replace the no-op that `debug: false` installs, so next-auth's debug lines now reach pino `debug` → QLT-12 (Info) |
+| Is the test meaningful? | Yes, within its seam. It runs the **real** route, the **real** `buildAuthOptions` (with the real logger) and next-auth's **real** core. pino is replaced by spies at `debug`, `info`, `warn` and `error`, and `nothingWasLogged` checks all four. There are three POST bodies at three levels (including one forged as the expired-token code), GET, and a positive control (`/api/auth/csrf` still reaches next-auth and returns a token). Plant #284 (the guard matches `_log-off`) turns all four `_log` cases red. Limit: the adapter is a stand-in that derives `action` as the real one does → QLT-11 |
+| Defence in depth | `LOGGABLE_VALUE` (`/^[A-Za-z0-9_.-]{1,64}$/`) replaces any code, name or error code that is not a plain identifier. So even with the route open, a forged line could not inject JSON or newlines. The hostile-value test covers it, and L1 and L3 break it |
+
+## Round-1 findings, re-checked
+
+| ID | Round-1 severity | Status | Evidence |
+|----|------------------|--------|----------|
+| QLT-01 | Major | **Resolved (documentation)** | DL-157 KEEP; ADR-009 amendment 2 is on `master`; DL-160 (1). No code change, as foreseen |
+| QLT-02 | Minor | **Fixed** | `auth-session.test.ts` "QLT-02 …" (also checks `requireUser` → `SESSION_ENDED`) and `auth-options.test.ts` (`session` callback drops the user when `signedAt` is missing). P2 red twice: developer #283, my #287 |
+| QLT-03 | Minor | **Fixed** | E2E test 2: `context.request.get('/api/v1/users')` with `addEndedSession(context, 'expired-token')`. It checks 401, `application/problem+json`, `private, no-store`, and an exact `toEqual` body (no extra members, so no data). E1 red only there. The browser hop (`handleSessionEnded` → SCR-01) stays unit-tested plus QA's own run (DL-160 (10)) |
+| QLT-04 | Info | Open, owner ux-expert (#256), due G8 | Unchanged code; the wording question is with #256 |
+| QLT-05 | Info | Open (optional) | `resolveSessionUser` now says it is test-only (STD-04). The two predicates are still ordered in one place |
+| QLT-06 | Info | Open (latent) | Unchanged; only relevant if the app runs on more than one host |
+| QLT-07 | Info | Open, owner ux-expert (#256), due G8 (DL-160 (9)) | Unchanged |
+| QLT-08 | Info | **Fixed** (#255) | Expired `JWT_SESSION_ERROR` → `debug`, other `JWT_SESSION_ERROR` → `warn`, other codes keep their level; only code, name and error code are written. Tests (i) to (iv) use real jose errors. The E2E logs are clean |
+| QLT-09 | Info | **Open, for QA at G7** | Unchanged. QA checks what it can, and the delivery lead's device session runs the real screen reader before G8 (DL-160 (10)) |
+| QLT-10 | Info (praise) | Stands | `encode` now also says why a token without the three claims gets the default lifetime (it is never honoured) |
+
+## AC conformance (round 2 delta)
+
+| AC | Change since round 1 | Result |
+|----|----------------------|--------|
+| AC-1 | none | Met |
+| AC-2 | `encode` comment only | Met (DL-160 (2)) |
+| AC-3 | `FocusMainHeading` moved from `unauthorized.tsx` into `SystemPageCard` for `kind === 'session-ended'` (only `unauthorized.tsx` uses that kind). E2E test 1 (focus on the heading, 3 widths) is green | Met |
+| AC-4 | API 401 `SESSION_ENDED` checked against the real server (E1 red) | **Met and now verified end to end on the server side**; the browser hop stays unit-tested plus QA (DL-160 (10)) |
+| AC-5 | test refactor only (typed holder, STD-14) | Met |
+| AC-6 | as AC-3 | Met; QLT-09 with QA |
+
+## Findings (round 2)
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-11 | Minor | `tests/unit/auth-log-route.test.ts:41-55` | Test adequacy (SEC-01) | The test replaces next-auth's App Router adapter with a stand-in that derives `action` from `nextauth[0]` itself (l.49). The property the control rests on, that the guard and next-auth read the same value, is shown by reading `next/index.js:54,64`. No real request through Next.js routing shows it | A future next-auth release that derives `action` differently (for example from the URL) would reopen `_log` with this test still green. Next-auth bumps come in as Dependabot PRs, whose CI is the only check | Add to an existing E2E test (no new entry, e = 0), after its other steps: `const relay = await context.request.post('/api/auth/_log', { form: { level: 'error', code: 'QLT_11' } }); expect(relay.status()).toBe(404);` (optionally also `/api/auth/_log/x`). Or a follow-up issue. It does not block G6 |
+| QLT-12 | Info | `src/server/auth/options.ts:133`, `:143` | Operability | Supplying `logger.debug` makes `setLogger` forward next-auth's debug lines, which `debug: false` used to silence (`utils/logger.js` l.49–52) | None today: only the code, error name and error code are written, and pino runs at `info` (`src/lib/logger.ts:77`). At `debug`, codes such as `CHUNKING_SESSION_COOKIE` would appear, with no claims | None needed. Optionally mention it in the `buildNextAuthLogger` comment |
+| QLT-13 | Info | `src/components/features/system-pages/system-page.tsx:100` | Design (PRF-01 fix) | A page-level focus effect now sits inside a presentational card, keyed on one `kind` | Acceptable: the card is the whole content of every system page, and the effect is tied to the kind that needs it. The E2E focus check covers it. Byte effect → reviewer-performance | None |
+| QLT-14 | Info (praise) | `src/server/auth/options.ts:93-137`; `tests/unit/auth-options.test.ts` | Correctness, test quality | The logger tests feed it the errors jose really throws (expired, wrong key, malformed), not hand-made objects. The leak test plants a token in the message, stack and extra fields, and checks every level. The identifier filter keeps the logger safe even if `_log` were reachable. The SEC-01 test has a positive control | n/a | n/a |
+
+## Issues for other roles (round 2)
+
+- **master:** (1) DL-160 (4) asked for the fix "in the PR's 32 files". SEC-01 adds `route.ts` and `tests/unit/auth-log-route.test.ts`, and the PR body states it. From the quality side the extension is necessary and contained. (2) DL-163 (4)(a): #253 does not yet contain 774eff8 (3 Dependabot squashes, package files only, no overlap). The CI evidence is already on a merge ref with 774eff8. Whether the merge commit is needed before G6 attempt 2 or before the squash is your ruling. (3) QLT-11: a follow-up issue, or one request in E2E with the next push, your choice.
+- **qa-engineer (G7):** QLT-09 (real screen reader via the delivery lead's device session, DL-160 (10)), and the AC-4 browser hop.
+- **delivery lead:** delete `control/AQP-89-qlt-r2-e2e-api` and `control/AQP-89-qlt-r2-p2` with the other AQP-89 control branches (DL-160 (12)).
+
+# Round 1 (c4055f7), kept as written
 
 ## Summary
 
