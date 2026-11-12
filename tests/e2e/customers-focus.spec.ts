@@ -143,6 +143,8 @@ test.describe('the read after an add (DL-153, DEF-020)', () => {
     await addByKeyboard(page, name);
     await expect(page.getByRole('dialog', { name: ADD })).toHaveCount(0);
     await afterOneFrame(page);
+    // CONTROL (reviewer-quality): everything that takes focus from here on is the answer to the failed read.
+    const fromTheRead = focusLog.length;
     gate.release();
 
     const title = page.getByRole('heading', { name: LOAD_ERROR_TITLE });
@@ -152,6 +154,8 @@ test.describe('the read after an add (DL-153, DEF-020)', () => {
     expect(focusLog.filter((entry) => entry.startsWith('H1:'))).toEqual([]);
     expect(focusLog.at(-1)).toBe(`H2:${LOAD_ERROR_TITLE}`);
     await expect(title).toBeFocused();
+    // CONTROL (reviewer-quality): after the failed read only the error title took focus: not the Add button, not the heading.
+    expect(focusLog.slice(fromTheRead).filter((entry) => entry !== `H2:${LOAD_ERROR_TITLE}`)).toEqual([]);
     // Polled at the three widths of the projects (360, 768 and 1366 px): the element with focus is the title, and stays it.
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? ''), { message: 'focus stays on the error title' }).toBe(LOAD_ERROR_TITLE);
     await expect(page.getByRole('status').filter({ hasText: `${name} was added.` })).toBeVisible();
