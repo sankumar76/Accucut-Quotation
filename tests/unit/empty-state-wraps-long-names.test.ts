@@ -14,6 +14,9 @@ import { EmptyState } from '@/components/shared/states';
 
 const LEVELS = ['h2', 'h3', 'h4'] as const;
 
+/** The longest name the form of SCR-11 and SCR-13 accepts (UX spec 6.0 "Names wrap"): the title is checked with a value of that length. */
+const LONG_NAME_LENGTH = 100;
+
 interface RenderedHeading {
   readonly tag: string;
   readonly classes: string[];
@@ -51,8 +54,8 @@ describe('an empty state wraps an unbroken name in its title (AQP-289, DEF-035)'
     expect(headingOf({}).classes).toEqual(expect.arrayContaining(['text-sub', 'font-semibold', 'text-ink']));
   });
 
-  it('prints a 100-character title in full, with the wrapping class on its heading', () => {
-    const title = `No rate matches "${'x'.repeat(100)}"`;
+  it(`prints a ${LONG_NAME_LENGTH}-character title in full, with the wrapping class on its heading`, () => {
+    const title = `No rate matches "${'x'.repeat(LONG_NAME_LENGTH)}"`;
     const heading = headingOf({ title });
     expect(heading.text).toBe(title.replaceAll('"', '&quot;'));
     expect(heading.classes).toContain(BREAK_LONG_NAMES);
