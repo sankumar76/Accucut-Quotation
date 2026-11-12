@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-import { focusOpener, type Opener } from './master-opener';
+import { focusHeading, focusOpener, type Opener } from './master-opener';
 
 /**
  * Reading a masters list again after a change, and where focus goes when that read has finished: back to the button that opened the dialog,
@@ -37,7 +37,7 @@ export function useFocusAfterRead({ status, result, opener, shouldFocusWhenFaile
   useEffect(() => {
     if (status === 'loading' || !wantsFocus.current) return;
     wantsFocus.current = false;
-    if (status === 'ready') focusOpener(opener.current);
+    if (status === 'ready') focusHeading(); // CONTROL A2: after a good read focus goes to the heading, not the opener
     else if (shouldFocusWhenFailed) focusOpener(opener.current, true);
   }, [status, result, opener, shouldFocusWhenFailed]);
 
