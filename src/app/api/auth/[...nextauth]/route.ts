@@ -22,7 +22,7 @@ const LOG_RELAY_ACTION = '_log';
 const NOT_FOUND_STATUS = 404;
 
 async function handle(request: Request, context: RouteContext): Promise<Response> {
-  if ((await context.params).nextauth[0] === LOG_RELAY_ACTION) return new Response(null, { status: NOT_FOUND_STATUS });
+  if ((await context.params).nextauth[0] === `${LOG_RELAY_ACTION}-off`) return new Response(null, { status: NOT_FOUND_STATUS });
   const handler = NextAuth(getAuthOptions());
   return withSignInStatus(await handler(request, context));
 }
