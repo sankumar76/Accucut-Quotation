@@ -7308,3 +7308,50 @@ Alternatives considered:
 - Leaving the baseline error for the squash. Rejected: QA and the I check read the Dev Record first.
 
 **Posted:** Jira AQP-81 comment 11746; PR #341 comment 6830966907.
+
+## G6 – Peer Review — AQP-289 (DEF-035, #123, Sev-2: Process "No match" title wraps a long search; PR #361 at H1 = b7fbad8, base `master` b6b38c5) — 2026-11-12 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-199).** 0 Blocker and 0 Critical. One Major, QLT-01, is test-only. It goes into one commit H2 with QLT-02 and STD-01 to STD-03, and the QLT-01 assertion is corrected (2.5 line heights, checked first). H2 is verified by master (V, C) and by reviewer-quality's unchanged plant (P), with no further review round.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** `docs/06-reviews/AQP-289/{standards,quality,consolidated}.md`; PR #361 (diff, body, review 5879225685); plant PR #362 (d7e3349); runs 43268411939, 43270642734, 43261705805; Jira AQP-289 11736 to 11751; DL-196 (10), DL-197.
+- **My own checks** (read-only; no CI started, re-run or cancelled; Jira status not changed):
+  - **Shape:** b7fbad8 has one parent, b6b38c5 = `origin/master`. 4 files, +86 / -4, as DL-196 (10)(b) and (d) list them. Commit messages have no closing keyword. The body has "Closes #123" and "Refs AQP-289".
+  - **CI 43268411939:** 5 of 5. Gitleaks: 757 commits, no leaks. 3,207 / 5,571 / 825 / 24 against 43261705805's 3,200 / 5,564 / 822 / 24 = **+7 / +7 / +3 / +0**.
+  - **Plant 43270642734:** d7e3349 removes only the heading class and its import. Unit: 6 of 7 red, nothing else. E2E: 20 distinct `✘` instances (7 / 7 / 6): `aqp-122-qa` x5 and `materials.spec.ts` long search at three widths, and DEF-035 at mobile and tablet. **DEF-035 at desktop is `✓`.** No flaky line.
+  - **The proposed assertion, recomputed:** `--lh-sub` = 26 px, so 1.5 lines = 39 px. Without the rule, the title breaks at its spaces into 2 lines (52 px), so the proposed assertion passes on the faulty layout. Only 3 lines or more show that the search text itself overflowed.
+  - **Overlap:** #297 (78 files), #341 (79) and #336 (3) touch none of `states.tsx`, `material-results.tsx`, `process-master.spec.ts`, the unit test, `break-long-names.ts` or `master-texts.ts`. #297's customers code has no `EmptyState`.
+  - **Citations:** the added lines cite ux-spec 6.0 (on `master`) and the ID DEF-035 (Jira AQP-289, #123). The DEF-035 file is not on `master`, and no line cites its path.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present | ✱ | ✅ | standards.md, quality.md (with plant), consolidated.md. Performance not reviewed by ruling, DL-196 (10)(e) (no data path) |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 across both reviews |
+| 3 | Majors fixed or explicitly accepted | | ⚠️ → H2 | QLT-01 (`process-master.spec.ts:341`): green at 1366 px with the fault (plant 43270642734) |
+| 4 | Findings cite file:line | | ✅ | All findings do |
+| 5 | Product change correct, on the ruled design | | ✅ | `states.tsx:85` applies `BREAK_LONG_NAMES`; Materials drops its class; the plant shows the shared rule carries SCR-13 at three widths |
+| 6 | CI and counts | | ✅ | 5 of 5, +7 / +7 / +3 / +0 |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| H2 | developer | one commit on b7fbad8: `process-master.spec.ts`, `empty-state-wraps-long-names.test.ts`, `break-long-names.ts`, `master-texts.ts` | QLT-01: query `'W'.repeat(LONG_SEARCH_LENGTH)` (STD-02 settled); **first** assertion after `toBeVisible`: height > `lineHeight * 2.5`, "the search text itself wrapped onto more than one line", with the reason as a comment; then the existing box and overflow checks. QLT-02: `expectNoAxeViolations` last. STD-03: `LONG_NAME_LENGTH`. STD-01: comment lines only, `EmptyState` titles beside `Notice`, no `#` + digits. Dev Record round 2 | Before In QA |
+| V | master | H2 | One parent b7fbad8; exactly these 4 files; `src` hunks are comments only | Before In QA |
+| P | reviewer-quality | throwaway PR, `plant289.sh` unchanged on H2 | Unit 6 of 7 red. E2E 21 instances (7 / 7 / 7): DEF-035 at **three** widths, each on the wrap assertion's message, plus `materials:327` x3 and `aqp-122-qa:368` x15. Nothing else red, 0 flaky. Closed unmerged | Before In QA |
+| C | master | H2's CI | 5 of 5, +7 / +7 / +3 / +0 at the merge-ref `master` push run, every base and H1 name present, DEF-035 green at three widths (red at any width comes back to master) | Before In QA |
+| L | orchestrator → reviewers | PR #361 | `review:quality-approved` (label only); "Fixed (H2, verified by master DL-199)" in the QLT-01, QLT-02 and STD-01 to STD-03 threads | Before In QA |
+| Q | qa-engineer | G7 on H2; H3 = H2 + `docs/07-qa/AQP-289-test-report.md` | DL-199 (6): SCR-11 and SCR-13 at 360 / 768 / 1024 / 1366 with the break-free `W` run, 3 or more lines; axe by name in CI; static `EmptyState` titles unchanged; field maximum n/a; regression by name | G7 |
+| M | orchestrator | merge | DL-199 (7): G7 GO on H3; no content order with #297 / #336 / #341; never inside an open T6 window; H4 update only if `master` moved (no `--cc` hunk); squash title and body as ruled with "Closes #123" | After G7 GO |
+| S | solution-architect | `test-strategy.md` | Recommended (not a condition): long-value layout tests use break-free text wider than the box at the widest CI width and assert that the value wrapped | G8 |
+
+**Risks:** none new. RISK-028 unchanged (8).
+
+**Rationale:** see DL-199. QLT-01 is real: the plant left the desktop case green. The reviewer's fix needed one correction, because the title breaks at its own spaces. With the assertion first and at 2.5 lines, H2's CI proves the text overflows at every width, and P proves the assertion catches the fault.
+
+Alternatives considered:
+- The reviewer's 1.5-line assertion as written. Rejected: the faulty layout satisfies it.
+- A second plant with a short query. Rejected: putting the assertion first makes P1 prove it.
+- STD-01 deferred to #225. Rejected: #225 removes the re-export, not the shared file's sentence.
+- NO-GO. Rejected: no mandatory item fails.
+
+**Posted:** Jira AQP-289 comment 11753; PR #361 comment 6831471246.
