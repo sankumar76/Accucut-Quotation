@@ -6934,3 +6934,29 @@ Alternatives considered:
 **Rationale:** The diff is the one matrix line, its pins and its comments. CI and both controls behave as AC-1 to AC-3 require, and master read them independently. STD-01 is cheap. The branch must take a merge-commit update anyway before the measure (strict protection, and AC-4 measures on the post-AQP-142 suite), so the title rides with that update and costs no extra CI reading. PRF-01 and PRF-02 must be settled before the measure, so that its result is judged against a stated expectation and not one picked after the result is known.
 
 **Posted:** PR #336 comment 6824364740; Jira AQP-276 comment 11674.
+
+## Condition records — AQP-275 condition U (DL-186) and AQP-276 proposal P-1 (DL-187); CI Stage 2 incident (DL-188) — 2026-11-12
+
+**AQP-275 (PR #334), condition U of DL-183: MET**, by the delivery lead's own action under option (a). M is in progress and is not ruled here.
+
+| # | Check (DL-183 (3)) | Result | Evidence (read by master after `git fetch`) |
+|---|--------------------|--------|---------------------------------------------|
+| 1 | Merge of `master` into the branch, branch side kept | ✅ | 327955c, parents 7fe674a and 3f22672 (= `origin/master`); `git log 327955c..3f22672` is empty |
+| 2 | Files = the 8 of #334 | ✅ | `git diff --stat 3f22672 327955c`: 8 files, +114 / -11 |
+| 3 | Content = 7fe674a | ✅ | `git diff 7fe674a 327955c -- <8 files>`: 0 lines |
+| 4 | No semantic change in the merge | ✅ | `git show --cc --format= 327955c`: 0 lines; 0 conflict markers (`git grep`). Only `treatment-panel.tsx` conflicted, per the merge message |
+| 5 | CI | n/a for U | 43227855468: shards `success`; Stage 2 "leaks found: 3" (DL-188). The count condition is read on M's head |
+
+**AQP-276 (PR #336), proposal P-1: ACCEPTED (DL-187)**, ruled before T6's first sample. The slowest-run exit applies when the head's slowest run is over 5:30 and at most 5:45, the median line is met or takes its exit, and the base median minus the head median is at least 20 s in the same window. There is no slow-host replacement, both exits are stated separately, and RISK-023 stays at 8. No other line moves.
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| P1-PO | product-owner | Jira AQP-276 AC-4 | Add the slowest-run exit of DL-187 (1) and (2)(b) | Before T6's first sample; the orchestrator holds T6 until it is posted |
+| P1-SA | solution-architect | test strategy §10.5 item 12 | Mark P-1 "ruled, DL-187" | With the AC-8 record, by G8 |
+| P1-PM | product-manager | release plan 3.15 (d) | Align the line text with DL-187 | By G8 |
+| R1 | orchestrator | CI readings | Read AQP-275 M, AQP-276 S and AQP-81 G5 again on runs whose Stage 2 is green. `feat/AQP-81-password-rule` has been deleted by the delivery lead, and Stage 2 is green on 43225870317 attempt 2 (DL-188) | Before each gate that uses them |
+
+**Risks registered:** RISK-027 (secret-shaped test fixtures stop every PR's Stage 2), 9.
+
+**Posted:** Jira AQP-275 comment 11682, AQP-276 comment 11683, AQP-1 comment 11684 (RISK-027).
