@@ -7,6 +7,7 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 import { validCallFor, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
+import { SPEC_ACCESS } from '../support/spec-access';
 import { harness, holdSessionClock, releaseSessionClock, SESSION_NOW, FORBIDDEN_SIGNAL, NOT_FOUND_SIGNAL, REDIRECT_PREFIX } from '../support/session-harness';
 
 /**
@@ -43,38 +44,8 @@ vi.mock('@/server/composition', async () => {
 
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
 
-/** What SPEC sections 3 and 9 say, written out (screen, then who may open it). */
-const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
-  '/queue': ['ADMIN', 'LEAD', 'ENGINEER'], // Dashboard and task queues: all (an Engineer sees their own)
-  '/assign': ['ADMIN', 'LEAD'], // Assign task
-  '/estimates/[code]': ['ADMIN', 'LEAD', 'ENGINEER'], // Estimate workspace: all, role-filtered
-  '/estimates/[code]/costs/[slNo]': ['ADMIN', 'LEAD'], // Cost details
-  '/estimates/[code]/export': ['ADMIN', 'LEAD'], // Excel export (FR-070)
-  '/masters/process': ['ADMIN'], // Masters
-  '/masters/customers': ['ADMIN'],
-  '/masters/materials': ['ADMIN'],
-  '/config/fields': ['ADMIN', 'LEAD'], // Field and formula configuration: Admin edits, Lead views
-  '/config/checkpoints': ['ADMIN'], // Insert and delete fields, checkpoints: Admin
-  '/users': ['ADMIN'], // Users
-  '/settings': ['ADMIN'], // Settings
-  '/audit': ['ADMIN'], // Audit log
-  '/about': ['ADMIN', 'LEAD', 'ENGINEER'], // About: all
-  // The API behind the Users screen (SPEC section 9: Users is the Admin's; architecture section 6 rows "Users" and "Reset user password").
-  '/api/v1/users': ['ADMIN'],
-  '/api/v1/users/[id]': ['ADMIN'],
-  '/api/v1/users/[id]/password-reset': ['ADMIN'],
-  // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
-  '/api/v1/audit': ['ADMIN'],
-  // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
-  '/api/v1/process-items': ['ADMIN'],
-  '/api/v1/process-items/[id]': ['ADMIN'],
-  '/api/v1/materials': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
-  '/api/v1/materials/[id]': ['ADMIN'],
-};
-
-/** Routes that are in no SPEC table: the shell and the account. They are open to everyone who is signed in. */
-// `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options").
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/account/password'];
+/** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:

@@ -1,0 +1,12 @@
+Full browser suite (837 tests, 3 widths, dev server, 2 workers) started by mistake when a file filter matched the path of the user folder ("Users"). QA stopped it after the mobile project finished; tests the stop interrupted are not results and are left out.
+mobile: passed 197, failed 8 (6 are the condition-F probe cases, which fail by design while DEF-024 to DEF-026 exist; 2 are load timeouts of navigation.spec AC-8 and users.spec reset-password, which pass when rerun alone: mobile-failures-rerun-output.txt).
+
+Failed lines (mobile):
+  ✘   27 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit (8.8s)
+  ✘   29 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:67:3 › F-b Material (SCR-13, AQP-122): typing 3 letters into the second refused field (9.1s)
+  ✘   28 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit (10.0s)
+  ✘   31 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:67:3 › F-b Process (SCR-11, AQP-113): typing 3 letters into the second refused field (8.7s)
+  ✘   30 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit (9.3s)
+  ✘   32 [mobile] › tests\e2e\aqp-123-focus-jump.spec.ts:67:3 › F-b Users (SCR-14, AQP-65): typing 3 letters into the second refused field (10.7s)
+  ✘  189 [mobile] › tests\e2e\navigation.spec.ts:198:3 › the Engineer (signs in through the page) › AC-8: an unknown address shows the "not found" card to an Engineer, with the button named "Go to my tasks" (21.9s)
+  ✘  262 [mobile] › tests\e2e\users.spec.ts:204:3 › reset a password (AC-5, AC-7) › asks for a password, then sets it; Escape closes the dialog and focus returns to the button (28.2s)

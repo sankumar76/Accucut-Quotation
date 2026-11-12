@@ -11,8 +11,9 @@ import { cn } from '@/lib/cn';
 import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '@/lib/masters/process-items';
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 
-import { isOpener, type Opener } from './process-opener';
-import { BREAK_LONG_NAMES, NOT_USED } from './process-texts';
+import { isOpener, type Opener } from './master-opener';
+import { BREAK_LONG_NAMES } from './master-texts';
+import { NOT_USED } from './process-texts';
 
 /**
  * The rates of SCR-11 (STORY-02.01 AC-1, AC-7): a table from 768 px, where it scrolls inside its own container only, and a card for

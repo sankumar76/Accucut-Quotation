@@ -1,17 +1,17 @@
 import { MATERIAL_FIELD_LABELS } from '@/lib/masters/materials';
 import { RUPEE } from '@/lib/masters/process-items';
 
-import type { PageNotice } from './process-texts';
+import type { PageNotice } from './master-texts';
 
 /**
  * The words of SCR-13 "Materials and lists", Materials tab, that more than one component says (UX spec section 6, "SCR-13"; the mock-up
  * `docs/03-ux/screens/SCR-13.html`). The messages under the fields are in `src/lib/masters/materials.ts`, where the server's schemas read
- * them too. The words that SCR-11 says for every master (the failure lines, Try again, Clear filters) are SCR-11's, imported where used.
+ * them too. The words every masters screen says (the failure lines, Try again, Clear filters) are in `master-texts.ts`, imported where used.
  * The delete states of the mock-up are story 02.07's; the Exchange rates and Treatment / Color tabs are stories 02.04 and 02.05.
  */
 
 export const MASTERS_TITLE = 'Materials and lists';
-export const MASTERS_DESCRIPTION = 'Material prices, specific gravity and scrap rates.';
+export const MASTERS_DESCRIPTION = 'Material prices, exchange rates and the treatment and colour list.';
 
 export const MATERIALS_TAB = 'Materials';
 export const TABS_LABEL = 'Lists';

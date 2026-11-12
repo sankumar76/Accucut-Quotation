@@ -1,0 +1,12 @@
+Control c0: PR #185, CI run 42867526102 (QA probe spec included; plant diff in plant-c0.diff where there is one)
+
+Jobs:
+  Stages 1 to 11b: success
+  Stage 12: E2E (shard 1 of 3): success
+  Stage 12: E2E (shard 2 of 3): success
+  Stage 12: E2E (shard 3 of 3): success
+  Stages 1 to 11: success
+
+Tests failed on every attempt (unique, project and test):
+
+QA probe tests passed: 18

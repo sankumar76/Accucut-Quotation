@@ -1,0 +1,18 @@
+RESULT F-a desktop | Material (SCR-13, AQP-122) | refused=5 first=material-in-drawing | focused=material-specific-gravity | material-in-drawing=x ; material-considered=y ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-a desktop | Process (SCR-11, AQP-113) | refused=3 first=rate-name | focused=rate-unit | rate-name=x ; rate-unit= ; rate-default=
+RESULT F-a desktop | Users (SCR-14, AQP-65) | refused=3 first=user-name | focused=user-password | user-name=x ; user-email=y ; role=ENGINEER ; user-password=z
+RESULT F-a mobile | Material (SCR-13, AQP-122) | refused=5 first=material-in-drawing | focused=material-specific-gravity | material-in-drawing=x ; material-considered=y ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-a mobile | Process (SCR-11, AQP-113) | refused=3 first=rate-name | focused=rate-unit | rate-name=x ; rate-unit= ; rate-default=
+RESULT F-a mobile | Users (SCR-14, AQP-65) | refused=3 first=user-name | focused=user-password | user-name=x ; user-email=y ; role=ENGINEER ; user-password=z
+RESULT F-a tablet | Material (SCR-13, AQP-122) | refused=5 first=material-in-drawing | focused=material-specific-gravity | material-in-drawing=x ; material-considered=y ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-a tablet | Process (SCR-11, AQP-113) | refused=3 first=rate-name | focused=rate-unit | rate-name=x ; rate-unit= ; rate-default=
+RESULT F-a tablet | Users (SCR-14, AQP-65) | refused=3 first=user-name | focused=user-password | user-name=x ; user-email=y ; role=ENGINEER ; user-password=z
+RESULT F-b desktop | Material (SCR-13, AQP-122) | first=material-in-drawing second=material-considered | focused=material-specific-gravity | material-in-drawing=y ; material-considered=x ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-b desktop | Process (SCR-11, AQP-113) | first=rate-name second=rate-default | focused=rate-unit | rate-name=y ; rate-unit= ; rate-default=x
+RESULT F-b desktop | Users (SCR-14, AQP-65) | first=user-name second=user-email | focused=user-password | user-name=y ; user-email=x ; role=ENGINEER ; user-password=z
+RESULT F-b mobile | Material (SCR-13, AQP-122) | first=material-in-drawing second=material-considered | focused=material-specific-gravity | material-in-drawing=y ; material-considered=x ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-b mobile | Process (SCR-11, AQP-113) | first=rate-name second=rate-default | focused=rate-unit | rate-name=y ; rate-unit= ; rate-default=x
+RESULT F-b mobile | Users (SCR-14, AQP-65) | first=user-name second=user-email | focused=user-password | user-name=y ; user-email=x ; role=ENGINEER ; user-password=z
+RESULT F-b tablet | Material (SCR-13, AQP-122) | first=material-in-drawing second=material-considered | focused=material-specific-gravity | material-in-drawing=y ; material-considered=x ; material-price=z ; material-specific-gravity= ; material-scrap-rate=
+RESULT F-b tablet | Process (SCR-11, AQP-113) | first=rate-name second=rate-default | focused=rate-unit | rate-name=y ; rate-unit= ; rate-default=x
+RESULT F-b tablet | Users (SCR-14, AQP-65) | first=user-name second=user-email | focused=user-password | user-name=y ; user-email=x ; role=ENGINEER ; user-password=z

@@ -1,0 +1,12 @@
+diff --git a/src/server/services/exchange-rate-service.ts b/src/server/services/exchange-rate-service.ts
+index 67513e5..d80a71b 100644
+--- a/src/server/services/exchange-rate-service.ts
++++ b/src/server/services/exchange-rate-service.ts
+@@ -123,7 +123,6 @@ async function change(
+ ): Promise<ExchangeRatesRecord> {
+   await masters.lockExchangeRates(tx);
+   const before = await masters.findExchangeRatesForUpdate(tx);
+-  if (changedExchangeRates(before, wanted).length === 0) return before;
+   const after = await masters.saveExchangeRates(wanted, { updatedById: context.actorId, updatedAt: clock.now() }, tx);
+   await audit.record(tx, {
+     event: 'master.edited',

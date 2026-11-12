@@ -1,0 +1,173 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v5.0.5 <worktree>
+
+ ❯ tests/unit/masters-service-treatments.test.ts (39 tests | 2 failed) 143ms
+   ❯ deleteTreatment (AC-4, AC-6) (3)
+     × removes the treatment from the list and writes exactly one master.deleted entry with the name before and nothing after 26ms
+     × answers not found for an unknown ID and for one deleted already, and writes nothing 3ms
+ ❯ tests/integration/masters/treatments.test.ts (29 tests | 3 failed) 2807ms
+   ❯ AC-4, AC-6 (T2): deleting a treatment (2)
+     × removes the row and writes exactly one master.deleted entry with the name before and nothing after 67ms
+   ❯ AC-6 (DEF-017): an entry commits with its change, or not at all (4)
+     × an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007) 194ms
+   ❯ two requests at once (2)
+     × serialise a rename and a delete of one treatment: whichever comes second finds the first one's result, and each wrote its own entry or none 78ms
+ ❯ tests/acceptance/aqp-130-treatments.test.ts (105 tests | 2 failed) 8505ms
+   ❯ AQP-130 AC-6: exactly one audit entry per add, rename and delete (12)
+     × [AQP-130 AC-6] a delete writes one master.deleted entry: before { name }, after null; the entry stays when the row is gone 43ms
+     × [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST) 88ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] a delete writes one master.deleted entry: before { name }, after null; the entry stays when the row is gone
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:528:21
+    526|     const answer = await remove(id);
+    527|     const written = (await entries()).filter((entry) => entry.event ==…
+    528|     expect(written).toHaveLength(1);
+       |                     ^
+    529|     expect(written[0]).toMatchObject({
+    530|       event: 'master.deleted',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/acceptance/aqp-130-treatments.test.ts > AQP-130 AC-6: exactly one audit entry per add, rename and delete > [AQP-130 AC-6] add, rename, rename and delete make exactly four entries in order, and each rename starts where the last ended (ST)
+AssertionError: expected [ 'master.created', …(2) ] to deeply equal [ 'master.created', …(3) ]
+
+- Expected
++ Received
+
+  [
+    "master.created",
+    "master.edited",
+    "master.edited",
+-   "master.deleted",
+  ]
+
+ ❯ tests/acceptance/aqp-130-treatments.test.ts:549:49
+    547|     await remove(id);
+    548|     const written = await entries();
+    549|     expect(written.map((entry) => entry.event)).toEqual(['master.creat…
+       |                                                 ^
+    550|     expect(written.map((entry) => entry.before)).toEqual([null, { name…
+    551|     expect(written.map((entry) => entry.after)).toEqual([{ name: 'Qa13…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/unit/masters-service-treatments.test.ts > deleteTreatment (AC-4, AC-6) > removes the treatment from the list and writes exactly one master.deleted entry with the name before and nothing after
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/unit/masters-service-treatments.test.ts:266:35
+    264|     expect(masters.treatments.map((treatment) => treatment.id)).not.to…
+    265|     expect((await service.listTreatments()).map((treatment) => treatme…
+    266|     expect(world.audit.committed).toHaveLength(1);
+       |                                   ^
+    267|     expect(world.audit.committed[0]).toMatchObject({
+    268|       event: 'master.deleted',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/unit/masters-service-treatments.test.ts > deleteTreatment (AC-4, AC-6) > answers not found for an unknown ID and for one deleted already, and writes nothing
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/unit/masters-service-treatments.test.ts:290:35
+    288|     await service.deleteTreatment(CONTEXT, id);
+    289|     expect(await refusal(service.deleteTreatment(CONTEXT, id))).toBeIn…
+    290|     expect(world.audit.committed).toHaveLength(1);
+       |                                   ^
+    291|   });
+    292| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-4, AC-6 (T2): deleting a treatment > removes the row and writes exactly one master.deleted entry with the name before and nothing after
+AssertionError: expected { event: 'master.created', …(11) } to match object { event: 'master.deleted', …(4) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "after": null,
+-   "before": {
++   "after": {
+      "name": "Invented powder coat",
+    },
+-   "event": "master.deleted",
++   "before": null,
++   "event": "master.created",
+    "object_label": "Invented powder coat",
+    "object_type": "treatment",
+  }
+
+ ❯ tests/integration/masters/treatments.test.ts:257:21
+    255|     expect((await db.mastersService.listTreatments()).map((treatment) …
+    256|     const deleted = defined((await entriesFor(db, created.id)).at(-1));
+    257|     expect(deleted).toMatchObject({ event: 'master.deleted', object_ty…
+       |                     ^
+    258|   });
+    259|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > AC-6 (DEF-017): an entry commits with its change, or not at all > an entry the audit service refuses takes the change back, for an add, a rename and a delete (a change is never saved without its record, NFR-007)
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ tests/integration/masters/treatments.test.ts:334:76
+    332|     await expect(db.mastersService.createTreatment(unrecorded, { name:…
+    333|     await expect(db.mastersService.updateTreatment(unrecorded, created…
+    334|     await expect(db.mastersService.deleteTreatment(unrecorded, created…
+       |                                                                            ^
+    335|     expect((await rows()).map((row) => row.name)).toEqual(['Other', 'R…
+    336|     expect(await entryCount(db)).toBe(entries);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/integration/masters/treatments.test.ts > two requests at once > serialise a rename and a delete of one treatment: whichever comes second finds the first one's result, and each wrote its own entry or none
+AssertionError: expected [ 'master.created' ] to include 'master.deleted'
+ ❯ tests/integration/masters/treatments.test.ts:370:20
+    368|     const events = (await entriesFor(db, created.id)).map((entry) => e…
+    369|     expect(events[0]).toBe('master.created');
+    370|     expect(events).toContain('master.deleted');
+       |                    ^
+    371|   });
+    372| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  7 failed | 166 passed (173)
+   Start at  02:27:33
+   Duration  10.97s (tests 69%, import 23%, transform 8%)
+

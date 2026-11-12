@@ -1,0 +1,15 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/integration/masters/exchange-rates.test.ts (26 tests | 1 failed) 3626ms
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 1 failed) 6268ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] atomic: with the unit of work failing after its last step, the save answers 500 with the generic words, stores noth
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+- Expected
++ Received
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-4 (DEF-017): an entry commits with its change, or not at all > a later save (edit): the rates are as they were, with their stamp, and no entry is kept
+AssertionError: expected 18 to be 17 // Object.is equality
+- Expected
++ Received
+ Test Files  2 failed (2)
+      Tests  2 failed | 84 passed (86)
+   Duration  8.32s (tests 75%, import 18%, transform 7%)

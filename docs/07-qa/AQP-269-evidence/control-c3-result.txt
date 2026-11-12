@@ -1,0 +1,42 @@
+Control c3: PR #188, CI run 42867619515 (QA probe spec included; plant diff in plant-c3.diff where there is one)
+
+Jobs:
+  Stages 1 to 11b: success
+  Stage 12: E2E (shard 3 of 3): failure
+  Stage 12: E2E (shard 2 of 3): failure
+  Stage 12: E2E (shard 1 of 3): failure
+  Stages 1 to 11: failure
+
+Tests failed on every attempt (unique, project and test):
+[desktop] › tests/e2e/aqp-122-qa.spec.ts:136:3 › as the Admin › [AQP-122 AC-8] Add: every message of the final-words table appears under its field, the old "Enter a name." does not, values stay,
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[desktop] › tests/e2e/materials.spec.ts:166:3 › add a material (AC-2, AC-3, AC-7, AC-8) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field
+[desktop] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, an
+[desktop] › tests/e2e/process-master.spec.ts:123:3 › add a rate (AC-2, AC-5, AC-7) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field with
+[desktop] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so d
+[desktop] › tests/e2e/users.spec.ts:129:3 › add a user (AC-1, AC-3, AC-7) › refuses a wrong e-mail and an empty password in words, under the field, and keeps what was typed 
+[desktop] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e
+[mobile] › tests/e2e/aqp-122-qa.spec.ts:136:3 › as the Admin › [AQP-122 AC-8] Add: every message of the final-words table appears under its field, the old "Enter a name." does not, values stay, 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[mobile] › tests/e2e/materials.spec.ts:166:3 › add a material (AC-2, AC-3, AC-7, AC-8) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field 
+[mobile] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and
+[mobile] › tests/e2e/process-master.spec.ts:123:3 › add a rate (AC-2, AC-5, AC-7) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field with 
+[mobile] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so do
+[mobile] › tests/e2e/users.spec.ts:129:3 › add a user (AC-1, AC-3, AC-7) › refuses a wrong e-mail and an empty password in words, under the field, and keeps what was typed 
+[mobile] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-
+[tablet] › tests/e2e/aqp-122-qa.spec.ts:136:3 › as the Admin › [AQP-122 AC-8] Add: every message of the final-words table appears under its field, the old "Enter a name." does not, values stay, 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Material (SCR-13, AQP-122): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Process (SCR-11, AQP-113): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/aqp-269-qa-probe.spec.ts:52:3 › F-a Users (SCR-14, AQP-65): typing 3 letters into the first refused field after an empty submit 
+[tablet] › tests/e2e/materials.spec.ts:166:3 › add a material (AC-2, AC-3, AC-7, AC-8) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field 
+[tablet] › tests/e2e/materials.spec.ts:185:3 › add a material (AC-2, AC-3, AC-7, AC-8) › DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and
+[tablet] › tests/e2e/process-master.spec.ts:123:3 › add a rate (AC-2, AC-5, AC-7) › refuses an empty form in words under each field, keeps what was typed, and puts focus on the first field with 
+[tablet] › tests/e2e/process-master.spec.ts:136:3 › add a rate (AC-2, AC-5, AC-7) › DEF-025: after a refusal of several fields, typing into the name keeps focus and every letter there, and so do
+[tablet] › tests/e2e/users.spec.ts:129:3 › add a user (AC-1, AC-3, AC-7) › refuses a wrong e-mail and an empty password in words, under the field, and keeps what was typed 
+[tablet] › tests/e2e/users.spec.ts:142:3 › add a user (AC-1, AC-3, AC-7) › DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-
+
+QA probe tests passed: 9

@@ -15,9 +15,9 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * random part), so the three screen sizes and the retries never meet on one material. The words are the UX spec's, written out here.
  * Names and numbers are invented (`n.37`, ADR-014), except inputs that test the format (three decimals, zero, a sign).
  *
- * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-199) and pinned by
- * `tests/unit/one-width-tag.test.ts`; none of them is tagged until it is ruled. Proposed for the ruling: "refuses a name another material
- * has" and "an edit that changes nothing closes without a request" read no layout.
+ * Width: which of these tests may run at one width only is ruled in test strategy section 10.5 (AQP-122 PRF-03; ruling 2026-11-08) and pinned
+ * by `tests/unit/one-width-tag.test.ts`. Two are tagged `@one-width`: "an edit that changes nothing closes without a request" (the AQP-65 client
+ * rule) and the filter test. Every other test, "Duplicate name" included (it runs axe on the error state), keeps three widths.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -98,14 +98,11 @@ test.describe('the tab shell and the list (AC-1, AC-7)', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('the page description and the description meta name only the tabs that exist: with one tab, neither says "exchange" or "treatment" (ux-spec v0.18)', async ({ page }) => {
+  test('the page description and the description meta name only the tabs that exist: with the Materials, Exchange rates and Treatment / Color tabs, they name all three (ux-spec v0.18, last row of the table)', async ({ page }) => {
     await openMaterials(page);
-    await expect(page.getByRole('tab')).toHaveCount(1);
-    const description = page.locator('main h1 + p');
-    await expect(description).toHaveText('Material prices, specific gravity and scrap rates.');
-    const meta = page.locator('meta[name="description"]');
-    await expect(meta).toHaveAttribute('content', 'Manage the materials used in estimates.');
-    for (const text of [await description.innerText(), (await meta.getAttribute('content')) ?? '']) expect(text).not.toMatch(/exchange|treatment/i);
+    await expect(page.getByRole('tab')).toHaveText(['Materials', 'Exchange rates', 'Treatment / Color']);
+    await expect(page.locator('main h1 + p')).toHaveText('Material prices, exchange rates and the treatment and colour list.');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'Manage materials, exchange rates and the treatment and colour list used in estimates.');
   });
 
   test('AC-7: controls are at least 44 px, and the icon button of a table row at least 36 px', async ({ page }, testInfo) => {
@@ -176,6 +173,45 @@ test.describe('add a material (AC-2, AC-3, AC-7, AC-8)', () => {
     await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
     await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
     await expect(dialog.getByLabel('Material in Drawing')).toHaveAttribute('aria-invalid', 'true');
+
+    // A second refusal of the same first field moves focus there again, from the button just pressed (the hook's contract, QLT-02 of AQP-269).
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+  });
+
+  test('DEF-024: after a refusal of several fields, typing into the first keeps focus and every letter there, and so does the next field', async ({ page }) => {
+    await openMaterials(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add material' }));
+    const dialog = page.getByRole('dialog', { name: 'Add material' });
+    await dialog.getByLabel('Price per kg').fill('58.123');
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByText('Enter the Material in Drawing.')).toBeVisible();
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+
+    // The later refused field first, while the one before it still has its message (the old code jumped back to it).
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await page.keyboard.type('abc');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('abc');
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('');
+    await page.keyboard.press('Shift+Tab');
+
+    // The keys go to whatever has focus, as a keyboard user does. Each key clears a message; none of them may move focus.
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Material in Drawing')).toBeFocused();
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
+
+    // And the second field again, now that the one before it is fixed (Tab selects its text, so the new letters replace it): focus and the letters stay while the fields after it still have messages.
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await page.keyboard.type('def');
+    await expect(dialog.getByLabel('Material Considered')).toBeFocused();
+    await expect(dialog.getByLabel('Material Considered')).toHaveValue('def');
+    await expect(dialog.getByLabel('Material in Drawing')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('Price per kg')).toHaveValue('58.123');
   });
 
   test('state "Specific gravity 0": 0 is refused under the field with "Enter a value above 0.", the hint stays, the dialog keeps what was typed and focus goes to the field (UX-37)', async ({ page }, testInfo) => {
@@ -240,7 +276,7 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
     await expect(rowOf(page, name).getByRole('button', { name: `Edit ${name}` })).toBeFocused();
   });
 
-  test('an edit that changes nothing closes without a request', async ({ page }, testInfo) => {
+  test('an edit that changes nothing closes without a request', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = await makeMaterial(page, testInfo);
     await openMaterials(page);
     let requests = 0;
@@ -269,7 +305,7 @@ test.describe('edit a material (AC-2, AC-3, AC-5)', () => {
 });
 
 test.describe('search and states (AC-1, AC-8)', () => {
-  test('filters by Material in Drawing or Material Considered ignoring letter case, says "No material matches" with Clear filters, and Clear filters brings the list back and focuses the search', async ({ page }, testInfo) => {
+  test('filters by Material in Drawing or Material Considered ignoring letter case, says "No material matches" with Clear filters, and Clear filters brings the list back and focuses the search', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const name = await makeMaterial(page, testInfo);
     await openMaterials(page);
     const search = page.getByLabel('Search materials');

@@ -1,0 +1,19 @@
+  ✓   1 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (20.8s)
+  ✓   2 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (29.0s)
+  ✓   3 [mobile] › tests\e2e\aqp-123-qa.spec.ts:114:1 › D3-1a: keyboard only, two fields refused, FIXING USD FIRST: focus and text stay in USD, EUR keeps its text and message (6.1s)
+  ✓   4 [mobile] › tests\e2e\aqp-123-qa.spec.ts:124:1 › D3-1b: keyboard only, two fields refused, FIXING EUR FIRST (Tab to EUR): focus and text stay in EUR; USD keeps its text (3.5s)
+  ✓   5 [mobile] › tests\e2e\aqp-123-qa.spec.ts:143:1 › D3-1c: a server 422 naming both fields (the real 422 body), then typing a fix: focus and text stay in the field typed (7.3s)
+QLT11 rows [{"currency":"EUR","value":"92.7300","updated_by":"2d5809d7-b2c7-4484-a4b2-c0b0428cbbe6","updated_at":"2026-11-10T14:02:24.932Z"},{"currency":"USD","value":"91.3700","updated_by":"2d5809d7-b2c7-4484-a4b2-c0b0428cbbe6","updated_at":"2026-11-10T14:02:24.932Z"}]
+QLT11 entry 1 {"event":"master.edited","object_type":"exchange_rate","object_id":"00000000-0000-4000-8000-000600000001","before":{"eur":"839.73","usd":"838.37"},"after":{"eur":"92.73","usd":"91.37"},"actor_label":"E2E Admin"}
+QLT11 entry 2 (restore) {"event":"master.edited","object_type":"exchange_rate","object_id":"00000000-0000-4000-8000-000600000001","before":{"eur":"92.73","usd":"91.37"},"after":{"eur":"839.73","usd":"838.37"},"actor_label":"E2E Admin"}
+QLT11 entries before/after 22 24 pair now {"USD":"838.3700","EUR":"839.7300"}
+  ✓   6 [mobile] › tests\e2e\aqp-123-qa.spec.ts:171:1 › D3-7 QLT-11: a keyboard-only save of a pair other than the canary pair, through the real route, stores both with one stamp and writes one master.edited entry; then the canary pair is restored (4.9s)
+  ✓   7 [mobile] › tests\e2e\aqp-123-qa.spec.ts:238:1 › D3-8: the five sentences of ux-spec v0.21, in the browser (6.3s)
+  ✓   8 [mobile] › tests\e2e\aqp-123-qa.spec.ts:287:1 › D3-8b: Error with the Saved notice on the page says the rates were saved but cannot be shown; focus on the error title and stays (4.2s)
+  ✓   9 [mobile] › tests\e2e\aqp-123-qa.spec.ts:312:1 › D3-9: AC-1, AC-5, AC-7 on the real server and stored data: no sideways scroll, axe 0, targets of 44 px, inputmode decimal, hints with the registry letters, stamp as text (11.6s)
+  ✓  10 [mobile] › tests\e2e\aqp-123-qa.spec.ts:347:1 › D3-9 AC-6: a Lead and an Engineer have no way to the tab and no rate over the wire; signed out is refused (13.7s)
+E-1 stale tab: saved notice shown, audit entries added = 1
+  ✓  11 [mobile] › tests\e2e\aqp-123-qa.spec.ts:396:1 › E-1 exploratory: a stale second tab saves the values another tab already saved: 200, "Exchange rates saved.", and no second audit entry (QLT-06 a) (7.0s)
+E-2 double click: PUT responses = [200] audit entries added = 1
+  ✓  12 [mobile] › tests\e2e\aqp-123-qa.spec.ts:426:1 › E-2 exploratory: two presses of Save at once (a double click) send one or two requests, both 200, and write exactly one entry (6.4s)
+  12 passed (2.8m)

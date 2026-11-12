@@ -1,0 +1,31 @@
+diff --git a/src/server/services/exchange-rate-service.ts b/src/server/services/exchange-rate-service.ts
+index 67513e5..8234094 100644
+--- a/src/server/services/exchange-rate-service.ts
++++ b/src/server/services/exchange-rate-service.ts
+@@ -116,7 +116,7 @@ function assertValid(input: ExchangeRateValues): void {
+ 
+ /** Takes the table lock, then the rows; writes both rates and the entry only if a rate changes. All in the caller's transaction. */
+ async function change(
+-  { masters, audit, clock = systemClock }: ExchangeRateDependencies,
++  { masters, audit, transactions, clock = systemClock }: ExchangeRateDependencies,
+   tx: Transaction,
+   context: AuditContext,
+   wanted: ExchangeRateValues,
+@@ -125,14 +125,15 @@ async function change(
+   const before = await masters.findExchangeRatesForUpdate(tx);
+   if (changedExchangeRates(before, wanted).length === 0) return before;
+   const after = await masters.saveExchangeRates(wanted, { updatedById: context.actorId, updatedAt: clock.now() }, tx);
+-  await audit.record(tx, {
++  const entry = {
+     event: 'master.edited',
+     ...context,
+     objectType: EXCHANGE_RATES_OBJECT_TYPE,
+     object: { id: EXCHANGE_RATES_OBJECT_ID, label: EXCHANGE_RATES_LABEL },
+     before: auditState(before),
+     after: auditState(after),
+-  });
++  } as const;
++  await (before.stamp !== null ? transactions.run((tx2) => audit.record(tx2, entry)) : audit.record(tx, entry));
+   return after;
+ }
+ 

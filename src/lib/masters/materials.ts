@@ -1,9 +1,4 @@
-import {
-  DEFAULT_VALUE_MESSAGE,
-  DEFAULT_VALUE_PATTERN,
-  NAME_TOO_LONG_MESSAGE,
-  normaliseDefaultValue,
-} from './process-items';
+import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, MASTER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE, normaliseDecimalText } from './master-rules';
 
 /**
  * What the Materials tab of SCR-13 (STORY-02.03; SPEC section 4.3, architecture sections 5.1 and 6) and its routes share: the limits,
@@ -12,12 +7,12 @@ import {
  * which imports the limits, the words and `specificGravityProblem` from here, so a limit or a sentence is written once.
  *
  * A price, a specific gravity and a Material-Scrap-Rate are carried as **decimal text** ("7.37"), never as a JavaScript number
- * (coding standards section 10, "Money and rates"). The text of a price or a scrap rate follows the Process Master's default value
+ * (coding standards section 10, "Money and rates"). The text of a price or a scrap rate follows `DECIMAL_TEXT_PATTERN` (`master-rules.ts`)
  * (up to 12 digits, up to two decimals, 0 or more); a specific gravity follows it too and must also be above 0 (UX-37).
  */
 
-/** The longest Material in Drawing and Material Considered. The same limit as a rate's name (SCR-11). */
-export const MATERIAL_TEXT_MAX_LENGTH = 100;
+/** The longest Material in Drawing and Material Considered. The same limit as every master's name (`master-rules.ts`). */
+export const MATERIAL_TEXT_MAX_LENGTH = MASTER_NAME_MAX_LENGTH;
 
 /** The words of the fields, as the labels of SCR-13 write them (the field is named Material-Scrap-Rate, per kg: SPEC D-39). */
 export const MATERIAL_FIELD_LABELS = {
@@ -33,7 +28,7 @@ export const MATERIAL_NAME_TOO_LONG_MESSAGE = NAME_TOO_LONG_MESSAGE;
 /** The ux-expert's words (ux-spec v0.18, SCR-13 "The Materials tab: final words", Jira 11188): "Enter the" plus the field's label. */
 export const CONSIDERED_REQUIRED_MESSAGE = 'Enter the Material Considered.';
 export const MATERIAL_NAME_TAKEN_MESSAGE = 'A material with this name already exists. Names must be unique.';
-export const NUMBER_MESSAGE = DEFAULT_VALUE_MESSAGE;
+export const NUMBER_MESSAGE = DECIMAL_TEXT_MESSAGE;
 /** The message and the hint of UX-37 (state "Specific gravity 0"). */
 export const SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE = 'Enter a value above 0.';
 export const SPECIFIC_GRAVITY_HINT = 'Must be above 0.';
@@ -75,7 +70,7 @@ export function materialTextProblem(value: string, required: string): string | n
 
 /** The message for a price or a Material-Scrap-Rate, or null: digits, then up to two decimals, 0 or more. */
 export function materialNumberProblem(value: string): string | null {
-  return DEFAULT_VALUE_PATTERN.test(value.trim()) ? null : NUMBER_MESSAGE;
+  return DECIMAL_TEXT_PATTERN.test(value.trim()) ? null : NUMBER_MESSAGE;
 }
 
 /**
@@ -85,14 +80,14 @@ export function materialNumberProblem(value: string): string | null {
  */
 export function specificGravityProblem(value: string): string | null {
   const text = value.trim();
-  if (DEFAULT_VALUE_PATTERN.test(text)) return NONZERO_DIGIT.test(text) ? null : SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
+  if (DECIMAL_TEXT_PATTERN.test(text)) return NONZERO_DIGIT.test(text) ? null : SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
   if (LOOSE_NUMBER.test(text) && (text.startsWith('-') || !NONZERO_DIGIT.test(text))) return SPECIFIC_GRAVITY_ABOVE_ZERO_MESSAGE;
   return SPECIFIC_GRAVITY_FORMAT_MESSAGE;
 }
 
 /** A typed number as the stored text: no leading zeros, two decimals ("003.37" is "3.37"). The text must already pass its check. */
 export function normaliseMaterialNumber(value: string): string {
-  return normaliseDefaultValue(value);
+  return normaliseDecimalText(value);
 }
 
 /**

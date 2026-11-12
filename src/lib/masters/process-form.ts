@@ -1,9 +1,8 @@
+import { nameProblem, normaliseDecimalText } from './master-rules';
 import {
   changesFrom,
   defaultValueProblem,
   isProcessUnit,
-  nameProblem,
-  normaliseDefaultValue,
   UNIT_REQUIRED_MESSAGE,
   type ProcessItemFields,
   type ProcessItemValues,
@@ -54,7 +53,7 @@ export function editChanges(original: FormValues, values: FormValues): ProcessIt
 
 /** The body of an add: the name trimmed and the value as stored text. */
 export function newRateBody(values: FormValues): ProcessItemValues {
-  return { name: values.name.trim(), unit: values.unit, defaultValue: normaliseDefaultValue(values.defaultValue) };
+  return { name: values.name.trim(), unit: values.unit, defaultValue: normaliseDecimalText(values.defaultValue) };
 }
 
 /** The errors without the one for `field`, once the person has changed that field. */

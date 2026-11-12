@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
+import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
 import { MATERIAL_CANARIES } from '../support/material-master-canary';
 import { defined } from '../support/defined';
 import { cacheControlProblems, describeFinding, fixedForbiddenProblem, isBuiltFile, maskRequestId, scanResponses } from '../support/scanner';
@@ -13,9 +14,11 @@ import {
   createDisposableUser,
   E2E_ADMIN,
   E2E_PASSWORD,
+  ensureCanaryExchangeRates,
   ensureCanaryMaterials,
   ensureCanaryProcessRates,
   ensureCanaryUser,
+  readExchangeRatesFromDatabase,
   readFormulaTexts,
   signInThroughThePage,
   useFreshAddress,
@@ -88,7 +91,21 @@ async function prepare(
 ): Promise<{ readonly forbidden: ReturnType<typeof forbiddenStrings>; readonly engineer: Awaited<ReturnType<typeof createDisposableUser>> }> {
   await ensureCanaryProcessRates();
   await ensureCanaryMaterials();
+  await ensureCanaryExchangeRates();
   return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
+}
+
+/**
+ * The end of an Engineer scan: the canary pair was still in the database. The scan finds nothing when it looks for values that are not there, so a
+ * pair changed by another test while the scan ran (QLT-02) would pass it for the wrong reason. The saving tests of `exchange-rates.spec.ts` send
+ * only this pair, so they cannot change it.
+ */
+async function expectCanaryRatesStillStored(): Promise<void> {
+  const stored = await readExchangeRatesFromDatabase();
+  expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+    USD: Number(EXCHANGE_RATE_CANARIES.usd).toFixed(4),
+    EUR: Number(EXCHANGE_RATE_CANARIES.eur).toFixed(4),
+  });
 }
 
 test('AC-3: an Engineer is sent no Restricted value, name or formula by any page, payload, header or script', async ({ page, context }, testInfo) => {
@@ -108,6 +125,7 @@ test('AC-3: an Engineer is sent no Restricted value, name or formula by any page
   expect(sentences(recorder, forbidden)).toEqual([]);
   // AC-5: `private, no-store` on every response to a request that carried the session (build files and `public/` excepted).
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
 });
 
 /** Calls every Lead and Admin route as the signed-in Engineer, for a real ID and, where the path has one, an invented one. */
@@ -163,6 +181,7 @@ test('AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
   expect(sentences(recorder, forbidden)).toEqual([]);
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
 });
 
 test('AC-3, AC-4 (control with real data): the same scan finds the canary rates in what the Admin is sent', async ({ page, context }) => {
@@ -207,6 +226,27 @@ test('AC-6 (control with real data, STORY-02.03): the same scan finds the canary
       expect(found.has(value), `the scan finds ${value} of ${material.materialInDrawing}`).toBe(true);
     }
   }
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+/**
+ * The exchange rates (STORY-02.04 AC-6). The Admin saves the canary pair through the route, as the screen does, and the same scan finds both values in
+ * the answer. The answer of the PUT is the state written in the same transaction, so no other test's save can change what this one looks for. The Engineer
+ * side of the story is the scan above: the route is in no Engineer list, the pair is in the database (`prepare`), and the scan finds neither value.
+ */
+test('AC-6 (control with real data, STORY-02.04): the same scan finds both canary exchange rates in what the Admin is sent', async ({ page, context }) => {
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, E2E_ADMIN);
+
+  const answer = await callInBrowser(recorder, page, 'PUT /api/v1/exchange-rates (API, Admin)', '/api/v1/exchange-rates', { method: 'PUT', body: EXCHANGE_RATE_CANARIES });
+  expect(answer.status).toBe(200);
+  await recorder.settled();
+
+  const found = new Set(scanResponses(recorder.responses, forbidden).map((finding) => finding.found));
+  for (const [currency, value] of Object.entries(EXCHANGE_RATE_CANARIES)) expect(found.has(value), `the scan finds the ${currency} rate ${value}`).toBe(true);
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
 });
 
@@ -294,6 +334,7 @@ test('AC-4 (negative control): a sentinel planted in a script chunk and in a res
     findings.some((finding) => finding.label.includes('/api/v1/me') && finding.found === customer),
     'the sentinel planted in a fetched response',
   ).toBe(true);
+  await expectCanaryRatesStillStored();
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {

@@ -1,0 +1,6 @@
+  ✓  1 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (35.6s)
+  ✓  2 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (1.0m)
+  ✓  3 [tablet] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (15.2s)
+  ✓  4 [mobile] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (15.4s)
+  ✓  5 [desktop] › tests\e2e\exchange-rates.spec.ts:383:3 › loading and the load error (AC-7) › DEF-020: when a save succeeds and the read after it fails, focus is on the error title, not on the page heading, and stays there; Try again brings the form back with focus on Save (8.6s)
+  5 passed (2.3m)

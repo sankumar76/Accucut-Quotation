@@ -1,0 +1,79 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/acceptance/aqp-123-exchange-rates.test.ts (60 tests | 25 failed) 2536ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 25 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-1: the tab shows the stored values, or "not set yet", with the stamp > [AQP-123 AC-1] after a save: the values with two decimals, the saver's name, the instant in UTC (ISO, Z), and the same instant is stored in UTC
+AssertionError: expected 422 to be 200 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-1: the tab shows the stored values, or "not set yet", with the stamp > [AQP-123 AC-1] the stamp is stored in UTC and is one IST time across midnight: 23:59:59 IST is still 9 Nov
+AssertionError: expected null to be '2026-11-09T18:29:59.000Z' // Object.is equality
+- Expected:
++ Received:
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-1: the tab shows the stored values, or "not set yet", with the stamp > [AQP-123 AC-1] the stamp is stored in UTC and is one IST time across midnight: 00:00:00 IST is 10 Nov
+AssertionError: expected null to be '2026-11-09T18:30:00.000Z' // Object.is equality
+- Expected:
++ Received:
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-1: the tab shows the stored values, or "not set yet", with the stamp > [AQP-123 AC-1] the stamp is stored in UTC and is one IST time across midnight: a year end
+AssertionError: expected null to be '2026-12-31T20:00:00.000Z' // Object.is equality
+- Expected:
++ Received:
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "0" is accepted and stored as 0.00 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "0.00" is accepted and stored as 0.00 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "0.01" is accepted and stored as 0.01 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "83" is accepted and stored as 83.00 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "83.3" is accepted and stored as 83.30 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "83.37" is accepted and stored as 83.37 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "083.50" is accepted and stored as 83.50 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "0000.5" is accepted and stored as 0.50 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] "999999999999.99" is accepted and stored as 999999999999.99 (EP, BVA: zero, one cent, twelve digits)
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] " 83.37 " is accepted and stored as 83.37 (EP, BVA: zero, one cent, twelve digits)
+AssertionError: expected 422 to be 200 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] both rates are saved together with ONE stamp (same person, same instant); the first save inserts both rows
+AssertionError: expected [] to deeply equal [ 'EUR', 'USD' ]
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] a change of one rate stamps both rows with the new save
+AssertionError: expected [] to deeply equal [ '89.3700', '81.3700' ]
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] idempotent: the same body gives the same answer (stamp included); "83.5" and "083.50" are one value
+AssertionError: expected { type: 'about:blank', …(5) } to deeply equal { type: 'about:blank', …(5) }
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-2 and AC-3: both rates saved together; values of 0 or more with up to 2 decimals > [AQP-123 AC-2] the rows survive a read by the runtime role only as SELECT, INSERT, UPDATE: it cannot delete or truncate (data integrity)
+AssertionError: expected [] to have a length of 2 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] first save: exactly one entry, with the fixed object_id, the label, the actor, the request ID of the response, befo
+AssertionError: expected [] to have a length of 1 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] a change of one currency is one entry holding both before and after; a chain: each before is the previous after
+AssertionError: expected [] to have a length of 3 but got +0
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] no entry for a save that changes nothing, for any refusal, for a GET, or for a refused caller
+AssertionError: expected false to be true // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] atomic: with the unit of work failing after its last step, the save answers 500 with the generic words, stores noth
+AssertionError: expected 422 to be 500 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-4 (amended): one master.edited entry of object_type exchange_rate per changing save; none otherwise > [AQP-123 AC-4] parallel saves of six different pairs: the rows hold one request's pair entire, and the entries form one unbroken c
+AssertionError: expected false to be true // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-5: the hints are made from the registry's letters > [AQP-123 AC-5] a damaged registry (no field for a rate column) fails loudly with the generic 500, and a save is refused before anything is written
+AssertionError: expected 422 to be 500 // Object.is equality
+- Expected
++ Received
+ FAIL  tests/acceptance/aqp-123-exchange-rates.test.ts > AQP-123 AC-6: only the Admin; nobody else receives a rate (BR-003, BR-004) > [AQP-123 AC-6] decision table: Lead 403, Engineer 403, signed out 401, on GET and on PUT; the bodies are identical for Lead and Engineer and hold no rate
+AssertionError: expected [] to deeply equal [ '838.3700', '839.7300' ]
+- Expected
++ Received
+ Test Files  1 failed (1)
+      Tests  25 failed | 35 passed (60)
+   Duration  4.35s (tests 64%, import 21%, transform 14%)

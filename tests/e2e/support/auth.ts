@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
+import { EXCHANGE_RATE_CANARIES } from '../../support/exchange-rate-canary';
 import { displayFormOf } from '../../support/formula-display';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
@@ -201,6 +202,38 @@ export async function ensureCanaryMaterials(): Promise<void> {
   const client = await connectToTestDatabase();
   try {
     await loadCanaryMaterials(client);
+  } finally {
+    await client.end();
+  }
+}
+
+/** The exchange rates the database holds now, as the stored text per currency (QLT-02: the scan checks its precondition at the end). */
+export async function readExchangeRatesFromDatabase(): Promise<Record<string, string>> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ currency: string; inr_value: string }>('SELECT currency, inr_value::text AS inr_value FROM exchange_rates');
+    return Object.fromEntries(rows.map((row) => [row.currency, row.inr_value]));
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Puts the canary exchange rates (STORY-02.04's values, `tests/support/exchange-rate-canary.ts`) into the database the servers use, stamped by the E2E
+ * Admin, so the confidentiality scan has a USD and a EUR rate to look for. The upsert is on the currency (the primary key), so three screen sizes
+ * running it at once cannot fail on a conflict, and it needs no retry. The set-up project makes the Admin before any spec runs. The values are invented
+ * and this database is thrown away (guarded above).
+ */
+export async function ensureCanaryExchangeRates(): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ id: string }>('SELECT id FROM users WHERE email = $1', [E2E_ADMIN.email]);
+    const admin = rows[0];
+    if (admin === undefined) throw new Error('The E2E Admin does not exist yet: the set-up project makes it.');
+    const upsert = `INSERT INTO exchange_rates (currency, inr_value, updated_by) VALUES ($1, $2, $3)
+      ON CONFLICT (currency) DO UPDATE SET inr_value = EXCLUDED.inr_value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+    await client.query(upsert, ['USD', EXCHANGE_RATE_CANARIES.usd, admin.id]);
+    await client.query(upsert, ['EUR', EXCHANGE_RATE_CANARIES.eur, admin.id]);
   } finally {
     await client.end();
   }

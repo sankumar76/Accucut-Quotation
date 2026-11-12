@@ -1,0 +1,4 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ Test Files  3 passed (3)
+      Tests  145 passed (145)
+   Duration  97.38s (tests 95%, import 4%, transform 1%)
