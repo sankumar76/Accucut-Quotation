@@ -6702,3 +6702,59 @@ Alternatives considered:
 - #309 widened to replace the Customers copy. Rejected: it widens a Sev-3 fix into a feature's files.
 
 **Posted:** PR #297 comment 6818172998; Jira AQP-142 comment 11613. Tech-debt issue #326 created by master.
+
+## G7 – QA Acceptance — AQP-245 (STORY-10.21 Users list table actions, PR #222: H1 = 03e21f2 = d59e8ea + `master` 6b1883f; H2 = 6422ea4 = H1 + the QA report) — 2026-11-12 (attempt 1)
+
+- **Decision:** **GO (DL-174).** AQP-245 goes to **Done** (qa-engineer). **DEF-030 (AQP-275, #325) is reclassified Sev-2.** It does not hold AQP-245, because it is outside #222's diff (DL-094). It blocks G8.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-245-test-report.md` at 6422ea4: ACCEPT. QA hand-off: Jira 11614 and PR comment 6818187322. Step U checks: PR comment 6817527657.
+  - **Branch, read by master:**
+    - 03e21f2 has parents d59e8ea and 6b1883f. `git show --cc` prints no hunk.
+    - `git diff d59e8ea 03e21f2` over the 2 files is empty. `git diff --stat 6b1883f 03e21f2` is exactly the 2 files (+262 / -37).
+    - 6422ea4 has the one parent 03e21f2, and `git diff --stat 03e21f2 6422ea4` is the report alone (+151).
+    - `master` is still 6b1883f.
+  - **CI 43175448561** (H1, attempt 1): jobs API 5 of 5; merge ref 025b1c0 in every job; 18 cache restores, 0 misses; no leaks. Vitest 3,185 / 5,549; E2E **279 / 277 / 264 = 820**; skipped 24. Against 43169697211: **+0 / +0 / +12 / +0**, the target exactly. Path 5:20.
+  - **Names (master's own extraction):** 823 distinct base names, 0 missing. 12 new: the 11 SCR-14 width cases and the AC-4 card case.
+  - **QA control #324** (cdc384e on 03e21f2, closed unmerged): the diff is `TableActionsCell` → `TableCell` in `users-list.tsx` only. Run 43177111733: shard 3 has 11 failed and 253 passed, exactly the SCR-14 cases at `:291`, with "forced to scroll, at its start: action 0 ends inside the region" (22 lines over both attempts). Shards 1 and 2 are green.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a result with evidence | ✱ | ✅ | Report: AC-1 to AC-6, M1 to M7, CI cases |
+| 2 | No open Sev-1 / Sev-2 against the story | ✱ | ✅ | DEF-030 is Sev-2 but pre-existing and outside #222's 2 code files (origin AQP-65, AQP-28). DL-094: it does not hold the story |
+| 3 | Regression recorded and green | ✱ | ✅ | 43175448561 at the target counts; 0 base names missing |
+| 4 | Exploratory notes | | ✅ | Report, "Exploratory Testing" (60 min charter) |
+| 5 | Accessibility checks (UI story) | | ✅ | axe 0 at 768 / 1024 / 1366 px, as drawn and forced; keyboard walk M5 |
+| 6 | QA control red where expected, and only there | | ✅ | #324: 11 of 11 SCR-14 cases, nothing else |
+| 7 | H2 = H1 + the report alone | | ✅ | `git diff --stat 03e21f2 6422ea4` |
+
+**DEF-030 ruling.** The scale says "a WCAG 2.2 AA violation on a delivered screen" is Sev-2. A page scroll of 1011 px at 360 px, and 611 px at 768 and 1024 px, breaks SC 1.4.10 Reflow and the ux-spec's "Zoom and reflow" row. That is the same row DL-094 applied to DEF-014. Cause, read by master: `users-screen.tsx:132` interpolates the name, and its `Notice` has no wrapping class, while the master screens pass `BREAK_LONG_NAMES` (`materials-panel.tsx:49`).
+
+| # | Owner | Action | Due |
+|---|-------|--------|-----|
+| a | qa-engineer | AQP-275 to priority High with label `sev-2`; #325 label `sev-2`; the defect file `docs/07-qa/defects/DEF-030-*.md` as Sev-2 citing DL-174, on the records branch | Now |
+| b | developer | Fix PR `fix/AQP-275-<slug>` from `master` after #222 merges. One home for the wrapping rule (the shared `Notice`, or every Users call site), stated in the PR. A regression test asserting no page overflow at 360 and 768 px with a 120-character name. A `master`-based control without the class must turn it red | Before G8 |
+| c | reviewer-quality, reviewer-standards | Review (DL-169 (3)(c) route) | Before G8 |
+| d | qa-engineer | G7, plus a sweep at 360 px of every notice that repeats a user-entered name (Users, Process, Materials, Treatment / Color). Any other overflow is its own defect | Before G8 |
+
+**Merge prerequisites (DL-170 (7), confirmed; orchestrator)**
+- **Order:** #222, then #321, then #309 (DL-171). #297 comes after #309 (DL-172).
+- **Update:** none now (the tip 6b1883f is in H2). If `master` moves, do a merge-commit update with the (6)(a) checks over the 3 files. A move that does not touch them needs no new G7; anything else comes back to master.
+- **CI on the final head** (now 43179793942 on H2, in progress): 5 of 5 (jobs API), every attempt read, no failed or retried test, and 3,185 / 5,549 / 820 / 24 against the 6b1883f push run (+0 / +0 / +12 / +0). A path of 5:30 or more is reported, not held.
+- **Post before the squash:** head, run, base push run, arithmetic, path.
+- **Squash:** "AQP-245: STORY-10.21: Users list table actions". The body says 3 files and contains "Closes #134" and "Refs #319".
+- **After the squash:** the `master` push run is 5 of 5 at base +0 / +0 / +12 / +0, posted on AQP-245; AQP-245 to Done (qa-engineer).
+- **After the merge** (DL-170 (8)): #137 step 1, #307 Users part, #225, #245 item 5, the DEF-030 fix branch, and #297's F1 overlap. **H (delivery lead, before G8):** delete the branches of #223, #224, #233, #234, #310 to #313 and #324.
+
+**Risks:** none new. RISK-023 unchanged (5:20).
+
+**Rationale:** see DL-174. In short, every mandatory item holds on evidence master read itself. DEF-030 is graded by the scale, consistent with DL-094, and bound to G8, not to this story.
+
+Alternatives considered:
+- DEF-030 kept at Sev-3. Rejected: inconsistent with the scale and DL-094.
+- Holding AQP-245 until DEF-030 is fixed. Rejected: the defect is outside its diff and its ACs.
+- Fixing DEF-030 in #222. Rejected: it widens a 3-file PR after the G7 evidence was taken.
+
+**Posted:** PR #222 comment 6818348583; Jira AQP-245 comment 11619; Jira AQP-275 comment 11620 (DEF-030 routing).
