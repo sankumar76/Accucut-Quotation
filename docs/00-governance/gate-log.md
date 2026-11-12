@@ -6758,3 +6758,35 @@ Alternatives considered:
 - Fixing DEF-030 in #222. Rejected: it widens a 3-file PR after the G7 evidence was taken.
 
 **Posted:** PR #222 comment 6818348583; Jira AQP-245 comment 11619; Jira AQP-275 comment 11620 (DEF-030 routing).
+
+## G7 – QA Acceptance — AQP-274 (DEF-029, #308; PR #309: H1 = e6e1c14 = 356e9d6 + the tests-only condition A commit; H2 = a7f1a2d = H1 + the QA report) — 2026-11-12 (attempt 1)
+
+- **Decision:** **GO (DL-181).** DL-171's conditions A, B and C are met. DEF-029 is verified, and AQP-274 goes to **Done** (qa-engineer). The afecc58 push run is green, which closes DL-175 (2).
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every expected result verified with evidence | ✱ | ✅ | Report a7f1a2d: P1 to P6, M1 to M2, T1 at 360, 768 and 1366 px. P7 and M3 (failed first read) are recorded as not reachable |
+| 2 | No open Sev-1 / Sev-2 against the story | ✱ | ✅ | No new defect. DEF-030 (Sev-2) and #307 are outside this diff |
+| 3 | Regression recorded and green | ✱ | ✅ | 43179008751 5 of 5: 3,194 / 5,558 / 808 / 24 = 6b1883f +9 / +9 / +0 / +0 (files +1 / +1); every base name present; path 5:23 |
+| 4 | Exploratory notes | | ✅ | Report, "Exploratory session" |
+| 5 | Accessibility (UI) | | ✅ | axe 0 at three widths on P1, M1, T1, P4 to P6 |
+| 6 | Condition A (tests only; QLT-01, STD-01, STD-02; Dev Record) | | ✅ | `git diff --stat 356e9d6 e6e1c14` lists 3 files under `tests/` and `src/` is empty. 9-case unit file; DEF-029 in both titles; two file-local constants; Dev Record rows |
+| 7 | Condition B (reviewer's control) | | ✅ | #327 (0d4071b on e6e1c14; the diff is the sentence made unconditional, both files only), run 43180573071: exactly the 4 non-success unit rows failed (3,190 of 3,194 passed); E2E green |
+| 8 | H2 = H1 + the report alone | | ✅ | `git diff --stat e6e1c14 a7f1a2d` (+385) |
+
+**`master` move:** `master` is now cdcf18b (#222 afecc58 and #321). `git diff --stat 6b1883f origin/master` over #309's 10 files is empty, so no new G7. Push runs 43182725471 (afecc58) and 43185034340 (cdcf18b) are both 5 of 5 at 3,185 / 5,549 / 820 / 24.
+
+**Merge prerequisites (DL-181 (5)):**
+- **Order:** #309 now, #297 after it.
+- **Update (strict protection):** GitHub update-branch, merge method. On H3: parents a7f1a2d and the tip; `--cc` prints no hunk; `git diff a7f1a2d H3` over the 10 files is empty; `git diff --stat <tip> H3` is exactly the 10 files.
+- **CI on H3:** 5 of 5 with every attempt read, at the merge-ref `master` push run +9 / +9 / +0 / +0. On cdcf18b that is 3,194 / 5,558 / 820 / 24.
+- **Post before the squash** on #309 and AQP-274.
+- **Squash:** "AQP-274: DEF-029: saved-but-not-shown sentence on Process and Materials", with "Closes #308" and #307 named with no closing keyword.
+- **After:** `master` push run at base +9 / +9 / +0 / +0, posted. AQP-274 to Done. The DEF-029 file set to Closed in the next records PR.
+- **H (delivery lead, before G8):** delete the control branches of #316, #320 and #327.
+
+**Risks:** none new. RISK-023 unchanged (path 5:23).
+
+**Posted:** PR #309 comment 6820554578; Jira AQP-274 comment 11645.
