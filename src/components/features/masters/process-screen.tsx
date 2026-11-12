@@ -76,7 +76,7 @@ export function ProcessScreen({ initialItems }: ProcessScreenProps) {
     <>
       <PageHeader title={PROCESS_TITLE} description={PROCESS_DESCRIPTION} actions={<AddRateButton master={master} />} />
       {dialogs.loader.failed ? (
-        <MasterDialogsFailed title={dialogs.open === 'delete' || dialogs.open === 'blocked' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE} />
+        <MasterDialogsFailed title={dialogs.open === 'delete' || dialogs.open === 'blocked' ? FAILED_DIALOGS_TITLE : FAILED_CONFIRMATION_TITLE} />
       ) : null}
       {notice === null ? null : <PageNoticeView notice={notice} />}
       <Card aria-busy={list.status === 'loading' || undefined}>
