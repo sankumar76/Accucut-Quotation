@@ -118,7 +118,7 @@ export function UsersList(props: UsersListProps) {
   return (
     <Card aria-busy={refreshing || undefined}>
       <div className="hidden md:block">
-        <Table regionLabel="Users, scrollable" caption="Users" actionButtons={3}>
+        <Table regionLabel="Users, scrollable" caption="Users">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
