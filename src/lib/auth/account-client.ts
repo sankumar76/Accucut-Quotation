@@ -1,4 +1,7 @@
 import { JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
+import { TOO_MANY_ATTEMPTS_CODE } from '../errors';
+
+import type { ChangePasswordProblems } from './change-password';
 
 /**
  * The browser's side of `POST /api/v1/account/password` (SCR-23, STORY-01.05): one small call, and the reading of its answer through the
@@ -8,10 +11,6 @@ import { JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client'
  */
 
 const CHANGE_PASSWORD_PATH = '/api/v1/account/password';
-
-/** The code of the 422 that says the current password given is wrong, and of the 429 that says the form is blocked. */
-export const CURRENT_PASSWORD_WRONG_RESPONSE = 'CURRENT_PASSWORD_WRONG';
-export const TOO_MANY_ATTEMPTS_RESPONSE = 'TOO_MANY_ATTEMPTS';
 
 export interface ChangePasswordRequest {
   readonly currentPassword: string;
@@ -26,4 +25,41 @@ export function changeOwnPassword(request: ChangePasswordRequest, doFetch: Fetch
     { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(request) },
     () => true,
   );
+}
+
+/**
+ * What the form shows for an answer (UX spec SCR-23 "final words"):
+ *   - `saved`: the password was changed;
+ *   - `blocked`: five wrong current passwords (429);
+ *   - `fields`: the server named a field (the current password is wrong, or the new one fails the rule or equals the current one);
+ *   - `refused`: the server said no with no field to put it under (409 changed elsewhere, a 403, a 401 that is not a session ended): its
+ *     own `title` is shown, never the connection sentence, because the connection worked;
+ *   - `failed`: no usable answer at all (the network, a server fault, an answer of the wrong shape).
+ */
+export type ChangeResult =
+  | { readonly kind: 'saved' }
+  | { readonly kind: 'blocked' }
+  | { readonly kind: 'fields'; readonly problems: ChangePasswordProblems }
+  | { readonly kind: 'refused'; readonly title: string }
+  | { readonly kind: 'failed' };
+
+const FAILED: ChangeResult = { kind: 'failed' };
+
+/** The messages of a refusal that name a field of the change form. */
+function fieldProblems(fields: Readonly<Record<string, string>>): ChangePasswordProblems {
+  const found: { currentPassword?: string; newPassword?: string } = {};
+  const current = fields['currentPassword'];
+  const next = fields['newPassword'];
+  if (current !== undefined) found.currentPassword = current;
+  if (next !== undefined) found.newPassword = next;
+  return found;
+}
+
+export function resultOf(outcome: Outcome<true>): ChangeResult {
+  if (outcome.status === 'ok') return { kind: 'saved' };
+  if (outcome.status === 'failed') return FAILED;
+  if (outcome.code === TOO_MANY_ATTEMPTS_CODE) return { kind: 'blocked' };
+  const problems = fieldProblems(outcome.fields);
+  if (Object.keys(problems).length > 0) return { kind: 'fields', problems };
+  return outcome.title === '' ? FAILED : { kind: 'refused', title: outcome.title };
 }

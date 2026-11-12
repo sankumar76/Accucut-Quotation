@@ -9,8 +9,8 @@ import { forEachSpec, listPlaywrightSuites } from '../support/playwright-list';
 /**
  * AQP-199 AC-3 (STORY-10.14; test strategy section 10.5): a test that reads no layout may be tagged `@one-width`, which
  * runs it in the desktop project only. The tag hides a test from the mobile and tablet projects, so it is allowed in
- * exactly eleven spec files, ruled one by one in section 10.5 (four from AQP-199, two from AQP-65, one from its G7, two from AQP-74, two from the
- * ruling of 2026-11-08), and on exactly the 52 tests pinned below. Tagging a test anywhere else, or tagging another test in one of the eleven files (for example inside a block that the ruling keeps at
+ * exactly twelve spec files, ruled one by one in section 10.5 (four from AQP-199, two from AQP-65, one from its G7, two from AQP-74, two from the
+ * ruling of 2026-11-08, one from AQP-81), and on exactly the 53 tests pinned below. Tagging a test anywhere else, or tagging another test in one of the twelve files (for example inside a block that the ruling keeps at
  * three widths), fails here until the ruling and this list are both changed. The E2E suite cannot run in a unit test, so
  * this reads the text of the specs and of the Playwright configuration, and asks Playwright itself to list the tests.
  */
@@ -19,7 +19,7 @@ const TAG = '@one-width';
 const E2E_DIRECTORY = fileURLToPath(new URL('../e2e/', import.meta.url));
 const WIDTH_PROJECTS = ['mobile', 'tablet', 'desktop'] as const;
 
-/** The eleven files section 10.5 rules on. Paths are relative to `tests/e2e`, with forward slashes. */
+/** The twelve files section 10.5 rules on. Paths are relative to `tests/e2e`, with forward slashes. */
 const RULED_FILES: ReadonlyArray<string> = [
   'aqp-38-qa.spec.ts',
   'axe-helper.spec.ts',
@@ -32,10 +32,11 @@ const RULED_FILES: ReadonlyArray<string> = [
   'audit.spec.ts',
   'process-master.spec.ts',
   'materials.spec.ts',
+  'account.spec.ts',
 ];
 
 /**
- * The 52 tests ruled to run at one width, as `file > blocks > title`: 22 from AQP-199, 12 from AQP-65, 1 from its G7, 12 from AQP-74 (all of
+ * The 53 tests ruled to run at one width, as `file > blocks > title`: 22 from AQP-199, 12 from AQP-65, 1 from its G7, 12 from AQP-74 (all of
  * users-production.spec.ts, and seven in users.spec.ts) and 5 from the ruling of 2026-11-08 (three in process-master.spec.ts, two in materials.spec.ts). Everything else keeps three widths, in particular
  * "SCR-01 at this width (AC-8)" and the account-menu test in sign-in.spec.ts, the AC-8 keyboard and screen-reader
  * block and the locked and "could not be checked" states in aqp-38-qa.spec.ts, and in users.spec.ts the list (scroll and
@@ -102,6 +103,8 @@ const ONE_WIDTH_TESTS: ReadonlyArray<string> = [
   'process-master.spec.ts > search and states (AC-1, AC-8) > filters by name ignoring letter case, says "No rate matches" with Clear filters, and Clear filters brings the list back and focuses the search',
   'materials.spec.ts > edit a material (AC-2, AC-3, AC-5) > an edit that changes nothing closes without a request',
   'materials.spec.ts > search and states (AC-1, AC-8) > filters by Material in Drawing or Material Considered ignoring letter case, says "No material matches" with Clear filters, and Clear filters brings the list back and focuses the search',
+  // AQP-81 PRF-02 (architect, test strategy v0.38 section 10.5; DL-191 F9): the five-wrong-tries block reads no layout. The other three tests of account.spec.ts read layout and stay at three widths.
+  'account.spec.ts > the block (AC-6) > five wrong current passwords block the form for 15 minutes, and the person can still sign in',
 ];
 
 // A Windows checkout with Git's default autocrlf writes CRLF; the checks below expect LF (DEF-002).
@@ -119,7 +122,7 @@ describe('@one-width allow-list (AQP-199 AC-3)', () => {
     for (const file of RULED_FILES) expect(E2E_FILES).toContain(file);
   });
 
-  it('appears in no file of tests/e2e except the eleven ruled in test strategy section 10.5', () => {
+  it('appears in no file of tests/e2e except the twelve ruled in test strategy section 10.5', () => {
     const tagged = E2E_FILES.filter((file) => read(`${E2E_DIRECTORY}${file}`).includes(TAG));
     expect(tagged.filter((file) => !RULED_FILES.includes(file))).toEqual([]);
   });
@@ -160,10 +163,10 @@ describe('the tests that carry @one-width, as Playwright lists them (AQP-199 AC-
     listed = await listTests();
   });
 
-  it('are exactly the 52 tests ruled in test strategy section 10.5, by title', () => {
+  it('are exactly the 53 tests ruled in test strategy section 10.5, by title', () => {
     const tagged = listed.filter((test) => test.tagged).map((test) => test.key).sort();
     expect(tagged).toEqual([...ONE_WIDTH_TESTS].sort());
-    expect(ONE_WIDTH_TESTS).toHaveLength(52);
+    expect(ONE_WIDTH_TESTS).toHaveLength(53);
   });
 
   it('run in the desktop project only, and every other test runs in all three width projects, except the own-width files, which run in desktop only (AQP-244)', () => {

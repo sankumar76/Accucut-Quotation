@@ -10,7 +10,9 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 /**
  * STORY-01.05 T6 (AC-2, AC-3, AC-5, AC-6, AC-7): SCR-23 "Account" at 360x800, 768x1024 and 1366x768 on the development server. Each test
  * works on a person made for it (kind `password`, or one the Admin adds), so the three screen sizes and the retries never meet on one,
- * and what the change does to sessions and to the attempt count reaches nobody else. The words are the UX spec's, written out here.
+ * and what the change does to sessions and to the attempt count reaches nobody else. The words are the UX spec's (v0.27, "SCR-23 Account:
+ * final words"), written out here. One test, the block (AC-6), reads no layout and runs at one width (test strategy section 10.5, architect
+ * ruling on AQP-81, DL-191 F9); the other three read layout and run at three.
  *
  *   - the change: a wrong current password and a mismatch are named, the right ones change the password, the browser that made the change
  *     stays signed in, another device is signed out, the old password is refused at sign-in and the new one accepted;
@@ -28,9 +30,14 @@ const TEMPORARY_PASSWORD = 'invented-temporary-password-2';
 const NEW_PASSWORD = 'Pr9$kWd3!Rx-fresh';
 const WRONG_PASSWORD = 'Not-the-current-1!';
 
+const CHANGE_PATH = '**/api/v1/account/password';
 const HINT = 'At least 10 and at most 128 characters, with at least one number and one symbol, such as ! # $ or %.';
 const CURRENT_WRONG = 'Your current password is not correct.';
 const MISMATCH = 'The two new passwords do not match.';
+const SAME_AS_CURRENT = 'Choose a new password that is different from your current one.';
+const BLOCKED_BODY = 'Try again in 15 minutes, or ask the Admin to reset your password. Your password has not been changed.';
+const FAILED_BODY = 'Check your connection and try again. If you are asked to sign in, try your new password first.';
+const CHANGED_ELSEWHERE = 'Your password was just changed somewhere else. Enter the newest password as your current password and try again.';
 const SUCCESS_TITLE = 'Your password has been changed.';
 const SUCCESS_BODY = 'Use the new one the next time you sign in.';
 const MUST_CHANGE_NOTICE =
@@ -114,6 +121,13 @@ test.describe('the change (AC-2, AC-3)', () => {
     await expect(profile).toContainText(person.email);
     await expect(profile).toContainText('Engineer');
     await waitUntilHydrated(page, 'form[aria-label="Change password"]', 'onSubmit');
+
+    // Nothing typed: the three empty-field messages and the summary, and nothing is sent.
+    await submit(page).click();
+    await expect(page.getByRole('alert').filter({ hasText: '3 things need fixing.' })).toBeVisible();
+    await expect(page.locator('#current-password-error')).toHaveText('Enter your current password.');
+    await expect(page.locator('#new-password-error')).toHaveText('Enter a new password.');
+    await expect(page.locator('#repeat-password-error')).toHaveText('Repeat the new password.');
 
     // A wrong current password: named under its field, in the summary, and focus goes there.
     await fillAndSend(page, { current: WRONG_PASSWORD, next: NEW_PASSWORD });
@@ -199,6 +213,19 @@ test.describe('the change (AC-2, AC-3)', () => {
       await expect(newPassword(page)).toBeFocused();
     }
 
+    // QLT-01: the new password is the current one. Nothing is sent; the rule's own messages come first; another letter case is a different password, which the unit tests hold (sending it would change the password).
+    const posts: string[] = [];
+    page.on('request', (request) => void (request.method() === 'POST' && request.url().includes('/api/v1/account/password') && posts.push(request.url())));
+    await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD });
+    await expect(page.locator('#new-password-error')).toHaveText(SAME_AS_CURRENT);
+    await expect(page.getByRole('alert').filter({ hasText: '1 thing needs fixing.' }).getByRole('link', { name: SAME_AS_CURRENT })).toBeVisible();
+    await expect(newPassword(page)).toBeFocused();
+    expect(posts).toEqual([]);
+    await fillAndSend(page, { current: 'Short1!x', next: 'Short1!x' });
+    await expect(page.locator('#new-password-error')).toHaveText('The new password must be at least 10 characters.');
+    await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD.toUpperCase() });
+    await expect(page.locator('#new-password-error')).toHaveCount(0);
+
     // The error state, as a person sees it: it fits the width, its controls are large enough, and axe finds nothing.
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     for (const field of [current(page), newPassword(page), repeat(page)]) {
@@ -215,7 +242,7 @@ test.describe('the change (AC-2, AC-3)', () => {
 });
 
 test.describe('the block (AC-6)', () => {
-  test('five wrong current passwords block the form for 15 minutes, and the person can still sign in', async ({ page }, testInfo) => {
+  test('five wrong current passwords block the form for 15 minutes, and the person can still sign in', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const person = await createDisposableUser('password', testInfo);
     await signIn(page, person, E2E_PASSWORD);
     await expect(page).toHaveURL(/\/queue$/);
@@ -228,7 +255,35 @@ test.describe('the block (AC-6)', () => {
     // The sixth is refused whatever it holds, even the right current password.
     await fillAndSend(page, { current: E2E_PASSWORD, next: NEW_PASSWORD });
     const blocked = page.getByRole('alert').filter({ hasText: 'Too many attempts.' });
-    await expect(blocked).toContainText('Try again in 15 minutes. You can still sign in.');
+    await expect(blocked).toContainText(BLOCKED_BODY);
+    // The fields keep what was typed and the button stays enabled (UX spec SCR-23 "final words", Blocked).
+    await expect(current(page)).toHaveValue(E2E_PASSWORD);
+    await expect(submit(page)).toBeEnabled();
+
+    // The answers a test cannot get from the real server, stubbed in turn (rows 5 to 7 of the spec's tests): each shows its own words in one alert
+    // and never the connection sentence when the connection worked, and the fields keep their values.
+    const problem = (status: number, code: string, title: string) => JSON.stringify({ type: 'about:blank', title, status, code, requestId: 'req-00000000' });
+    const answerWith = async (answer: { readonly status: number; readonly code: string; readonly title: string } | 'no-answer'): Promise<void> => {
+      await page.unroute(CHANGE_PATH);
+      await page.route(CHANGE_PATH, (route) =>
+        answer === 'no-answer'
+          ? route.abort('connectionreset')
+          : route.fulfill({ status: answer.status, contentType: 'application/problem+json', body: problem(answer.status, answer.code, answer.title) }),
+      );
+      await repeat(page).press('Enter');
+    };
+    await answerWith({ status: 409, code: 'PASSWORD_CHANGED_ELSEWHERE', title: CHANGED_ELSEWHERE });
+    await expect(page.getByRole('alert').filter({ hasText: CHANGED_ELSEWHERE })).toHaveCount(1);
+    await expect(page.getByText('Check your connection')).toHaveCount(0);
+    await expect(current(page)).toHaveValue(E2E_PASSWORD);
+    await answerWith({ status: 403, code: 'PASSWORD_CHANGE_REQUIRED', title: 'Set a new password to continue.' });
+    await expect(page.getByRole('alert').filter({ hasText: 'Set a new password to continue.' })).toHaveCount(1);
+    await expect(page.getByText('Check your connection')).toHaveCount(0);
+    await answerWith('no-answer');
+    const failed = page.getByRole('alert').filter({ hasText: 'We could not change your password.' });
+    await expect(failed).toContainText(FAILED_BODY);
+    await expect(newPassword(page)).toHaveValue(NEW_PASSWORD);
+    await page.unroute(CHANGE_PATH);
 
     // Mistyping here never locks the person out of signing in: it has a key of its own.
     await page.context().clearCookies();
@@ -264,8 +319,20 @@ test.describe('"Set a new password" (AC-5, AC-7)', () => {
     expect(me.status()).toBe(403);
     expect(await me.json()).toMatchObject({ code: 'PASSWORD_CHANGE_REQUIRED' });
 
-    // A password that does not meet the rule keeps them here; one that does takes them to their work, with the menu.
+    // QLT-01: typing the temporary password again keeps them here (the page refuses it; so does the server, and the duty stays).
     await waitUntilHydrated(page, 'form[aria-label="Change password"]', 'onSubmit');
+    await fillAndSend(page, { current: FIRST_PASSWORD, next: FIRST_PASSWORD });
+    await expect(page.locator('#new-password-error')).toHaveText(SAME_AS_CURRENT);
+    await expect(page).toHaveURL(/\/account$/);
+    const sameByApi = await page.request.post('/api/v1/account/password', {
+      headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+      data: { currentPassword: FIRST_PASSWORD, newPassword: FIRST_PASSWORD },
+    });
+    expect(sameByApi.status()).toBe(422);
+    expect(await sameByApi.json()).toMatchObject({ code: 'PASSWORD_RULE', errors: [{ field: 'newPassword', message: SAME_AS_CURRENT }] });
+    expect((await page.request.get('/api/v1/me')).status()).toBe(403);
+
+    // A password that does not meet the rule keeps them here; one that does takes them to their work, with the menu.
     await fillAndSend(page, { current: FIRST_PASSWORD, next: 'Short1!x' });
     await expect(page.locator('#new-password-error')).toHaveText('The new password must be at least 10 characters.');
     await fillAndSend(page, { current: FIRST_PASSWORD, next: NEW_PASSWORD });

@@ -2,25 +2,23 @@
 
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 
-import { FormField } from '@/components/shared/form-field';
-import { Notice } from '@/components/shared/notice';
-import { PasswordInput } from '@/components/shared/password-input';
 import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { changeOwnPassword, TOO_MANY_ATTEMPTS_RESPONSE } from '@/lib/auth/account-client';
+import { changeOwnPassword, resultOf } from '@/lib/auth/account-client';
 import { changePasswordProblems, type ChangePasswordField, type ChangePasswordProblems } from '@/lib/auth/change-password';
 import { PASSWORD_RULE_HINT } from '@/lib/auth/password-rule';
 import { HOME_PATH } from '@/lib/auth/return-path';
 
-import { BLOCKED_BODY, BLOCKED_TITLE, errorSummaryTitle, FAILED_BODY, FAILED_TITLE, SUCCESS_BODY, SUCCESS_TITLE } from './texts';
+import { ErrorSummary, PasswordField, ResultNotice, type ResultKind, type SummaryEntry } from './change-password-parts';
 
 /**
  * The "Change password" form of SCR-23 (STORY-01.05 AC-2, AC-3, AC-5, AC-6, AC-7): current, new and repeat. The form collects and shows;
- * the server decides (the current password, the rule, the attempt limit). The shape and the parts of the rule that need no list are
- * checked on submit (UX spec section 6.0), and the server's messages are put under the field they name. After a refusal focus goes to the
- * first field with a message and a summary above the form links to each one. Paste is never blocked, `autocomplete` is
- * `current-password` and `new-password`, and each field has a show and hide button.
+ * the server decides (the current password, the rule, the attempt limit). The shape, the parts of the rule that need no list and "the new
+ * password is the current one" are checked on submit (UX spec section 6.0), and the server's messages are put under the field they name.
+ * After a refusal focus goes to the first field with a message and a summary above the form links to each one. Paste is never blocked,
+ * `autocomplete` is `current-password` and `new-password`, and each field has a show and hide button. The fields keep what was typed
+ * after every refusal and are emptied only after a success (WCAG 3.3.7).
  *
  * On success the server has issued this browser a fresh session. A person who had to set a new password goes to their home with a full
  * page load (so no page from before is left in the router cache); anyone else stays here, the fields are cleared and the notice says so.
@@ -34,17 +32,11 @@ export interface ChangePasswordFormProps {
 }
 
 const FIELD_ORDER: ReadonlyArray<ChangePasswordField> = ['currentPassword', 'newPassword', 'repeatPassword'];
-const FIELD_IDS: Readonly<Record<ChangePasswordField, string>> = {
-  currentPassword: 'current-password',
-  newPassword: 'new-password',
-  repeatPassword: 'repeat-password',
-};
+const EMPTY_VALUES = { currentPassword: '', newPassword: '', repeatPassword: '' };
 
-type Phase = 'idle' | 'saved' | 'blocked' | 'failed';
-
-interface SummaryEntry {
-  readonly field: ChangePasswordField;
-  readonly message: string;
+interface Shown {
+  readonly kind: ResultKind;
+  readonly serverTitle?: string;
 }
 
 function summaryOf(problems: ChangePasswordProblems): ReadonlyArray<SummaryEntry> {
@@ -58,21 +50,13 @@ function withoutProblem(problems: ChangePasswordProblems, field: ChangePasswordF
   return Object.fromEntries(Object.entries(problems).filter(([name]) => name !== field));
 }
 
-/** The messages of a refusal that name a field of this form. */
-function serverProblems(fields: Readonly<Record<string, string>>): ChangePasswordProblems {
-  const found: Partial<Record<ChangePasswordField, string>> = {};
-  const current = fields['currentPassword'];
-  const next = fields['newPassword'];
-  if (current !== undefined) found.currentPassword = current;
-  if (next !== undefined) found.newPassword = next;
-  return found;
-}
-
+// Over 40 lines on purpose (coding standards section 1): one form owns its state, its refs and its submit. The repeated pieces are in
+// `change-password-parts.tsx` and the reading of the answer is `resultOf`; what is left is the wiring, as in `UserForm` (SCR-14).
 export function ChangePasswordForm({ email, mustChange }: ChangePasswordFormProps) {
-  const [values, setValues] = useState({ currentPassword: '', newPassword: '', repeatPassword: '' });
+  const [values, setValues] = useState(EMPTY_VALUES);
   const [problems, setProblems] = useState<ChangePasswordProblems>({});
   const [summary, setSummary] = useState<ReadonlyArray<SummaryEntry>>([]);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [shown, setShown] = useState<Shown | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const currentRef = useRef<HTMLInputElement>(null);
   const newRef = useRef<HTMLInputElement>(null);
@@ -84,10 +68,10 @@ export function ChangePasswordForm({ email, mustChange }: ChangePasswordFormProp
     repeatPassword: repeatRef,
   };
 
-  // The notice of a result takes focus once it is in the page (saved, blocked, failed), so it is read and seen.
+  // The notice of a result takes focus once it is in the page (saved, blocked, failed, refused), so it is read and seen.
   useEffect(() => {
-    if (phase !== 'idle') noticeRef.current?.focus();
-  }, [phase]);
+    if (shown !== null) noticeRef.current?.focus();
+  }, [shown]);
 
   const focusField = (field: ChangePasswordField): void => refs[field].current?.focus();
   const showProblems = useFocusOnRefusal(FIELD_ORDER, focusField, (next) => {
@@ -98,130 +82,62 @@ export function ChangePasswordForm({ email, mustChange }: ChangePasswordFormProp
   const set = (field: ChangePasswordField) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     setProblems((current) => withoutProblem(current, field));
-    setPhase('idle');
+    setShown(null);
   };
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (submitting) return;
-    setPhase('idle');
+    setShown(null);
     const found = changePasswordProblems(values, email);
     showProblems(found);
     if (Object.keys(found).length > 0) return;
 
     setSubmitting(true);
-    const outcome = await changeOwnPassword({ currentPassword: values.currentPassword, newPassword: values.newPassword });
-    if (outcome.status === 'ok') {
-      if (mustChange) {
-        // Stay in the loading state until the next page replaces this one.
-        window.location.assign(HOME_PATH);
-        return;
-      }
-      setSubmitting(false);
-      setValues({ currentPassword: '', newPassword: '', repeatPassword: '' });
-      setSummary([]);
-      setPhase('saved');
+    const result = resultOf(await changeOwnPassword({ currentPassword: values.currentPassword, newPassword: values.newPassword }));
+    if (result.kind === 'saved' && mustChange) {
+      // Stay in the loading state until the next page replaces this one.
+      window.location.assign(HOME_PATH);
       return;
     }
     setSubmitting(false);
-    if (outcome.status === 'refused') {
-      if (outcome.code === TOO_MANY_ATTEMPTS_RESPONSE) return setPhase('blocked');
-      const fromServer = serverProblems(outcome.fields);
-      if (Object.keys(fromServer).length > 0) return showProblems(fromServer);
+    if (result.kind === 'fields') return showProblems(result.problems);
+    if (result.kind === 'saved') {
+      setValues(EMPTY_VALUES);
+      setSummary([]);
     }
-    setPhase('failed');
+    setShown(result.kind === 'refused' ? { kind: 'refused', serverTitle: result.title } : { kind: result.kind });
   }
+
+  const field = (name: ChangePasswordField, label: string, autoComplete: 'current-password' | 'new-password', extra: { hint?: string } = {}) => (
+    <PasswordField
+      field={name}
+      label={label}
+      autoComplete={autoComplete}
+      value={values[name]}
+      onValue={set(name)}
+      inputRef={refs[name]}
+      error={problems[name]}
+      {...extra}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-s-4">
       {/* The wrapper takes focus; the notice inside announces itself (role="status" or "alert"). */}
       <div ref={noticeRef} tabIndex={-1} className="flex flex-col gap-s-4 outline-none empty:hidden">
-        {phase === 'saved' ? (
-          <Notice tone="success" title={SUCCESS_TITLE}>
-            {SUCCESS_BODY}
-          </Notice>
-        ) : null}
-        {phase === 'blocked' ? (
-          <Notice tone="danger" title={BLOCKED_TITLE}>
-            {BLOCKED_BODY}
-          </Notice>
-        ) : null}
-        {phase === 'failed' ? (
-          <Notice tone="danger" title={FAILED_TITLE}>
-            {FAILED_BODY}
-          </Notice>
-        ) : null}
+        {shown === null ? null : <ResultNotice kind={shown.kind} {...(shown.serverTitle === undefined ? {} : { serverTitle: shown.serverTitle })} />}
       </div>
-      {summary.length === 0 ? null : (
-        <Notice tone="danger" title={errorSummaryTitle(summary.length)}>
-          <ul className="list-disc pl-s-4">
-            {summary.map(({ field, message }) => (
-              <li key={field}>
-                <a
-                  href={`#${FIELD_IDS[field]}`}
-                  className="underline"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    focusField(field);
-                  }}
-                >
-                  {message}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Notice>
-      )}
+      {summary.length === 0 ? null : <ErrorSummary entries={summary} onFocusField={focusField} />}
       <Card>
         <form noValidate aria-label="Change password" onSubmit={(event) => void onSubmit(event)}>
           <CardHeader>
             <CardTitle>Change password</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-s-4">
-            <FormField id={FIELD_IDS.currentPassword} label="Current password" {...(problems.currentPassword === undefined ? {} : { error: problems.currentPassword })}>
-              {(control) => (
-                <PasswordInput
-                  {...control}
-                  ref={currentRef}
-                  name="currentPassword"
-                  autoComplete="current-password"
-                  required
-                  value={values.currentPassword}
-                  onChange={(event) => set('currentPassword')(event.target.value)}
-                />
-              )}
-            </FormField>
-            <FormField
-              id={FIELD_IDS.newPassword}
-              label="New password"
-              hint={PASSWORD_RULE_HINT}
-              {...(problems.newPassword === undefined ? {} : { error: problems.newPassword })}
-            >
-              {(control) => (
-                <PasswordInput
-                  {...control}
-                  ref={newRef}
-                  name="newPassword"
-                  autoComplete="new-password"
-                  required
-                  value={values.newPassword}
-                  onChange={(event) => set('newPassword')(event.target.value)}
-                />
-              )}
-            </FormField>
-            <FormField id={FIELD_IDS.repeatPassword} label="Repeat new password" {...(problems.repeatPassword === undefined ? {} : { error: problems.repeatPassword })}>
-              {(control) => (
-                <PasswordInput
-                  {...control}
-                  ref={repeatRef}
-                  name="repeatPassword"
-                  autoComplete="new-password"
-                  required
-                  value={values.repeatPassword}
-                  onChange={(event) => set('repeatPassword')(event.target.value)}
-                />
-              )}
-            </FormField>
+            {field('currentPassword', 'Current password', 'current-password')}
+            {field('newPassword', 'New password', 'new-password', { hint: PASSWORD_RULE_HINT })}
+            {field('repeatPassword', 'Repeat new password', 'new-password')}
           </CardContent>
           <CardFooter className="justify-end">
             <Button type="submit" loading={submitting}>
