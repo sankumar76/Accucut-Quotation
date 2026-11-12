@@ -1,0 +1,25 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/unit/masters-service-exchange-rates.test.ts (20 tests | 1 failed) 274ms
+ ❯ tests/unit/exchange-rates-routes.test.ts (16 tests | 1 failed) 625ms
+ ❯ tests/unit/exchange-rates-lib.test.ts (39 tests | 1 failed) 278ms
+ ❯ tests/integration/masters/exchange-rates.test.ts (26 tests | 1 failed) 12513ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/unit/exchange-rates-lib.test.ts > the audit entry of a save (AC-4, SCR-16) > keeps the fixed object id of the pair (architecture 8): a new value would split the append-only history
+AssertionError: expected 'exchange_rates' to be 'exchange_rate' // Object.is equality
+Expected: "exchange_rate"
+Received: "exchange_rates"
+ FAIL  tests/unit/exchange-rates-routes.test.ts > PUT /api/v1/exchange-rates (AC-2, AC-4) > saves both rates: 200, the rates to two decimals, the stamp, and exactly one master.edited entry of object type exchange_rate
+AssertionError: expected [ [ 'master.edited', …(2) ] ] to deeply equal [ [ 'master.edited', …(2) ] ]
+- Expected
++ Received
+ FAIL  tests/unit/masters-service-exchange-rates.test.ts > saveExchangeRates (AC-2, AC-4) > stores both rates with one stamp and writes exactly one master.edited entry of object type exchange_rate, with both rates before and after
+AssertionError: expected { …(10) } to match object { event: 'master.edited', …(6) }
+- Expected
++ Received
+ FAIL  tests/integration/masters/exchange-rates.test.ts > AC-2, AC-4 (T2): saving the pair > stores both rates with one stamp (who, when in UTC) and writes exactly one master.edited entry of object type exchange_rate
+AssertionError: expected { event: 'master.edited', …(11) } to match object { event: 'master.edited', …(8) }
+- Expected
++ Received
+ Test Files  4 failed | 15 passed (19)
+      Tests  4 failed | 1078 passed (1082)
+   Duration  24.81s (tests 58%, import 37%, transform 4%, worker 1%)

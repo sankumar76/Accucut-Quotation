@@ -24,8 +24,9 @@ const NO_ACCESS_TITLE = 'You do not have access to this page';
 
 // The words, from ux-spec v0.18 SCR-13.
 const WORDS = {
-  description: 'Material prices, specific gravity and scrap rates.',
-  metaDescription: 'Manage the materials used in estimates.',
+  // Three tabs are in the bar since STORY-02.05, so the page names exactly those three (ux-spec v0.18 "The page description until ...", last row).
+  description: 'Material prices, exchange rates and the treatment and colour list.',
+  metaDescription: 'Manage materials, exchange rates and the treatment and colour list used in estimates.',
   placeholder: 'Material in Drawing or Considered',
   nameRequired: 'Enter the Material in Drawing.',
   oldNameRequired: 'Enter a name.',
@@ -113,7 +114,7 @@ test.describe('as the Admin', () => {
     await expect(page.locator('main h1 + p')).toHaveText(WORDS.description);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', WORDS.metaDescription);
     await expect(page).toHaveTitle(/Materials and lists/);
-    await expect(page.getByRole('tablist', { name: 'Lists' }).getByRole('tab')).toHaveText(['Materials']);
+    await expect(page.getByRole('tablist', { name: 'Lists' }).getByRole('tab')).toHaveText(['Materials', 'Exchange rates', 'Treatment / Color']);
     await expect(page.getByLabel('Search materials')).toHaveAttribute('placeholder', WORDS.placeholder);
     const row = rowOf(page, name);
     if ((page.viewportSize()?.width ?? 0) >= 768) {
@@ -435,11 +436,15 @@ test.describe('as the Admin', () => {
     await expect(rowOf(page, added)).toContainText('8.37');
   });
 
-  test('[AQP-122 AC-4] the browser fetch of /api/v1/options/materials as the Admin has exactly three keys per entry and no number', async ({ page }) => {
+  test('[AQP-122 AC-4] the browser fetch of /api/v1/options/materials as the Admin has exactly three keys per entry and no number', async ({ page }, testInfo) => {
+    // DEF-027: the test makes the material it reads. It used to rely on materials made by other tests, so it failed when it ran first in a shard.
+    const name = newName(testInfo, 'opt');
+    await makeMaterial(page, name);
     const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/materials`);
     expect(response.status()).toBe(200);
     const body = (await response.json()) as { options: Array<Record<string, unknown>> };
     expect(body.options.length).toBeGreaterThan(0);
+    expect(body.options.map((option) => option['name']), 'the material this test made is listed').toContain(name);
     for (const option of body.options) expect(Object.keys(option).sort()).toEqual(['id', 'materialConsidered', 'name']);
     expect(response.headers()['cache-control']).toMatch(/no-store/);
   });

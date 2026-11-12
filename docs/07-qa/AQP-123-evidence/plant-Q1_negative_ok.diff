@@ -1,0 +1,13 @@
+diff --git a/src/lib/masters/exchange-rates.ts b/src/lib/masters/exchange-rates.ts
+index 27720c5..9ec0a92 100644
+--- a/src/lib/masters/exchange-rates.ts
++++ b/src/lib/masters/exchange-rates.ts
+@@ -41,7 +41,7 @@ export const EXCHANGE_RATE_MESSAGE = DEFAULT_VALUE_MESSAGE;
+ 
+ /** The message for a typed rate, or null: digits, then up to two decimals, 0 or more. Spaces around the text are ignored. */
+ export function exchangeRateProblem(value: string): string | null {
+-  return DEFAULT_VALUE_PATTERN.test(value.trim()) ? null : EXCHANGE_RATE_MESSAGE;
++  return /^-?d{1,12}(?:.d{1,2})?$/.test(value.trim()) ? null : EXCHANGE_RATE_MESSAGE;
+ }
+ 
+ /** A typed rate as the stored text: no leading zeros, two decimals ("083.5" is "83.50"). The text must already pass its check. */

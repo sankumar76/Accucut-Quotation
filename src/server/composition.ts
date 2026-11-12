@@ -76,8 +76,10 @@ export function getUserService(): UserService {
 }
 
 /**
- * The Process Master (STORY-02.01). Every change runs in one transaction with its audit entry (STORY-01.07). The formulas that use
- * a rate are read from the current configuration version, which the process caches per version (`getCurrentVersion`).
+ * The masters: the Process Master (STORY-02.01), the Material Master (STORY-02.03) and the Exchange Rate Master (STORY-02.04). Every change runs in
+ * one transaction with its audit entry (STORY-01.07). The formulas that use a rate, and the letters the exchange-rate hints name, are read from
+ * the current configuration version, which the process caches per version (`getCurrentVersion`). The exchange-rate stamp takes its time from
+ * the system clock.
  */
 export function getMastersService(): MastersService {
   if (mastersService === undefined) {
@@ -87,6 +89,7 @@ export function getMastersService(): MastersService {
       transactions: createTransactionRunner(runtimeClient()),
       audit: getAuditService(),
       currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
+      clock: systemClock,
     });
   }
   return mastersService;

@@ -1,4 +1,5 @@
 import type { ConfigDocument } from '../../src/lib/fields/schema';
+import type { Clock } from '../../src/lib/time';
 import { createAuditRepository, type AuditRepository } from '../../src/server/repositories/audit-repository';
 import { createMasterRepository, type MasterRepository } from '../../src/server/repositories/master-repository';
 import { createTransactionRunner, type TransactionRunner } from '../../src/server/repositories/transaction';
@@ -30,6 +31,8 @@ export interface AuditDatabase extends AuthDatabase {
     readonly configuration?: ConfigDocument;
     /** Replaces the reading of the configuration, for a test of a read that fails. */
     readonly readConfiguration?: () => Promise<ConfigDocument>;
+    /** Replaces the clock that stamps an exchange-rate save (STORY-02.04), so a test sets the instant. */
+    readonly clock?: Clock;
   }): MastersService;
 }
 
@@ -55,6 +58,7 @@ export async function openAuditDatabase(): Promise<AuditDatabase> {
       transactions: options.transactions ?? transactions,
       audit,
       currentConfiguration: options.readConfiguration ?? (() => Promise.resolve(options.configuration ?? seedConfig)),
+      clock: options.clock,
     });
   return { ...base, auditRepository, transactions, audit, userService, masterRepository, mastersService: buildMastersService(), buildMastersService };
 }

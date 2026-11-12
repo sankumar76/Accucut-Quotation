@@ -1,0 +1,54 @@
+# QA probe, PR #232, run 42982426395, commit 3939829: QA130-MEASURE lines and the probe's results per width (from the CI job logs of the three E2E shards)
+QA130-MEASURE desktop 320px overflow px 0
+QA130-MEASURE desktop control heights px {"Add treatment button":44,"Treatment / Color tab":44,"Rename row button":36,"Delete row button":36,"Add: Name field":44,"Add: Cancel":44,"Add: Add treatment":44,"Rename: Name field":44,"Rename: Cancel":44,"Rename: Save":44,"Delete: Keep treatment":44,"Delete: Delete treatment":44}
+QA130-MEASURE desktop delete dialog tab order after Keep treatment ["Delete treatment","Keep treatment","Delete treatment","Keep treatment"]
+QA130-MEASURE desktop tab overflow px 0
+QA130-MEASURE mobile 320px overflow px 0
+QA130-MEASURE mobile control heights px {"Add treatment button":44,"Treatment / Color tab":44,"Rename row button":44,"Delete row button":44,"Add: Name field":44,"Add: Cancel":44,"Add: Add treatment":44,"Rename: Name field":44,"Rename: Cancel":44,"Rename: Save":44,"Delete: Keep treatment":44,"Delete: Delete treatment":44}
+QA130-MEASURE mobile delete dialog tab order after Keep treatment ["Delete treatment","Keep treatment","Delete treatment","Keep treatment"]
+QA130-MEASURE mobile tab overflow px 0
+QA130-MEASURE tablet 320px overflow px 0
+QA130-MEASURE tablet control heights px {"Add treatment button":44,"Treatment / Color tab":44,"Rename row button":36,"Delete row button":36,"Add: Name field":44,"Add: Cancel":44,"Add: Add treatment":44,"Rename: Name field":44,"Rename: Cancel":44,"Rename: Save":44,"Delete: Keep treatment":44,"Delete: Delete treatment":44}
+QA130-MEASURE tablet delete dialog tab order after Keep treatment ["Delete treatment","Keep treatment","Delete treatment","Keep treatment"]
+QA130-MEASURE tablet tab overflow px 0
+
+ ✓  224 [desktop] › tests/e2e/aqp-130-qa.spec.ts:104:3 › as the Admin › [AQP-130 AC-1, AC-8] the tab: names, "Other" first with its reason as text, no control on it; no sideways scroll; axe 0 violations (5.5s)
+ ✓  225 [desktop] › tests/e2e/aqp-130-qa.spec.ts:128:3 › as the Admin › [AQP-130 AC-8] 320 px reflow: the tab with a treatment and a 100-character name has no sideways page scroll (5.7s)
+ ✓  226 [desktop] › tests/e2e/aqp-130-qa.spec.ts:139:3 › as the Admin › [AQP-130 AC-8] controls are 44 px (icon buttons of a table row 36 px) in the list and in all three dialogs; each dialog fits the screen and has no axe violation (10.4s)
+ ✓  227 [desktop] › tests/e2e/aqp-130-qa.spec.ts:194:3 › as the Admin › [AQP-130 AC-2, AC-6, AC-8] the sentences: Add, Rename and Delete dialogs and the three notices, exactly as ux-spec v0.22 writes them (6.8s)
+ ✓  228 [desktop] › tests/e2e/aqp-130-qa.spec.ts:238:3 › as the Admin › [AQP-130 AC-2] the four messages under Name; each clears when the field is edited; the typed text stays; typing after a refusal keeps focus in the field (6.7s)
+ ✓  229 [desktop] › tests/e2e/aqp-130-qa.spec.ts:283:3 › as the Admin › [AQP-130 AC-3, AC-8] by keyboard alone: add, rename and delete; the delete dialog starts on Keep treatment, keeps focus inside, Escape sends nothing; focus returns where the ux-spec says (8.2s)
+ ✓  230 [desktop] › tests/e2e/aqp-130-qa.spec.ts:334:3 › as the Admin › [AQP-130 AC-6, AC-8] a failed add, rename and delete say so in the words of ux-spec v0.22, keep the typed name, and never say "Nothing was changed." (8.6s)
+ ✓  231 [desktop] › tests/e2e/aqp-130-qa.spec.ts:376:3 › as the Admin › [AQP-130 AC-1, AC-8] loading shows "Loading the treatments"; a failed read shows the error with focus on its title and "Try again" (4.2s)
+ ✓  232 [desktop] › tests/e2e/aqp-130-qa.spec.ts:404:3 › as the Admin › [AQP-130 AC-8] a 100-character name with no space stays inside the notice, the Rename title and the Delete title: no sideways scroll at any step (5.5s)
+ ✓  233 [desktop] › tests/e2e/aqp-130-qa.spec.ts:434:3 › as a Lead (the saved browser state of the set-up project) › [AQP-130 AC-7] the page is SCR-26 "no access" with status 403 and holds no tab and no treatment; every admin route is 403 for a real and an invented ID alike; the options list is open (5.4s)
+ ✓  234 [desktop] › tests/e2e/aqp-130-qa.spec.ts:466:3 › as an Engineer and signed out › [AQP-130 AC-5, AC-7] a signed-out visitor is sent to sign-in and gets 401; an Engineer gets SCR-26 and 403 on the page and the admin routes, and the options list as IDs and names only (4.6s)
+ ✓   28 [mobile] › tests/e2e/aqp-130-qa.spec.ts:104:3 › as the Admin › [AQP-130 AC-1, AC-8] the tab: names, "Other" first with its reason as text, no control on it; no sideways scroll; axe 0 violations (3.4s)
+ ✓   29 [mobile] › tests/e2e/aqp-130-qa.spec.ts:128:3 › as the Admin › [AQP-130 AC-8] 320 px reflow: the tab with a treatment and a 100-character name has no sideways page scroll (3.2s)
+ ✓   30 [mobile] › tests/e2e/aqp-130-qa.spec.ts:139:3 › as the Admin › [AQP-130 AC-8] controls are 44 px (icon buttons of a table row 36 px) in the list and in all three dialogs; each dialog fits the screen and has no axe violation (6.2s)
+ ✓   31 [mobile] › tests/e2e/aqp-130-qa.spec.ts:194:3 › as the Admin › [AQP-130 AC-2, AC-6, AC-8] the sentences: Add, Rename and Delete dialogs and the three notices, exactly as ux-spec v0.22 writes them (3.8s)
+ ✓   32 [mobile] › tests/e2e/aqp-130-qa.spec.ts:238:3 › as the Admin › [AQP-130 AC-2] the four messages under Name; each clears when the field is edited; the typed text stays; typing after a refusal keeps focus in the field (4.6s)
+ ✓   33 [mobile] › tests/e2e/aqp-130-qa.spec.ts:283:3 › as the Admin › [AQP-130 AC-3, AC-8] by keyboard alone: add, rename and delete; the delete dialog starts on Keep treatment, keeps focus inside, Escape sends nothing; focus returns where the ux-spec says (4.7s)
+ ✓   34 [mobile] › tests/e2e/aqp-130-qa.spec.ts:334:3 › as the Admin › [AQP-130 AC-6, AC-8] a failed add, rename and delete say so in the words of ux-spec v0.22, keep the typed name, and never say "Nothing was changed." (4.2s)
+ ✓   35 [mobile] › tests/e2e/aqp-130-qa.spec.ts:376:3 › as the Admin › [AQP-130 AC-1, AC-8] loading shows "Loading the treatments"; a failed read shows the error with focus on its title and "Try again" (2.3s)
+ ✓   36 [mobile] › tests/e2e/aqp-130-qa.spec.ts:404:3 › as the Admin › [AQP-130 AC-8] a 100-character name with no space stays inside the notice, the Rename title and the Delete title: no sideways scroll at any step (3.2s)
+ ✓   37 [mobile] › tests/e2e/aqp-130-qa.spec.ts:434:3 › as a Lead (the saved browser state of the set-up project) › [AQP-130 AC-7] the page is SCR-26 "no access" with status 403 and holds no tab and no treatment; every admin route is 403 for a real and an invented ID alike; the options list is open (2.6s)
+ ✓   38 [mobile] › tests/e2e/aqp-130-qa.spec.ts:466:3 › as an Engineer and signed out › [AQP-130 AC-5, AC-7] a signed-out visitor is sent to sign-in and gets 401; an Engineer gets SCR-26 and 403 on the page and the admin routes, and the options list as IDs and names only (3.2s)
+ ✓  264 [tablet] › tests/e2e/aqp-130-qa.spec.ts:104:3 › as the Admin › [AQP-130 AC-1, AC-8] the tab: names, "Other" first with its reason as text, no control on it; no sideways scroll; axe 0 violations (4.7s)
+ ✓  265 [tablet] › tests/e2e/aqp-130-qa.spec.ts:128:3 › as the Admin › [AQP-130 AC-8] 320 px reflow: the tab with a treatment and a 100-character name has no sideways page scroll (4.2s)
+ ✓  266 [tablet] › tests/e2e/aqp-130-qa.spec.ts:139:3 › as the Admin › [AQP-130 AC-8] controls are 44 px (icon buttons of a table row 36 px) in the list and in all three dialogs; each dialog fits the screen and has no axe violation (7.2s)
+ ✓  267 [tablet] › tests/e2e/aqp-130-qa.spec.ts:194:3 › as the Admin › [AQP-130 AC-2, AC-6, AC-8] the sentences: Add, Rename and Delete dialogs and the three notices, exactly as ux-spec v0.22 writes them (5.1s)
+ ✓  268 [tablet] › tests/e2e/aqp-130-qa.spec.ts:238:3 › as the Admin › [AQP-130 AC-2] the four messages under Name; each clears when the field is edited; the typed text stays; typing after a refusal keeps focus in the field (6.2s)
+ ✓  269 [tablet] › tests/e2e/aqp-130-qa.spec.ts:283:3 › as the Admin › [AQP-130 AC-3, AC-8] by keyboard alone: add, rename and delete; the delete dialog starts on Keep treatment, keeps focus inside, Escape sends nothing; focus returns where the ux-spec says (5.6s)
+ ✓  270 [tablet] › tests/e2e/aqp-130-qa.spec.ts:334:3 › as the Admin › [AQP-130 AC-6, AC-8] a failed add, rename and delete say so in the words of ux-spec v0.22, keep the typed name, and never say "Nothing was changed." (5.6s)
+ ✓  271 [tablet] › tests/e2e/aqp-130-qa.spec.ts:376:3 › as the Admin › [AQP-130 AC-1, AC-8] loading shows "Loading the treatments"; a failed read shows the error with focus on its title and "Try again" (2.2s)
+ ✓  272 [tablet] › tests/e2e/aqp-130-qa.spec.ts:404:3 › as the Admin › [AQP-130 AC-8] a 100-character name with no space stays inside the notice, the Rename title and the Delete title: no sideways scroll at any step (4.2s)
+ ✓  273 [tablet] › tests/e2e/aqp-130-qa.spec.ts:434:3 › as a Lead (the saved browser state of the set-up project) › [AQP-130 AC-7] the page is SCR-26 "no access" with status 403 and holds no tab and no treatment; every admin route is 403 for a real and an invented ID alike; the options list is open (3.0s)
+ ✓  274 [tablet] › tests/e2e/aqp-130-qa.spec.ts:466:3 › as an Engineer and signed out › [AQP-130 AC-5, AC-7] a signed-out visitor is sent to sign-in and gets 401; an Engineer gets SCR-26 and 403 on the page and the admin routes, and the options list as IDs and names only (3.1s)
+
+  17 skipped
+  261 passed (2.9m)
+  4 skipped
+  274 passed (4.9m)
+  3 skipped
+  276 passed (3.6m)

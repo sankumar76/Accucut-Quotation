@@ -1,0 +1,10 @@
+  - import "./scripts/lib/coverage-scope" without a file extension (vitest.config.ts:5:52). Add the file extension
+ ❯ tests/unit/exchange-rates-lib.test.ts (39 tests | 1 failed) 387ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/unit/exchange-rates-lib.test.ts > the audit entry of a save (AC-4, SCR-16) > keeps the fixed object id of the pair (architecture 8): a new value would split the append-only history
+AssertionError: expected '00000000-0000-4000-8000-000600000002' to be '00000000-0000-4000-8000-000600000001' // Object.is equality
+Expected: "00000000-0000-4000-8000-000600000001"
+Received: "00000000-0000-4000-8000-000600000002"
+ Test Files  1 failed | 18 passed (19)
+      Tests  1 failed | 1081 passed (1082)
+   Duration  27.19s (tests 60%, import 35%, transform 5%, worker 1%)

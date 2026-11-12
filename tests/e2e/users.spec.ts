@@ -139,6 +139,43 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
   });
 
+  test('DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-mail', async ({ page }) => {
+    await openUsers(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add user' }));
+    const dialog = page.getByRole('dialog', { name: 'Add user' });
+    await dialog.getByLabel('E-mail (used to sign in)').fill('not-an-address');
+    await dialog.getByRole('button', { name: 'Add user' }).click();
+    await expect(dialog.getByText('Enter a password.')).toBeVisible();
+    await expect(dialog.getByLabel('Name')).toBeFocused();
+
+    // The later refused field first, while the one before it still has its message (the old code jumped back to it).
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('abc@example.test');
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toHaveValue('abc@example.test');
+    await expect(dialog.getByLabel('Name')).toHaveValue('');
+    await page.keyboard.press('Shift+Tab');
+
+    // The keys go to whatever has focus, as a keyboard user does. Each key clears a message; none of them may move focus.
+    await expect(dialog.getByLabel('Name')).toBeFocused();
+    await page.keyboard.type('xyz');
+    await expect(dialog.getByLabel('Name')).toBeFocused();
+    await expect(dialog.getByLabel('Name')).toHaveValue('xyz');
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toHaveValue('abc@example.test');
+
+    // Tab to the e-mail, replace it, and focus stays there while the password still has its message.
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('xyz@example.test');
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toHaveValue('xyz@example.test');
+    await expect(dialog.getByLabel('Name')).toHaveValue('xyz');
+    await expect(dialog.getByText('Enter a password.')).toBeVisible();
+  });
+
   test('refuses an e-mail that is already used, whatever its letter case', { tag: '@one-width' }, async ({ page }, testInfo) => {
     const existing = await createDisposableUser('managed', testInfo);
     await openUsers(page);
@@ -150,6 +187,8 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await dialog.getByLabel('First password').press('Enter');
     await expect(dialog.getByText('A user with this e-mail already exists.')).toBeVisible();
     await expect(dialog).toBeVisible();
+    // The server refusal takes focus to the field it names (UX spec 6.0 "Forms"; QLT-03 of AQP-269).
+    await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
   });
 
   test('AC-3: a second Admin is refused, the current Admin is named, and nobody is added', { tag: '@one-width' }, async ({ page }) => {
@@ -166,6 +205,8 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await dialog.getByLabel('First password').press('Enter');
     await expect(dialog.getByText(ADMIN_TAKEN)).toBeVisible();
     await expect(dialog).toBeVisible();
+    // The message sits under Role and takes focus (SCR-14 "Second Admin"; QLT-03 of AQP-269).
+    await expect(dialog.getByRole('combobox', { name: 'Role' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('alert').filter({ hasText: `There is already an active Admin: ${E2E_ADMIN.name}.` })).toBeVisible();

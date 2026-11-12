@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DECIMAL_TEXT_PATTERN } from '../../../lib/masters/master-rules';
 import {
   CONSIDERED_REQUIRED_MESSAGE,
   MATERIAL_NAME_REQUIRED_MESSAGE,
@@ -10,7 +11,6 @@ import {
   SPECIFIC_GRAVITY_FORMAT_MESSAGE,
   specificGravityProblem,
 } from '../../../lib/masters/materials';
-import { DEFAULT_VALUE_PATTERN } from '../../../lib/masters/process-items';
 
 /**
  * The contract of the Material Master routes (STORY-02.03, architecture section 6 "Materials"). Every body, path parameter and answer is
@@ -36,7 +36,7 @@ const materialConsidered = z
   .max(MATERIAL_TEXT_MAX_LENGTH, MATERIAL_NAME_TOO_LONG_MESSAGE);
 
 /** Decimal text, never a JSON number: a price is not a floating-point value (coding standards section 10). Up to two decimals, 0 or more. */
-const nonNegativeNumber = z.string({ error: NUMBER_MESSAGE }).trim().regex(DEFAULT_VALUE_PATTERN, NUMBER_MESSAGE);
+const nonNegativeNumber = z.string({ error: NUMBER_MESSAGE }).trim().regex(DECIMAL_TEXT_PATTERN, NUMBER_MESSAGE);
 
 /** Decimal text above 0, up to two decimals: the one check of the screen (`specificGravityProblem`), so 0, a negative and a bad shape each get their words. */
 const specificGravity = z.string({ error: SPECIFIC_GRAVITY_FORMAT_MESSAGE }).superRefine((value, context) => {

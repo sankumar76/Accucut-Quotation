@@ -1,0 +1,32 @@
+  ✓   1 [setup] › tests\e2e\auth.setup.ts:51:1 › warm the production server: every page and API route once, as an Engineer (5.3s)
+  ✓   2 [setup] › tests\e2e\auth.setup.ts:22:1 › create the E2E users and save a signed-in Lead (30.8s)
+  ✓   3 [setup] › tests\e2e\auth.setup.ts:113:1 › make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec) (48.5s)
+  ✘   5 [desktop] › tests\e2e\canary-scan.spec.ts:111:1 › AC-3: an Engineer is sent no Restricted value, name or formula by any page, payload, header or script (9.7s)
+  ✘   4 [desktop] › tests\e2e\canary-scan.spec.ts:165:1 › AC-5: every Lead and Admin route, called as an Engineer, is the fixed 403 with no data, for a real ID and an invented one (11.1s)
+  ✓   6 [desktop] › tests\e2e\canary-scan.spec.ts:187:1 › AC-3, AC-4 (control with real data): the same scan finds the canary rates in what the Admin is sent (5.4s)
+  ✓   7 [desktop] › tests\e2e\canary-scan.spec.ts:207:1 › AC-6 (control with real data, STORY-02.03): the same scan finds the canary materials' price, specific gravity and scrap rate in what the Admin is sent (4.7s)
+  ✓   8 [desktop] › tests\e2e\canary-scan.spec.ts:237:1 › AC-6 (control with real data, STORY-02.04): the same scan finds both canary exchange rates in what the Admin is sent (1.6s)
+  ✓   9 [desktop] › tests\e2e\canary-scan.spec.ts:253:1 › AC-4, AC-6 (STORY-02.03): the options list an Engineer is sent names the canary materials, carries no rate of any kind, and holds no number of them in any form (1.5s)
+  ✓  10 [desktop] › tests\e2e\canary-scan.spec.ts:275:1 › AC-4 (negative control): a sentinel planted in a header and in an RSC payload is reported in each place (2.1s)
+  ✓  12 [desktop] › tests\e2e\canary-scan.spec.ts:340:1 › AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied (52ms)
+  ✘  11 [desktop] › tests\e2e\canary-scan.spec.ts:304:1 › AC-4 (negative control): a sentinel planted in a script chunk and in a response the browser fetches is found by the Engineer scan itself (4.1s)
+    Error: the canary exchange rates were in the database when the scan ended
+    - Expected  - 1
+    + Received  + 1
+    -   "USD": "838.3700",
+    +   "USD": "1.0000",
+    > 105 |   expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+    Error: the canary exchange rates were in the database when the scan ended
+    - Expected  - 1
+    + Received  + 1
+    -   "USD": "838.3700",
+    +   "USD": "1.0000",
+    > 105 |   expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+    Error: the canary exchange rates were in the database when the scan ended
+    - Expected  - 1
+    + Received  + 1
+    -   "USD": "838.3700",
+    +   "USD": "1.0000",
+    > 105 |   expect(stored, 'the canary exchange rates were in the database when the scan ended').toEqual({
+  3 failed
+  9 passed (1.9m)
