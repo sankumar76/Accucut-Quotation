@@ -3,11 +3,11 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-performance |
-| Review round | 1 |
-| Base…branch | `master...feat/AQP-237-audit-tx-static-checks` (PR #250) |
-| Commit reviewed | 87465b68f888344df48a108a24912ca161b6b2f6 |
+| Review round | 1 (below), 2 (section "Round 2", after the Hand-off of round 1) |
+| Base…branch | `master...feat/AQP-237-audit-record-tx-checks` (PR #250; round 1 read it under the earlier branch name `feat/AQP-237-audit-tx-static-checks`) |
+| Commit reviewed | Round 1: 87465b68f888344df48a108a24912ca161b6b2f6. Round 2: 57acbae200ffca4befb99a757bd41aea557e8a22 (merge 2c543cd of `master` 2891457, then the fix commit) |
 | Date | 2026-11-11 |
-| **Verdict** | **APPROVE** (two Info notes, no change requested) |
+| **Verdict** | Round 1: **APPROVE** (two Info notes). **Round 2: APPROVE WITH COMMENTS** (PRF-03 Minor, optional; PRF-01 updated; PRF-02 closed). See "Round 2". |
 
 ## Summary
 The PR adds only tests and lint configuration (5 files, no `src/`), so no runtime path, query, route, dependency or first-load JavaScript changes. The architecture test builds the TypeScript program **once**, in one `beforeAll` hook, and every case reuses it. Its cost is 5.2 s in Stage 6 and 4.1 s in Stage 11 (file durations from the CI job log, including the hook). That is about half of AC-5's 10 s report line. The CI-time effect is real but small and off the critical path: about +3 s in Stage 6 (one sample, inside `master`'s own spread) and nothing readable in Stage 11 or Stage 4. The path is set by the slowest E2E shard, which has at least 101 s of slack over the `Stages 1 to 11b` job on every run read. RISK-023 (8, DL-151) is not moved by this PR, and no hold is needed.
@@ -99,7 +99,7 @@ Time-limit safety: the hook has 120 s against a 4 to 5 s run (more than 20 times
 ## Previous Findings (re-review only)
 Not applicable (round 1).
 
-## Hand-off
+## Hand-off (round 1)
 - Status: COMPLETE
 - Verdict: APPROVE. Counts: Blocker 0, Critical 0, Major 0, Minor 0, Info 2.
 - Artefacts written/updated: `docs/06-reviews/AQP-237/performance.md` (branch `docs/AQP-237-review-performance`)
@@ -107,3 +107,122 @@ Not applicable (round 1).
 - Open questions: none
 - Risks raised: none new. RISK-023 unchanged at 8 (DL-151)
 - Recommended next agent: master (G6 decision once the standards and quality reviews are in)
+
+---
+
+# Round 2 (re-review of `87465b6..57acbae`)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance |
+| Trigger | DL-156 (7): re-run because the stage 6 file time of the architecture test is over 8 s (10,515 ms on the fix head) |
+| Scope | `87465b6..57acbae`: merge 2c543cd (`master` 2891457; read with `git show --cc`) and the fix commit 57acbae. 8 files in the fix commit (+996 / -605), all under `tests/` plus `eslint.config.mjs`; nothing under `src/`, no `package.json` or lockfile change |
+| Date | 2026-11-11 |
+| **Verdict** | **APPROVE WITH COMMENTS** |
+
+## Round 2 summary
+The test reads slower on the fix head, and the numbers need care. Raw file time went from 5.2 s (round 1) to **10.5 s** in stage 6, and from 4.1 s to **10.6 s** in stage 11 of the same job. The code does not explain it: `createServicesProgram` is unchanged except for a renamed slash helper, the `beforeAll` hook makes the same calls (the only change is 29 fixtures becoming 41), and a local A/B of the whole hook shows no difference (old 5.3 s, new 5.5 s, medians of six interleaved runs). On CI, after dividing by how fast that runner was for other files, the same test still reads about 1.3 to 2.2 times its old cost, and I cannot assign that remainder to the diff. One schedule effect is visible: on the fix head the file ran **last** (stage 6 ended 0.5 s after it did), where it ran in the first wave on the two earlier heads. The cost is a test file and is off the CI critical path on every run read except one, where the slack was 8 s. RISK-023 does not move. AC-5's 10 s line is a report line for the program build, not a gate, and the developer has reported (Jira 11523). I record one optional Minor (PRF-03) with a measured, cheap fix that I do **not** ask for in this PR.
+
+| Severity | Count (round 2 new) |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 1 (PRF-03, optional) |
+| Info | 0 new; PRF-01 updated; PRF-02 closed |
+
+## Round 2 checks run
+No `npm ci`, no full local suite. Evidence is the CI jobs API, the CI job logs, and a single-file local timing outside the repository working copy.
+
+| Check | Command or source | Result |
+|-------|-------------------|--------|
+| Diff | `git diff 2c543cd 57acbae`; `git show --cc 2c543cd`; the two files at both heads | The fix commit moves the cases into `tests/support/audit-transaction-cases.ts` and `audit-transaction-failing-cases.ts`, adds `lint-fixture.ts`, and rewrites the check (446 lines changed). The merge brings 71 files from `master`, none touching the check. |
+| Program build unchanged | `diff` of `createServicesProgram` at 87465b6 and 57acbae | Identical apart from `slashes` renamed `toForwardSlashes`. Still one call, in `beforeAll`; `ts.createCompilerHost(options, true)`, `noEmit`, `incremental: false`. |
+| CI jobs | `gh api .../actions/runs/{43056524392,43053441301,43027184210,43053208506,43056860151}/jobs`; logs of the `Stages 1 to 11b` jobs 130647322861, 130636473587, 130544744381, 130635632085, 130648512368 | Per-file Vitest lines, Vitest `Duration`, step times, shard times read. |
+| Local single-file timing | Vitest 5.0.5 and TypeScript 5.9.3, one test file; `git archive` copies of 87465b6 and 57acbae in a scratch folder, with `node_modules` shared read-only from the main copy. Nothing in the repository, no `npm ci`, no git state change | Hook A/B and the split below. The machine was noisy (the same build read 3 s to 14 s over the session), so the local figures show shares and direction, not CI seconds. |
+
+## Stage 6 file time: what it is, on which evidence
+
+AC-5 asks that "if building the program takes more than 10 s in the unit stage, the developer reports it to the solution-architect". The CI figure is the **file** time (hook plus cases), which is an upper bound of the build.
+
+| Run (head) | Test (Vitest cases) | Stage 6 file time | Stage 11 file time | Host factor, stage 6 / 11 (median of the other files over 1 s, against the `master` push run) | Normalised to `master`-host speed, stage 6 / 11 |
+|---|---|---|---|---|---|
+| 43027184210 (87465b6, round 1) | old (29) | 5,199 ms | 4,068 ms | 0.88 / 0.91 | 5.9 s / 4.5 s |
+| 43053441301 (merge 2c543cd, old test on the new base) | old (29) | 4,355 ms | 3,393 ms | 0.70 / 0.72 | 6.2 s / 4.7 s |
+| **43056524392 (57acbae, attempt 1)** | **new (45)** | **10,515 ms** | **10,561 ms** | 1.13 / 1.07 | **9.3 s / 9.9 s** |
+| 43056860151 (control B, `master`-based plants, one case red on purpose) | new (45) | 7,685 ms | (not run) | 1.03 / n/a | 7.5 s |
+
+The `master` push run 43053208506 (2891457) has no architecture test; it is the host reference. Its Vitest `Duration` is 32.98 s (stage 6) and 85.56 s (stage 11).
+
+1. **Is AC-5's 10 s line breached? Not shown.** The over-10 s reading comes from **one run** (43056524392), read twice in the same job on the same runner (stage 6 and stage 11 are not independent samples). The one other host that ran the same code (control B) read 7.7 s. So the new code reads 7.7 to 10.6 s over two runs and three readings. The build is about 80 % of the hook (item 3), so the build on the 10.5 s run is about 8 to 8.5 s (estimate), under 10 s. No evidence reads the **build** above 10 s. The developer reported the file time anyway (11523), so the AC-5 duty is met either way. A median of five is not warranted for a test-file time.
+2. **How much of the rise is the host?** About half. The other files read 1.13 times the `master` host on this run and 0.70 on the merge-head run, so those two runners differ by about 1.6 times: 4.4 s x 1.6 is 7 s. The rest (10.5 against 7) is a residue of 1.2 to 1.5 times that I cannot assign to the diff (item 3).
+3. **What the diff can and cannot explain.**
+
+| Part of the test | Local share of the hook (calm runs, 5 repeats) | Changed by the fix? | Reading |
+|---|---|---|---|
+| `createServicesProgram` (parse and resolve 445 files, 7.7 MB of text) | about 3.1 to 3.5 s of about 4.2 to 5.3 s: **about 80 %** | No (rename only) | The base cost. Of the 7.7 MB, 386 KB is `src`, 249 KB is zod (95 files, already in the program before the fix), 2.4 MB is TypeScript's `lib` files, 2.3 MB is `@types/node`, and about 1.5 MB is auto-included `@types/*` (csstype, lodash, d3, react, chai). |
+| `beforeAll` set-up: `serviceFilesUnder` twice, `fixtureSources` | under 0.05 s | Fixtures 29 to 41 | Not measurable. A program with 41 fixtures against none: inside the noise (best of four 8.5 s against 7.7 s on the noisy machine). The new prelude imports `zod` and `AuditService`; zod was already loaded, so there is no extra parse. |
+| First use of the type checker (global merge, then the 15 real calls) | 0.4 to 1.4 s (up to 2.7 s on the noisy machine) | Check rewritten | Similar to before. The `today` check re-run on a warm program is 0.13 to 0.27 s. |
+| The 41 cases | 0.08 to 0.28 s for all of them | +12 cases, more checks per call | **Negligible** (2 % of the hook). |
+| Rescans (`usesOf`, `callsAnotherRepository`) | inside the rows above | `usesOf` still rescans per helper step | **PRF-02 is closed**: the whole real-services check, warm, takes 0.13 to 0.27 s for 15 calls. |
+
+   Whole-hook A/B, six interleaved runs each, same machine: **old 5.6, 4.9, 7.1, 6.4, 4.1, 5.0 s (median 5.3); new 4.7, 6.3, 6.8, 5.4, 5.6, 5.3 s (median 5.5)**. The difference (0.2 s) is inside the spread (3 s). So the fix does not make the work heavier on a quiet machine, and it is not a per-call or per-case cost.
+4. **The schedule effect (observed; cause not proved).** Vitest runs the biggest files first when it has no timing cache (my reading of its default; I did not check the CI configuration). The test file shrank from 442 to 94 lines because the cases moved to `tests/support`. In the log it started **+32 s** into the 42.6 s stage 6 run on the fix head (16:17:16.99 to 16:17:27.50), against +1.4 s on the round-1 head and +1.7 s on the merge head. On the fix head it was the last substantial file: stage 6 ended 0.5 s after it. On the two earlier heads it ran in the first wave alongside other work. Had it run in the first wave at about 6 to 7 s (the normalised old cost plus a little), stage 6 would have ended about 9 s sooner on that run (estimate). Another run would confirm the order: the next run of this branch, or the `master` push after the squash.
+5. **Wall effect on the stages (estimate, uncertainty stated).** Against the merge-head run (same base, old test) after normalising by the host factors: stage 6 about +1 s, stage 11 about +6 s. Against the `master` push run: stage 6 +5 s, stage 11 +12 s. The factors come from 34 and 9 files and are good to about 15 %, which is 5 to 15 s here, so the effect is **not readable from one run**. My estimate of what the PR adds to the main job is **+3 to +10 s**.
+
+## CI path and RISK-023 (the brief's question)
+
+| Run | Head | `Stages 1 to 11b` job | Stage 4 / 5 / 6 / 11 (steps) | Shards (1 / 2 / 3) | Slowest shard minus main job | Path (first job start to `Stages 1 to 11` end) |
+|---|---|---|---|---|---|---|
+| 43056524392 | 57acbae | **243 s** | 17 / 12 / 44 / 104 s | 251 / 242 / 209 s | **+8 s** | **262 s (4:22)** |
+| 43053441301 | 2c543cd (old test) | 164 s | 10 / 6 / 27 / 66 s | 261 / 294 / 303 s | +139 s | 312 s (5:12) |
+| 43027184210 | 87465b6 | 190 s | 11 / 9 / 32 / 80 s | 291 / 296 / 263 s | +106 s | 308 s (5:08) |
+| 43053208506 (`master` push) | 2891457 | 212 s | 13 / 10 / 34 / 87 s | 234 / 211 / 335 s | +123 s | 346 s (5:46) |
+
+1. **The 4:22 path is not a gain from this PR.** It comes from fast E2E hosts (209 to 251 s against 263 to 335 s elsewhere). I do not read it as evidence that the PR is cheap.
+2. **This is the first run where the unit and integration job nearly sets the path** (slack 8 s; 101 to 139 s on the other eight runs I have read: the five base attempts of round 1, 87465b6, the merge head and 2891457). The job took 243 s because the runner was slow: stages 4, 5, 6 and 11 are all 1.2 to 1.6 times the other runs, including stages this PR does not touch (lint 17 s against 10 to 13 s, type-check 12 s against 6 to 10 s). The PR's own share of that job is the +3 to +10 s estimate above.
+3. **Effect on the path: 0 s in expectation, at most about +10 s.** For the main job to set a path of 5:30 it would need about 315 s, which is 72 s more than the slow-runner run above. That is not this PR. The PR adds no E2E spec (778 unchanged), so it does not feed the +33 s per E2E-adding story that drives RISK-023 (DL-125, DL-151).
+4. **RISK-023 stays at 8 on DL-151's reading.** I recommend no re-score and no hold. DL-151's 5:30 trigger is about the path; this PR touches the part of the path that has slack. What to watch is the slack itself: if more unit-heavy stories land and the runners are slow, the main job becomes the path. That is a note for the solution-architect's fourth-shard work, not a PR finding.
+5. **No median of five is needed for this PR.** The fix-head path is below 5:30; DL-142 (1) and DL-143 apply as in round 1.
+
+## Findings
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| PRF-03 | Minor (optional, not required for G6) | `tests/support/audit-transaction-check.ts:148` (`createServicesProgram`, the `options` object) | AC-5 (10 s report line); NFR-009 | The program parses 445 files (7.7 MB of text), of which about 4 MB is TypeScript `lib` files and auto-included `@types/*` that no service needs: `lib.dom`, and `@types/lodash`, `d3-*`, `chai`, `react`, `csstype`, which `tsconfig.json` pulls in because it sets no `types`. The build is about 80 % of the hook. | On CI the file read 10.5 s on one slow-runner run (7.7 s on another). Main-job cost about +3 to +10 s (estimate); off the path. Local, noisy machine, 5 interleaved repeats of build plus first use, medians: shipped 4.3 s; `types: ['node']` 4.0 s (-5 %); `lib: ['lib.esnext.d.ts']` 3.7 s (-13 %); both 2.9 s (-31 %). Files 445, 413, 443, 411. **The 15 real calls still pass under each variant** (0 findings). The direction is clear, the size is not. | **Not asked for in this PR.** It changes the type environment the check asks questions in, so the plants (P1 to P5, Q1 to Q3b, Q6) would have to be re-run by reviewer-quality on the new head: another round for a test-file saving. If the developer pushes for another reason, add `types: ['node']` and `lib: ['lib.esnext.d.ts']` to `options` (after `...parsed.options`), run the 15-call check and the plants, and read the file time again. Otherwise put it beside #259 as a follow-up (owner developer, due before G8), only if the next readings stay over 8 s. Do not touch the pool or isolation settings: they are shared with 210 other files (G12). |
+
+## Previous findings (re-review)
+| ID | Round 1 | Round 2 status |
+|----|---------|----------------|
+| PRF-01 (Info) | Record 5.2 s / 4.1 s as the baseline in test strategy section 10 | **Updated, still open for the solution-architect.** Record **a range, not one number**: round-1 head 5.2 / 4.1 s, merge head 4.4 / 3.4 s, fix head 10.5 / 10.6 s (one slow-runner run) and 7.7 s (control B). A later G6 compares against the range and the host factor, not against 5.2 s. DL-156 (8) already sends "the PRF-01 baseline from the fix-head run" to the architect; this is the content. |
+| PRF-02 (Info, `usesOf` rescans) | Not measured | **Closed.** Measured: the whole real-services check, warm, is 0.13 to 0.27 s for 15 calls, and all 41 cases take 0.08 to 0.28 s. No memoisation needed. |
+
+## Round 2 other checklist items (none apply or none found)
+- **Algorithmic complexity.** Same shape. The new work in the check is a `getTypeAtLocation` on each `record` member access (`verdictOn`), skipped for any other name, and one `getNonNullableType`. Chain depth is still capped by `MAX_HELPER_STEPS` = 3, with cycles refused.
+- **I/O.** Still one recursive `readdirSync` of `src/server/services`, now called twice per hook (once in `createServicesProgram`, once in `beforeAll`). A few milliseconds; no finding.
+- **Memory.** One program per worker, as in round 1. The fixtures are in-memory strings. No change in kind.
+- **Lint cost.** Stage 4 read 17 s on the slow runner (13 s on the `master` push run). Stage 5 (type-check, which the PR does not touch) read 12 s against 10 s, so the lint reading is the host. The `eslint.config.mjs` change (20 lines) adds patterns to option lists ESLint already builds per file; no typed linting. The rule test (111 cases) reads 3.4 s against 2.0 s on the merge head, which is 3.05 s against 2.8 s once normalised: unchanged.
+- **Time-limit safety.** Hook limit 120 s against a 10.6 s worst reading (11 times). The cases are lookups on a warm checker, so the 5 s default per test is not at risk.
+- **Front end and runtime.** No `src/` change in the fix commit; the merge brings `master`'s own `src/` changes, which are not this PR's. First-load JavaScript is judged by Stage 11b (3 s, passed on the fix head).
+
+## NFR impact (round 2)
+| NFR | Risk | Findings |
+|-----|------|----------|
+| NFR-009 CI feedback time (p95 ≤ 10 min; 6-min early warning; RISK-023 trigger 5:30) | Low. The fix head's path is 4:22. The PR's share of the main job is about +3 to +10 s (estimate), and the main job has slack on every run read except one slow-runner run (8 s). No E2E spec added. RISK-023 stays at 8. | PRF-01 (baseline as a range), PRF-03 |
+| NFR-009 first-load JavaScript (200 KB gzip per route) | None. Stage 11b passed. | none |
+| Page and API latency NFRs | None. No runtime code. | none |
+| Data volume and concurrency NFRs | None. No query, index, schema or migration change. | none |
+
+## Issues for other roles (round 2)
+- **solution-architect:** PRF-01 as a range (above). Also a slack figure beside the path in test strategy 10.5 (slowest shard minus `Stages 1 to 11b`: 101 to 139 s on eight runs, 8 s on 43056524392), so the day the main job becomes the path is seen before it happens. AC-5 says "building the program takes more than 10 s" but CI shows only a file time; say which one the line means.
+- **orchestrator:** no extra CI run is needed for the time. Read the `audit-transaction-architecture` line in the `master` push run after the squash and in the first nightly, and send both to the architect with the host factor. If both read over 8 s, open the PRF-03 follow-up.
+- **reviewer-quality:** if PRF-03 is ever applied, the re-run of the plants is yours.
+
+## Hand-off (round 2)
+- Status: COMPLETE
+- Verdict: APPROVE WITH COMMENTS. Counts: Blocker 0, Critical 0, Major 0, Minor 1 (PRF-03, optional), Info 0 new (PRF-01 updated, PRF-02 closed).
+- Measured: architecture test file time on 57acbae, run 43056524392 attempt 1: **10,515 ms (stage 6) and 10,561 ms (stage 11)**; control B run 43056860151: 7,685 ms (stage 6). Earlier heads: 5,199 / 4,068 ms (run 43027184210) and 4,355 / 3,393 ms (run 43053441301). The `master` push run 43053208506 (2891457) has no such test (Vitest Duration 32.98 s stage 6, 85.56 s stage 11). Fix-head path 262 s (4:22); main job 243 s; slowest shard 251 s.
+- Artefacts written/updated: `docs/06-reviews/AQP-237/performance.md` (round 2 added; round 1 kept)
+- Jira / GitHub updates: PR #250 review (COMMENT, verdict in body) with one inline Minor on `tests/support/audit-transaction-check.ts:148`; label `review:performance-approved` (kept); Jira AQP-237 hand-off comment
+- Open questions: none
+- Risks raised: none new. RISK-023 unchanged at 8 (DL-151)
+- Recommended next agent: master (G6 attempt 2, with the quality and standards round-2 reviews)
