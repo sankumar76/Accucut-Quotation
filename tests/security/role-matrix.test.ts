@@ -45,7 +45,7 @@ vi.mock('@/server/composition', async () => {
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
 
 /** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/account/password'];
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:

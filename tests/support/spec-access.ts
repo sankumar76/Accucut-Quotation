@@ -14,6 +14,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/estimates/[code]/export': ['ADMIN', 'LEAD'], // Excel export (FR-070)
   '/masters/process': ['ADMIN'], // Masters
   '/masters/customers': ['ADMIN'],
+  '/masters/customers/[id]': ['ADMIN'], // SCR-12, the edit page
   '/masters/materials': ['ADMIN'],
   '/config/fields': ['ADMIN', 'LEAD'], // Field and formula configuration: Admin edits, Lead views
   '/config/checkpoints': ['ADMIN'], // Insert and delete fields, checkpoints: Admin
@@ -35,4 +36,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/exchange-rates': ['ADMIN'], // the Exchange rates tab (STORY-02.04): the Admin's alone; an Engineer never receives a rate (BR-003)
   '/api/v1/treatments': ['ADMIN'], // the Treatment / Color tab (STORY-02.05): the Admin's alone (BR-004); an Engineer reads only the options list
   '/api/v1/treatments/[id]': ['ADMIN'],
+  '/api/v1/customers': ['ADMIN'], // SCR-12 (STORY-02.02): the Admin's alone (BR-004); an Engineer reads only the options list (names, no contact detail or rate)
+  '/api/v1/customers/[id]': ['ADMIN'],
+  '/api/v1/customers/[id]/reset-rates': ['ADMIN'],
 };

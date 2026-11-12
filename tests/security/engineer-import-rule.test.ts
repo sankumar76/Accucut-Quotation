@@ -51,6 +51,7 @@ const REPOSITORIES = {
   blocked: [
     'audit-repository',
     'config-repository',
+    'customer-repository',
     'decimal-text',
     'exchange-rate-repository',
     'master-constraints',
@@ -72,6 +73,7 @@ const SERVICES = {
     'audit-service',
     'bootstrap-admin-service',
     'config-service',
+    'customer-service',
     'exchange-rate-service',
     'masters-service',
     'rate-name-rules',

@@ -110,8 +110,13 @@ describe('the state of a master entry must fit its own master (#218, NFR-007)', 
   const SHEET = { materialInDrawing: 'Invented-sheet-grade-A', materialConsidered: 'Invented steel', pricePerKg: '58.37', specificGravity: '7.37', scrapRate: '22.37' };
   const RATES = { usd: '81.37', eur: null };
   const TREATMENT = { name: 'Invented-anodise' };
+  const CUSTOMER = {
+    name: 'Invented Works',
+    contact: ['phone'],
+    rates: [{ processItemId: '00000000-0000-4000-8000-000400000001', name: 'Cutting-Rate-per-Sec', unit: 'per second', value: '1.37' }],
+  };
   /** One valid state for each master the audit log knows, by its `object_type`. */
-  const STATES: Readonly<Record<string, unknown>> = { process_item: FOAM, material: SHEET, exchange_rate: RATES, treatment: TREATMENT };
+  const STATES: Readonly<Record<string, unknown>> = { process_item: FOAM, material: SHEET, exchange_rate: RATES, treatment: TREATMENT, customer: CUSTOMER };
 
   type MasterEvent = 'master.created' | 'master.edited' | 'master.deleted';
 
