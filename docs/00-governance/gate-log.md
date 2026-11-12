@@ -7152,3 +7152,64 @@ Alternatives considered:
 - #329 before #334. Rejected: no code citation waits on it, and it forces a CI run with nothing to judge.
 
 **Posted:** Jira AQP-275 comment 11718; PR #334 comment 6828836485; Jira AQP-1 comment 11719 (RISK-028); Jira AQP-288 comment 11720; GitHub #347 comment 6828851101, #123 comment 6828852294; #348 opened.
+
+## G6 – Peer Review — AQP-81 (STORY-01.05 password rule and own-password change, PR #341 at H2 = a7186f2, base `master` 3f22672; re-review of `c4517e6..a7186f2`) — 2026-11-12 (attempt 2)
+
+- **Decision:** **CONDITIONAL GO (DL-196).** Round 1 is closed. QLT-01 to QLT-06 are Fixed, and so are STD-01, STD-02, STD-04 to STD-06 and F11. Every plant (P1a to P5) turned red as ruled. One new Major, QLT-13, is test-only: an E2E step sends a real change, so the AC-7 error-state axe, overflow and 44 px checks scan a saved page. It is fixed in one commit H3, together with QLT-14 and STD-12, and master verifies H3 against a stated diff. There is no third review round. In QA also needs DL-190 (3)'s integration update after #297, and the product-owner's note.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2
+- **Artefacts evaluated:** `docs/06-reviews/AQP-81/{standards-r2,quality-r2}.md`; PR #341 at a7186f2 (Dev Record round 2), review 5878476881 and the standards round-2 review; plant PRs #351 to #356 and control #357 (all closed, unmerged); Jira AQP-81 11724, 11728, 11732, 11733 (and 11704, 11707, 11708, 11710, 11716); DL-191, DL-193, DL-194, DL-195; DEF-035 file, Jira AQP-289, GitHub #123.
+- **My own checks** (read-only; no CI started, re-run or cancelled):
+  - **Head and base:** a7186f2 = c4517e6 + 4 linear commits (F10 did not apply). `origin/master` is b6b38c5 (on 8f66157). #341 shares no file with 3f22672..b6b38c5. #297 is OPEN at eb6bc66.
+  - **CI 43254379119** (attempt 1, merge ref 631d3cb into 3f22672): 5 of 5 `success`. Gitleaks "733 commits scanned", "no leaks found". 3,385 / 5,794 / 833 / 24 against 43197966408's 3,194 / 5,558 / 820 / 24 = **+191 / +236 / +13 / +0**. 0 `✘`, 0 retry.
+  - **E2E names:** with line:col stripped, 0 of 844 base instances are missing. The 13 new ones are the 4 `account.spec.ts` tests at three widths, minus the `@one-width` block test at mobile and tablet, plus users.spec T7 at three widths.
+  - **Plants:** all six runs are `failure`. Master read Stage 6 of P1a (6), P2 (4) and P4 (1), and each failed exactly the tests the reviewer named.
+  - **C3:** 2c4c66b adds only `opacity-10` plus a success assertion, and run 43259540330 is all green. fb35b8e removes only the step's 3 lines, and run 43261793288 fails "AC-2, AC-7: ..." at 3 widths on `color-contrast`, with nothing else failing.
+  - **DEF-035 code:** on b6b38c5, the `states.tsx:81` heading has no wrap rule inside the `flex-col items-center` box at line 77. `process-results.tsx:34` prints the query. `material-results.tsx:43` passes `BREAK_LONG_NAMES`. No open PR touches those files or `process-master.spec.ts`.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | Round 1 `standards.md`, `quality.md`, `performance.md` plus round 2 `standards-r2.md` (APPROVE WITH COMMENTS) and `quality-r2.md` (REQUEST CHANGES); performance was not re-reviewed, as ruled (DL-191 (4)); the median of five is posted (6:02, PR comment 6827365222) |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 in both round-2 reports |
+| 3 | Majors fixed or explicitly accepted | | ⚠️ → H3 | Round 1: QLT-01, QLT-02, STD-01 Fixed (plants P1a, P1b, P2 red; licence SHA-256 equal to upstream). New: QLT-13 open, fix specified to the line and proven by C3 |
+| 4 | Findings cite file:line | | ✅ | QLT-13 `account.spec.ts:226-227`, QLT-14 `harness-password.ts:3-6`, STD-12 `route.ts:11`, STD-13, STD-14 |
+| 5 | Plants as ruled (DL-191 (4)) | | ✅ | P1a #351, P1b #352, P2 #353, P3 #354, P4 #355, P5 #356: each red on its named tests only |
+| 6 | CI on H2 (DL-191 (5), DL-194) | | ✅ | +191 / +236 / +13 / +0; names as above; exactly two Vitest renames |
+| 7 | F4 to F8, F11 done; #346 exists | | ✅ | Both reports; #346 OPEN |
+| 8 | AC conformance | | ✅ with QLT-13 | AC-1 to AC-6 met. AC-7 is met in code, but the error state is not verified by CI until H3 |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| H3 | developer | `tests/e2e/account.spec.ts`, `tests/support/harness-password.ts`, `src/app/api/v1/account/password/route.ts`; Dev Record round 3 | One commit on a7186f2 with exactly these 3 files. QLT-13: lines 226-227 move below `expectNoAxeViolations(page)` and gain the `SUCCESS_TITLE` status assertion, and the line-218 comment is reworded. QLT-14: header comment only. STD-12: `export const` → `const`, nothing else | Before In QA |
+| V | master | PR #341 and AQP-81 comment | Verify H3. The only parent is a7186f2. The stat shows the 3 files. `route.ts` changes by one token, and `harness-password.ts` by comment lines only. `git diff fb35b8e H3 -- tests/e2e/account.spec.ts` shows only the line-218 comment and the 3 lines after the axe call | On H3's CI |
+| C | orchestrator | H3's CI | 5 of 5, Stage 2 green, 0 flaky. At the merge-ref `master` push run **+191 / +236 / +13 / +0** (3,391 / 5,800 / 835 / 24 on b6b38c5's run 43261705805). Every base and H2 name is present, with no rename. H3 is pushed alone, before the DL-190 (3) merge, and not inside an open T6 window | Before In QA |
+| L | orchestrator → reviewer-quality, reviewer-standards | PR #341 | After V: reviewer-quality sets `review:quality-approved` (a label change, not a re-review). "Fixed (H3, DL-196)" replies go in the QLT-13, QLT-14 and STD-12 threads | After V |
+| I | developer | merge commit on #341 | DL-190 (3): after #297's squash and its 5-of-5 push run, merge `master` (no rebase or force-push). Master reads `--cc`, and any resolving hunk goes to reviewer-quality. CI at the post-AQP-142 push run is +191 / +236 / +13 / +0, with any difference explained by name | Before In QA |
+| O | product-owner | Jira AQP-81 change note | DL-191 (6), still outstanding: AC-1 "one rule" and the four cases; new = current refused; A-3 replaced | Before In QA |
+| T | orchestrator | GitHub #346 comment | Add STD-13 (log line before `issue(...)`) and STD-14 / QLT-16 (`BLOCK_MINUTES` to a policy module) | By G8 |
+| Q | qa-engineer | `docs/07-qa/AQP-81-test-report.md` | Besides the ACs and the regression by name: (i) DL-194 (2), the SCR-23 Blocked state at 360, 768 and 1366 px: axe with the five NFR-018 tags, focus on the notice, the v0.27 text, overflow 0. (ii) Confirm by name that "AC-2, AC-7" ran at three widths on the G7 head, with the case-only step after the axe call. (iii) The refused-with-no-field state shows the title only | G7 |
+
+**DEF-035 (AQP-289, #123): Sev-2 confirmed, on NFR-016.** It fails at 768 px (100) and 1024 px (96), two of NFR-016's three sizes; 1366 was not measured. At 360 px it overflows by 304 px and the start of the title is lost. SC 1.4.10 (320 px) was not measured and is not the basis. **Route:** its own PR `fix/AQP-289-<slug>` from `master`, which may start now.
+- **Files:** the `EmptyState` heading applies `BREAK_LONG_NAMES`, and `material-results.tsx` drops its redundant class.
+- **Behaviour:** overflow <= 0 and the title inside the viewport at 360, 768, 1024 and 1366 px with a 100-character unbroken search.
+- **Tests:** a new three-width test in `process-master.spec.ts` plus a unit test.
+- **Plant:** reviewer-quality removes the heading class. The SCR-11 case, the unit test and the two SCR-13 long-search cases go red, and nothing else does.
+- **Review:** reviewer-standards reviews.
+- **QA:** SCR-11 and SCR-13 at four widths.
+- **PR body and due:** "Closes #123". Before G8.
+
+**Risks:** RISK-028 is restated. DEF-035 is the fourth case and was already counted in P 4 (DL-195), so the score stays at 8 🟡. #348's guard PR also branches after DEF-035's fix. The next trigger is a fifth case outside the four known components (P to 5), or any case after #348 merges.
+
+**Unchanged from DL-190:** AQP-142 merges first. The developer merges `master` into #341 after #297 merges. The (4) triggers stand: AQP-276 merges or stops, or 24 h after AQP-142's push run, and never inside an open T6 window. The 2026-11-16 12:00 UTC re-ask stands, and the path is not re-read.
+
+**Rationale:** see DL-196. Both mandatory items pass, and one Major is open with an exact fix. The fix changes no behaviour and is already proven both ways in CI, so master verifies it (DL-047, DL-051). STD-12 rides because the build catches its only risk. STD-13 does not, because it reorders a security path. DEF-035 gets its own PR: it shares no file or rule with DEF-034, and DEF-034's PR may have to wait for #341.
+
+Alternatives considered:
+- A third round with reviewer-quality. Rejected: it would re-read a move that CI has already proven.
+- QLT-13 as a follow-up with a QA manual pass. Rejected: it leaves a refactored state unchecked at merge, and the fix costs two lines.
+- NO-GO. Rejected: no mandatory item fails.
+- DEF-035 in DEF-034's PR. Rejected for the reasons above.
+- DEF-035 as Sev-3. Rejected: likelihood belongs to the risk (DL-135).
+
+**Posted:** Jira AQP-81 comment 11735; PR #341 comment 6830321612; Jira AQP-289 comment 11736; GitHub #123 comment 6830329053; Jira AQP-1 comment 11737 (RISK-028).
