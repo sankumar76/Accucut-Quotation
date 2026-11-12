@@ -179,7 +179,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/materials', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', mustChangeAllowed: true },
   // STORY-02.04 (SCR-13, the Exchange rates tab). The Admin only (BR-004); an Engineer never receives a rate (BR-003), so the route is in no Engineer list.
   // The tab is in the page of the Materials row above: no new page, no new menu entry.
   { path: '/api/v1/exchange-rates', kind: 'api', methods: ['GET', 'PUT'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
