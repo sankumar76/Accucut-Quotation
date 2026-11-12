@@ -7111,3 +7111,44 @@ Alternatives considered:
 - The full three-reviewer route. Rejected: no data path, E2E +0.
 
 **Posted:** Jira AQP-142 comment 11711; PR #297 comment 6827649206; Jira AQP-1 comment 11712 (RISK-028).
+
+## G7 – QA Acceptance — AQP-275 (DEF-030, #325, Sev-2: notices wrap a long name; PR #334: H1 = e438ed9; H2 = 7ddb335 = H1 + the QA report) — 2026-11-12 (attempt 1)
+
+- **Decision:** **GO (DL-195).** DEF-030 is verified, and AQP-275 goes to **Done** (qa-engineer). DEF-034 (AQP-288, #347) is confirmed **Sev-2** on NFR-016, not on WCAG. It is pre-existing, does not hold this story, and blocks G8. **RISK-028's trigger has fired:** P goes from 3 to 4 (score 8 🟡), and a guard is owned in #348. #334 may squash now, with no update, and #329 is not a prerequisite.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every expected result verified with evidence (DL-183 (6)) | ✱ | ✅ | Report 7ddb335. A1 at 360, 768 and 1024 px: overflow 0 before and after (DEF-030 was 1011 / 611 / 611 px), 7 / 4 / 4 lines. B1: the Admin-name title wraps and adds 0 px. C: 18 notices at 360 px, all inside the window. QA's in-build control brings 998 / 598 / 598 px back |
+| 2 | No open Sev-1 / Sev-2 against the story | ✱ | ✅ | DEF-034 is outside #334's 9 files and comes from the shared shell (DL-094, DL-174 (3)). It blocks G8, not this story |
+| 3 | Regression recorded and green | ✱ | ✅ | H2 run 43247482466, jobs API 5 of 5, merge ref f59c2ad = 7ddb335 into 3f22672. 3,200 / 5,564 / 822 / 24 = 43233600652 +0 / +0 / +0 / +0 = push run 43197966408 +6 / +6 / +2 / +0. 0 `✘`, 0 retry, 0 flaky. Gitleaks: no leaks. Names: QA's match, 0 of 844 and 0 of 376 missing (same test tree) |
+| 4 | Exploratory notes | | ✅ | Report, "Exploratory Testing" (60 min charter) |
+| 5 | Accessibility (UI) | | ✅ | axe 0 in 22 scans, with the five NFR-018 tags (`wcag21a` included) |
+| 6 | H2 = H1 + the report alone | | ✅ | `git diff --stat e438ed9 7ddb335`: the report only (+150) |
+| 7 | Up to date with `master` | | ✅ | `git log 7ddb335..origin/master` is empty. GitHub reports `CLEAN`. Strict protection, with the one context `Stages 1 to 11` green |
+
+**DEF-034 (Sev-2, corrected basis):** `account-trigger.tsx:35-55`. The button and its wrapper have no `min-w-0` or maximum width, and the name span is `truncate` (nowrap). SC 1.4.10 is measured at 320 CSS px, where only the initials show. NFR-016 ("no horizontal page scroll" at 768, 1024 and 1366 px, "0 failures at the 3 test widths") fails on every signed-in page: an AC fails with a workaround (test plan section 6). **Route:** developer, PR `fix/AQP-288-<slug>` from `master`, which may start now. Truncate inside a bounded box (ux-spec SCR-25). The open panel's label is measured too and rides if it overflows. Extend `account-trigger-name.spec.ts`, using a user the test creates and never the shared E2E user. If `header.tsx` must change, the PR branches after #341 has merged. reviewer-quality runs the plant, and reviewer-standards reviews. QA at 768, 1024, 1366 and 1920 px. "Closes #347". Due before G8. QA writes the DEF-034 file to the records branch.
+
+**RISK-028:** this is the third defect of the class (DEF-030, DEF-031, DEF-034), and #123 (`EmptyState`, SCR-11 No match) is probably a fourth, never graded. P goes from 3 to 4, score 8. The guard is #348: the solution-architect designs it, the developer builds one test-only PR after #334, #297 (F2) and DEF-034's fix, and the reviewers run the plants. Due before G8. qa-engineer reproduces and grades #123.
+
+**Merge prerequisites (DL-195 (6); orchestrator):**
+- **Now:** no update is needed. Before the squash, re-read that `origin/master` is 3f22672, the head is 7ddb335 and `Stages 1 to 11` is green.
+- **If `master` moved:** GitHub update-branch, merge method. Parents 7ddb335 and the tip; `--cc` prints no hunk; `git diff 7ddb335 H3` over the 9 files is empty; `git diff --stat <tip> H3` lists exactly the 9 files. CI 5 of 5 with every attempt read, at the merge-ref push run +6 / +6 / +2 / +0, every base name present, 0 flaky. A touched file comes back to master.
+- **#329 is not a prerequisite.** The code cites only ux-spec 6.0, DEF-030 and issue 225, all on `master`. Order: #334, then #329, then #297's final update (DL-192 (9)(a)).
+- **DL-185 (4) is confirmed:** #334 merges before AQP-276's window. None is open (#297 is not merged; there is no H_m; no run is active). If a window opens first, #334 waits for both sets.
+- **#297:** goes after #334. F2 takes `master` first and imports `BREAK_LONG_NAMES` (DL-192 (4)(b)), unless its literal commit already exists. The only shared file has disjoint hunks.
+- **Squash title** "AQP-275: DEF-030: Users notice wraps a long name". The body is written by the orchestrator (text in DL-195 (6)(f)), with "Closes #325", "Refs #225", "Refs #319" and "Refs #347". There is no other closing keyword: master grepped the 7 commit messages.
+- **After:** the `master` push run is 5 of 5 at 3,200 / 5,564 / 822 / 24, posted on #334 and AQP-275. The delivery lead deletes #335's control branch before G8.
+
+**Risks:** RISK-028 is restated: P 3 to 4, score 6 to 8 🟡, trigger fired, guard #348. RISK-023 is unchanged (H2 path 5:46, a reading; base 5:40).
+
+**Rationale:** see DL-195. Every mandatory item is met on evidence master read. DEF-034's grade follows the scale, on the NFR-016 clause, because the WCAG Reflow width does not show it.
+
+Alternatives considered:
+- DEF-034 as Sev-3 for its low likelihood. Rejected: likelihood belongs to the risk (DL-135).
+- Holding #334 for DEF-034. Rejected: a different component and origin (DL-094).
+- The guard inside DEF-034's PR. Rejected: it widens a Sev-2 fix, and its plants need F2 on `master`.
+- #329 before #334. Rejected: no code citation waits on it, and it forces a CI run with nothing to judge.
+
+**Posted:** Jira AQP-275 comment 11718; PR #334 comment 6828836485; Jira AQP-1 comment 11719 (RISK-028); Jira AQP-288 comment 11720; GitHub #347 comment 6828851101, #123 comment 6828852294; #348 opened.
