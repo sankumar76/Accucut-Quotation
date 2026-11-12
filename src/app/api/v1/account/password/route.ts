@@ -8,7 +8,7 @@ import { changePasswordBodySchema } from '@/server/views/schemas/account';
 const NO_CONTENT = 204;
 
 /** The one line a successful change writes (STD-07, DL-193): who and which request, never the password, a hash, the e-mail or the body. */
-export const PASSWORD_CHANGED_LOG_MESSAGE = 'A person changed their own password.';
+const PASSWORD_CHANGED_LOG_MESSAGE = 'A person changed their own password.';
 
 /**
  * `POST /api/v1/account/password` (STORY-01.05 AC-3, AC-5, AC-6): the signed-in person changes their own password with the current

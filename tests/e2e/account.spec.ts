@@ -213,7 +213,7 @@ test.describe('the change (AC-2, AC-3)', () => {
       await expect(newPassword(page)).toBeFocused();
     }
 
-    // QLT-01: the new password is the current one. Nothing is sent; the rule's own messages come first; another letter case is a different password, which the unit tests hold (sending it would change the password).
+    // QLT-01: the new password is the current one. Nothing is sent; the rule's own messages come first. The last step, below, is another letter case: a different password, so it is sent and saved, and it comes after the error state has been scanned.
     const posts: string[] = [];
     page.on('request', (request) => void (request.method() === 'POST' && request.url().includes('/api/v1/account/password') && posts.push(request.url())));
     await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD });
@@ -223,8 +223,6 @@ test.describe('the change (AC-2, AC-3)', () => {
     expect(posts).toEqual([]);
     await fillAndSend(page, { current: 'Short1!x', next: 'Short1!x' });
     await expect(page.locator('#new-password-error')).toHaveText('The new password must be at least 10 characters.');
-    await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD.toUpperCase() });
-    await expect(page.locator('#new-password-error')).toHaveCount(0);
 
     // The error state, as a person sees it: it fits the width, its controls are large enough, and axe finds nothing.
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -238,6 +236,11 @@ test.describe('the change (AC-2, AC-3)', () => {
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     await expectNoAxeViolations(page);
+
+    // QLT-01, QLT-13: the same letters in another case are a different password. It is sent and saved, which is why this step is last.
+    await fillAndSend(page, { current: E2E_PASSWORD, next: E2E_PASSWORD.toUpperCase() });
+    await expect(page.locator('#new-password-error')).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: SUCCESS_TITLE })).toBeVisible();
   });
 });
 
