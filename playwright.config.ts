@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
 
 import { NEGATIVE_CONTROL_ENV_NAME } from './src/lib/negative-control-gate';
 import { NEGATIVE_CONTROL_SENTINEL } from './tests/support/canary-masters';
-import { DEV_PORT, PRODUCTION_PORT, SIGNED_IN_STATE } from './tests/e2e/support/servers';
+import { DEV_PORT, E2E_AUTH_SECRET, PRODUCTION_PORT, SIGNED_IN_STATE } from './tests/e2e/support/servers';
 
 /**
  * End-to-end configuration: Chromium at three screen sizes (test strategy sections 2 and 9, NFR-016).
@@ -45,7 +45,7 @@ const DATABASE_URL =
   process.env['DATABASE_URL'] ?? 'postgresql://accucut_app:invented-e2e-password@localhost:55432/accucut';
 const serverEnvironment = (port: number) => ({
   DATABASE_URL,
-  AUTH_SECRET: 'invented-e2e-auth-secret-0123456789-abcdef',
+  AUTH_SECRET: E2E_AUTH_SECRET,
   APP_ORIGIN: `http://localhost:${port}`,
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',

@@ -3,10 +3,11 @@ import { join } from 'node:path';
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HomeAction } from '@/components/features/system-pages/home-action';
 import { RETRY_BUTTON_CLASSES } from '@/components/features/system-pages/retry-button-classes';
+import { SignInAgainAction } from '@/components/features/system-pages/sign-in-again-action';
 import {
   errorReference,
   ERROR_REFERENCE_TEXT,
@@ -17,10 +18,23 @@ import {
   NOT_FOUND_TITLE,
   NO_ACCESS_TEXT,
   NO_ACCESS_TITLE,
+  SESSION_ENDED_TEXT,
+  SESSION_ENDED_TITLE,
   SystemPageCard,
 } from '@/components/features/system-pages/system-page';
 import { buttonVariants } from '@/components/ui/button';
 import { homeActionLabel, type RoleName } from '@/lib/auth/roles';
+
+// `headers()` is only available inside a request; the page for unauthorized() reads the address the proxy recorded from it.
+const mocks = vi.hoisted(() => {
+  const state: { returnPath: string | null } = { returnPath: null };
+  return state;
+});
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve(new Headers(mocks.returnPath === null ? {} : { 'x-return-path': mocks.returnPath })),
+}));
+
+const { default: Unauthorized } = await import('@/app/unauthorized');
 
 /**
  * STORY-01.02 AC-8 (SCR-26, UX spec v0.12): each system page has one clear action; the error page shows a reference and never
@@ -112,6 +126,76 @@ describe('AC-8: "no access" is the same whatever address was asked for, for the 
   });
 });
 
+describe('STORY-01.06 AC-3: SCR-26 "Session ended"', () => {
+  const sessionEnded = (href = '/sign-in') => createElement(SystemPageCard, { kind: 'session-ended', action: createElement(SignInAgainAction, { href }) });
+
+  it('says it in the words of the story and the UX spec (UX-33), and the notice is announced (role="alert")', () => {
+    const markup = html(sessionEnded());
+    expect(SESSION_ENDED_TITLE).toBe('Your session ended');
+    expect(SESSION_ENDED_TEXT).toBe(
+      'Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.',
+    );
+    expect(markup).toContain(SESSION_ENDED_TITLE);
+    expect(markup).toMatch(/<p [^>]*role="alert"[^>]*>Sessions last 12 hours from the time you sign in, so you were signed out\./);
+    expect(markup).toContain('Anything you had saved is still there.');
+  });
+
+  it('has one h1 that can take focus, one action ("Sign in again") and a hidden icon', () => {
+    const markup = html(sessionEnded('/sign-in?callbackUrl=%2Fusers'));
+    expect(markup.match(/<h1\b[^>]*tabindex="-1"/g)).toHaveLength(1);
+    expect(markup.match(/<a\b/g)).toHaveLength(1);
+    expect(markup).toContain('>Sign in again</a>');
+    expect(markup).toContain('href="/sign-in?callbackUrl=%2Fusers"');
+    expect(markup).toContain('aria-hidden="true"');
+  });
+
+  it('the other system pages do not announce themselves: only this one is an alert', () => {
+    expect(html(noAccess('ADMIN'))).not.toContain('role="alert"');
+  });
+
+  it('shows nothing technical and names no page, role or person', () => {
+    expect(html(sessionEnded())).not.toMatch(/stack|Error:|node_modules|req-|estimate|cost|\/users|\/masters/i);
+  });
+});
+
+describe('STORY-01.06 AC-3: app/unauthorized.tsx, the page Next.js shows for unauthorized()', () => {
+  afterEach(() => {
+    mocks.returnPath = null;
+  });
+
+  async function pageMarkup(): Promise<string> {
+    return html(await Unauthorized());
+  }
+
+  it('is the standalone frame (skip link, brand, main) around the card, and takes focus to the heading', async () => {
+    const markup = await pageMarkup();
+    expect(markup).toContain('Skip to main content');
+    expect(markup).toContain('<main id="main"');
+    expect(markup).toContain(SESSION_ENDED_TITLE);
+    expect(markup.match(/<h1\b/g)).toHaveLength(1);
+  });
+
+  it('"Sign in again" leads to SCR-01 and keeps the page that was asked for, as the proxy recorded it', async () => {
+    mocks.returnPath = '/masters/materials?q=steel';
+    expect(await pageMarkup()).toContain('href="/sign-in?callbackUrl=%2Fmasters%2Fmaterials%3Fq%3Dsteel"');
+  });
+
+  it('with no recorded address the link is the bare sign-in page', async () => {
+    mocks.returnPath = null;
+    expect(await pageMarkup()).toContain('href="/sign-in"');
+  });
+
+  it.each(['https://evil.example/x', '//evil.example/x', '/\\evil.example', '/api/v1/me', '/sign-in'])(
+    'a recorded address that is not a page of this portal (%j) is dropped',
+    async (recorded) => {
+      mocks.returnPath = recorded;
+      const markup = await pageMarkup();
+      expect(markup).toContain('href="/sign-in"');
+      expect(markup).not.toContain('evil');
+    },
+  );
+});
+
 describe('PRF-01: the error boundary stays light', () => {
   const SRC = 'src';
 
@@ -159,5 +243,14 @@ describe('PRF-01: the error boundary stays light', () => {
       .map((file) => file.split('\\').join('/'))
       .sort();
     expect(importers).toEqual(['src/app/(portal)/forbidden.tsx', 'src/app/(portal)/not-found.tsx', 'src/app/not-found.tsx']);
+  });
+
+  it('sign-in-again-action.tsx is server only, and only the "Session ended" page imports it (STORY-01.06)', () => {
+    expect(readFileSync(join(SRC, 'components', 'features', 'system-pages', 'sign-in-again-action.tsx'), 'utf8')).toMatch(/^import 'server-only';/);
+    const importers = sourceFiles(join(SRC, 'app'))
+      .filter((file) => importsOf(readFileSync(file, 'utf8')).some((name) => name.endsWith('/sign-in-again-action')))
+      .map((file) => file.split('\\').join('/'));
+    expect(importers).toEqual(['src/app/unauthorized.tsx']);
+    expect(importsOf(readFileSync(join(SRC, 'app', 'error.tsx'), 'utf8')).filter((name) => name.includes('sign-in-again'))).toEqual([]);
   });
 });

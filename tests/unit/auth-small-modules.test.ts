@@ -10,7 +10,16 @@ import {
 } from '@/lib/auth/sign-in-validation';
 import { createFixedClock, MILLISECONDS_PER_HOUR, MILLISECONDS_PER_MINUTE, systemClock } from '@/lib/time';
 import { clientAddressFrom } from '@/server/auth/client-address';
-import { isWithinSession, SESSION_HOURS, SESSION_MAX_AGE_SECONDS, sessionTokenSchema } from '@/server/auth/session-token';
+import {
+  hasSessionEnded,
+  isWithinSession,
+  SESSION_COOKIE_MAX_AGE_SECONDS,
+  SESSION_ENDED_NOTICE_DAYS,
+  SESSION_HOURS,
+  SESSION_MAX_AGE_SECONDS,
+  sessionSecondsLeft,
+  sessionTokenSchema,
+} from '@/server/auth/session-token';
 
 /** Small pure parts of STORY-01.01: the clock, the role words, the form checks, the client address and the session age. */
 
@@ -107,6 +116,33 @@ describe('AC-5: the session is 12 hours from sign-in', () => {
 
   it('refuses a sign-in time in the future', () => {
     expect(isWithinSession(signedAt, new Date((signedAt - 1) * 1_000))).toBe(false);
+  });
+
+  it('STORY-01.06 AC-1: 11 h 59 m 59 s after sign-in is accepted, 12 h 00 m 01 s is refused, and exactly 12 h is over', () => {
+    const start = signedAt * 1_000;
+    const twelveHours = SESSION_HOURS * MILLISECONDS_PER_HOUR;
+    expect(isWithinSession(signedAt, new Date(start + twelveHours - 1_000))).toBe(true);
+    expect(hasSessionEnded(signedAt, new Date(start + twelveHours - 1_000))).toBe(false);
+    expect(isWithinSession(signedAt, new Date(start + twelveHours + 1_000))).toBe(false);
+    expect(hasSessionEnded(signedAt, new Date(start + twelveHours + 1_000))).toBe(true);
+    expect(hasSessionEnded(signedAt, new Date(start + twelveHours))).toBe(true);
+  });
+
+  it('STORY-01.06: a sign-in time in the future is not "ended" (it is not a session at all)', () => {
+    expect(hasSessionEnded(signedAt, new Date((signedAt - 1) * 1_000))).toBe(false);
+  });
+
+  it('STORY-01.06 AC-2: the time left counts down from sign-in and never goes below zero', () => {
+    const start = signedAt * 1_000;
+    expect(sessionSecondsLeft(signedAt, new Date(start))).toBe(SESSION_MAX_AGE_SECONDS);
+    expect(sessionSecondsLeft(signedAt, new Date(start + 6 * MILLISECONDS_PER_HOUR))).toBe(6 * 60 * 60);
+    expect(sessionSecondsLeft(signedAt, new Date(start + 6 * MILLISECONDS_PER_HOUR + 400))).toBe(6 * 60 * 60);
+    expect(sessionSecondsLeft(signedAt, new Date(start + 13 * MILLISECONDS_PER_HOUR))).toBe(0);
+  });
+
+  it('STORY-01.06: the cookie outlives the token by a stated number of days, so a person coming back can be told', () => {
+    expect(SESSION_ENDED_NOTICE_DAYS).toBe(7);
+    expect(SESSION_COOKIE_MAX_AGE_SECONDS).toBe(SESSION_MAX_AGE_SECONDS + 7 * 24 * 60 * 60);
   });
 
   it('the token schema holds the user, the version and the sign-in time, and rejects anything incomplete', () => {
