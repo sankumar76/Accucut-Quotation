@@ -1,7 +1,6 @@
 'use client';
 
 import { Pencil } from 'lucide-react';
-import Link from 'next/link';
 
 import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
@@ -23,8 +22,10 @@ import { BREAK_LONG_NAMES } from './master-texts';
 /**
  * The customers of SCR-12 (STORY-02.02 AC-1, AC-8): a masters table from 768 px (ux-spec section 6.0 "Masters tables" and "The Customers list from 768
  * px": the shared `Table` with its sticky Actions column holding **Edit only**, 68 px, until story 02.07 adds Delete; names wrap; the E-mail column is
- * hidden below 1024 px because the same value is on the edit page), and a card for each customer below it. The name is a link to the customer's page and
- * so is the Edit button, which is named `Edit <customer name>`. It decides nothing: it draws the customers it is given.
+ * hidden below 1024 px because the same value is on the edit page), and a card for each customer below it. The way in to a customer is the Edit button, named
+ * `Edit <customer name>`; the name beside it is text and not a second link to the same page, so the first Tab from the table lands on a row action (the
+ * masters-table rule of ux-spec section 6.0 "Tests", held by `masters-table-actions.spec.ts` for every table). It decides nothing: it draws the customers it
+ * is given.
  */
 
 export interface CustomerListProps {
@@ -32,19 +33,13 @@ export interface CustomerListProps {
   readonly onEdit: (id: string) => void;
 }
 
-const pathOf = (id: string): string => `/masters/customers/${encodeURIComponent(id)}`;
-
 /** The Rates cell and line: how many differ, or that none does. Text, not colour alone. */
 function RatesText({ differ }: { readonly differ: number }) {
   return differ === 0 ? <span className="text-ink-3">{ALL_DEFAULT}</span> : <span>{differText(differ)}</span>;
 }
 
-function NameLink({ item }: { readonly item: CustomerSummaryRow }) {
-  return (
-    <Link href={pathOf(item.id)} className={cn('font-semibold text-ink underline-offset-2 hover:underline', BREAK_LONG_NAMES)}>
-      {item.name}
-    </Link>
-  );
+function NameText({ item }: { readonly item: CustomerSummaryRow }) {
+  return <span className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{item.name}</span>;
 }
 
 function EditButton({ item, onEdit, compact }: Pick<CustomerListProps, 'onEdit'> & { readonly item: CustomerSummaryRow; readonly compact: boolean }) {
@@ -79,7 +74,7 @@ function CustomerTable({ items, onEdit }: CustomerListProps) {
         {items.map((item) => (
           <TableRow key={item.id} data-item-id={item.id}>
             <TableCell className={BREAK_LONG_NAMES}>
-              <NameLink item={item} />
+              <NameText item={item} />
             </TableCell>
             <TableCell className={cn('text-ink-2', BREAK_LONG_NAMES)}>{item.phone}</TableCell>
             <TableCell className={cn('hidden text-ink-2 lg:table-cell', BREAK_LONG_NAMES)}>{item.email}</TableCell>
@@ -105,7 +100,7 @@ function CustomerCards({ items, onEdit }: CustomerListProps) {
       {items.map((item) => (
         <li key={item.id} data-item-id={item.id} className="flex flex-col gap-s-3 border-b border-border p-s-4 last:border-b-0">
           <div className="flex flex-col gap-s-1">
-            <NameLink item={item} />
+            <NameText item={item} />
             {item.phone === null ? null : <span className={cn('text-ink-2', BREAK_LONG_NAMES)}>{item.phone}</span>}
             <span className="text-label text-ink-2">
               <RatesText differ={item.differ} />
