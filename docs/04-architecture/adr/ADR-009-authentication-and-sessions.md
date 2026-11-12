@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-19) and v0.4 (PRD v0.7 FR-004, FR-006). **Amended 2026-11-04: sign-out (amendment 1, at the end; AQP-38). Amended 2026-11-11: the cookie outlives the token by 7 days so an ended session can be named (amendment 2, at the end; AQP-89, delivery-lead ruling KEEP).** The session measured from sign-in and the meaning of "symbol" **rest on ASSUMPTION-56** |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-19) and v0.4 (PRD v0.7 FR-004, FR-006). **Amended 2026-11-04: sign-out (amendment 1, at the end; AQP-38). Amended 2026-11-11: the cookie outlives the token by 7 days so an ended session can be named (amendment 2, at the end; AQP-89, delivery-lead ruling KEEP). Amended 2026-11-12: after a person's own password change, the change route issues the fresh cookie, and `signedAt` is the time of the last proof of the password (amendment 3, at the end; AQP-81, DL-191 (6)).** The session measured from sign-in and the meaning of "symbol" **rest on ASSUMPTION-56** |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-001 to 006, 080, 098, 099; NFR-003, 004; SPEC §2, §12, §18 D-19; BR-049, BR-050; ASSUMPTION-56; ADR-010 |
@@ -175,3 +175,31 @@ A request whose cookie is present but whose token cannot be read counts as "ende
 - A browser with an expired token, and one with a sign-in 12 hours old or more, sees SCR-26 at three widths: `tests/e2e/session-ended.spec.ts`.
 - Sign-out still clears the cookie: `tests/integration/auth/sign-in-handler.test.ts`, `tests/acceptance/aqp-38-sign-in.test.ts`.
 - Owed by #255: a unit test that `JWT_SESSION_ERROR` is logged at `debug`, not `error`.
+
+## Amendment 3 — After an own password change, the route issues the fresh cookie (2026-11-12)
+
+| Field | Value |
+|-------|-------|
+| Status | Accepted. Recorded by the solution-architect on master's routing (DL-191 (6), open question 4). reviewer-quality accepted the design at G6 attempt 1 (QLT-07, Info). Documentation only, with no code change |
+| Trigger | PR #341 (AQP-81, STORY-01.05), read at `c4517e6`: `src/server/auth/session-cookie.ts` and `src/app/api/v1/account/password/route.ts:21-24`. Story assumption A-3 said the browser that made the change keeps its session through next-auth's `update`. The build does not use `update` |
+| Related | FR-002, FR-099, NFR-003; STORY-01.05 AC-3, AC-6; architecture section 8 (v0.42); amendment 1 (the raise of `session_version`); amendment 2 (the three lifetimes) |
+
+### Context
+A password change raises `session_version` (amendment 1), which refuses every token issued before it, including the one in the browser that made the change. That browser needs a new token at the new version. Assumption A-3 expected next-auth's `update`. `update` is a client call that makes the server rewrite the token from what the client sends. This app's `jwt` callback builds a token only at sign-in, from three server-held values.
+
+### Options
+- **A: next-auth `update`.** Pros: the library's own path. Cons: the `jwt` callback must then accept a rewrite requested by a client. That adds a second way to set the token's claims and widens what a cookie can be made to say.
+- **B: the change route issues the cookie (chosen).** Pros: the same three claims (`sub`, `sv`, `signedAt`), the same `encode` and `AUTH_SECRET`, and the same name and attributes (`sessionCookieName`). The cookie is set only on a 204, so a refusal sets none. Nothing the client sends reaches the token. Cons: the module repeats next-auth's cookie name, which a library change could break. The E2E change test catches that, because the browser stays signed in only if `getServerSession` reads the cookie.
+
+### Decision
+**B.** **`signedAt` is the time of the last proof of the password: a sign-in, or the person's own change.** After a change it is the time of the change, so the 12 hours of amendment 2 restart there. The token's `exp` is set to the same instant (`SESSION_MAX_AGE_SECONDS`), and the cookie's lifetime is the token's 12 hours plus 7 days, as at sign-in. A-3 is replaced.
+
+### Consequences
+- **The restart adds no access an attacker lacks.** The change needs the current password, and it is throttled on its own key (5 wrong, 15 minutes; AC-6). It is the same proof as a sign-in. Someone who holds a stolen cookie but not the password cannot extend the session.
+- **"12 hours from sign-in"** in the Decision, in amendment 2 and in architecture A-23 means 12 hours from `signedAt`. SCR-26's words stay true, because a change counts as signing in again.
+- **The Admin's reset is unchanged.** It raises `session_version` and issues no cookie, so the person signs in again with the temporary password (FR-004).
+- **The cookie name has one more reader.** If next-auth's cookie naming changes, `session-cookie.ts` must change with it. Check this at any upgrade or change of the auth library.
+
+### Verification (tests on `c4517e6`)
+- The cookie decodes with the right secret to exactly `sub`, `sv` at the new version, and `signedAt`. Another secret cannot read it. A refusal sets no cookie: `tests/unit/auth-session-cookie.test.ts` and `tests/unit/account-route.test.ts`.
+- The browser that made the change stays signed in (`/api/v1/me` 200 after a reload), and another device gets 401: `tests/e2e/account.spec.ts` (the change test) and `tests/integration/auth/account-password.test.ts`.
