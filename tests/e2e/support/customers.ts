@@ -21,7 +21,7 @@ export const EMAIL_FORMAT = 'Enter an e-mail address like name@company.com.';
 export const RATE_DECIMALS = 'Enter a number, 0 or more, with up to 2 decimals.';
 export const RATE_WHOLE = 'Enter a whole number, 0 or more.';
 export const LOAD_ERROR_TITLE = 'We could not load customers';
-export const SAVED_BUT_NOT_SHOWN = 'The customer was added, but we could not show the list. Check your connection and try again.';
+export const SAVED_BUT_NOT_SHOWN = 'The change was saved, but we could not show the list. Check your connection and try again.';
 export const DIFFERS = 'Differs from default';
 export const SAME = 'Same as default';
 export const FAILED_WITH_FORM = 'Check your connection and try again. What you typed is still in the form.';
@@ -100,4 +100,22 @@ export async function failListWhen(page: Page, busy: { readonly status: number; 
   const fail = { value: false };
   await page.route('**/api/v1/customers', (route) => (route.request().method() === 'GET' && fail.value ? route.fulfill(busy) : route.continue()));
   return fail;
+}
+
+/** The Process Master items the migration seeds: every customer has a rate for at least these. Other specs add and delete items in the same database, so the count is not exactly this. */
+export const SEED_RATE_COUNT = 15;
+
+/**
+ * Every rate of the customer's page is "Same as default": the table has at least the seeded items, and as many "Same as default" lines as rows, and none
+ * says "Differs from default". The exact number is not asserted because the Process specs add and delete items in the same database while this one runs.
+ */
+export async function expectEveryRateSame(page: Page): Promise<void> {
+  const rows = page.locator('tr[data-rate-id]');
+  await expect
+    .poll(async () => {
+      const count = await rows.count();
+      return count >= SEED_RATE_COUNT && (await page.getByText(SAME).count()) === count;
+    })
+    .toBe(true);
+  await expect(page.getByText(DIFFERS)).toHaveCount(0);
 }

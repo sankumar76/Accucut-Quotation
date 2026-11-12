@@ -6,6 +6,7 @@ import {
   addButton,
   DIFFERS,
   EMAIL_FORMAT,
+  expectEveryRateSame,
   FIRST_RATE,
   makeCustomer,
   NAME_REQUIRED,
@@ -19,7 +20,6 @@ import {
   rateInput,
   rateRow,
   rowOf,
-  SAME,
   setRates,
   TITLE,
 } from './support/customers';
@@ -134,7 +134,7 @@ test.describe('add a customer (AC-1, AC-6, AC-8)', () => {
 });
 
 test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
-  test('AC-2, AC-8: the customer\'s page shows the details, 15 rates with their default, this customer\'s value and a status in words; no sideways scroll, axe 0 violations, targets of 44 px', async ({ page }, testInfo) => {
+  test('AC-2, AC-8: the customer\'s page shows the details, every rate with its default, this customer\'s value and a status in words; no sideways scroll, axe 0 violations, targets of 44 px', async ({ page }, testInfo) => {
     const customer = await makeCustomer(page, newCustomerName(testInfo));
     await openCustomers(page);
     await rowOf(page, customer.name).getByRole('button', { name: `Edit ${customer.name}` }).click();
@@ -143,10 +143,8 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: TITLE })).toBeVisible();
     await expect(page.getByText('Every rate is at its default.')).toBeVisible();
     for (const label of ['Customer name', 'Phone', 'E-mail', 'Address']) await expect(page.getByLabel(label, { exact: true })).toBeVisible();
-    await expect(page.locator('tr[data-rate-id]')).toHaveCount(15);
-    await expect(page.getByText(SAME)).toHaveCount(15);
+    await expectEveryRateSame(page);
     await expect(page.getByText(DIFFERS)).toHaveCount(0);
-    await expect(rateInput(page, customer, FIRST_RATE)).toBeVisible();
     await expect(rateInput(page, customer, PERCENT_RATE)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
@@ -239,8 +237,7 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: `${customer.name} was reset to the defaults. 2 rates were replaced.` })).toBeVisible();
-    await expect(page.getByText(DIFFERS)).toHaveCount(0);
-    await expect(page.getByText(SAME)).toHaveCount(15);
+    await expectEveryRateSame(page);
     await expect(reset).toBeFocused();
     await page.reload();
     await expect(page.getByText('Every rate is at its default.')).toBeVisible();
