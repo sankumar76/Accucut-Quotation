@@ -118,7 +118,7 @@ function failureOf(metadata: unknown): { readonly errorName: string | undefined;
 function buildNextAuthLogger(): NonNullable<NextAuthOptions['logger']> {
   return {
     error(code: string, metadata: unknown) {
-      const fields = { authCode: loggable(code) ?? UNKNOWN_LOG_VALUE, ...failureOf(metadata) };
+      const fields = { authCode: loggable(code) ?? UNKNOWN_LOG_VALUE, ...failureOf(metadata), message: metadata instanceof Error ? metadata.message : undefined };
       if (code !== JWT_SESSION_ERROR) {
         logger.error(fields, 'next-auth reported an error.');
       } else if (fields.errorCode === TOKEN_EXPIRED_CODE) {
