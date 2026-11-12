@@ -77,6 +77,21 @@ describe('the shape of the manifest', () => {
   });
 });
 
+describe('STORY-01.05 AC-5, QLT-06: the routes open to a person who must set a new password are named here', () => {
+  it('are exactly the account page and the change of the password, and no other row carries the flag', () => {
+    expect(ROUTE_MANIFEST.filter((row) => row.mustChangeAllowed === true).map((row) => `${row.kind} ${row.path}`)).toEqual([
+      'page /account',
+      'api /api/v1/account/password',
+    ]);
+  });
+
+  it('both are open to every role, so the change can be made by whoever is told to', () => {
+    for (const row of ROUTE_MANIFEST.filter((entry) => entry.mustChangeAllowed === true)) {
+      expect(row.roles, row.path).toEqual(['ADMIN', 'LEAD', 'ENGINEER']);
+    }
+  });
+});
+
 describe('BR-003: the routes an Engineer can reach are named here, so adding one is a visible decision', () => {
   /**
    * Edit this list only when a story adds a route that an Engineer is meant to open, and name that story in the commit.

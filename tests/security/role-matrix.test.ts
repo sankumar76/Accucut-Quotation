@@ -29,7 +29,7 @@ vi.mock('next/navigation', async () => {
   return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
@@ -300,9 +300,12 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     if (record === undefined) throw new Error('no Engineer');
     try {
       for (const [row, method] of calls) {
+        // `signInAs` puts the person back on the first password, so the account recipe (current to a different new one) repeats (QLT-01).
         record.role = 'ENGINEER';
+        harness.signInAs('ENGINEER');
         const before = (await callValid(row, method)).status;
         record.role = 'LEAD';
+        harness.signInAs('ENGINEER');
         const after = (await callValid(row, method)).status;
         expect(before).toBe(expectedRoles(row.path).includes('ENGINEER') ? validCall(row, method).status : 403);
         expect(after).toBe(expectedRoles(row.path).includes('LEAD') ? validCall(row, method).status : 403);

@@ -18,8 +18,10 @@ import {
  * PostgreSQL in `tests/integration/auth`.
  */
 
-export interface FakeUserRecord extends Omit<NewUser, 'role' | 'mustChangePassword'> {
+export interface FakeUserRecord extends Omit<NewUser, 'role' | 'mustChangePassword' | 'passwordHash'> {
   readonly id: string;
+  /** Mutable, so a harness can put a person back on a known password. */
+  passwordHash: string;
   /** Mutable, so a test can change a role the way an Admin would. */
   role: UserRole;
   /** Mutable, so a test can put a person in the "Set a new password" state (STORY-01.05 AC-5). */

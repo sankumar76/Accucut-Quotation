@@ -135,6 +135,8 @@ export function createSessionHarness(): SessionHarness {
     targetId,
     signInAs(role) {
       state.callerId = role === null ? null : idOf[role];
+      // Every call starts from the same password, so the account recipe (current -> a different new one, QLT-01) repeats as every role.
+      if (role !== null) defined(users.records.find((record) => record.id === idOf[role])).passwordHash = `hash:${HARNESS_PASSWORD}`;
     },
     setMustChangePassword(role, value) {
       defined(users.records.find((record) => record.id === idOf[role])).mustChangePassword = value;

@@ -1,3 +1,4 @@
+import { BLOCK_MINUTES } from '../../lib/auth/change-password';
 import { MILLISECONDS_PER_MINUTE, type Clock } from '../../lib/time';
 import type { PasswordHasher } from '../auth/password-hasher';
 import { throttleKey } from '../auth/throttle-key';
@@ -29,8 +30,8 @@ export const THROTTLE_POLICY = {
   /** Failures from one address within `ipWindowMilliseconds` before it is blocked. */
   ipFailureLimit: 30,
   ipWindowMilliseconds: 15 * MILLISECONDS_PER_MINUTE,
-  /** How long a block lasts. The message promises "15 minutes". */
-  blockMilliseconds: 15 * MILLISECONDS_PER_MINUTE,
+  /** How long a block lasts. The messages name the same number of minutes (`BLOCK_MINUTES`). */
+  blockMilliseconds: BLOCK_MINUTES * MILLISECONDS_PER_MINUTE,
 } as const;
 
 /** Shown to a person who types a wrong password; the same text for the three failures (AC-2). Held in the UI. */

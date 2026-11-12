@@ -67,10 +67,16 @@ export class ConflictError extends AppError {
   }
 }
 
-/** Too many tries on something that is counted: 429 (STORY-01.05 AC-6: five wrong current passwords on the change form block it for 15 minutes). */
+/** The `code` of the 429 of a counted try that is blocked (STORY-01.05 AC-6). The browser compares with it too. */
+export const TOO_MANY_ATTEMPTS_CODE = 'TOO_MANY_ATTEMPTS';
+
+/**
+ * Too many tries on something that is counted: 429 (STORY-01.05 AC-6: five wrong current passwords on the change form block it). The message
+ * is the caller's, so the minutes it names are written once, from the policy (`BLOCK_MINUTES`), and never typed here.
+ */
 export class TooManyAttemptsError extends AppError {
-  constructor(message = 'Too many attempts. Try again in 15 minutes.', options: AppErrorOptions = {}) {
-    super(options.code ?? 'TOO_MANY_ATTEMPTS', 429, message, options.cause);
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super(options.code ?? TOO_MANY_ATTEMPTS_CODE, 429, message, options.cause);
   }
 }
 

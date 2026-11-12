@@ -90,6 +90,18 @@ describe('AC-3, AC-5: the change', () => {
     expect(await row(id)).toEqual(before);
   });
 
+  it('QLT-01: the temporary password typed again as the new one is refused, and the person stays in "Set a new password" with the hash, the flag and the version as they were', async () => {
+    const { id } = await person('same.again');
+    const before = await row(id);
+    expect(before.must_change_password).toBe(true);
+    expect(await error(service.changePassword(id, { currentPassword: CURRENT, newPassword: CURRENT }))).toMatchObject({
+      code: 'PASSWORD_RULE',
+      httpStatus: 422,
+      fields: [{ field: 'newPassword', message: 'Choose a new password that is different from your current one.' }],
+    });
+    expect(await row(id)).toEqual(before);
+  });
+
   it('a weak new password changes nothing and costs no attempt', async () => {
     const { id } = await person('weak.new');
     const before = await row(id);

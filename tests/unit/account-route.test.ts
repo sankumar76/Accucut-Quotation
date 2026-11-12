@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { sessionTokenSchema } from '@/server/auth/session-token';
 
 import { defined } from '../support/defined';
-import { HARNESS_PASSWORD } from '../support/harness-password';
+import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from '../support/harness-password';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
@@ -22,7 +22,8 @@ vi.mock('next/navigation', async () => {
   return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+const logged = vi.hoisted(() => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logger: logged }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
@@ -66,6 +67,7 @@ beforeEach(() => {
   Object.assign(person, { passwordHash: `hash:${HARNESS_PASSWORD}`, mustChangePassword: false, sessionVersion: 0 });
   harness.setMustChangePassword('ENGINEER', false);
   harness.throttles.rows.clear();
+  for (const method of Object.values(logged)) method.mockClear();
 });
 
 describe('AC-3: the change', () => {
@@ -151,6 +153,64 @@ describe('AC-2 and AC-3: what a refusal says', () => {
   it('a body that is not JSON is 400', async () => {
     const response = await POST(new Request(`${ORIGIN}/api/v1/account/password`, { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: '{nope' }));
     expect(response.status).toBe(400);
+  });
+});
+
+describe('F11, STD-07: the log line of a successful change', () => {
+  const everything = () => JSON.stringify(Object.values(logged).flatMap((method) => method.mock.calls));
+
+  it('is one info line with the request ID and the user ID and a fixed message, and nothing the person typed', async () => {
+    const response = await POST(request(goodBody));
+    expect(response.status).toBe(204);
+    expect(logged.info).toHaveBeenCalledTimes(1);
+    expect(logged.info).toHaveBeenCalledWith({ requestId: response.headers.get('X-Request-Id'), userId: harness.idOf.ENGINEER }, 'A person changed their own password.');
+    const text = everything();
+    for (const secret of [HARNESS_PASSWORD, NEW_PASSWORD, 'invented.engineer@example.test', 'hash:']) expect(text).not.toContain(secret);
+  });
+
+  it.each([
+    ['a wrong current password', { ...goodBody, currentPassword: 'Not-the-current-1!' }, 422],
+    ['a weak new password', { ...goodBody, newPassword: 'Short1!x' }, 422],
+    ['a new password equal to the current one', { currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_PASSWORD }, 422],
+    ['a body that is not valid', { currentPassword: HARNESS_PASSWORD }, 422],
+  ])('writes no info line for %s, and none of the typed values anywhere', async (_name, body, status) => {
+    const response = await POST(request(body));
+    expect(response.status).toBe(status);
+    expect(logged.info).not.toHaveBeenCalled();
+    const text = everything();
+    for (const typed of Object.values(body)) expect(text).not.toContain(typed);
+  });
+});
+
+describe('QLT-01: a new password equal to the current one', () => {
+  const SAME = 'Choose a new password that is different from your current one.';
+  const person = () => defined(harness.users.records.find((entry) => entry.id === harness.idOf.ENGINEER));
+
+  it.each([
+    ['in the ordinary state', false],
+    ['in "Set a new password"', true],
+  ])('is 422 PASSWORD_RULE under newPassword %s, with no cookie, and nothing changes', async (_name, mustChange) => {
+    harness.setMustChangePassword('ENGINEER', mustChange);
+    const before = { ...person() };
+    const response = await POST(request({ currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_PASSWORD }));
+    expect(response.status).toBe(422);
+    expect(response.headers.get('Set-Cookie')).toBeNull();
+    const body = record.parse(await response.json());
+    expect(body['code']).toBe('PASSWORD_RULE');
+    expect(body['errors']).toEqual([{ field: 'newPassword', message: SAME }]);
+    expect(person()).toMatchObject({ passwordHash: before.passwordHash, mustChangePassword: mustChange, sessionVersion: before.sessionVersion });
+  });
+
+  it('the recipe of the role matrix sends a different new password, so it is a success', async () => {
+    expect((await POST(request({ currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_NEXT_PASSWORD }))).status).toBe(204);
+    expect(HARNESS_NEXT_PASSWORD).not.toBe(HARNESS_PASSWORD);
+  });
+
+  it('putting the person back on the first password (signInAs) makes the recipe repeatable', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      harness.signInAs('ENGINEER');
+      expect((await POST(request({ currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_NEXT_PASSWORD }))).status).toBe(204);
+    }
   });
 });
 

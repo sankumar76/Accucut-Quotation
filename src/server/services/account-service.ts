@@ -1,5 +1,12 @@
-import { CURRENT_PASSWORD_WRONG_MESSAGE, TOO_MANY_CHANGE_ATTEMPTS_MESSAGE } from '../../lib/auth/change-password';
-import { ConflictError, CURRENT_PASSWORD_WRONG_CODE, FieldValidationError, NotFoundError, TooManyAttemptsError } from '../../lib/errors';
+import { CURRENT_PASSWORD_WRONG_MESSAGE, NEW_PASSWORD_SAME_MESSAGE, TOO_MANY_CHANGE_ATTEMPTS_MESSAGE } from '../../lib/auth/change-password';
+import {
+  ConflictError,
+  CURRENT_PASSWORD_WRONG_CODE,
+  FieldValidationError,
+  NotFoundError,
+  PASSWORD_RULE_CODE,
+  TooManyAttemptsError,
+} from '../../lib/errors';
 import type { Clock } from '../../lib/time';
 import type { PasswordHasher } from '../auth/password-hasher';
 import { passwordChangeThrottleKey } from '../auth/throttle-key';
@@ -18,7 +25,9 @@ import { assertPasswordRule } from './password-policy';
  *      minutes, on a key of its own (`password-change`), so a mistyped current password can never lock the person out of signing in;
  *   3. the current password is checked against the stored hash (a wrong one is a 422 under its own field, never a 401, which a screen
  *      reads as a lost session);
- *   4. the new password is hashed and stored, `must_change_password` is cleared and `session_version` is raised, in one statement, so
+ *   4. a new password equal to the current one is refused (422 under `newPassword`, FR-004: a password the Admin gave is only used once), so
+ *      the flag cannot be cleared by typing the temporary password again; no hash is made and nothing changes;
+ *   5. the new password is hashed and stored, `must_change_password` is cleared and `session_version` is raised, in one statement, so
  *      every token issued before is refused (AC-3). The caller then issues the current browser a fresh session at the new version.
  *
  * The password, its hash and the current password are never logged, returned or put in an error. No audit entry is written for a person
@@ -26,6 +35,8 @@ import { assertPasswordRule } from './password-policy';
  */
 
 export const PASSWORD_CHANGED_ELSEWHERE_CODE = 'PASSWORD_CHANGED_ELSEWHERE';
+export const PASSWORD_CHANGED_ELSEWHERE_MESSAGE =
+  'Your password was just changed somewhere else. Enter the newest password as your current password and try again.';
 
 /** Five consecutive wrong current passwords block the form for 15 minutes (AC-6). The numbers are the sign-in account policy's, written once. */
 const CHANGE_POLICY: AttemptPolicy = {
@@ -91,10 +102,13 @@ export function createAccountService({ users, throttles, hasher, clock, keySecre
 
       // The right current password ends the run of failures.
       await throttles.clear(key);
+      if (newPassword === currentPassword) {
+        throw new FieldValidationError([{ field: 'newPassword', message: NEW_PASSWORD_SAME_MESSAGE }], { code: PASSWORD_RULE_CODE });
+      }
       const newHash = await hasher.hash(newPassword);
       const sessionVersion = await users.changeOwnPassword(account.id, storedHash, newHash);
       if (sessionVersion === null) {
-        throw new ConflictError('Your password was changed in another place. Try again.', { code: PASSWORD_CHANGED_ELSEWHERE_CODE });
+        throw new ConflictError(PASSWORD_CHANGED_ELSEWHERE_MESSAGE, { code: PASSWORD_CHANGED_ELSEWHERE_CODE });
       }
       return { sessionVersion };
     },

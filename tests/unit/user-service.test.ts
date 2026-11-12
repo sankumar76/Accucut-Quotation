@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
-import { accountThrottleKey } from '@/server/auth/throttle-key';
+import { accountThrottleKey, passwordChangeThrottleKey } from '@/server/auth/throttle-key';
 import { UserConstraintError, type UserRepository } from '@/server/repositories/user-repository';
 import {
   CANNOT_RESET_OWN_PASSWORD_CODE,
@@ -228,6 +228,20 @@ describe('AC-5: resetting a password', () => {
     throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil });
     await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
     expect(throttles.rows.get(key)).toMatchObject({ failures: 0, blockedUntil: null });
+  });
+
+  it('QLT-03: clears the block of the change-password form too, so the person is not refused on "Set a new password", the only page open to them', async () => {
+    const key = passwordChangeThrottleKey(KEY_SECRET, engineerId);
+    throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') });
+    await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
+    expect(throttles.rows.get(key)).toMatchObject({ failures: 0, blockedUntil: null });
+  });
+
+  it('QLT-03: a refused reset (own password, weak password) leaves the change-form block as it was', async () => {
+    const key = passwordChangeThrottleKey(KEY_SECRET, engineerId);
+    throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') });
+    await refusal(service.resetPassword(by(adminId), engineerId, 'weak'));
+    expect(throttles.rows.get(key)?.failures).toBe(5);
   });
 
   it('leaves everyone else blocked: only that person account key is cleared', async () => {

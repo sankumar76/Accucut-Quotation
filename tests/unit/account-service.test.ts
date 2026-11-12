@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError, TooManyAttemptsError } from '@/lib/errors';
 import { accountThrottleKey, passwordChangeThrottleKey } from '@/server/auth/throttle-key';
-import { createAccountService, PASSWORD_CHANGED_ELSEWHERE_CODE, type AccountService } from '@/server/services/account-service';
+import {
+  createAccountService,
+  PASSWORD_CHANGED_ELSEWHERE_CODE,
+  PASSWORD_CHANGED_ELSEWHERE_MESSAGE,
+  type AccountService,
+} from '@/server/services/account-service';
 import { createAuthService } from '@/server/services/auth-service';
 
 import { defined } from '../support/defined';
@@ -19,6 +24,7 @@ const KEY_SECRET = 'invented-throttle-key-material';
 const MINUTE = 60_000;
 const CURRENT = 'Tn4#vLm8@Qz-current';
 const NEW = 'Pr9$kWd3!Rx-fresh';
+const WRONG = 'Not-the-current-1!';
 
 let users: FakeUserRepository;
 let throttles: FakeThrottleRepository;
@@ -91,7 +97,57 @@ describe('AC-3: changing the password', () => {
     const racingService = createAccountService({ users: racing, throttles, hasher, clock: { now: () => now }, keySecret: KEY_SECRET });
     const error = await refusal(racingService.changePassword(personId, { currentPassword: CURRENT, newPassword: NEW }));
     expect(error).toBeInstanceOf(ConflictError);
-    expect(error).toMatchObject({ httpStatus: 409, code: PASSWORD_CHANGED_ELSEWHERE_CODE });
+    expect(error).toMatchObject({ httpStatus: 409, code: PASSWORD_CHANGED_ELSEWHERE_CODE, message: PASSWORD_CHANGED_ELSEWHERE_MESSAGE });
+    expect(PASSWORD_CHANGED_ELSEWHERE_MESSAGE).toBe('Your password was just changed somewhere else. Enter the newest password as your current password and try again.');
+  });
+});
+
+describe('QLT-01: a new password equal to the current one is refused', () => {
+  const SAME = { currentPassword: CURRENT, newPassword: CURRENT };
+
+  it('is 422 PASSWORD_RULE under newPassword in "Set a new password": no hash, the flag and the version unchanged, the temporary password stays', async () => {
+    const before = { ...stored() };
+    expect(before.mustChangePassword).toBe(true);
+    const error = await refusal(service.changePassword(personId, SAME));
+    expect(error).toBeInstanceOf(FieldValidationError);
+    expect(error).toMatchObject({
+      code: 'PASSWORD_RULE',
+      httpStatus: 422,
+      fields: [{ field: 'newPassword', message: 'Choose a new password that is different from your current one.' }],
+    });
+    expect(hasher.hashed).toEqual([]);
+    expect(stored()).toMatchObject({ passwordHash: before.passwordHash, mustChangePassword: true, sessionVersion: before.sessionVersion });
+  });
+
+  it('is refused in the ordinary state too', async () => {
+    stored().mustChangePassword = false;
+    expect(await refusal(service.changePassword(personId, SAME))).toMatchObject({ code: 'PASSWORD_RULE', fields: [{ field: 'newPassword' }] });
+    expect(hasher.hashed).toEqual([]);
+    expect(stored()).toMatchObject({ mustChangePassword: false, sessionVersion: 0 });
+  });
+
+  it('is judged after the current password: with a wrong current password the person is told that, and the try counts', async () => {
+    const error = await refusal(service.changePassword(personId, { currentPassword: WRONG, newPassword: WRONG }));
+    expect(error).toMatchObject({ code: 'CURRENT_PASSWORD_WRONG', fields: [{ field: 'currentPassword' }] });
+    expect(throttles.rows.get(passwordChangeThrottleKey(KEY_SECRET, personId))?.failures).toBe(1);
+  });
+
+  it('the rule\'s messages come first: a same password that fails the rule is told so', async () => {
+    stored().passwordHash = 'hash:Short1!x';
+    expect(await refusal(service.changePassword(personId, { currentPassword: 'Short1!x', newPassword: 'Short1!x' }))).toMatchObject({
+      fields: [{ field: 'newPassword', message: 'The new password must be at least 10 characters.' }],
+    });
+  });
+
+  it('compares exactly: the same letters in another case, or with a trailing space, are a different password and are accepted', async () => {
+    await expect(service.changePassword(personId, { currentPassword: CURRENT, newPassword: CURRENT.toUpperCase() })).resolves.toMatchObject({ sessionVersion: 1 });
+    await expect(service.changePassword(personId, { currentPassword: CURRENT.toUpperCase(), newPassword: `${CURRENT.toUpperCase()} ` })).resolves.toMatchObject({ sessionVersion: 2 });
+  });
+
+  it('a right current password ends the run of failures even when the new one is refused', async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) await refusal(service.changePassword(personId, { currentPassword: WRONG, newPassword: NEW }));
+    await refusal(service.changePassword(personId, SAME));
+    expect(throttles.rows.get(passwordChangeThrottleKey(KEY_SECRET, personId))?.failures).toBe(0);
   });
 });
 
