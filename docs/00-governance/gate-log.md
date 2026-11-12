@@ -6617,3 +6617,88 @@ Alternatives considered:
 - An E2E for the deleted-elsewhere path. Rejected: E2E +1 against DL-169, and a render test pins the branch more cheaply.
 
 **Posted:** PR #309 comment 6817883568; Jira AQP-274 comment 11609. No tech-debt issue (nothing deferred).
+
+## G6 – Peer Review — AQP-142 (STORY-02.02 Customers, PR #297 at efcf768 = story commits + `master` b710741 by merge commit a3521c7) — 2026-11-12 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-172; PRF-01 ruled in DL-173)** on the full three-reviewer route. Majors QLT-01 and STD-01 are upheld and fixed in fix round F1. PRF-01 is a measurement condition, not a hold. AQP-142 goes to **Changes Requested** (orchestrator). G6 closes (attempt 2) on H1, the head QA will test, after F1, its re-review and the alignment commit taken once #222 and #309 have merged.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **Reviews** (`docs/06-reviews/AQP-142/`, f38c929): standards REQUEST CHANGES (Jira 11597; 1 Major, 8 Minor, 2 Info); quality REQUEST CHANGES (5870698558, Jira 11608; 1 Major, 4 Minor, 3 Info); performance APPROVE WITH COMMENTS (Jira 11600; 1 Major, 1 Minor, 3 Info); `consolidated.md` (orchestrator). De-duplicated: 0 Blocker, 0 Critical, 3 Major, 12 Minor, 8 Info.
+  - **Developer:** Jira 11595; PR #297 Dev Record. **Orchestrator:** G5 11596.
+  - **Scope:** `git diff --stat b710741 efcf768` = 71 files, +5,061 / -51. Overlap with #222: `tests/e2e/masters-table-actions.spec.ts` (#297 +9 / -2; #222's files are `users-list.tsx` and that spec).
+  - **CI 43170187169**, the only run on efcf768, attempt 1, jobs API 5 of 5; merge ref dc50970 (efcf768 into 6b1883f) in every job; 18 cache restores; Gitleaks no leaks. Vitest 164 / **3,302** and 226 / **5,786**; E2E **292 + 291 + 278 = 861**; skipped 3 + 4 + 17 = 24. Against 6b1883f's push run 43169697211: **+117 / +237 / +53 / +0**. JS 176,675 and 177,269. Path **6:37** (06:43:56Z to 06:50:33Z).
+  - **Controls, diffs printed by master:**
+
+| Control | Diff | Run | Result |
+|---|---|---|---|
+| #314 A1 (279578f on efcf768) | `use-read-again.ts`: `else focusOpener(opener.current);` | 43173424055 | Red at `masters-slow-read.spec.ts:76, :103`, `exchange-rates.spec.ts:383`, `treatments-focus.spec.ts:181, :197` × 3 widths; **`customers-focus.spec.ts:131` green** |
+| #315 A2 | (reviewer's report) | 43173430261 | `customers-focus.spec.ts:105` red × 3 widths |
+| #322 probe (fdaafd5 = efcf768 + 2 test-only commits, 1 file) | the read held until the dialog closes; only the title takes focus after the read | 43176014661 | 5 of 5 green |
+| #323 probe under A1 (54d2d21; the same A1 line) | #322's test + A1 | 43176020141 | **`customers-focus.spec.ts:131` red at mobile, tablet and desktop**, plus the five A1 tests above |
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | standards, quality, performance |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | All three reviews |
+| 3 | Majors fixed or accepted | | ❌ → condition | QLT-01 and STD-01 upheld (F1). PRF-01 accepted as a measurement condition (DL-173) |
+| 4 | Findings cite file:line | | ✅ | Findings tables in the three reports |
+| 5 | ACs met in the product | | ✅ | Quality AC table, AC-1 to AC-8. AC-8's test power is QLT-01 |
+| 6 | Controls red where the story requires (Dev Context D) | | ❌ → condition | A1 not caught (#314); the fix is probed (#322 / #323) |
+| 7 | CI green, deltas stated | ✱ | ✅ | +117 / +237 / +53 / +0 against 43169697211 |
+| 8 | Path | | ⚠️ | 6:37: median of five on H1 (DL-173) |
+| 9 | Branch current with `master` | | ⏳ | BEHIND 6b1883f. The update is step (8)(a) of DL-172 |
+
+**Fix round F1 (developer; DL-172 (4))**
+| Finding | Severity | Required change |
+|---|---|---|
+| QLT-01 | Major | `customers-focus.spec.ts:131` in #322's probed form (held read, focus log marked when the dialog closes, only the error title after the read) |
+| STD-01 | Major | Split `useCustomerEdit` along its seams, or justify inline why it stays whole |
+| STD-02 | Minor | Justify or split `createCustomerMethods` |
+| STD-03 = QLT-05 | Minor | The record is made only when the script started its own server, or behind a flag that CI passes. Usage says it writes one customer and one audit entry |
+| STD-04, STD-07, STD-08, STD-09 | Minor | As the reviewer suggested |
+| STD-05 | Minor | The header cites v0.23 §6.0 for the load-error sentence, and the ux-expert's ruling for the other sentences |
+| STD-06 | Minor | One `customerSide` zod helper, no `as` casts |
+| QLT-02 | Minor | `router.refresh()` after save and reset. A test that fails without it only if Back reproduces in Playwright; otherwise cite the probe and correct the comment |
+| QLT-03 | Minor | Remove the `?added=1` path, `useForgetAddedFlag` and `customerCreatedNotice` |
+| QLT-04 | Minor | The route schema validates the canonical name. Unit row: 101 raw characters that fit once canonical |
+| QLT-06 | Info | Header reworded now (#291 merged) |
+| Overlap | — | `masters-table-actions.spec.ts` back to `master`'s version in F1 if #222 has not merged yet |
+| Dev Record | — | A row per finding, and the expected delta per shard with causes |
+
+**Re-review of F1 (new diff only):** reviewer-quality (QLT-01 to QLT-04; re-plants on F1: **A1 red at `:131` and A2 red at `:105`, each at three widths**; the QLT-02 control if a test was added) and reviewer-standards (STD-01 to STD-09, QLT-06, the STD-03 restriction). reviewer-performance is re-run only if F1 touches a query, the migration, a route's data path, CI, or the JS budget measurement beyond the record guard.
+
+**Routed:**
+- **ux-expert:** the SCR-12 sentences the developer proposed, and the edit page's error title, ruled in the ux-spec before G6 closes.
+- **product-owner:** QLT-07, before G8.
+- **product-manager:** PRF-02 (NFR-011 counts), before G8.
+- **#326** (created by master): the cross-screen blind spot. Owner developer, narrow route, may ride #306, due G8.
+
+**Accepted, no change:** STD-10, STD-11, QLT-08, PRF-03, PRF-04, PRF-05.
+
+**G6 close (attempt 2; DL-172 (8))**
+| Step | Owner | What | Pass |
+|------|-------|------|------|
+| U | orchestrator | After #222, #321 and #309 merge: GitHub update-branch (merge method) to the tip | `--cc` prints no hunk. `git diff <F1> U` over #297's files is empty. Both are posted. A conflict comes back to master |
+| A | developer | One alignment commit on U | The Customers entry in `masters-table-actions.spec.ts` on #222's version (11 cases). `CUSTOMERS_SAVED_NOT_SHOWN_BODY` removed and the shared `SAVED_NOT_SHOWN_BODY` imported. The ux-expert's word changes. Nothing else |
+| C | orchestrator | CI on H1 and the median of five (DL-173) | 5 of 5. Counts as the Dev Record states against the merge-ref `master` push run. Every base name present. Five paths posted with slowest shard, host line and slack |
+| M | master | Close G6 | Round-2 verdicts with 0 open Major, the re-plants read, the alignment diff read. Then In QA, and G7 set in that record |
+
+If #309 has not merged when F1's re-review is done, the orchestrator asks master.
+
+**Merge (outline):** after #222, #321 and #309; a strict-protection update with empty-diff checks; "AQP-142: STORY-02.02: Customers"; "Refs #326" with no closing keyword.
+
+**Risks:** none new. RISK-023 stays at 8. The H1 median is a reading, not a hold (DL-173). RISK-026: every deferred item has an issue (#326) or a named owner and due point.
+
+**Rationale:** see DL-172 and DL-173. In short:
+- Both code Majors have probed or rule-compliant fixes, so a fix round with a re-review is proportionate (DL-128, DL-142).
+- The alignment waits for #222, because agents cannot hand-resolve (DL-158), and for #309, so there is one shared sentence constant (DL-171).
+
+Alternatives considered:
+- NO-GO. Rejected: no mandatory item fails.
+- QLT-01 deferred to #326. Rejected: the story's own control requirement fails.
+- The spec merged by GitHub as is. Rejected: a conflict would need a local merge.
+- #309 widened to replace the Customers copy. Rejected: it widens a Sev-3 fix into a feature's files.
+
+**Posted:** PR #297 comment 6818172998; Jira AQP-142 comment 11613. Tech-debt issue #326 created by master.
