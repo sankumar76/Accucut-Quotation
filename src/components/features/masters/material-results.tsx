@@ -55,7 +55,7 @@ export function MaterialResults({ master, onClearFilters }: MaterialResultsProps
   const { list, dialog } = master;
   if (list.status === 'error') {
     // While a success notice is on the page the change happened, so the error never reads "Nothing was changed." under "X saved." (DEF-029).
-    const saved = master.notice?.tone === 'success';
+    const saved = master.notice !== null;
     return <MasterLoadError title={MATERIALS_ERROR_TITLE} onRetry={() => void master.readAgain(false)} description={saved ? SAVED_NOT_SHOWN_BODY : undefined} />;
   }
   if (list.showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={MATERIALS_LOADING_LABEL} />;
