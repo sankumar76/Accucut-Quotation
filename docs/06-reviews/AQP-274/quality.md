@@ -100,6 +100,23 @@ The same applies for `MaterialResults` with `null` and `materialSavedNotice('M',
 | Focus on the error title (§6.0) | unchanged | `expectLoadErrorHoldsFocus` | Met |
 | Exchange rates keeps its own sentence | `exchange-rates-panel.tsx:112` untouched | `exchange-rates.spec.ts:413` | Met |
 
+## Previous Findings (round 2: DL-171 condition B, at H1 `e6e1c14`)
+Master's G6 was CONDITIONAL GO (DL-171; PR comment 6817883568). Condition A was the developer's H1, `e6e1c14`. It touches `tests/` only and adds `tests/unit/masters-load-error-words.test.ts`, 9 `renderToStaticMarkup` rows:
+- Process, standard line: no notice, gone on edit, gone on delete.
+- Process, saved sentence: Added, Saved, Deleted.
+- Materials, standard line: no notice.
+- Materials, saved sentence: Added, Saved.
+
+It also carries the STD-01 titles and the STD-02 constants. H1 run 43179008751 is a success (I re-read it).
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Minor | **Fixed** | Control **#327** (`control/AQP-274-qlt-r2-always` 0d4071b, from e6e1c14; anchor-once regex script, CRLF-safe, diff printed before push). The plant makes the saved sentence unconditional: the `const saved` line is deleted and the prop becomes `description={SAVED_NOT_SHOWN_BODY}` in both results files. Run **43180573071**: lint (stage 4) and type-check (stage 5) pass. Stage 6 fails with **exactly 4 tests**, all in `masters-load-error-words.test.ts` (1 of 158 files): Process "no notice", Process "a rate deleted elsewhere while it was edited (warning)", Process "a rate deleted elsewhere while it was deleted (information)", Materials "no notice". The 5 saved-sentence rows pass. E2E shards are green: 260 + 273 + 275 = 808 passed, 17 + 4 + 3 = 24 skipped. Stages 7 to 11b were skipped after the stage 6 failure, because the workflow stops at the first failure. Closed, never merged, branch kept. Thread reply: r4547921956 |
+| QLT-02 | Info | n/a | unchanged |
+| QLT-03 | Info | n/a | unchanged |
+
+Round-2 verdict: **APPROVE**. Open findings: 0 Blocker, 0 Critical, 0 Major, 0 Minor.
+
 ## Issues for other roles
 - **master:** record the QLT-03 deviation from DL-169 (3c) and decide on QLT-01: fix here, or a `follow-up` due with STORY-02.07.
 - **qa-engineer (G7):** at G7, a deleted-elsewhere notice followed by a failed re-read on Process should show the standard line. This is ux-spec test (3), and no automated test covers it today.
