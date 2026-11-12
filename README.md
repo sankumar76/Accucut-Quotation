@@ -30,15 +30,26 @@ npx next dev
 ```
 
 Every page now needs a signed-in person, so create the first Admin once (after filling in `.env`, below). Put an
-e-mail address and a password of your choice in `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` in `.env`, then run:
+e-mail address and a password that meets the password rule in `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` in `.env`, then run:
 
 ```sh
 npx tsx scripts/bootstrap-admin.ts
 ```
 
 It creates one Admin who must choose a new password at first sign-in, stores only a hash of the password, and
-never prints it. It refuses, and changes nothing, if any Admin already exists. Remove the password from `.env`
-afterwards.
+never prints it. It refuses, and changes nothing, if any Admin already exists, or if the password does not meet the
+rule (it exits with an error that names the part that failed, for example "Add at least one number."). Remove the
+password from `.env` afterwards.
+
+**The password rule** (one rule wherever a password is set: this command, the Admin adding a user or resetting a
+password, and a person changing their own): 10 to 128 characters, at least one number, at least one symbol (any character
+that is not a letter or a number, a space included), not the person's e-mail address, and not a common password (a bundled
+list of the 10,000 most common ones, also checked with digits and symbols taken off both ends, so `Password1!` and
+`Welcome@123` are refused; a password with the product's name in it is refused too). Signing in never runs the rule, so a
+password set before it existed still works. A person whose password the Admin set or reset, and the first Admin, are taken
+to "Set a new password" at their next sign-in and can open no other page until they have chosen their own. Everyone changes
+their own password with **Change password** in the account menu (**http://localhost:3000/account**); five wrong current
+passwords there block that form, and only that form, for 15 minutes.
 
 **Enter all 15 rates before any estimate is calculated.** The portal starts with the 15 named rates of the Process master
 (cutting, bending, drilling, welding, galvanizing, primer, shot blasting, polishing, plating, powder coating, foam,
