@@ -49,12 +49,13 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *   axe      gets one wrong password for the accessibility check of the error state;
  *   sign-out signs out, which ends every session of that person;
  *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04;
- *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it.
+ *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it;
+ *   expiry   holds a session that ended and signs in again (STORY-01.06), which writes no failure and raises no `session_version`.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)

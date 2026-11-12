@@ -1,0 +1,56 @@
+// QA plant script: applies edits to files under a repo root and fails unless each anchor occurs EXACTLY once.
+// usage: node plant.mjs <repoRoot> <plantName>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, plant] = process.argv.slice(2);
+const ROUTE = 'src/app/api/auth/[...nextauth]/route.ts';
+const CONFIG = 'playwright.config.ts';
+
+const PLANTS = {
+  // SEC-01: remove the guard line (and the two constants only it used, so lint does not stop the job before the unit stage)
+  sec01: [
+    [
+      ROUTE,
+      [
+        ["  if ((await context.params).nextauth[0] === LOG_RELAY_ACTION) return new Response(null, { status: NOT_FOUND_STATUS });\n", ''],
+        ["const LOG_RELAY_ACTION = '_log';\n", ''],
+        ['const NOT_FOUND_STATUS = 404;\n', ''],
+      ],
+    ],
+  ],
+  // Make the production server's stdout visible in the CI log (pino writes there); evidence aid only
+  logs: [
+    [
+      CONFIG,
+      [
+        [
+          '      command: IN_CI ? `npx next start --port ${PRODUCTION_PORT}` : `npx next build && npx next start --port ${PRODUCTION_PORT}`,\n',
+          '      command: IN_CI ? `npx next start --port ${PRODUCTION_PORT}` : `npx next build && npx next start --port ${PRODUCTION_PORT}`,\n      stdout: \'pipe\',\n',
+        ],
+      ],
+    ],
+  ],
+};
+
+const plan = PLANTS[plant];
+if (!plan) {
+  console.error('unknown plant', plant);
+  process.exit(2);
+}
+for (const [file, edits] of plan) {
+  const path = join(root, file);
+  const raw = readFileSync(path, 'utf8');
+  const crlf = raw.includes('\r\n');
+  let text = raw.replace(/\r\n/g, '\n');
+  for (const [anchor, replacement] of edits) {
+    const count = text.split(anchor).length - 1;
+    if (count !== 1) {
+      console.error(`ANCHOR COUNT ${count} (need exactly 1) in ${file}: ${JSON.stringify(anchor)}`);
+      process.exit(1);
+    }
+    text = text.replace(anchor, () => replacement);
+  }
+  writeFileSync(path, crlf ? text.replace(/\n/g, '\r\n') : text);
+  console.log(`applied ${plant} to ${file}`);
+}

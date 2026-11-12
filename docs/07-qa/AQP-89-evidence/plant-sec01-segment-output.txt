@@ -1,0 +1,33 @@
+# Plant 3 (control #298, run 43155581613, head 827c0f2; guard matches only the exact path): lines read from the CI log
+Stages 1 to 11b | ^[[2m Test Files ^[[22m ^[[1m^[[32m157 passed^[[39m^[[22m^[[90m (157)^[[39m
+Stage 12: E2E (shard 1 of 3) |   ✘  141 [mobile] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 1 of 3) |   ✘  146 [mobile] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 1 of 3) |     Expected: 404
+Stage 12: E2E (shard 1 of 3) |     Received: 200
+Stage 12: E2E (shard 1 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 1 of 3) |     Expected: 404
+Stage 12: E2E (shard 1 of 3) |     Received: 200
+Stage 12: E2E (shard 1 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 1 of 3) |   1 failed
+Stage 12: E2E (shard 1 of 3) |   3 skipped
+Stage 12: E2E (shard 2 of 3) |   ✘  101 [tablet] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 2 of 3) |   ✘  106 [tablet] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an 
+Stage 12: E2E (shard 2 of 3) |     Expected: 404
+Stage 12: E2E (shard 2 of 3) |     Received: 200
+Stage 12: E2E (shard 2 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 2 of 3) |     Expected: 404
+Stage 12: E2E (shard 2 of 3) |     Received: 200
+Stage 12: E2E (shard 2 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 2 of 3) |   1 failed
+Stage 12: E2E (shard 2 of 3) |   4 skipped
+Stage 12: E2E (shard 3 of 3) |   ✘  156 [desktop] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an
+Stage 12: E2E (shard 3 of 3) |   ✘  161 [desktop] › tests/e2e/session-ended.spec.ts:55:3 › AC-4 and AC-6: SCR-01 in its "Session ended" state › an ended session gets 401 SESSION_ENDED with no data; SCR-01 then shows the notice as an
+Stage 12: E2E (shard 3 of 3) |     Expected: 404
+Stage 12: E2E (shard 3 of 3) |     Received: 200
+Stage 12: E2E (shard 3 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 3 of 3) |     Expected: 404
+Stage 12: E2E (shard 3 of 3) |     Received: 200
+Stage 12: E2E (shard 3 of 3) |         at /home/runner/work/Accucut-Quotation/Accucut-Quotation/tests/e2e/session-ended.spec.ts:96:39
+Stage 12: E2E (shard 3 of 3) |   1 failed
+Stage 12: E2E (shard 3 of 3) |   17 skipped
+SEC01_E2E_PROBE lines: 0

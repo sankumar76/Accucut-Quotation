@@ -1,3 +1,5 @@
+import { handleSessionEnded } from '../auth/session-ended';
+
 import { isUserRole, type UserRoleValue } from './validation';
 
 /**
@@ -101,7 +103,10 @@ async function send<T>(doFetch: Fetch, path: string, init: RequestInit, read: (b
       const value = read(response.status === 204 ? undefined : await readJson(response));
       return value === null ? { status: 'failed' } : { status: 'ok', value };
     }
-    return refusalFrom(response.status, await readJson(response));
+    const refusal = refusalFrom(response.status, await readJson(response));
+    // A session that ended (401 SESSION_ENDED) takes the person to SCR-01, to sign in again and come back here (STORY-01.06 AC-4).
+    if (refusal.status === 'refused') handleSessionEnded(refusal.httpStatus, refusal.code);
+    return refusal;
   } catch {
     return { status: 'failed' };
   }
