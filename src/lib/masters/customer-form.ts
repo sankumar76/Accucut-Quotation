@@ -71,7 +71,7 @@ export function customerEditProblems(values: CustomerValues, rates: ReadonlyArra
 export function changedRateInputs(rates: ReadonlyArray<CustomerRate>, inputs: RateInputs): ReadonlyArray<RateChange> {
   return rates.flatMap((rate) => {
     const typed = inputs[rate.processItemId];
-    return typed !== undefined && rateText(typed) !== rateText(rate.value) ? [{ processItemId: rate.processItemId, value: rateText(typed) }] : [];
+    return typed !== undefined && rateText(typed) !== rateText(rate.value) ? [{ processItemId: rate.processItemId, value: typed.trim() }] : [];
   });
 }
 

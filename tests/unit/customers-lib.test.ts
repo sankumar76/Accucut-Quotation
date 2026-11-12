@@ -137,9 +137,9 @@ describe("the edit page's map of messages and changes (AC-1, AC-2, AC-8)", () =>
     expect(customerEditChanges(CUSTOMER, { ...VALUES, phone: '', address: ' 1 Invented Road ' }, { ...inputs, [CUTTING.processItemId]: '2.5', [OH_PROFIT.processItemId]: '11' })).toEqual({
       phone: null,
       address: '1 Invented Road',
-      rates: [{ processItemId: CUTTING.processItemId, value: '2.50' }],
+      rates: [{ processItemId: CUTTING.processItemId, value: '2.5' }],
     });
-    expect(changedRateInputs(CUSTOMER.rates, { ...inputs, [OH_PROFIT.processItemId]: '12' })).toEqual([{ processItemId: OH_PROFIT.processItemId, value: '12.00' }]);
+    expect(changedRateInputs(CUSTOMER.rates, { ...inputs, [OH_PROFIT.processItemId]: '12' })).toEqual([{ processItemId: OH_PROFIT.processItemId, value: '12' }]);
   });
 
   it('turns the server\'s messages into the page\'s keys: a detail by name, rates.<index>.value as the rate that was at that index of what was sent', () => {
