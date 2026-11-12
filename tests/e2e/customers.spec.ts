@@ -7,6 +7,7 @@ import {
   DIFFERS,
   EMAIL_FORMAT,
   expectEveryRateSame,
+  FAILED_WITH_FORM,
   FIRST_RATE,
   makeCustomer,
   NAME_REQUIRED,
@@ -23,7 +24,7 @@ import {
   TITLE,
 } from './support/customers';
 import { ADMIN_STATE } from './support/servers';
-import { pressWithKeyboard } from './support/treatments';
+import { afterOneFrame, BUSY, pressWithKeyboard, recordFocus } from './support/treatments';
 
 /**
  * STORY-02.02 T5, T7 (AC-1, AC-2, AC-3, AC-8): SCR-12 "Customer master", the list, the Add customer dialog, the edit page and the reset dialog, at 360x800,
@@ -42,6 +43,9 @@ test.use({ storageState: ADMIN_STATE });
 
 /** A value that is not `current`, for a rate whose default is not known to the test. */
 const otherThan = (current: string, ...choices: string[]): string => choices.find((choice) => Number(choice) !== Number(current)) ?? '1';
+
+/** The longest name the form accepts: 100 characters and no space, so the browser has nowhere to break it (DEF-031). */
+const longNameOf = (name: string): string => name.padEnd(100, 'x');
 
 async function defaultOf(page: Page, rate: { readonly id: string }): Promise<string> {
   const text = (await rateRow(page, rate).getByRole('cell').nth(0).innerText()).replace(/[^\d.]/g, '');
@@ -150,6 +154,15 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     for (const control of [page.getByRole('button', { name: 'Save customer' }), page.getByRole('button', { name: 'Reset to defaults' }), rateInput(page, customer, FIRST_RATE), page.getByLabel('Phone')]) {
       expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
+
+    // DEF-031: the longest name the form accepts (100 characters, no space) wraps in the page title, on load and under a Saved notice that repeats it.
+    const longCustomer = await makeCustomer(page, longNameOf(newCustomerName(testInfo)));
+    await openCustomer(page, longCustomer);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await rateInput(page, longCustomer, FIRST_RATE).fill(otherThan(await defaultOf(page, FIRST_RATE), '8.5', '7.5'));
+    await page.getByRole('button', { name: 'Save customer' }).click();
+    await expect(page.getByRole('status').filter({ hasText: `${longCustomer.name} was saved.` })).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
   test('AC-2: a rate and the details are changed and saved by keyboard; the tag follows what is typed, the notice says it was saved, it survives a reload, and a save with nothing changed sends nothing', async ({ page }, testInfo) => {
@@ -183,6 +196,29 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     await page.getByRole('button', { name: 'Save customer' }).click();
     await expect(page.getByText('Nothing to save.')).toBeVisible();
     expect(patches).toBe(0);
+
+    // DEF-032: a save that fails puts focus on the notice and nowhere else (the whole sequence, not one look: a late move would pass a single check); the
+    // next save that is accepted still returns focus to the Save button.
+    let failing = true;
+    await page.route('**/api/v1/customers/*', (route) => (route.request().method() === 'PATCH' && failing ? route.fulfill(BUSY) : route.fallback()));
+    await page.getByLabel('Address').fill('2 Invented Road');
+    const save = page.getByRole('button', { name: 'Save customer' });
+    await save.focus();
+    const focusLog = await recordFocus(page);
+    await save.press('Enter');
+    const failed = page.getByRole('alert').filter({ hasText: 'We could not save the changes.' });
+    await expect(failed).toBeVisible();
+    await expect(failed.getByText(FAILED_WITH_FORM)).toBeVisible();
+    await expect(failed.locator('xpath=..')).toBeFocused();
+    await afterOneFrame(page);
+    expect(focusLog).toHaveLength(1);
+    expect(focusLog[0]).toContain('We could not save the changes.');
+    await expect(page.getByLabel('Address')).toHaveValue('2 Invented Road');
+
+    failing = false;
+    await pressWithKeyboard(save);
+    await expect(page.getByRole('status').filter({ hasText: `${customer.name} was saved.` })).toBeVisible();
+    await expect(save).toBeFocused();
   });
 
   test('AC-2: a rate with three decimals and a percent rate with three decimals are each refused under their own rate, in words, with focus on the first; a percent rate with one decimal is accepted; typing a fix saves', async ({ page }, testInfo) => {

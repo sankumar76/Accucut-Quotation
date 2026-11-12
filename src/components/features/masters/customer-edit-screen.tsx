@@ -72,15 +72,18 @@ function ResetButton({ edit }: { readonly edit: CustomerEditState }) {
   );
 }
 
-function Notices({ edit }: { readonly edit: CustomerEditState }) {
+function Notices({ edit, failureNotice }: { readonly edit: CustomerEditState; readonly failureNotice: RefObject<HTMLDivElement | null> }) {
   const { notice, failure } = edit;
   return (
     <>
       {edit.reset.loader.failed ? <MasterDialogsFailed title={FAILED_DIALOGS_TITLE} /> : null}
       {failure === null ? null : (
-        <Notice tone="danger" title={failure.title}>
-          {failure.body}
-        </Notice>
+        // The wrapper takes focus when a save fails; the notice inside announces itself (role="alert"), as in the sign-in form.
+        <div ref={failureNotice} tabIndex={-1} className="outline-none">
+          <Notice tone="danger" title={failure.title}>
+            {failure.body}
+          </Notice>
+        </div>
       )}
       {notice === null ? null : (
         <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
@@ -127,7 +130,8 @@ function RatesCard({ edit, saveButton }: { readonly edit: CustomerEditState; rea
 
 export function CustomerEditScreen({ initial }: CustomerEditScreenProps) {
   const saveButton = useRef<HTMLButtonElement>(null);
-  const edit = useCustomerEdit(initial, saveButton);
+  const failureNotice = useRef<HTMLDivElement>(null);
+  const edit = useCustomerEdit(initial, saveButton, failureNotice);
   const { customer, reset } = edit;
   const Dialog = reset.loader.shown ? reset.loader.Overlay : null;
 
@@ -135,7 +139,7 @@ export function CustomerEditScreen({ initial }: CustomerEditScreenProps) {
     <>
       <Breadcrumb name={customer.name} />
       <PageHeader title={customer.name} description={editDescription(differCount(customer.rates))} actions={<ResetButton edit={edit} />} />
-      <Notices edit={edit} />
+      <Notices edit={edit} failureNotice={failureNotice} />
       <form noValidate onSubmit={(event) => void edit.save(event)} className="flex flex-col gap-s-5">
         <DetailsCard edit={edit} />
         <RatesCard edit={edit} saveButton={saveButton} />

@@ -43,7 +43,8 @@ import { useDialogOpener } from './use-dialog-opener';
  * here, no skeleton and no load error; the list is `useCustomers`, built on `useMasterList`.
  *
  * **Focus.** After a refusal it goes to the first control that has a message and never while a person types (`useFocusOnRefusal`, DL-135). After a save that
- * is accepted, or that fails without naming a field, it goes back to the Save button, which was disabled while the request was out. After the reset dialog
+ * is accepted it goes back to the Save button, which was disabled while the request was out; after one that fails without naming a field it goes to the
+ * notice that says so (the pattern of the sign-in form, DEF-032). After the reset dialog
  * closes it returns to the Reset button (Radix returns focus only to a trigger, and this dialog has none).
  */
 
@@ -75,6 +76,8 @@ interface SaveContext {
   readonly values: CustomerValues;
   readonly inputs: RateInputs;
   readonly saveButton: RefObject<HTMLButtonElement | null>;
+  /** The wrapper of the failed-save notice, which takes focus when a save fails (the pattern of the sign-in form). */
+  readonly failureNotice: RefObject<HTMLDivElement | null>;
   readonly setNotice: (notice: PageNotice | null) => void;
   /** Shows the messages of a refusal and moves focus to the first field that has one (`useFocusOnRefusal`). */
   readonly showErrors: (errors: EditErrors) => void;
@@ -86,15 +89,20 @@ interface SaveContext {
  * The save: the request, the failure under it and where focus goes afterwards. Nothing is sent when nothing changed (a sentence says so), a refusal that
  * names fields goes to `showErrors`, and any other failure keeps what was typed and says so (ux-spec v0.21, section 6.0).
  */
-function useCustomerSave({ customer, values, inputs, saveButton, setNotice, showErrors, adopt }: SaveContext) {
+function useCustomerSave({ customer, values, inputs, saveButton, failureNotice, setNotice, showErrors, adopt }: SaveContext) {
   const [failure, setFailure] = useState<SaveFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saveFocusRequest, setSaveFocusRequest] = useState(0);
 
-  // The Save button is disabled while the request is out, which takes focus off it; once it is enabled again, focus goes back to it.
+  // The Save button is disabled while the request is out, which takes focus off it; once the save is accepted, focus goes back to it.
   useEffect(() => {
     if (saveFocusRequest > 0) saveButton.current?.focus();
   }, [saveFocusRequest, saveButton]);
+
+  // A save that fails without naming a field moves focus to the notice, once it is in the page (ux-spec SCR-12 "Failed Save", AQP-142 DEF-032).
+  useEffect(() => {
+    if (failure !== null) failureNotice.current?.focus();
+  }, [failure, failureNotice]);
 
   async function save(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -122,7 +130,6 @@ function useCustomerSave({ customer, values, inputs, saveButton, setNotice, show
         ? { title: outcome.title, body: null }
         : { title: FAILED_SAVE_CUSTOMER_MESSAGE, body: FAILED_WRITE_KEEPS_FORM_BODY },
     );
-    setSaveFocusRequest((count) => count + 1);
   }
   return { failure, clearFailure: () => setFailure(null), submitting, save };
 }
@@ -162,12 +169,12 @@ function useCustomerFields(initial: CustomerRow) {
   return { customer, values, inputs, errors, showErrors, adopt, setField, setRate };
 }
 
-/** `saveButton` is the screen's ref to its Save button, so the screen can attach it and the save can return focus to it. */
-export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTMLButtonElement | null>) {
+/** `saveButton` and `failureNotice` are the screen's refs to its Save button and to the wrapper of the failed-save notice, so the screen can attach them and the save can move focus to them. */
+export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTMLButtonElement | null>, failureNotice: RefObject<HTMLDivElement | null>) {
   const { customer, values, inputs, errors, showErrors, adopt, setField, setRate } = useCustomerFields(initial);
   const [notice, setNotice] = useState<PageNotice | null>(null);
   const reset = useResetDialog();
-  const { failure, clearFailure, submitting, save } = useCustomerSave({ customer, values, inputs, saveButton, setNotice, showErrors, adopt });
+  const { failure, clearFailure, submitting, save } = useCustomerSave({ customer, values, inputs, saveButton, failureNotice, setNotice, showErrors, adopt });
 
   function onReset(byKeyboard: boolean): void {
     const opened = reset.press({ itemId: null, action: 'reset' }, byKeyboard, () => reset.setOpen(true));
