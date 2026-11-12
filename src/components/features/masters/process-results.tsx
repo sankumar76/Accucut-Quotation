@@ -7,7 +7,7 @@ import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
 import { MasterLoadError } from './master-load-error';
-import { CLEAR_FILTERS, SAVED_NOT_SHOWN_BODY } from './master-texts';
+import { CLEAR_FILTERS } from './master-texts';
 import { ProcessList } from './process-list';
 import { EMPTY_DESCRIPTION, EMPTY_TITLE, ERROR_TITLE, LOADING_LABEL, NO_MATCH_DESCRIPTION } from './process-texts';
 import type { ProcessMaster } from './use-process-master';
@@ -45,11 +45,7 @@ function NoMatch({ query, onClearFilters }: { readonly query: string; readonly o
 
 export function ProcessResults({ master, onClearFilters }: ProcessResultsProps) {
   const { list, dialogs } = master;
-  if (list.status === 'error') {
-    // While a success notice is on the page the change happened, so the error never reads "Nothing was changed." under "X saved." (DEF-029).
-    const saved = master.notice?.tone === 'success';
-    return <MasterLoadError title={ERROR_TITLE} onRetry={() => void master.readAgain(false)} description={saved ? SAVED_NOT_SHOWN_BODY : undefined} />;
-  }
+  if (list.status === 'error') return <MasterLoadError title={ERROR_TITLE} onRetry={() => void master.readAgain(false)} />;
   if (list.showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={LOADING_LABEL} />;
   if (list.items.length === 0) {
     return (

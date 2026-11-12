@@ -7,7 +7,7 @@ import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
 import { MasterLoadError } from './master-load-error';
-import { BREAK_LONG_NAMES, CLEAR_FILTERS, SAVED_NOT_SHOWN_BODY } from './master-texts';
+import { BREAK_LONG_NAMES, CLEAR_FILTERS } from './master-texts';
 import { MaterialList } from './material-list';
 import {
   MATERIALS_EMPTY_DESCRIPTION,
@@ -53,11 +53,7 @@ function NoMatch({ query, onClearFilters }: { readonly query: string; readonly o
 
 export function MaterialResults({ master, onClearFilters }: MaterialResultsProps) {
   const { list, dialog } = master;
-  if (list.status === 'error') {
-    // While a success notice is on the page the change happened, so the error never reads "Nothing was changed." under "X saved." (DEF-029).
-    const saved = master.notice?.tone === 'success';
-    return <MasterLoadError title={MATERIALS_ERROR_TITLE} onRetry={() => void master.readAgain(false)} description={saved ? SAVED_NOT_SHOWN_BODY : undefined} />;
-  }
+  if (list.status === 'error') return <MasterLoadError title={MATERIALS_ERROR_TITLE} onRetry={() => void master.readAgain(false)} />;
   if (list.showSkeleton) return <SkeletonBlock rows={SKELETON_ROWS} delayMs={0} label={MATERIALS_LOADING_LABEL} />;
   if (list.items.length === 0) {
     return (
