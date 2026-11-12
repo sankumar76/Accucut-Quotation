@@ -7048,3 +7048,66 @@ Alternatives considered:
 **Rationale:** Majors with no Critical give CONDITIONAL GO under the procedure. F1, F2 and F4 change production behaviour on an authentication path, so the round needs a re-review, not master's own verification (DL-051). Because that round is required anyway, the cheap Minors ride in it. STD-03's suggested fix would break the bootstrap entry point, so it needs a design choice and is deferred with an owner and a due point.
 
 **Posted:** Jira AQP-81 comment 11704; PR #341 comment 6827270628; GitHub #346 created (tech-debt).
+
+## G7 – QA Acceptance — AQP-142 (STORY-02.02 Customers, PR #297: H1 = cb95102; H2 = f269b05 = H1 + the QA report) — 2026-11-12 (attempt 1)
+
+- **Decision:** **NO-GO (DL-192).** AQP-142 goes to **Rejected** (qa-engineer; Jira In Progress). **DEF-031 (AQP-285, #342) is confirmed Sev-2** and is in the story's diff. The fix is round F2 on #297: the shared `PageHeader` `h1` always wraps a long name, and DEF-032 (AQP-286, #344, Sev-3) rides the same round. DEF-033 (AQP-287, #345, Sev-3, pre-existing) is a separate fix PR after #297 merges, due before G8.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-142-test-report.md` at f269b05: REJECT. QA hand-off: Jira 11702 and PR comment 6827048475. Orchestrator brief: Jira 11705.
+  - **Branch, read by master:** f269b05 has the one parent cb95102. `git diff --stat cb95102 f269b05` is the report alone (+182). `origin/master` is still 3f22672.
+  - **CI 43242211495** (H2, attempt 1, jobs API): 5 of 5; merge ref 5a6f8f2 (f269b05 into 3f22672) in every job. Stage 2: 721 commits scanned, no leaks found (green after DL-188). Vitest 3,327 / 5,812; E2E **297 / 296 / 283 = 876**, 24 skipped; no `✘`, retry or flaky line. Against 43197966408: **+133 / +254 / +56 / +0**, the same as the H1 run of record 43200501126. Path 6:48, a reading only.
+  - **QA control #340** (3174620 on cb95102, closed unmerged): master printed the diff, one line in `customer-list.tsx` (`TableActionsHead className="min-w-[1200px]"`). Run 43227722032: shard 3 has 11 failed, 272 passed, 17 skipped. The 22 `✘` lines are exactly the 11 `SCR-12 Customers` cases at `masters-table-actions.spec.ts:298`, on both attempts. Shards 1 and 2 are green. Its Stage 2 red is the DL-188 incident.
+  - **DEF-031 cause, read by master:** `customer-edit-screen.tsx:137` passes `customer.name` to `shared/page-header.tsx`, whose `h1` has no wrapping class. It is the only `PageHeader` title in `src` that a user types.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a result with evidence | ✱ | ✅ | Report matrix: AC-1 to AC-7 pass; AC-8 fails at the longest name (DEF-031), passes with ordinary names |
+| 2 | No open Sev-1 / Sev-2 against the story | ✱ | ❌ | DEF-031 Sev-2, in #297's diff (`customer-edit-screen.tsx:137`) |
+| 3 | Regression recorded and green | ✱ | ✅ | 43200501126 and 43242211495: +133 / +254 / +56 / +0; 838 base names, 0 missing; 0 flaky |
+| 4 | Exploratory notes | | ✅ | Report, "Exploratory Testing" (90 min charter) |
+| 5 | Accessibility checks (UI story) | | ✅ | axe 0 in 12 scans with the five tags; keyboard and focus (f). Reflow fails under DEF-031 |
+| 6 | QA control red where expected, and only there | | ✅ | #340: the 11 SCR-12 cases, nothing else |
+| 7 | H2 = H1 + the report alone | | ✅ | `git diff --stat cb95102 f269b05` |
+| 8 | DL-184 (8) (a) to (h) | | ⚠️ | All met except AC-8 in (a). QLT-09 cases (5) and (6) reproduced in a browser; the Reset paragraphs pass |
+
+**DEF-031 ruling.** The scale (test plan section 6) decides (DL-094). "An AC fails with a workaround" and "a WCAG 2.2 AA violation on a delivered screen" are both Sev-2. AC-8 says "No horizontal page scroll". A 100-character name, which the form accepts, makes the page scroll by 1681, 1618 and 1276 px at 360, 768 and 1366 px. This is the DL-174 (3) class (DEF-030). Here the cause is in the story's own diff, so it holds this story.
+
+| # | Owner | Action | Due |
+|---|-------|--------|-----|
+| R | qa-engineer | AQP-142 to Rejected. Defect files DEF-031 to DEF-033 on the records branch, citing DL-192 | Now |
+| F2a | developer | `PageHeader` `h1` always carries the wrapping class (ux-spec 6.0 "Names wrap"); no caller adds it. If #334 has merged when F2 starts, take `master` by a merge commit first and import from `./break-long-names`. Otherwise write the literal with a comment naming "GitHub issue 225" (never `#225`, DL-189). Do not create the shared file and do not import `features` into `shared` | H3 |
+| F2b | developer | DEF-032: after a failed Save, focus goes to the notice (`sign-in-form.tsx` pattern). Focus after a good Save and after Reset is unchanged. If the fix needs the shared read-again hooks, it becomes a follow-up issue due before G8 instead | H3 |
+| F2c | developer | Extend the existing `customers.spec.ts` AC-8 and failed-Save tests: a 100-character name with no space gives page overflow <= 0 at 3 widths (on load and after Saved), and focus is on the notice after a failed Save at 3 widths. New titles or cases are stated by name | H3 |
+| F2d | developer | Scope: `page-header.tsx`, `customer-edit-screen.tsx` (and a customers hook or text file if needed), those tests, and the Dev Record. None of the 11 files shared with #341. Dev Record F2 rows, CI table, "Refs #342", "Refs #344", no closing keyword | H3 |
+| C | orchestrator | H3 CI: 5 of 5, every attempt read, Stage 2 green, counts as a delta against the merge-ref `master` push run (+133 / +254 / +56 / +0 plus F2's delta by name). **No new median of five** (DL-173 (3) was taken on H1); the path is a reading | H3 |
+| V1 | reviewer-quality | Review `git diff f269b05 H3` (and `--cc` of any merge). Plants P1 (wrapping class removed from the `h1`) and P2 (focus call removed) on throwaway H3-based PRs, closed unmerged: each red on its assertion at 3 widths and nothing else, with the diffs printed | G6 close |
+| V2 | reviewer-standards | Shared-component change, constant or literal per F2a, comment wording, Dev Record | G6 close |
+| Q | qa-engineer | G7 attempt 2 on H3: long-name series (100 / 40 / 24) on the customer page and the list at 3 widths; DEF-032 focus and the good-Save and Reset focus; a `PageHeader` sweep at 360 px over every page and the six portal error boundaries; axe on the customer page with the long name; regression by name; `git diff --stat f269b05 H3`; report as one commit H4 = H3 + report | After the G6 close |
+| D33 | developer; reviewer-quality and reviewer-standards; qa-engineer | DEF-033: PR `fix/AQP-287-<slug>` from `master` after #297's push run is green. One shared "Try again" for every route error boundary, a regression test and a control that restores the bare `reset`. QA sweeps every boundary | Before G8 |
+| UX | ux-expert | ux-spec 6.0 "Page frame": the page title wraps a long name | By G8 (no hold) |
+| O | orchestrator | Comment on #225 if F2a's literal route is taken | With H3 |
+
+**Merge prerequisites (DL-184 (9), restated for the new heads; orchestrator)**
+- **Order:** records PR #329 (or its successor) before #297's final update. #336 not before #297. #334 may go first, and F2 then takes it.
+- **Final update H5:** GitHub update-branch, merge method. Parents are H4 and the tip; `--cc` prints no hunk; `git diff H4 H5` over #297's files is empty; `git diff --stat <tip> H5` is exactly #297's files, now with `page-header.tsx`.
+- **CI on H5:** 5 of 5, every attempt read. Merge-ref `master` push run +133 / +254 / +56 / +0 plus F2's and any QA delta. Every base name is present, 0 flaky, and a red is never re-run away.
+- **Squash:** "AQP-142: STORY-02.02: Customers". The body is written by the orchestrator, with "Refs #326", "Refs #342" and "Refs #344" and no closing keyword (grep every commit message).
+- **After the squash:** the `master` push run is posted at the pre-merge base plus the same delta. QA closes #342 and #344 after G7 attempt 2.
+
+**DL-190 / DL-185:** the order is unchanged. AQP-142's merge moves later, and with it AQP-276's H_m and T6 window (no sample before #297 merges) and DL-190 (4)(c)'s 24-hour time-box. The 2026-11-16 12:00 UTC re-ask stands. F2 adds no file shared with #341.
+
+**Risks:** RISK-028 registered (long names on shared surfaces; DEF-030, DEF-031; score 6). RISK-023 unchanged (H2 path 6:48, a reading).
+
+**Rationale:** see DL-192. A mandatory item fails on evidence master read, and the grade follows the scale and DL-174 (3). The fix goes in the shared component because the page title is the page frame's one `h1` and record pages will keep putting names in it.
+
+Alternatives considered:
+- Reclassifying DEF-031 as Sev-3. Rejected: inconsistent with the scale, DL-094 and DL-174 (3).
+- A call-site fix (a `titleClassName` prop). Rejected: a per-caller rule, the class that produced DEF-030.
+- Waiting for #334 before F2. Rejected: it couples #297 to another G7 with no date; F2a covers both cases.
+- DEF-033 in F2. Rejected: it widens #297 to four other screens.
+- The full three-reviewer route. Rejected: no data path, E2E +0.
+
+**Posted:** Jira AQP-142 comment 11711; PR #297 comment 6827649206; Jira AQP-1 comment 11712 (RISK-028).
