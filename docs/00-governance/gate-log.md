@@ -6790,3 +6790,47 @@ Alternatives considered:
 **Risks:** none new. RISK-023 unchanged (path 5:23).
 
 **Posted:** PR #309 comment 6820554578; Jira AQP-274 comment 11645.
+
+## G6 – Peer Review — AQP-275 (DEF-030, #325, Sev-2: notices wrap a long name; PR #334 reviewed at 8ecdc0b, realigned to 7fe674a) — 2026-11-12 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-183)** on the DL-174 (3)(c) route (reviewer-quality and reviewer-standards). Master confirms the realignment commits 65ca898 and 7fe674a. **The conflict with `master` goes to the delivery lead:** no agent workaround (DL-158). Master recommends option (a). The resolution keeps the PR branch's side of both files.
+- **Decided by:** master  ·  **Human override:** none (the delivery lead's choice is pending for the conflict step)
+- **Attempt:** 1
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present (route DL-174 (3)(c)) | ✱ | ✅ | quality APPROVE (5872762390, 11657); standards APPROVE WITH COMMENTS (11656); `consolidated.md` |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 / 0 Major |
+| 3 | Majors fixed or accepted | | ✅ | none |
+| 4 | Findings cite file:line | | ✅ | both reports |
+| 5 | The fix is proven by a control | ✱ | ✅ | #335 (`notice.tsx` only; diff read): 5 of 6 new unit cases, `masters-table-actions.spec.ts:411` at both widths, and `aqp-122-qa.spec.ts:388` red |
+| 6 | CI green, deltas as stated | ✱ | ✅ | 43195864855 5 of 5 (merge ref 7468a2b into cdcf18b): 3,191 / 5,555 / 822 / 24 = +6 / +6 / +2 / +0 |
+| 7 | Realignment adds nothing unreviewed | | ✅ | `git diff 3f22672 7fe674a` on the two files = exactly #334's change |
+| 8 | Mergeable with `master` | | ❌ → condition U | CONFLICTING; update-branch 422 |
+
+**Conflict options (the delivery lead chooses):**
+- **(a) Recommended.** Merge `origin/master` into the branch, take the branch's side for `master-texts.ts` and `treatment-panel.tsx` (`--ours`), commit and push (the d59e8ea route).
+- **(b)** Re-cut from the tip: `git checkout 7fe674a -- <8 files>`, open a new PR, and close #334 unmerged.
+- **(c)** Change the deny rule for this one step and restore it afterwards.
+- **Checks after any option:** `git diff 7fe674a H1` over the 8 files is empty; `git diff --stat <tip> H1` is exactly the 8 files; for (a), `--cc` shows only the two files on the branch's side.
+
+**Findings disposition:**
+- **M (one commit after U):** STD-04 (`JSON_HEADERS`), STD-02 (direct import), STD-03 (cite DEF-030), and a `@deprecated` line on the re-export pointing to #225.
+- **STD-01 → #225**: move the 10 importers, drop the re-export, and drop #297's two redundant `className` props (QLT-01). After #334 and #297 merge; due G8.
+- **STD-05 → #319.**
+- **QLT-02, QLT-03:** accepted.
+
+**Conditions (checked by master at G7):** U; then M; then CI on the M head (5 of 5, merge-ref `master` push run +6 / +6 / +2 / +0, every base name present). Master reads the M diff, then In QA.
+
+**G7 (qa-engineer):**
+- AQP-275 at 360, 768 and 1024 px: with a 120-character name, no page overflow, and the notice and the Admin-name title wrap.
+- At 360 px, sweep every notice that repeats a user-entered name on Users, Process, Materials and Treatment / Color.
+- axe, and the regression by name. The report goes in as one commit.
+
+**Merge (outline):** a strict-protection update with empty-diff checks; the overlap with #297 re-checked; squash "AQP-275: DEF-030: Users notice wraps a long name" with "Closes #325", "Refs #225" and "Refs #319".
+
+**Also recorded:** DL-182, #309 squashed as 3f22672 (push run 43197966408 5 of 5, +9 / +9 / +0 / +0).
+
+**Risks:** none new.
+
+**Posted:** PR #334 comment 6821446985; Jira AQP-275 comment 11661; #225 scope comment 6821451017.
