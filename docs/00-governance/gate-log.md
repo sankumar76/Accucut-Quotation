@@ -6459,3 +6459,84 @@ Alternatives considered:
 - A median of five on 41e5fd4. Rejected: not the head that merges, and no outcome can change RISK-023 or the half-triggered step (DL-151 (3)).
 
 **Posted:** PR #291 comment 6816323255 (G6 and G7) and addendum 6816409367 (base 8f07c17, target restated); Jira AQP-1 comment 11584.
+
+## G6 – Peer Review (narrow route) — AQP-245 (STORY-10.21 Users list table actions, PR #222 at d59e8ea = c9c8de7 + `master` b710741 by merge commit) — 2026-11-12 (attempt 2)
+
+- **Decision:** **GO (DL-170).** This closes DL-147's CONDITIONAL GO. Conditions A, B and C are met. AQP-245 goes to **In QA** (orchestrator). The one-line `users-list.tsx` import repoint in merge commit d59e8ea is **confirmed**. Before QA starts, #222 takes the `master` tip (6b1883f or newer) by a GitHub merge-commit update, and G7 is judged on that head.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (attempt 1 was DL-147)
+- **Artefacts evaluated:**
+  - **Review:** reviewer-quality round 2, PR review 5870559816 (Jira 11598): APPROVE WITH COMMENTS, 0 Blocker, 0 Critical, 0 Major, 1 Minor (QLT-09), 2 Info (QLT-10, QLT-11). Report `docs/06-reviews/AQP-245/quality-round2.md`, on the records branch `docs/AQP-1-records-sprint1-j` (61f8140).
+  - **Developer:** Jira 11592; PR #222 body (Dev Record round-2 rows; "Closes #134" at line 3). **Orchestrator:** briefs 11594 and 11599.
+  - **Branch, read by master:**
+    - The commits since b710741 are 85e9d61, fbfb968, 72d92e9, c9c8de7 (the fix round: `git diff --stat 72d92e9 c9c8de7` is the spec only, +88 / -50) and d59e8ea (the merge, with parents c9c8de7 and b710741).
+    - `git show --cc --name-only d59e8ea` lists the 2 files. `git diff --stat b710741 d59e8ea` shows the same 2 files, +262 / -37. The narrow route holds.
+    - `git show --cc d59e8ea -- users-list.tsx` has exactly one `++` line, the `master-texts` import. `git diff c9c8de7 d59e8ea` on the file is that line alone. `process-texts.ts` at b710741 no longer exports `BREAK_LONG_NAMES`. `master-texts.ts:12` has the same value.
+    - `git diff --stat b710741 6b1883f` touches none of the 2 files.
+  - **Plants (d59e8ea + 1 commit; master printed each diff and read each failing assertion):**
+    - #310 P-WRAP / 43172313584: 22 + 7 failed at the fit.
+    - #311 P-GAP / 43172326922: 11 failed at the 8 px gap.
+    - #312 P-TAB / 43172342852: 11 failed at "Tab 3 reaches deactivate".
+    - #313 P-PROP / 43172353984: 11 failed at the scroll padding.
+    - All four are closed unmerged.
+  - **CI on d59e8ea:** run **43169604615**, attempt 1, 5 of 5 (jobs API), path 4:42. The merge ref is on 8f07c17; its push run 43166263631 is the reference.
+    - Vitest 3,185 / 5,557, equal to the base.
+    - E2E passed 272 + 270 + 257 = **799 = 787 + 12**; skipped 24, equal to the base.
+    - All 805 distinct base names are present, and the 12 new names are the 11 SCR-14 width cases and the AC-4 card case (master's own extraction from the shard logs).
+    - Per-case means (shard 3): SCR-14 3.01 s against 5.13 s, and SCR-11 2.07 s against 2.40 s.
+  - **`master` 6b1883f:** push run **43169697211**, 5 of 5, at 3,185 / 5,549 / 275 + 273 + 260 = 808 / 24 (read by master). #222 is MERGEABLE and BEHIND. Branch protection: `strict: true`.
+
+**Checklist** (G6, narrow route; DL-147 (5))
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review evidence present (narrow route: reviewer-quality alone) | ✱ | ✅ | Review 5870559816; `quality-round2.md`. The route exception is DL-147 (1) and DL-124. Scope is 2 files |
+| 2 | Zero open Blocker or Critical | ✱ | ✅ | 0 / 0 |
+| 3 | Majors fixed or accepted | | ✅ | QLT-01 is fixed (line 311); P-WRAP is red |
+| 4 | Findings cite file:line | | ✅ | QLT-09 :304, QLT-10 (file), QLT-11 :121-124 |
+| 5 | Condition A (QLT-01 to QLT-04, AC IDs in titles, Dev Record) | | ✅ | c9c8de7, spec only. P-WRAP, P-GAP and P-TAB are red. Means 3.01 s and 2.07 s. Round-2 rows in the PR body |
+| 6 | Condition B (merge commit, hand resolution, #195 kept) | | ✅ | d59e8ea. The `--cc` shows 2 files, #195 is kept, and Treatment runs the fit and the gap |
+| 7 | `users-list.tsx` repoint: only the import line in `--cc` | | ✅ | One `++` line. The value is identical |
+| 8 | Condition C (plants, and the #224 form if `expectThreeButtonColumn` was touched) | | ✅ | 4 of 4 red at their own assertions. P-PROP ran because the docblock and message were touched |
+| 9 | Counts per DL-147 (4)(d) and the name list | | ✅ | +0 / +0 / +12 / +0 against 43166263631. 805 of 805 names are present |
+| 10 | Branch current with `master` | | ⏳ | It is BEHIND 6b1883f. This is G7 step U below (DL-170 (6)(a)) and does not hold G6 |
+
+**Findings disposition**
+- **QLT-09 (Minor)** is accepted and deferred to **#319** (`tech-debt`, created by master). Owner: developer, in the next PR that touches the spec, by G8.
+- **QLT-10 (Info)** rides #319.
+- **QLT-11 (Info)** is accepted as sound.
+- **Dev Record (Info):** the reference run should be 43166263631 (8f07c17), not 43165366576 (b710741). The counts are the same, so this is not a condition.
+
+**G7 route (qa-engineer; DL-170 (6))**
+| Step | Owner | What | Pass |
+|------|-------|------|------|
+| U | orchestrator | Update #222 from the `master` tip by GitHub's update-branch, merge method. No rebase, force-push or local `git merge` | H1's parents are d59e8ea and the tip. `git show --cc H1` prints no hunk. `git diff d59e8ea H1` over the 2 files is empty. `git diff --stat <tip> H1` is exactly the 2 files. All are posted on #222. A conflict comes back to master |
+| N | qa-engineer (in the report) | Counts on H1's CI run | 5 of 5 (jobs API). Counts = the merge-ref `master` push run +0 / +0 / +12 / +0. On 6b1883f: **3,185 / 5,549 / 820 (279 / 277 / 264) / 24**. Every base name is present, and the 12 new names are as before. A different split is reported with its cause. A red or any other delta comes back to master |
+| Q | qa-engineer | DL-147 (6) on H1 | AC-1 to AC-6 with evidence. QA's own SCR-14 measurements at the seven §6.0 widths (120-character name, as drawn and forced at 1024 px) against G7-2b. Activate and a busy row. A real Tab across a non-own row at 1024 px forced. axe at 3 widths. 360 px cards. `users.spec.ts` and `users-production.spec.ts` unchanged and green. QA's control (`TableActionsCell` → `TableCell`, from H1, anchor-once, diff printed, closed unmerged) red in the forced modes. QA does not repeat the reviewer's four plants |
+| R | qa-engineer | `docs/07-qa/AQP-245-test-report.md` | One commit adding only that file, giving H2. `git diff --stat H1 H2` is the report alone |
+
+**Merge prerequisites (DL-147 (7) as refined by DL-170 (7); orchestrator, after G7 GO)**
+- **Update:** strict protection means another merge-commit update if `master` has moved since H2, with the U checks over the 3 files. A move that is docs-only, or that does not touch the 3 files, needs no new G7. A conflict, or a change to any of the 3 files, comes back to master.
+- **CI:** 5 of 5 from the jobs API, every attempt read, no failed or retried test, and counts per N against that head's merge-ref `master`. A path of 5:30 or more is reported, not held.
+- **Post before the squash,** on #222 and AQP-245: the head, the run, the base push run, the counts with the arithmetic, and the path.
+- **Squash:** title "AQP-245: STORY-10.21: Users list table actions". The body says 3 files and contains "Closes #134" and "Refs #319", with no closing keyword on the Refs line.
+- **After the squash:** the `master` push run is 5 of 5 at base +0 / +0 / +12 / +0 and is posted on AQP-245. A red comes back to master.
+
+**After the merge:**
+- **#137 step 1** (QLT-06): may proceed (qa-engineer).
+- **#307 Users part:** unblocked (developer, by G8).
+- **#225 (QLT-07):** the developer checks what remains after #265's move, then closes or keeps it.
+- **#245 item 5:** the orchestrator re-checks the hold.
+- **H (delivery lead, before G8; does not hold G7 or the merge):** delete the branches of #223, #224, #233, #234 and #310 to #313.
+
+**Risks:** none new. RISK-023 is unchanged at 8. Path 4:42 is not a reading of 5:30 or more.
+
+**Rationale:**
+- **Why GO.** Every mandatory item holds on evidence master read itself. The only Minor is deferred with an issue (the DL-168 pattern). The update and the QA route belong to the next gate.
+- **Why the repoint is confirmed.** Without it the merged tree does not compile. It is value-identical, in scope, and inside the merge commit as DL-158 (2) requires. P-WRAP proves the class still reaches the cell.
+- **Why the update comes before QA.** DL-163 (4)(a) requires it, and strict protection forces it before the squash anyway. With the update first, QA tests the code that merges.
+
+Alternatives considered:
+- QA on d59e8ea, with the update afterwards. Rejected: two baselines, and it breaks DL-163 (4)(a).
+- QLT-09 fixed in #222. Rejected: it changes the spec after the plants were read against it, for a missing space.
+- The repoint as a separate commit. Rejected: the merge commit would not compile.
+**Posted:** PR #222 comment 6817488784; Jira AQP-245 comment 11603. Tech-debt issue #319 created by master.
