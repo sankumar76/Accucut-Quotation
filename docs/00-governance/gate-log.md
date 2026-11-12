@@ -7426,3 +7426,19 @@ Alternatives considered:
 - #358 first. Rejected: nothing in #297 cites it (DL-195 (6)(c)).
 
 **Posted:** Jira AQP-142 comment 11755; PR #297 comment 6831669625.
+
+### Note (DL-201) — G7 AQP-142 attempt 2: H6 = 8506a96 meets DL-200 (4)(d) — 2026-11-12
+
+The empty-diff item in DL-200 (4)(d) could not hold as written. H5's base 3f22672 lacks #334, and #334 changes `tests/e2e/masters-table-actions.spec.ts`, which is also in the PR. Master reads that item as "H6 differs from H5 only by `master`'s own changes".
+
+| Check | Result | Evidence |
+|---|---|---|
+| Parents | ✅ | e38db93 and b6b38c5; `origin/master` = b6b38c5 |
+| `git show --cc 8506a96` | ✅ | no output |
+| File set | ✅ | `b6b38c5..8506a96` = the same 78 files as `b6b38c5...e38db93` |
+| Tree | ✅ | 3d6f96bc… = the tree of 40f4407, tested by run 43271701586 |
+| H5 to H6 only `master`'s change | ✅ | `-U0` `+`/`-` lines of `e38db93..8506a96` = those of `3f22672..b6b38c5` (whole diff and the one file in the 78, 51 lines) |
+| `master` to H6 only the PR's change | ✅ | `-U0` lines of `b6b38c5..8506a96` = those of `3f22672..e38db93` |
+| CI on H6 | pending | run 43275308287 in progress; it must meet (4)(d): 5 of 5 at 3,333 / 5,818 / 878 / 24, 0 flaky, all 846 base names |
+
+**Ruling:** DL-200 (4)(d) is met except for CI. The squash goes when run 43275308287 meets (4)(d), then (4)(f), (4)(g) and (5) apply unchanged. Corrected wording for later updates: see DL-201 (3). **Posted:** Jira AQP-142 comment 11756; PR #297 comment 6831760838.
