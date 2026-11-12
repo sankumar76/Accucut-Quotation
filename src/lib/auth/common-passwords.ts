@@ -10043,7 +10043,7 @@ function withoutNonLettersAtEnds(text: string): string {
  * "1234567890" and "1qaz2wsx!!" becomes "1qaz2wsx". The list holds entries that start or end with a digit, which the form above strips away.
  */
 function withoutSymbolsAtEnds(text: string): string {
-  return text.replace(/^[^\p{L}\p{Nd}]+|[^\p{L}\p{Nd}]+$/gu, '');
+  return text;
 }
 
 /**
