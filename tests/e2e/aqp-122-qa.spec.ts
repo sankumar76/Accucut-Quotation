@@ -43,6 +43,7 @@ const WORDS = {
   loading: 'Loading the materials',
   loadErrorTitle: 'We could not load the materials',
   failedText: 'Check your connection and try again. Nothing was changed.',
+  savedNotShown: 'The change was saved, but we could not show the list. Check your connection and try again.',
   failedAdd: 'We could not add the material.',
   failedSave: 'We could not save the changes.',
 } as const;
@@ -308,7 +309,9 @@ test.describe('as the Admin', () => {
     await again.getByRole('button', { name: 'Save' }).click();
     const title = page.getByRole('heading', { name: WORDS.loadErrorTitle });
     await expect(title).toBeVisible();
-    await expect(page.getByText(WORDS.failedText)).toBeVisible();
+    // The failing read follows a Save that succeeded, so the sentence says the change was saved and never "Nothing was changed." (DEF-029, ux-spec v0.23).
+    await expect(page.getByText(WORDS.savedNotShown)).toBeVisible();
+    await expect(page.getByText('Nothing was changed.')).toHaveCount(0);
     await expectNoAxeViolations(page);
     mode = 'empty';
     await page.getByRole('button', { name: 'Try again' }).click();
