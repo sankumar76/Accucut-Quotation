@@ -7355,3 +7355,74 @@ Alternatives considered:
 - NO-GO. Rejected: no mandatory item fails.
 
 **Posted:** Jira AQP-289 comment 11753; PR #361 comment 6831471246.
+
+## G7 – QA Acceptance — AQP-142 (STORY-02.02 Customers, PR #297: H4 = eb6bc66; H5 = e38db93 = H4 + the QA report) — 2026-11-12 (attempt 2)
+
+- **Decision:** **GO (DL-200).** DEF-031 (Sev-2) and DEF-032 (Sev-3) are fixed and verified on H4. Every DL-197 (4) item passes. No Sev-1 or Sev-2 is open. The squash needs H6 first, because the PR is `behind` b6b38c5 under strict protection. AQP-142 goes to Done, and #342 and #344 close, after the squash push run is green.
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no (G7 is not in `HUMAN_APPROVAL_POINTS`; MERGE_POLICY all-auto, CLAUDE.md §8)
+- **Attempt:** 2 (attempt 1 NO-GO, DL-192)
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-142-test-report.md` at e38db93, section "G7 attempt 2": ACCEPT. QA hand-off: Jira 11752 and PR comment 6831223649. Orchestrator brief: Jira 11754.
+  - **Branch, read by master:** e38db93 has the one parent eb6bc66. `git diff --stat eb6bc66 e38db93` is the report alone (+50 / -7). The PR has 78 files. `origin/master` is b6b38c5. The PR is `behind` by 8f66157 (#334) and b6b38c5 (#329), and `mergeable` is true. Protection is strict on `Stages 1 to 11`.
+  - **CI 43271701586** (H5, attempt 1; jobs API 5 of 5 `success`, 17:39:17Z to 17:45:20Z). Merge ref 40f4407 (e38db93 into b6b38c5, tree 3d6f96bc) in every job. Stage 2: 762 commits scanned, no leaks found. Vitest 168 / 3,333 and 230 / 5,818. E2E 298 + 297 + 283 = **878**, 3 + 4 + 17 = 24 skipped. No `✘`, retry or flaky line. Against push run 43261705805: **+133 / +254 / +56 / +0**, equal to H4's 43262443016.
+  - **Names, master's own comparison** (full job logs, ANSI and line:col stripped): 846 base instances (840 distinct), **0 missing** on H5. The 56 new instances: `customers.spec.ts` 27, `customers-focus.spec.ts` 12, `canary-scan.spec.ts` 6, `masters-table-actions.spec.ts` 11.
+  - **Other runs on the branch** since the G6 close: only eb6bc66 and e38db93, both green. Reviews: 27, all COMMENTED, none REQUEST_CHANGES. The PR body has Refs #342, #344 and #326. No closing keyword is in the body or in any of the 20 commit messages.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a result with evidence | ✱ | ✅ | AC-8 re-verified on H4 (45 of 45 readings, overflow 0). AC-1 to AC-7 stand from attempt 1, not re-run as ruled (DL-192 (6), DL-197 (4)) |
+| 2 | No open Sev-1 / Sev-2 against the story | ✱ | ✅ | DEF-031 fixed and verified (re-run of the failing tests); its closure waits for the push run (DL-197 (5)(h)). Open: DEF-033 Sev-3, pre-existing |
+| 3 | Regression recorded and green | ✱ | ✅ | 43271701586 (H5) and 43262443016 (H4): +133 / +254 / +56 / +0; 0 of 846 base instances missing; 0 flaky |
+| 4 | Exploratory notes | | ✅ | Attempt 1 charter (kept); attempt 2 is a ruled retest |
+| 5 | Accessibility checks (UI story) | | ✅ | axe, five NFR-018 tags, 100-character name: 12 scans, 0 violations; DEF-032 focus and QLT-12 focus at 3 widths |
+| 6 | DL-197 (4) (a) to (g) | | ✅ | (a) 45 of 45 break-free readings; (b) 503 and a real 409 (QLT-12); (c) 9 pages and 6 boundaries at 360 px, the importer list checked by master; (d) axe 0; (e) by name; (f) 4 files; (g) H5 = report alone |
+| 7 | H5 = H4 + the report alone | | ✅ | `git diff --stat eb6bc66 e38db93` |
+
+**Merge steps (orchestrator; DL-197 (5), restated in DL-200 (4))**
+| # | Step | Check |
+|---|------|-------|
+| M1 | No squash from H5 | The PR is `behind`; strict protection. Do not bypass |
+| M2 | Order | #336 and #341 do not merge before #297. #358 and #361 share no file with the 78; if either merged first, use M4b |
+| M3 | H6 by GitHub update-branch, merge method, `expected_head_sha` e38db93 | Parents e38db93 and the tip; no rebase, force-push or local merge |
+| M4a | Tip = b6b38c5 | `git show --cc H6` no hunk; `git diff e38db93 H6 -- <78 files>` empty; `git diff --stat b6b38c5 H6` = exactly the 78 files; `H6^{tree}` = 3d6f96bc1d4d9e5f2bbfc08b8b194dc884505dbe. CI on H6: 5 of 5, every attempt read, Stage 2 clean, **3,333 / 5,818 / 878 / 24**, 0 `✘` / retry / flaky, 846 base instances present |
+| M4b | Tip moved (#358 or #361 only) | The tip touches none of the 78 files and its push run is 5 of 5; the same `--cc` and diff checks (no tree check); CI on H6 at **the tip's push run +133 / +254 / +56 / +0**, every base name present. Anything else comes back to master |
+| M5 | PR body | Re-grep "Refs #326", "Refs #342", "Refs #344" just before the squash |
+| M6 | Squash H6 (`sha` = H6) | Title below; body below plus the orchestrator's attribution line; re-grep all 21 commit messages and the body for closing keywords |
+
+**Squash title:** `AQP-142: STORY-02.02: Customers` (GitHub's ` (#297)` suffix accepted, as on #334 and #329).
+
+**Squash body (exact):**
+
+```
+STORY-02.02 Customers (SCR-12): the customer list, the customer page with a rate for every Process Master item, the Add dialog and Reset to defaults; customer rates in the Engineer canary scan; one audit entry per create, edit or reset. G7 round F2 makes the shared PageHeader title wrap a long name (DEF-031) and puts focus on the notice after a failed Save (DEF-032).
+
+QA report: docs/07-qa/AQP-142-test-report.md (attempt 1 REJECT on cb95102; attempt 2 ACCEPT on eb6bc66).
+G6: DL-184 (F2 fix-only review closed by DL-197). G7: DL-192 (attempt 1, NO-GO), DL-200 (attempt 2, GO).
+
+Refs #326
+Refs #342
+Refs #344
+```
+
+**After the squash**
+| # | Owner | Action | Trigger |
+|---|-------|--------|---------|
+| P1 | orchestrator | Read the squash's `master` push run: 5 of 5, every attempt read, pre-merge base push run +133 / +254 / +56 / +0 (3,333 / 5,818 / 878 / 24 on b6b38c5), every base name, 0 flaky; post on PR #297 and AQP-142 | The push run completes |
+| P2 | orchestrator | AQP-142 to In QA if the workflow needs it before Done (the DL-197 move was not made; Jira shows In Progress) | Now |
+| P3 | qa-engineer | AQP-142 to Done; close AQP-285, AQP-286, #342, #344 (completed) with the squash SHA and the push run; Fix & Verification rows in the DEF-031 and DEF-032 files | P1 green |
+| P4 | orchestrator, developer | AQP-276: H_m update of #336 and the T6 window (DL-185 (4) O). No merge to `master` during the ten runs, #358 and #361 included | P1 green and H_m's first run meets S |
+| P5 | developer (delivery lead if the merge is denied), master | AQP-81 condition I (DL-190 (3), DL-196 (8)): merge `master` into #341; master reads `--cc`; CI at the post-AQP-142 push run +191 / +236 / +13 / +0 | P1 green, never inside T6 |
+| P6 | developer | DEF-033 PR `fix/AQP-287-<slug>` from `master`, due before G8 | P1 green |
+| P7 | orchestrator | Records PR #358 between P1 and the next update of #336 or #341, never inside T6 (DL-155 (2)) | P1 green |
+
+**Risks:** none new. RISK-028 is unchanged; DEF-031's fix lands with the squash. RISK-023: H5 path 6:06 (17:39:14Z to 17:45:20Z), a reading only (DL-192 (7)).
+
+**Rationale:** see DL-200. All three mandatory items pass on evidence master read, including a by-name comparison on H5 itself. The brief's "up to date" premise does not hold, so H6 is required and pre-ruled. Done and the defect closures wait for the push run (DL-197 (5)(h)).
+
+Alternatives considered:
+- CONDITIONAL GO until the defects close. Rejected: closure is a post-merge record step, not a quality gap.
+- Re-running AC-1 to AC-7. Rejected: ruled out at DL-192 (6), and their files are unchanged.
+- #358 first. Rejected: nothing in #297 cites it (DL-195 (6)(c)).
+
+**Posted:** Jira AQP-142 comment 11755; PR #297 comment 6831669625.
