@@ -136,4 +136,6 @@ export async function expectLoadErrorHoldsFocus(page: Page, focusLog: ReadonlyAr
   expect(focusLog.at(-1), 'the last element to take focus is the title').toBe(`H2:${errorTitle}`);
   await expect(title).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? ''), { message: 'focus stays on the error title' }).toBe(errorTitle);
+  // PROBE (reviewer-quality, not to be merged): ux-spec 6.0 "Error (load)": "Nothing was changed." is not said when the read follows a save that succeeded.
+  await expect(page.getByRole('main'), 'probe: no "Nothing was changed." after a save that succeeded').not.toContainText('Nothing was changed.');
 }
