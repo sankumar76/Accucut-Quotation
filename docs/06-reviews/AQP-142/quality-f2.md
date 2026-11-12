@@ -3,11 +3,12 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | F2 (fix only, DL-192 (5)) |
-| Base…branch | `git diff f269b05 7fd3cdd` on PR #297 (`feat/AQP-142-customers`): 4 files, +67 / -16 |
-| Commit reviewed | 7fd3cdd6ec79784912f2874d62676e5c28805fdf (H3, one parent f269b05) |
+| Review round | F2 (fix only, DL-192 (5)); F2 re-review on eb6bc66 (section "F2 re-review" at the end) |
+| Base…branch | `git diff f269b05 7fd3cdd` on PR #297 (`feat/AQP-142-customers`): 4 files, +67 / -16; then `git diff 7fd3cdd eb6bc66`: 2 files, +43 / -26 |
+| Commit reviewed | 7fd3cdd6ec79784912f2874d62676e5c28805fdf (H3, one parent f269b05); re-review eb6bc6651478d5a319da0742c47ae5376e2b2114 (H4, one parent 7fd3cdd) |
 | Date | 2026-11-12 |
-| **Verdict** | **REQUEST CHANGES** (1 Major) |
+| GitHub reviews | 5878185009 (H3, COMMENT); 5878675852 (eb6bc66, COMMENT) |
+| **Verdict** | **APPROVE WITH COMMENTS** on eb6bc66 (0 Blocker, 0 Critical, 0 Major, 0 Minor, 2 Info). Was REQUEST CHANGES on 7fd3cdd (QLT-10, Major, now Fixed) |
 
 ## Summary
 
@@ -95,3 +96,31 @@ const longNameOf = (name: string): string => name.replaceAll('-', '').padEnd(100
 - **developer:** QLT-10, a one-line test change on #297 (H3 + 1). No product code changes.
 - **reviewer-quality (me):** re-run P1 on the new head, using the same anchor-once script. It must be red at 360, 768 and 1366 px and nowhere else. P2 does not need a re-run unless `:168` or the hook changes.
 - **qa-engineer:** at (6)(a), QA's own names have no break opportunity. Keep them that way. QLT-12 can join (6)(b).
+
+## F2 re-review on eb6bc66 (QLT-10 fix)
+
+**Verdict: APPROVE WITH COMMENTS** (0 Blocker, 0 Critical, 0 Major, 0 Minor, 2 Info). QLT-11 and QLT-12 stand as notes and need no change.
+
+**Diff** (`git diff --stat 7fd3cdd eb6bc66`: 2 files, +43 / -26; eb6bc66 has one parent, 7fd3cdd):
+- `customers.spec.ts`: `longNameOf` is now `name.replaceAll('-', '').padEnd(100, 'W')`, and its comment and the DEF-031 inline comment are corrected. The header gains an F2 paragraph. The DEF-032 block moved verbatim into the helper `failASaveThenSaveAgain(page, customer)` (STD-01), and the test title is unchanged. `MadeCustomer` is imported as a type.
+- `use-customer-edit.ts`: the `useCustomerEdit` JSDoc is re-wrapped onto three lines. No code changed.
+
+**Checks (re-review)**
+
+| Check | Source | Result |
+|-------|--------|--------|
+| H4 CI | run 43262443016, attempt 1, jobs API; merge ref 82da98d (eb6bc66 into b6b38c5) | 5 of 5 success. `customers.spec.ts:175` (long name) and `:203` (keyboard save) are green on [mobile], [tablet] and [desktop]. E2E 298 + 297 + 283 = 878 passed, 3 + 4 + 17 skipped |
+| **P1 re-run** (#359, `control/AQP-142-f2-p1b-no-wrap`, ec088f7, one parent eb6bc66) | same anchor-once plant as before, diff printed. Run 43263976324, attempt 1, merge ref 655fb15 (into b6b38c5) | Stages 1 to 11b green. `:175` red at line 196 on both attempts: [mobile] **1626 / 1621 px**, [tablet] **1563 / 1562 px**, [desktop] **1221 / 1223 px**. Shard totals 297 / 296 / 282 passed. Nothing else red. **Red at three widths: DL-192 (5) met** |
+| **P2 re-run** (#360, `control/AQP-142-f2-p2b-no-focus`, e7c9052, one parent eb6bc66) | same plant as before, diff printed; re-run because STD-01 moved the assertions. Run 43263984300, attempt 1, merge ref 11884f9 | Stages 1 to 11b green. `:203` red on both attempts in every shard, at line 73 in `failASaveThenSaveAgain` (`toBeFocused`, received "inactive"). Shard totals 297 / 296 / 282 passed. Nothing else red. **Red at three widths: DL-192 (5) met** |
+
+Both re-run controls are draft PRs against `master`. Each has its result in a comment, and both were closed unmerged. The branches are kept.
+
+**Previous findings (F2)**
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-10 | Major | **Fixed** | eb6bc66; P1 re-run red at 360, 768 and 1366 px (thread reply on #297, discussion r4553652617) |
+| QLT-11 | Info | Stands (note) | the deviation is accepted; eb6bc66 changes only a comment in the hook |
+| QLT-12 | Info | Stands (note) | optional for QA's (6)(b) |
+
+**AC conformance (fix scope), updated:** AC-8 with the longest accepted name (DEF-031) is now **Met, code and test**: the guard is green on eb6bc66 and red under P1 at all three widths. SCR-12 "Failed Save" focus (DEF-032) is **Met** and red under P2 at three widths after the helper move. Focus after a good Save and after Reset is unchanged.
