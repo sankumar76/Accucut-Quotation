@@ -37,8 +37,6 @@ export const DELETING_TREATMENT = 'Deleting';
 
 export const TREATMENT_LOADING_LABEL = 'Loading the treatments';
 export const TREATMENT_ERROR_TITLE = 'We could not load the treatments';
-/** The load error's sentence while a success notice is on the page: the change happened, and the read after it failed (the DEF-020 case; ux-spec v0.21). */
-export const TREATMENT_SAVED_NOT_SHOWN_BODY = 'The change was saved, but we could not show the list. Check your connection and try again.';
 
 export const FAILED_ADD_TREATMENT_MESSAGE = 'We could not add the treatment.';
 export const FAILED_RENAME_TREATMENT_MESSAGE = 'We could not save the changes.';
