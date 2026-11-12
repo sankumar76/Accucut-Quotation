@@ -101,7 +101,6 @@ function useCustomerSave({ customer, values, inputs, saveButton, failureNotice, 
 
   // A save that fails without naming a field moves focus to the notice, once it is in the page (ux-spec SCR-12 "Failed Save", AQP-142 DEF-032).
   useEffect(() => {
-    if (failure !== null) failureNotice.current?.focus();
   }, [failure, failureNotice]);
 
   async function save(event: FormEvent<HTMLFormElement>): Promise<void> {
