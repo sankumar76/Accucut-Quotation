@@ -7213,3 +7213,57 @@ Alternatives considered:
 - DEF-035 as Sev-3. Rejected: likelihood belongs to the risk (DL-135).
 
 **Posted:** Jira AQP-81 comment 11735; PR #341 comment 6830321612; Jira AQP-289 comment 11736; GitHub #123 comment 6830329053; Jira AQP-1 comment 11737 (RISK-028).
+
+## G6 – Peer Review (fix-only, G7 fix round F2) — AQP-142 (STORY-02.02 Customers, PR #297 at H4 = eb6bc66; review of `f269b05..eb6bc66`) — 2026-11-12
+
+- **Decision:** **GO (DL-197).** The F2 fix review (DL-192 (5), item V) is closed with 0 open Blocker, Critical or Major. QLT-10 (Major, test-only) is Fixed. Plant P1 is red at 360, 768 and 1366 px, and plant P2 at three widths, with nothing else red. STD-01 to STD-03 are Fixed, verified by master on eb6bc66 (DL-047). QA's G7 attempt 2 runs on eb6bc66 with DL-192 (6) confirmed and two adjustments (Q below). H5 = eb6bc66 + the report. The final update is H6.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (fix-only round F2; G6 for the story was GO in DL-184)
+- **Heads:** DL-192's H3 / H4 / H5 shift by one because F2 took two commits. H3 = 7fd3cdd (product fix), H4 = eb6bc66 (test-only QLT-10 fix plus STD-01 to STD-03), H5 = H4 + QA report, H6 = final update.
+- **Artefacts evaluated:** `docs/06-reviews/AQP-142/standards-f2.md` (APPROVE WITH COMMENTS, 3 Minor, on 7fd3cdd) and `quality-f2.md` (REQUEST CHANGES on 7fd3cdd, then APPROVE WITH COMMENTS on eb6bc66); PR #297 reviews 5878026196, 5878185009, 5878672632, 5878675852 (all COMMENT) and its body; plants #359 and #360 (and #349, #350); Jira AQP-142 11727, 11729, 11730, 11734, 11738, 11739.
+- **My own checks** (read-only; no CI started, re-run or cancelled):
+  - **Diff:** `git diff --stat f269b05 eb6bc66` lists 4 files: `page-header.tsx`, `customer-edit-screen.tsx`, `use-customer-edit.ts` and `customers.spec.ts`. There are two linear commits and no merge commit. The only `src` change in `7fd3cdd..eb6bc66` is a JSDoc re-wrap.
+  - **Literal route:** F2 started before #334 merged (7fd3cdd at 16:02Z; #334 at 16:12:26Z), so the literal route is ruled (DL-195 (6)(e)).
+  - **Base and PR state:** `origin/master` = b6b38c5. The PR is `BEHIND` 2 and `MERGEABLE`, with strict protection on `Stages 1 to 11`. #297 holds 78 files.
+  - **CI 43262443016** (the only run on eb6bc66, attempt 1, merge ref 82da98d into b6b38c5): 5 of 5 `success`. Gitleaks "750 commits scanned", "no leaks found". Counts are 3,333 / 5,818 / 878 / 24 against 43261705805's 3,200 / 5,564 / 822 / 24 = **+133 / +254 / +56 / +0**. 0 `✘`, 0 retry.
+  - **Names:** 0 base E2E instances are missing. The 56 new ones are the story's titles (27 + 12 + 6 + 11). F2's delta is +0.
+  - **Path:** 6:00, a reading only.
+  - **P1 #359** (ec088f7, one line: the `h1` loses `[overflow-wrap:anywhere]`). Run 43263976324: `customers.spec.ts:175` is red on both attempts at 1626 / 1621, 1563 / 1562 and 1221 / 1223 px. Vitest is green, and nothing else is red.
+  - **P2 #360** (e7c9052, one line: the focus call removed). Run 43263984300: `:203` is red on both attempts at three widths, at `toBeFocused` in `failASaveThenSaveAgain`. Nothing else is red.
+  - **Keywords:** the 19 commit messages of eb6bc66 not on `master` hold no closing keyword. The PR body has "Refs #342" and "Refs #344" and no closing keyword. **It does not have "Refs #326".**
+  - **STD-01 to STD-03 on eb6bc66:** the helper is 22 lines, and the test at `:203` is 34 lines. No line of `use-customer-edit.ts` is over 160 characters. The header names the DEF-031 and DEF-032 coverage.
+  - **Merged tree:** the customers notices (`customer-edit-screen.tsx:89`, `customer-screen.tsx:65`) still pass `BREAK_LONG_NAMES`, which `Notice` now applies itself. Five customers files import the deprecated `master-texts` re-export. This is #225's scope.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Fix-only reports present (DL-192 (5): quality and standards; no performance) | ✱ | ✅ | `quality-f2.md` (re-review on eb6bc66), `standards-f2.md` (on 7fd3cdd; Minors verified by master on eb6bc66) |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 in both reports |
+| 3 | Majors fixed or explicitly accepted | | ✅ | QLT-10 Fixed (eb6bc66, P1 re-run red at 3 widths); no other Major |
+| 4 | Findings cite file:line | | ✅ | QLT-10 `customers.spec.ts:47-48`, QLT-11, QLT-12 `use-customer-edit.ts`; STD-01 to STD-07 |
+| 5 | Plants as ruled (DL-192 (5)) | | ✅ | P1 #359 and P2 #360: one-line diffs, one parent eb6bc66, red on the named test at 3 widths only, closed unmerged |
+| 6 | Scope (DL-192 (4)(e)) | | ✅ | 4 files; none of the 11 shared with #341; no new title (E2E +0) |
+| 7 | CI on the head | | ✅ | 43262443016, 5 of 5, +133 / +254 / +56 / +0 at b6b38c5, names complete |
+| 8 | Minors | | ✅ | STD-01 to STD-03 Fixed (master, DL-047); STD-04 on #225; QLT-11 accepted; QLT-12 to QA (Q) |
+
+**Conditions / next actions**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| Q | qa-engineer | `docs/07-qa/AQP-142-test-report.md` (one commit, H5 = eb6bc66 + report) | DL-192 (6) on eb6bc66, without taking `master`. (a) The DEF-031 series at 100, 40 and 24 characters, **each one unbroken run (no space, hyphen or other break point)**, at 360, 768 and 1366 px: customer page on load, after Saved and after Reset, and the list; overflow 0. (b) DEF-032 focus at 3 widths, words unchanged, good-Save and Reset focus as in attempt 1. **QLT-12 is required:** a 409 that names no field puts focus on the notice, shows the server's title and keeps what was typed, at 3 widths (real state, or a QA-only route fulfilment with the route's 409 shape, stated). (c) The `PageHeader` sweep at 360 px, including the six portal route error boundaries: overflow 0, title text unchanged. (d) axe (five NFR-018 tags) with the 100-character name at 3 widths. (e) Regression by name: 43262443016 against 43261705805, every base name present, 0 flaky, +133 / +254 / +56 / +0. (f) `git diff --stat f269b05 eb6bc66` = the 4 files. AC-1 to AC-7 are not re-run, except the edit-page rows of DL-184 (8)(b) | G7 attempt 2 |
+| B | orchestrator | PR #297 body | Add "Refs #326" (DL-192 (9)(f)). No closing keyword | Before the squash |
+| T | orchestrator | GitHub #225 comment | Add the redundant `className={BREAK_LONG_NAMES}` on the two customers notices and the five customers importers of the deprecated `master-texts` re-export | By G8 |
+| M | orchestrator | PR #297 merge | Restated in DL-197 (5): (a) DL-192 (9)(a) is met (#329 merged); records PR #358 is not a prerequisite. (b) #336 not before #297. (c) G7 GO on H5. (d) H6 by update-branch, merge method, to the tip: `--cc` no hunk; `git diff H5 H6` over the 78 files is empty; `git diff --stat <tip> H6` = the 78 files; a tip that touches any of them other than `masters-table-actions.spec.ts` comes back to master. (e) CI on H6 5 of 5, every attempt read, +133 / +254 / +56 / +0 plus QA's delta (+0 expected) at the tip's push run (3,333 / 5,818 / 878 / 24 if the tip is b6b38c5), names complete, 0 flaky, a red read and never re-run away. (f, g) Squash title "AQP-142: STORY-02.02: Customers", body written by the orchestrator with "Refs #326", "Refs #342", "Refs #344", and a keyword grep of every commit and the body. (h) After the squash, the push run is posted at base + delta | At merge |
+| W | orchestrator, developer | AQP-276 (#336), AQP-81 (#341), DEF-033 (#345) | AQP-276's H_m update and T6 measure window open only after #297's squash push run is green; no sample before. DL-190 (4)(c)'s 24 h count from that run; (4)(d)'s 2026-11-16 12:00 UTC re-ask stands. DL-196 (I) and the DEF-033 PR follow the same run | After the squash |
+| C | qa-engineer | GitHub #342, #344 | Close once the squash's push run is green (tightens DL-192 (9)(h)) | After the squash |
+
+**Risks:** none new. RISK-028 is unchanged (score 8, DL-195, DL-196). F2 adds no shared surface without a rule.
+
+**Rationale:** see DL-197. Both mandatory items pass on evidence master read. The only Major was test-only, and it is now proven by a plant that sees the fault at all three widths. The Minors carry no behaviour and are verified line by line, so a standards re-review would add nothing (DL-047). QLT-12 becomes a required QA check because F2 changed a focus outcome that no test covers (DL-194 (2) precedent).
+
+Alternatives considered:
+- A standards re-review of eb6bc66. Rejected: three Minors with no behaviour, verified on the diff.
+- Removing the redundant `Notice` class in #297. Rejected: it belongs to #225 and would reopen review.
+- Keeping QLT-12 optional. Rejected: an untested behaviour change would ship unverified.
+- Closing #342 and #344 at G7. Rejected: an issue could close before its fix is on `master`.
+- Holding the final update for records PR #358. Rejected: no code citation waits on it (DL-195 (6)(c)).
+
+**Posted:** Jira AQP-142 comment 11743; PR #297 comment 6830770038.
