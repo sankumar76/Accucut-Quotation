@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { E2E_ADMIN } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
-import { actionsOf, makeTreatment, openTreatments } from './support/treatments';
+import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './support/treatments';
 
 /**
  * DEF-021 (AQP-234) and GitHub #134 (AQP-245): the row actions of a masters table are inside the table's visible box, without scrolling it, at
@@ -413,7 +413,7 @@ test.describe('SCR-14 Users: the "can sign in again" notice wraps a long name (A
       await addPerson(page, name);
       const person = await findPerson(page, name);
       const deactivated = await page.request.patch(`${DEVELOPMENT_URL}/api/v1/users/${person.id}`, {
-        headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+        headers: JSON_HEADERS,
         data: { isActive: false },
       });
       expect(deactivated.status()).toBe(200);

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { BREAK_LONG_NAMES } from '@/components/features/masters/master-texts';
+import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
 import type { AlertTone } from '@/components/ui/alert';
 
@@ -28,7 +28,7 @@ beforeAll(async () => {
   all = declarationsOf(await buildCss([BREAK_LONG_NAMES]));
 });
 
-describe('a notice wraps an unbroken name (AQP-275)', () => {
+describe('a notice wraps an unbroken name (AQP-275, DEF-030)', () => {
   it.each(TONES)('%s: the notice carries the one shared wrapping class', (tone) => {
     expect(noticeClasses(tone)).toContain(BREAK_LONG_NAMES);
   });
