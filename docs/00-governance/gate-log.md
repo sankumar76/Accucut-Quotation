@@ -6540,3 +6540,80 @@ Alternatives considered:
 - QLT-09 fixed in #222. Rejected: it changes the spec after the plants were read against it, for a missing space.
 - The repoint as a separate commit. Rejected: the merge commit would not compile.
 **Posted:** PR #222 comment 6817488784; Jira AQP-245 comment 11603. Tech-debt issue #319 created by master.
+
+## G6 – Peer Review — AQP-274 (DEF-029, GitHub #308: saved-but-not-shown sentence on Process and Materials; PR #309 at 356e9d6) — 2026-11-12 (attempt 1)
+
+- **Decision:** **CONDITIONAL GO (DL-171)** on the two-reviewer route of DL-169 (3)(c) (reviewer-quality and reviewer-standards; no performance review). QLT-01, STD-01 and STD-02 are fixed in this PR, in one test-only commit (H1), before QA starts. AQP-274 goes to **Changes Requested** (orchestrator), and to **In QA** when conditions A and B are posted. The one shared `SAVED_NOT_SHOWN_BODY` (QLT-03) is accepted and amends DL-169 (3)(c).
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **Reviews:** reviewer-standards, PR review 5870688497 (Jira 11605), `docs/06-reviews/AQP-274/standards.md`: APPROVE WITH COMMENTS, 0 / 0 / 0, 2 Minor (STD-01, STD-02), 3 Info. reviewer-quality, PR review 5870753553 (Jira 11606), `quality.md`: APPROVE WITH COMMENTS, 0 / 0 / 0, 1 Minor (QLT-01), 2 Info. `consolidated.md` (orchestrator). All three on the records branch (f61ce78, draft PR #321). Both reviews are on 356e9d6.
+  - **Developer:** Jira 11601; PR #309 body (Dev Record; "Closes #308" at line 3). **Orchestrator:** G5 11602, brief 11607.
+  - **Diff, read by master:** `git diff --stat origin/master...356e9d6` = 8 files, +40 / -11, base 6b1883f (the `master` tip; #309 CLEAN). `src/`: the two results components choose `SAVED_NOT_SHOWN_BODY` while `master.notice?.tone === 'success'`; `master-texts.ts:35` holds it; Treatment imports it. The removed and the added literal are identical, and both equal ux-spec v0.23 (lines 388, 756, 834) and `support/treatments.ts:22`.
+  - **Controls, diffs printed by master:**
+
+| Control | Diff | Run | Result |
+|---|---|---|---|
+| #316 (developer; 813af2d on 86d7108, a tree-identical rebuild of 356e9d6) | `description` removed in both results files, nothing else | 43173789224 | 9 failed (4 + 3 + 2): `masters-slow-read.spec.ts:77`, `:105`, `aqp-122-qa.spec.ts:278` × 3 widths, at "the load error says the change was saved"; 799 passed |
+| #320 (reviewer-quality; 0fe6e11 on 356e9d6) | `saved = master.notice !== null` in both files | 43175410045 | 5 of 5 green: the non-success half is untested (QLT-01) |
+
+  - **CI 43173595283:** attempt 1, jobs API 5 of 5; merge ref a2a6f91 (356e9d6 into 6b1883f) in every job. Vitest 157 / 3,185 and 217 / 5,549; E2E 275 + 273 + 260 = 808 passed, 3 + 4 + 17 = 24 skipped. Against 6b1883f's push run 43169697211 (read by master, same figures): **+0 / +0 / +0 / +0**. No `✘`, no retry; Gitleaks "no leaks found". JS process 175,119 (+58), materials 187,481 (+57). Path 5:23 from the first job.
+
+**Checklist** (G6; route DL-169 (3)(c))
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Review reports present | ✱ | ✅ (recorded route) | Two reports, as DL-169 (3)(c) routed; performance not needed (no route, query, dependency or CI change; JS +58 / +57) |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 5870688497, 5870753553 |
+| 3 | Majors fixed or accepted | | ✅ | None raised |
+| 4 | Findings cite file:line | | ✅ | `standards.md`, `quality.md` Findings tables |
+| 5 | Words match ux-spec v0.23 | ✱ | ✅ | Literal compared by master; both reviewers |
+| 6 | Regression test red without the fix | ✱ | ✅ | #316 red at exactly 9 |
+| 7 | The other half (standard line) pinned by a test | | ⚠️ | #320 green: QLT-01, condition A |
+| 8 | CI green, deltas as stated | ✱ | ✅ | 43173595283 against 43169697211, +0 across |
+| 9 | Test titles carry the defect ID; no magic strings | | ⚠️ | STD-01, STD-02: condition A |
+| 10 | Branch current with `master` | | ✅ | Base 6b1883f = tip; CLEAN |
+
+**Findings disposition**
+- **QLT-01 (Minor): fixed in this PR** (A(i)), proven by B.
+- **STD-01, STD-02 (Minor): fixed in this PR** (A(ii), A(iii)); master checks them in the H1 diff at G7.
+- **QLT-03 (Info): accepted;** DL-169 (3)(c) amended to one shared constant (ux-spec v0.23 SCR-11 permits it).
+- **QLT-02 (Info):** accepted; Add and Delete are covered by QA in G7 step Q.
+- **STD-03, STD-04 (Info):** accepted, no issue.
+- **STD-05 (Info):** accepted. The fourth caller is SCR-12 in #297; the orchestrator adds to reviewer-quality's AQP-142 G6 brief that #297 uses the shared constant, and whether the choice moves into `MasterLoadError` is that review's call.
+- **#316's parent (Info):** 86d7108, not 356e9d6, but `git diff 356e9d6 813af2d` is the plant alone.
+- No tech-debt issue: nothing is deferred.
+
+**Conditions (due before QA starts; checked by master at G7)**
+| # | Owner | Artefact | Required change | Due |
+|---|-------|----------|-----------------|-----|
+| A | developer | PR #309, one commit, `tests/` only (H1) | (i) node Vitest `renderToStaticMarkup` test, one assertion per row: `ProcessResults` in error with `null`, `goneNotice(…,'edit')`, `goneNotice(…,'delete')` → standard line; `savedNotice(…)` → saved sentence and no "Nothing was changed."; `MaterialResults` with `null` → standard line, `materialSavedNotice(…)` → saved sentence; strings written out; E2E +0. (ii) Both `masters-slow-read.spec.ts` failed-read titles carry DEF-029. (iii) The two helper literals become file-local constants. (iv) Dev Record rows per finding, the "no component-test setup" and "NOT included" lines corrected, QLT-03 cited as DL-171, the H1 run. `git diff --stat 356e9d6 H1` is `tests/` only; any `src/` change returns #309 to G6 | Before QA |
+| B | reviewer-quality | Control PR from H1 | Saved sentence made unconditional in both results files (lint- and type-clean form), anchor-once, diff printed, closed unmerged: red at the four non-success unit rows and nowhere else in Vitest; any E2E red read and reported. "Fixed" reply in thread r4547581271 | Before QA |
+| C | orchestrator | #309, AQP-274 | Post A, B and the H1 run (5 of 5; merge-ref `master` push run +k / +k / +0 / +0, Vitest files +1 in both jobs; all base E2E names present except the 2 renamed titles × 3 widths, present under their new titles); then AQP-274 to In QA | Before QA |
+
+**G7 route (qa-engineer; DL-171 (6))**
+| Step | Owner | What | Pass |
+|------|-------|------|------|
+| N | qa-engineer (report) | H1 run and counts as in C | Exact; a red or other delta comes back to master |
+| Q | qa-engineer | Running app, Admin, 3 widths, list re-read forced to fail | Process Add / Edit / Delete and Materials Add / Edit: notice stays, right title, saved sentence, no "Nothing was changed.", focus on title, Try again behaves. Standard line after a deleted-elsewhere notice (warn / info) and after a refused Delete (notice cleared); a failed first read recorded as not reachable if so. Treatment and Exchange rates unchanged. axe 0 on the Process error at 3 widths |
+| R | qa-engineer | Regression by name in the H1 run | `masters-slow-read`, `aqp-122-qa`, `treatments-focus`, `exchange-rates` specs green; #316 and B read, no QA control needed; #307's failed writes are not a finding |
+| S | qa-engineer | `docs/07-qa/AQP-274-test-report.md` | One commit adding only that file (H2), naming H1; `git diff --stat H1 H2` is the report alone |
+
+**Merge prerequisites (orchestrator, `CLAUDE.md` §8, after G7 GO)**
+- **Order:** #222 next; #321 after #222; #309 only after #321 has merged (ux-spec v0.23 and DEF-029 are not on `master`, which has ux-spec v0.22).
+- **Update (strict protection):** GitHub update-branch, merge method, to the tip after #321. On H3: parents H2 and the tip; `git show --cc H3` no hunk; `git diff H2 H3` over #309's files empty; `git diff --stat <tip> H3` = exactly #309's files (8 + unit test + report). Moves not touching them need no new G7. A conflict, or a move touching any of them (for example #297 referencing `TREATMENT_SAVED_NOT_SHOWN_BODY`, which #309 removes, or editing a masters file of #309), comes back to master.
+- **CI on H3:** 5 of 5 (jobs API), every attempt read, no failed or retried test, counts = merge-ref `master` push run +k / +k / +0 / +0; 5:30 or more is reported, not held.
+- **Post before the squash** on #309 and AQP-274: head, run, base push run, arithmetic, path.
+- **Squash:** "AQP-274: DEF-029: saved-but-not-shown sentence on Process and Materials"; body lists the files and contains "Closes #308"; #307 with no closing keyword.
+- **After:** `master` push run 5 of 5 at base +k / +k / +0 / +0 posted on AQP-274; #308 closed (else closed as completed with the merge commit); AQP-274 to Done by qa-engineer on G7 GO.
+- **H (delivery lead, before G8; holds nothing):** delete `control/AQP-274-plant`, `control/AQP-274-qlt-always` and B's branch.
+
+**Risks:** none new. RISK-023 unchanged (5:23 is not a reading). RISK-026: nothing deferred, so no new tracked item.
+
+**Rationale:** see DL-171. In short: all mandatory items hold on evidence master read itself; QLT-01 is fixed now because ux-spec SCR-11 tests (2) and (3) require the standard line, the warn / info path is live on Process today, a regression there repeats DEF-029's class, and the fix is one unit file with no `src/` change.
+
+Alternatives considered:
+- GO with QLT-01 as a follow-up due with STORY-02.07. Rejected: the path is live now, and follow-ups get lost (RISK-026).
+- NO-GO. Rejected: no mandatory item fails; the code is correct on every traced path.
+- An E2E for the deleted-elsewhere path. Rejected: E2E +1 against DL-169, and a render test pins the branch more cheaply.
+
+**Posted:** PR #309 comment 6817883568; Jira AQP-274 comment 11609. No tech-debt issue (nothing deferred).
