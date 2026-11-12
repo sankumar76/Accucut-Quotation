@@ -61,5 +61,5 @@ export function resultOf(outcome: Outcome<true>): ChangeResult {
   if (outcome.code === TOO_MANY_ATTEMPTS_CODE) return { kind: 'blocked' };
   const problems = fieldProblems(outcome.fields);
   if (Object.keys(problems).length > 0) return { kind: 'fields', problems };
-  return outcome.title === '' ? FAILED : { kind: 'refused', title: outcome.title };
+  return FAILED;
 }
