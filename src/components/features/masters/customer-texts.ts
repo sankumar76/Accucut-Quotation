@@ -32,7 +32,7 @@ export const CUSTOMER_HEADINGS = { name: 'Customer', phone: 'Phone', email: 'E-m
 export const CUSTOMERS_LOADING_LABEL = 'Loading customers';
 export const CUSTOMERS_ERROR_TITLE = 'We could not load customers';
 /** The load error's sentence while a success notice is on the page: the change happened, and the read after it failed (the DEF-020 case; ux-spec v0.21). */
-export const CUSTOMERS_SAVED_NOT_SHOWN_BODY = 'The customer was added, but we could not show the list. Check your connection and try again.';
+export const CUSTOMERS_SAVED_NOT_SHOWN_BODY = 'The change was saved, but we could not show the list. Check your connection and try again.';
 
 export const CUSTOMERS_EMPTY_TITLE = 'No customers yet';
 export const CUSTOMERS_EMPTY_DESCRIPTION = 'Add the first customer. It starts with every default rate.';
