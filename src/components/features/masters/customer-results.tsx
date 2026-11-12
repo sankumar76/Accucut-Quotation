@@ -14,10 +14,10 @@ import {
   CUSTOMERS_ERROR_TITLE,
   CUSTOMERS_LOADING_LABEL,
   CUSTOMERS_NO_MATCH_DESCRIPTION,
-  CUSTOMERS_SAVED_NOT_SHOWN_BODY,
   noCustomerMatchTitle,
 } from './customer-texts';
 import { MasterLoadError } from './master-load-error';
+import { SAVED_NOT_SHOWN_BODY } from './master-texts';
 import type { CustomersState } from './use-customers';
 
 /**
@@ -50,7 +50,7 @@ export function CustomerResults({ customers, changeSaved }: CustomerResultsProps
     return (
       <MasterLoadError
         title={CUSTOMERS_ERROR_TITLE}
-        description={changeSaved ? CUSTOMERS_SAVED_NOT_SHOWN_BODY : undefined}
+        description={changeSaved ? SAVED_NOT_SHOWN_BODY : undefined}
         onRetry={() => void customers.readAgain(false)}
       />
     );

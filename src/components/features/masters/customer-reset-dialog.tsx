@@ -65,29 +65,35 @@ function useResetRequest(customer: CustomerRow, onReset: CustomerResetDialogProp
   return { submitting, failed, clearFailure: () => setFailed(false), reset };
 }
 
-function ResetBody({ customer, request }: { readonly customer: CustomerRow; readonly request: ReturnType<typeof useResetRequest> }) {
+/** The dialog's one accessible description: both paragraphs and the list of saved rates that are replaced, so a screen reader reads all of it (ux-spec v0.25). */
+function ResetDescription({ customer }: { readonly customer: CustomerRow }) {
   const differing = customer.rates.filter(differsFromDefault);
+  return (
+    <AlertDialogDescription asChild>
+      <div className="flex flex-col gap-s-3">
+        <p>{resetDescription(customer.rates.length, differing.length)}</p>
+        {differing.length === 0 ? null : (
+          <ul aria-label="Rates that will be replaced" className="flex max-h-60 flex-col gap-s-1 overflow-y-auto pl-s-5 text-body text-ink list-disc">
+            {differing.map((rate) => (
+              <li key={rate.processItemId} className={BREAK_LONG_NAMES}>
+                {rate.name} <span className="tabular-nums">{rateWords(rate, rate.value)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p>{RESET_TYPED_NOTE}</p>
+      </div>
+    </AlertDialogDescription>
+  );
+}
+
+function ResetBody({ customer, request }: { readonly customer: CustomerRow; readonly request: ReturnType<typeof useResetRequest> }) {
   return (
     <>
       <AlertDialogHeader>
         <AlertDialogTitle className={BREAK_LONG_NAMES}>{resetTitle(customer.name)}</AlertDialogTitle>
       </AlertDialogHeader>
-      {/* One description holds both paragraphs and the list, so a screen reader reads all of what the reset replaces (ux-spec v0.25). */}
-      <AlertDialogDescription asChild>
-        <div className="flex flex-col gap-s-3">
-          <p>{resetDescription(customer.rates.length, differing.length)}</p>
-          {differing.length === 0 ? null : (
-            <ul aria-label="Rates that will be replaced" className="flex max-h-60 flex-col gap-s-1 overflow-y-auto pl-s-5 text-body text-ink list-disc">
-              {differing.map((rate) => (
-                <li key={rate.processItemId} className={BREAK_LONG_NAMES}>
-                  {rate.name} <span className="tabular-nums">{rateWords(rate, rate.value)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p>{RESET_TYPED_NOTE}</p>
-        </div>
-      </AlertDialogDescription>
+      <ResetDescription customer={customer} />
       {request.failed ? (
         <Notice tone="danger" title={RESET_FAILED_MESSAGE}>
           {FAILED_WRITE_BODY}

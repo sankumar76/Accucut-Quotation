@@ -32,10 +32,10 @@ export const CUSTOMER_HEADINGS = { name: 'Customer', phone: 'Phone', email: 'E-m
 
 export const CUSTOMERS_LOADING_LABEL = 'Loading customers';
 export const CUSTOMERS_ERROR_TITLE = 'We could not load customers';
-/** The customer's own page has its own load-error title (ux-spec v0.24), with the same sentence under it. */
+/** The customer's own page has its own load-error title and sentence (ux-spec v0.24 and v0.26). */
 export const CUSTOMER_PAGE_ERROR_TITLE = 'We could not load this customer';
-/** The load error's sentence while a success notice is on the page: the change happened, and the read after it failed (the DEF-020 case; ux-spec v0.21). */
-export const CUSTOMERS_SAVED_NOT_SHOWN_BODY = 'The change was saved, but we could not show the list. Check your connection and try again.';
+/** Under that title (ux-spec v0.26): the read can fail after a save or a reset that went through, so the sentence does not say "Nothing was changed.". */
+export const CUSTOMER_PAGE_ERROR_BODY = 'Check your connection and try again. If you just saved or reset this customer, that change was kept.';
 
 export const CUSTOMERS_EMPTY_TITLE = 'No customers yet';
 export const CUSTOMERS_EMPTY_DESCRIPTION = 'Add the first customer. It starts with every default rate.';
