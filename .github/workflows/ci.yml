@@ -10,8 +10,8 @@
 #   - `verify`, named `Stages 1 to 11b`: stages 1 to 11b, as before.
 #   - `e2e`, named `Stage 12: E2E (shard <i> of <N>)`: a matrix of shard jobs. Each shard builds for itself (nothing is
 #     passed between jobs), migrates its own throwaway database, installs the browser (stage 12a) and runs its share of
-#     the E2E tests with four workers. The shard count is the length of `matrix.shard`, the one line to change (three
-#     since AQP-227, STORY-10.17).
+#     the E2E tests with four workers. The shard count is the length of `matrix.shard`, the one line to change (four
+#     since AQP-276, STORY-10.22).
 #   - `required`, named `Stages 1 to 11`: the fan-in job and the ONLY job with `needs`. It is the required status check
 #     on master, so branch protection does not change. It runs even when a needed job failed and fails unless every
 #     needed job succeeded, so a failed, cancelled or skipped job cannot be merged past.
@@ -308,9 +308,9 @@ jobs:
 
   # ---- Stage 12: E2E, in shards (AQP-208, STORY-10.15; test strategy section 10.5) ---------------------------------
   # One job per shard, started together with `verify` (no `needs`). The shard count is the length of `matrix.shard`, which
-  # is `[1, 2, 3]` (STORY-10.17, test strategy section 10.5, "Three shards"): nothing else changes with the count (the
-  # command reads the total from `strategy.job-total`). A fourth shard needs section 10.5 first. Two unit tests guard the
-  # count: tests/unit/ci-workflow.test.ts fails on any list other than `[1, 2, 3]`, and tests/unit/ci-workflow-shards.test.ts
+  # is `[1, 2, 3, 4]` (STORY-10.22, test strategy section 10.5 item 12): nothing else changes with the count (the
+  # command reads the total from `strategy.job-total`). A fifth shard needs section 10.5 first. Two unit tests guard the
+  # count: tests/unit/ci-workflow.test.ts fails on any list other than `[1, 2, 3, 4]`, and tests/unit/ci-workflow-shards.test.ts
   # fails on an `include`, `exclude` or `max-parallel` in this strategy block (any of them changes the number of shards
   # that run) and on a job-level `continue-on-error` here or on `verify`. With `fullyParallel` (asserted in
   # tests/unit/e2e-shards.test.ts), `--shard` divides the tests themselves, so the union of the shards' mobile, tablet and
@@ -327,7 +327,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
 
     services:
       # The same throwaway PostgreSQL as `verify` (same image and digest; change both together). One per shard job, so
