@@ -71,7 +71,7 @@ export interface SummaryEntry {
 export function ErrorSummary({ entries, onFocusField }: { readonly entries: ReadonlyArray<SummaryEntry>; readonly onFocusField: (field: ChangePasswordField) => void }) {
   return (
     <Notice tone="danger" title={errorSummaryTitle(entries.length)}>
-      <ul className="list-disc pl-s-4">
+      <ul className="list-disc pl-s-4 opacity-10">
         {entries.map(({ field, message }) => (
           <li key={field}>
             <a
