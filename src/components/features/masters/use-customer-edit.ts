@@ -169,7 +169,10 @@ function useCustomerFields(initial: CustomerRow) {
   return { customer, values, inputs, errors, showErrors, adopt, setField, setRate };
 }
 
-/** `saveButton` and `failureNotice` are the screen's refs to its Save button and to the wrapper of the failed-save notice, so the screen can attach them and the save can move focus to them. */
+/**
+ * `saveButton` and `failureNotice` are the screen's refs to its Save button and to the wrapper of the failed-save notice, so the screen can attach them
+ * and the save can move focus to them.
+ */
 export function useCustomerEdit(initial: CustomerRow, saveButton: RefObject<HTMLButtonElement | null>, failureNotice: RefObject<HTMLDivElement | null>) {
   const { customer, values, inputs, errors, showErrors, adopt, setField, setRate } = useCustomerFields(initial);
   const [notice, setNotice] = useState<PageNotice | null>(null);

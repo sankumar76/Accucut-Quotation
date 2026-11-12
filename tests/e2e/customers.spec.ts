@@ -10,6 +10,7 @@ import {
   FAILED_WITH_FORM,
   FIRST_RATE,
   makeCustomer,
+  type MadeCustomer,
   NAME_REQUIRED,
   NAME_TAKEN,
   newCustomerName,
@@ -37,6 +38,10 @@ import { afterOneFrame, BUSY, pressWithKeyboard, recordFocus } from './support/t
  * when a read is slow or fails, and that typing never moves it, is `customers-focus.spec.ts`; the table at eleven widths is `masters-table-actions.spec.ts`.
  * The audit entry, the rates written and the database are judged against PostgreSQL in `tests/integration/masters/customers.test.ts`. The words are the UX
  * spec's and the story's, written out in `support/customers.ts`. Names are invented.
+ *
+ * G7 fix round F2 (AQP-142): DEF-031 is covered by the AC-2, AC-8 test of the edit page (a 100-character name in one unbroken run: no sideways scroll on load
+ * and under the Saved notice, at three widths); DEF-032 by the keyboard-save test (a failed Save puts focus on the notice alone, a good Save still returns it
+ * to the Save button).
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -44,8 +49,38 @@ test.use({ storageState: ADMIN_STATE });
 /** A value that is not `current`, for a rate whose default is not known to the test. */
 const otherThan = (current: string, ...choices: string[]): string => choices.find((choice) => Number(choice) !== Number(current)) ?? '1';
 
-/** The longest name the form accepts: 100 characters and no space, so the browser has nowhere to break it (DEF-031). */
-const longNameOf = (name: string): string => name.padEnd(100, 'x');
+/**
+ * The longest name the form accepts: 100 characters in one unbroken run (DEF-031). The hyphens of a test's name are removed, because a browser may break a
+ * line after a hyphen and the longest run left (about 73 characters) would fit at 1366 px, so only 360 and 768 px would see the fault (QLT-10).
+ */
+const longNameOf = (name: string): string => name.replaceAll('-', '').padEnd(100, 'W');
+
+/**
+ * DEF-032: a save that fails (the server answers 503) puts focus on the notice and nowhere else (the whole sequence is read, not one look: a late move
+ * would pass a single check), keeps what was typed, and the next save that is accepted still returns focus to the Save button.
+ */
+async function failASaveThenSaveAgain(page: Page, customer: MadeCustomer): Promise<void> {
+  let failing = true;
+  await page.route('**/api/v1/customers/*', (route) => (route.request().method() === 'PATCH' && failing ? route.fulfill(BUSY) : route.fallback()));
+  await page.getByLabel('Address').fill('2 Invented Road');
+  const save = page.getByRole('button', { name: 'Save customer' });
+  await save.focus();
+  const focusLog = await recordFocus(page);
+  await save.press('Enter');
+  const failed = page.getByRole('alert').filter({ hasText: 'We could not save the changes.' });
+  await expect(failed).toBeVisible();
+  await expect(failed.getByText(FAILED_WITH_FORM)).toBeVisible();
+  await expect(failed.locator('xpath=..')).toBeFocused();
+  await afterOneFrame(page);
+  expect(focusLog).toHaveLength(1);
+  expect(focusLog[0]).toContain('We could not save the changes.');
+  await expect(page.getByLabel('Address')).toHaveValue('2 Invented Road');
+
+  failing = false;
+  await pressWithKeyboard(save);
+  await expect(page.getByRole('status').filter({ hasText: `${customer.name} was saved.` })).toBeVisible();
+  await expect(save).toBeFocused();
+}
 
 async function defaultOf(page: Page, rate: { readonly id: string }): Promise<string> {
   const text = (await rateRow(page, rate).getByRole('cell').nth(0).innerText()).replace(/[^\d.]/g, '');
@@ -155,7 +190,7 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
       expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
 
-    // DEF-031: the longest name the form accepts (100 characters, no space) wraps in the page title, on load and under a Saved notice that repeats it.
+    // DEF-031: the longest name the form accepts (100 characters in one unbroken run, no space or hyphen) wraps in the page title, on load and under a Saved notice that repeats it.
     const longCustomer = await makeCustomer(page, longNameOf(newCustomerName(testInfo)));
     await openCustomer(page, longCustomer);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -197,28 +232,7 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     await expect(page.getByText('Nothing to save.')).toBeVisible();
     expect(patches).toBe(0);
 
-    // DEF-032: a save that fails puts focus on the notice and nowhere else (the whole sequence, not one look: a late move would pass a single check); the
-    // next save that is accepted still returns focus to the Save button.
-    let failing = true;
-    await page.route('**/api/v1/customers/*', (route) => (route.request().method() === 'PATCH' && failing ? route.fulfill(BUSY) : route.fallback()));
-    await page.getByLabel('Address').fill('2 Invented Road');
-    const save = page.getByRole('button', { name: 'Save customer' });
-    await save.focus();
-    const focusLog = await recordFocus(page);
-    await save.press('Enter');
-    const failed = page.getByRole('alert').filter({ hasText: 'We could not save the changes.' });
-    await expect(failed).toBeVisible();
-    await expect(failed.getByText(FAILED_WITH_FORM)).toBeVisible();
-    await expect(failed.locator('xpath=..')).toBeFocused();
-    await afterOneFrame(page);
-    expect(focusLog).toHaveLength(1);
-    expect(focusLog[0]).toContain('We could not save the changes.');
-    await expect(page.getByLabel('Address')).toHaveValue('2 Invented Road');
-
-    failing = false;
-    await pressWithKeyboard(save);
-    await expect(page.getByRole('status').filter({ hasText: `${customer.name} was saved.` })).toBeVisible();
-    await expect(save).toBeFocused();
+    await failASaveThenSaveAgain(page, customer);
   });
 
   test('AC-2: a rate with three decimals and a percent rate with three decimals are each refused under their own rate, in words, with focus on the first; a percent rate with one decimal is accepted; typing a fix saves', async ({ page }, testInfo) => {
