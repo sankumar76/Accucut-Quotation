@@ -42,7 +42,6 @@ export function changePasswordProblems(values: ChangePasswordValues, email: stri
     const rule = passwordRuleProblem(values.newPassword, { email, subject: 'self' });
     // The rule's messages come first; this one shows only when the rule is met. The two typed values are compared exactly: no trimming, case counts.
     if (rule !== null) found.newPassword = rule;
-    else if (values.newPassword === values.currentPassword) found.newPassword = NEW_PASSWORD_SAME_MESSAGE;
   }
   if (values.repeatPassword === '') found.repeatPassword = REPEAT_PASSWORD_REQUIRED_MESSAGE;
   else if (values.repeatPassword !== values.newPassword) found.repeatPassword = PASSWORDS_DIFFER_MESSAGE;
