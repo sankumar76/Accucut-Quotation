@@ -7,7 +7,7 @@ import { UnitInput } from '@/components/shared/unit-input';
 import { Button } from '@/components/ui/button';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS, exchangeRateHint, type ExchangeRateField } from '@/lib/masters/exchange-rates';
 import type { ExchangeRatesRow } from '@/lib/masters/exchange-rates-client';
-import { RUPEE } from '@/lib/masters/process-items';
+import { RUPEE } from '@/lib/masters/master-rules';
 import { formatIst } from '@/lib/time';
 
 import {
