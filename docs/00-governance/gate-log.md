@@ -6364,3 +6364,98 @@ Alternatives considered:
 - Merging the records PR first. Rejected, per (h).
 
 **Posted:** Jira AQP-89 comment 11574; PR #253 comment 6815326942.
+
+## G6 – Peer Review — tech-debt #244 + #277 (slow-read focus tests and first-open tests for the shared dialog opener; PR #291 at 41e5fd4) — 2026-11-12 (attempt 1)
+
+- **Decision:** **GO (DL-168)** on the narrow reviewer-quality route (DL-124; set for #244 by DL-150 (4) and for #277 by DL-162 (5)).
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **Scope:** `git diff --stat abdac01...41e5fd4` = 5 files, +396 / -2, all under `tests/`: `tests/e2e/masters-slow-read.spec.ts` (new), `tests/e2e/masters-dialog-opener.spec.ts` (new), `tests/e2e/support/masters.ts` (new), `tests/security/engineer-import-rule.test.ts` (STD-06: one `FUTURE_IMPORTS` entry and the header line), `tests/unit/process-opener.test.ts` → `master-opener.test.ts` (100 %). No `src/`, config, `package.json` or CI workflow, so the narrow route holds.
+  - **Review:** `docs/06-reviews/244/quality.md`; PR review 5869724916, APPROVE WITH COMMENTS; 0 Blocker, 0 Critical, 0 Major, 2 Minor (QLT-01, QLT-02), 4 Info (QLT-03 to QLT-06). Inline comments cite file:line.
+  - **Standards items checked by master** (no reviewer-standards on this route): scope above; Gitleaks "no leaks found" (stage 2); lint and type-check green (CI); grep of the three new files for sleeps, `.only`, `.skip`, disable comments, `@ts-` directives, TODO and credentials: none.
+  - **Plants, diffs printed by master against 41e5fd4 and failed lists read in the run logs** (all `master`-based, closed unmerged, Stages 1 to 11b green):
+
+| Control | Diff (one line) | Run | Red | Failed list |
+|---|---|---|---|---|
+| A1 #300 | `use-read-again.ts`: `else if (shouldFocusWhenFailed) focusOpener(opener.current, true)` → `else focusOpener(opener.current)` | 43161026597 | 15 | new `masters-slow-read.spec.ts:76, :103`; old `exchange-rates.spec.ts:383`, `treatments-focus.spec.ts:181, :197`; each at three widths |
+| A2 #301 | `use-read-again.ts`: `focusOpener(opener.current)` → `focusOpener(null)` | 43161038044 | 18 | new `:62, :89, :116`; old `exchange-rates.spec.ts:171, :370, :383`; each at three widths |
+| P2 #303 | `use-dialog-opener.ts`: `if (loader.pending) return false;` removed | 43162387883 | 6 | `masters-dialog-opener.spec.ts:82, :107` at three widths |
+| P4 #302 | `process-screen.tsx`: the two failed-dialog titles swapped | 43162250858 | 3 | `masters-dialog-opener.spec.ts:82` at three widths |
+| N1 #304 (probe) | `support/masters.ts`: `not.toContainText('Nothing was changed.')` added to `expectLoadErrorHoldsFocus` | 43162431792 | 6 | `masters-slow-read.spec.ts:76, :103` at three widths only (QLT-01, DL-169) |
+
+  - **CI 43155701604** (`gh run list --commit 41e5fd4`: the only run, attempt 1): jobs API 5 of 5 `success`; merge ref **43d96e2** (41e5fd4 into abdac01), read from "HEAD is now at" in every job. Unit 153 files **3,081**; full 212 files **5,436**; E2E **272 / 270 / 257 = 799**, skipped **3 / 4 / 17**. Against abdac01's push run 43148695027 (3,081 / 5,444 / 265 / 263 / 250 / 3 / 4 / 17, read by master): **+0 / -8 / +7 / +7 / +7 / +0**. 0 "Cache not found"; Gitleaks no leaks; matched lines read (the Postgres `password authentication failed` init line, the `failed=` fan-in script, passing titles containing "failed"); no `✘`, no retry. JS: `/masters/materials` 186,501, `/masters/process` 174,153 (limit 200,000).
+  - **Path:** 5:41 from run start (04:34:36Z to 04:40:17Z), 5:38 from the first job; fan-in queue 2 s (shard 2 ended 04:40:08Z, `Stages 1 to 11` started 04:40:10Z).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ (recorded exception) | Narrow route, DL-124 (1): test-only, no `src/`, config, deps or CI; reviewer-quality report present; standards items checked by master |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | Review 5869724916 |
+| 3 | Major findings fixed or accepted | | ✅ | None raised |
+| 4 | Findings cite file:line | | ✅ | `quality.md` Findings table |
+| 5 | Plants red on every screen the tests cover | ✱ | ✅ | A1 15, A2 18, P2 6, P4 3 (table above) |
+| 6 | STD-06 weakens no assertion | ✱ | ✅ | -8 = duplicate cases; 646 distinct names before and after (`quality.md` Checks) |
+| 7 | CI green, deltas as stated | ✱ | ✅ | 43155701604 against 43148695027 |
+| 8 | Path | | ⚠️ (reported) | 5:41 / 5:38; not held (DL-142 (1), DL-151 (4)) |
+
+**Rulings:**
+- **QLT-01 (Minor): not this PR.** It is on `master` before #291 and outside the diff; a fix needs `src/`. Ruled as a delivered-code defect in DL-169.
+- **QLT-02 (Minor): accepted here, deferred to #306** (created by master; developer; narrow reviewer-quality route; branched after #291 merges; due G8; it does not ride the QLT-01 fix PR). Master confirmed `support/masters.ts:81-84` is `support/treatments.ts:72-75` verbatim.
+- **QLT-03 (Info):** the "no script was requested twice" line (`masters-dialog-opener.spec.ts:69-70`) cannot fail. #277 item 1 is met in substance by the pending-look and target checks, which P2 turns red at `:67`. Its rewording rides #306 item 2.
+- **QLT-04 to QLT-06 (Info):** accepted, no issue.
+- **Dev Record (Info):** "7 files" (body line 28) is 5, and P4's line is `:82`, not `:81`. Not a condition; the orchestrator's squash body says 5 files.
+
+**Risks registered:** none from this gate. RISK-023 stays at 8 (the 5:41 / 5:38 path is reported under DL-151). RISK-026 is registered with DL-169.
+
+**Posted:** see the G7 record below (one decision comment covers G6 and G7).
+
+## G7 – QA Acceptance — tech-debt #244 + #277 (PR #291 at 41e5fd4) — 2026-11-12 (attempt 1)
+
+- **Decision:** **GO (DL-168)**, decided by master with no QA run (DL-124 pattern). The merge is pre-ruled below; it needs an update by merge commit onto `master` 8f07c17 (#253 and #305 are already squashed).
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:** the G6 evidence above; issues #244 and #277 ("Required" items, read in full with their comments); `quality.md` "Conformance with the issues' Required items"; PR #291 body and its four commit messages; JQL `project = AQP AND issuetype = Bug AND statusCategory != Done AND priority in (Highest, High)` = none (2026-11-12).
+
+**Checklist** (the issues' "Required" items stand in for ACs)
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | #244 (1): slow-read E2E, Process and Materials ready + failed, Treatments ready, three widths, from the ux-spec | ✱ | ✅ | `masters-slow-read.spec.ts:62, 76, 89, 103, 116`; A2 red 9 and A1 red 6 on them. Deleted-row heading branch left to `process-master.spec.ts` (QLT-04, accepted) |
+| 2 | #244 (2): reviewer re-plants A1 and A2 | ✱ | ✅ | #300, #301 by reviewer-quality, not the developer |
+| 3 | #244 (3) STD-04 rename only; (4) STD-06 with the delta stated | ✱ | ✅ | 100 % similarity; -8 explained, nothing weakened |
+| 4 | #244 (5): E2E entries stated | ✱ | ✅ | PR body: 7 tests × 3 widths = 21, mean 3.79 s |
+| 5 | #277 (1) and (2): press guard and failed-dialog titles, Process and Materials, three widths | ✱ | ✅ | `masters-dialog-opener.spec.ts:82, :107`; P2 red 6, P4 red 3 |
+| 6 | #277 controls re-planted by the reviewer | ✱ | ✅ | #303, #302 |
+| 7 | Regression suite green | ✱ | ✅ | CI 43155701604, 5 of 5 |
+| 8 | No open Sev-1 / Sev-2 defects | ✱ | ✅ | JQL: none. QLT-01's Bug is bound to AQP-113 and AQP-122, not to #291 (DL-169) |
+| 9 | Exploratory notes | | ✅ | Probe N1 is the exploratory check; it found QLT-01 |
+| 10 | Accessibility checks for UI changes | | n/a | No UI code changes; the tests themselves assert focus at three widths |
+| 11 | "Closes" lines match the issues | | ✅ | Body lines 5 and 6; nothing in #244 or #277 is left without an owner (#244's AQP-142 clause stays with AQP-142, DL-150 (8)) |
+
+**Merge prerequisites (orchestrator, `CLAUDE.md` §8):**
+- (a) **Order.** Done before this record was written: #253 squashed as b710741 and records PR #305 as 8f07c17, whose push run 43166263631 is 5 of 5 at 3,185 / 5,557 / 268 / 266 / 253 / 3 + 4 + 17 (read by master). DL-168 and DL-169 ride the next records PR, which does not hold #291.
+- (b) **Update #291 by a GitHub merge commit only** ("Update branch"; DL-163 (4)(a)); no rebase, no force-push. `git show --cc <new head>` must print no hunks, and `git diff 41e5fd4 <new head>` over the 5 files must be empty; post both. Overlap checked by master: none of #253's 44 files or #305's docs is one of the 5.
+- (c) **Invariant.** Read the merge ref in the new run ("HEAD is now at <ref> Merge <head> into <sha>"). Counts = that `master` commit's push run **+0 unit / -8 full Vitest / +21 E2E passed (+7 per shard) / +0 skipped**. On 8f07c17 (push run 43166263631: 3,185 / 5,557 / 268 / 266 / 253 / 3 + 4 + 17) the target is **3,185 / 5,549 / 275 / 273 / 260 / 3 + 4 + 17**. Totals must match exactly. A different per-shard split with the right totals is reported with its cause before the squash (DL-163 (4)(b)). A different unit or full Vitest delta comes back to master.
+- (d) **CI.** 5 of 5 from the jobs API, every attempt read, matched lines read, `/masters/materials` and `/masters/process` JS posted (within 200,000). The path is reported, not held; no median is ordered. **A red comes back to master and is not re-run.**
+- (e) **Before the squash**, post the head, run, merge-ref `master` and its push run, the counts with the arithmetic, JS and path on #291 and #244.
+- (f) **Squash body, written by the orchestrator:** title as the PR; body says 5 files; "Closes #244" and "Closes #277"; "Refs #306", and "Refs #<QA's GitHub bug>" for QLT-01 if it exists by then, with no closing keyword on the Refs lines. No commit message carries a closing keyword (grepped by master). If #244 or #277 stays open, the orchestrator closes it as completed with the merge commit.
+- (g) **After the squash**, the `master` push run is 5 of 5 at base +0 / -8 / +21 / +0 and is posted on #244, #277 and AQP-1. A red comes back to master.
+
+**After the merge:**
+- AQP-142's G6 no longer waits for #244 (DL-150 (4)). Its SCR-12 slow-read test uses `support/masters.ts` with A1 and A2 as controls (DL-150 (8)), adds no helper copy (#306), and does not copy QLT-01 or the K sentence (DL-169 (3)(d)).
+- QLT-01 routing (DL-169): qa-engineer reproduces, grades and files the Jira Bug + GitHub issue bound to AQP-113 and AQP-122; ux-expert confirms the two sentences; a developer fixes it in a small `src/` PR branched after #291 merges, with N1's assertion as the regression test; due before G8. #307 (condition K, Process and Materials part) may ride it.
+- **H (delivery lead, before G8; does not hold the merge):** delete `control/244-*` (#293 to #296, #299) and `control/244-qlt-*` (#300 to #304).
+
+**Risks registered:** RISK-026 (DL-169), the lost-condition pattern. RISK-023 unchanged at 8.
+
+**Rationale:**
+- **Why GO.** Every mandatory item holds on evidence master read directly: the diff, the plant diffs and their failed lists, the jobs API and logs of the head run, the base push run and five control runs, the issue texts, the PR body and commits, and JQL.
+- **Why no QA run.** There is no AC and no user-facing change. Each acceptance item is pinned by a plant that the reviewer, not the developer, made and ran, and CI is the regression. A QA run would add no independence (DL-124 (3)).
+- **Why QLT-01 does not hold this gate.** It is on `master` before #291, in code #291 does not touch; #291 is the test that found it.
+
+Alternatives considered:
+- CONDITIONAL GO for the Dev Record's file count. Rejected: it misroutes nothing, and the squash body carries the right count.
+- QLT-02 fixed in #291. Rejected: a CI and review cycle for no behaviour, on a head that must be updated anyway.
+- A median of five on 41e5fd4. Rejected: not the head that merges, and no outcome can change RISK-023 or the half-triggered step (DL-151 (3)).
+
+**Posted:** PR #291 comment 6816323255 (G6 and G7) and addendum 6816409367 (base 8f07c17, target restated); Jira AQP-1 comment 11584.
