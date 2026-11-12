@@ -67,6 +67,22 @@ export class ConflictError extends AppError {
   }
 }
 
+/** Too many tries on something that is counted: 429 (STORY-01.05 AC-6: five wrong current passwords on the change form block it for 15 minutes). */
+export class TooManyAttemptsError extends AppError {
+  constructor(message = 'Too many attempts. Try again in 15 minutes.', options: AppErrorOptions = {}) {
+    super(options.code ?? 'TOO_MANY_ATTEMPTS', 429, message, options.cause);
+  }
+}
+
+/** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
+export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';
+
+/** The current password given on the change form is not the person's (STORY-01.05 AC-3): a 422 under the field, never a 401, which a screen reads as a lost session. */
+export const CURRENT_PASSWORD_WRONG_CODE = 'CURRENT_PASSWORD_WRONG';
+
+/** The person must set a new password before anything else (STORY-01.05 AC-5, FR-004): every route but the change is refused with this code. */
+export const PASSWORD_CHANGE_REQUIRED_CODE = 'PASSWORD_CHANGE_REQUIRED';
+
 /** The one Admin the portal allows is already active (STORY-01.04 AC-3, CONSTRAINT-04). */
 export const ADMIN_ALREADY_ACTIVE_CODE = 'ADMIN_ALREADY_ACTIVE';
 
