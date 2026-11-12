@@ -5910,3 +5910,82 @@ Alternatives considered:
 - QLT-01 into #244. Not the default, because it would load AQP-142's G6 with tests SCR-12 does not need.
 
 **Posted:** Jira AQP-1 comment 11543; PR #265 comment 6811563571; GitHub #277 (created); #244 comment 6811566605.
+
+## G7 – QA Acceptance — tech-debt #245 (`useMasterList` and the shared master pieces; PR #265 at aad53e9) — 2026-11-11 (attempt 1)
+
+- **Decision:** **GO (DL-164)**, decided by master with no QA run, as DL-162 (8) set (DL-124 pattern).
+  - Condition A (65af06b) and condition R (reviewer-quality round 2) are met.
+  - Master checked STD-01 and STD-02's text itself (DL-047, DL-162 (4)): both state the ruled rule.
+  - The merge is pre-ruled below. It needs an update by merge commit after records PR #285 merges.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **Condition A, read in full by master:** `git diff dcdad49 65af06b` is 1 file, `use-master-list.ts`, +20 / -7, and no test file.
+    - STD-01: the module comment (:24-27) says any read that is not the newest when it answers is dropped, whichever answers first; the status stays `loading` until the newest answers; if the older read succeeds and the newest fails, the older rows are not applied and the status is `error`. A single read, or two that do not overlap, behave as before. This is DL-162 (2) word for word in substance.
+    - STD-02: a doc comment on `useMasterList` (:61-65) covers `initialItems` or `null` then `read()` once, stable `read` / `refresh`, a failed read keeping the rows, and nothing thrown.
+    - QLT-02: `readListRef` (:77) is updated by a no-deps effect (:80-82), and `read` is `useCallback(…, [])` calling `readListRef.current()`. The option doc (:35-36) is reworded. The guard (`if (mine !== newest.current) return;`), the setters and `refresh`'s `loading` step are unchanged.
+  - **Branch update:** aad53e9 has parents 65af06b and 774eff8. `git show --cc aad53e9` prints no hunks. `git diff --name-only 774eff8 aad53e9` lists the same 16 files, and `git diff 65af06b aad53e9` over those 16 files is empty. Tree bbddcdd.
+  - **PR body:** no closing keyword (`close`, `fix`, `resolve` + `#N`) in the title, body or the six commit messages. "Refs #245" is on line 5. The Dev Record has the round-2 table (STD-01, STD-02, QLT-02 at 65af06b; QLT-01 routed to #277).
+  - **Review:** `docs/06-reviews/245/quality.md` Round 2; review 5867836989, APPROVE WITH COMMENTS. Blocker, Critical, Major and Minor open on the PR: 0. QLT-02 Fixed. QLT-08 (Info) is new. reviewer-standards was not needed: the push stays within the comments, the latest-function mechanism and `read`'s dependency list.
+  - **Plants, read by master:** both control PRs are based on `master`, from aad53e9, and closed unmerged.
+    - #278 (6526213): `:88` `mine !== newest.current` became `mine > newest.current`. Run 43137195323 is red only in `treatments-focus.spec.ts:213` at mobile, tablet and desktop (3, each with its retry). Stages 1 to 11b green.
+    - #279 (0ac0f46): `:94` `setStatus('loading');` removed. Run 43137205416 is red only in `process-master.spec.ts:337`, `materials.spec.ts:335` and `aqp-122-qa.spec.ts:277`, each at three widths (9).
+    - Both lists equal round 1's (#273, #275). Master printed both diffs against aad53e9 before reading the results.
+  - **CI** (`gh run list --branch tech-debt/245-use-master-list`): 43135407890 on 65af06b is `success`, attempt 1 (superseded head). **43136387943 on aad53e9** is attempt 1 and the only run on the head.
+    - Jobs API: 5 of 5 `success`. Merge ref **3c18dcd** (aad53e9 into **774eff8**), read from "HEAD is now at" in every job.
+    - Unit 151 files **2,922**; full 210 files **5,285**; E2E **265 / 263 / 250 = 778**, skipped **3 / 4 / 17 = 24**. That equals 774eff8's push run 43135619452 (DL-163 (3)) **+0 / +0 / +0 / +0**, per shard as well (DL-163 (4)(b)).
+    - 18 cache restores, 0 "Cache not found". Gitleaks: 701 commits, no leaks.
+    - Matched lines read: three `Unable to reserve cache` saves, the `failed=` fan-in script, the expected Postgres auth line, four branch names in the fetch listing and passing titles. No `✘`, no retry.
+    - JS (11b, gzip): `/masters/materials` **186,501**, `/masters/process` **174,153**, both within 200,000.
+    - **Path 5:38** from the run start (01:42:49Z to the end of `Stages 1 to 11` at 01:48:27Z), 5:35 from the first job. The fan-in waited 2 s; the longest job, shard 2, took 5:23.
+  - **Jira:** JQL `project = AQP AND issuetype = Bug AND statusCategory != Done AND priority in (Highest, High)` returns none (2026-11-11).
+  - **Brief:** PR #265 comment 6812243534. Its figures match what master read.
+
+**Checklist** (DL-162 (8); there is no AC)
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | (a) A's diff within `use-master-list.ts` and the body | ✱ | ✅ | `git diff dcdad49 65af06b`: 1 file, +20 / -7 |
+| 2 | STD-01 and STD-02 text states the ruled rule (DL-047) | ✱ | ✅ | `use-master-list.ts:24-27`, `:61-65` against DL-162 (2) |
+| 3 | QLT-02: `read` / `refresh` stable for any `readList`, latest one called | ✱ | ✅ | `:77`, `:80-82`, `:84-91`; quality.md round 2 |
+| 4 | (b) Round 2 with no Blocker, Critical or Major | ✱ | ✅ | Review 5867836989 |
+| 5 | (b) P1 and P3 red as before | ✱ | ✅ | #278 red 3, #279 red 9; diffs printed by master |
+| 6 | (c) CI 5 of 5, every attempt read, +0 / +0 / +0 / +0 against the merge-ref push run | ✱ | ✅ | 43136387943 against 43135619452 |
+| 7 | (c) Matched lines read; JS within 200,000 | ✱ | ✅ | Above |
+| 8 | (d) No open Sev-1 or Sev-2 | ✱ | ✅ | JQL: none |
+| 9 | Branch update clean, 16 files unchanged | ✱ | ✅ | `--cc` empty; diff over 16 files empty |
+| 10 | No closing keyword; "Refs #245" | | ✅ | Body line 5; title and commits clean |
+| 11 | Path | | ⚠️ (reported) | 5:38; not held (below) |
+
+**Rulings:**
+- **Path 5:38.** It is a reading (0 cache misses) of 5:30 or more, so it is reported, not held (DL-142 (1), DL-151). No median of five is ordered: the PR adds no test, so the run measures `master`'s suite. RISK-023 at 8 and the half-triggered next step are already in force (DL-152 (3)).
+- **QLT-08 (Info): no action.** The passive-effect ref is the house pattern (`use-first-open.ts`). It matters only for a caller that passes an inline `readList` over changing props and starts a read from a layout effect or a child's mount effect. AQP-142's Dev Context does not change (DL-162 (7)). reviewer-quality reads AQP-142's `useMasterList` call against QLT-08 at its G6.
+- **PR body, Info:** the DoD line "Docs / config updated … (none: behaviour-preserving)" calls the PR behaviour-preserving, though it declares latest-read-wins. "None" is right (DL-162 (2): no AC, FR, UX or architecture text changes), and the change is declared in the body's table. The developer may correct the words; it is not required.
+
+**Merge prerequisites (orchestrator, `CLAUDE.md` §8), restated from DL-162 (9) for aad53e9:**
+- (a) **Done first:** this GO; and records PR #285 (with DL-162) squashed onto `master`. #285 is behind `master` by the three Dependabot commits, so it is updated first; it moves `master` by docs files only. DL-164 rides on #285 if the orchestrator can commit it there before #285 merges, otherwise on the next records PR. It does not hold #265.
+- (b) **Update #265 by merge commit only** if `master` has moved from 774eff8 ("Update branch" is fine; no rebase, no force-push). `git show --cc <new head>` must print no hunks, and `git diff aad53e9 <new head>` over the 16 files must be empty. Both are posted. If #250, #253 or #222 has merged in the meantime, the overlap with the 16 files is re-checked; a shared path comes back to master.
+- (c) **Invariant:** the run on the new head reads its merge ref ("HEAD is now at <ref> Merge <head> into <master sha>"). Its counts are that `master` commit's push run **+0 / +0 / +0 / +0** (unit, full Vitest, E2E passed, skipped), per shard too. On #285's squash over 774eff8, if its push run reads 2,922 / 5,285 / 265 / 263 / 250 / 3 / 4 / 17, the target is exactly that. A per-shard difference is reported with its cause before the squash (DL-163 (4)(b)).
+- (d) 5 of 5 from the jobs API, `Stages 1 to 11` read, every attempt read, matched lines read. `/masters/materials` and `/masters/process` JS posted, within 200,000. A path of 5:30 or more is reported, not held. **A red comes back to master and is not re-run.**
+- (e) **Before the squash**, the head, run, merge-ref `master` and its push run, the counts with the arithmetic, JS and path are posted on PR #265 and on #245.
+- (f) **Squash message: "Refs #245", with no "Closes", "Fixes" or "Resolves"** in the title or body. The orchestrator writes the body itself rather than keeping the default commit list. If #245 closes anyway, the orchestrator reopens it with a comment: item 5 is open.
+- (g) The `master` push run after the squash is posted. A red comes back to master.
+
+**What may start once #265 is on `master`:**
+- **#244** (developer; DL-150 (4), DL-162 (6)): branch from `master` after the squash. Slow-read focus E2E for Process and Materials (both branches) and Treatments (ready branch), at three widths, with STD-04 and STD-06 riding. reviewer-quality re-plants A1 and A2 on a `master`-based control. Narrow reviewer-quality route. Due before AQP-142's G6, at the latest G8. A new test that is red on `master` is a regression defect.
+- **#277** (developer; DL-162 (5)): branch after the squash. Press guard and failed-dialog title on Process and Materials at three widths, with P2 and P4 re-planted red. It may ride with #244 if #244's due point does not move. Due before the G6 of #245 item 5's PR, at the latest G8.
+- **AQP-142** (DL-153 (2), DL-162 (7)): its branch takes `master` by a merge commit (no rebase or force-push). Its Customers list calls `useMasterList` and composes the shared pieces; an inline `readList` is now safe. Then it may reach G5. Its G6 still waits for #244 (DL-150 (4)).
+- **#245** stays open for item 5 (the Users copies, after #222 and #171), due G8 (DL-150 (5)).
+- **H (delivery lead, before G8, does not hold the merge):** delete `control/245-qlt-*` (#273 to #276) and the round-2 `control/245-qlt-r2-p1-no-latest-read-wins` (#278) and `control/245-qlt-r2-p3-refresh-no-loading` (#279), plus any branch left from #266 to #269.
+
+**Risks registered:** none new. RISK-023 stays at 8 (the 5:38 path is reported under DL-151).
+**Rationale:**
+- **Why GO.** Every test DL-162 (8) set holds on evidence master read itself: the diff, the merge commit, the plant diffs and their failed lists, the jobs API, the logs and JQL. There is no open condition on the head. The remaining duties are merge mechanics that DL-162 (9) already ruled.
+- **Why no QA run.** DL-162 (8) still applies: there is no AC; the one behaviour change only shows under overlapping reads; and it is pinned at three widths by a reviewer's plants that were re-run on this head.
+- **Why DL-164 does not hold the merge.** The decision is posted on PR #265 and AQP-1 (the systems of record, §7.1). Holding #265 for another records PR would force a second update and CI run with nothing new to judge (DL-155 (2)).
+
+Alternatives considered:
+- CONDITIONAL GO with a body edit for the DoD wording. Rejected: the wording misroutes nothing, and "none" is correct.
+- A reviewer-standards read of 65af06b. Rejected: its trigger in DL-162 (4) is not met, and master read STD-01 and STD-02 itself.
+- A median of five for the 5:38 path. Rejected: +0 E2E, and the consequences are in force (DL-152 (3)).
+
+**Posted:** PR #265 comment 6812355814; Jira AQP-1 comment 11555.
