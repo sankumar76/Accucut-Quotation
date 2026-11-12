@@ -67,7 +67,7 @@ function CustomerTable({ items, onEdit }: CustomerListProps) {
           <TableHead>{CUSTOMER_HEADINGS.phone}</TableHead>
           <TableHead className="hidden lg:table-cell">{CUSTOMER_HEADINGS.email}</TableHead>
           <TableHead className="text-right">{CUSTOMER_HEADINGS.rates}</TableHead>
-          <TableActionsHead />
+          <TableActionsHead className="min-w-[1200px]" />
         </TableRow>
       </TableHeader>
       <TableBody>
