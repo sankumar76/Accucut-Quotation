@@ -7267,3 +7267,44 @@ Alternatives considered:
 - Holding the final update for records PR #358. Rejected: no code citation waits on it (DL-195 (6)(c)).
 
 **Posted:** Jira AQP-142 comment 11743; PR #297 comment 6830770038.
+
+## G6 – Peer Review — AQP-81 (STORY-01.05, PR #341 at H3 = ff4e193) — 2026-11-12 (attempt 2 close: DL-196 V and C)
+
+- **Decision:** **GO (DL-198). G6 attempt 2 is closed.** V and C of DL-196 are met on H3. 0 open Blocker, Critical or Major. QLT-13, QLT-14 and STD-12 are Fixed, verified by master (DL-047, DL-051), with no third review round. Before In QA: L, D (new) and I. O is done.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 2 (closing its conditions)
+- **Artefacts evaluated:** PR #341 at ff4e193 (diff, Dev Record and its edit history); runs 43266343533, 43261705805, 43254379119, 43261793288; commits a7186f2, 2c4c66b, fb35b8e; Jira AQP-81 11742, 11744; `quality-r2.md` QLT-13, QLT-14; `standards-r2.md` STD-12.
+- **My own checks** (read-only; no CI started, re-run or cancelled; Jira status not changed):
+  - **Shape:** ff4e193 has one parent, a7186f2. The stat lists the 3 ruled files. `route.ts:11` changes one token, and `git grep` finds no importer. `harness-password.ts` changes 2 header comment lines.
+  - **Tie to red:** `git diff fb35b8e ff4e193 -- tests/e2e/account.spec.ts` shows the QLT-01 comment (line 216, not 218), then after the axe call a blank line, one comment line and the 3 ruled lines. fb35b8e is C3 step 2, which is right, not a typo.
+  - **CI 43266343533:** the only run on ff4e193. 5 of 5, and every job ran on merge ref 79cb355 (b6b38c5 + ff4e193). Gitleaks: 756 commits, no leaks. Counts 3,391 / 5,800 / 835 / 24 against 43261705805's 3,200 / 5,564 / 822 / 24 = **+191 / +236 / +13 / +0**. 0 `✘`, 0 retry, 0 flaky.
+  - **Names:** 0 of 846 base E2E instances missing. The 13 new are DL-196's list. All 857 H2-run instances are present. 0 of 378 base Vitest file lines are missing.
+  - **Dev Record:** rounds 1 and 2 are unchanged from the 16:13Z body (blanked 17:20:21Z, rewritten 17:22:54Z). The round-3 base figures are wrong: H3's own counts were written for b6b38c5's.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Three reports present | ✱ | ✅ | As DL-196; no new review needed (DL-196 (4)) |
+| 2 | Zero open Blocker / Critical | ✱ | ✅ | 0 / 0 |
+| 3 | Majors fixed or explicitly accepted | | ✅ | QLT-13 Fixed on H3 (tied to the red run 43261793288) |
+| 4 | V: H3 against the stated diff | | ✅ | Two wording slips accepted (line 216; blank and comment lines, not executed); QLT-14 Fixed via the `HARNESS_NEXT_PASSWORD` comment |
+| 5 | C: H3's CI, counts, names, timing | | ✅ | See above; #297 OPEN, no T6 window |
+| 6 | Dev Record coherent | | ⚠️ → D | One wrong baseline parenthesis in round 3 (also in Jira 11744) |
+
+**Conditions / remediation**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| D | developer (orchestrator checks) | PR #341 body, round 3; Jira AQP-81 | "(3,391 / 5,800 / 835 / 24)" → "(3,200 / 5,564 / 822 / 24)". Edit nothing else; add a one-line correction comment on AQP-81. The orchestrator confirms in the edit history that only that text changed | Before In QA |
+| L | orchestrator → reviewer-quality, reviewer-standards | PR #341 | `review:quality-approved` (label change only); "Fixed (H3, verified by master DL-196, DL-198)" in the QLT-13, QLT-14 and STD-12 threads | Before In QA |
+| I | developer | merge commit on #341 | DL-190 (3) unchanged: after #297's squash and its 5-of-5 push run. Master reads `--cc`. CI at that push run is +191 / +236 / +13 / +0, with any difference explained by name | Before In QA |
+| O | product-owner | Jira AQP-81 | Done (11742). The AC-6 one-width reading is DL-194 (2), and AC-7 is not revisited | — |
+
+**Risks:** none new. RISK-028 unchanged (8).
+
+**Rationale:** see DL-198. V's purpose was the line-for-line tie of the executable lines to the red control, and that holds exactly. C matches DL-196 (5) in every count and name. The one record error is fixed by an edit, not a push.
+
+Alternatives considered:
+- A third review round. Rejected (DL-196 (4)).
+- Checking against a7186f2 as a "typo" base. Rejected: fb35b8e is the red commit; the a7186f2 diff was read too.
+- Leaving the baseline error for the squash. Rejected: QA and the I check read the Dev Record first.
+
+**Posted:** Jira AQP-81 comment 11746; PR #341 comment 6830966907.
