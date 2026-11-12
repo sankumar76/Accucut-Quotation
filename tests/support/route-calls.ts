@@ -1,6 +1,7 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
+import { HARNESS_PASSWORD } from './harness-password';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
 import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
@@ -83,6 +84,9 @@ function treatmentCall(method: HttpMethod, path: string): ValidCall | undefined 
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
+    // STORY-01.05: the person changes their own password. The new password is the current one, so the call can be repeated as every role.
+    case 'POST /api/v1/account/password':
+      return { id: NO_RECIPE_ID, body: { currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_PASSWORD }, status: 204 };
     case 'GET /api/v1/users':
       return DEFAULT_CALL;
     case 'POST /api/v1/users':

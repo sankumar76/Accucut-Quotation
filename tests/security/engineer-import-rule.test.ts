@@ -66,6 +66,7 @@ const REPOSITORIES = {
 const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
+    'account-service',
     'audit-cursor',
     'audit-events',
     'audit-secrets',
@@ -74,6 +75,7 @@ const SERVICES = {
     'config-service',
     'exchange-rate-service',
     'masters-service',
+    'password-policy',
     'rate-name-rules',
     'treatment-service',
   ],

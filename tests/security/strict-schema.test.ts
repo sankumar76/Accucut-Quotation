@@ -37,6 +37,8 @@ vi.mock('@/server/composition', async () => {
     getUserService: () => shared.userService,
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
+    getAccountService: () => shared.accountService,
+    getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
 });
 
@@ -151,7 +153,13 @@ describe.each(ENGINEER_CALLS)('$name (AC-2)', ({ row, method }) => {
     const { responseSchema } = await handlerFor(row, method);
     const answer = await callAsEngineer(row, method);
     expect(answer.status).toBeLessThan(300);
-    const sample: unknown = answer.status === 204 ? undefined : await answer.json();
+    if (answer.status === 204) {
+      // A 204 has no body, so there is no object to plant a key in: its schema accepts "no body" and nothing else, so no field can leave.
+      expect(responseSchema.safeParse(undefined).success).toBe(true);
+      expect(responseSchema.safeParse({ [PLANTED_KEY]: 'x' }).success).toBe(false);
+      return;
+    }
+    const sample: unknown = await answer.json();
     const paths = objectPaths(sample);
     expect(paths.length, `${row.path} answered with no object to plant a key in`).toBeGreaterThan(0);
     expect(responseSchema.safeParse(sample).success).toBe(true);

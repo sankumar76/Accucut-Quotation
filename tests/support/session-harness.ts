@@ -2,12 +2,15 @@ import { vi } from 'vitest';
 
 import type { RoleName } from '../../src/lib/auth/roles';
 
+import { createSessionCookieIssuer, type SessionCookieIssuer } from '../../src/server/auth/session-cookie';
+import { type AccountService, createAccountService } from '../../src/server/services/account-service';
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
-import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
+import { HARNESS_PASSWORD } from './harness-password';
+import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
@@ -28,6 +31,8 @@ import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
  */
 
 const MILLISECONDS_PER_SECOND = 1_000;
+
+const THROTTLE_KEY_MATERIAL = 'invented-throttle-key-material';
 
 /**
  * The instant at which every harness session was signed in, and at which the tests that use the harness hold the system
@@ -67,6 +72,12 @@ export interface SessionHarness {
   readonly mastersService: MastersService;
   /** The in-memory rates behind `mastersService`: a test sets values in them to look for in what a refused caller is sent. */
   readonly masters: FakeMasterRepository;
+  /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
+  readonly throttles: FakeThrottleRepository;
+  /** The real account service over the fake repository, for `POST /api/v1/account/password` (`getAccountService` in the composition mock). */
+  readonly accountService: AccountService;
+  /** The real issuer of the fresh session cookie, over a held clock (`getSessionCookieIssuer` in the composition mock). */
+  readonly sessionCookieIssuer: SessionCookieIssuer;
   /** The in-memory audit storage behind `auditService` and `userService`: what was recorded, and the clock that stamps it. */
   readonly auditWorld: FakeAuditWorld;
   /** The id of each role's person (the first of that role). */
@@ -75,6 +86,8 @@ export interface SessionHarness {
   readonly targetId: string;
   /** Who the next request comes from; `null` for nobody. */
   signInAs(role: RoleName | null): void;
+  /** Sets or clears "must change password" on the first person of a role (STORY-01.05 AC-5). */
+  setMustChangePassword(role: RoleName, value: boolean): void;
   /** The address `proxy.ts` would record for the request, or `null` for none. */
   recordReturnPath(path: string | null): void;
   readonly getServerSession: ReturnType<typeof vi.fn>;
@@ -86,12 +99,14 @@ export interface SessionHarness {
 
 export function createSessionHarness(): SessionHarness {
   const users = createFakeUserRepository(
-    PEOPLE.map((person) => ({ name: person.name, email: person.email, passwordHash: 'invented-hash', role: person.role, mustChangePassword: false })),
+    PEOPLE.map((person) => ({ name: person.name, email: person.email, passwordHash: `hash:${HARNESS_PASSWORD}`, role: person.role, mustChangePassword: false })),
   );
   const idFor = (role: RoleName): string => defined(users.records.find((record) => record.role === role)).id;
   const idOf: Readonly<Record<RoleName, string>> = { ADMIN: idFor('ADMIN'), LEAD: idFor('LEAD'), ENGINEER: idFor('ENGINEER') };
   const targetId = defined(users.records.find((record) => record.email === 'invented.target@example.test')).id;
   const state: { callerId: string | null; returnPath: string | null } = { callerId: null, returnPath: null };
+  const throttles = createFakeThrottleRepository();
+  const hasher = createCountingHasher();
   const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
   // The Material Master holds the canary materials (STORY-02.03): a route that leaked a price, a gravity or a scrap rate to a role would send one.
@@ -103,6 +118,7 @@ export function createSessionHarness(): SessionHarness {
 
   return {
     users,
+    throttles,
     auditService,
     auditWorld,
     masters,
@@ -112,27 +128,27 @@ export function createSessionHarness(): SessionHarness {
       audit: auditService,
       currentConfiguration: () => Promise.resolve(seedConfig),
     }),
-    userService: createUserService({
-      users,
-      throttles: createFakeThrottleRepository(),
-      hasher: createCountingHasher(),
-      transactions: auditWorld.transactions,
-      audit: auditService,
-      keySecret: 'invented-throttle-key-material',
-    }),
+    userService: createUserService({ users, throttles, hasher, transactions: auditWorld.transactions, audit: auditService, keySecret: THROTTLE_KEY_MATERIAL }),
+    accountService: createAccountService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL }),
+    sessionCookieIssuer: createSessionCookieIssuer({ secret: 'invented-session-secret-for-the-harness', clock: { now: () => new Date() }, production: false }),
     idOf,
     targetId,
     signInAs(role) {
       state.callerId = role === null ? null : idOf[role];
     },
+    setMustChangePassword(role, value) {
+      defined(users.records.find((record) => record.id === idOf[role])).mustChangePassword = value;
+    },
     recordReturnPath(path) {
       state.returnPath = path;
     },
-    getServerSession: vi.fn(() =>
-      Promise.resolve(
-        state.callerId === null ? null : { expires: 'x', userId: state.callerId, sessionVersion: 0, signedAt: Math.floor(SESSION_NOW.getTime() / MILLISECONDS_PER_SECOND) },
-      ),
-    ),
+    // The cookie of the caller carries the version their row has now: a password change raises it and issues a fresh cookie, as the portal does.
+    getServerSession: vi.fn(() => {
+      const caller = state.callerId === null ? undefined : users.records.find((record) => record.id === state.callerId);
+      return Promise.resolve(
+        caller === undefined ? null : { expires: 'x', userId: caller.id, sessionVersion: caller.sessionVersion, signedAt: Math.floor(SESSION_NOW.getTime() / MILLISECONDS_PER_SECOND) },
+      );
+    }),
     headers: () => Promise.resolve(new Headers(state.returnPath === null ? {} : { 'x-return-path': state.returnPath })),
     redirect: (path) => {
       throw new Error(`${REDIRECT_PREFIX}${path}`);
