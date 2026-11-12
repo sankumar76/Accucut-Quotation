@@ -12,7 +12,6 @@ import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '@/lib/masters/proce
 import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 
 import { isOpener, type Opener } from './master-opener';
-import { BREAK_LONG_NAMES } from './master-texts';
 import { NOT_USED } from './process-texts';
 
 /**
@@ -88,7 +87,7 @@ function ProcessTable(props: ProcessListProps) {
       <TableBody>
         {props.items.map((item) => (
           <TableRow key={item.id} data-item-id={item.id}>
-            <TableCell className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{item.name}</TableCell>
+            <TableCell className={cn('font-semibold text-ink')}>{item.name}</TableCell>
             <TableCell className="text-ink-2">{unitLabel(item.unit)}</TableCell>
             <TableCell className="text-right tabular-nums">{formatDefaultValue(item.defaultValue, item.unit)}</TableCell>
             <TableCell>
