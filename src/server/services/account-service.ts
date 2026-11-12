@@ -1,10 +1,9 @@
-import { CURRENT_PASSWORD_WRONG_MESSAGE, NEW_PASSWORD_SAME_MESSAGE, TOO_MANY_CHANGE_ATTEMPTS_MESSAGE } from '../../lib/auth/change-password';
+import { CURRENT_PASSWORD_WRONG_MESSAGE, TOO_MANY_CHANGE_ATTEMPTS_MESSAGE } from '../../lib/auth/change-password';
 import {
   ConflictError,
   CURRENT_PASSWORD_WRONG_CODE,
   FieldValidationError,
   NotFoundError,
-  PASSWORD_RULE_CODE,
   TooManyAttemptsError,
 } from '../../lib/errors';
 import type { Clock } from '../../lib/time';
@@ -102,9 +101,6 @@ export function createAccountService({ users, throttles, hasher, clock, keySecre
 
       // The right current password ends the run of failures.
       await throttles.clear(key);
-      if (newPassword === currentPassword) {
-        throw new FieldValidationError([{ field: 'newPassword', message: NEW_PASSWORD_SAME_MESSAGE }], { code: PASSWORD_RULE_CODE });
-      }
       const newHash = await hasher.hash(newPassword);
       const sessionVersion = await users.changeOwnPassword(account.id, storedHash, newHash);
       if (sessionVersion === null) {
