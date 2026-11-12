@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { expect, test, type APIRequestContext, type Browser, type Locator, type Page, type PlaywrightWorkerArgs, type TestInfo } from '@playwright/test';
 
-import { createDisposableUser, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
+// `useFreshAddress` is a helper of this suite whose name starts with `use` but is not a React hook; the alias keeps the hooks rule from reading it as one.
+import { createDisposableUser, E2E_PASSWORD, signInThroughThePage, useFreshAddress as setFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilAccountMenuIsLive, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
@@ -42,7 +43,7 @@ interface Person {
 }
 
 async function signIn(page: Page, person: Person, password: string): Promise<void> {
-  await useFreshAddress(page.context());
+  await setFreshAddress(page.context());
   await page.goto('/sign-in');
   await signInThroughThePage(page, person.email, password);
 }
