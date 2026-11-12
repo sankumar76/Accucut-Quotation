@@ -1,6 +1,6 @@
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '../../lib/errors';
 import type { PasswordHasher } from '../auth/password-hasher';
-import { accountThrottleKey, passwordChangeThrottleKey } from '../auth/throttle-key';
+import { accountThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
 import type { TransactionRunner } from '../repositories/transaction';
 import {
@@ -211,8 +211,6 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       // The sign-in page tells a blocked person to ask the Admin for a reset (architecture section 6, "Rate limits").
       // Done once the reset is committed, so a reset that was rolled back does not lift anyone's block.
       await throttles.clear(accountThrottleKey(keySecret, email));
-      // And the block of the change-password form, so a person blocked there is not refused on "Set a new password", the only page open to them.
-      await throttles.clear(passwordChangeThrottleKey(keySecret, asked.id));
     },
   };
 }
