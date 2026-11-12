@@ -3,10 +3,6 @@
  * button can show that its dialog is still loading (UX spec 7.3.1 rule 11). Types and lookups; nothing here is a component.
  */
 
-import { type Transaction, createTransactionHandle } from '@/server/repositories/transaction';
-export const plantedMake = createTransactionHandle;
-export type PlantedHandle = Transaction;
-
 export interface Opener {
   /** The item (rate, material or treatment) whose row the button is in, or null for an Add button. */
   readonly itemId: string | null;

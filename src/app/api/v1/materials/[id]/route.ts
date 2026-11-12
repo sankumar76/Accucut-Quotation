@@ -1,6 +1,5 @@
 import { getMastersService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
-export { createTransactionHandle as plantedMakeHandle } from '../../../../../server/repositories/transaction';
 import { materialIdParamsSchema, materialSchema, updateMaterialBodySchema } from '@/server/views/schemas/materials';
 
 /**
