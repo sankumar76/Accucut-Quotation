@@ -9,6 +9,7 @@ import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/cn';
 import { differCount } from '@/lib/masters/customers';
 import type { CustomerRow } from '@/lib/masters/customers-client';
 
@@ -54,7 +55,7 @@ function Breadcrumb({ name }: { readonly name: string }) {
       <span aria-hidden="true" className="text-ink-3">
         /
       </span>
-      <span aria-current="page" className={`font-semibold text-ink ${BREAK_LONG_NAMES}`}>
+      <span aria-current="page" className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>
         {name}
       </span>
     </nav>

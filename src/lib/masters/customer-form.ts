@@ -10,6 +10,7 @@ import {
   type CustomerValues,
 } from './customers';
 import type { CustomerChangesBody, CustomerRow, RateChange } from './customers-client';
+import { PERCENT_UNIT } from './process-items';
 
 /**
  * What the edit page of SCR-12 holds and checks before it sends anything (STORY-02.02 AC-1, AC-2, AC-8). Pure, so the rules are tested without a browser
@@ -31,9 +32,19 @@ export const RATE_KEY_PREFIX = 'rate:';
 
 export const rateErrorKey = (processItemId: string): string => `${RATE_KEY_PREFIX}${processItemId}`;
 
-/** The rate inputs as a customer's stored values: the text the server sent. */
+/** A percent rate is typed as a whole number (AC-2), so a stored "11.00" starts in its input as "11"; any other value is the text the server sent. */
+function startingText(rate: CustomerRate): string {
+  return rate.unit === PERCENT_UNIT ? rate.value.replace(/\.00$/, '') : rate.value;
+}
+
+/** The rate inputs as a customer's stored values. */
 export function initialRateInputs(rates: ReadonlyArray<CustomerRate>): RateInputs {
-  return Object.fromEntries(rates.map((rate) => [rate.processItemId, rate.value]));
+  return Object.fromEntries(rates.map((rate) => [rate.processItemId, startingText(rate)]));
+}
+
+/** Is what is typed the value the customer already has? Then it is not judged again: a value stored with decimals on a percent rate must not stop a save of something else. */
+function isUnchanged(rate: CustomerRate, typed: string): boolean {
+  return typed.trim() !== '' && rateText(typed.trim()) === rateText(rate.value);
 }
 
 /** The keys of every control in the order of the page (the details, then the rates in table order), so focus goes to the first one with a message. */
@@ -49,7 +60,8 @@ export function customerEditProblems(values: CustomerValues, rates: ReadonlyArra
     if (problem !== null) found[field] = problem;
   }
   for (const rate of rates) {
-    const problem = rateProblem(inputs[rate.processItemId] ?? '', rate.unit);
+    const typed = inputs[rate.processItemId] ?? '';
+    const problem = isUnchanged(rate, typed) ? null : rateProblem(typed, rate.unit);
     if (problem !== null) found[rateErrorKey(rate.processItemId)] = problem;
   }
   return found;
