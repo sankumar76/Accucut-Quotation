@@ -24,6 +24,8 @@ const SESSION_ENDED_TITLE = 'Your session ended';
 const SESSION_ENDED_TEXT = 'Sessions last 12 hours from the time you sign in, so you were signed out. Sign in again. Anything you had saved is still there.';
 const SIGN_IN_NOTICE = 'Your session ended. Sign in again to continue where you left off.';
 const SESSION_ENDED_PROBLEM_TITLE = 'Your session ended. Sign in again.';
+const LOG_RELAY_PATH = '/api/auth/_log';
+const LOG_RELAY_PROBE = { level: 'error', code: 'SEC01_E2E_PROBE' };
 
 test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
@@ -84,6 +86,14 @@ test.describe('AC-4 and AC-6: SCR-01 in its "Session ended" state', () => {
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     await expectNoAxeViolations(page);
+
+    // SEC-01 (QLT-11): next-auth's log relay stays closed through the real server and routing. The unit test uses a stand-in for next-auth's
+    // request adapter, so a release that derives the action in another way would reopen it with that test still green; these two requests
+    // would not. The probe code must never reach a log line.
+    const relay = await context.request.post(LOG_RELAY_PATH, { form: LOG_RELAY_PROBE });
+    expect(relay.status()).toBe(404);
+    const relayWithSegment = await context.request.post(`${LOG_RELAY_PATH}/x`, { form: LOG_RELAY_PROBE });
+    expect(relayWithSegment.status()).toBe(404);
   });
 });
 
