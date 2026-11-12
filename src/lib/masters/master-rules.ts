@@ -1,8 +1,8 @@
 /**
  * The rules that more than one master states for its typed fields (the Process Master, the Material Master, the Exchange Rate Master and
- * the Treatment / Color list): the longest name and the one check of a name, and a number typed as decimal text. Pure and without zod or the
- * formula engine, so the page does not carry them (NFR-009) and a client component may import it. The server's schemas import the limit, the
- * pattern and the words from here, so a limit or a sentence is written once.
+ * the Treatment / Color list): the longest name and the one check of a name, a number typed as decimal text, and the rupee sign that money is
+ * shown with. Pure and without zod or the formula engine, so the page does not carry them (NFR-009) and a client component may import it. The
+ * server's schemas import the limit, the pattern and the words from here, so a limit or a sentence is written once.
  *
  * Each master's own words (the sentence for a name that is taken, the hint under its field) stay in its own file.
  */
@@ -29,6 +29,9 @@ export function nameProblem(value: string): string | null {
 export const DECIMAL_TEXT_PATTERN = /^\d{1,12}(?:\.\d{1,2})?$/;
 
 export const DECIMAL_TEXT_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
+
+/** The rupee sign: the one place it is written for every master's screens and the audit log. */
+export const RUPEE = '₹';
 
 /**
  * A typed number as the stored text: no leading zeros, and two decimals ("003.37" is "3.37"). Two spellings of one number therefore
