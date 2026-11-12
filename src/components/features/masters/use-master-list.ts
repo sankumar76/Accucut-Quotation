@@ -72,7 +72,7 @@ export function useMasterList<Row, Initial extends ReadonlyArray<Row> | null>({
     newest.current += 1;
     const mine = newest.current;
     const outcome = await readList();
-    if (mine !== newest.current) return;
+    if (mine > newest.current) return;
     if (outcome.status === 'ok') setItems(outcome.value);
     setStatus(outcome.status === 'ok' ? 'ready' : 'error');
   }, [readList]);
