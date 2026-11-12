@@ -77,7 +77,7 @@ function RowActions({ user, currentUserId, busyUserId, pendingOpener, onAction, 
   const label = (text: string, icon: LucideIcon) => (compact ? <Icon icon={icon} size="large" /> : <><Icon icon={icon} />{text}</>);
 
   return (
-    <div className={compact ? 'flex flex-nowrap items-center justify-end gap-s-2' : 'flex flex-wrap gap-s-2'}>
+    <div className={compact ? 'flex flex-nowrap items-center justify-end gap-s-1' : 'flex flex-wrap gap-s-2'}>
       <Button variant={variant} size={size} data-action="edit" aria-label={ACTION_NAMES.edit(user)} {...busyFor('edit')} onClick={press('edit')}>
         {label('Edit', Pencil)}
       </Button>
