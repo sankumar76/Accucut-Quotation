@@ -22,7 +22,6 @@ export function useDialogOpener<Props>(options: FirstOpenOptions<Props>) {
    * remembers the opener, calls `prepare` (the screen sets which dialog is open and about what, in the same step), and asks the loader to open.
    */
   function press(from: Opener, byKeyboard: boolean, prepare: () => void): boolean {
-    if (loader.pending) return false;
     opener.current = from;
     setPressed(from);
     prepare();
