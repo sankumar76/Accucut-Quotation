@@ -3,7 +3,8 @@
  *
  * Source: SecLists, `Passwords/Common-Credentials/10k-most-common.txt` (the 10,000 most common passwords),
  *   https://github.com/danielmiessler/SecLists, MIT Licence, Copyright (c) 2018 Daniel Miessler. The licence permits use, copying,
- *   modification and distribution with this notice kept; the full text is at the source above.
+ *   modification and distribution with its notice kept: the full text, unchanged from upstream, is in `LICENSE-SecLists-MIT.txt` beside
+ *   this file, as the font licences are beside the fonts.
  * Taken: 2026-11-12. Changes made: lower-cased, duplicates and single characters removed, and any entry with a character outside
  *   printable ASCII, or longer than 40 characters, left out. Nothing was added to the list itself; the product words are in
  *   `PRODUCT_WORDS` below.
@@ -12,6 +13,9 @@
  * satisfied. It holds well-known public words, never a password of this portal. It is read by the server only: the page checks the
  * parts of the rule that need no list (`password-rule.ts`) and the server names "too common" (UX spec section 6.0: "the server names
  * the part that failed"), so the list is not sent to the browser.
+ *
+ * Over 400 lines on purpose (coding standards section 1): the list is data, 10,000 entries one per line, and the logic below it is the
+ * last 30 lines. Splitting the logic into another file would only separate it from the one place it is used.
  */
 
 /** One entry per line. A template literal keeps the list compact; no entry holds a backtick, a backslash or a dollar sign. */
@@ -10035,12 +10039,21 @@ function withoutNonLettersAtEnds(text: string): string {
 }
 
 /**
- * Is this password too common to accept? Judged on the password lower-cased, on its own and with the digits and symbols stripped from
- * both ends, because a composition rule produces `Password1!` and `Welcome@123`, which a plain list does not hold (architecture
- * section 8). A password that contains a product word is refused too.
+ * The text without the symbols (characters that are neither a letter nor a digit) at its start and its end: "1234567890!" becomes
+ * "1234567890" and "1qaz2wsx!!" becomes "1qaz2wsx". The list holds entries that start or end with a digit, which the form above strips away.
+ */
+function withoutSymbolsAtEnds(text: string): string {
+  return text.replace(/^[^\p{L}\p{Nd}]+|[^\p{L}\p{Nd}]+$/gu, '');
+}
+
+/**
+ * Is this password too common to accept? Judged on the password lower-cased, on its own and in two stripped forms: with the digits and
+ * symbols taken off both ends (`Password1!` and `Welcome@123` become `password` and `welcome`), and with only the symbols taken off both
+ * ends (`1234567890!` and `1qaz2wsx!!` become `1234567890` and `1qaz2wsx`), because a composition rule turns a list entry into a password
+ * that a plain list does not hold (architecture section 8). A password that contains a product word is refused too.
  */
 export function isCommonPassword(password: string): boolean {
   const lower = password.toLowerCase();
   if (PRODUCT_WORDS.some((word) => lower.includes(word))) return true;
-  return COMMON_PASSWORDS.has(lower) || COMMON_PASSWORDS.has(withoutNonLettersAtEnds(lower));
+  return [lower, withoutNonLettersAtEnds(lower), withoutSymbolsAtEnds(lower)].some((candidate) => COMMON_PASSWORDS.has(candidate));
 }

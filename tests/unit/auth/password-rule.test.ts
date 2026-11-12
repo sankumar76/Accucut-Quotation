@@ -140,6 +140,17 @@ describe('the list of common passwords', () => {
     expect(isCommonPassword(password)).toBe(true);
   });
 
+  // QLT-02: list entries that start or end with a digit never match the form with digits stripped; only the symbols are stripped for them.
+  it.each(['1234567890!', '!1234567890', '123456789!', '1qaz2wsx!!'])('QLT-02: refuses %s, a list entry with symbols added at an end', (password) => {
+    expect(isCommonPassword(password)).toBe(true);
+    expect(checkPasswordRule(password, SERVER)).toBe('TOO_COMMON');
+  });
+
+  it('QLT-02: a list entry with a symbol added inside, or more after the symbols, is still accepted', () => {
+    expect(isCommonPassword('1234-567890')).toBe(false);
+    expect(isCommonPassword('1qaz2wsx7Tn#')).toBe(false);
+  });
+
   it('refuses a product word anywhere in the password', () => {
     expect(isCommonPassword('Accucut@2026!')).toBe(true);
     expect(isCommonPassword('x9-ACCUCUT-lasers')).toBe(true);
