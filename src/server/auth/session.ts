@@ -54,8 +54,8 @@ const readSessionState = cache(async (): Promise<SessionState> => {
   await connection();
   const session = await getServerSession(getAuthOptions());
   const claims =
-    session?.userId !== undefined && session.sessionVersion !== undefined && session.signedAt !== undefined
-      ? { userId: session.userId, sessionVersion: session.sessionVersion, signedAt: session.signedAt }
+    session?.userId !== undefined && session.sessionVersion !== undefined
+      ? { userId: session.userId, sessionVersion: session.sessionVersion, signedAt: session.signedAt ?? Math.floor(systemClock.now().getTime() / 1000) }
       : null;
   const resolution = await resolveSession(claims, getUserRepository(), systemClock.now());
   if (resolution.status === 'active') return { status: 'signed-in', user: resolution.user };
