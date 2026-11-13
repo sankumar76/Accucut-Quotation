@@ -28,6 +28,12 @@ const SEARCH_LENGTH = 100;
 const QUERY = 'W'.repeat(SEARCH_LENGTH);
 const MIN_LINES = 3;
 
+/** Evidence for the job log; a QA control only, so the console rule is lifted for this one line. */
+function note(line: string): void {
+  // eslint-disable-next-line no-console
+  console.log(line);
+}
+
 interface TitleReading {
   readonly lines: number;
   readonly left: number;
@@ -68,7 +74,7 @@ for (const size of WIDTHS) {
       await page.getByLabel('Search').fill(QUERY);
       const name = `No rate matches "${QUERY}"`;
       const reading = await readTitle(page, name);
-      console.log(`QA289 SCR-11 ${size.width} ${JSON.stringify({ lines: reading.lines, left: reading.left, right: reading.right, overflow: reading.overflow })}`);
+      note(`QA289 SCR-11 ${size.width} ${JSON.stringify({ lines: reading.lines, left: reading.left, right: reading.right, overflow: reading.overflow })}`);
       expect(reading.text, 'the full search text is shown').toContain(QUERY);
       expectInsideWindow(reading, size.width);
       await expectNoAxeViolations(page);
@@ -87,7 +93,7 @@ for (const size of WIDTHS) {
       await page.getByLabel('Search materials').fill(QUERY);
       const name = `No material matches "${QUERY}"`;
       const reading = await readTitle(page, name);
-      console.log(`QA289 SCR-13 ${size.width} ${JSON.stringify({ lines: reading.lines, left: reading.left, right: reading.right, overflow: reading.overflow })}`);
+      note(`QA289 SCR-13 ${size.width} ${JSON.stringify({ lines: reading.lines, left: reading.left, right: reading.right, overflow: reading.overflow })}`);
       expect(reading.text, 'the full search text is shown').toContain(QUERY);
       expectInsideWindow(reading, size.width);
       await expectNoAxeViolations(page);
@@ -101,7 +107,7 @@ for (const size of FIXED_TITLE_WIDTHS) {
 
     async function expectOneLine(page: Page, name: string): Promise<void> {
       const reading = await readTitle(page, name);
-      console.log(`QA289 FIXED ${size.width} ${JSON.stringify({ name, lines: reading.lines, left: reading.left, right: reading.right })}`);
+      note(`QA289 FIXED ${size.width} ${JSON.stringify({ name, lines: reading.lines, left: reading.left, right: reading.right })}`);
       expect(reading.text).toBe(name);
       expect(reading.lines, `${name}: one line, as before`).toBe(1);
       expect(reading.left).toBeGreaterThanOrEqual(0);
