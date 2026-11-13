@@ -212,3 +212,34 @@ required checks are green and the docs PR it depends on has merged. Docs-only PR
 still merge after a GO, as before. Deployment, releases and G8 stay human. A bad
 merge is undone by a new PR, never by rewriting `master`. Dependabot dependency
 bumps are not story PRs and are not covered by this override.
+
+---
+
+## 9. Fast-track delivery override (delivery lead, 2026-11-13)
+
+The delivery lead approved this in chat on 2026-11-13, to finish the project in about two weeks
+(target 2026-11-27). It overrides the per-story parts of §3 (G6 and G7), §4 and §8 until G8. All
+other rules stay, including §6 rule 7 (no secrets or real personal data) and "Deployment, releases
+and G8 stay human".
+
+1. **Per-story gate = fully green CI.** The developer works test-first. A story PR merges (squash, by
+   the orchestrator) as soon as every required check is green. Nothing is loosened: lint,
+   type-check, unit tests, E2E at three widths, the secret scan, the cost-confidentiality scan and
+   branch protection. No per-story peer reviews, QA runs, control/plant branches, master gate
+   rulings or records PRs.
+2. **Immediate focused review only for critical stories:** authentication and passwords, Engineer
+   cost visibility (NFR-002), approval and step-up actions, and anything that can lose or corrupt
+   data. One combined security-and-quality review before merge; Blocker or Critical findings are
+   fixed before merge.
+3. **One full review at the end.** After development, all three reviewers and QA review the whole
+   product, then a full regression. Every finding at Blocker, Critical or Major, and every Sev-1 or
+   Sev-2 defect, is fixed in a hardening window before G8. Nothing at those levels is waived without
+   the delivery lead's word.
+4. **Frozen until after G8:** new CI-speed or tooling enabler stories and CI measurement windows.
+   Small defects and follow-ups (for example DEF-033, DEF-036, #369) go to the hardening window.
+5. **Order and parallelism:** the R1 core first (EPIC-04 to EPIC-07), then R1+ and R2 as far as time
+   allows. Two or three developers work in parallel on independent epics in separate worktrees.
+   Heavy browser tests run in CI, not locally, while the PC is short of memory.
+6. **Records:** one `docs/project-state.md` update a day, and short Jira comments (a link to the PR,
+   with the result). Stories still move through the Jira statuses.
+7. **Human decisions** are asked at once, one at a time, through the main session.
