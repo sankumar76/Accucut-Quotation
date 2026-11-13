@@ -4,6 +4,8 @@ import { z } from 'zod';
 import type { RoleName } from '@/lib/auth/roles';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
+import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
+import { defined } from '../support/defined';
 import { validCallFor, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
@@ -45,7 +47,7 @@ vi.mock('@/server/composition', async () => {
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
 
 /** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/account/password'];
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
@@ -80,7 +82,13 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
+  '/masters/customers': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fcustomers',
+  '/masters/customers/[id]': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fcustomers%2F%5Bid%5D',
 };
+
+/** The ID an allowed role opens a page with: a page with a dynamic segment needs a record that exists (an invented ID is SCR-26 "not found"); the others take any text. */
+const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID };
+const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented-id';
 
 const moduleShape = z.record(z.string(), z.unknown());
 
@@ -329,7 +337,18 @@ describe('AC-2 and AC-4: pages, as each role and signed out', () => {
 
   it.each(pageRows.flatMap((row) => ROLES.map((role) => [`${row.path} as ${role}`, row, role] as const)))('%s', async (_name, row, role) => {
     harness.signInAs(role);
-    expect(await callPage(row, 'invented-id')).toBe(expectedRoles(row.path).includes(role) ? 'renders' : 'forbidden');
+    expect(await callPage(row, pageIdFor(row))).toBe(expectedRoles(row.path).includes(role) ? 'renders' : 'forbidden');
+  });
+
+  it('SCR-12 edit page: an invented ID is "not found" for the Admin and the same "no access" as a real one for the other roles (CR-33)', async () => {
+    const row = defined(pageRows.find((candidate) => candidate.path === '/masters/customers/[id]'));
+    harness.signInAs('ADMIN');
+    expect(await callPage(row, 'invented-id')).toBe('not-found');
+    for (const role of ['LEAD', 'ENGINEER'] as const) {
+      harness.signInAs(role);
+      expect(await callPage(row, 'invented-id')).toBe(await callPage(row, CUSTOMER_RECIPE_ID));
+      expect(await callPage(row, 'invented-id')).toBe('forbidden');
+    }
   });
 });
 

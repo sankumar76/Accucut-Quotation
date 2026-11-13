@@ -14,6 +14,7 @@ import 'server-only';
  * service. `server-only` keeps a client component from carrying zod and those services into the first-load bundle (NFR-009).
  */
 export * from './audit';
+export * from './customers';
 export * from './exchange-rates';
 export * from './materials';
 export * from './me';
