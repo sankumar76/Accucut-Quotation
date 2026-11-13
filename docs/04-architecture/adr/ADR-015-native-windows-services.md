@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40** |
+| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)** |
 | Date | 2026-11-13 |
 | Deciders | solution-architect; the delivery lead's stated target (AQP-1 comment 11790, relayed); Accucut IT confirms at install |
 | Related | FR-091, FR-105; NFR-003, 012, 013, 024, 030; ADR-001, ADR-002, ADR-011; OQ-ARCH-02, OQ-ARCH-03, OQ-ARCH-14; STORY-10.04, 10.05, 10.11, 02.09; architecture section 9.9; test strategy section 10.8 |
@@ -16,7 +16,7 @@ The application itself is portable: Node 22, Next.js `output: 'standalone'`, Pri
 ## Decision Drivers
 
 - The least operational risk for a small IT team with no platform engineer (the brief).
-- NFR-013 and FR-091: a weekly encrypted backup, a guided restore and a guided clear, run by an Admin who is not a system administrator; **40 GB** (OQ-ARCH-03, DL-034).
+- NFR-013 and FR-091: a weekly encrypted backup, a guided restore and a guided clear, run by an Admin who is not a system administrator; **40 GB** (OQ-ARCH-03, DL-034), **grown to one 100 GB disk by OQ-ARCH-14 (Amendment)**.
 - NFR-030: a clean machine reaches the sign-in page within 30 minutes by the README.
 - NFR-012: 99.0 % a month on one host; NFR-024: logs kept 30 days.
 - Supported, licensed components only; nothing in preview.
@@ -52,7 +52,7 @@ What was checked (2026-11-13; sources in the hand-off):
 
 - Positive: one operating system and Windows-native tools; no container runtime to license or patch; services restart after a Windows Update reboot; the restore and clear commands are still one guided command each.
 - Negative / trade-offs accepted:
-  - **Windows itself takes about 20 GB more of the 40 GB than a Linux host did, so the retention ceiling falls from about 5 to 6 GB of data to about 1.5 GB** (architecture 9.9, ARCH-R10). 2 years of weekly copies does not fit unless the data stays under about 0.07 GB. Their decision on the disk stands; OQ-ARCH-14 asks whether a second volume or a larger disk is wanted.
+  - **Windows itself takes about 20 GB more of the 40 GB than a Linux host did, so the retention ceiling falls from about 5 to 6 GB of data to about 1.4 GB** (architecture 9.9, ARCH-R10). 2 years of weekly copies does not fit unless the data stays under about 0.07 GB. **Superseded by the Amendment: on one 100 GB disk the ceiling is about 10 GB, and 2 years fits under about 0.5 GB.**
   - Runtime parity with CI is lost; stage 13 on Windows is the mitigation.
   - Manual runtime updates (Node, PostgreSQL minor versions) are now the IT person's, through `update.ps1`.
 - Follow-up actions (with owners):
@@ -60,7 +60,16 @@ What was checked (2026-11-13; sources in the hand-off):
   - product-manager: restate FR-091 and NFR-030 ("`docker compose up`" becomes "`install.ps1` from the release zip").
   - product-owner and scrum-master: restate the three EPIC-10 rows and STORY-02.09.
   - master: log the decision; ARCH-R9 and ARCH-R10 to the register.
-  - Accucut IT: confirm the Windows version, OQ-ARCH-14, and whether the JEA account suits them (A-35).
+  - Accucut IT: confirm the Windows version and whether the JEA account suits them (A-35); provide one disk of about 100 GB (OQ-ARCH-14, answered); the off-server copy is recommended to them (Amendment).
+
+## Amendment, 2026-11-13: OQ-ARCH-14 answered (one disk of about 100 GB)
+
+**Decision (the delivery lead, option (b), relayed in the orchestrator's brief on AQP-1):** grow the server's one disk to about 100 GB. The backups stay on the same disk as the data. Options (a), a second volume for the backups, and (c), accepting the 40 GB ceiling, were not chosen. The delivery lead was told that one disk failure loses both the data and its backups.
+
+- **Retention (architecture 9.9, v0.44, same method as for 40 GB):** fixed use about 25 GB, 20 GB kept free, about 55 GB for the live data and its copies. 2 years of weekly copies at 0.25 and 0.5 GB of data; about a year at 1 GB; about 6 months at 2 GB. **Ceiling about 10 GB of data** (was about 1.4 GB). With the invented rates and a start at 0.1 GB, it is reached after about 99 weeks at 0.1 GB a week, about 20 weeks at 0.5 GB a week, and about 9.5 years at 0.02 GB a week.
+- **Single-disk risk (ARCH-R10, reworded):** a disk failure or the loss of the server loses the data and every backup together (RISK-011). Accepted by the delivery lead.
+- **Go-live recommendation, owner Accucut IT:** copy each weekly encrypted backup off the server (a scheduled copy to a network share or other storage), keeping the key elsewhere. A recommendation only: no code, no script, no story.
+- **No change** to the scripts, the stories, the effort or stage 13: the paths are configurable and the free-space thresholds are percentages.
 
 ## Verification
 
