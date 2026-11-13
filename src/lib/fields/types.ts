@@ -50,3 +50,6 @@ export const MATERIAL_CONSIDERED_KEY = 'material-considered';
  * calculator supplies its value to the formulas that read it (Material Cost, AK).
  */
 export const MATERIAL_RATE_KEY = 'material-rate-per-kg';
+
+/** Key of Total Unit Production Price / Tool Cost (column BN): the product-level field that is BL divided by the total Tool Cost. */
+export const PRICE_PER_TOOL_COST_KEY = 'price-per-tool-cost';

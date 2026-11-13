@@ -50,19 +50,23 @@ export interface RowCalculationInput {
 const ZERO = new Decimal(0);
 
 /**
- * The value of a field for this node. A typed number or flag is itself. One that is absent is 0: an unselected treatment flag is stored as
- * 0 (SPEC section 7.4, "Hide zero treatment lines"), and Fasteners Qty and Cost, hidden while Fasteners is "None", are stored as 0 (SPEC
- * section 14 item 4). A blank that must be filled in is refused by Calculate before it reaches here. Material Rate / Kg (I) comes from
- * the Material Master. Any other field (text, a drop-down, a picture) is not a number and has no figure.
+ * The typed value of a number or flag input for one node. A typed number or flag is itself. One that is absent is 0: an unselected
+ * treatment flag is stored as 0 (SPEC section 7.4, "Hide zero treatment lines"), and Fasteners Qty and Cost, hidden while Fasteners is
+ * "None", are stored as 0 (SPEC section 14 item 4). A blank that must be filled in is refused by Calculate before it reaches here. Any
+ * other field (text, a drop-down, a picture, a calculated or looked-up field) is not typed and has no figure here (`null`).
  */
-function fieldValueOf(input: RowCalculationInput, fieldId: string): Value {
-  const typed = input.inputs.get(fieldId);
+export function typedFieldValue(document: ConfigDocument, inputs: ReadonlyMap<string, Value>, fieldId: string): Value {
+  const typed = inputs.get(fieldId);
   if (typed !== undefined) return typed;
+  const field = findFieldById(document, fieldId);
+  return field?.kind === 'input' && (field.dataType === 'number' || field.dataType === 'flag') ? ZERO : null;
+}
+
+/** The value of a field for this node: typed (above), or Material Rate / Kg (I) from the Material Master. */
+function fieldValueOf(input: RowCalculationInput, fieldId: string): Value {
   const field = findFieldById(input.document, fieldId);
-  if (field === undefined) return null;
-  if (field.kind === 'auto') return field.key === MATERIAL_RATE_KEY ? input.material.pricePerKg : null;
-  if (field.kind === 'input') return field.dataType === 'number' || field.dataType === 'flag' ? ZERO : null;
-  return null;
+  if (field?.kind === 'auto') return field.key === MATERIAL_RATE_KEY ? input.material.pricePerKg : null;
+  return typedFieldValue(input.document, input.inputs, fieldId);
 }
 
 function resolverFor(input: RowCalculationInput): Resolver {
