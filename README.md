@@ -211,6 +211,8 @@ shows that it can fail: the Admin is sent the canary rates by the same routes an
 
 `npm test`, `npm run lint`, `npm run typecheck`, `npm run build` and `npm run test:e2e` are aliases.
 
+`npm run test:perf` runs the timing tests under `tests/perf/` on demand (NFR-008: a 500-node estimate recalculated 20 times, p95 under 2 seconds; it prints the machine it ran on). They are not part of `npm test` or of the pull-request stages; run them on a quiet machine.
+
 Tests refuse to start against a database that is not local, CI or staging, and refuse
 `NODE_ENV=production` (`tests/support/db-guard.ts`). For a staging database, set `STAGING_DB_HOST`.
 The test run loads `.env` first (`tests/support/global-setup.ts`), without overriding a variable that is
