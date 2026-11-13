@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 
+import { BREAK_LONG_NAMES } from './break-long-names';
 import { Icon } from './icon';
 
 /** The delay before a skeleton appears (UX spec section 6.0 "States": shown after 300 ms). */
@@ -71,14 +72,17 @@ export interface EmptyStateProps {
   readonly className?: string;
 }
 
-/** Empty state: icon, one-line title, one sentence, and one action if there is one (UX spec section 6.0). */
+/**
+ * Empty state: icon, one-line title, one sentence, and one action if there is one (UX spec section 6.0). The title wraps an unbroken name
+ * (`BREAK_LONG_NAMES`, "Names wrap"): a search screen puts what the person typed in it, for example `No rate matches "<text>"` (AQP-289, DEF-035).
+ */
 export function EmptyState({ icon, title, description, action, as: Heading = 'h2', className }: EmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center gap-s-3 px-s-5 py-s-7 text-center', className)}>
       <span aria-hidden="true" className="flex h-s-7 w-s-7 items-center justify-center rounded-full bg-surface-2 text-ink-2">
         {icon}
       </span>
-      <Heading className="text-sub font-semibold text-ink">{title}</Heading>
+      <Heading className={cn('text-sub font-semibold text-ink', BREAK_LONG_NAMES)}>{title}</Heading>
       <p className="max-w-prose text-ink-2">{description}</p>
       {action}
     </div>
