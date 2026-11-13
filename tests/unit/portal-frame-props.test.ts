@@ -6,7 +6,8 @@ import type { AuthenticatedUser } from '@/server/auth/session';
 /**
  * AQP-188 AC-9 (NFR-001, NFR-002, BR-003): the layout builds the props of the frame's client components in one
  * function. Given a user with every field of `AuthenticatedUser`, the output holds only the name, the e-mail, the role label
- * and the role's navigation entries (label, address, icon). The id and `mustChangePassword` are absent.
+ * and the role's navigation entries (label, address, icon). The id and `mustChangePassword` are absent. STORY-01.05 AC-5: a person who
+ * has to set a new password gets no menu at all (no entries, `withMenu` false), and still no id or flag in the output.
  */
 
 const USER: AuthenticatedUser = {
@@ -14,8 +15,9 @@ const USER: AuthenticatedUser = {
   name: 'Invented Person',
   email: 'invented.person@example.test',
   role: 'LEAD',
-  mustChangePassword: true,
+  mustChangePassword: false,
 };
+const MUST_CHANGE: AuthenticatedUser = { ...USER, mustChangePassword: true };
 
 /** Every key and every string in a value, however deep (React elements included). */
 function collect(value: unknown, keys: Set<string>, strings: Set<string>, seen = new Set<object>()): void {
@@ -49,9 +51,21 @@ describe('portal frame props (AC-9)', () => {
     const keys = new Set<string>();
     const strings = new Set<string>();
     collect(props, keys, strings);
+    collect(portalFrameProps(MUST_CHANGE), keys, strings);
     expect(keys.has('id')).toBe(false);
     expect(keys.has('mustChangePassword')).toBe(false);
     expect([...strings].some((text) => text.includes(USER.id))).toBe(false);
+  });
+
+  it('offers the menu to a person who has no duty to change the password', () => {
+    expect(props.withMenu).toBe(true);
+  });
+
+  it('STORY-01.05 AC-5: offers a person who must set a new password no menu, not even a hidden list, but keeps the account menu fields', () => {
+    const limited = portalFrameProps(MUST_CHANGE);
+    expect(limited.withMenu).toBe(false);
+    expect(limited.navGroups).toEqual([]);
+    expect(limited.account).toEqual({ name: 'Invented Person', email: 'invented.person@example.test', role: 'Lead' });
   });
 
   it('shows each role its own queue title and the same account fields', () => {

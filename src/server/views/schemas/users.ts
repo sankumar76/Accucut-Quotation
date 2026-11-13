@@ -5,7 +5,7 @@ import {
   NAME_REQUIRED_MESSAGE,
   NAME_TOO_LONG_MESSAGE,
   NOTHING_TO_CHANGE_MESSAGE,
-  PASSWORD_MAX_LENGTH,
+  PASSWORD_INPUT_CEILING,
   PASSWORD_REQUIRED_MESSAGE,
   PASSWORD_TOO_LONG_MESSAGE,
   ROLE_REQUIRED_MESSAGE,
@@ -36,11 +36,14 @@ const email = z
 
 const role = z.enum(USER_ROLE_VALUES, { error: ROLE_REQUIRED_MESSAGE });
 
-/** The password is never trimmed or changed: spaces may be part of it. The rule (FR-098) is story 01.05's. */
+/**
+ * The password is never trimmed or changed: spaces may be part of it. Only its presence and a ceiling are the schema's; the rule
+ * (FR-098: length in code points, number, symbol, e-mail, common) is `assertPasswordRule`, which names the failing part (422 `PASSWORD_RULE`).
+ */
 const password = z
   .string({ error: PASSWORD_REQUIRED_MESSAGE })
   .min(1, PASSWORD_REQUIRED_MESSAGE)
-  .max(PASSWORD_MAX_LENGTH, PASSWORD_TOO_LONG_MESSAGE);
+  .max(PASSWORD_INPUT_CEILING, PASSWORD_TOO_LONG_MESSAGE);
 
 /** What the Users list shows about a person, and what an add or an edit returns. No password hash, no session version. */
 export const userSchema = z.strictObject({

@@ -12,6 +12,7 @@ import { displayFormOf } from '../../support/formula-display';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
+import { HARNESS_PASSWORD } from '../../support/harness-password';
 
 import { waitUntilHydrated } from './design-system';
 
@@ -21,7 +22,7 @@ import { waitUntilHydrated } from './design-system';
  */
 
 /** Invented people for the journey. `.test` is a reserved domain; the password exists only here. */
-export const E2E_PASSWORD = 'invented-e2e-password-for-aqp-38';
+export const E2E_PASSWORD = HARNESS_PASSWORD;
 
 export interface E2eUser {
   readonly name: string;
@@ -50,12 +51,14 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *   sign-out signs out, which ends every session of that person;
  *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04;
  *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it;
- *   expiry   holds a session that ended and signs in again (STORY-01.06), which writes no failure and raises no `session_version`.
+ *   expiry   holds a session that ended and signs in again (STORY-01.06), which writes no failure and raises no `session_version`;
+ *   password changes their own password on the account page (STORY-01.05), which raises `session_version` and counts wrong current passwords
+ *            on a key of its own; nobody else's sessions or counts are touched.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)

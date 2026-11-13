@@ -81,13 +81,29 @@ describe('POST /api/v1/users (AC-1)', () => {
     ['no name', { name: '   ' }, 'name', 'Enter a name.'],
     ['no password', { password: '' }, 'password', 'Enter a password.'],
     ['a role that does not exist', { role: 'OWNER' }, 'role', 'Choose a role.'],
-    ['a password over the limit', { password: 'x'.repeat(129) }, 'password', 'Use 128 characters or fewer.'],
+    ['a password over the ceiling the routes read (1,024 characters)', { password: 'x'.repeat(1025) }, 'password', 'Use 128 characters or fewer.'],
   ])('refuses %s with 422 and the message under its field', async (_name, change, field, message) => {
     const response = await POST(request('POST', { ...newPerson, email: 'valid@example.test', ...change }));
     expect(response.status).toBe(422);
     const body = record.parse(await response.json());
     expect(body['code']).toBe('VALIDATION_FAILED');
     expect(body['errors']).toEqual([{ field, message }]);
+  });
+
+  it.each([
+    ['129 characters (the rule, not the schema)', 'x'.repeat(129), 'Use 128 characters or fewer.'],
+    ['9 characters', 'Ab7!xyzuv', 'The new password must be at least 10 characters.'],
+    ['no number and no symbol', 'abcdefghijkl', 'Add at least one number and one symbol, such as ! # $ or %.'],
+    ['common', 'Welcome@123', 'That password is too common. Choose a different one.'],
+  ])('STORY-01.05 AC-2: a password with %s is 422 PASSWORD_RULE naming the part under password, and nothing is stored', async (_name, password, message) => {
+    const response = await POST(request('POST', { ...newPerson, email: 'valid@example.test', password }));
+    expect(response.status).toBe(422);
+    const text = await response.text();
+    const body = record.parse(JSON.parse(text));
+    expect(body['code']).toBe('PASSWORD_RULE');
+    expect(body['errors']).toEqual([{ field: 'password', message }]);
+    expect(text).not.toContain(password);
+    expect(harness.users.records.some((entry) => entry.email === 'valid@example.test')).toBe(false);
   });
 
   it('refuses a key it does not know (no setting the hash, the session or the flag directly)', async () => {
@@ -205,6 +221,16 @@ describe('POST /api/v1/users/{id}/password-reset (AC-5)', () => {
     const extra = await RESET(request('POST', { password: SECRET_LOOKING, role: 'ADMIN' }), withId(harness.targetId));
     expect(extra.status).toBe(422);
     expect(await extra.text()).not.toContain(SECRET_LOOKING);
+  });
+
+  it('STORY-01.05 AC-2: a weak password is 422 PASSWORD_RULE under password, and the person keeps the old one', async () => {
+    const before = JSON.stringify(harness.users.records.find((entry) => entry.id === harness.targetId));
+    const response = await RESET(request('POST', { password: 'short1!' }), withId(harness.targetId));
+    expect(response.status).toBe(422);
+    const body = record.parse(await response.json());
+    expect(body['code']).toBe('PASSWORD_RULE');
+    expect(body['errors']).toEqual([{ field: 'password', message: 'The new password must be at least 10 characters.' }]);
+    expect(JSON.stringify(harness.users.records.find((entry) => entry.id === harness.targetId))).toBe(before);
   });
 
   it('answers 404 for a UUID nobody has', async () => {

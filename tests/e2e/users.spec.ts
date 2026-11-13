@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitUntilHydrated, widthOf } from './support/design-system';
 import { ADMIN_STATE } from './support/servers';
 
 /**
@@ -26,6 +26,13 @@ const ADMIN_TAKEN = 'There is already an active Admin. Only one Admin can be act
 /** UX spec (ux-expert, AQP-65 comment 11038): the name of the disabled Reset on the Admin's own row, written out here and not imported. */
 const OWN_RESET_NAME = 'Reset password is not available for your own account. Use Change password in the account menu.';
 const OWN_ROW_NAME = 'You cannot deactivate your own account';
+/** UX spec v0.15 (SCR-14, "The Admin's own row"): the visible reason on the Admin's own phone card, written out here and not imported. */
+const OWN_PHONE_LINE = 'To change your own password, use Change password in the account menu.';
+/** UX spec section 6.0 and SCR-14: the rule sentence that begins both password hints (STORY-01.05 T7). */
+const RULE_HINT = 'At least 10 and at most 128 characters, with at least one number and one symbol, such as ! # $ or %.';
+const NEEDS_NUMBER_AND_SYMBOL = 'Add at least one number and one symbol, such as ! # $ or %.';
+const SAME_AS_EMAIL = "The password cannot be the same as the user's e-mail address.";
+const TOO_COMMON = 'That password is too common. Choose a different one.';
 const FIRST_PASSWORD = 'invented-first-password-1';
 const NEW_PASSWORD = 'invented-temporary-password-2';
 
@@ -56,6 +63,14 @@ test.describe('the list', () => {
     await expect(row).toContainText('Engineer');
     await expect(row).toContainText('Active');
     await expect(rowOf(page, E2E_ADMIN.name)).toContainText('Admin');
+    // STORY-01.05 T7: on the phone card, and only there, the Admin's own row says in text why Reset password is disabled; no other card does.
+    if ((await widthOf(page)) < TABLET_MIN_WIDTH) {
+      await expect(rowOf(page, E2E_ADMIN.name).getByText(OWN_PHONE_LINE, { exact: true })).toBeVisible();
+      await expect(rowOf(page, person.name).getByText(OWN_PHONE_LINE)).toHaveCount(0);
+      await expect(page.getByText(OWN_PHONE_LINE)).toHaveCount(1);
+    } else {
+      await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
+    }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
@@ -137,6 +152,38 @@ test.describe('add a user (AC-1, AC-3, AC-7)', () => {
     await expect(dialog.getByText('Enter a password.')).toBeVisible();
     await expect(dialog.getByLabel('Name')).toHaveValue('E2E Never Added');
     await expect(dialog.getByLabel('E-mail (used to sign in)')).toBeFocused();
+  });
+
+  test('STORY-01.05 T7: the First password hint begins with the rule, and the password-rule states are named under the field with focus on it', async ({ page }) => {
+    const suffix = randomBytes(3).toString('hex');
+    const email = `e2e.rule.${suffix}@example.test`;
+    await openUsers(page);
+    await pressWithKeyboard(page.getByRole('button', { name: 'Add user' }));
+    const dialog = page.getByRole('dialog', { name: 'Add user' });
+    const password = dialog.getByLabel('First password');
+    await expect(password).toHaveAccessibleDescription(
+      `${RULE_HINT} Tell the person in person or by phone; the portal does not e-mail it until Release 2. The person must change it at their first sign-in.`,
+    );
+    await dialog.getByLabel('Name').fill(`E2E Rule ${suffix}`);
+    await dialog.getByLabel('E-mail (used to sign in)').fill(email);
+
+    // "Needs number and symbol" and "Password same as e-mail" are the screen's own checks; "Password too common" is the server's.
+    const states: ReadonlyArray<readonly [string, string]> = [
+      ['abcdefghijkl', NEEDS_NUMBER_AND_SYMBOL],
+      [email.toUpperCase(), SAME_AS_EMAIL],
+      ['Password1!', TOO_COMMON],
+    ];
+    for (const [attempt, message] of states) {
+      await password.fill(attempt);
+      await dialog.getByRole('button', { name: 'Add user' }).click();
+      await expect(dialog.getByText(message, { exact: true })).toBeVisible();
+      await expect(password).toHaveAttribute('aria-invalid', 'true');
+      await expect(password).toBeFocused();
+    }
+    await expect(dialog.getByLabel('Name')).toHaveValue(`E2E Rule ${suffix}`);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(rowOf(page, `E2E Rule ${suffix}`)).toHaveCount(0);
   });
 
   test('DEF-026: after a refusal of several fields, typing into the name keeps focus and every letter there, and so does the e-mail', async ({ page }) => {
@@ -254,8 +301,22 @@ test.describe('reset a password (AC-5, AC-7)', () => {
     await expect(opener).toBeFocused();
 
     await pressWithKeyboard(opener);
+    // STORY-01.05 T7: the hint begins with the rule, and the two reset states are named under the field.
+    await expect(dialog.getByLabel('New password')).toHaveAccessibleDescription(
+      `${RULE_HINT} The old password stops working straight away. The person must change it at their next sign-in.`,
+    );
     await dialog.getByRole('button', { name: 'Set password' }).click();
     await expect(dialog.getByText('Enter a password.')).toBeVisible();
+    await dialog.getByLabel('New password').fill('abcdefghijkl');
+    await dialog.getByRole('button', { name: 'Set password' }).click();
+    await expect(dialog.getByText(NEEDS_NUMBER_AND_SYMBOL, { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('New password')).toBeFocused();
+    await dialog.getByLabel('New password').fill(person.email.toUpperCase());
+    await dialog.getByRole('button', { name: 'Set password' }).click();
+    await expect(dialog.getByText(SAME_AS_EMAIL, { exact: true })).toBeVisible();
+    await dialog.getByLabel('New password').fill('Welcome@123');
+    await dialog.getByRole('button', { name: 'Set password' }).click();
+    await expect(dialog.getByText(TOO_COMMON, { exact: true })).toBeVisible();
     await dialog.getByLabel('New password').fill(NEW_PASSWORD);
     await dialog.getByLabel('New password').press('Enter');
     await expect(dialog).toBeHidden();

@@ -5,6 +5,7 @@ import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
 import { passwordHasher } from './auth/password-hasher';
+import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createMasterRepository } from './repositories/master-repository';
@@ -12,6 +13,7 @@ import { getPrismaClient } from './repositories/prisma-client';
 import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
+import { type AccountService, createAccountService } from './services/account-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { getCurrentVersion } from './services/config-service';
@@ -29,6 +31,8 @@ import { createUserService, type UserService } from './services/user-service';
 let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
+let accountService: AccountService | undefined;
+let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let authOptions: NextAuthOptions | undefined;
@@ -73,6 +77,31 @@ export function getUserService(): UserService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return userService;
+}
+
+/**
+ * The signed-in person's own account (STORY-01.05): change your own password with the current one. Shares the runtime-role client, the real
+ * hasher and the throttle table; its attempts are counted on a key of their own.
+ */
+export function getAccountService(): AccountService {
+  accountService ??= createAccountService({
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    clock: systemClock,
+    keySecret: loadAppEnv().AUTH_SECRET,
+  });
+  return accountService;
+}
+
+/** Issues the fresh session cookie that follows a password change (STORY-01.05 AC-3): same secret, same cookie name as sign-in. */
+export function getSessionCookieIssuer(): SessionCookieIssuer {
+  sessionCookieIssuer ??= createSessionCookieIssuer({
+    secret: loadAppEnv().AUTH_SECRET,
+    clock: systemClock,
+    production: process.env.NODE_ENV === 'production',
+  });
+  return sessionCookieIssuer;
 }
 
 /**

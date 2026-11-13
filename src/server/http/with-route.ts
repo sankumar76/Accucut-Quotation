@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import { loadOriginEnv } from '../../lib/env';
-import { AppError, ForbiddenError, isAppError } from '../../lib/errors';
+import { AppError, ForbiddenError, isAppError, PASSWORD_CHANGE_REQUIRED_CODE } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { requireUser, type AuthenticatedUser } from '../auth/session';
 
@@ -20,6 +20,7 @@ import {
   validationProblem,
 } from './problem';
 import { allowsRole, findRoute, isStateChanging, type HttpMethod } from './route-manifest';
+import { serializeSessionCookie, type ResponseCookie } from './set-cookie';
 
 /**
  * The only way to declare an API handler (STORY-01.02 AC-1; architecture sections 4.1, 6 and 8). Every handler in
@@ -27,7 +28,9 @@ import { allowsRole, findRoute, isStateChanging, type HttpMethod } from './route
  * not. In this order, and nothing earlier can be skipped:
  *
  *   1. a state-changing request must come from the portal's own origin (CSRF);
- *   2. the session: `requireUser()` reads `users` on every request, so a deactivated person is refused at once (401);
+ *   2. the session: `requireUser()` reads `users` on every request, so a deactivated person is refused at once (401); a person who
+ *      still has to set a new password (FR-004) is refused with 403 `PASSWORD_CHANGE_REQUIRED` on every route whose row is not
+ *      `mustChangeAllowed` (STORY-01.05 AC-5);
  *   3. the role, taken from the route's row in the manifest, before anything is looked up or parsed (CR-33): a role the
  *      row does not list gets 403 with a fixed body, whatever ID was asked for;
  *   4. the input: query, path parameters and body are parsed with the zod schemas given (400 malformed, 422 invalid);
@@ -48,6 +51,8 @@ export interface HandlerContext<Query, Body, Params> {
   readonly params: Params;
   readonly requestId: string;
   readonly request: Request;
+  /** Puts a session cookie on the answer (STORY-01.05 AC-3: the fresh session after a password change). Sent with the success answer only. */
+  readonly setSessionCookie: (cookie: ResponseCookie) => void;
 }
 
 export interface RouteOptions<Output extends z.ZodType, Query extends z.ZodType, Body extends z.ZodType, Params extends z.ZodType> {
@@ -110,12 +115,19 @@ function describeFailure(error: unknown): { readonly errorName: string; readonly
   return error instanceof ResponseSchemaError ? { ...base, schemaPaths: error.paths } : base;
 }
 
-function jsonResponse(body: unknown, status: number, requestId: string): Response {
-  return Response.json(body, { status, headers: { 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId } });
+/** The headers of an answer: `no-store`, the request ID and any cookies the handler set. */
+function answerHeaders(requestId: string, cookies: ReadonlyArray<string>): Headers {
+  const headers = new Headers({ 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId });
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
+  return headers;
 }
 
-function noContentResponse(requestId: string): Response {
-  return new Response(null, { status: NO_CONTENT_STATUS, headers: { 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId } });
+function jsonResponse(body: unknown, status: number, requestId: string, cookies: ReadonlyArray<string>): Response {
+  return Response.json(body, { status, headers: answerHeaders(requestId, cookies) });
+}
+
+function noContentResponse(requestId: string, cookies: ReadonlyArray<string>): Response {
+  return new Response(null, { status: NO_CONTENT_STATUS, headers: answerHeaders(requestId, cookies) });
 }
 
 function queryOf(request: Request): Record<string, string> {
@@ -154,22 +166,27 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
       return problemResponse(originRefusedProblem(requestId));
     }
     const user = await requireUser();
+    if (user.mustChangePassword && allowed.mustChangeAllowed !== true) {
+      throw new ForbiddenError('Set a new password to continue.', { code: PASSWORD_CHANGE_REQUIRED_CODE });
+    }
     if (!allowsRole(allowed, user.role)) throw new ForbiddenError();
 
     const query = parseInput(options.query ?? NO_INPUT, options.query === undefined ? undefined : queryOf(request), requestId);
     const params = parseInput(options.params ?? NO_INPUT, options.params === undefined ? undefined : await context?.params, requestId);
     const body = parseInput(options.body ?? NO_INPUT, options.body === undefined ? undefined : await bodyOf(request, requestId), requestId);
 
-    const result = await options.handler({ user, query, body, params, requestId, request });
+    const cookies: string[] = [];
+    const setSessionCookie = (cookie: ResponseCookie): void => void cookies.push(serializeSessionCookie(cookie));
+    const result = await options.handler({ user, query, body, params, requestId, request, setSessionCookie });
     const answer = options.output.safeParse(result);
     if (!answer.success) throw new ResponseSchemaError(options.route, answer.error.issues.map((issue) => issue.path.join('.')));
     const status = options.status ?? DEFAULT_STATUS;
     if (status === NO_CONTENT_STATUS) {
       // A 204 has no body: whatever the handler returned would be dropped, so returning anything is a mistake in the code.
       if (answer.data !== undefined) throw new ResponseSchemaError(options.route, []);
-      return noContentResponse(requestId);
+      return noContentResponse(requestId, cookies);
     }
-    return jsonResponse(answer.data, status, requestId);
+    return jsonResponse(answer.data, status, requestId, cookies);
   }
 
   async function handle(request: Request, context?: NextRouteContext): Promise<Response> {
