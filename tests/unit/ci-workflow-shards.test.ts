@@ -37,16 +37,16 @@ function strategyBlock(id: string): string {
 }
 
 describe('CI workflow: the shards behind the required check (AQP-227)', () => {
-  // QLT-02. `exclude` of shard 3 runs two shards (`strategy.job-total` is 2) and `include` of shard 4 runs four, while the
-  // `shard: [1, 2, 3]` line, which `ci-workflow.test.ts` and `e2e-shards.test.ts` read, still says three. `max-parallel`
-  // would serialise the shards and lose the time the third shard buys.
+  // QLT-02. `exclude` of shard 4 runs three shards (`strategy.job-total` is 3) and `include` of shard 5 runs five, while the
+  // `shard: [1, 2, 3, 4]` line, which `ci-workflow.test.ts` and `e2e-shards.test.ts` read, still says four. `max-parallel`
+  // would serialise the shards and lose the time the fourth shard buys.
   it('AC-1: the e2e strategy has no include, exclude or max-parallel', () => {
     expect(strategyBlock('e2e')).not.toMatch(/\b(include|exclude|max-parallel)\b/);
   });
 
   // The same class: a second matrix dimension would multiply the jobs. Together with the shard list this pins the whole block.
   it('AC-1: the e2e strategy holds only fail-fast: false and the one-line shard list', () => {
-    expect(strategyBlock('e2e')).toBe('      fail-fast: false\n      matrix:\n        shard: [1, 2, 3]');
+    expect(strategyBlock('e2e')).toBe('      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4]');
   });
 
   // QLT-03 (AQP-208 AC-4). A job-level `continue-on-error` stops a failed job from failing the run, so a
