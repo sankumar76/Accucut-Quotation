@@ -82,8 +82,8 @@ describe('BR-003: the routes an Engineer can reach are named here, so adding one
    * Edit this list only when a story adds a route that an Engineer is meant to open, and name that story in the commit.
    * Every route listed has an allow-list response with no cost field (architecture section 6, "Engineer-reachable routes").
    */
-  // `/api/v1/options/materials` is STORY-02.03's: IDs, names and Material Considered through one strict schema, no rate of any kind (AC-4); `/api/v1/options/treatments` is STORY-02.05's: IDs and names (AC-5).
-  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/estimates/[code]', '/about', '/account/password'];
+  // `/api/v1/options/materials` is STORY-02.03's: IDs, names and Material Considered through one strict schema, no rate of any kind (AC-4); `/api/v1/options/treatments` is STORY-02.05's: IDs and names (AC-5); `/api/v1/options/customers` is STORY-02.02's: IDs and names (AC-5).
+  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/estimates/[code]', '/about', '/account/password'];
 
   it('matches exactly', () => {
     const reachable = ROUTE_MANIFEST.filter((row) => row.roles !== 'public' && allowsRole(row, 'ENGINEER')).map((row) => row.path);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { createCustomerMethods, type CustomerMethods } from './customer-repository';
 import { isRecordNotFound, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
 import { createExchangeRateMethods, type ExchangeRateMethods } from './exchange-rate-repository';
@@ -10,10 +11,10 @@ import { createTreatmentMethods, type TreatmentMethods } from './treatment-repos
 import { clientFor, type Transaction } from './transaction';
 
 /**
- * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01); the story for
- * customers adds its methods here. The Material Master (STORY-02.03) is `material-repository.ts`, the Exchange Rate Master (STORY-02.04) is
- * `exchange-rate-repository.ts` and the Treatment / Color list (STORY-02.05) is `treatment-repository.ts`; this repository includes all three,
- * so the file stays within its size limit (coding standards section 1).
+ * Storage of the master data the Admin keeps (architecture section 5.1). Today that is the Process Master (STORY-02.01) in this file. The Material
+ * Master (STORY-02.03) is `material-repository.ts`, the Exchange Rate Master (STORY-02.04) is `exchange-rate-repository.ts`, the Treatment / Color
+ * list (STORY-02.05) is `treatment-repository.ts` and the Customer Master (STORY-02.02) is `customer-repository.ts`; this repository includes all
+ * four, so the file stays within its size limit (coding standards section 1).
  *
  * A rate's default value is carried as **decimal text** ("0.37"), never as a JavaScript number (coding standards section 10,
  * "Money and rates"): the column is `Decimal(18,4)`, and the text keeps at least two decimals and drops zeros beyond them.
@@ -49,7 +50,7 @@ export interface ProcessItemChanges {
   readonly defaultValue?: string | undefined;
 }
 
-export interface MasterRepository extends ExchangeRateMethods, MaterialMethods, TreatmentMethods {
+export interface MasterRepository extends CustomerMethods, ExchangeRateMethods, MaterialMethods, TreatmentMethods {
   /** Every rate, in the order of SPEC section 4.1 (the seed items) and then in the order they were added. */
   listProcessItems(): Promise<ReadonlyArray<ProcessItemRecord>>;
   /**
@@ -76,6 +77,17 @@ const LOCKED_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), u
 
 export { MasterConstraintError, type MasterConstraint } from './master-constraints';
 export { trimDecimalText };
+export type {
+  CustomerDetailChanges,
+  CustomerDetailRecord,
+  CustomerMethods,
+  CustomerOptionRecord,
+  CustomerRateRecord,
+  CustomerRateValue,
+  CustomerRecord,
+  CustomerSummaryRecord,
+  NewCustomer,
+} from './customer-repository';
 export type { ExchangeRateMethods, ExchangeRateStamp, ExchangeRatesRecord, NewExchangeRateStamp } from './exchange-rate-repository';
 export type { MaterialChanges, MaterialMethods, MaterialOptionRecord, MaterialRecord, NewMaterial } from './material-repository';
 export { TreatmentNameTakenError } from './treatment-repository';
@@ -86,9 +98,10 @@ function toRecord(row: { readonly id: string; readonly name: string; readonly un
 }
 
 /** Builds the repository over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
-// Over 40 lines on purpose (coding standards section 1): one object of the seven Process Master methods, each about 20 lines or fewer, plus a spread of the material, exchange rate and treatment methods.
+// Over 40 lines on purpose (coding standards section 1): one object of the seven Process Master methods, each about 20 lines or fewer, plus a spread of the customer, material, exchange rate and treatment methods.
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
+    ...createCustomerMethods(db),
     ...createMaterialMethods(db),
     ...createExchangeRateMethods(db),
     ...createTreatmentMethods(db),

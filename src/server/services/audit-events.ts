@@ -2,10 +2,11 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { RUPEE } from '../../lib/masters/master-rules';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
-import { formatDefaultValue, unitLabel } from '../../lib/masters/process-items';
+import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '../../lib/masters/process-items';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 import type { JsonValue } from '../repositories/audit-repository';
 
@@ -138,6 +139,43 @@ function describeMaterial(state: z.output<typeof materialState>): string {
 /** A treatment as the log keeps it: its name. The ID and the name label the entry. */
 const treatmentState = z.strictObject({ name: z.string().min(1) });
 
+// ---- Shape of the Customer Master events (SCR-16 "Master data edit"; STORY-02.02, architecture section 8 "Customers") -----------------------
+/**
+ * One rate of a customer as the log keeps it: the Process Master item's ID, its name and unit at that moment (items are renamed, D-39) and the customer's
+ * value as decimal text. A create lists every rate as created; an edit or a reset lists only the rates that changed, `before` with the old values and
+ * `after` with the new ones, for the same items in the order of the SCR-12 table.
+ */
+const customerRateState = z.strictObject({
+  processItemId: z.uuid(),
+  name: z.string().min(1),
+  unit: z.string().min(1),
+  value: decimalText,
+});
+
+/**
+ * A customer as the log keeps it. `contact` names the contact fields that were given (a create) or changed (an edit), the same list on both sides, and
+ * **never their values**: the log is append-only, a phone number or an address is personal data, and erasure waits on Q-26 (data minimisation, as for the
+ * user events). The ID and the name label the entry; `name` is kept in the state as well, so an edit shows the old name and the new one.
+ */
+const customerState = z.strictObject({
+  name: z.string().min(1),
+  contact: z.array(z.enum(CONTACT_FIELD_NAMES)),
+  rates: z.array(customerRateState),
+});
+
+const CONTACT_WORDS: Readonly<Record<ContactFieldName, string>> = { phone: 'Phone', email: 'E-mail', address: 'Address' };
+
+/** "Cutting-Rate-per-Sec ₹ 0.50" and "OH Profit % 11.00 %": the rate and its value in the unit's own form. */
+function describeCustomerRate(rate: z.output<typeof customerRateState>): string {
+  return `${rate.name} ${rate.unit === PERCENT_UNIT ? formatDefaultValue(rate.value, rate.unit) : `${RUPEE} ${rate.value}`}`;
+}
+
+/** "Brightwater Controls; Contact: Phone, E-mail; Cutting-Rate-per-Sec ₹ 0.50": the name, the contact fields, and the rates the entry lists. */
+function describeCustomer(state: z.output<typeof customerState>): string {
+  const contact = state.contact.length === 0 ? [] : [`Contact: ${state.contact.map((field) => CONTACT_WORDS[field]).join(', ')}`];
+  return [state.name, ...contact, ...state.rates.map(describeCustomerRate)].join('; ');
+}
+
 // ---- Shape of the Exchange Rate Master events (SCR-16 "Master data edit"; STORY-02.04) ------------------------------------------
 /**
  * The exchange rates as the log keeps them: each of the two rates as decimal text, or null while it was never set. One entry covers the pair
@@ -164,6 +202,7 @@ export const MASTER_SHAPES = {
   material: materialState,
   exchange_rate: exchangeRateState,
   treatment: treatmentState,
+  customer: customerState,
 } as const satisfies Readonly<Record<string, StoredShape>>;
 
 /** The same table as a Map, so a type such as "constructor" finds nothing: a Map has no inherited members to find (deny by default). */
@@ -180,7 +219,7 @@ function masterShapeOf(objectType: string): StoredShape | undefined {
  * **words** are chosen by the entry's object type, never by guessing from the keys (a material state under `process_item` is not
  * described as a rate; the screen shows a dash).
  */
-const masterState = z.union([processItemState, materialState, exchangeRateState, treatmentState]);
+const masterState = z.union([processItemState, materialState, exchangeRateState, treatmentState, customerState]);
 
 function wordsOf<T extends z.ZodType>(shape: T, describe: (state: z.output<T>) => string): (state: unknown) => string | null {
   return (state) => {
@@ -198,6 +237,7 @@ const MASTER_WORDS = {
   material: wordsOf(MASTER_SHAPES.material, describeMaterial),
   exchange_rate: wordsOf(MASTER_SHAPES.exchange_rate, describeExchangeRates),
   treatment: wordsOf(MASTER_SHAPES.treatment, (state) => state.name),
+  customer: wordsOf(MASTER_SHAPES.customer, describeCustomer),
 } as const satisfies { readonly [K in keyof typeof MASTER_SHAPES]: (state: unknown) => string | null };
 
 /** The same table as a Map, so a stored object type such as "toString" finds nothing: a Map has no inherited members (deny by default). */

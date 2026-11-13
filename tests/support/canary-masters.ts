@@ -2,6 +2,7 @@ import { Decimal } from 'decimal.js';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 
+import { CUSTOMER_CANARY_VALUES } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { PROCESS_MASTER_CANARIES, PROCESS_MASTER_CANARY_NAME, PROCESS_MASTER_CANARY_VALUES } from './process-master-canary';
@@ -61,15 +62,15 @@ export const SEED_RATE_SENTINELS: ReadonlyArray<{ readonly id: string; readonly 
 );
 
 /**
- * Every Restricted value and its sentinel. Customers have no table yet (story 02.02 adds it); their sentinels are listed already so the
- * forbidden list and the scan are complete from the first Engineer route, and that story adds the loader that writes its sentinels into its
- * table. The materials have theirs (STORY-02.03: `ensureCanaryMaterials` in `tests/e2e/support/auth.ts`) and so do the exchange rates
+ * Every Restricted value and its sentinel. The customers' rates have theirs (STORY-02.02: `ensureCanaryCustomers` in `tests/e2e/support/auth.ts`), so the
+ * forbidden list and the scan are complete. The materials have theirs (STORY-02.03: `ensureCanaryMaterials` in `tests/e2e/support/auth.ts`) and so do the exchange rates
  * (STORY-02.04: `ensureCanaryExchangeRates`).
  */
 export const canaryMasters: ReadonlyArray<CanarySentinel> = [
   ...SEED_RATE_SENTINELS.map((rate): CanarySentinel => ({ kind: 'process-rate', label: `Process rate ${rate.name}`, value: rate.value })),
   ...sentinels('process-rate', 'Process master canary rate', PROCESS_MASTER_CANARY_VALUES),
-  ...sentinels('customer-rate', 'Customer rate', ['881.37', '882.37']),
+  // The Customer Master's rates (STORY-02.02): taken from `customer-canary.ts`, which is their single definition and also loads them into the E2E database.
+  ...sentinels('customer-rate', 'Customer rate', CUSTOMER_CANARY_VALUES),
   // The Material Master's numbers (STORY-02.03): taken from `material-master-canary.ts`, which is their single definition and also loads
   // them into the E2E database. A six-digit and a seven-digit price, so the lakh and crore groupings of Indian number format are exercised.
   ...sentinels('material-price', 'Material price', MATERIAL_CANARIES.map((material) => material.pricePerKg)),
