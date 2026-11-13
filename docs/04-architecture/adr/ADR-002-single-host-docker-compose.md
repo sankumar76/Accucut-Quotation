@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-01** until the open part of Q-18 is answered. Revised for v0.3 (D-15) and for architectures v0.8 and v0.9: backups stay on the same server, and the Admin holds the key, has server access and runs a restore (AQP-1 comments 10550, 10559, 10560), for `master` to check at G4 |
+| Status | **Superseded by ADR-015 for the runtime and install model (2026-11-13, a Windows Server with a 40 GB disk)**; its backup decisions stand. Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). **Rests on assumption A-01** until the open part of Q-18 is answered. Revised for v0.3 (D-15) and for architectures v0.8 and v0.9: backups stay on the same server, and the Admin holds the key, has server access and runs a restore (AQP-1 comments 10550, 10559, 10560), for `master` to check at G4 |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh and Accucut IT at G3) |
 | Related | NFR-003, 011, 012, 013, 030; FR-091; Q-18; ADR-001 |

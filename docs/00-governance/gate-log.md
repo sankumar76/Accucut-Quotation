@@ -7657,3 +7657,138 @@ Alternatives considered:
 - A median of five on `master` now. Rejected: it needs a merge freeze to read a state that AQP-81 probably changes, and a cheaper window is available.
 
 **Posted:** Jira AQP-276 comment 11786; PR #336 comment 6845687690.
+
+## G7 – QA Acceptance — AQP-289 (DEF-035, #123, Sev-2; PR #361: H2 = 43182d9; H3 = f88170a = H2 + the QA report) — 2026-11-13 (attempt 1)
+
+- **Decision:** **GO (DL-206).** Every DL-199 (6) item has a result with evidence. DEF-035 is verified, and no Sev-1 or Sev-2 is open. H3's regression is +7 / +7 / +3 / +0 with every base name present. Q-12 (SCR-12) is met by control #367, because its rendering code equals H4's: QA adds no control on H4, and pre-ruled check Q plus H4's CI stand in for it. H4 is made by update-branch on the newest tip (4b3579f now). #361 squashes before #341.
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no (G7 is not in `HUMAN_APPROVAL_POINTS`; MERGE_POLICY all-auto, CLAUDE.md §8; §9 item 1)
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-289-test-report.md` at f88170a: ACCEPT. QA hand-off: Jira 11788 and PR comment 6845715300. Orchestrator brief: Jira 11780.
+  - **Branch, read by master:** f88170a has the one parent 43182d9 and adds only the report (+131). `b6b38c5..f88170a` is the 7 files. The body has "Closes #123" and "Refs AQP-289", and no other closing keyword appears in the body or in the 3 commit messages. Reviews: 5 COMMENTED, 0 REQUEST_CHANGES. Labels: `review:standards-approved`, `review:quality-approved`, `gate:g6-pass`.
+  - **CI 43376455456** (H3, attempt 1, 5 of 5). Merge ref 7ab4a37 (into e76b513). 786 commits scanned, no leaks. Vitest 169 / 3,340 and 231 / 5,825. E2E 299 + 298 + 284 = 881 passed, 24 skipped, 905 listed (three shards). 0 `✘`, 0 retry, 0 flaky, 0 ECONNRESET. There are 3 digest lines, which are the server line alone. Against 43342511688 attempt 1 (3,333 / 5,818 / 878 / 24) that is **+7 / +7 / +3 / +0**. Master's own name comparison: 0 of 896 distinct base names are missing. The 3 added are the DEF-035 case at three widths, each `✓`. Vitest: 0 of 398 file lines are missing, plus the new unit file in each config.
+  - **Control #366** (run 43374926854, 5 of 5). SCR-11 and SCR-13 at 360 / 768 / 1024 / 1366 px give 8 / 4 / 4 / 3 lines, with left edges 41 / 49 / 305 / 305 and right edges 319 / 719 / 967 / 1309 px. Overflow is 0, and each reading is ×3. The six fixed titles are one line each at 360 and 1366 px.
+  - **Control #367** (run 43374170593, 5 of 5). SCR-12 gives the same readings. `e76b513..2bf6ae5` equals `b6b38c5..43182d9` in its `-U0` lines (117 lines, `cmp`).
+  - **Tip moves:**
+    - **cce9ea4** (#336) squashed at 06:15:03Z. Its push run 43377388993 is 6 of 6 at 3,333 / 5,818 / 880 + 1 flaky = 881 / 24 / 905, `shard i of 4`, with all 896 names. The flaky is DEF-036 (job 131726964633, `customers.spec.ts:175` [desktop], ECONNRESET at `support/customers.ts:52`, passed on retry #1); it is named and not counted.
+    - **4b3579f** (#363) squashed at 06:24:28Z (`docs/` and CLAUDE.md only). Its push run 43378489433 was in progress when master read it.
+    - `b6b38c5..4b3579f` touches none of the 7 files.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC (DL-199 (6) item) has a verification result with evidence | ✱ | ✅ | (a) and (b) at four widths with 3 or more lines; (c) axe 0 in 24 scans, and the CI cases by name on H2 and H3; (d) one line each, with the same text (met in substance; a one-line title has no break to differ); (e) n/a; (f) H3 run read by master; (g) one file |
+| 2 | No open Sev-1 / Sev-2 | ✱ | ✅ | DEF-035 verified; DEF-036 Sev-3 belongs to another story |
+| 3 | Regression recorded and green | ✱ | ✅ | 43376455456: +7 / +7 / +3 / +0, 0 of 896 names missing, 0 flaky |
+| 4 | Exploratory notes | | ✅ | Charter and areas recorded, SCR-12 included, with the "not tested" items listed |
+| 5 | Accessibility (UI stories) | | ✅ | axe with the five NFR-018 tags: 24 control scans and the CI scans by name |
+| 6 | Q-12 (DL-202 (9)(d)) | | ✅ | #367 readings; rendering-code equality to H4 by check Q (DL-206 (3)) |
+| 7 | H3 = H2 + the report alone | | ✅ | `git show --stat f88170a` |
+
+**Merge steps (orchestrator; DL-206 (5))**
+| # | Step | Check |
+|---|------|-------|
+| M1 | Preconditions | This GO; `Stages 1 to 11` success on f88170a; no REQUEST_CHANGES; body "Closes #123", "Refs AQP-289" |
+| M2 | Tip push run | The newest tip's push run (4b3579f: 43378489433) completes, with attempt 1 read in full. Expected: 6 of 6 at 3,333 / 5,818 / 881 / 24 / 905 and 896 names. A red is read, never re-run away; no H4 on a red tip |
+| M3 | H4 | Update-branch (merge method) with `expected_head_sha` f88170a. Then all of these hold: parents f88170a and the tip; `--cc` empty; `f88170a..H4` = `b6b38c5..tip`; `tip..H4` = `b6b38c5..f88170a` (`-U0` lines); `tip..H4` = exactly the 7 files; **Q:** `e76b513..tip` lists nothing under `src/` or `public/` and no package, Next, Tailwind, PostCSS or tsconfig file. Any failure comes to master |
+| M4 | CI on H4 | 6 of 6, with no leaks. Vitest 169 / 3,340 and 231 / 5,825. E2E 884 / 24 / 908 listed, `shard i of 4` (a named DEF-036 flaky counts in the 884). 899 distinct names; DEF-035 and `materials.spec.ts:327` `✓` at three widths. If M2 differs: M2 +7 / +7 / +3 / +0 |
+| M5 | Squash, `sha` = H4 | Title and body below, plus the attribution line. The only closing keyword is "Closes #123" |
+| M6 | After the squash | One parent (the tip) and H4's tree. The push run is +7 / +7 / +3 / +0 against M2, 6 of 6. #123 closed. qa-engineer moves AQP-289 to Done and adds SCR-12 to DEF-035's affected screens |
+
+**Squash title:** `AQP-289: DEF-035: Process "No match" title wraps a long search` (GitHub's ` (#361)` suffix accepted).
+
+**Squash body (exact):**
+
+```
+DEF-035 (Sev-2): a long search with no break point made the "No match" empty-state title overflow the window, so the page scrolled sideways (NFR-016, FR-085, ux-spec 6.0 "Names wrap").
+
+- The shared EmptyState heading (src/components/shared/states.tsx) applies BREAK_LONG_NAMES, so every caller's title wraps a long word inside its box.
+- Materials (material-results.tsx) drops its own wrap class, now redundant.
+- Comments in break-long-names.ts and master-texts.ts name EmptyState titles beside Notice.
+- Tests: tests/unit/empty-state-wraps-long-names.test.ts (7 tests), and the SCR-11 E2E case in tests/e2e/process-master.spec.ts at mobile, tablet and desktop (100 W: the search text itself wraps onto 3 or more lines, no page overflow, axe).
+- The shared heading also wraps the SCR-12 Customers "No customer matches" title (Q-12, DL-202, DL-206).
+
+QA report: docs/07-qa/AQP-289-test-report.md (ACCEPT on 43182d9).
+G6: DL-199 (conditions met, DL-202). G7: DL-206 (GO).
+
+Closes #123
+Refs AQP-289
+```
+
+**Order:** #361 now, then #341 after its G7 (no shared file; #341's DL-204 (6)(c) update then includes #361). The next records PR does not merge between H4 and this squash.
+
+**Risks:** none new. RISK-028 stays at 8. DEF-036 stays open (Sev-3, §9 hardening window).
+
+**Rationale:** see DL-206. All three mandatory items pass on evidence master re-read. A control on H4 could only repeat #367's numbers on the same rendering code, and check Q proves that equality while failing closed if the tip changes rendering code.
+
+Alternatives considered:
+- A QA-only control on H4. Rejected: it uses the same rendering code as #367, costs an extra branch and run, and §9 stops control branches.
+- A new SCR-12 E2E. Rejected: DL-202 ruled against it.
+- CONDITIONAL GO on Q-12. Rejected: Q-12 is a pre-squash item, not a G7 item.
+- #341 first. Rejected: its G7 is pending.
+
+**Posted:** Jira AQP-289 comment 11794; PR #361 comment 6845933013. The DL-207 scope entry is on AQP-1, comment 11795.
+
+## G7 – QA Acceptance — AQP-81 (STORY-01.05 Password rule and change own password, PR #341: G7 head ceb6787; H_r = a5dbd99 = ceb6787 + the QA report) — 2026-11-13 (attempt 1)
+
+- **Decision:** **GO (DL-208).** AC-1 to AC-7 and DL-204 (5) (a) to (h) each have a result with evidence. 0 defects. H_r's run is +191 / +236 / +13 / +0 against AQP-276's four-shard push run, with 0 of 896 names missing. #361 squashes first (DL-206). #341 then takes its final update onto that tip, and squashes with the STD-11 subject.
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no (G7 is not in `HUMAN_APPROVAL_POINTS`; CLAUDE.md §8 and §9 item 1)
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-81-test-report.md` at a5dbd99: ACCEPT, 0 defects. QA hand-off: Jira 11796 and PR comment 6845942934.
+  - **Branch:** a5dbd99 has one parent, ceb6787, and adds only the report (+111). `0ca47df..a5dbd99` touches 80 files. No closing keyword appears in the body or in the commits. Reviews: 23, all COMMENTED; labels are the three `-approved` plus `gate:g6-pass`.
+  - **CI 43378267495** (H_r, attempt 1, 6 of 6):
+    - Merge ref ded5a77 (into cce9ea4). 792 commits scanned, no leaks.
+    - Vitest 3,524 / 6,054. `/account` is 169,632 B; all 12 rows are within the limit.
+    - E2E: 894 passed, 24 skipped, 918 listed, across 4 shards. 0 `✘`, 0 retry, 0 flaky, 0 ECONNRESET.
+    - Against 43377388993 that is **+191 / +236 / +13 / +0**. 0 of 896 base names are missing, and the 13 new instances are DL-196's list.
+  - **Control #368** (closed unmerged; 2 test files): runs 43375810924 and 43377097630, both 5 of 5. Master read the second: every `QA81` case passes at three widths, with 0 `✘`.
+    - Blocked state: v0.27 words, focus on the alert wrapper, overflow 0, axe 0 with five tags.
+    - (d): 409 and 403 show their title only, and the abort control shows the connection sentence.
+    - (e): 422 `PASSWORD_RULE` in both states, and 204 for a case-only change.
+  - **Brief check:** CLAUDE.md §9 item 7 does not name AQP-81 or DEF-035 (see DL-208 (3)).
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-7 matrix; DL-204 (5) (a) to (h) |
+| 2 | No open Sev-1 / Sev-2 | ✱ | ✅ | 0 defects; DEF-036 (Sev-3) did not occur |
+| 3 | Regression recorded and green | ✱ | ✅ | 43378267495 at +191 / +236 / +13 / +0; 0 of 896 names missing; 0 flaky |
+| 4 | Exploratory notes | | ✅ | 60-minute charter; O-1 to O-4 |
+| 5 | Accessibility (UI stories) | | ✅ | axe with five tags and the keyboard walk at three widths; Blocked state 0 violations |
+| 6 | DL-204 (5)(f) integration check | | ✅ | A must-change person is refused on the three AQP-142 routes (real server, Lead), plus the Admin case at unit level |
+| 7 | H_r = ceb6787 + the report alone | | ✅ | `git show --stat a5dbd99` |
+
+**Merge steps (orchestrator; DL-208 (4))**
+| # | Step | Check |
+|---|------|-------|
+| M1 | Preconditions | This GO; `Stages 1 to 11` success on a5dbd99; no REQUEST_CHANGES |
+| M2 | Order | #361 squashes first (DL-206): #341 changes `src/`, which would break #361's check Q |
+| M3 | H_f | Update-branch (merge method) onto #361's squash tip, `expected_head_sha` a5dbd99. `--cc` is empty. `a5dbd99..H_f` = `0ca47df..tip`, and `tip..H_f` = `0ca47df..a5dbd99` (`-U0` lines). Exactly the 80 files |
+| M4 | CI on H_f | 6 of 6 at the tip push run +191 / +236 / +13 / +0 (expected 3,531 / 6,061 / 897 / 24 / 921 listed). All names present. 0 flaky except a named DEF-036 instance. No leaks. Stage 11b green. A red run is read, never re-run away |
+| M5 | Path | Post the first-attempt path, its base and the shard count (a reading only) |
+| M6 | Squash, `sha` = H_f | Title `feat(auth): AQP-81 STORY-01.05 password rule and change own password [AQP-81]`, with the body below plus the attribution line. No closing keyword; Refs #346 |
+| M7 | After the squash | One parent and H_f's tree. The push run is +191 / +236 / +13 / +0 against the tip run. QA moves the story to Done and closes the sub-tasks. No median of five (§9 item 4) |
+
+**Squash body (exact):**
+
+```
+STORY-01.05 (AQP-81): one password rule (10 to 128 code points, a number and a symbol, not the e-mail, not a common password, not the product words) applies wherever a password is set: the Admin adding a user or resetting a password, the first Admin (bootstrap-admin) and a person changing their own. Sign-in never runs it.
+
+- SCR-23 /account: a person changes their own password (POST /api/v1/account/password). This browser gets a fresh session at the new version, other devices are signed out, and one info log line is written; a new password equal to the current one is refused (422).
+- A person who must change their password (added or reset by the Admin) is sent to /account from every page and refused on every other API route (403 PASSWORD_CHANGE_REQUIRED), the AQP-142 customer routes included.
+- Five wrong current passwords block the change for 15 minutes on its own throttle key; sign-in still works.
+- SCR-14 password hints begin with the rule.
+- Tests: unit, integration, security and E2E at three widths (13 new E2E instances).
+
+QA report: docs/07-qa/AQP-81-test-report.md (ACCEPT, 0 defects).
+G6: DL-191, DL-196, DL-198 (GO); integration merge DL-204. G7: DL-208 (GO).
+
+Refs #346
+```
+
+**Risks:** none new. RISK-023 stays at 8, and measure windows are frozen under §9.
+
+**Rationale:** see DL-208.
+
+**Posted:** Jira AQP-81 comment 11799; PR #341 comment 6846037875; #346 comment 6846039002 (O-1). DL-209 and DL-210 are on AQP-1, comment 11800.

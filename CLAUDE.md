@@ -243,3 +243,5 @@ and G8 stay human".
 6. **Records:** one `docs/project-state.md` update a day, and short Jira comments (a link to the PR,
    with the result). Stories still move through the Jira statuses.
 7. **Human decisions** are asked at once, one at a time, through the main session.
+
+2026-11-13: target moved to about 2026-12-07 or 2026-12-08 for the G8 recommendation, because all of R2 is kept in scope (DL-210).
