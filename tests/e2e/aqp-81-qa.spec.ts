@@ -306,3 +306,64 @@ test.describe('(f) a person who must change their password, on the customer rout
     await admin.dispose();
   });
 });
+
+test.describe('AC-7 keyboard only', () => {
+  /** Where focus is, by what a person hears: the label of a field, or the name of a button; and whether it draws a focus indicator. */
+  async function stop(page: Page): Promise<{ readonly name: string; readonly indicator: boolean }> {
+    return page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement)) return { name: '', indicator: false };
+      const label = element instanceof HTMLInputElement ? (element.labels?.[0]?.textContent ?? '') : '';
+      const style = getComputedStyle(element);
+      return {
+        name: (element.getAttribute('aria-label') ?? (label || (element.textContent ?? ''))).trim(),
+        indicator: style.outlineStyle !== 'none' || style.boxShadow !== 'none',
+      };
+    });
+  }
+
+  test('QA81 AC-7: the whole change is made with the keyboard: Tab reaches every field, every toggle and the button in order, Space shows and hides, Enter sends, and a success notice follows', async ({ page }, testInfo) => {
+    const person = await createDisposableUser('password', testInfo);
+    await signIn(page, person, E2E_PASSWORD);
+    await expect(page).toHaveURL(/\/queue$/);
+    await openAccount(page);
+
+    await current(page).focus();
+    const walked = [await stop(page)];
+    // Typing by keyboard, then Tab to the next stop.
+    await page.keyboard.type(E2E_PASSWORD);
+    for (let step = 1; step <= 6; step += 1) {
+      await page.keyboard.press('Tab');
+      walked.push(await stop(page));
+      if (step === 2) await page.keyboard.type(NEW_PASSWORD);
+      if (step === 4) await page.keyboard.type(NEW_PASSWORD);
+    }
+    const names = walked.map((entry) => entry.name);
+    note(`QA81 AC-7 keyboard ${JSON.stringify({ project: testInfo.project.name, walked })}`);
+    expect(names).toEqual(['Current password', 'Show password', 'New password', 'Show password', 'Repeat new password', 'Show password', 'Change password']);
+    expect(walked.every((entry) => entry.indicator), 'every stop draws a focus indicator').toBe(true);
+    await expect(current(page)).toHaveValue(E2E_PASSWORD);
+    await expect(newPassword(page)).toHaveValue(NEW_PASSWORD);
+    await expect(repeat(page)).toHaveValue(NEW_PASSWORD);
+
+    // Space shows the text of New password and again hides it, with the keyboard only (Shift+Tab back to the second toggle, the one beside New password).
+    for (let back = 0; back < 3; back += 1) await page.keyboard.press('Shift+Tab');
+    expect(await stop(page)).toMatchObject({ name: 'Show password' });
+    await expect(page.getByRole('button', { name: 'Show password' }).nth(1)).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(newPassword(page)).toHaveAttribute('type', 'text');
+    await expect(page.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Space');
+    await expect(newPassword(page)).toHaveAttribute('type', 'password');
+
+    // On to the button and Enter.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    expect((await stop(page)).name).toBe('Change password');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: 'Your password has been changed.' })).toBeVisible();
+    await expect.poll(async () => (await focusReading(page)).tag).toBe('DIV');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+});
