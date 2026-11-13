@@ -2,6 +2,7 @@ import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest'
 
 import { CUSTOMER_RECIPE_ID } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
+import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
 import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
@@ -104,6 +105,10 @@ function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
+    // STORY-01.05: the person changes their own password to a different one (QLT-01). The harness puts each role back on the first password
+    // whenever `signInAs` names it, so the call repeats as every role; the real scan makes it once for a person made for the run.
+    case 'POST /api/v1/account/password':
+      return { id: NO_RECIPE_ID, body: { currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_NEXT_PASSWORD }, status: 204 };
     case 'GET /api/v1/users':
       return DEFAULT_CALL;
     case 'POST /api/v1/users':

@@ -22,6 +22,11 @@ export interface AppShellProps {
   readonly navGroups: ReadonlyArray<NavGroup>;
   readonly bell: ReactNode;
   readonly account: ReactNode;
+  /**
+   * False for "Set a new password" (STORY-01.05 AC-5, UX spec SCR-23): no side menu, no menu button and no drawer, because every
+   * page but one sends the person back to the account page. The top bar and the page stay. Defaults to true.
+   */
+  readonly withMenu?: boolean;
   readonly children: ReactNode;
 }
 
@@ -74,7 +79,7 @@ function MenuButton({ open, first, buttonRef }: MenuButtonProps) {
  * The drawer is not in the first load (AQP-188, NFR-009): its code is fetched on the first press of the menu button,
  * through the loader every overlay uses (`use-first-open.ts`), and stays mounted afterwards.
  */
-export function AppShell({ navGroups, bell, account, children }: AppShellProps) {
+export function AppShell({ navGroups, bell, account, withMenu = true, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const titleFocus = useFocusTitleAfterNavigation(usePathname());
@@ -110,16 +115,18 @@ export function AppShell({ navGroups, bell, account, children }: AppShellProps) 
   return (
     <>
       <SkipLink />
-      <Header menuButton={<MenuButton open={menuOpen} first={drawer} buttonRef={menuButton} />} bell={bell} account={account} />
-      <div className="lg:grid lg:grid-cols-[var(--side-w)_minmax(0,1fr)]">
-        <aside data-on-dark="" className="sticky top-(--topbar-h) hidden h-[calc(100vh-var(--topbar-h))] overflow-y-auto bg-nav text-nav-ink lg:block">
-          <Nav groups={navGroups} />
-        </aside>
+      <Header menuButton={withMenu ? <MenuButton open={menuOpen} first={drawer} buttonRef={menuButton} /> : undefined} bell={bell} account={account} />
+      <div className={withMenu ? 'lg:grid lg:grid-cols-[var(--side-w)_minmax(0,1fr)]' : undefined}>
+        {withMenu ? (
+          <aside data-on-dark="" className="sticky top-(--topbar-h) hidden h-[calc(100vh-var(--topbar-h))] overflow-y-auto bg-nav text-nav-ink lg:block">
+            <Nav groups={navGroups} />
+          </aside>
+        ) : null}
         <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-(--page-max) min-w-0 flex-col gap-s-4 p-s-4 outline-none md:gap-s-5 md:p-s-5 lg:p-s-6">
           {children}
         </main>
       </div>
-      {Drawer === null ? null : (
+      {!withMenu || Drawer === null ? null : (
         <Drawer groups={navGroups} open={menuOpen} onOpenChange={setMenuOpen} onNavigate={chooseLink} onCloseAutoFocus={returnFocusToMenuButton} />
       )}
     </>

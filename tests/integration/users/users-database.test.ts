@@ -272,3 +272,27 @@ describe('AC-5: resetting a password', () => {
     expect(await signIn('still.blocked@example.test', 'invented-first-password-1')).toEqual({ status: 'refused', reason: 'locked' });
   });
 });
+
+describe('STORY-01.05 AC-4: the password rule, over the real repositories', () => {
+  it('refuses a weak first password with 422 PASSWORD_RULE, stores no user and hashes nothing', async () => {
+    const error: unknown = await service.create(by(actorId), { ...newUser('weak.first'), password: 'short1!' }).then(() => null, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(FieldValidationError);
+    expect(error).toMatchObject({ code: 'PASSWORD_RULE', httpStatus: 422, fields: [{ field: 'password', message: 'The new password must be at least 10 characters.' }] });
+    const { rows } = await db.owner.query('SELECT 1 FROM users WHERE email = $1', ['weak.first@example.test']);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('refuses a weak reset with 422 PASSWORD_RULE and leaves the hash, the version and the flag as they were', async () => {
+    const person = await service.create(by(actorId), newUser('weak.reset'));
+    const before = await row(person.id);
+    const error: unknown = await service.resetPassword(by(adminId), person.id, 'Welcome@123').then(() => null, (reason: unknown) => reason);
+    expect(error).toMatchObject({ code: 'PASSWORD_RULE', fields: [{ field: 'password', message: 'That password is too common. Choose a different one.' }] });
+    expect(await row(person.id)).toEqual(before);
+  });
+
+  it('sign-in never runs the rule: a person whose stored password is weak still signs in', async () => {
+    const person = await service.create(by(actorId), newUser('weak.stored'));
+    await db.owner.query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hasher.hash('abc'), person.id]);
+    expect((await signIn('weak.stored@example.test', 'abc')).status).toBe('signed-in');
+  });
+});

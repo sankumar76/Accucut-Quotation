@@ -28,6 +28,8 @@ const NAME_TAKEN = 'A rate with this name already exists.';
 const VALUE_MESSAGE = 'Enter a number, 0 or more, with up to 2 decimals.';
 const BLOCKED_TITLE = 'This rate is used by a formula';
 const BLOCKED_SENTENCE = 'Cutting-Rate-per-Sec cannot be deleted while a formula uses it. Formulas cannot be changed until Release 2, so this rate stays on the list.';
+/** The longest name the form allows (UX spec 6.0 "Names wrap"), typed in the search as one word. */
+const LONG_SEARCH_LENGTH = 100;
 /** A seed rate that a seed formula uses (Cutting Cost, AL), and the one that no formula uses. */
 const USED_RATE = 'Cutting-Rate-per-Sec';
 const UNUSED_RATE = 'Plating-rate-per-sqin';
@@ -332,6 +334,25 @@ test.describe('search and states (AC-1, AC-8)', () => {
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
     await expect(rowOf(page, 'Foam Cost')).toBeVisible();
+  });
+
+  test('DEF-035 (AQP-289): a 100-character search with no space shows the "No rate matches" title wrapped inside the window, and the page does not scroll sideways', async ({ page }) => {
+    await openProcessMaster(page);
+    // A wide letter with no break point: 100 of them are wider than the box at every project width, 1366 px included.
+    const query = 'W'.repeat(LONG_SEARCH_LENGTH);
+    await page.getByLabel('Search').fill(query);
+    const title = page.getByRole('heading', { level: 2, name: `No rate matches "${query}"` });
+    await expect(title).toBeVisible();
+    const width = page.viewportSize()?.width ?? 0;
+    const box = await title.boundingBox();
+    const lineHeight = await title.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight));
+    // Line 1 is "No rate matches". Without the wrap rule the title still breaks at the spaces of `No rate matches "..."`, into two lines, so the
+    // check is for a third: it shows only when the search text itself was wider than the box and was broken inside the word.
+    expect(box?.height ?? 0, 'the search text itself wrapped onto more than one line').toBeGreaterThan(lineHeight * 2.5);
+    expect(box?.x ?? -1, 'the title starts inside the window').toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? Number.POSITIVE_INFINITY), 'the title ends inside the window').toBeLessThanOrEqual(width);
+    expect(await horizontalOverflow(page), 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 
   test('shows the skeleton after 300 ms while the list is read again, with the card busy, and the list when it arrives', async ({ page }, testInfo) => {
