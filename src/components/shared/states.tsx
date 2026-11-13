@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 
-import { BREAK_LONG_NAMES } from './break-long-names';
 import { Icon } from './icon';
 
 /** The delay before a skeleton appears (UX spec section 6.0 "States": shown after 300 ms). */
@@ -82,7 +81,7 @@ export function EmptyState({ icon, title, description, action, as: Heading = 'h2
       <span aria-hidden="true" className="flex h-s-7 w-s-7 items-center justify-center rounded-full bg-surface-2 text-ink-2">
         {icon}
       </span>
-      <Heading className={cn('text-sub font-semibold text-ink', BREAK_LONG_NAMES)}>{title}</Heading>
+      <Heading className="text-sub font-semibold text-ink">{title}</Heading>
       <p className="max-w-prose text-ink-2">{description}</p>
       {action}
     </div>
