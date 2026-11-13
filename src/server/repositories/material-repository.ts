@@ -64,7 +64,7 @@ export interface MaterialMethods {
   /** Every listed material as a choice: ID, name and Material Considered. Reads no number. */
   listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
   /**
-   * The numbers of the material with this ID for a calculation, or null (unknown, deleted, or not an ID alike). Unlike the finders above it
+   * The numbers of the material with this ID for a calculation, or null (unknown, deleted, or not an ID alike). Unlike `findMaterialForUpdate` and the lists it
    * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). A plain read.
    */
   findMaterialForCalculation(id: string): Promise<MaterialValuesRecord | null>;
