@@ -7581,3 +7581,79 @@ Alternatives considered:
 Alternatives considered:
 - A narrow reviewer-quality re-read of the `noRecords` line. Rejected: CI proves the count.
 - Holding In QA for AQP-276's merge. Rejected: DL-190 binds only the merge.
+
+
+## G7 – QA Acceptance — AQP-276 (STORY-10.22 CI fourth shard, PR #336: H_m = eff79fe; H_r = a2799fe = H_m + the QA report) — 2026-11-13 (attempt 1)
+
+- **Decision:** **GO (DL-205).** AC-1 to AC-5 and AC-7 to AC-9 pass. AC-6 is met in substance under DL-203 (4) (i) to (iii). Its literal "0 flaky" is not met by one test, DEF-036 (Sev-3, pre-existing, AQP-290 / #364). The PR is `clean` on `master` e76b513, so the squash goes straight from a2799fe and first, before #363, #361 and #341. RISK-023 stays at 8.
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no (G7 is not in `HUMAN_APPROVAL_POINTS`; MERGE_POLICY all-auto, CLAUDE.md §8)
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-276-test-report.md` at a2799fe: ACCEPT. QA hand-off: Jira 11783 and PR comment 6845406902. Orchestrator brief: Jira 11784. Window record: 11776.
+  - **Branch, read by master:** a2799fe has the one parent eff79fe and adds only the report (+167). eff79fe's parents are b94eba7 and e76b513, and `--cc` prints no hunk. `e76b513..a2799fe` is the 3 code files (+14 / -14) plus the report. `mergeable_state` is `clean`, and the base is e76b513 = `origin/master`. Protection: strict, `Stages 1 to 11` only. Reviews: 3 COMMENTED, 0 REQUEST_CHANGES. No closing keyword is in the body or in the 4 commit messages.
+  - **CI 43374357956** (H_r, attempt 1, 6 of 6). Merge ref 2de2533, tree 1f04a6ce = `a2799fe^{tree}`. 782 commits scanned, no leaks. Vitest 3,333 / 5,818. E2E 881 passed / 24 skipped / 905 listed (225 + 223 + 224 + 209), `shard i of 4`. 0 `✘`, 0 retry, 0 flaky, 0 ECONNRESET, and 3 digest lines (the server line alone). Against 43342511688 attempt 1 that is **+0 / +0 / +3 / +0**. 896 of 896 names are present (master's own comparison). Path 5:26 (information).
+  - **T6, recomputed by master** (jobs API, all ten attempts). Base 5:42, 5:49, 5:01, 5:01, 5:52 (median 5:42, slowest 5:52). Head 5:11, 4:54, 4:53, 4:44, 5:01 (median **4:54**, slowest **5:11**). Gain 48 s. Queue waits 2 to 4 s. Raw 18.000 / 20.833 = **1.157**, billed 20 / 24 = **1.200**. In the 35 sample shard logs, ECONNRESET, retry and flaky each appear once (job 131625693705) and nowhere else.
+  - **Second DEF-036 sighting** (brief), run 43371572437, job 131708295261. This is DEF-035's plant control 9bd871d, at three shards (`[1, 2, 3]`), on a tree without b94eba7. Digest at 05:24:30.151Z; `customers.spec.ts:175 [desktop]` ECONNRESET at 05:24:30.318Z; passed on retry #1. It is corroboration, not a (ii) source (DL-205 (2)).
+  - **DEF-036 root cause** on AQP-290 11774 (before G7, as DL-203 (6) asked): an aborted `router.refresh()` and keep-alive socket reuse at an idle gap of about 6 s, both inside one test.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-9 in the QA matrix; AC-4, AC-5 and AC-6 recomputed by master (DL-205 (1)(c)) |
+| 2 | No open Sev-1 / Sev-2 | ✱ | ✅ | Open: DEF-036 Sev-3 (pre-existing, Test type, fails closed) |
+| 3 | Regression recorded and green | ✱ | ✅ | 43374357956: +0 / +0 / +3 / +0; 0 of 896 names missing; 0 flaky |
+| 4 | Exploratory notes | | ✅ | Charter, 45 min, N-1 to N-5 |
+| 5 | Accessibility (UI stories) | | n/a | No user-facing screen |
+| 6 | AC-6 under DL-203 (4) | | ✅ | (i) diff touches no spec, helper or `src`; (ii) the only instance is DEF-036's signature; (iii) 1 of 5 head, against a line of 2 |
+| 7 | AC-4 pass lines (DL-187) | | ✅ | Median 4:54 ≤ 5:00, slowest 5:11 ≤ 5:30, no exit, 0 replacements |
+| 8 | AC-5 cost | | ✅ | 1.157 raw, 1.200 billed ≤ 1.30 |
+| 9 | S (DL-185 (2)) verified from the diff | | ✅ | b94eba7 names AQP-276 AC-2; N-1 met in substance (DL-205 (4)) |
+| 10 | H_r = H_m + the report alone | | ✅ | `git diff --stat eff79fe a2799fe` |
+| 11 | Window freeze (DL-203 (7)(a)) | | ⚠️ | Two pushes to #363 at 04:34Z and 04:36Z; no effect on the result (DL-205 (4) N-4) |
+
+**Merge steps (orchestrator; DL-205 (5))**
+| # | Step | Check |
+|---|------|-------|
+| M1 | Preconditions | This GO; `Stages 1 to 11` success on a2799fe; no REQUEST_CHANGES; `mergeable_state` `clean` |
+| M2 | Order | #336 now and first; then #363, #361 and #341 as their own rulings say (DL-190 (1), DL-204 (6)(b)). No measure window is open |
+| M3 | PR body (no push) | AC-9 line: AQP-81 (#341) In QA, not merged, at the time of the merge; N-2 counts: 893 real, 9 / 12 `setup`, 896 distinct names; re-grep for closing keywords (none) |
+| M4 | Final update | None if `origin/master` = e76b513 and the PR reads `clean`. Otherwise update-branch (merge method, `expected_head_sha` a2799fe) giving H_f, with the DL-201 (3) checks: `--cc` empty; `a2799fe..H_f` = `e76b513..tip`; `tip..H_f` = `e76b513..a2799fe` (`-U0` `+`/`-` lines); CI 6 of 6 at the tip's push run +0 / +0 / +3 / +0, all names present, 0 flaky except a named DEF-036 instance, no leaks. A failed check goes back to master |
+| M5 | Squash, `sha` = a2799fe (or H_f) | Title and body below, plus the orchestrator's attribution line |
+| M6 | After the squash | One parent e76b513; tree 1f04a6ce83c5f8cab27835251e76941c00e25c35 (from a2799fe) |
+
+**Squash title:** `AQP-276: STORY-10.22: CI fourth shard` (GitHub's ` (#336)` suffix accepted).
+
+**Squash body (exact):**
+
+```
+STORY-10.22 CI fourth shard (enabler): the E2E job runs in four shards (matrix.shard: [1, 2, 3, 4]) instead of three. The shard pin in ci-workflow.test.ts and the exact-block pin in ci-workflow-shards.test.ts follow, and the ci.yml comments say four. No test, spec, Playwright setting or src file changes.
+
+Measure (T6, ten alternating samples, 0 replacements): head median 4:54, slowest 5:11; base median 5:42 at three shards; gain 48 s. Cost 1.157 times raw and 1.200 times billed (limit 1.30). RISK-023 stays at 8 (DL-151 (5)).
+
+QA report: docs/07-qa/AQP-276-test-report.md (ACCEPT on eff79fe).
+G6: DL-185 (narrow route), DL-187 (AC-4 slowest-run exit). G7: DL-203 (AC-6 reading), DL-205 (GO).
+
+Refs #364
+```
+
+**After the squash**
+| # | Owner | Action | Trigger |
+|---|-------|--------|---------|
+| P1 | orchestrator | Read the `master` push run: 6 of 6, attempt 1 in full, 3,333 / 5,818 / 881 / 24 / 905 listed (+0 / +0 / +3 / +0 against 43342511688 attempt 1), `shard i of 4`, all 896 names, 0 flaky except a named DEF-036 instance, no leaks; post the first-attempt path with its base and shard count (a reading only). A red run is read, never re-run away | The push run completes |
+| P2 | qa-engineer | AQP-276 to Done; close AQP-277 to AQP-284 with the squash SHA; post run 43371572437 / job 131708295261 on AQP-290 as a DEF-036 instance | P1 green |
+| P3 | solution-architect | Test strategy 10.5 item 12 AC-8 record (893 / 9 / 12; P-1 "ruled, DL-187"); STD-03: architecture §9.2 and the pin row to `[1, 2, 3, 4]`; N-3 statement for later measures. The product-manager aligns release plan 3.15 (d) | By G8; holds nothing |
+| P4 | orchestrator | RISK-023: no median of five now. Post the first 10.3 window of at least 13 runs created after the squash; a median of five on `master` after AQP-81's squash is optional, outside any window and with no merge waiting | After the squash |
+| P5 | delivery lead | Delete `control/AQP-276-shard4-fails` and `control/AQP-276-shard4-cancelled` (STD-04) | After G7 |
+| P6 | orchestrator | #341 final update per DL-204 (6)(c) on AQP-276's four-shard push run; #361 per DL-202 (9)(b); #363 at any time outside a window; DEF-036 fix PR outside any window, before G8 | P1 green |
+
+**Risks:** none new. RISK-023 stays at 8 (review note added). DEF-036 stays open (Sev-3) until its fix merges.
+
+**Rationale:** see DL-205. Every mandatory item passes on evidence that master recomputed. AC-6 is read on the attribution test fixed before the result (DL-203 (4)). The second sighting corroborates the attribution and does not change the test.
+
+Alternatives considered:
+- NO-GO on AC-6's literal text. Rejected: DL-203 (4) is the ruled reading, and none of its conditions failed.
+- CONDITIONAL GO until DEF-036's fix. Rejected: DEF-036 is not caused by this diff, and its fix is due before G8.
+- A push for N-1. Rejected: it makes an unread head for a title, and the finding's purpose is met.
+- A median of five on `master` now. Rejected: it needs a merge freeze to read a state that AQP-81 probably changes, and a cheaper window is available.
+
+**Posted:** Jira AQP-276 comment 11786; PR #336 comment 6845687690.
