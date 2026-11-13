@@ -3,13 +3,15 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality |
-| Review round | 1 |
+| Review round | 1; then DL-199 / DL-202 condition P (plant on H2) and L, with no further review round |
 | Base…branch | `master...fix/AQP-289-empty-state-title-wrap` (base b6b38c5) |
-| Commit reviewed | b7fbad84e4666c581e33c24d2a6e9e3670f9106e |
-| Date | 2026-11-12 |
-| **Verdict** | **REQUEST CHANGES** (one Major, test-only) |
+| Commit reviewed | Round 1: b7fbad84e4666c581e33c24d2a6e9e3670f9106e (H1). Conditions P and L: 43182d98a92d5d8a2c23cd470f33c7ac62b2ff23 (H2) |
+| Date | 2026-11-12 (round 1); 2026-11-13 (conditions P and L) |
+| **Verdict** | **APPROVE** on H2 (round 1 on H1: REQUEST CHANGES, one Major, test-only; fixed, see "Previous Findings") |
 
-PR review: https://github.com/sankumar76/Accucut-Quotation/pull/361 (submitted as COMMENT because `REVIEW_IDENTITY = single-token`; the verdict is stated in the body). Label: `review:quality-changes-requested`. Plant (DL-196 (10)(e)): draft PR #362, run 43270642734, closed unmerged.
+PR reviews: round 1, https://github.com/sankumar76/Accucut-Quotation/pull/361#pullrequestreview-5879225685; conditions P and L, https://github.com/sankumar76/Accucut-Quotation/pull/361#pullrequestreview-5886631651. Both were submitted as COMMENT because `REVIEW_IDENTITY = single-token`, with the verdict stated in the body. Label now `review:quality-approved`; `review:quality-changes-requested` is removed. Plants: H1, draft PR #362, run 43270642734; H2, draft PR #365, run 43371572437. Both were closed unmerged.
+
+> **Update 2026-11-13 (H2).** QLT-01 and QLT-02 are fixed in H2, which master verified in DL-199 and DL-202 (conditions V and C). The plant, re-run unchanged on H2, now turns DEF-035 red at all three widths on the wrap assertion. See "Previous Findings" and "Condition P on H2". The round-1 text below is kept as it was written for H1.
 
 ## Summary
 The production change is correct and is the ruled design (DL-196 (10)(b)). The shared `EmptyState` heading carries `BREAK_LONG_NAMES` (`overflow-wrap: anywhere`), so every caller gets the rule and none can drop it. Materials no longer adds the class itself. The plant shows that the shared rule now carries SCR-13 at all three widths, and that the unit test pins the class.
@@ -113,13 +115,36 @@ await expectNoAxeViolations(page);
 </details>
 
 ## Issues for other roles
-- qa-engineer (G7, DL-196 (10)(f)): measure 1024 px (not a CI project) and 1366 px. Until QLT-01 is fixed, the 1366 px CI case is not evidence for DEF-035.
+- qa-engineer (G7, DL-196 (10)(f)): measure 1024 px (not a CI project) and 1366 px. Until QLT-01 is fixed, the 1366 px CI case is not evidence for DEF-035. *(2026-11-13: fixed on H2, so the 1366 px CI case is now evidence.)*
 - reviewer-standards: STD-02 and the QLT-01 fix touch the same line, so one edit settles both.
+
+## Previous Findings (re-check on H2 = 43182d9)
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Major | **Fixed** (H2, verified by master DL-199, DL-202) | The query is `'W'.repeat(LONG_SEARCH_LENGTH)`. The first check is `box.height > lineHeight * 2.5`. Master corrected the threshold this report proposed (1.5) in DL-199 (3): without the rule, the title still breaks at its spaces into two lines ("No rate matches" / `"WWW…"`), so a check above 1.5 lines would pass without the fix. Only a third line shows that the search text itself was broken. The plant confirms it: without the rule, the height is 52 px (two lines) at every width, against the > 65 px threshold. Thread reply: https://github.com/sankumar76/Accucut-Quotation/pull/361#discussion_r4560005401 |
+| QLT-02 | Minor | **Fixed** (H2, verified by master DL-199, DL-202) | `await expectNoAxeViolations(page);` is the last line of the case. Thread reply: https://github.com/sankumar76/Accucut-Quotation/pull/361#discussion_r4560005594 |
+| QLT-03 | Info | No action | QA measures 1024 px at G7 (DL-199) |
+| QLT-04 | Info | No action | — |
+
+## Condition P on H2 (DL-199, DL-202): plant re-run unchanged
+Branch `control/AQP-289-qlt-h2-heading-nowrap`, commit 9bd871d (one parent, H2 = 43182d9), draft PR #365, run 43371572437. The merge ref is fad8b24 = 9bd871d into `master` e76b513. `plant289.sh` was run without change and its diff printed before the push. It gives the same blob as #362 (`fea45a2`): the class and its import removed from `states.tsx`, nothing else. All 5 jobs `failure`, as planted.
+
+| Expected red | Result |
+|---|---|
+| Lint, type-check | green, as intended |
+| `empty-state-wraps-long-names.test.ts` | **red**: the six class tests. 3,334 of 3,340 pass, and 168 other files pass |
+| DEF-035 `process-master.spec.ts:339` at mobile, tablet, desktop | **red at all three** on "the search text itself wrapped onto more than one line" (received 52, expected > 65) |
+| `materials.spec.ts:327` at three widths | **red** at all three |
+| `aqp-122-qa.spec.ts:368` (five long texts) at three widths | **red**: 15 instances |
+| Total E2E | **21 failed, 7 / 7 / 7**, all named above. Passed 287 + 291 + 281 |
+| Anything else | nothing red. One `1 flaky` line: `customers.spec.ts:175` [desktop], `apiRequestContext.post: read ECONNRESET` beside server `digest: '3305231884'`. That is **DEF-036**'s signature (AQP-290), named and not counted |
+
+The reading is posted on #365 (comment 6845057809), and #365 is closed unmerged with its branch kept. No local tests were run; the CI job logs are the evidence.
 
 ## Hand-off
 - Status: COMPLETE
-- Artefacts written/updated: `docs/06-reviews/AQP-289/quality.md` (not committed)
-- Jira / GitHub updates: PR #361 review 5879225685 (COMMENT, verdict REQUEST CHANGES, inline QLT-01 and QLT-02), label `review:quality-changes-requested`; control PR #362 (run 43270642734) closed unmerged, reading in comment 6831230688; Jira AQP-289 comment 11750
+- Artefacts written/updated: `docs/06-reviews/AQP-289/quality.md` (not committed; round 1 on `docs/AQP-1-records-sprint1-l`, the H2 update on `docs/AQP-1-records-sprint1-m`)
+- Jira / GitHub updates: round 1: PR #361 review 5879225685, #362 (run 43270642734), Jira 11750. Conditions P and L: PR #361 review 5886631651 (COMMENT, verdict APPROVE); QLT-01 and QLT-02 thread replies; label `review:quality-changes-requested` replaced by `review:quality-approved`; #365 (run 43371572437) closed unmerged; Jira AQP-289 hand-off
 - Open questions: none
-- Risks raised: none new (RISK-028 unchanged)
-- Recommended next agent: master — G6 decision for #361. QLT-01 is a test-only Major with an exact fix; the fix head can be verified with the same plant
+- Risks raised: none new (RISK-028 unchanged; DEF-036 recurred once, named, not counted)
+- Recommended next agent: orchestrator / master. P and L are met. Per DL-202, AQP-289 goes In QA, and H4 plus Q-12 are still due before the squash
