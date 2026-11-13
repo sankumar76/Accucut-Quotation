@@ -7521,3 +7521,63 @@ Alternatives considered:
 **Risks:** none new. RISK-023 is unchanged (8).
 
 **Posted:** Jira AQP-276 comment 11769; Jira AQP-142 comment 11770.
+
+---
+
+## AQP-81 (STORY-01.05, PR #341): condition I, the integration merge (between G6 and G7), 2026-11-13, master, DL-204
+
+**Not a gate decision.** This entry closes the last DL-196 (8) item before In QA, which G6 attempt 2 left open (DL-198 GO on H3). The orchestrator asked for it after the push of ceb6787 (developer 11778).
+
+**Result: condition I is MET. AQP-81 may go to In QA** (the orchestrator moves it). There is no reviewer-quality re-read.
+
+**Evidence.** Master read it with `git show --cc`, `git diff -U0` and `git log`, and with `gh api` jobs and logs. Nothing was started, re-run or cancelled.
+
+**The merge**
+- ceb6787 has two parents: ff4e193 (H3) and 0ca47df (AQP-142). The merge base is 3f22672.
+- `--cc` shows 9 files. 7 lines differ from both parents, and each is the base line plus both sides' edits:
+  - `SIGNED_IN_ROUTES`;
+  - `ENGINEER_ROUTES`;
+  - the 12-route budget list;
+  - the counts "all 12 rows", the overrun "1 of 12" and problems 10;
+  - plus the `noRecords` line "1 of 12", in an auto-merged hunk that came from AQP-142 alone.
+- Every other combined line is a one-side entry next to the other side's entry.
+
+**Comparison (i):** `ff4e193..ceb6787` against `3f22672..0ca47df`. Both cover 117 files and 8,445 lines. They differ only on those 7 lines.
+
+**Comparison (ii):** `0ca47df..ceb6787` against `3f22672..ff4e193`. Both cover 79 files.
+- The merge side has 13,431 lines, against 13,429. The 2 extra lines are the `noRecords` pair.
+- Otherwise they differ on the same lines.
+
+**CI run 43371707587**
+- Attempt 1, merge ref ca50e98 into e76b513 (a docs-only commit). 5 of 5.
+- 3,524 (176 files), 6,054 (239), E2E 891, 24 skipped. That is +191 / +236 / +13 / +0 against 0ca47df's push run 43339039704 (3,333 / 5,818 / 878 / 24).
+- Per-file Vitest deltas equal H3's own deltas file by file (39 files, 427).
+- 0 of 895 base E2E names missing. The 13 new instances are DL-196's list.
+- 0 flaky, 0 `✘`. Gitleaks: 775 commits, no leaks. Coverage 96.6 %. JS budget: 12 rows.
+- DEF-036's ECONNRESET is absent. Its server line (digest 3305231884) appears 3 times, against 5 times on the base, and fails no test.
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Every `--cc` hunk only keeps both sides | ✅ (the `noRecords` count ruled in DL-204 (1)(c)) | `git show --cc ceb6787` |
+| 2 | (i) master's change brought in exactly | ✅ the only differences are the 7 resolved lines | `-U0` comparison |
+| 3 | (ii) the PR's own change kept exactly | ✅ the only differences are the 7 lines plus the `noRecords` pair | `-U0` comparison |
+| 4 | CI 5 of 5, every count exact | ✅ +191 / +236 / +13 / +0 | 43371707587 against 43339039704 |
+| 5 | Every base name present, 0 flaky | ✅ | job logs, `comm`-style compare |
+| 6 | L, D, O done | ✅ | label events 17:32Z; threads 4553990321, 4553998836, 4553999621; PR body round 3; Jira 11748, 11742 |
+| 7 | Pushed outside any T6 window | ✅ | window closed 04:45Z (AQP-276 11776); run 05:23Z |
+
+**Conditions / next steps**
+
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| Q | orchestrator | Jira AQP-81 | Move to In QA and brief QA with DL-204 (5) | Now |
+| G7 | qa-engineer | `docs/07-qa/AQP-81-test-report.md` (one commit on #341) | AC-1 to AC-7 with evidence; (5)(b) Blocked state at 360 / 768 / 1366; (c) "AC-2, AC-7" by name at 3 widths; (d) 409 / 403 title only; (e) new = current refused, one `logger.info` line on success; (f) must-change person refused on the customers routes; (g) `/account` budget; (h) DEF-036 named if seen | G7 |
+| M | orchestrator | #341 squash | Only after G7 GO and DL-204 (6): AQP-276 merges first unless trigger (b), or (c) at 2026-11-14 00:47:58Z, fires (never in an open T6 window); final update by update-branch with the pre-ruled checks; CI at the newest push run +191 / +236 / +13 / +0; `feat(...)` `[AQP-81]` subject | Merge |
+
+**Risks:** none new. RISK-023 (8) and RISK-028 (8) are unchanged.
+
+**Rationale:** see DL-204.
+
+Alternatives considered:
+- A narrow reviewer-quality re-read of the `noRecords` line. Rejected: CI proves the count.
+- Holding In QA for AQP-276's merge. Rejected: DL-190 binds only the merge.
