@@ -114,19 +114,49 @@ for (const size of FIXED_TITLE_WIDTHS) {
       expect(reading.right).toBeLessThanOrEqual(size.width);
     }
 
+    // The first paint of both master screens is read on the server, so the list is emptied the way the screens' own specs do it: the answer to the
+    // next read is stubbed empty, and a Save makes the screen read again.
     test(`"No rates yet" (${size.width} px)`, async ({ page }) => {
+      const name = `E2E-qa289-rate-${size.width}-${randomBytes(3).toString('hex')}`;
+      const made = await page.request.post(`${DEVELOPMENT_URL}/api/v1/process-items`, {
+        headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+        data: { name, unit: 'per kg', defaultValue: '1.37' },
+      });
+      expect(made.status()).toBe(201);
+      await page.goto('/masters/process');
+      await expect(page.getByRole('heading', { level: 1, name: 'Process master' })).toBeVisible();
+      await waitUntilHydrated(page, 'main button[data-action="add"]');
       await page.route('**/api/v1/process-items', (route) =>
         route.request().method() === 'GET' ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ processItems: [] }) }) : route.continue(),
       );
-      await page.goto('/masters/process');
+      const edit = page.locator('[data-item-id]:visible').filter({ hasText: name }).getByRole('button', { name: `Edit ${name}` });
+      await edit.focus();
+      await edit.press('Enter');
+      const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+      await dialog.getByLabel('Default value').fill('4.37');
+      await dialog.getByRole('button', { name: 'Save' }).click();
       await expectOneLine(page, 'No rates yet');
     });
 
     test(`"No materials yet" (${size.width} px)`, async ({ page }) => {
+      const name = `E2E-qa289-material-${size.width}-${randomBytes(3).toString('hex')}`;
+      const made = await page.request.post(`${DEVELOPMENT_URL}/api/v1/materials`, {
+        headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+        data: { materialInDrawing: name, materialConsidered: 'Invented mild steel', pricePerKg: '58.37', specificGravity: '7.37', scrapRate: '22.37' },
+      });
+      expect(made.status()).toBe(201);
+      await page.goto('/masters/materials');
+      await expect(page.getByRole('heading', { level: 1, name: 'Materials and lists' })).toBeVisible();
+      await waitUntilHydrated(page, 'main button[data-action="add"]');
       await page.route('**/api/v1/materials', (route) =>
         route.request().method() === 'GET' ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ materials: [] }) }) : route.continue(),
       );
-      await page.goto('/masters/materials');
+      const edit = page.locator('[data-item-id]:visible').filter({ hasText: name }).getByRole('button', { name: `Edit ${name}` });
+      await edit.focus();
+      await edit.press('Enter');
+      const dialog = page.getByRole('dialog', { name: `Edit ${name}` });
+      await dialog.getByLabel('Material-Scrap-Rate (per kg)').fill('45.37');
+      await dialog.getByRole('button', { name: 'Save' }).click();
       await expectOneLine(page, 'No materials yet');
     });
 
@@ -135,16 +165,17 @@ for (const size of FIXED_TITLE_WIDTHS) {
       await expectOneLine(page, 'No open tasks');
     });
 
-    test(`the audit screen "No entries yet" and "No entries match" (${size.width} px)`, async ({ page }) => {
-      await page.route('**/api/v1/audit*', (route) =>
-        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [], total: 0, nextCursor: null }) }),
-      );
+    test(`the audit screen "No entries match" and "No entries yet" (${size.width} px)`, async ({ page }) => {
       await page.goto('/audit');
       await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible();
       await waitUntilHydrated(page, '#audit-event', 'onChange');
-      await expectOneLine(page, 'No entries yet');
+      await page.route('**/api/v1/audit*', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [], total: 0, nextCursor: null }) }),
+      );
       await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
       await expectOneLine(page, 'No entries match');
+      await page.getByLabel('Event', { exact: true }).selectOption({ label: 'All events' });
+      await expectOneLine(page, 'No entries yet');
     });
 
     test(`the feedback sections of the design system "Nothing here yet" (${size.width} px)`, async ({ page }) => {
