@@ -44,3 +44,9 @@ export type ExchangeCurrency = (typeof EXCHANGE_CURRENCIES)[number];
  * (ADR-008), so the allow-list rule in `visibility.ts` names it.
  */
 export const MATERIAL_CONSIDERED_KEY = 'material-considered';
+
+/**
+ * Key of Material Rate / Kg (column I): an `auto_lookup` field filled from the Material Master's price (SPEC section 7.1). The row
+ * calculator supplies its value to the formulas that read it (Material Cost, AK).
+ */
+export const MATERIAL_RATE_KEY = 'material-rate-per-kg';

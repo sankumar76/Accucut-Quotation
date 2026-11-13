@@ -47,11 +47,27 @@ export interface MaterialOptionRecord {
   readonly materialConsidered: string | null;
 }
 
+/**
+ * What a calculation reads of a material (STORY-03.03; architecture section 4.2): the three numbers, as decimal text, and nothing else.
+ * Restricted. The hidden "Not applicable" row has them all at 0 (SPEC section 18 D-17).
+ */
+export interface MaterialValuesRecord {
+  readonly id: string;
+  readonly pricePerKg: string;
+  readonly specificGravity: string;
+  readonly scrapRate: string;
+}
+
 export interface MaterialMethods {
   /** Every listed material, in the order they were added. Hidden and deleted materials are not listed. */
   listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
   /** Every listed material as a choice: ID, name and Material Considered. Reads no number. */
   listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
+  /**
+   * The numbers of the material with this ID for a calculation, or null (unknown, deleted, or not an ID alike). Unlike `findMaterialForUpdate` and the lists, it
+   * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). A plain read.
+   */
+  findMaterialForCalculation(id: string): Promise<MaterialValuesRecord | null>;
   /** Takes the lock that serialises changes to the materials until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
   lockMaterials(tx: Transaction): Promise<void>;
   /** The listed material with this ID, or null (unknown, hidden or deleted alike), read **with its row locked** until the transaction ends. */
@@ -126,6 +142,17 @@ async function readMaterialOptions(db: PrismaClient): Promise<ReadonlyArray<Mate
   return rows.map((row) => ({ id: row.id, name: row.materialInDrawing, materialConsidered: row.materialConsidered }));
 }
 
+async function readMaterialValues(db: PrismaClient, id: string): Promise<MaterialValuesRecord | null> {
+  // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
+  if (!z.uuid().safeParse(id).success) return null;
+  const row = await db.material.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, pricePerKg: true, specificGravity: true, scrapRate: true },
+  });
+  if (row === null) return null;
+  return { id: row.id, pricePerKg: decimalText(row.pricePerKg), specificGravity: decimalText(row.specificGravity), scrapRate: decimalText(row.scrapRate) };
+}
+
 async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialRecord | null> {
   // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
   if (!z.uuid().safeParse(id).success) return null;
@@ -165,6 +192,7 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
   return {
     listMaterials: () => withDatabaseErrors(() => readMaterials(db)),
     listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
+    findMaterialForCalculation: (id) => withDatabaseErrors(() => readMaterialValues(db, id)),
     lockMaterials: (tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).$executeRaw`LOCK TABLE materials IN SHARE ROW EXCLUSIVE MODE`;
