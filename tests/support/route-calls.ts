@@ -1,5 +1,6 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
+import { CUSTOMER_RECIPE_ID } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
@@ -61,7 +62,10 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
 }
 
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. Empty until one is implemented. */
-const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {};
+const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
+  // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
+  '/masters/customers/[id]': () => `/masters/customers/${CUSTOMER_RECIPE_ID}`,
+};
 
 /**
  * STORY-02.05: the Treatment routes. The ID is a canary treatment (`treatment-canary.ts`), which the in-memory repository of the security tests holds; the bodies
@@ -76,6 +80,23 @@ function treatmentCall(method: HttpMethod, path: string): ValidCall | undefined 
       return { id: TREATMENT_RECIPE_ID, body: { name: 'Invented-renamed-treatment' }, status: 200 };
     case 'DELETE /api/v1/treatments/[id]':
       return { id: TREATMENT_RECIPE_ID, status: 204 };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * STORY-02.02: the Customer routes. The ID is a canary customer (`customer-canary.ts`), which the in-memory repository of the security tests holds; the bodies
+ * are invented. `GET /api/v1/customers` and `GET /api/v1/options/customers` have no ID or body: the default call is their valid call.
+ */
+function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
+  switch (`${method} ${path}`) {
+    case 'POST /api/v1/customers':
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-customer-Z' }, status: 201 };
+    case 'PATCH /api/v1/customers/[id]':
+      return { id: CUSTOMER_RECIPE_ID, body: { phone: '+99 555 0142' }, status: 200 };
+    case 'POST /api/v1/customers/[id]/reset-rates':
+      return { id: CUSTOMER_RECIPE_ID, status: 200 };
     default:
       return undefined;
   }
@@ -127,7 +148,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return treatmentCall(method, path) ?? DEFAULT_CALL;
+      return treatmentCall(method, path) ?? customerCall(method, path) ?? DEFAULT_CALL;
   }
 }
 

@@ -19,6 +19,8 @@ export interface FormFieldProps {
   /** Shown beside the label, for example a column tag. */
   readonly tag?: ReactNode;
   readonly hint?: string;
+  /** The label is read by assistive technology but not drawn: for a field in a table cell, where the column heading and the row name say what it is. */
+  readonly labelHidden?: boolean;
   /** The error message. Its presence sets `aria-invalid` on the control and shows the icon and the text. */
   readonly error?: string;
   readonly children: (control: FieldControlProps) => ReactNode;
@@ -29,7 +31,7 @@ export interface FormFieldProps {
  * alert icon (UX spec section 6.0 "Forms"). The control is created by the caller from the props this passes
  * in, so `aria-describedby` and `aria-invalid` are always wired.
  */
-export function FormField({ id, label, tag, hint, error, children }: FormFieldProps) {
+export function FormField({ id, label, tag, hint, labelHidden = false, error, children }: FormFieldProps) {
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   const describedBy = [hint === undefined ? undefined : hintId, error === undefined ? undefined : errorId]
@@ -38,7 +40,7 @@ export function FormField({ id, label, tag, hint, error, children }: FormFieldPr
 
   return (
     <div className="flex min-w-0 flex-col gap-s-2">
-      <Label htmlFor={id}>
+      <Label htmlFor={id} className={labelHidden ? 'sr-only' : undefined}>
         {label}
         {tag}
       </Label>

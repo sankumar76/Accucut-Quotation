@@ -8,10 +8,12 @@ import { type AuditService, createAuditService } from '../../src/server/services
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
+import { CUSTOMER_CANARIES } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { fakeCustomer } from './fake-customers';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';
@@ -111,6 +113,11 @@ export function createSessionHarness(): SessionHarness {
   const auditService = createAuditService({ audit: auditWorld.audit });
   // The Material Master holds the canary materials (STORY-02.03): a route that leaked a price, a gravity or a scrap rate to a role would send one.
   const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES, [...FRESH_TREATMENTS, ...TREATMENT_CANARIES]);
+  // The Customer Master holds the canary customer (STORY-02.02): a route that leaked a customer's rate or contact detail to a role would send one.
+  for (const canary of CUSTOMER_CANARIES) {
+    const values = Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value]));
+    masters.customers.push({ ...fakeCustomer(masters.records, canary.name, values, { phone: canary.phone }), id: canary.id });
+  }
   // The Exchange Rate Master holds the canary rates (STORY-02.04): a route that leaked a rate to a role would send one.
   masters.exchange.usd = EXCHANGE_RATE_CANARIES.usd;
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;

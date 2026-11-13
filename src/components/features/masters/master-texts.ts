@@ -6,10 +6,11 @@
  */
 
 /**
- * The class that lets a long name wrap inside a dialog title, a description or a notice (ux-spec v0.17: "long names wrap"). It
- * is one string so that the rule is written once; Tailwind finds the class in this file.
+ * The class that lets a long name wrap inside a table cell, a dialog title or a description (ux-spec v0.17: "long names wrap"). It is
+ * defined once, in `shared/break-long-names.ts`, where `Notice` also reads it: a notice always wraps, so no caller adds it to one (AQP-275).
+ * @deprecated Import it from `@/components/shared/break-long-names`; this re-export goes when its importers move (GitHub issue 225).
  */
-export const BREAK_LONG_NAMES = '[overflow-wrap:anywhere]';
+export { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 
 export const CLEAR_FILTERS = 'Clear filters';
 

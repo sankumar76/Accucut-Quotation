@@ -20,13 +20,13 @@ describe('the menu of each role, from the manifest as it is now', () => {
     // Only pages that exist are listed: planned pages (Assign task, Masters, Users ...) appear when their stories land.
     // Users (STORY-01.04) and the Audit log (STORY-01.07) are the Admin's alone, under Administration, before the Review group:
     // a Lead and an Engineer are never shown them, not even disabled.
-    // The Process master (STORY-02.01) and Materials and lists (STORY-02.03) are the Admin's alone, in the Masters group, which comes before Administration.
-    const admin = role === 'ADMIN' ? ['Process master', 'Materials and lists', 'Users', 'Audit log'] : [];
+    // The Process master (STORY-02.01), Customers (STORY-02.02) and Materials and lists (STORY-02.03) are the Admin's alone, in the Masters group, which comes before Administration.
+    const admin = role === 'ADMIN' ? ['Process master', 'Customers', 'Materials and lists', 'Users', 'Audit log'] : [];
     expect(labels(role)).toEqual([role === 'ENGINEER' ? 'My tasks' : 'Task queue', 'Home', ...admin, 'Design system']);
   });
 
   it('a production build does not list the design-system page', () => {
-    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Home', 'Process master', 'Materials and lists', 'Users', 'Audit log']);
+    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Home', 'Process master', 'Customers', 'Materials and lists', 'Users', 'Audit log']);
   });
 
   it('every entry has a fixed address, a label and an icon, and an address that is a page of the manifest', () => {

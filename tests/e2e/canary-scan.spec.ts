@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
+import { CUSTOMER_CANARIES, CUSTOMER_CANARY_PHONE, CUSTOMER_CANARY_VALUES } from '../support/customer-canary';
 import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
 import { MATERIAL_CANARIES } from '../support/material-master-canary';
 import { defined } from '../support/defined';
@@ -14,6 +15,7 @@ import {
   createDisposableUser,
   E2E_ADMIN,
   E2E_PASSWORD,
+  ensureCanaryCustomers,
   ensureCanaryExchangeRates,
   ensureCanaryMaterials,
   ensureCanaryProcessRates,
@@ -92,6 +94,7 @@ async function prepare(
   await ensureCanaryProcessRates();
   await ensureCanaryMaterials();
   await ensureCanaryExchangeRates();
+  await ensureCanaryCustomers();
   return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
 }
 
@@ -230,6 +233,32 @@ test('AC-6 (control with real data, STORY-02.03): the same scan finds the canary
 });
 
 /**
+ * The customers' rates (STORY-02.02 AC-7). The canary customer is in the database (`prepare` loads it for the Engineer scans), and the same scan finds its two rates
+ * and its phone number in what the Admin is sent by the list route and by the customer's own page, so a green Engineer scan means the rates were looked for and
+ * not there. The Engineer side is the scan above: the customers routes and pages are in no Engineer list, and `/api/v1/options/customers` is, with an ID and a name.
+ */
+test('AC-7 (control with real data, STORY-02.02): the same scan finds the canary customer\'s rates and phone number in what the Admin is sent', async ({ page, context }) => {
+  await ensureCanaryCustomers();
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, E2E_ADMIN);
+
+  await callInBrowser(recorder, page, 'GET /api/v1/customers (API, Admin)', '/api/v1/customers');
+  const canary = defined(CUSTOMER_CANARIES[0]);
+  await recorder.recordNavigation('GET /masters/customers/{id} (page, Admin)', await page.goto(`/masters/customers/${canary.id}`));
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  const found = new Set(scanResponses(recorder.responses, forbidden).map((finding) => finding.found));
+  for (const value of CUSTOMER_CANARY_VALUES) expect(found.has(value), `the scan finds the customer rate ${value}`).toBe(true);
+  // The phone number is Confidential, not a sentinel of the forbidden list: it is looked for in the same responses by plain text.
+  expect(recorder.responses.some((response) => (response.body ?? '').includes(CUSTOMER_CANARY_PHONE)), 'the Admin is sent the phone number').toBe(true);
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+});
+
+/**
  * The exchange rates (STORY-02.04 AC-6). The Admin saves the canary pair through the route, as the screen does, and the same scan finds both values in
  * the answer. The answer of the PUT is the state written in the same transaction, so no other test's save can change what this one looks for. The Engineer
  * side of the story is the scan above: the route is in no Engineer list, the pair is in the database (`prepare`), and the scan finds neither value.
@@ -268,6 +297,29 @@ test('AC-4, AC-6 (STORY-02.03): the options list an Engineer is sent names the c
   const ours = options.filter((option) => MATERIAL_CANARIES.some((material) => material.id === option['id']));
   expect(ours.map((option) => option['name']).sort()).toEqual(MATERIAL_CANARIES.map((material) => material.materialInDrawing).sort());
   for (const option of ours) expect(Object.keys(option).sort(), 'no rate of any kind').toEqual(['id', 'materialConsidered', 'name']);
+  await recorder.settled();
+  expect(sentences(recorder, forbidden)).toEqual([]);
+});
+
+test('AC-5, AC-7 (STORY-02.02): the options list an Engineer is sent names the canary customer with an ID and a name only: no contact detail, no rate, in any form', async ({
+  page,
+  context,
+}, testInfo) => {
+  await ensureCanaryCustomers();
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const engineer = await createDisposableUser('scan', testInfo);
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  const answer = await callInBrowser(recorder, page, 'GET /api/v1/options/customers (API, Engineer)', '/api/v1/options/customers');
+  expect(answer.status).toBe(200);
+  const options = optionsBody.parse(JSON.parse(answer.body ?? '{}')).options;
+  const ours = options.filter((option) => CUSTOMER_CANARIES.some((customer) => customer.id === option['id']));
+  expect(ours.map((option) => option['name']).sort()).toEqual(CUSTOMER_CANARIES.map((customer) => customer.name).sort());
+  for (const option of ours) expect(Object.keys(option).sort(), 'no contact detail and no rate').toEqual(['id', 'name']);
+  expect(answer.body ?? '').not.toContain(CUSTOMER_CANARY_PHONE);
   await recorder.settled();
   expect(sentences(recorder, forbidden)).toEqual([]);
 });

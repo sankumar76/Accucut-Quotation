@@ -15,7 +15,7 @@ import { nonEmpty } from '../support/security-loops';
  *   - every file in `src/server/repositories` and `src/server/services` is classed here as allowed or blocked, and the lint is asked
  *     about each: a file in neither list fails the test, so a new file cannot be added unclassified (the "block by default" is the
  *     rule's; the classification is this test's);
- *   - files that do not exist yet (a customer reader, a materials service, a calculation service) are refused by the same rule;
+ *   - files that do not exist yet (a calculation or approval service or repository, a customer-rate repository) are refused by the same rule;
  *   - `@/server/composition` (it hands out every service) and the schemas barrel (it re-exports the Admin schemas) are refused;
  *   - an Engineer page may import no repository, no formula engine and no database driver. The pages come from the route manifest, so a
  *     later story that opens a page to an Engineer gets its fixture here without an edit (AC-6).
@@ -51,6 +51,7 @@ const REPOSITORIES = {
   blocked: [
     'audit-repository',
     'config-repository',
+    'customer-repository',
     'decimal-text',
     'exchange-rate-repository',
     'master-constraints',
@@ -73,6 +74,7 @@ const SERVICES = {
     'audit-service',
     'bootstrap-admin-service',
     'config-service',
+    'customer-service',
     'exchange-rate-service',
     'masters-service',
     'password-policy',

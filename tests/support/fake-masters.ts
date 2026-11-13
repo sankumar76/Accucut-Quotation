@@ -15,6 +15,7 @@ import {
   type TreatmentRecord,
 } from '../../src/server/repositories/master-repository';
 
+import { createFakeCustomerMethods, type FakeCustomer } from './fake-customers';
 import { SEED_PROCESS_ITEMS } from './seed-config';
 import { FRESH_TREATMENTS } from './treatment-canary';
 
@@ -42,6 +43,8 @@ export interface FakeMasterRepository extends MasterRepository {
   readonly records: MutableProcessItem[];
   /** The listed treatments, mutable in the same way. Starts with the locked "Other" row of the migration. There is no hidden row here: that is story 02.06's. */
   readonly treatments: MutableTreatment[];
+  /** The listed customers, mutable in the same way (STORY-02.02). Starts empty. */
+  readonly customers: FakeCustomer[];
   /** How many times the treatments' table lock was taken. */
   treatmentLockCount(): number;
   /** The listed materials, mutable in the same way. There is no hidden row here: that is story 02.06's. */
@@ -193,6 +196,7 @@ export function createFakeMasterRepository(
   initialTreatments: ReadonlyArray<TreatmentRecord> = FRESH_TREATMENTS,
 ): FakeMasterRepository {
   const records: MutableProcessItem[] = initial.map((record) => ({ ...record }));
+  const customers: FakeCustomer[] = [];
   const materials: MutableMaterial[] = initialMaterials.map((material) => ({ ...material }));
   const treatments: MutableTreatment[] = initialTreatments.map((treatment) => ({ ...treatment }));
   let locks = 0;
@@ -207,11 +211,13 @@ export function createFakeMasterRepository(
     records,
     materials,
     treatments,
+    customers,
     exchange,
     lockCount: () => locks,
     materialLockCount: () => materialLocks,
     treatmentLockCount: () => treatmentLocks,
     exchangeLockCount: () => exchangeLocks,
+    ...createFakeCustomerMethods(records, customers),
     ...createFakeTreatmentMethods(treatments, () => {
       treatmentLocks += 1;
     }),

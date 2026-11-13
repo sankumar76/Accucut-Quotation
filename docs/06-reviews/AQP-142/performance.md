@@ -115,3 +115,82 @@ Not applicable (round 1).
 - Open questions: customer and item counts (PRF-02, product-manager)
 - Risks raised: RISK-023 stays at 8 (recommendation above); no new risk
 - Recommended next agent: orchestrator — median of five on efcf768 and today's nightly; then master — G6 with standards and quality; solution-architect and product-manager if the nightly is over 5:00
+
+---
+
+# Round 2 (2026-11-12)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance |
+| Commit reviewed | b9f36fa03711fcec765159ee08f1129368d58ec2 (diff `efcf768..b9f36fa`: 18ea370, 580ba03, b9f36fa; 31 files, +405 / -178) |
+| Scope | Performance only, as DL-172 allows: F1 touched the JS budget measurement. Brief from the orchestrator session |
+| **Verdict** | **APPROVE WITH COMMENTS** (label `review:performance-approved` stays) |
+
+## Summary (round 2)
+Nothing in the new diff touches a query, an index, the migration or a lock. 18ea370 makes the JS-budget script write its customer only for a server it started, or with `--make-records`; CI starts its own server, so the CI cost is unchanged (stage 11b 3.3 s). Two small things are new: `/masters/customers/[id]` grew by 3,471 B gzip to 180,740 B, of which only about 1 to 1.5 KB is explained by the diff (PRF-06, Minor), and each successful save or reset now asks the server for one fresh render of the page (PRF-07, Info). The CI path of this head's first attempt is 5:25; it does not close PRF-01, which is decided by the median of five on the final head (DL-173).
+
+| Severity | New | Total (round 1 + 2) |
+|----------|-----|---------------------|
+| Blocker | 0 | 0 |
+| Critical | 0 | 0 |
+| Major | 0 | 1 (PRF-01, open, process) |
+| Minor | 1 (PRF-06) | 2 |
+| Info | 1 (PRF-07) | 4 |
+
+## Previous Findings (re-review)
+| ID | Status | Note |
+|----|--------|------|
+| PRF-01 (CI path, Major) | Open, no code change asked | First attempt of b9f36fa is 5:25, under 5:30. See the table below. The reading that decides is the median of five on H1, the orchestrator's |
+| PRF-02 (customer count, Minor) | Open, owner product-manager | Not in this diff |
+| PRF-03 (table lock, Info) | Unchanged | `customer-service.ts` has the same three lock calls |
+| PRF-04 (JS-budget cost, Info) | Verified, still 0 | Stage 11b 3.3 s with the new `given === undefined \|\| --make-records` condition (job 131090175894, 09:27:39.62Z to 09:27:42.91Z). The STD-03 side effect is closed by 18ea370 (standards' finding, not mine) |
+| PRF-05 (redundant index, Info) | Unchanged | Migration not in the diff |
+
+## Checks Run (round 2)
+| Check | Command / source | Result |
+|-------|------------------|--------|
+| New diff read | `git diff efcf768 b9f36fa` (script, server, lib, components, tests) | No query, index, migration or lock change. `customer-repository.ts` +1 comment line; `customer-service.ts` and `schemas/customers.ts` change a rule and a comment |
+| Name schema | `schemas/customers.ts`, `canonicalCustomerName` | `normalize('NFKC')`, `trim` and one `replace(/\s+/g, ' ')` run before `.max(100)`: linear in the body length, no backtracking; bounded by the request body |
+| Run | `gh run view 43191052265` | 5 of 5, first attempt. 09:23:37Z to 09:29:02Z = **5:25**. Shards 4:06 (shard 3), 4:15 (shard 1), 5:14 (shard 2). `Stages 1 to 11b` 4:10. Slack 64 s |
+| Shard steps | job logs 131090176431 / 176655 / 176267 | E2E step 202.2 / 233.0 / 190.4 s (round 1: 298.4 / 285.2 / 293.3; base 249.2 / 211.4 / 252.9). `next build` 11.3 to 13.1 s (round 1: 21.6 to 22.7). Shard 2 also lost about 20 s in set-up (Node 11.8 s, Stage 12a 10.5 s) |
+| Per-test times | `list` reporter lines | 856 timed instances, 2,079 s summed. The 799 tests common with `master`'s push: 1,876 s against 2,377 s (**-21.1 %**); against round 1: 2,016 s against 2,851 s on 835 common (-29.3 %). The 57 new instances: 202 s (`customers` 27 / 118.8, `customers-focus` 12 / 41.5, `masters-table-actions` 12 / 31.8, `canary-scan` 6 / 10.3) |
+| Stage 11b | same job | 11 rows PASS. `/masters/customers` 176,817; `/masters/customers/[id]` 180,740 (headroom 19,260); `/masters/materials` 187,607 (12,393); `/users` 171,227 (+116 against round 1); the other rows equal to round 1 |
+| Stage 6 and 11 | same job | 46.0 s and 107.1 s (round 1: 45.1 / 108.1) |
+| Cache | shard 2 log | `node_modules`, Playwright and `nextjs-` caches restored (the Next.js one by prefix again, a closer entry: build 11 to 13 s) |
+| Not run | | Local build (no chunk diff for PRF-06), query plans, workflow re-runs |
+
+## Findings (round 2)
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| PRF-06 | Minor | `src/app/(portal)/masters/customers/[id]/error.tsx:1` (the new boundary; route `/masters/customers/[id]`) | NFR-009 (200,000 B gzip per route); test strategy 10.1 | First-load JS of `/masters/customers/[id]` +3,471 B (177,269 to 180,740); `/masters/customers` +142 B; other rows unchanged. The diff's client code in the first load explains about 1 to 1.5 KB (estimate: new boundary, `customer-load-error.tsx`, split hooks, longer texts); the Reset dialog paragraph is in the lazy chunk. About 2 KB unattributed (hypothesis: the second error boundary regroups a chunk, as in AQP-89 PRF-01) | No breach. Headroom 22,731 B to 19,260 B (-15 %); story 02.07 will add dialogs to this route | Name the chunk that grew with a local `next build` diff of `.next/static/chunks`, or record 180,740 B as the new baseline in the Dev Record. No change needed for G6 |
+| PRF-07 | Info | `src/components/features/masters/use-customer-edit.ts:149` | NFR-010 | `adopt` calls `router.refresh()` after each successful save and reset (QLT-02): one fresh server render of the page, two statements, 3 to 10 KB | About 15 to 40 ms, not awaited, one Admin. Not measurable (estimates) | None |
+
+## RISK-023 and CI time (round 2)
+| Run | Head | Path | Shards | Common-test speed against `master` push 43169697211 |
+|-----|------|------|--------|---------------------------------------------------|
+| 43169697211 (push) | 6b1883f | 5:14 | 5:00 / 4:24 / 5:05 | 1.000 |
+| 43170187169 (PR, round 1) | efcf768 | 6:37 | 6:12 / 6:26 / 6:11 | 1.130 (slower) |
+| 43191052265 (PR, round 2) | b9f36fa | 5:25 | 4:15 / 5:14 / 4:06 | 0.789 (faster) |
+
+- The same suite (plus 4 instances) ran 72 s apart on two draws of two heads; the host moved test speed by 43 % between them. One run cannot say where the level is, which is why item 5 and item 9 AC-5 use a median of five.
+- This story's own cost, normalised to the push's speed: round 1, 224 s / 1.13 = 198 s for 53 instances; round 2, 202 s / 0.789 = 256 s for 57 instances. So 200 to 256 s summed, **about 17 to 32 s of path** (divided by 12 workers, up to 1.5 times; estimate). The round 1 figure of 19 to 28 s stands inside that.
+- **First attempt 5:25 is under 5:30**, so on this head the item 5 PR trigger is not started by itself. It is not a reading of the level: shard 2 alone ran 59 s behind the others. DL-173 reads the median of five on H1, the final head after the alignment commit, which is the orchestrator's run; I did not re-run.
+- The architect's gate (b) reading (a median of 5:18 over 20 runs, AQP-1 comment 11635) is reported to me and not recomputed. With gate (a) probably met (5:34 median of five at b3403e3; single reads 5:15 and 5:16), the fourth-shard enabler is due (test strategy v0.36 10.5 item 12). That agrees with my round-1 recommendation.
+- **Recommendation to master (unchanged):** RISK-023 stays at 8 (P 4 x I 2). Do not hold AQP-142 for it. The enabler is placed before the next E2E-adding story after AQP-142. The level of a `master` head after this merge remains an estimate of 5:25 to 5:45 until the median of five on H1 is posted.
+
+## NFR impact (round 2)
+| NFR ID | Risk | Finding IDs |
+|--------|------|-------------|
+| NFR-009 pages (JS 200,000 B gzip) | Low: tightest changed route `/masters/customers/[id]` 19,260 B headroom; `/masters/materials` 12,393 B unchanged | PRF-06 |
+| NFR-009 CI feedback (RISK-023) | Medium, unchanged: first attempt 5:25; level decided by the median of five on H1 | PRF-01 |
+| NFR-010 server p95 500 ms | Low: one extra render per successful save | PRF-07 |
+| NFR-011 capacity | Low, customer count still unquantified | PRF-02 |
+
+## Hand-off (round 2)
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/AQP-142/performance.md` (round 2 appended; uncommitted on `docs/AQP-1-records-sprint1-k`); PR #297 review (COMMENT, verdict in the body); label `review:performance-approved` kept
+- Jira / GitHub updates: PR #297 review with inline PRF-06 and PRF-07; Jira AQP-142 comment 11640
+- Open questions: PRF-02 (customer count, product-manager)
+- Risks raised: RISK-023 stays at 8; no new risk
+- Recommended next agent: orchestrator — median of five on H1 (DL-173); then master — G6 close. solution-architect and product-manager — the fourth-shard enabler (item 12) before the next E2E-adding story
