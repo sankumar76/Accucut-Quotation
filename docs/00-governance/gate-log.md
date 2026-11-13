@@ -7488,3 +7488,36 @@ Alternatives considered:
 - An SCR-12 E2E on #361. Rejected: the unit test proves the rule does not depend on the caller.
 
 **Posted:** Jira AQP-289 comment 11766; PR #361 comment 6840948450.
+
+---
+
+## AQP-276 (STORY-10.22, PR #336): T6 flaky sample ruling (between G6 and G7), 2026-11-13, master, DL-203
+
+**Not a gate decision.** This is a ruling on a measure precondition between G6 (DL-185, CONDITIONAL GO) and G7. Asked in orchestrator brief AQP-276 11768, after the developer's stop in 11767.
+
+**Evidence** (read-only `gh api` jobs and logs; nothing started, re-run or cancelled):
+- Runs 43342511688 (base e76b513, 3 shards) and 43342625012 (H_m eff79fe, 4 shards) are both at attempt 3, completed.
+- Paths, recomputed by master: samples base 2 = 5:42, head 2 = 5:11, base 3 = 5:49, head 3 = 4:54; the attempt 1s (6:40 / 4:52) are not samples. Queue waits are 3 to 4 s at most, and the caches restored from exact primary keys.
+- Job 131625693705 (head attempt 3, shard 3 of 4): `customers.spec.ts:175` [desktop] failed with `apiRequestContext.post: read ECONNRESET` at `support/customers.ts:52` (called from `:194`), 0.23 s after `[WebServer] … destination stream errored` (digest 3305231884). It passed on retry #1. The summary is 1 flaky / 2 skipped / 223 passed.
+- Log scan of every E2E job, all attempts, since 2026-11-12 09:30Z: 238 job logs from 77 run-attempts. The digest 3305231884 server error is on all 21 run-attempts whose tree holds AQP-142's customers suite: `master` 0ca47df, `master` e76b513 attempts 1 to 3, and #297's heads and controls. Each is at 3 shards, and no test fails there. ECONNRESET is in job 131625693705 only. The host stopped the scan for low memory before the runs created before 2026-11-12 10:29Z.
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Sample 4 has a v0.37 (d) replacement cause | ❌ none: it counts (4:54, retry inside the path) | jobs API, attempt 3 |
+| 2 | The flaky test is in AQP-276's diff | ❌ no (3 CI/unit files) | PR #336 diff |
+| 3 | The same server error exists without AQP-276 | ✅ yes: base attempts 1 to 3, 0ca47df's push run and #297's runs, all at 3 shards, digest 3305231884 | scan (DL-203 (2)) |
+| 4 | AC-6 reading fixed before samples 5 to 10 | ✅ DL-203 (4) (i) to (iii) | this entry |
+| 5 | DL-190 (4) trigger met | ❌ no: (c) only at 2026-11-14 00:47:58Z; (b) not met | 43339039704 fan-in end 00:47:58Z |
+
+**Conditions / next steps**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| R | developer (AQP-276) | runs 43342511688 / 43342625012 | Resume T6 with base attempt 4, then alternate up to head attempt 6, under the v0.37 (d) rules unchanged. Record any later flaky instance and continue. On a red sample, stop, re-run nothing and ask master | Now |
+| W | orchestrator | Jira AQP-276 | Post the resume. After the tenth sample, post "window closed". Only then: #341 push of ceb6787, #361 P then H3, #363 records | Window close |
+| D | qa-engineer | Jira Bug DEF-036 + GitHub `bug` mirror; defect file in the next records PR | Open, relate to AQP-142 and AQP-276, cite job 131625693705 and DL-203, and grade on the test-plan scale (master's view: Sev-3 Test) | By 2026-11-14 01:39Z |
+| I | developer (not the one on T6) | DEF-036 | Root cause of (a) the dev-server stream error in the customers edit-page tests (and whether `next start` shows it) and (b) the ECONNRESET. No CI run inside the window. The fix PR may not add a retry, a wider timeout, a quarantine or a one-width move | Root cause before AQP-276 G7 (information only); fix merged before G8 and before the next "0 flaky" re-run measure |
+| G7 | master | AQP-276 G7 | AC-6 read under DL-203 (4) | G7 |
+
+**Risks:** none new. RISK-023 is unchanged (8).
+
+**Posted:** Jira AQP-276 comment 11769; Jira AQP-142 comment 11770.
