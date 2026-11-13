@@ -7442,3 +7442,49 @@ The empty-diff item in DL-200 (4)(d) could not hold as written. H5's base 3f2267
 | CI on H6 | pending | run 43275308287 in progress; it must meet (4)(d): 5 of 5 at 3,333 / 5,818 / 878 / 24, 0 flaky, all 846 base names |
 
 **Ruling:** DL-200 (4)(d) is met except for CI. The squash goes when run 43275308287 meets (4)(d), then (4)(f), (4)(g) and (5) apply unchanged. Corrected wording for later updates: see DL-201 (3). **Posted:** Jira AQP-142 comment 11756; PR #297 comment 6831760838.
+
+## G6 – Peer Review — AQP-289 (DEF-035, #123, Sev-2; PR #361 at H2 = 43182d9) — 2026-11-12 (attempt 1 conditions V and C)
+
+- **Decision:** **V and C of DL-199 are MET on H2 (DL-202).** QLT-01, as master corrected it, and QLT-02, STD-01, STD-02 and STD-03 are on H2 as ruled. P and L remain, and In QA needs both. Correction to the attempt-1 record: the Customers list does use `EmptyState`. Its "No customer matches" title (SCR-12) has DEF-035's fault on `master` e76b513. #361's shared rule fixes it, and the new item Q-12 checks it on H4. H4 is required, because `master` has moved.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (closing its master-owned conditions)
+- **Artefacts evaluated:** PR #361 at 43182d9 (diff, body, Dev Record round 2); runs 43274032611, 43268411939, 43261705805, 43342511688 (attempt 1); Jira AQP-289 11765; `customer-results.tsx`, `customer-texts.ts`, `master-rules.ts` on e76b513 / 43182d9; `docs/07-qa/AQP-142-test-report.md`.
+- **My own checks** (read-only; no CI started, re-run or cancelled; no PR head touched; Jira status not changed):
+  - **Shape:** 43182d9 has one parent, b7fbad8. It changes exactly 4 files (+16 / -5). The `src` hunks are JSDoc lines only, with no `#` followed by digits. No closing keyword in `b6b38c5..43182d9`. The subject's scope is `ui`, not `masters` (slip accepted).
+  - **E2E hunk:** the query is `'W'.repeat(LONG_SEARCH_LENGTH)`, with its reason comment. `lineHeight` comes from `getComputedStyle`, and the **first** assertion is height > 2.5 line heights, with the third-line comment. The left, right and overflow checks are unchanged, and `expectNoAxeViolations(page)` is last (imported at `:5`). The title is unchanged.
+  - **Unit hunk:** `LONG_NAME_LENGTH = 100` with its UX 6.0 comment (= `MASTER_NAME_MAX_LENGTH`, `master-rules.ts:11`), used in the name and the value, and nothing else.
+  - **CI 43274032611:** the only run on H2. 5 of 5 on merge ref 18bf683 (H2 into b6b38c5). Gitleaks: 765 commits, no leaks. 3,207 / 5,571 / 825 / 24 against 43261705805's 3,200 / 5,564 / 822 / 24 = **+7 / +7 / +3 / +0**. 0 `✘`, 0 retry, 0 flaky.
+  - **Names:** 0 of 846 base E2E instances missing. The 3 new instances are DEF-035 ✓ at mobile, tablet and desktop. All 849 H1-run instances are present. 0 of 378 base Vitest file lines missing, plus 2 new (the unit file in both configs). 380 of 380 H1 lines present.
+  - **Timing:** the run took 17:52:48Z to 17:58:27Z. It was before #297's squash push run (00:41:21Z), so before any T6 window.
+  - **Moved `master`:** `b6b38c5..e76b513` has 92 files, none of #361's 6, and no AQP-289 report. #361 is `BEHIND`. `customer-results.tsx:62`, `:74` render `EmptyState` with no wrap class, and have since cb95102. AQP-142's report (`:207`) did not test the No match states.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | V: one parent, exactly 4 files, `src` comments only, no `#` + digits | | ✅ | `git show --stat` / diff of 43182d9 |
+| 2 | QLT-01 / QLT-02 / STD-02 as ruled | | ✅ | `process-master.spec.ts:339-356` at H2 |
+| 3 | STD-03 constant | | ✅ | `empty-state-wraps-long-names.test.ts:17-18` |
+| 4 | STD-01 comments | | ✅ | `break-long-names.ts:1-6`, `master-texts.ts:8-13` |
+| 5 | C: 5 of 5, counts, names, 0 flaky, DEF-035 at three widths | | ✅ | run 43274032611 |
+| 6 | P: unchanged plant red on the wrap assertion at three widths | | ⏳ | after the AQP-276 window closes |
+| 7 | L: label and Fixed replies | | ⏳ | after P |
+
+**Conditions / remediation (remaining)**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| P | reviewer-quality | throwaway draft PR, `plant289.sh` unchanged on H2 | As in DL-199 (5): unit 6 of 7 red; E2E 21 instances (7 / 7 / 7), with DEF-035 at 360 / 768 / 1366 on "the search text itself wrapped onto more than one line", `materials:327` x3 and `aqp-122-qa:368` x15; nothing else red, 0 flaky; closed unmerged. Master reads the run. **Not started inside the T6 window** | Before In QA |
+| L | orchestrator → reviewer-quality, reviewer-standards | PR #361 | `review:quality-approved` (label only); "Fixed (H2, verified by master DL-199, DL-202)" in the QLT-01, QLT-02 and STD-01 to STD-03 threads | Before In QA, after P |
+| Q | qa-engineer | G7 on H2; H3 = H2 + `docs/07-qa/AQP-289-test-report.md` alone | DL-199 (6) (a) to (g), unchanged; H3 pushed outside T6 | G7 |
+| H4 | orchestrator (master reads) | update of #361 | GitHub update-branch (merge method, `expected_head_sha` H3), outside T6. Checks: `--cc` prints no hunk; DL-201 (3) `-U0` both ways; `<tip>..H4` = the 7 files; CI at the tip push run +7 / +7 / +3 / +0 (e76b513: **3,340 / 5,825 / 881 / 24**), with every base name, DEF-035 at three widths and 0 flaky | After G7 GO |
+| Q-12 | qa-engineer | Jira AQP-289 + PR #361 comment; DEF-035 file (next records PR) | SCR-12 Customers No match, 100 `W` at 360 / 768 / 1366 on H4: overflow <= 0, title inside the viewport, full quoted query, 3 or more lines. A failure means no squash, and the case comes back to master | After H4's CI, before the squash |
+| M | orchestrator | squash | DL-199 (7)(d) to (f). The body adds the SCR-12 line (DL-202 (9)(e)) | After Q-12 |
+
+**Risks:** none new. RISK-028 unchanged (8). SCR-12 is DEF-035 itself, not a new case.
+
+**Rationale:** see DL-202. H2 is exactly the ruled change, and CI proves the wide query overflows at every width. The correction closes a factual error in the attempt-1 record before it could hide SCR-12 at G8.
+
+Alternatives considered:
+- Updating before G7 so that G7 covers SCR-12. Rejected: it likely costs one more CI run when `master` moves again.
+- A new defect for SCR-12. Rejected: same cause, same fix.
+- An SCR-12 E2E on #361. Rejected: the unit test proves the rule does not depend on the caller.
+
+**Posted:** Jira AQP-289 comment 11766; PR #361 comment 6840948450.
