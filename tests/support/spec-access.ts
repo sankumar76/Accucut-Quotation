@@ -39,4 +39,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/customers': ['ADMIN'], // SCR-12 (STORY-02.02): the Admin's alone (BR-004); an Engineer reads only the options list (names, no contact detail or rate)
   '/api/v1/customers/[id]': ['ADMIN'],
   '/api/v1/customers/[id]/reset-rates': ['ADMIN'],
+  // The API behind Assign task (SPEC section 5.1, SCR-04; architecture section 6 rows "Create task" and "Assign context", STORY-04.01): a Lead and an Admin assign, an Engineer never does (BR-004, CR-33).
+  '/api/v1/tasks': ['ADMIN', 'LEAD'],
+  '/api/v1/options/assign-context': ['ADMIN', 'LEAD'],
 };

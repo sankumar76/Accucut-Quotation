@@ -3,7 +3,9 @@ import { vi } from 'vitest';
 import type { RoleName } from '../../src/lib/auth/roles';
 
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
+import { systemClock } from '../../src/lib/time';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { CUSTOMER_CANARIES } from './customer-canary';
@@ -11,6 +13,7 @@ import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { fakeCustomer } from './fake-customers';
+import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';
@@ -69,6 +72,10 @@ export interface SessionHarness {
   readonly mastersService: MastersService;
   /** The in-memory rates behind `mastersService`: a test sets values in them to look for in what a refused caller is sent. */
   readonly masters: FakeMasterRepository;
+  /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
+  readonly taskService: TaskService;
+  /** The in-memory tasks behind `taskService`. */
+  readonly taskWorld: FakeTaskWorld;
   /** The in-memory audit storage behind `auditService` and `userService`: what was recorded, and the clock that stamps it. */
   readonly auditWorld: FakeAuditWorld;
   /** The id of each role's person (the first of that role). */
@@ -108,11 +115,16 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
+  const taskWorld = createFakeTaskWorld(() => users.records);
+
   return {
     users,
     auditService,
     auditWorld,
     masters,
+    taskWorld,
+    // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

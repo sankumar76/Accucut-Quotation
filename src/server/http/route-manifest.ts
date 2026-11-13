@@ -200,21 +200,25 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/customers/[id]/reset-rates', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/customers', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
-  // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
-  // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
-  { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
-
-  // ---- Planned: Work -----------------------------------------------------------------------------------------------
+  // STORY-04.01 (SCR-04). A Lead and an Admin assign (BR-004); an Engineer is refused on all three, with 403 for the routes and SCR-26 for the page (AC-5). The
+  // options route is for the same two roles, so it is in no Engineer's list and the cost scan never calls it as an Engineer. Reassign (`PATCH /tasks/{id}`) is story 04.07's.
   {
     path: '/assign',
     kind: 'page',
     methods: ['GET'],
     roles: ADMIN_AND_LEAD,
-    status: 'planned',
+    status: 'implemented',
     stage: 'R1',
     screen: 'SCR-04',
     nav: { group: 'Work', label: 'Assign task', order: 20, icon: 'user-plus' },
   },
+  { path: '/api/v1/tasks', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
+  // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
+  { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
+
+  // ---- Planned: Work -----------------------------------------------------------------------------------------------
   { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'planned', stage: 'R1', screen: 'SCR-05' },
   { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-07' },
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },

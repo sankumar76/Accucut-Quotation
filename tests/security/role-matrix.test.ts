@@ -41,6 +41,7 @@ vi.mock('@/server/composition', async () => {
     getUserService: () => shared.userService,
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
+    getTaskService: () => shared.taskService,
   };
 });
 
@@ -79,6 +80,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/queue': 'redirect:/sign-in',
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
+  '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',

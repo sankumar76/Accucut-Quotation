@@ -58,6 +58,7 @@ const REPOSITORIES = {
     'master-repository',
     'material-repository',
     'prisma-client',
+    'task-repository',
     'throttle-repository',
     'treatment-repository',
   ],
@@ -77,6 +78,7 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'rate-name-rules',
+    'task-service',
     'treatment-service',
   ],
 } as const;
@@ -86,7 +88,6 @@ const FUTURE_IMPORTS: ReadonlyArray<string> = [
   '@/server/repositories/calculation-repository',
   '@/server/repositories/approval-repository',
   '@/server/repositories/customer-rate-repository',
-  '@/server/repositories/task-repository',
   '../repositories/master-repository',
   '../../server/repositories/calculation-repository',
   '@/server/services/calculation-service',

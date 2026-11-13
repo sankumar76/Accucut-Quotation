@@ -78,10 +78,11 @@ test.describe('the Lead (saved browser state)', () => {
     await page.goto('/queue');
     await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible();
     const menu = await openMenu(page, testInfo);
-    expect(await menuLabels(menu)).toEqual(['Task queue', ...IMPLEMENTED_MENU]);
+    // "Assign task" (STORY-04.01) is the Lead's and the Admin's first working page, so it is in the Lead's menu now, under Work, after the queue.
+    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', ...IMPLEMENTED_MENU]);
     await expect(menu.getByText('Work', { exact: true })).toBeVisible();
     await expect(menu.getByText('Review', { exact: true })).toBeVisible();
-    for (const hidden of ADMIN_AND_LEAD_ITEMS) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
+    for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
   });
 
   test('AC-6: the top bar has the logo, the name, the bell and the account menu, and the account menu shows who is signed in', async ({ page }) => {

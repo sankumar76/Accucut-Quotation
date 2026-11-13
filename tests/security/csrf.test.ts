@@ -49,6 +49,7 @@ vi.mock('@/server/composition', async () => {
     getUserService: () => shared.userService,
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
+    getTaskService: () => shared.taskService,
   };
 });
 vi.mock('@/server/http/route-manifest', async (importOriginal) => {
