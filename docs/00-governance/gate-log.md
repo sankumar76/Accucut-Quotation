@@ -7442,3 +7442,218 @@ The empty-diff item in DL-200 (4)(d) could not hold as written. H5's base 3f2267
 | CI on H6 | pending | run 43275308287 in progress; it must meet (4)(d): 5 of 5 at 3,333 / 5,818 / 878 / 24, 0 flaky, all 846 base names |
 
 **Ruling:** DL-200 (4)(d) is met except for CI. The squash goes when run 43275308287 meets (4)(d), then (4)(f), (4)(g) and (5) apply unchanged. Corrected wording for later updates: see DL-201 (3). **Posted:** Jira AQP-142 comment 11756; PR #297 comment 6831760838.
+
+## G6 – Peer Review — AQP-289 (DEF-035, #123, Sev-2; PR #361 at H2 = 43182d9) — 2026-11-12 (attempt 1 conditions V and C)
+
+- **Decision:** **V and C of DL-199 are MET on H2 (DL-202).** QLT-01, as master corrected it, and QLT-02, STD-01, STD-02 and STD-03 are on H2 as ruled. P and L remain, and In QA needs both. Correction to the attempt-1 record: the Customers list does use `EmptyState`. Its "No customer matches" title (SCR-12) has DEF-035's fault on `master` e76b513. #361's shared rule fixes it, and the new item Q-12 checks it on H4. H4 is required, because `master` has moved.
+- **Decided by:** master  ·  **Human override:** none
+- **Attempt:** 1 (closing its master-owned conditions)
+- **Artefacts evaluated:** PR #361 at 43182d9 (diff, body, Dev Record round 2); runs 43274032611, 43268411939, 43261705805, 43342511688 (attempt 1); Jira AQP-289 11765; `customer-results.tsx`, `customer-texts.ts`, `master-rules.ts` on e76b513 / 43182d9; `docs/07-qa/AQP-142-test-report.md`.
+- **My own checks** (read-only; no CI started, re-run or cancelled; no PR head touched; Jira status not changed):
+  - **Shape:** 43182d9 has one parent, b7fbad8. It changes exactly 4 files (+16 / -5). The `src` hunks are JSDoc lines only, with no `#` followed by digits. No closing keyword in `b6b38c5..43182d9`. The subject's scope is `ui`, not `masters` (slip accepted).
+  - **E2E hunk:** the query is `'W'.repeat(LONG_SEARCH_LENGTH)`, with its reason comment. `lineHeight` comes from `getComputedStyle`, and the **first** assertion is height > 2.5 line heights, with the third-line comment. The left, right and overflow checks are unchanged, and `expectNoAxeViolations(page)` is last (imported at `:5`). The title is unchanged.
+  - **Unit hunk:** `LONG_NAME_LENGTH = 100` with its UX 6.0 comment (= `MASTER_NAME_MAX_LENGTH`, `master-rules.ts:11`), used in the name and the value, and nothing else.
+  - **CI 43274032611:** the only run on H2. 5 of 5 on merge ref 18bf683 (H2 into b6b38c5). Gitleaks: 765 commits, no leaks. 3,207 / 5,571 / 825 / 24 against 43261705805's 3,200 / 5,564 / 822 / 24 = **+7 / +7 / +3 / +0**. 0 `✘`, 0 retry, 0 flaky.
+  - **Names:** 0 of 846 base E2E instances missing. The 3 new instances are DEF-035 ✓ at mobile, tablet and desktop. All 849 H1-run instances are present. 0 of 378 base Vitest file lines missing, plus 2 new (the unit file in both configs). 380 of 380 H1 lines present.
+  - **Timing:** the run took 17:52:48Z to 17:58:27Z. It was before #297's squash push run (00:41:21Z), so before any T6 window.
+  - **Moved `master`:** `b6b38c5..e76b513` has 92 files, none of #361's 6, and no AQP-289 report. #361 is `BEHIND`. `customer-results.tsx:62`, `:74` render `EmptyState` with no wrap class, and have since cb95102. AQP-142's report (`:207`) did not test the No match states.
+
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | V: one parent, exactly 4 files, `src` comments only, no `#` + digits | | ✅ | `git show --stat` / diff of 43182d9 |
+| 2 | QLT-01 / QLT-02 / STD-02 as ruled | | ✅ | `process-master.spec.ts:339-356` at H2 |
+| 3 | STD-03 constant | | ✅ | `empty-state-wraps-long-names.test.ts:17-18` |
+| 4 | STD-01 comments | | ✅ | `break-long-names.ts:1-6`, `master-texts.ts:8-13` |
+| 5 | C: 5 of 5, counts, names, 0 flaky, DEF-035 at three widths | | ✅ | run 43274032611 |
+| 6 | P: unchanged plant red on the wrap assertion at three widths | | ⏳ | after the AQP-276 window closes |
+| 7 | L: label and Fixed replies | | ⏳ | after P |
+
+**Conditions / remediation (remaining)**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| P | reviewer-quality | throwaway draft PR, `plant289.sh` unchanged on H2 | As in DL-199 (5): unit 6 of 7 red; E2E 21 instances (7 / 7 / 7), with DEF-035 at 360 / 768 / 1366 on "the search text itself wrapped onto more than one line", `materials:327` x3 and `aqp-122-qa:368` x15; nothing else red, 0 flaky; closed unmerged. Master reads the run. **Not started inside the T6 window** | Before In QA |
+| L | orchestrator → reviewer-quality, reviewer-standards | PR #361 | `review:quality-approved` (label only); "Fixed (H2, verified by master DL-199, DL-202)" in the QLT-01, QLT-02 and STD-01 to STD-03 threads | Before In QA, after P |
+| Q | qa-engineer | G7 on H2; H3 = H2 + `docs/07-qa/AQP-289-test-report.md` alone | DL-199 (6) (a) to (g), unchanged; H3 pushed outside T6 | G7 |
+| H4 | orchestrator (master reads) | update of #361 | GitHub update-branch (merge method, `expected_head_sha` H3), outside T6. Checks: `--cc` prints no hunk; DL-201 (3) `-U0` both ways; `<tip>..H4` = the 7 files; CI at the tip push run +7 / +7 / +3 / +0 (e76b513: **3,340 / 5,825 / 881 / 24**), with every base name, DEF-035 at three widths and 0 flaky | After G7 GO |
+| Q-12 | qa-engineer | Jira AQP-289 + PR #361 comment; DEF-035 file (next records PR) | SCR-12 Customers No match, 100 `W` at 360 / 768 / 1366 on H4: overflow <= 0, title inside the viewport, full quoted query, 3 or more lines. A failure means no squash, and the case comes back to master | After H4's CI, before the squash |
+| M | orchestrator | squash | DL-199 (7)(d) to (f). The body adds the SCR-12 line (DL-202 (9)(e)) | After Q-12 |
+
+**Risks:** none new. RISK-028 unchanged (8). SCR-12 is DEF-035 itself, not a new case.
+
+**Rationale:** see DL-202. H2 is exactly the ruled change, and CI proves the wide query overflows at every width. The correction closes a factual error in the attempt-1 record before it could hide SCR-12 at G8.
+
+Alternatives considered:
+- Updating before G7 so that G7 covers SCR-12. Rejected: it likely costs one more CI run when `master` moves again.
+- A new defect for SCR-12. Rejected: same cause, same fix.
+- An SCR-12 E2E on #361. Rejected: the unit test proves the rule does not depend on the caller.
+
+**Posted:** Jira AQP-289 comment 11766; PR #361 comment 6840948450.
+
+---
+
+## AQP-276 (STORY-10.22, PR #336): T6 flaky sample ruling (between G6 and G7), 2026-11-13, master, DL-203
+
+**Not a gate decision.** This is a ruling on a measure precondition between G6 (DL-185, CONDITIONAL GO) and G7. Asked in orchestrator brief AQP-276 11768, after the developer's stop in 11767.
+
+**Evidence** (read-only `gh api` jobs and logs; nothing started, re-run or cancelled):
+- Runs 43342511688 (base e76b513, 3 shards) and 43342625012 (H_m eff79fe, 4 shards) are both at attempt 3, completed.
+- Paths, recomputed by master: samples base 2 = 5:42, head 2 = 5:11, base 3 = 5:49, head 3 = 4:54; the attempt 1s (6:40 / 4:52) are not samples. Queue waits are 3 to 4 s at most, and the caches restored from exact primary keys.
+- Job 131625693705 (head attempt 3, shard 3 of 4): `customers.spec.ts:175` [desktop] failed with `apiRequestContext.post: read ECONNRESET` at `support/customers.ts:52` (called from `:194`), 0.23 s after `[WebServer] … destination stream errored` (digest 3305231884). It passed on retry #1. The summary is 1 flaky / 2 skipped / 223 passed.
+- Log scan of every E2E job, all attempts, since 2026-11-12 09:30Z: 238 job logs from 77 run-attempts. The digest 3305231884 server error is on all 21 run-attempts whose tree holds AQP-142's customers suite: `master` 0ca47df, `master` e76b513 attempts 1 to 3, and #297's heads and controls. Each is at 3 shards, and no test fails there. ECONNRESET is in job 131625693705 only. The host stopped the scan for low memory before the runs created before 2026-11-12 10:29Z.
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Sample 4 has a v0.37 (d) replacement cause | ❌ none: it counts (4:54, retry inside the path) | jobs API, attempt 3 |
+| 2 | The flaky test is in AQP-276's diff | ❌ no (3 CI/unit files) | PR #336 diff |
+| 3 | The same server error exists without AQP-276 | ✅ yes: base attempts 1 to 3, 0ca47df's push run and #297's runs, all at 3 shards, digest 3305231884 | scan (DL-203 (2)) |
+| 4 | AC-6 reading fixed before samples 5 to 10 | ✅ DL-203 (4) (i) to (iii) | this entry |
+| 5 | DL-190 (4) trigger met | ❌ no: (c) only at 2026-11-14 00:47:58Z; (b) not met | 43339039704 fan-in end 00:47:58Z |
+
+**Conditions / next steps**
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| R | developer (AQP-276) | runs 43342511688 / 43342625012 | Resume T6 with base attempt 4, then alternate up to head attempt 6, under the v0.37 (d) rules unchanged. Record any later flaky instance and continue. On a red sample, stop, re-run nothing and ask master | Now |
+| W | orchestrator | Jira AQP-276 | Post the resume. After the tenth sample, post "window closed". Only then: #341 push of ceb6787, #361 P then H3, #363 records | Window close |
+| D | qa-engineer | Jira Bug DEF-036 + GitHub `bug` mirror; defect file in the next records PR | Open, relate to AQP-142 and AQP-276, cite job 131625693705 and DL-203, and grade on the test-plan scale (master's view: Sev-3 Test) | By 2026-11-14 01:39Z |
+| I | developer (not the one on T6) | DEF-036 | Root cause of (a) the dev-server stream error in the customers edit-page tests (and whether `next start` shows it) and (b) the ECONNRESET. No CI run inside the window. The fix PR may not add a retry, a wider timeout, a quarantine or a one-width move | Root cause before AQP-276 G7 (information only); fix merged before G8 and before the next "0 flaky" re-run measure |
+| G7 | master | AQP-276 G7 | AC-6 read under DL-203 (4) | G7 |
+
+**Risks:** none new. RISK-023 is unchanged (8).
+
+**Posted:** Jira AQP-276 comment 11769; Jira AQP-142 comment 11770.
+
+---
+
+## AQP-81 (STORY-01.05, PR #341): condition I, the integration merge (between G6 and G7), 2026-11-13, master, DL-204
+
+**Not a gate decision.** This entry closes the last DL-196 (8) item before In QA, which G6 attempt 2 left open (DL-198 GO on H3). The orchestrator asked for it after the push of ceb6787 (developer 11778).
+
+**Result: condition I is MET. AQP-81 may go to In QA** (the orchestrator moves it). There is no reviewer-quality re-read.
+
+**Evidence.** Master read it with `git show --cc`, `git diff -U0` and `git log`, and with `gh api` jobs and logs. Nothing was started, re-run or cancelled.
+
+**The merge**
+- ceb6787 has two parents: ff4e193 (H3) and 0ca47df (AQP-142). The merge base is 3f22672.
+- `--cc` shows 9 files. 7 lines differ from both parents, and each is the base line plus both sides' edits:
+  - `SIGNED_IN_ROUTES`;
+  - `ENGINEER_ROUTES`;
+  - the 12-route budget list;
+  - the counts "all 12 rows", the overrun "1 of 12" and problems 10;
+  - plus the `noRecords` line "1 of 12", in an auto-merged hunk that came from AQP-142 alone.
+- Every other combined line is a one-side entry next to the other side's entry.
+
+**Comparison (i):** `ff4e193..ceb6787` against `3f22672..0ca47df`. Both cover 117 files and 8,445 lines. They differ only on those 7 lines.
+
+**Comparison (ii):** `0ca47df..ceb6787` against `3f22672..ff4e193`. Both cover 79 files.
+- The merge side has 13,431 lines, against 13,429. The 2 extra lines are the `noRecords` pair.
+- Otherwise they differ on the same lines.
+
+**CI run 43371707587**
+- Attempt 1, merge ref ca50e98 into e76b513 (a docs-only commit). 5 of 5.
+- 3,524 (176 files), 6,054 (239), E2E 891, 24 skipped. That is +191 / +236 / +13 / +0 against 0ca47df's push run 43339039704 (3,333 / 5,818 / 878 / 24).
+- Per-file Vitest deltas equal H3's own deltas file by file (39 files, 427).
+- 0 of 895 base E2E names missing. The 13 new instances are DL-196's list.
+- 0 flaky, 0 `✘`. Gitleaks: 775 commits, no leaks. Coverage 96.6 %. JS budget: 12 rows.
+- DEF-036's ECONNRESET is absent. Its server line (digest 3305231884) appears 3 times, against 5 times on the base, and fails no test.
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Every `--cc` hunk only keeps both sides | ✅ (the `noRecords` count ruled in DL-204 (1)(c)) | `git show --cc ceb6787` |
+| 2 | (i) master's change brought in exactly | ✅ the only differences are the 7 resolved lines | `-U0` comparison |
+| 3 | (ii) the PR's own change kept exactly | ✅ the only differences are the 7 lines plus the `noRecords` pair | `-U0` comparison |
+| 4 | CI 5 of 5, every count exact | ✅ +191 / +236 / +13 / +0 | 43371707587 against 43339039704 |
+| 5 | Every base name present, 0 flaky | ✅ | job logs, `comm`-style compare |
+| 6 | L, D, O done | ✅ | label events 17:32Z; threads 4553990321, 4553998836, 4553999621; PR body round 3; Jira 11748, 11742 |
+| 7 | Pushed outside any T6 window | ✅ | window closed 04:45Z (AQP-276 11776); run 05:23Z |
+
+**Conditions / next steps**
+
+| # | Owner agent | Artefact | Required change | Due |
+|---|-------------|----------|-----------------|-----|
+| Q | orchestrator | Jira AQP-81 | Move to In QA and brief QA with DL-204 (5) | Now |
+| G7 | qa-engineer | `docs/07-qa/AQP-81-test-report.md` (one commit on #341) | AC-1 to AC-7 with evidence; (5)(b) Blocked state at 360 / 768 / 1366; (c) "AC-2, AC-7" by name at 3 widths; (d) 409 / 403 title only; (e) new = current refused, one `logger.info` line on success; (f) must-change person refused on the customers routes; (g) `/account` budget; (h) DEF-036 named if seen | G7 |
+| M | orchestrator | #341 squash | Only after G7 GO and DL-204 (6): AQP-276 merges first unless trigger (b), or (c) at 2026-11-14 00:47:58Z, fires (never in an open T6 window); final update by update-branch with the pre-ruled checks; CI at the newest push run +191 / +236 / +13 / +0; `feat(...)` `[AQP-81]` subject | Merge |
+
+**Risks:** none new. RISK-023 (8) and RISK-028 (8) are unchanged.
+
+**Rationale:** see DL-204.
+
+Alternatives considered:
+- A narrow reviewer-quality re-read of the `noRecords` line. Rejected: CI proves the count.
+- Holding In QA for AQP-276's merge. Rejected: DL-190 binds only the merge.
+
+
+## G7 – QA Acceptance — AQP-276 (STORY-10.22 CI fourth shard, PR #336: H_m = eff79fe; H_r = a2799fe = H_m + the QA report) — 2026-11-13 (attempt 1)
+
+- **Decision:** **GO (DL-205).** AC-1 to AC-5 and AC-7 to AC-9 pass. AC-6 is met in substance under DL-203 (4) (i) to (iii). Its literal "0 flaky" is not met by one test, DEF-036 (Sev-3, pre-existing, AQP-290 / #364). The PR is `clean` on `master` e76b513, so the squash goes straight from a2799fe and first, before #363, #361 and #341. RISK-023 stays at 8.
+- **Decided by:** master  ·  **Human override:** none  ·  **Human approval required:** no (G7 is not in `HUMAN_APPROVAL_POINTS`; MERGE_POLICY all-auto, CLAUDE.md §8)
+- **Attempt:** 1
+- **Artefacts evaluated:**
+  - **QA report** `docs/07-qa/AQP-276-test-report.md` at a2799fe: ACCEPT. QA hand-off: Jira 11783 and PR comment 6845406902. Orchestrator brief: Jira 11784. Window record: 11776.
+  - **Branch, read by master:** a2799fe has the one parent eff79fe and adds only the report (+167). eff79fe's parents are b94eba7 and e76b513, and `--cc` prints no hunk. `e76b513..a2799fe` is the 3 code files (+14 / -14) plus the report. `mergeable_state` is `clean`, and the base is e76b513 = `origin/master`. Protection: strict, `Stages 1 to 11` only. Reviews: 3 COMMENTED, 0 REQUEST_CHANGES. No closing keyword is in the body or in the 4 commit messages.
+  - **CI 43374357956** (H_r, attempt 1, 6 of 6). Merge ref 2de2533, tree 1f04a6ce = `a2799fe^{tree}`. 782 commits scanned, no leaks. Vitest 3,333 / 5,818. E2E 881 passed / 24 skipped / 905 listed (225 + 223 + 224 + 209), `shard i of 4`. 0 `✘`, 0 retry, 0 flaky, 0 ECONNRESET, and 3 digest lines (the server line alone). Against 43342511688 attempt 1 that is **+0 / +0 / +3 / +0**. 896 of 896 names are present (master's own comparison). Path 5:26 (information).
+  - **T6, recomputed by master** (jobs API, all ten attempts). Base 5:42, 5:49, 5:01, 5:01, 5:52 (median 5:42, slowest 5:52). Head 5:11, 4:54, 4:53, 4:44, 5:01 (median **4:54**, slowest **5:11**). Gain 48 s. Queue waits 2 to 4 s. Raw 18.000 / 20.833 = **1.157**, billed 20 / 24 = **1.200**. In the 35 sample shard logs, ECONNRESET, retry and flaky each appear once (job 131625693705) and nowhere else.
+  - **Second DEF-036 sighting** (brief), run 43371572437, job 131708295261. This is DEF-035's plant control 9bd871d, at three shards (`[1, 2, 3]`), on a tree without b94eba7. Digest at 05:24:30.151Z; `customers.spec.ts:175 [desktop]` ECONNRESET at 05:24:30.318Z; passed on retry #1. It is corroboration, not a (ii) source (DL-205 (2)).
+  - **DEF-036 root cause** on AQP-290 11774 (before G7, as DL-203 (6) asked): an aborted `router.refresh()` and keep-alive socket reuse at an idle gap of about 6 s, both inside one test.
+
+**Checklist**
+| # | Check | Mandatory | Result | Evidence |
+|---|-------|-----------|--------|----------|
+| 1 | Every AC has a verification result with evidence | ✱ | ✅ | AC-1 to AC-9 in the QA matrix; AC-4, AC-5 and AC-6 recomputed by master (DL-205 (1)(c)) |
+| 2 | No open Sev-1 / Sev-2 | ✱ | ✅ | Open: DEF-036 Sev-3 (pre-existing, Test type, fails closed) |
+| 3 | Regression recorded and green | ✱ | ✅ | 43374357956: +0 / +0 / +3 / +0; 0 of 896 names missing; 0 flaky |
+| 4 | Exploratory notes | | ✅ | Charter, 45 min, N-1 to N-5 |
+| 5 | Accessibility (UI stories) | | n/a | No user-facing screen |
+| 6 | AC-6 under DL-203 (4) | | ✅ | (i) diff touches no spec, helper or `src`; (ii) the only instance is DEF-036's signature; (iii) 1 of 5 head, against a line of 2 |
+| 7 | AC-4 pass lines (DL-187) | | ✅ | Median 4:54 ≤ 5:00, slowest 5:11 ≤ 5:30, no exit, 0 replacements |
+| 8 | AC-5 cost | | ✅ | 1.157 raw, 1.200 billed ≤ 1.30 |
+| 9 | S (DL-185 (2)) verified from the diff | | ✅ | b94eba7 names AQP-276 AC-2; N-1 met in substance (DL-205 (4)) |
+| 10 | H_r = H_m + the report alone | | ✅ | `git diff --stat eff79fe a2799fe` |
+| 11 | Window freeze (DL-203 (7)(a)) | | ⚠️ | Two pushes to #363 at 04:34Z and 04:36Z; no effect on the result (DL-205 (4) N-4) |
+
+**Merge steps (orchestrator; DL-205 (5))**
+| # | Step | Check |
+|---|------|-------|
+| M1 | Preconditions | This GO; `Stages 1 to 11` success on a2799fe; no REQUEST_CHANGES; `mergeable_state` `clean` |
+| M2 | Order | #336 now and first; then #363, #361 and #341 as their own rulings say (DL-190 (1), DL-204 (6)(b)). No measure window is open |
+| M3 | PR body (no push) | AC-9 line: AQP-81 (#341) In QA, not merged, at the time of the merge; N-2 counts: 893 real, 9 / 12 `setup`, 896 distinct names; re-grep for closing keywords (none) |
+| M4 | Final update | None if `origin/master` = e76b513 and the PR reads `clean`. Otherwise update-branch (merge method, `expected_head_sha` a2799fe) giving H_f, with the DL-201 (3) checks: `--cc` empty; `a2799fe..H_f` = `e76b513..tip`; `tip..H_f` = `e76b513..a2799fe` (`-U0` `+`/`-` lines); CI 6 of 6 at the tip's push run +0 / +0 / +3 / +0, all names present, 0 flaky except a named DEF-036 instance, no leaks. A failed check goes back to master |
+| M5 | Squash, `sha` = a2799fe (or H_f) | Title and body below, plus the orchestrator's attribution line |
+| M6 | After the squash | One parent e76b513; tree 1f04a6ce83c5f8cab27835251e76941c00e25c35 (from a2799fe) |
+
+**Squash title:** `AQP-276: STORY-10.22: CI fourth shard` (GitHub's ` (#336)` suffix accepted).
+
+**Squash body (exact):**
+
+```
+STORY-10.22 CI fourth shard (enabler): the E2E job runs in four shards (matrix.shard: [1, 2, 3, 4]) instead of three. The shard pin in ci-workflow.test.ts and the exact-block pin in ci-workflow-shards.test.ts follow, and the ci.yml comments say four. No test, spec, Playwright setting or src file changes.
+
+Measure (T6, ten alternating samples, 0 replacements): head median 4:54, slowest 5:11; base median 5:42 at three shards; gain 48 s. Cost 1.157 times raw and 1.200 times billed (limit 1.30). RISK-023 stays at 8 (DL-151 (5)).
+
+QA report: docs/07-qa/AQP-276-test-report.md (ACCEPT on eff79fe).
+G6: DL-185 (narrow route), DL-187 (AC-4 slowest-run exit). G7: DL-203 (AC-6 reading), DL-205 (GO).
+
+Refs #364
+```
+
+**After the squash**
+| # | Owner | Action | Trigger |
+|---|-------|--------|---------|
+| P1 | orchestrator | Read the `master` push run: 6 of 6, attempt 1 in full, 3,333 / 5,818 / 881 / 24 / 905 listed (+0 / +0 / +3 / +0 against 43342511688 attempt 1), `shard i of 4`, all 896 names, 0 flaky except a named DEF-036 instance, no leaks; post the first-attempt path with its base and shard count (a reading only). A red run is read, never re-run away | The push run completes |
+| P2 | qa-engineer | AQP-276 to Done; close AQP-277 to AQP-284 with the squash SHA; post run 43371572437 / job 131708295261 on AQP-290 as a DEF-036 instance | P1 green |
+| P3 | solution-architect | Test strategy 10.5 item 12 AC-8 record (893 / 9 / 12; P-1 "ruled, DL-187"); STD-03: architecture §9.2 and the pin row to `[1, 2, 3, 4]`; N-3 statement for later measures. The product-manager aligns release plan 3.15 (d) | By G8; holds nothing |
+| P4 | orchestrator | RISK-023: no median of five now. Post the first 10.3 window of at least 13 runs created after the squash; a median of five on `master` after AQP-81's squash is optional, outside any window and with no merge waiting | After the squash |
+| P5 | delivery lead | Delete `control/AQP-276-shard4-fails` and `control/AQP-276-shard4-cancelled` (STD-04) | After G7 |
+| P6 | orchestrator | #341 final update per DL-204 (6)(c) on AQP-276's four-shard push run; #361 per DL-202 (9)(b); #363 at any time outside a window; DEF-036 fix PR outside any window, before G8 | P1 green |
+
+**Risks:** none new. RISK-023 stays at 8 (review note added). DEF-036 stays open (Sev-3) until its fix merges.
+
+**Rationale:** see DL-205. Every mandatory item passes on evidence that master recomputed. AC-6 is read on the attribution test fixed before the result (DL-203 (4)). The second sighting corroborates the attribution and does not change the test.
+
+Alternatives considered:
+- NO-GO on AC-6's literal text. Rejected: DL-203 (4) is the ruled reading, and none of its conditions failed.
+- CONDITIONAL GO until DEF-036's fix. Rejected: DEF-036 is not caused by this diff, and its fix is due before G8.
+- A push for N-1. Rejected: it makes an unread head for a title, and the finding's purpose is met.
+- A median of five on `master` now. Rejected: it needs a merge freeze to read a state that AQP-81 probably changes, and a cheaper window is available.
+
+**Posted:** Jira AQP-276 comment 11786; PR #336 comment 6845687690.
