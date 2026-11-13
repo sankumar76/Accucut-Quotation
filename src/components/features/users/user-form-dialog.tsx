@@ -66,7 +66,7 @@ function problemsOf(values: Values, adding: boolean): Errors {
   if (adding) {
     const email = userEmailProblem(values.email);
     if (email !== null) found.email = email;
-    const password = newPasswordProblem(values.password);
+    const password = newPasswordProblem(values.password, values.email);
     if (password !== null) found.password = password;
   }
   return found;

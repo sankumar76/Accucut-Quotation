@@ -51,7 +51,7 @@ function ResetForm({ user, onReset }: { readonly user: UserRow; readonly onReset
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (submitting) return;
-    const problem = newPasswordProblem(password);
+    const problem = newPasswordProblem(password, user.email);
     setError(problem);
     setFailed(false);
     if (problem !== null) return;

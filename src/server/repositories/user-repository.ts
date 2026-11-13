@@ -78,6 +78,8 @@ export class UserConstraintError extends Error {
 export interface UserRepository {
   /** The sign-in view of the user with this e-mail, or null. */
   findCredentialsByEmail(email: string): Promise<UserCredentials | null>;
+  /** The sign-in view of the user with this ID, or null (the change-password form checks the current password with it). */
+  findCredentialsById(id: string): Promise<UserCredentials | null>;
   /** The account with this ID, or null. */
   findAccountById(id: string): Promise<UserAccount | null>;
   /**
@@ -109,6 +111,13 @@ export interface UserRepository {
    * transaction.
    */
   setPassword(id: string, passwordHash: string, tx?: Transaction): Promise<string | null>;
+  /**
+   * Replaces the person's own password after they proved the current one (STORY-01.05 AC-3): sets the new hash, clears
+   * `must_change_password` and raises `session_version` (which ends every session issued before), in one statement that matches only
+   * while the stored hash is still `expectedHash`, so a reset made meanwhile is never overwritten. Returns the new `session_version`,
+   * or null if there is no such user or the stored hash is no longer `expectedHash`. With `tx` it runs in the caller's transaction.
+   */
+  changeOwnPassword(id: string, expectedHash: string, newHash: string, tx?: Transaction): Promise<number | null>;
   /**
    * Raises the user's `session_version` by one, which ends every session they have (ADR-009), **only if it is still
    * `expectedVersion`**: compare and increment in one statement (ADR-009 amendment 1). A token whose version is already
@@ -165,6 +174,15 @@ export function createUserRepository(db: PrismaClient): UserRepository {
           where: { email: normaliseEmail(email) },
           select: { id: true, passwordHash: true, isActive: true, sessionVersion: true },
         }),
+      );
+    },
+
+    findCredentialsById(id) {
+      return withDatabaseErrors(() =>
+        // PostgreSQL would refuse a text that is not a UUID with an error; a person who asks for one is not found.
+        z.uuid().safeParse(id).success
+          ? db.user.findUnique({ where: { id }, select: { id: true, passwordHash: true, isActive: true, sessionVersion: true } })
+          : Promise.resolve(null),
       );
     },
 
@@ -260,6 +278,22 @@ export function createUserRepository(db: PrismaClient): UserRepository {
             select: { email: true },
           });
           return updated.email;
+        } catch (error) {
+          if (isRecordNotFound(error)) return null;
+          throw error;
+        }
+      });
+    },
+
+    changeOwnPassword(id, expectedHash, newHash, tx) {
+      return withDatabaseErrors(async () => {
+        try {
+          const updated = await clientFor(db, tx).user.update({
+            where: { id, passwordHash: expectedHash },
+            data: { passwordHash: newHash, mustChangePassword: false, sessionVersion: { increment: 1 } },
+            select: { sessionVersion: true },
+          });
+          return updated.sessionVersion;
         } catch (error) {
           if (isRecordNotFound(error)) return null;
           throw error;

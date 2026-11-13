@@ -115,8 +115,8 @@ for (const route of ROUTES) {
         await trigger.focus();
         await page.keyboard.press(key);
         await expect(page.getByRole('menu')).toBeVisible();
-        // "Change password" is disabled until story 01.05, so the first enabled item is "Sign out".
-        await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+        // "Change password" works from story 01.05 (SCR-23), so it is the first enabled item.
+        await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
         await page.keyboard.press('Escape');
         await expect(page.getByRole('menu')).toBeHidden();
         await expect(trigger).toBeFocused();
@@ -129,7 +129,7 @@ for (const route of ROUTES) {
       const menu = page.getByRole('menu');
       await expect(menu).toBeVisible();
       await expect(menu).toBeFocused();
-      await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeDisabled();
+      await expect(page.getByRole('menuitem', { name: 'Change password' })).toHaveAttribute('href', '/account');
       await expect(page.getByRole('main')).not.toHaveAttribute('aria-hidden', 'true');
     });
 
@@ -138,7 +138,7 @@ for (const route of ROUTES) {
       const trigger = page.locator('button[aria-label^="Account menu"]');
       await trigger.focus();
       await page.keyboard.press('Enter');
-      await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+      await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(page.getByRole('menu')).toBeHidden();
 
@@ -146,7 +146,7 @@ for (const route of ROUTES) {
       const menu = page.getByRole('menu');
       await expect(menu).toBeVisible();
       await expect(menu).toBeFocused();
-      await expect(page.getByRole('menuitem', { name: 'Sign out' })).not.toBeFocused();
+      await expect(page.getByRole('menuitem', { name: 'Change password' })).not.toBeFocused();
     });
 
     test('AC-6: axe finds 0 violations with the account menu closed and open, and with the drawer closed and open', async ({ page }, testInfo) => {

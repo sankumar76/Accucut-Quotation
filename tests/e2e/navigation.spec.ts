@@ -250,11 +250,14 @@ test.describe('sign-out by keyboard only (AC-9)', () => {
 
     await trigger.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+    // Focus starts on the first enabled item, "Change password" (SCR-23 exists from story 01.05); Sign out is the next one.
+    await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(trigger).toBeFocused();
 
     await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Change password' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/sign-in$/);

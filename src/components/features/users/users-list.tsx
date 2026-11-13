@@ -14,7 +14,7 @@ import type { UserRow } from '@/lib/users/users-client';
 
 import { BREAK_LONG_NAMES } from '../masters/master-texts';
 import { isOpener, type Opener } from './opener';
-import { OWN_PASSWORD_NAME } from './texts';
+import { OWN_PASSWORD_LINE, OWN_PASSWORD_NAME } from './texts';
 
 /**
  * The people of SCR-14 (STORY-01.04 AC-1, AC-4, AC-7): a table from 768 px, where it scrolls inside its own container only,
@@ -160,6 +160,7 @@ export function UsersList(props: UsersListProps) {
               <RoleText user={user} />
             </div>
             <RowActions {...props} user={user} compact={false} />
+            {user.id === props.currentUserId ? <p className="text-label text-ink-3">{OWN_PASSWORD_LINE}</p> : null}
           </li>
         ))}
       </ul>

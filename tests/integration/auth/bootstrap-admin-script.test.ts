@@ -58,6 +58,10 @@ let empty: Scenario;
 let withLead: { readonly db: AuthDatabase; readonly run: RunResult; readonly rows: ReadonlyArray<Record<string, unknown>> };
 let withAdmin: { readonly db: AuthDatabase; readonly run: RunResult; readonly rows: ReadonlyArray<Record<string, unknown>> };
 let badSettings: RunResult;
+let weakDatabase: AuthDatabase | undefined;
+/** STORY-01.05 AC-4: weak initial passwords, each tried against the empty database in turn. */
+let weak: ReadonlyArray<{ readonly password: string; readonly message: string; readonly run: RunResult }>;
+let weakRows: ReadonlyArray<Record<string, unknown>>;
 
 const SELECT_USERS = `SELECT email, role, is_active, must_change_password, password_hash FROM users ORDER BY email`;
 const environmentFor = (db: AuthDatabase): Record<string, string> => ({
@@ -83,10 +87,22 @@ beforeAll(async () => {
   withAdmin = { db: adminDb, run: await runScript(environmentFor(adminDb)), rows: (await adminDb.owner.query(SELECT_USERS)).rows };
 
   badSettings = await runScript({ DATABASE_URL: emptyDb.database.runtimeUrl, ADMIN_EMAIL: 'not-an-address', ADMIN_INITIAL_PASSWORD: 'CHANGE_ME_ADMIN_PASSWORD' });
+
+  const weakDb = await openAuthDatabase();
+  const weakCases = [
+    { password: 'Short-7!', message: 'The new password must be at least 10 characters.' },
+    { password: 'invented-initial-pass', message: 'Add at least one number.' },
+    { password: 'Welcome@123456', message: 'That password is too common. Choose a different one.' },
+  ];
+  weak = await Promise.all(
+    weakCases.map(async (entry) => ({ ...entry, run: await runScript({ ...environmentFor(weakDb), ADMIN_INITIAL_PASSWORD: entry.password }) })),
+  );
+  weakRows = (await weakDb.owner.query(SELECT_USERS)).rows;
+  weakDatabase = weakDb;
 });
 
 afterAll(async () => {
-  await Promise.all([empty?.db.close(), withLead?.db.close(), withAdmin?.db.close()]);
+  await Promise.all([empty?.db.close(), withLead?.db.close(), withAdmin?.db.close(), weakDatabase?.close()]);
 });
 
 describe('AC-7: an empty database', () => {
@@ -117,6 +133,19 @@ describe('AC-7: an empty database', () => {
     expect(empty.second.code).toBe(1);
     expect(empty.second.output).toContain('an Admin already exists; nothing was changed');
     expect(empty.rowsAfterSecond).toEqual(empty.rowsAfterFirst);
+  });
+});
+
+describe('STORY-01.05 AC-4: a password that does not meet the rule', () => {
+  it('exits non-zero, names the failing part, never prints the password, and creates no Admin', () => {
+    for (const entry of weak) {
+      expect(entry.run.code).toBe(1);
+      expect(entry.run.output).toContain('ADMIN_INITIAL_PASSWORD does not meet the password rule.');
+      expect(entry.run.output).toContain(entry.message);
+      expect(entry.run.output).toContain('Nothing was changed.');
+      expect(entry.run.output).not.toContain(entry.password);
+    }
+    expect(weakRows).toEqual([]);
   });
 });
 

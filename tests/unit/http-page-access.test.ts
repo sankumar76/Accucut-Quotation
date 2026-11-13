@@ -12,10 +12,13 @@ const mocks = vi.hoisted(() => ({
   forbidden: vi.fn((): never => {
     throw new Error('NEXT_FORBIDDEN');
   }),
+  redirect: vi.fn((path: string): never => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  }),
 }));
 
 vi.mock('@/server/auth/session', () => ({ requireUserOrRedirect: mocks.requireUserOrRedirect }));
-vi.mock('next/navigation', () => ({ forbidden: mocks.forbidden }));
+vi.mock('next/navigation', () => ({ forbidden: mocks.forbidden, redirect: mocks.redirect }));
 
 const { authorizePage } = await import('@/server/http/page-access');
 
@@ -26,6 +29,7 @@ function person(role: AuthenticatedUser['role']): AuthenticatedUser {
 beforeEach(() => {
   mocks.requireUserOrRedirect.mockReset();
   mocks.forbidden.mockClear();
+  mocks.redirect.mockClear();
 });
 
 describe('authorizePage', () => {
@@ -59,6 +63,27 @@ describe('authorizePage', () => {
     await expect(authorizePage('/not-a-page')).rejects.toThrow('not a page in the route manifest');
     await expect(authorizePage('/api/v1/me')).rejects.toThrow('not a page in the route manifest');
     expect(mocks.requireUserOrRedirect).not.toHaveBeenCalled();
+  });
+
+  it('STORY-01.05 AC-5: sends a person who must set a new password to the account page from every other page, before the role is looked at', async () => {
+    mocks.requireUserOrRedirect.mockResolvedValue({ ...person('LEAD'), mustChangePassword: true });
+    await expect(authorizePage('/queue')).rejects.toThrow('NEXT_REDIRECT:/account');
+    // Not forbidden() either: a Lead on an Admin page is sent to set the password first.
+    await expect(authorizePage('/users')).rejects.toThrow('NEXT_REDIRECT:/account');
+    expect(mocks.forbidden).not.toHaveBeenCalled();
+  });
+
+  it('STORY-01.05 AC-5: lets that person open the account page, which is the only page whose row says so', async () => {
+    mocks.requireUserOrRedirect.mockResolvedValue({ ...person('ENGINEER'), mustChangePassword: true });
+    expect((await authorizePage('/account')).mustChangePassword).toBe(true);
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it('STORY-01.05 AC-3: a person who has no such duty opens the account page like any signed-in role', async () => {
+    for (const role of ['ADMIN', 'LEAD', 'ENGINEER'] as const) {
+      mocks.requireUserOrRedirect.mockResolvedValue(person(role));
+      expect((await authorizePage('/account')).role).toBe(role);
+    }
   });
 
   it('is a mistake to ask for a public page, which needs no session', async () => {

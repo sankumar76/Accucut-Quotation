@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { forbidden } from 'next/navigation';
+import { forbidden, redirect } from 'next/navigation';
 
+import { ACCOUNT_PATH } from '../../lib/auth/return-path';
 import { requireUserOrRedirect, type AuthenticatedUser } from '../auth/session';
 
 import { allowsRole, findPage } from './route-manifest';
@@ -12,6 +13,8 @@ import { allowsRole, findPage } from './route-manifest';
  * which checks only that someone is signed in (STD-09), and an architecture test fails a page that does not call it.
  *
  *   - signed out: a redirect to the sign-in page that remembers the address;
+ *   - a person who still has to set a new password (FR-004, STORY-01.05 AC-5): a redirect to the account page, from every page whose row is
+ *     not `mustChangeAllowed`, before the role is looked at;
  *   - a role the row does not list: `forbidden()`, which renders SCR-26 "no access" with status 403. The check runs
  *     before the page reads anything, so the answer cannot depend on what the page holds (CR-33, UX-22);
  *   - otherwise the signed-in person.
@@ -21,6 +24,7 @@ export async function authorizePage(path: string): Promise<AuthenticatedUser> {
   if (row === undefined) throw new Error(`authorizePage: ${path} is not a page in the route manifest.`);
   if (row.roles === 'public') throw new Error(`authorizePage: ${path} is a public page and needs no session.`);
   const user = await requireUserOrRedirect();
+  if (user.mustChangePassword && row.mustChangeAllowed !== true) redirect(ACCOUNT_PATH);
   if (!allowsRole(row, user.role)) forbidden();
   return user;
 }

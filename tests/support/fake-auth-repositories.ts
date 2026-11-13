@@ -18,10 +18,14 @@ import {
  * PostgreSQL in `tests/integration/auth`.
  */
 
-export interface FakeUserRecord extends Omit<NewUser, 'role'> {
+export interface FakeUserRecord extends Omit<NewUser, 'role' | 'mustChangePassword' | 'passwordHash'> {
   readonly id: string;
+  /** Mutable, so a harness can put a person back on a known password. */
+  passwordHash: string;
   /** Mutable, so a test can change a role the way an Admin would. */
   role: UserRole;
+  /** Mutable, so a test can put a person in the "Set a new password" state (STORY-01.05 AC-5). */
+  mustChangePassword: boolean;
   isActive: boolean;
   sessionVersion: number;
 }
@@ -71,6 +75,14 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
     findCredentialsByEmail(email): Promise<UserCredentials | null> {
       lookups.push(email);
       const found = records.find((record) => record.email === normaliseEmail(email));
+      return Promise.resolve(
+        found === undefined
+          ? null
+          : { id: found.id, passwordHash: found.passwordHash, isActive: found.isActive, sessionVersion: found.sessionVersion },
+      );
+    },
+    findCredentialsById(id): Promise<UserCredentials | null> {
+      const found = records.find((record) => sameUuid(record.id, id));
       return Promise.resolve(
         found === undefined
           ? null
@@ -138,6 +150,13 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       Object.assign(found, { passwordHash, mustChangePassword: true });
       found.sessionVersion += 1;
       return Promise.resolve(found.email);
+    },
+    changeOwnPassword(id, expectedHash, newHash) {
+      const found = records.find((record) => sameUuid(record.id, id));
+      if (found === undefined || found.passwordHash !== expectedHash) return Promise.resolve(null);
+      Object.assign(found, { passwordHash: newHash, mustChangePassword: false });
+      found.sessionVersion += 1;
+      return Promise.resolve(found.sessionVersion);
     },
     raiseSessionVersion(id, expectedVersion) {
       const found = records.find((record) => sameUuid(record.id, id));
