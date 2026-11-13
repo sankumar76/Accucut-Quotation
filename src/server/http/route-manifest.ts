@@ -182,6 +182,24 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/treatments', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/treatments/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/treatments', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's.
+  // `/api/v1/options/customers` is the one route of the story that every role may call (AC-5): IDs and names, and no contact detail or rate of any kind, so
+  // the cost scan covers it as an Engineer route.
+  {
+    path: '/masters/customers',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-12',
+    nav: { group: 'Masters', label: 'Customers', order: 20, icon: 'users-round' },
+  },
+  { path: '/masters/customers/[id]', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1', screen: 'SCR-12' },
+  { path: '/api/v1/customers', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/customers/[id]/reset-rates', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/options/customers', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
@@ -202,17 +220,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
-  {
-    path: '/masters/customers',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-12',
-    nav: { group: 'Masters', label: 'Customers', order: 20, icon: 'users-round' },
-  },
-
   // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------
   {
     path: '/config/fields',

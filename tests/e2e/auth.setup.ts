@@ -1,4 +1,5 @@
 import { expect, test as setup, type Page } from '@playwright/test';
+import { z } from 'zod';
 
 import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
 
@@ -127,6 +128,35 @@ async function warmTreatmentRoutes(page: Page, headers: Record<string, string>):
   expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/treatments`)).status()).toBe(200);
 }
 
+/**
+ * The Customers list, the customer's page and their routes (STORY-02.02), compiled for the same reason, with the chunks of the Add customer dialog and
+ * the reset dialog, which are fetched when a button first opens them. A customer of the set-up's own is added (a name that is taken is 422 and is read from
+ * the list instead), so the page of one customer can be opened. Nothing else is stored (an empty body is 422, an ID no customer has is 404).
+ */
+async function warmCustomerRoutes(page: Page, headers: Record<string, string>): Promise<void> {
+  await page.goto(`${DEVELOPMENT_URL}/masters/customers`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Customers' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await page.getByRole('button', { name: 'Add customer' }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Add customer' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await page.keyboard.press('Escape');
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers`, { headers, data: {} })).status()).toBe(422);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers`, { headers, data: { name: 'E2E set-up customer' } })).status()).toBeLessThan(500);
+  const list: unknown = await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/customers`)).json();
+  const customers = z.object({ customers: z.array(z.object({ id: z.string(), name: z.string() })) }).parse(list).customers;
+  const ours = customers.find((customer) => customer.name === 'E2E set-up customer');
+  if (ours === undefined) throw new Error('The set-up customer is not in the list.');
+  await page.goto(`${DEVELOPMENT_URL}/masters/customers/${ours.id}`);
+  await expect(page.getByRole('heading', { level: 1, name: ours.name })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await waitUntilHydrated(page, 'main button[data-action="reset"]');
+  await page.getByRole('button', { name: 'Reset to defaults' }).click();
+  await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: COMPILE_TIMEOUT });
+  await page.keyboard.press('Escape');
+  expect((await page.request.patch(`${DEVELOPMENT_URL}/api/v1/customers/${NOBODY}`, { headers, data: { name: 'Invented warm-up' } })).status()).toBe(404);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers/${NOBODY}/reset-rates`, { headers })).status()).toBe(404);
+  expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/customers`)).status()).toBe(200);
+}
+
 setup('make the E2E Admin the one active Admin and save a signed-in Admin (the Users spec)', async ({ browser }) => {
   setup.setTimeout(SETUP_TIMEOUT);
   await ensureE2eAdmin();
@@ -154,6 +184,7 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     await warmMaterialsRoutes(page, headers);
     await warmExchangeRatesRoutes(page, headers);
     await warmTreatmentRoutes(page, headers);
+    await warmCustomerRoutes(page, headers);
     await context.storageState({ path: ADMIN_STATE });
   } finally {
     await context.close();

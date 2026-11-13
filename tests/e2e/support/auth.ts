@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
+import { loadCanaryCustomers } from '../../support/customer-canary-loader';
 import { EXCHANGE_RATE_CANARIES } from '../../support/exchange-rate-canary';
 import { displayFormOf } from '../../support/formula-display';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
@@ -203,6 +204,22 @@ export async function ensureCanaryMaterials(): Promise<void> {
   const client = await connectToTestDatabase();
   try {
     await loadCanaryMaterials(client);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Puts the Customer Master canary customer (STORY-02.02's name, ID, phone and rates, `tests/support/customer-canary.ts`) into the database the servers use,
+ * so the confidentiality scan has a customer's rates and phone number to look for, and the recipes for `PATCH /api/v1/customers/{id}` and the edit page name a
+ * customer that exists. The statements are `loadCanaryCustomers`: inserts that do nothing on any conflict (so several loaders at once cannot fail on a name
+ * index), a rate row for every Process Master item the customer lacks, then an update of the two canary rates. The numbers are invented and this database
+ * is thrown away (guarded above).
+ */
+export async function ensureCanaryCustomers(): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await loadCanaryCustomers(client);
   } finally {
     await client.end();
   }

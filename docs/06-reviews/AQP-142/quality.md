@@ -137,3 +137,74 @@ See "AC conformance" above.
 ## Previous Findings (re-review only)
 
 n/a (round 1).
+
+---
+
+# Round 2 — fix round F1 (G6 DL-172, AC-2 amended by DL-177)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality |
+| Review round | 2 |
+| Diff reviewed | new diff only, `efcf768..b9f36fa` (18ea370, 580ba03, b9f36fa): 31 files, +405 / -178 |
+| Commit reviewed | b9f36fa03711fcec765159ee08f1129368d58ec2 |
+| Date | 2026-11-12 |
+| GitHub review | 5872432837 (COMMENT, single-token) |
+| **Verdict** | **APPROVE WITH COMMENTS** (0 Blocker, 0 Critical, 0 Major; 1 new Minor) |
+
+## Summary (round 2)
+
+Every round-1 finding the ruling sent to F1 is fixed. The Major, QLT-01, is fixed and proven: the failed-read guard now goes red under re-planted A1 at all three widths, and the slow-read guard goes red under A2. The amended AC-2 is one rule shared by the screen and the server, and the route refuses `11.555` and accepts `12.5`. The ux-spec v0.24 and v0.25 words are in the build word for word. One new Minor (QLT-09) follows from the QLT-02 fix: a failure of the refresh's server render right after a save would show "Nothing was changed." on the edit page's error boundary. It needs a word from the ux-expert and does not block the G6 close.
+
+## Checks run (round 2)
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Customer unit and security tests (developer worktree at b9f36fa, read-only) | `npx vitest run` on `customers-error-pages`, `customers-lib`, `customers-routes`, `customers-texts`, `masters-service-customers`, `customers-audit-events`, `customers-source-rules`, `security/engineer-import-rule`, `security/role-matrix` | **9 files, 1,011 passed** |
+| F1 CI (as relayed by the orchestrator) | run 43191052265 | 5 of 5; unit 3,317, full Vitest 5,802, E2E 294 + 292 + 279 = 865, skipped 24 |
+| Re-plant A1 on F1 (#332) | b9f36fa + one line in `use-read-again.ts` (`else focusOpener(opener.current);`). Run 43194372418 | **`customers-focus.spec.ts:131` red at 360, 768 and 1366 px** (and each retry); received `["BUTTON:Add customer"]`; `:105` green |
+| Re-plant A2 on F1 (#333) | b9f36fa + `focusHeading()` after a good read. Run 43194383200 | **`customers-focus.spec.ts:105` red at 360, 768 and 1366 px** (and each retry); `:131` green |
+| Overlap files | `git rev-parse b9f36fa:… origin/master:…`; `git diff origin/master b9f36fa -- tests/security/engineer-import-rule.test.ts` | `masters-table-actions.spec.ts` = the branch-base blob 9649537 (b710741), so the update from master takes master's file. `engineer-import-rule.test.ts` differs from master only by the two customer classes |
+| ux-spec words | `ux-spec.md` v0.24 on master cdcf18b; v0.25 on `origin/docs/AQP-1-records-sprint1-k` | the edit-page title "We could not load this customer"; the v0.25 hint, the no-change paragraph, the typed-rate note and the count-0 notice all match |
+
+Both re-plants are on `control/AQP-142-qlt-r2-*` from b9f36fa. Each diff was printed before its push, using the anchor-once script. Both are draft PRs, closed unmerged with their results in comments, and both branches are kept.
+
+## Previous findings (round 1)
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Major | **Fixed** | 580ba03: the failing read is held until the Add dialog has closed, the log is marked at `fromTheRead`, and only the error title may take focus after the read. The re-plants above are red at three widths |
+| QLT-02 | Minor | **Fixed** | `adopt` (`useCustomerFields`) calls `router.refresh()` after a save and a reset, and the comment is corrected. No test: Back did not reproduce in Playwright (Dev Record), as DL-172 (4) allows. New edge: QLT-09 |
+| QLT-03 | Minor | **Fixed** | `useForgetAddedFlag`, `useSearchParams` and `customerCreatedNotice` are removed; a source guard is in `customers-error-pages.test.ts` |
+| QLT-04 | Minor | **Fixed** | the `name` schema is `.transform(canonicalCustomerName).pipe(min 1, max 100)`. Route rows: 101 raw / 100 canonical gives 201 and stores the canonical name; over 100 canonical gives 422 "Use 100 characters or fewer." |
+| QLT-05 | Minor | **Fixed** | 18ea370: records only for the script's own server or with `--make-records`, and Usage states the write. `js-budget.test.ts`: 1 customer with the flag, 0 without, and the dynamic route's reason |
+| QLT-06 | Info | Deferred as ruled | b9f36fa takes master's text for the header line so the update-branch merges cleanly; the rewording is the commit after #309 |
+| QLT-07 | Info | Resolved | DL-177 amends AC-2 (percent rates up to 2 decimals) |
+| QLT-08 | Info | n/a | praise |
+
+## AC-2 as amended (DL-177)
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| One rule for screen and server | Met | `rateProblem(value)` in `src/lib/masters/customers.ts`, used by `customer-form.ts` (`customerEditProblems`, `typedDiffers`) and `customer-service.ts` (`ratesToWrite`); the route schema's `rateChange` uses the same `DECIMAL_TEXT_PATTERN` |
+| `12.555` refused, by the route as well as the form | Met | `customers-routes.test.ts` "three decimals on a percent rate" (`11.555`, 422, "Enter a number, 0 or more, with up to 2 decimals."); E2E `customers.spec.ts` and `customers-focus.spec.ts`, under the percent rate's own row |
+| `12.5` accepted | Met | `customers-routes.test.ts` (stored `12.50`); E2E (input shows `12.50` after the save) |
+| An untouched stored value is not re-judged | Kept | `isUnchanged` unchanged; `customers-lib.test.ts` |
+| Hint and messages (v0.25) | Met | `RATES_HINT`; `WHOLE_NUMBER_MESSAGE` and its pattern removed |
+
+## Findings (round 2, new diff only)
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| QLT-09 | Minor | `src/components/features/masters/use-customer-edit.ts:149` with `src/app/(portal)/masters/customers/[id]/error.tsx` | DL-169 pattern; ux-spec v0.21 / v0.24 | `router.refresh()` renders the edit page again on the server right after a successful save or reset. If that render fails, the App Router shows `[id]/error.tsx`, whose standard line says "Nothing was changed.", and it replaces the page with its "was saved" notice. ux-spec v0.24 test (5) rules the standard line for the **first** read only. Reasoned from the App Router's error-boundary behaviour; not reproduced (it needs a server failure within milliseconds of a commit) | A false sentence about the Admin's own saved change. Rare | The ux-expert rules a sentence true in both cases (for example `Check your connection and try again.`) for the `[id]` boundary, passed through `CustomerLoadError`; one row in `customers-error-pages.test.ts`. It can ride the alignment commit; not a G6-close blocker |
+
+## Notes (round 2)
+
+- **Design.** `useCustomerEdit` is split into `useCustomerFields` (state, `adopt`, refresh) and `useCustomerSave` (request, failure, focus on Save) with no behaviour change. The F1 E2E for save by keyboard and focus on Save is green. Size and justification are reviewer-standards' (STD-01).
+- **Reset dialog (v0.25).** One `AlertDialogDescription asChild` holds both paragraphs and the list, so the accessible description is complete (the E2E asserts it). Typed, unsaved rates are replaced and typed details stay (`adopt(…, true)`; E2E).
+- **Not re-run.** Integration and E2E locally (no database credentials read, no `npm ci`); taken from F1's CI as relayed.
+
+## Issues for other roles (round 2)
+
+- **ux-expert:** QLT-09, the sentence under the edit page's load error when it can follow a saved change.
+- **orchestrator / master:** at the G6 close, the alignment commit carries the QLT-06 header rewording, the Customers entry in `masters-table-actions.spec.ts` on #222's version, the shared `SAVED_NOT_SHOWN_BODY` (DL-171) and, if ruled, QLT-09's sentence. The cross-screen blind spot of QLT-01 is #326.

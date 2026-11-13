@@ -6,7 +6,7 @@
 | Severity | **Sev-2 Major**, reclassified by master in DL-174 (QA graded Sev-3 Moderate). Test plan section 6: a WCAG 2.2 AA violation on a delivered screen (SC 1.4.10 Reflow), the same row as DEF-014 and the DL-094 rule that the scale decides severity |
 | Priority | P2 (Jira High). **Blocks G8** |
 | Type | Product, **pre-existing; not caused by AQP-245** (the notice is outside that PR's 2 files) |
-| Status | New (fix: a developer PR after #222 merges) |
+| Status | **Closed** (fixed by PR #334, squash-merged to `master` as `8f66157`; verified in the G7 of AQP-275, GO in DL-195, 2026-11-12) |
 | Jira / GitHub | [AQP-275](https://sankumar76.atlassian.net/browse/AQP-275) / [#325](https://github.com/sankumar76/Accucut-Quotation/issues/325); relates to AQP-245 |
 | Found by / date | qa-engineer, exploratory session M8 in the G7 of AQP-245, 2026-11-12 |
 | Build / commit | `03e21f2` (H1 of PR #222 = `master` 6b1883f + the 2 AQP-245 files) |
@@ -42,9 +42,9 @@ The notice does not wrap the unbroken name and the page scrolls sideways.
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-12 | PR #334, `Notice` always applies `BREAK_LONG_NAMES` (`src/components/shared/notice.tsx`, `break-long-names.ts`); squash-merged as `8f66157` |
+| Regression test added | developer | 2026-11-12 | `tests/unit/notice-wraps-long-names.test.ts` (6 cases); `masters-table-actions.spec.ts` SCR-14 "can sign in again" notice at 360 and 768 px |
+| Verified | qa-engineer | 2026-11-12 | `docs/07-qa/AQP-275-test-report.md` (H2 `7ddb335`): 120 characters, page overflow 0 before and 0 after at 360, 768 and 1024 px (was 1011 / 611 / 611 px); 18 notices swept at 360 px; axe 0; control brings the overflow back; CI run 43247482466 5 of 5 |
 
 ## Severity history and routing
 
