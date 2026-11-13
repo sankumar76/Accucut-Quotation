@@ -22,6 +22,10 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/treatments/[id]': () => import('@/app/api/v1/treatments/[id]/route'),
   '/api/v1/options/treatments': () => import('@/app/api/v1/options/treatments/route'),
   '/api/v1/exchange-rates': () => import('@/app/api/v1/exchange-rates/route'),
+  '/api/v1/customers': () => import('@/app/api/v1/customers/route'),
+  '/api/v1/customers/[id]': () => import('@/app/api/v1/customers/[id]/route'),
+  '/api/v1/customers/[id]/reset-rates': () => import('@/app/api/v1/customers/[id]/reset-rates/route'),
+  '/api/v1/options/customers': () => import('@/app/api/v1/options/customers/route'),
 };
 
 export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
@@ -32,4 +36,6 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/audit': () => import('@/app/(portal)/audit/page'),
   '/masters/process': () => import('@/app/(portal)/masters/process/page'),
   '/masters/materials': () => import('@/app/(portal)/masters/materials/page'),
+  '/masters/customers': () => import('@/app/(portal)/masters/customers/page'),
+  '/masters/customers/[id]': () => import('@/app/(portal)/masters/customers/[id]/page'),
 };

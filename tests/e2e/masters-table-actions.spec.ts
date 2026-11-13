@@ -9,8 +9,8 @@ import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './suppor
 
 /**
  * DEF-021 (AQP-234) and GitHub #134 (AQP-245): the row actions of a masters table are inside the table's visible box, without scrolling it, at
- * every width from 768 to 1440 px (UX spec v0.20 section 6.0 "Masters tables", SCR-11, SCR-13 and SCR-14). Run for Process master, for Materials,
- * since STORY-02.05 for the Treatment / Color tab (Rename and Delete, 112 px) and, since AQP-245, for Users, each with one row whose name is the
+ * every width from 768 to 1440 px (UX spec v0.20 section 6.0 "Masters tables", SCR-11, SCR-12, SCR-13 and SCR-14). Run for Process master, for Materials,
+ * since STORY-02.02 for Customers (Edit only, 68 px), since STORY-02.05 for the Treatment / Color tab (Rename and Delete, 112 px) and, since AQP-245, for Users, each with one row whose name is the
  * longest the table's own form allows with no space (100 characters; 120 for a user), at the eleven widths of the spec's table of regions.
  *
  * Each width is checked three ways: as drawn (the fit), with the table forced wider than the region, at its start and after a Tab, and scrolled to its
@@ -129,6 +129,13 @@ const SCREENS: ReadonlyArray<Screen> = [
         specificGravity: '7.37',
         scrapRate: '22.37',
       }),
+  },
+  {
+    label: 'SCR-12 Customers',
+    path: '/masters/customers',
+    title: 'Customers',
+    region: 'Customers, scrollable',
+    make: (page, name) => post(page, '/api/v1/customers', { name }),
   },
   {
     label: 'SCR-13 Treatment / Color',

@@ -25,6 +25,7 @@ import {
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
+import { createCustomerOperations, type CustomerOperations } from './customer-service';
 import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';
 import { assertNameUsable } from './rate-name-rules';
 import { createTreatmentOperations, type TreatmentOperations } from './treatment-service';
@@ -61,6 +62,10 @@ import { createTreatmentOperations, type TreatmentOperations } from './treatment
  *
  * **The Treatment / Color list** (STORY-02.05; FR-017) is `treatment-service.ts`: a name (unique ignoring letter case, never one the system keeps), the locked
  * "Other" entry, and one audit entry per change with `object_type` `treatment`.
+ *
+ * **The Customer Master** (STORY-02.02; FR-013) is `customer-service.ts`. What this file adds for it is the synchronisation of SPEC section 4.2 rules 3 and 5
+ * (AC-4): a rate added gets a row for every customer at its default, and a rate deleted loses its row on every customer, each in the **same transaction** as the
+ * change to the rate and writing no entry of its own (the rate's entry stands for it).
  */
 
 const NOT_FOUND_MESSAGE = 'Rate not found.';
@@ -88,7 +93,7 @@ export interface MastersServiceDependencies {
  * Every change takes the `AuditContext` first: `actorId` is the Admin making the change and `requestId` the request it came in
  * on. Both go into the audit entry.
  */
-export interface MastersService extends ExchangeRateOperations, TreatmentOperations {
+export interface MastersService extends CustomerOperations, ExchangeRateOperations, TreatmentOperations {
   listProcessItems(): Promise<ReadonlyArray<ProcessItemView>>;
   createProcessItem(context: AuditContext, input: NewProcessItem): Promise<ProcessItemView>;
   /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. */
@@ -248,6 +253,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     await masters.lockProcessItems(tx);
     assertNameUsable({ name: item.name, others: await ratesOtherThan(null, tx), renamed: null, document });
     const record = await masters.createProcessItem(item, tx);
+    await masters.addProcessItemToCustomers(record.id, tx);
     await audit.record(tx, { event: 'master.created', ...entryFor(context, record), before: null, after: auditState(record) });
     return record;
   }
@@ -277,6 +283,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     if (before === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     const usedBy = rateUsesOf(document).get(before.id.toLowerCase()) ?? [];
     if (usedBy.length > 0) throw new ProcessItemInUseError(before.name, usedBy);
+    await masters.removeProcessItemFromCustomers(before.id, tx);
     if (!(await masters.deleteProcessItem(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
     await audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: auditState(before), after: null });
   }
@@ -285,6 +292,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     ...createMaterialOperations({ masters, transactions, audit }),
     ...createExchangeRateOperations({ masters, transactions, audit, currentConfiguration, clock }),
     ...createTreatmentOperations({ masters, transactions, audit }),
+    ...createCustomerOperations({ masters, transactions, audit }),
 
     async listProcessItems() {
       const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);

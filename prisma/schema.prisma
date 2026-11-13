@@ -127,6 +127,8 @@ model ProcessItem {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  customerRates CustomerRate[]
+
   @@unique([name], map: "uq_process_items_name")
   @@map("process_items")
 }
@@ -189,4 +191,45 @@ model Treatment {
 
   @@unique([name], map: "uq_treatments_name")
   @@map("treatments")
+}
+
+/// One customer of the Customer Master (STORY-02.02, FR-013; architecture sections 5.1 and 6; SPEC section 4.2). Only the name is required (OQ-UX-04): the
+/// phone, e-mail and address are optional text. `deletedAt` is for the soft delete of story 02.07 (A-13); the customer repository lists only rows where it is
+/// null. The unique index on `lower(name)` (names differ by more than letter case, AC-1) and the CHECK that a name is not blank are hand-written in the
+/// migration: Prisma cannot express them. `uq_customers_name` (below) is implied by `uq_customers_name_lower` and mirrors this `@@unique`: do not drop it as a
+/// duplicate. Class Confidential: contact details are personal data and never reach an Engineer; `/options/customers` sends the ID and the name only.
+model Customer {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rates CustomerRate[]
+
+  @@unique([name], map: "uq_customers_name")
+  @@map("customers")
+}
+
+/// One customer's own value for one Process Master item (STORY-02.02, FR-012, FR-013; architecture section 5.1): normalised, one row per customer and item, so the
+/// synchronisation of SPEC section 4.2 (a new item on every customer, a deleted item off every customer) is plain SQL. `value` is a rate in the item's unit
+/// (a whole percentage for a percent item). The CHECK that a value is 0 or more is hand-written in the migration. Class Restricted: a value never reaches an Engineer.
+model CustomerRate {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId    String   @map("customer_id") @db.Uuid
+  processItemId String   @map("process_item_id") @db.Uuid
+  value         Decimal  @db.Decimal(18, 4)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_rates_customer_id")
+  processItem ProcessItem @relation(fields: [processItemId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_rates_process_item_id")
+
+  @@unique([customerId, processItemId], map: "uq_customer_rates_customer_id_process_item_id")
+  @@index([customerId], map: "idx_customer_rates_customer_id")
+  @@index([processItemId], map: "idx_customer_rates_process_item_id")
+  @@map("customer_rates")
 }
