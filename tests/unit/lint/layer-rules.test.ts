@@ -68,6 +68,7 @@ const IMPORT_FAULTS: ReadonlyArray<ImportCase> = [
   { name: 'an Engineer view imports a cost repository', filePath: ENGINEER_VIEW, specifier: COST_REPOSITORY },
   { name: 'an Engineer view imports the formula engine', filePath: 'src/server/views/engineer-form.ts', specifier: FORMULA },
   { name: 'an Engineer view imports the Restricted row outputs (STORY-03.03 AC-7)', filePath: ENGINEER_VIEW, specifier: '@/lib/estimate/row-outputs' },
+  { name: 'an Engineer view imports the product totals (STORY-03.04)', filePath: ENGINEER_VIEW, specifier: '@/lib/estimate/product-totals' },
   { name: 'an Engineer view imports the row calculator (STORY-03.03 AC-7)', filePath: ENGINEER_VIEW, specifier: '@/lib/estimate/row-calculator' },
   { name: 'an Engineer view imports the row outputs by a relative path', filePath: 'src/server/views/engineer-form.ts', specifier: '../../lib/estimate/row-outputs' },
   { name: 'a .tsx Engineer view imports a cost repository', filePath: 'src/server/views/engineer-a.tsx', specifier: COST_REPOSITORY },

@@ -115,7 +115,7 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 /** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
-const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = ['@/lib/estimate/row-outputs', '@/lib/estimate/row-calculator', '../../lib/estimate/row-outputs'];
+const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = ['@/lib/estimate/row-outputs', '@/lib/estimate/row-calculator', '@/lib/estimate/product-totals', '../../lib/estimate/row-outputs', '../../lib/estimate/product-totals'];
 
 const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generated/prisma/client'];
 

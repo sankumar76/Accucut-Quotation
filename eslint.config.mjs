@@ -56,12 +56,12 @@ const FORMULA_IMPORT = {
   message: 'This code must not import the formula engine (ADR-008, NFR-002).',
 };
 
-// The calculated outputs of a row (STORY-03.03 AC-7; ADR-008, NFR-002): the Restricted type and the calculator that makes it. Other modules of
+// The calculated outputs of a row (STORY-03.03 AC-7; ADR-008, NFR-002): the Restricted types and the calculators that make them. Other modules of
 // `lib/estimate` (the tree, the validation) hold nothing Restricted, so only these two are named.
 const ROW_OUTPUTS_IMPORT = {
-  group: ['**/lib/estimate/row-outputs', '**/lib/estimate/row-calculator'],
-  regex: `(^|${SLASH})lib${SLASH}estimate${SLASH}row-(outputs|calculator)${END}`,
-  message: 'Engineer views must not import the calculated row outputs or the row calculator: outputs live only in Restricted types (ADR-008, NFR-002).',
+  group: ['**/lib/estimate/row-outputs', '**/lib/estimate/row-calculator', '**/lib/estimate/product-totals'],
+  regex: `(^|${SLASH})lib${SLASH}estimate${SLASH}(row-(outputs|calculator)|product-totals)${END}`,
+  message: 'Engineer views must not import the calculated row outputs, the product totals or the calculators: outputs live only in Restricted types (ADR-008, NFR-002).',
 };
 
 // Presentation code reaches data through services and views only (architecture section 4.1, 10). Pages

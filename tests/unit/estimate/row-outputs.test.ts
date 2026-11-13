@@ -64,7 +64,7 @@ describe('displayStoredValue (AC-4)', () => {
 describe('the Restricted modules are server-only (AC-7, NFR-002, ADR-008)', () => {
   const root = fileURLToPath(new URL('../../../src/lib/estimate/', import.meta.url));
 
-  it.each(['row-outputs.ts', 'row-calculator.ts'])('%s starts with import \'server-only\'', (file) => {
+  it.each(['row-outputs.ts', 'row-calculator.ts', 'product-totals.ts'])('%s starts with import \'server-only\'', (file) => {
     const code = readFileSync(`${root}${file}`, 'utf8');
     const firstCode = code.split(/\r?\n/).find((line) => line.trim() !== '' && !line.trim().startsWith('//') && !line.trim().startsWith('/*') && !line.trim().startsWith('*'));
     expect(firstCode).toBe("import 'server-only';");

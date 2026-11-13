@@ -158,6 +158,62 @@ describe('the compiled plan is built once per configuration version (architectur
   });
 });
 
+describe('calculateEstimate: every row, then the product totals (STORY-03.04; architecture section 4.2)', () => {
+  const rowsOf = (request: RowCalculationRequest, count: number) => Array.from({ length: count }, () => ({ materialId: request.materialId, inputs: request.inputs }));
+
+  it('works out each row as calculateRow does, and BL as the plain sum of BG over the rows', async () => {
+    const { service, request } = fixture();
+    const single = storeRowOutputs(await service.calculateRow(request));
+    const estimate = await service.calculateEstimate({ customerId: request.customerId, rows: rowsOf(request, 3) });
+    expect(estimate.rows).toHaveLength(3);
+    for (const row of estimate.rows) expect(storeRowOutputs(row)).toEqual(single);
+    // BG = 451.398096..., so three rows total 1354.194288 and 1354.19 at 2 decimals
+    expect(estimate.totals.totalPrice?.toFixed(2)).toBe('1354.19');
+    expect(estimate.totals.approvedPrice).toBeNull();
+  });
+
+  it('reads the Tool Cost (BM) typed on the rows: the total is as typed and BN is BL over it', async () => {
+    const { service, request } = fixture();
+    const withTool = (text: string) => ({ materialId: request.materialId, inputs: { ...request.inputs, [idOf('BM')]: text } });
+    const estimate = await service.calculateEstimate({ customerId: request.customerId, rows: [withTool('2'), withTool('3')] });
+    expect(estimate.totals.toolCostTotal?.toString()).toBe('5');
+    // BL = 2 x 451.398096 = 902.796192, and BN = BL / 5 = 180.5592384
+    expect(estimate.totals.pricePerToolCost?.toFixed(2)).toBe('180.56');
+  });
+
+  it('an estimate with no rows totals 0 and has no BN', async () => {
+    const { service, request } = fixture();
+    const estimate = await service.calculateEstimate({ customerId: request.customerId, rows: [] });
+    expect(estimate.rows).toEqual([]);
+    expect(estimate.totals.totalPrice?.toString()).toBe('0');
+    expect(estimate.totals.pricePerToolCost).toBeNull();
+  });
+
+  it('a row of the hidden "Not applicable" material and a row of a real material can sit in one estimate', async () => {
+    const { service, request, masters } = fixture();
+    masters.materials.push({ id: '00000000-0000-4000-8000-0ccc00000002', materialInDrawing: 'Invented n/a', materialConsidered: 'Invented', ...NOT_APPLICABLE });
+    const estimate = await service.calculateEstimate({
+      customerId: request.customerId,
+      rows: [
+        { materialId: request.materialId, inputs: request.inputs },
+        { materialId: '00000000-0000-4000-8000-0ccc00000002', inputs: request.inputs },
+      ],
+    });
+    const [first, second] = estimate.rows.map((row) => storeRowOutputs(row));
+    expect(storedAt(defined(first), 'AK')).toBe('15.99');
+    expect(storedAt(defined(second), 'AK')).toBe('0');
+  });
+
+  it('refuses an unknown customer or material, and a typed value that is not a number, naming the row', async () => {
+    const { service, request } = fixture();
+    const good = { materialId: request.materialId, inputs: request.inputs };
+    expect(await thrownRejection(service.calculateEstimate({ customerId: '00000000-0000-4000-8000-0ddd00000009', rows: [good] }))).toBeInstanceOf(NotFoundError);
+    expect(await thrownRejection(service.calculateEstimate({ customerId: request.customerId, rows: [good, { ...good, materialId: 'not-an-id' }] }))).toBeInstanceOf(NotFoundError);
+    const failure = await thrownRejection(service.calculateEstimate({ customerId: request.customerId, rows: [good, { ...good, inputs: { [idOf('J')]: 'x' } }] }));
+    expect(failure).toMatchObject({ fields: [{ field: `rows[1].${idOf('J')}`, message: expect.any(String) }] });
+  });
+});
+
 async function thrownRejection(promise: Promise<unknown>): Promise<Error> {
   try {
     await promise;
