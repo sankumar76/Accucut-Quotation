@@ -34,6 +34,8 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/estimates/[id]/tree/move': () => import('@/app/api/v1/estimates/[id]/tree/move/route'),
   '/api/v1/estimates/[id]/nodes': () => import('@/app/api/v1/estimates/[id]/nodes/route'),
   '/api/v1/estimates/[id]/nodes/[nodeId]': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/route'),
+  '/api/v1/estimates/[id]/form': () => import('@/app/api/v1/estimates/[id]/form/route'),
+  '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/inputs/route'),
   '/api/v1/options/assign-context': () => import('@/app/api/v1/options/assign-context/route'),
 };
 

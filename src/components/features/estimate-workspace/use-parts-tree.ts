@@ -133,6 +133,14 @@ export function usePartsTree(estimateId: string) {
     setDeleteOpen(false);
   }
 
+  /**
+   * What typing into a part did (STORY-05.03): a save raises the part's own revision and may change how complete it is. The tree takes both, so a move or a delete of the part is
+   * sent with the revision the server has now (a delete that the person confirmed for the part as it was is refused otherwise, review SQR-01 (b)), and the part's icon is right.
+   */
+  function applySaved(saved: { readonly id: string; readonly revision: number; readonly completeness: PartItem['completeness'] }): void {
+    setNodes((current) => (current === null ? current : current.map((node) => (node.id === saved.id ? { ...node, revision: saved.revision, completeness: saved.completeness } : node))));
+  }
+
   const cancelDelete = (): void => setDeleteOpen(false);
   const readAgain = (): void => {
     setLoadFailed(false);
@@ -154,6 +162,7 @@ export function usePartsTree(estimateId: string) {
     askDelete,
     confirmDelete,
     cancelDelete,
+    applySaved,
     readAgain,
   };
 }

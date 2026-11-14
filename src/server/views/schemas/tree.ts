@@ -22,7 +22,7 @@ const MAX_INTEGER = 2_147_483_647;
 /** The path parameters of `/api/v1/estimates/{id}/nodes/{nodeId}`. */
 export const nodeParamsSchema = z.strictObject({ id: z.string().max(MAX_ID_LENGTH), nodeId: z.string().max(MAX_ID_LENGTH) });
 
-const revisionSchema = z.number().int().min(1).max(MAX_INTEGER);
+export const revisionSchema = z.number().int().min(1).max(MAX_INTEGER);
 /** The place a part is to end up in among its new siblings: 0 is first. A place past the end puts it last. */
 const indexSchema = z.number().int().min(0).max(MAX_INTEGER);
 const parentIdSchema = z.string().max(MAX_ID_LENGTH).nullable();
@@ -73,5 +73,16 @@ export const partsTreeSchema = z.strictObject({ nodes: z.array(treePartSchema) }
 /** `POST /nodes`: the part added, and the tree as it is now. */
 export const addedNodeSchema = z.strictObject({ nodeId: z.string().min(1), nodes: z.array(treePartSchema) });
 
-/** `GET /nodes/{nodeId}`: one part with what was typed into it. Strict and empty until STORY-05.03 names the fields. */
-export const nodeDetailSchema = z.strictObject({ ...partShape, inputs: z.strictObject({}) });
+/**
+ * What was typed into a part, as a list of **field ID and text** entries (STORY-05.03; SQR-09): a number as decimal text with two decimals, a text as typed, and Material in
+ * Drawing (E) as the ID of its Material Master row. It is a list and not an object keyed by field ID because the security tests hold every object of an answer to named,
+ * strict keys. The service sends only the values of fields of the form, so no rate, cost or formula can be in it; this schema bounds the shape: an ID that is not a UUID, a
+ * value that is not text or one longer than `MAX_INPUT_VALUE_LENGTH`, or a key beside the two, fails closed (a generic 500) and does not leave.
+ */
+export const MAX_INPUT_VALUE_LENGTH = 1_000;
+/** The most entries one part can have: a bound and not a rule (the form has fewer than this many fields). */
+export const MAX_INPUT_ENTRIES = 200;
+export const partInputsSchema = z.array(z.strictObject({ fieldId: z.uuid(), value: z.string().max(MAX_INPUT_VALUE_LENGTH) })).max(MAX_INPUT_ENTRIES);
+
+/** `GET /nodes/{nodeId}`: one part with what was typed into it, by field ID. */
+export const nodeDetailSchema = z.strictObject({ ...partShape, inputs: partInputsSchema });

@@ -44,6 +44,8 @@
   --topbar-h: 64px;
   --side-w: 248px;
   --drawer-w: 288px;
+  /* The parts tree beside the form from 1024 px (UX spec SCR-05 "Layout rules": 288 px). */
+  --tree-w: 288px;
   --page-max: 1320px;
   --menu-w: 264px;
   --switch-w: 52px;

@@ -76,6 +76,8 @@ export function createFakeEstimateWorld(
   let writes = 0;
   let nodeWrites = 0;
   let statusWrites = 0;
+  /** When a part was last written, as the real table's `updated_at` shows it; the creation of the world counts as a write. */
+  let lastWritten = new Date();
   const customerOf = (id: string | null): CustomerChoice | null => {
     const found = id === null ? undefined : customers().find((customer) => same(customer.id, id));
     return found === undefined ? null : { id: found.id, name: found.name };
@@ -168,6 +170,21 @@ export function createFakeEstimateWorld(
       nodeWrites += 1;
       return Promise.resolve();
     },
+    findNode: (estimateId, nodeId) => {
+      const node = nodes.find((candidate) => same(candidate.id, nodeId) && same(candidate.estimateId, estimateId));
+      return Promise.resolve(node === undefined ? null : recordOf(node));
+    },
+    saveInputs: (estimateId, nodeId, expectedRevision, inputs) => {
+      const node = nodes.find((candidate) => same(candidate.id, nodeId) && same(candidate.estimateId, estimateId));
+      if (node === undefined) return Promise.reject(new Error('A part to change is not in this estimate.'));
+      if (node.revision !== expectedRevision) return Promise.resolve(null);
+      node.inputs = { ...inputs };
+      node.revision += 1;
+      nodeWrites += 1;
+      lastWritten = new Date();
+      return Promise.resolve(recordOf(node));
+    },
+    lastWrittenAt: (estimateId) => Promise.resolve(nodes.some((node) => same(node.estimateId, estimateId)) ? lastWritten : null),
   };
 
   // The row lock: one transaction at a time, in the order they were opened. A failed one releases it, as a rollback does.

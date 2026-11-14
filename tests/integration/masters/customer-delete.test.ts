@@ -9,6 +9,7 @@ import { createEstimateService } from '@/server/services/estimate-service';
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { customerSide } from '../../support/customer-audit-side';
 import { defined } from '../../support/defined';
+import { inputsDependencies } from '../../support/estimate-inputs-deps';
 import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../support/hold-before-commit';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 
@@ -38,7 +39,7 @@ const by = () => contextOf(adminId);
 
 /** The estimate service over the real repositories and the transaction runner given (the real one, or one that holds before commit). */
 const estimateServiceOver = (transactions: TransactionRunner) =>
-  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions });
+  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions, ...inputsDependencies() });
 
 beforeAll(async () => {
   db = await openAuditDatabase();
