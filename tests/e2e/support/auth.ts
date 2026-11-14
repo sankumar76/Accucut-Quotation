@@ -54,13 +54,15 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it;
  *   expiry   holds a session that ended and signs in again (STORY-01.06), which writes no failure and raises no `session_version`;
  *   queue    is an Engineer with no task of their own, to whom the queue spec (STORY-04.02) assigns the tasks it needs and no others (a `scan` person owns a canary task);
+ *   bell     is a Lead (or an Admin, by the `role` argument) whose bell count the bell spec (STORY-04.03) reads: it assigns, or is assigned, only the tasks that spec seeds
+ *            for it, so the count it reads is its own whatever other specs seed in the shared database;
  *   password changes their own password on the account page (STORY-01.05), which raises `session_version` and counts wrong current passwords
  *            on a key of its own; nobody else's sessions or counts are touched.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue' | 'bell';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -179,10 +181,10 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
  * kind, the screen size, the repeat and the retry, plus a random part, so no two runs ever share it. The rows stay in
  * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`.
  */
-export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo): Promise<E2eUser & { readonly id: string }> {
+export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo, role: E2eUser['role'] = 'ENGINEER'): Promise<E2eUser & { readonly id: string }> {
   const part = randomBytes(3).toString('hex');
   const label = `${kind}.${testInfo.project.name}.r${testInfo.repeatEachIndex}.t${testInfo.retry}.${part}`;
-  const user: E2eUser = { name: `E2E ${label}`, email: `e2e.${label}@example.test`, role: 'ENGINEER' };
+  const user: E2eUser = { name: `E2E ${label}`, email: `e2e.${label}@example.test`, role };
   const hash = await createTestHasher().hash(E2E_PASSWORD);
   const client = await connectToTestDatabase();
   try {

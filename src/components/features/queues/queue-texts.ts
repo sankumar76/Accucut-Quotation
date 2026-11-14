@@ -16,6 +16,12 @@ export const TABLE_REGION_LABEL = 'Tasks, scrollable table';
 export const TABLE_CAPTION = 'Tasks sorted by deadline, earliest first';
 export const LIST_LABEL = 'Tasks';
 
+/** The words in front of how late a task is (STORY-04.03 AC-1): "Overdue by 1 d 18 h". */
+export const OVERDUE_BY = 'Overdue by';
+/** Under the title when the page is cut to the tasks the person assigned (a Lead's bell, STORY-04.03 AC-3). */
+export const ASSIGNED_BY_ME_NOTE = 'Showing only the tasks you assigned.';
+export const SHOW_ALL_TASKS = 'Show all tasks';
+
 export const ASSIGN_TASK_LABEL = 'Assign task';
 export const NOT_CHOSEN_YET = 'Not chosen yet';
 export const DEADLINE_COLUMN = 'Deadline (IST)';

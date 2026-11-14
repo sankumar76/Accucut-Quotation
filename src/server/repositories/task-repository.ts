@@ -52,9 +52,13 @@ export interface EstimateRecord {
   readonly status: EstimateStatus;
 }
 
-/** Whose tasks a read covers: one Engineer's own, or every task (`null`, for a Lead and an Admin). Decided by the service from the session, never from a request. */
+/**
+ * Whose tasks a read covers: one Engineer's own (`engineerId`), the tasks one person assigned (`assignedById`, a Lead's bell and the `assignedBy=me` view of STORY-04.03),
+ * both, or every task (`null` for each). Decided by the service from the session, never from a request.
+ */
 export interface QueueScope {
   readonly engineerId: string | null;
+  readonly assignedById: string | null;
 }
 
 /** A place in the queue's order (deadline, then code): tasks strictly after this one come next. */
@@ -100,6 +104,8 @@ export interface TaskRepository {
   listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
   /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
   countQueue(scope: QueueScope, now: Date): Promise<QueueCounts>;
+  /** How many tasks in this scope are overdue at `now`: the bell's count (STORY-04.03 AC-2), by the same rule as the Overdue tab and as one count, not three. */
+  countOverdue(scope: QueueScope, now: Date): Promise<number>;
 }
 
 const ENGINEER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
@@ -133,9 +139,15 @@ function afterFilter(after: QueuePosition | null): Prisma.TaskWhereInput {
   return { OR: [{ deadlineAt: { gt: after.deadlineAt } }, { deadlineAt: after.deadlineAt, code: { gt: after.code } }] };
 }
 
-const scopeFilter = (scope: QueueScope): Prisma.TaskWhereInput => (scope.engineerId === null ? {} : { engineerId: scope.engineerId });
+const scopeFilter = (scope: QueueScope): Prisma.TaskWhereInput => ({
+  ...(scope.engineerId === null ? {} : { engineerId: scope.engineerId }),
+  ...(scope.assignedById === null ? {} : { assignedById: scope.assignedById }),
+});
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
+
+/** An ID that is not a UUID would make PostgreSQL refuse the statement; the session's ID always is one, but nothing here trusts that. Such a scope holds no task. */
+const isReadable = (scope: QueueScope): boolean => [scope.engineerId, scope.assignedById].every((id) => id === null || isUuid(id));
 
 /** Builds the task methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createTaskRepository(db: PrismaClient): TaskRepository {
@@ -192,8 +204,7 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
 
     listQueue: ({ tab, scope, now, limit, after }) =>
       withDatabaseErrors(async () => {
-        // An ID that is not a UUID would make PostgreSQL refuse the statement; the session's ID always is one, but nothing here trusts that.
-        if (scope.engineerId !== null && !isUuid(scope.engineerId)) return [];
+        if (!isReadable(scope)) return [];
         const rows = await db.task.findMany({
           where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after)] },
           orderBy: [{ deadlineAt: 'asc' }, { code: 'asc' }],
@@ -222,10 +233,17 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
 
     countQueue: (scope, now) =>
       withDatabaseErrors(async () => {
-        if (scope.engineerId !== null && !isUuid(scope.engineerId)) return { open: 0, closed: 0, overdue: 0 };
+        if (!isReadable(scope)) return { open: 0, closed: 0, overdue: 0 };
         const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now)] } });
         const [open, closed, overdue] = await Promise.all([count('open'), count('closed'), count('overdue')]);
         return { open, closed, overdue };
+      }),
+
+    countOverdue: (scope, now) =>
+      withDatabaseErrors(async () => {
+        if (!isReadable(scope)) return 0;
+        // `idx_tasks_deadline_at` serves the deadline bound; the status of the estimate is the one join.
+        return db.task.count({ where: { AND: [scopeFilter(scope), tabFilter('overdue', now)] } });
       }),
   };
 }

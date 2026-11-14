@@ -30,6 +30,7 @@ import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor
  *     task. No part of a request can widen the scope, because the request has no field for it (the filters of STORY-04.06 arrive with their own rules).
  *   - **Open, Closed and Overdue are derived at read time** from the status of the estimate and the deadline against the server's clock (AC-1): a task whose
  *     deadline is exactly now is not overdue yet, one a millisecond past it is; an overdue task is also in Open.
+ *   - **The bell** (STORY-04.03; FR-037): `countOverdue` is one count of the overdue tasks relevant to the role, read at the server's clock on page load.
  *   - **A row carries no cost** (AC-8): the code, the title, the people's names, the customer's name, the folder, the deadline and the status of the estimate.
  */
 
@@ -74,6 +75,8 @@ export interface TaskQueue {
   readonly counts: QueueCounts;
   /** Where the next page begins, or null on the last page. */
   readonly nextCursor: string | null;
+  /** The instant "overdue" was judged at (the server's clock), so a row's "Overdue by" text is worded against the same instant as the counts (STORY-04.03 AC-1). */
+  readonly asOf: Date;
 }
 
 /** The person asking, from the session. */
@@ -86,6 +89,8 @@ export interface QueueQuery {
   readonly tab: QueueTab;
   readonly limit?: number | undefined;
   readonly cursor?: TaskQueueCursor | undefined;
+  /** `me`: only the tasks the viewer assigned (STORY-04.03). The one value of the `assignedBy` filter that exists before STORY-04.06. */
+  readonly assignedBy?: 'me' | undefined;
 }
 
 export interface TaskService {
@@ -98,6 +103,8 @@ export interface TaskService {
   assignTask(assignedById: string, input: AssignInput): Promise<AssignedTask>;
   /** A page of a tab for this person, with the count of every tab (STORY-04.02 AC-1, AC-2). */
   listQueue(viewer: QueueViewer, query: QueueQuery): Promise<TaskQueue>;
+  /** The bell's count for this person at the server's clock: own overdue (Engineer), overdue they assigned (Lead), all overdue (Admin). STORY-04.03 AC-2. */
+  countOverdue(viewer: QueueViewer): Promise<number>;
 }
 
 export interface TaskDependencies {
@@ -106,14 +113,31 @@ export interface TaskDependencies {
   readonly clock: Clock;
 }
 
-/** An Engineer sees their own tasks; a Lead and an Admin see all (AC-2). A switch, so a fourth role cannot compile without a decision. */
-function scopeOf(viewer: QueueViewer): QueueScope {
+/**
+ * An Engineer sees their own tasks; a Lead and an Admin see all (AC-2). `assignedBy: 'me'` narrows that to the tasks the viewer assigned (the Lead's bell, STORY-04.03
+ * AC-3): it is ANDed with the role's cut, so it can only narrow, and the person it names is the session's, never the request's. A switch, so a fourth role cannot
+ * compile without a decision.
+ */
+function scopeOf(viewer: QueueViewer, assignedBy?: 'me'): QueueScope {
+  const assignedById = assignedBy === 'me' ? viewer.id : null;
   switch (viewer.role) {
     case 'ENGINEER':
-      return { engineerId: viewer.id };
+      return { engineerId: viewer.id, assignedById };
     case 'LEAD':
     case 'ADMIN':
-      return { engineerId: null };
+      return { engineerId: null, assignedById };
+  }
+}
+
+/** What the bell counts (FR-037, STORY-04.03 AC-2): an Engineer's own overdue tasks, the overdue tasks a Lead assigned, and every overdue task for an Admin. */
+function bellScopeOf(viewer: QueueViewer): QueueScope {
+  switch (viewer.role) {
+    case 'ENGINEER':
+      return { engineerId: viewer.id, assignedById: null };
+    case 'LEAD':
+      return { engineerId: null, assignedById: viewer.id };
+    case 'ADMIN':
+      return { engineerId: null, assignedById: null };
   }
 }
 
@@ -174,7 +198,7 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
 
     async listQueue(viewer, query) {
       const now = clock.now();
-      const scope = scopeOf(viewer);
+      const scope = scopeOf(viewer, query.assignedBy);
       const limit = query.limit ?? QUEUE_DEFAULT_LIMIT;
       // One more than the page, to know whether another page follows without a count of its own.
       const [rows, counts] = await Promise.all([
@@ -188,7 +212,10 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
         tasks: page.map(toQueueTask),
         counts,
         nextCursor: rows.length > limit && last !== undefined ? encodeTaskQueueCursor({ deadlineAt: last.deadlineAt, code: last.code }) : null,
+        asOf: now,
       };
     },
+
+    countOverdue: (viewer) => tasks.countOverdue(bellScopeOf(viewer), clock.now()),
   };
 }

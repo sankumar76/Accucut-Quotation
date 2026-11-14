@@ -53,12 +53,14 @@ export const assignContextSchema = z.strictObject({ engineers: z.array(engineerS
 
 const LIMIT_MESSAGE = `The limit must be a whole number from 1 to ${QUEUE_MAX_LIMIT}.`;
 const CURSOR_MESSAGE = 'This is not a place in the list. Start again from the first page.';
+const ASSIGNED_BY_MESSAGE = 'The assignedBy filter can only be "me".';
 
 /**
- * `GET /api/v1/tasks?tab=&limit=&cursor=` (STORY-04.02 AC-1, AC-2; architecture section 6, "Tasks"). The query is a strict object, so a name that is not
- * offered is an error and is never read: in particular there is no field that names whose tasks to list (the scope comes from the session), and the filters
- * of STORY-04.06 (`assignedBy`, `engineer`, `customer`, `from`, `to`, `q`) are not accepted until that story adds them with their rules. Query strings arrive as
- * text: the limit becomes a whole number and the cursor the place it names.
+ * `GET /api/v1/tasks?tab=&limit=&cursor=&assignedBy=` (STORY-04.02 AC-1, AC-2; STORY-04.03 AC-3; architecture section 6, "Tasks"). The query is a strict object, so
+ * a name that is not offered is an error and is never read: in particular there is no field that names whose tasks to list (the scope comes from the session). Of
+ * the filters of STORY-04.06 (`assignedBy`, `engineer`, `customer`, `from`, `to`, `q`) only `assignedBy=me` exists, because a Lead's bell opens the Overdue tab
+ * with it (it names the signed-in person, never another, and can only narrow what the role may see); the rest are not accepted until that story adds them with
+ * their rules. Query strings arrive as text: the limit becomes a whole number and the cursor the place it names.
  */
 export const taskQueueQuerySchema = z.strictObject({
   tab: z.enum(QUEUE_TABS, { error: 'The tab must be open, closed or overdue.' }).default(DEFAULT_QUEUE_TAB),
@@ -80,6 +82,7 @@ export const taskQueueQuerySchema = z.strictObject({
       return position;
     })
     .optional(),
+  assignedBy: z.literal('me', { error: ASSIGNED_BY_MESSAGE }).optional(),
 });
 
 /**
@@ -109,4 +112,6 @@ export const taskQueueSchema = z.strictObject({
   tasks: z.array(queueTaskSchema),
   counts: z.strictObject({ open: count, closed: count, overdue: count }),
   nextCursor: z.string().min(1).nullable(),
+  /** The instant overdue was judged at, as an ISO 8601 instant in UTC: the rows' "Overdue by" text is worded against it (STORY-04.03 AC-1). */
+  asOf: z.iso.datetime(),
 });

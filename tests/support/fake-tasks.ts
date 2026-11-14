@@ -4,6 +4,7 @@ import type {
   EstimateStatus,
   NewTask,
   QueueRow,
+  QueueScope,
   TaskRecord,
   TaskRepository,
 } from '../../src/server/repositories/task-repository';
@@ -93,20 +94,27 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const inTab = (row: QueueRow, tab: 'open' | 'closed' | 'overdue', now: Date): boolean =>
     tab === 'closed' ? row.status === 'APPROVED' : row.status !== 'APPROVED' && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
 
+  /** The rows of a scope: one Engineer's own, the ones one person assigned, both, or all (the same cut as `scopeFilter` of the real repository). */
+  const inScope = (scope: QueueScope): QueueRow[] => {
+    const assignedBy = new Map(tasks.map((task) => [task.id, task.assignedById]));
+    return queueRows().filter((row) => (scope.engineerId === null || row.engineer.id === scope.engineerId) && (scope.assignedById === null || assignedBy.get(row.id) === scope.assignedById));
+  };
+
   const repository: TaskRepository = {
     listQueue: ({ tab, scope, now, limit, after }) => {
       const earlier = (row: QueueRow): boolean =>
         after === null || row.deadlineAt.getTime() > after.deadlineAt.getTime() || (row.deadlineAt.getTime() === after.deadlineAt.getTime() && row.code > after.code);
-      const rows = queueRows()
-        .filter((row) => (scope.engineerId === null || row.engineer.id === scope.engineerId) && inTab(row, tab, now) && earlier(row))
+      const rows = inScope(scope)
+        .filter((row) => inTab(row, tab, now) && earlier(row))
         .sort((a, b) => a.deadlineAt.getTime() - b.deadlineAt.getTime() || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
       return Promise.resolve(rows.slice(0, limit));
     },
     countQueue: (scope, now) => {
-      const mine = queueRows().filter((row) => scope.engineerId === null || row.engineer.id === scope.engineerId);
+      const mine = inScope(scope);
       const count = (tab: 'open' | 'closed' | 'overdue'): number => mine.filter((row) => inTab(row, tab, now)).length;
       return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
     },
+    countOverdue: (scope, now) => Promise.resolve(inScope(scope).filter((row) => inTab(row, 'overdue', now)).length),
     listActiveEngineers: () =>
       Promise.resolve(
         people()

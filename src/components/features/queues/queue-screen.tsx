@@ -13,12 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queueTitleFor, type RoleName } from '@/lib/auth/roles';
+import { overdueSummary } from '@/lib/tasks/overdue';
 import { isQueueTab, QUEUE_TABS, QUEUE_TAB_LABELS, type QueueTab } from '@/lib/tasks/queue';
 import { fetchQueuePage, type QueuePageData } from '@/lib/tasks/queue-client';
 
 import { QueueList } from './queue-list';
 import {
   ASSIGN_TASK_LABEL,
+  ASSIGNED_BY_ME_NOTE,
   descriptionFor,
   emptyTextFor,
   ERROR_RETRY,
@@ -26,6 +28,7 @@ import {
   LOADING_LABEL,
   SHOW_MORE,
   SHOW_MORE_FAILED_BODY,
+  SHOW_ALL_TASKS,
   SHOW_MORE_FAILED_TITLE,
   SORT_NOTE,
   TABS_LABEL,
@@ -47,6 +50,11 @@ import {
 export interface QueueScreenProps {
   readonly role: RoleName;
   readonly initialPage: QueuePageData;
+  /**
+   * The page was opened with `assignedBy=me` (a Lead's bell, STORY-04.03 AC-3): every tab, and every later request, covers only the tasks the person assigned, so the
+   * Overdue tab holds the set the bell counted. The screen says so and offers the whole queue.
+   */
+  readonly assignedByMe?: boolean;
 }
 
 type Status = 'ready' | 'loading' | 'error';
@@ -64,7 +72,7 @@ function AssignButton() {
   );
 }
 
-export function QueueScreen({ role, initialPage }: QueueScreenProps) {
+export function QueueScreen({ role, initialPage, assignedByMe = false }: QueueScreenProps) {
   const [activeTab, setActiveTab] = useState<QueueTab>(initialPage.tab);
   const [page, setPage] = useState<QueuePageData>(initialPage);
   const [status, setStatus] = useState<Status>('ready');
@@ -87,7 +95,7 @@ export function QueueScreen({ role, initialPage }: QueueScreenProps) {
     setStatus('loading');
     setMoreFailed(false);
     setLoadingMore(false);
-    const outcome = await fetchQueuePage(next, undefined, fetch, controller.signal);
+    const outcome = await fetchQueuePage(next, undefined, fetch, controller.signal, assignedByMe);
     // A newer request took over while this one was on its way: its answer is the one to show.
     if (inFlight.current !== controller) return;
     if (outcome.status === 'ok') {
@@ -103,7 +111,7 @@ export function QueueScreen({ role, initialPage }: QueueScreenProps) {
     const controller = startRequest();
     setLoadingMore(true);
     setMoreFailed(false);
-    const outcome = await fetchQueuePage(activeTab, page.nextCursor, fetch, controller.signal);
+    const outcome = await fetchQueuePage(activeTab, page.nextCursor, fetch, controller.signal, assignedByMe);
     if (inFlight.current !== controller) return;
     setLoadingMore(false);
     if (outcome.status === 'ok') setPage({ ...outcome.value, tasks: [...page.tasks, ...outcome.value.tasks] });
@@ -150,6 +158,11 @@ export function QueueScreen({ role, initialPage }: QueueScreenProps) {
     }
     return (
       <>
+        {activeTab === 'overdue' ? (
+          <div className="p-s-4 pb-0">
+            <Notice tone="warn">{overdueSummary(page.counts.overdue)}</Notice>
+          </div>
+        ) : null}
         {moreFailed ? (
           <div className="p-s-4 pb-0">
             <Notice tone="danger" title={SHOW_MORE_FAILED_TITLE}>
@@ -157,7 +170,7 @@ export function QueueScreen({ role, initialPage }: QueueScreenProps) {
             </Notice>
           </div>
         ) : null}
-        <QueueList role={role} tasks={page.tasks} />
+        <QueueList role={role} tasks={page.tasks} asOf={page.asOf} />
         {page.nextCursor === null ? null : (
           <div className="flex justify-center p-s-4">
             <Button variant="secondary" {...(loadingMore ? { 'aria-busy': true } : {})} onClick={() => void showMore()}>
@@ -173,6 +186,14 @@ export function QueueScreen({ role, initialPage }: QueueScreenProps) {
   return (
     <>
       <PageHeader title={queueTitleFor(role)} description={descriptionFor(role)} actions={manager ? <AssignButton /> : undefined} />
+      {assignedByMe ? (
+        <p className="text-body text-ink-2">
+          {ASSIGNED_BY_ME_NOTE}{' '}
+          <Link href="/queue" className="font-semibold text-primary-ink underline-offset-2 hover:underline">
+            {SHOW_ALL_TASKS}
+          </Link>
+        </p>
+      ) : null}
       <Card aria-busy={status === 'loading' || undefined}>
         <CardContent className="flex flex-col gap-s-4">
           <Tabs value={activeTab} onValueChange={changeTab}>

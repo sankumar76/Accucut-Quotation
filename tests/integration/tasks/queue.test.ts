@@ -97,7 +97,7 @@ describe('AC-1: Open, Closed and Overdue on the real tables', () => {
   });
 
   it('answers an empty database with empty tabs and zero counts', async () => {
-    expect(await service.listQueue({ id: leadId, role: 'LEAD' }, { tab: 'open' })).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null });
+    expect(await service.listQueue({ id: leadId, role: 'LEAD' }, { tab: 'open' })).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
   });
 });
 
@@ -122,7 +122,7 @@ describe('AC-2: an Engineer gets their own tasks, a Lead and an Admin get all', 
   it('answers a person who is not a UUID with nothing, and never an error or another person\'s tasks', async () => {
     await seedSix();
     const queue = await service.listQueue({ id: 'not-a-uuid', role: 'ENGINEER' }, { tab: 'open' });
-    expect(queue).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null });
+    expect(queue).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
   });
 });
 

@@ -27,6 +27,8 @@ export interface QueuePageData {
   readonly tasks: ReadonlyArray<QueueRowData>;
   readonly counts: QueueCounts;
   readonly nextCursor: string | null;
+  /** The server's instant (UTC text) that overdue was judged at: a row's "Overdue by" is worded against it, so the first paint and the hydrated page say the same. */
+  readonly asOf: string;
 }
 
 const TASKS_PATH = '/api/v1/tasks';
@@ -68,18 +70,25 @@ function toCounts(value: unknown): QueueCounts | null {
 /** The page of the queue that an answer of `GET /api/v1/tasks` is, or null for a body that is not one. The server's own page reads its first paint through it too. */
 export function readQueuePage(body: unknown): QueuePageData | null {
   if (!isRecord(body) || !Array.isArray(body['tasks'])) return null;
-  const { tab, nextCursor } = body;
+  const { tab, nextCursor, asOf } = body;
   const counts = toCounts(body['counts']);
   if (typeof tab !== 'string' || !isQueueTab(tab) || counts === null) return null;
   if (!(nextCursor === null || typeof nextCursor === 'string')) return null;
+  if (typeof asOf !== 'string' || Number.isNaN(new Date(asOf).getTime())) return null;
   const tasks = body['tasks'].map(toRow);
-  return tasks.every((row): row is QueueRowData => row !== null) ? { tab, tasks, counts, nextCursor } : null;
+  return tasks.every((row): row is QueueRowData => row !== null) ? { tab, tasks, counts, nextCursor, asOf } : null;
 }
 
 /**
  * One page of a tab, after `cursor` when one is given. Pass a `signal` to cancel the call when the person changes tab before the answer arrives; a cancelled
  * call answers `failed`, which the screen ignores when a newer call has taken over. A session that ended takes the person to sign-in (`sendJson`).
  */
-export function fetchQueuePage(tab: QueueTab, cursor?: string, doFetch: Fetch = fetch, signal?: AbortSignal): Promise<Outcome<QueuePageData>> {
-  return sendJson(doFetch, `${TASKS_PATH}?${queueQueryString(tab, cursor)}`, { method: 'GET', headers: ACCEPT_JSON, ...(signal === undefined ? {} : { signal }) }, readQueuePage);
+export function fetchQueuePage(
+  tab: QueueTab,
+  cursor?: string,
+  doFetch: Fetch = fetch,
+  signal?: AbortSignal,
+  assignedByMe = false,
+): Promise<Outcome<QueuePageData>> {
+  return sendJson(doFetch, `${TASKS_PATH}?${queueQueryString(tab, cursor, assignedByMe)}`, { method: 'GET', headers: ACCEPT_JSON, ...(signal === undefined ? {} : { signal }) }, readQueuePage);
 }

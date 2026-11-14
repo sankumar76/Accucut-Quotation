@@ -205,6 +205,7 @@ test.describe('an Engineer', () => {
         ),
         counts: z.strictObject({ open: z.number(), closed: z.number(), overdue: z.number() }),
         nextCursor: z.string().nullable(),
+        asOf: z.iso.datetime(),
       })
       .parse(await response.json());
     expect(body.tasks.map((task) => task.code)).not.toContain(otherCode);
