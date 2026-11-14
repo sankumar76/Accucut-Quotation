@@ -742,6 +742,14 @@ Describe 'the zip is copied into the locked root, checked as a copy, and unpacke
         @([System.IO.Directory]::GetFileSystemEntries((Join-Path $script:Install '.in'))).Count | Should -Be 0
     }
 
+    It 'accepts an entry whose name only contains dots (Next.js route folders such as [...nextauth]), with / or \ as the separator' {
+        $zip = New-ReleaseZip -Name 'dots' -Tag 't-dots' -ExtraEntry @('app/.next/server/[...nextauth]/route.js', 'app\.next\server\[...slug]\page.js', 'dir/a..b/file.txt')
+        $release = Expand-AccucutTrustedPackage -Root $script:Install -ZipPath $zip -Sha256 (Get-AccucutTrustedSha256 -Path $zip)
+        Test-Path -LiteralPath (Join-Path $release 'app\.next\server\[...nextauth]\route.js') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $release 'app\.next\server\[...slug]\page.js') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $release 'dir\a..b\file.txt') | Should -BeTrue
+    }
+
     It 'refuses a zip with no release.json, and a release.json with a tag that is not plain' {
         $noInfo = Join-Path $TestDrive 'noinfo.zip'
         $stream = [System.IO.FileStream]::new($noInfo, [System.IO.FileMode]::Create)

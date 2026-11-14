@@ -192,7 +192,7 @@ function Get-AccucutTrustComponent {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
 
-    if ($Path.StartsWith('\\') -or $Path.StartsWith('\\?\') -or -not [System.IO.Path]::IsPathRooted($Path) -or $Path.Contains('..')) { throw "'$Path' is not a full local path. Refusing to use it." }
+    if ($Path.StartsWith('\\') -or $Path.StartsWith('\\?\') -or -not [System.IO.Path]::IsPathRooted($Path) -or (@($Path.Split([char[]]@('/', '\'))) -contains '..')) { throw "'$Path' is not a full local path. Refusing to use it." }
     $full = [System.IO.Path]::GetFullPath($Path)
     $driveRoot = [System.IO.Path]::GetPathRoot($full)
     if ($driveRoot.Length -ne 3 -or $driveRoot[1] -ne [char]':') { throw "'$Path' is not on a local drive. Refusing to use it." }
@@ -428,7 +428,7 @@ function Expand-AccucutTrustedPackage {
     try {
         foreach ($entry in $archive.Entries) {
             $name = $entry.FullName
-            if ($name.StartsWith('/') -or $name.StartsWith('\') -or $name.Contains(':') -or $name.Contains('..')) { throw "The zip holds an entry that is not a plain relative path ('$name'). Refusing to unpack it." }
+            if ($name.StartsWith('/') -or $name.StartsWith('\') -or $name.Contains(':') -or (@($name.Split([char[]]@('/', '\'))) -contains '..')) { throw "The zip holds an entry that is not a plain relative path ('$name'). Refusing to unpack it." }
             $destination = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($unpacked, $name.Replace('/', '\')))
             if (-not $destination.StartsWith($unpackedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { throw "The zip holds an entry outside its folder ('$name'). Refusing to unpack it." }
             if ($name.EndsWith('/') -or $name.EndsWith('\')) { [void][System.IO.Directory]::CreateDirectory($destination); continue }
