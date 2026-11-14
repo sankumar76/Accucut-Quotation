@@ -83,6 +83,10 @@ const SERVICES = {
     'masters-service',
     'password-policy',
     'rate-name-rules',
+    // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a
+    // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
+    // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
+    'step-up-service',
     'task-service',
     'treatment-service',
   ],
