@@ -1,6 +1,6 @@
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '../../lib/errors';
 import type { PasswordHasher } from '../auth/password-hasher';
-import { accountThrottleKey, passwordChangeThrottleKey } from '../auth/throttle-key';
+import { accountThrottleKey, passwordChangeThrottleKey, stepUpThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
 import type { TransactionRunner } from '../repositories/transaction';
 import {
@@ -213,6 +213,8 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       await throttles.clear(accountThrottleKey(keySecret, email));
       // And the block of the change-password form, so a person blocked there is not refused on "Set a new password", the only page open to them.
       await throttles.clear(passwordChangeThrottleKey(keySecret, asked.id));
+      // And the step-up block (STORY-06.14 assumption A-1): the reset lifts every block that follows from a forgotten password.
+      await throttles.clear(stepUpThrottleKey(keySecret, asked.id));
     },
   };
 }
