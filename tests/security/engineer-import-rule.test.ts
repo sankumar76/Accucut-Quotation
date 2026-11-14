@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
@@ -40,6 +40,8 @@ const dynamicImport = (specifier: string): string => `export const load = () => 
 /** The views that sit under the rule: a real one, and the names the architecture plans (section 10). */
 const ENGINEER_VIEWS: ReadonlyArray<string> = [
   'src/server/views/engineer-me.ts',
+  // STORY-04.04: `GET /api/v1/tasks/{id}`. It imports its own schema file and the status machine's types and no service or repository (they are all blocked for it).
+  'src/server/views/engineer-task.ts',
   'src/server/views/engineer-queue.ts',
   'src/server/views/engineer-form.ts',
   'src/server/views/engineer-tree.tsx',
@@ -149,6 +151,11 @@ const ALLOWED_IMPORTS: ReadonlyArray<string> = [
   '@/server/http/navigation',
   '@/server/views/schemas/me',
   './schemas/me',
+  // STORY-04.04: the task schema file holds names, codes, paths, instants and the status of an estimate, no cost field (the barrel stays refused).
+  '@/server/views/schemas/tasks',
+  './schemas/tasks',
+  // STORY-04.04: the words of a task's status, derived from `estimates.status` alone; it holds no Restricted type.
+  '@/lib/estimate/task-status',
   '@/lib/estimate/validation',
   // STORY-06.01: the status machine holds statuses, events and roles, no figure and no person's data, so an Engineer view may read it to show inputs read-only.
   '@/lib/estimate/state-machine',
@@ -218,6 +225,14 @@ describe('an Engineer view may import only what is on the allow-list (AC-1, STD-
   it('F10: a named import of a service getter from the container is refused', async () => {
     const code = "import { getMastersService } from '@/server/composition';\nexport const service = getMastersService;\n";
     expect(await ruleIdsFor('src/server/views/engineer-me.ts', code)).toContain('no-restricted-imports');
+  });
+
+  it('STORY-04.04: the real task view lints clean, and the same file with the task service or the task repository imported is refused', async () => {
+    const view = 'src/server/views/engineer-task.ts';
+    const real = readFileSync(`${ROOT}${view}`, 'utf8');
+    expect(await ruleIdsFor(view, real)).toEqual([]);
+    expect(await ruleIdsFor(view, `import type { TaskDetail } from '../services/task-service';\n${real}`)).toContain('no-restricted-imports');
+    expect(await ruleIdsFor(view, `import type { TaskDetailRow } from '../repositories/task-repository';\n${real}`)).toContain('no-restricted-imports');
   });
 });
 

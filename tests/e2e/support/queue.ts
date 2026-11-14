@@ -16,6 +16,8 @@ import { E2E_LEAD } from './auth';
 export type SeededStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
 
 export interface SeededQueueTask {
+  /** The task's ID, for `GET /api/v1/tasks/{id}` (STORY-04.04). */
+  readonly id: string;
   readonly code: string;
   readonly title: string;
 }
@@ -60,7 +62,20 @@ export async function seedQueueTask(
     const id = task.rows[0]?.id;
     if (id === undefined) throw new Error('The person who assigns the task does not exist yet: the set-up project makes the E2E Lead, and a test makes its own.');
     await client.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, status]);
-    return { code, title };
+    return { id, code, title };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Puts the estimate of a task into another status, as an approval or an unlock would (STORY-04.04: an approved task unlocked is DRAFT again). The runtime role may update
+ * `estimates`, so this is the same write the application makes. Only the status changes.
+ */
+export async function setEstimateStatus(taskId: string, status: SeededStatus): Promise<void> {
+  const client = await connect();
+  try {
+    await client.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [taskId, status]);
   } finally {
     await client.end();
   }

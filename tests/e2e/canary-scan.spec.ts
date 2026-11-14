@@ -37,6 +37,7 @@ import {
   validCall,
   type Plant,
 } from './support/canary-scan';
+import { seedQueueTask, setEstimateStatus, type SeededQueueTask } from './support/queue';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -387,6 +388,102 @@ test('AC-4 (negative control): a sentinel planted in a script chunk and in a res
     'the sentinel planted in a fetched response',
   ).toBe(true);
   await expectCanaryRatesStillStored();
+});
+
+/**
+ * STORY-04.04 AC-6: the queue and the task page with tasks in each state. The Engineer owns a task in DRAFT, one in SUBMITTED, one APPROVED, and one that was approved and
+ * then unlocked (DRAFT again), and the scan opens the queue (every tab, as a page and as the API behind it), each task's page and `GET /api/v1/tasks/{id}`, and looks for
+ * every Restricted value in what comes back. "Approved" is a word and shows no amount. The scan above (AC-3) already opens these routes for the Engineer who owns the canary
+ * task; this one adds the states, so a status that carried a figure would be found.
+ */
+interface StatedTasks {
+  readonly draft: SeededQueueTask;
+  readonly submitted: SeededQueueTask;
+  readonly approved: SeededQueueTask;
+  readonly unlocked: SeededQueueTask;
+}
+
+const DAY_MS = 86_400_000;
+
+async function seedAllStates(engineerId: string): Promise<StatedTasks> {
+  const later = new Date(Date.now() + 30 * DAY_MS).toISOString();
+  const earlier = new Date(Date.now() - 10 * DAY_MS).toISOString();
+  const unlocked = await seedQueueTask(engineerId, later, 'APPROVED', 'Scan unlocked');
+  await setEstimateStatus(unlocked.id, 'DRAFT');
+  return {
+    draft: await seedQueueTask(engineerId, later, 'DRAFT', 'Scan draft'),
+    submitted: await seedQueueTask(engineerId, later, 'SUBMITTED', 'Scan submitted'),
+    approved: await seedQueueTask(engineerId, earlier, 'APPROVED', 'Scan approved'),
+    unlocked,
+  };
+}
+
+/** Opens the queue and every task as the signed-in Engineer, recording each page and each call. */
+async function visitQueueAndTasks(page: Page, recorder: ScanRecorder, tasks: StatedTasks): Promise<void> {
+  const queue = await recorder.recordNavigation('GET /queue (page, states)', await page.goto('/queue'));
+  expect(queue.status).toBe(200);
+  for (const tab of ['open', 'closed', 'overdue']) {
+    const answer = await callInBrowser(recorder, page, `GET /api/v1/tasks?tab=${tab} (API, states)`, `/api/v1/tasks?tab=${tab}`);
+    expect(answer.status, `the ${tab} tab`).toBe(200);
+  }
+  for (const [name, task] of Object.entries(tasks)) {
+    const document = await recorder.recordNavigation(`GET /estimates/${task.code} (page, ${name})`, await page.goto(`/estimates/${task.code}`));
+    expect(document.status, `${name} task page`).toBe(200);
+    const answer = await callInBrowser(recorder, page, `GET /api/v1/tasks/${task.id} (API, ${name})`, `/api/v1/tasks/${task.id}`);
+    expect(answer.status, `${name} task API`).toBe(200);
+  }
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+}
+
+test('AC-6 (STORY-04.04): the queue, the task page and the task route, with a task in each state, send an Engineer no Restricted value', async ({ page, context }, testInfo) => {
+  const { forbidden, engineer } = await prepare(testInfo);
+  const tasks = await seedAllStates(engineer.id);
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  await visitQueueAndTasks(page, recorder, tasks);
+
+  // The scan looked at something: the page of each state was read with its words, and the status the route sent is the one stored.
+  for (const [name, word] of [
+    ['draft', 'Draft'],
+    ['submitted', 'Submitted'],
+    ['approved', 'Approved'],
+    ['unlocked', 'Draft'],
+  ] as const) {
+    const read = recorder.withLabelContaining(`GET /estimates/${tasks[name].code} (page, ${name})`);
+    expect(read.length, `the ${name} task page was recorded`).toBeGreaterThan(0);
+    expect(read.every((response) => (response.body ?? '').includes(word)), `the ${name} page says "${word}"`).toBe(true);
+  }
+  const approvedStatus = recorder.withLabelContaining(`GET /api/v1/tasks/${tasks.approved.id} (API, approved)`);
+  expect(JSON.parse(approvedStatus[0]?.body ?? '{}')).toMatchObject({ status: 'APPROVED' });
+  const unlockedStatus = recorder.withLabelContaining(`GET /api/v1/tasks/${tasks.unlocked.id} (API, unlocked)`);
+  expect(JSON.parse(unlockedStatus[0]?.body ?? '{}')).toMatchObject({ status: 'DRAFT' });
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
+});
+
+test('AC-6 (negative control, STORY-04.04): a sentinel planted in the task route\'s answer is found by the same scan', async ({ page, context }, testInfo) => {
+  const customer = defined(canaryMasters.find((sentinel) => sentinel.kind === 'customer-rate')).value;
+  const plant: Plant = ({ url }, body) => (new URL(url).pathname.startsWith('/api/v1/tasks/') ? `${body} ${customer}` : body);
+  const { forbidden, engineer } = await prepare(testInfo);
+  const tasks = await seedAllStates(engineer.id);
+  const recorder = new ScanRecorder(plant);
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  await visitQueueAndTasks(page, recorder, tasks);
+
+  const findings = scanResponses(recorder.responses, forbidden);
+  expect(
+    findings.some((finding) => finding.label.includes(`/api/v1/tasks/${tasks.approved.id}`) && finding.found === customer),
+    'the sentinel planted in the task route\'s answer',
+  ).toBe(true);
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {

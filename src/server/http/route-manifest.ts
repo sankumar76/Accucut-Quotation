@@ -227,6 +227,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // same path, one per method, because the roles differ: the POST row above stays Lead and Admin, so an Engineer's POST is still the fixed 403 before the body is read.
   // The answer is cut to the caller's own tasks by the service, from the session, and parsed with a strict schema that names no cost.
   { path: '/api/v1/tasks', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-04.04. One task and the status of its estimate: every role, because an Engineer's own task is the same call (architecture section 6, "Task detail": A L, E own).
+  // One route, one schema: a Lead and an Admin are answered with the same shape, and an Engineer's other-person task is the same 404 as a task that does not exist. `PATCH`
+  // (reassign) is story 04.07's and will be its own row, for the Lead and the Admin only.
+  { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
   // for any other, a Lead and an Admin a short header until SCR-06 (STORY-06.02). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
