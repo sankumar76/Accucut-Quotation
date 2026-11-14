@@ -114,7 +114,7 @@ test.describe('AC-2, AC-7: a customer on a Draft estimate is refused, and the es
 test.describe('AC-6: the API refuses a delete from anyone but the Admin', () => {
   test('a signed-out call is 401, and the customer is still listed', async ({ page, playwright }, testInfo) => {
     const customer = await makeCustomer(page, newCustomerName(testInfo));
-    const anonymous = await playwright.request.newContext({ baseURL: DEVELOPMENT_URL });
+    const anonymous = await playwright.request.newContext({ baseURL: DEVELOPMENT_URL, storageState: { cookies: [], origins: [] } });
     try {
       const response = await anonymous.delete(`${API}/${customer.id}`, { headers: { origin: DEVELOPMENT_URL } });
       expect(response.status()).toBe(401);
