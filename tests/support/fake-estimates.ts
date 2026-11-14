@@ -4,7 +4,8 @@ import { createTransactionHandle, type Transaction, type TransactionRunner } fro
 
 /**
  * An in-memory estimate repository and transaction runner, for unit tests of the rules (no database): the estimates are a list the test owns, the customers
- * come from a list it also owns (so a deleted one is simply marked), and a transaction that throws puts the estimates back as they were, as PostgreSQL does.
+ * come from a list it also owns (so a deleted one is simply marked), a transaction that throws puts the estimates back as they were, as PostgreSQL does, and
+ * transactions run one after another, as the estimate's row lock makes them (STORY-06.01 AC-4: the second waits and then sees what the first did).
  * The real queries and the row lock are tested against PostgreSQL in `tests/integration/estimates`. Every name here is invented.
  */
 
@@ -36,6 +37,8 @@ export interface FakeEstimateWorld {
   readonly estimates: FakeEstimate[];
   /** How many times `setCustomer` wrote, so "no write" is something a test can see. */
   writes(): number;
+  /** How many times `setStatus` changed a status. */
+  statusWrites(): number;
 }
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
@@ -43,6 +46,7 @@ const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCas
 export function createFakeEstimateWorld(customers: () => ReadonlyArray<FakeCustomerEntry>, initial: ReadonlyArray<FakeEstimate> = []): FakeEstimateWorld {
   const estimates: FakeEstimate[] = initial.map((estimate) => ({ ...estimate }));
   let writes = 0;
+  let statusWrites = 0;
   const customerOf = (id: string | null): CustomerChoice | null => {
     const found = id === null ? undefined : customers().find((customer) => same(customer.id, id));
     return found === undefined ? null : { id: found.id, name: found.name };
@@ -83,19 +87,32 @@ export function createFakeEstimateWorld(customers: () => ReadonlyArray<FakeCusto
       writes += 1;
       return Promise.resolve();
     },
-  };
-
-  const transactions: TransactionRunner = {
-    async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-      const before = estimates.map((estimate) => ({ ...estimate }));
-      try {
-        return await work(createTransactionHandle());
-      } catch (error) {
-        estimates.splice(0, estimates.length, ...before);
-        throw error;
-      }
+    setStatus: (estimateId, from, to) => {
+      const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
+      if (estimate === undefined || estimate.status !== from) return Promise.resolve(false);
+      estimate.status = to;
+      statusWrites += 1;
+      return Promise.resolve(true);
     },
   };
 
-  return { repository, transactions, estimates, writes: () => writes };
+  // The row lock: one transaction at a time, in the order they were opened. A failed one releases it, as a rollback does.
+  let lock: Promise<unknown> = Promise.resolve();
+  const transactions: TransactionRunner = {
+    run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+      const turn = lock.then(async () => {
+        const before = estimates.map((estimate) => ({ ...estimate }));
+        try {
+          return await work(createTransactionHandle());
+        } catch (error) {
+          estimates.splice(0, estimates.length, ...before);
+          throw error;
+        }
+      });
+      lock = turn.catch(() => undefined);
+      return turn;
+    },
+  };
+
+  return { repository, transactions, estimates, writes: () => writes, statusWrites: () => statusWrites };
 }

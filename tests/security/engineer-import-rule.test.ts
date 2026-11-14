@@ -145,6 +145,9 @@ const ALLOWED_IMPORTS: ReadonlyArray<string> = [
   '@/server/views/schemas/me',
   './schemas/me',
   '@/lib/estimate/validation',
+  // STORY-06.01: the status machine holds statuses, events and roles, no figure and no person's data, so an Engineer view may read it to show inputs read-only.
+  '@/lib/estimate/state-machine',
+  '@/lib/estimate/can-edit-inputs',
   '../auth/resolve-session-user',
 ];
 

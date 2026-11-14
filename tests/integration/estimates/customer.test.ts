@@ -163,11 +163,18 @@ describe('AC-5: the refusals leave the row as it was', () => {
     expect(await stored()).toEqual({ customerId: null, revision: 0, status: 'DRAFT' });
   });
 
-  it.each(['SUBMITTED', 'APPROVED'])('a %s estimate is a 409, even for a Lead', async (status) => {
+  it.each(['SUBMITTED', 'APPROVED'])('a %s estimate is a 409 for the Engineer', async (status) => {
     await setUpEstimate();
     await db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE id = $1::uuid', [estimateId, status]);
     await expect(service.setCustomer(arjun(), estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
+    expect(await stored()).toMatchObject({ customerId: null, revision: 0 });
+  });
+
+  it('an approved estimate is a 409 for a Lead and an Admin too (STORY-06.01: a submitted one is theirs to change, FR-064)', async () => {
+    await setUpEstimate();
+    await db.owner.query("UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid", [estimateId]);
     await expect(service.setCustomer({ id: leadId, role: 'LEAD' }, estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer({ id: adminId, role: 'ADMIN' }, estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
     expect(await stored()).toMatchObject({ customerId: null, revision: 0 });
   });
 
