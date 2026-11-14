@@ -89,7 +89,7 @@ describe('AC-1: the workspace is read by the code of the task', () => {
       folderUrl: 'file:////invented-server/invented-share/RFQ-123',
       title: 'Hopper cover',
       notes: 'Sheet-metal parts only.',
-      assignedByName: 'Estimate Lead',
+      assignedByName: 'Invented Estimate Lead',
     });
     expect(workspace.deadlineAt.toISOString()).toBe('2026-11-12T11:30:00.000Z');
   });
