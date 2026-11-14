@@ -120,19 +120,22 @@ Describe 'the first half: only the trust block runs, in this order (AC-1, AC-5, 
         Should -Invoke Invoke-AccucutTrustedScript -Times 0 -Exactly
     }
 
-    It 'fails, and removes the root, when the second half does not finish; a check that refuses the release also removes it' {
+    It 'fails when the second half does not finish, and leaves the clean-up to it (it removes the root it made before any service exists, or leaves it for IT to look at after)' {
         Mock Invoke-AccucutTrustedScript { 1 }
         { Invoke-AccucutInstallFirstHalf -ZipPath $script:ZipFile -Sha256 $script:ZipHash -Root 'C:\Accucut' } | Should -Throw '*did not finish*'
-        Should -Invoke Remove-AccucutTrustedTree -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut' -and $IncludeWithin }
+        Should -Invoke Remove-AccucutTrustedTree -Times 0 -Exactly
+    }
+
+    It 'removes the root that this run made when the check that refuses the release script stops the run before the second half starts' {
         Mock Invoke-AccucutTrustedScript { throw "'C:\Accucut\releases\t1\install.ps1' can be changed by S-1-5-32-545" }
         { Invoke-AccucutInstallFirstHalf -ZipPath $script:ZipFile -Sha256 $script:ZipHash -Root 'C:\Accucut' } | Should -Throw '*can be changed by*'
-        Should -Invoke Remove-AccucutTrustedTree -Times 2 -Exactly
+        Should -Invoke Remove-AccucutTrustedTree -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut' -and $Within -eq 'C:\Accucut' -and $IncludeWithin }
     }
 
     It 'keeps going with a warning, and still re-throws the real error, when the root cannot be removed' {
-        Mock Invoke-AccucutTrustedScript { 1 }
+        Mock Invoke-AccucutTrustedScript { throw "'C:\Accucut\releases\t1\install.ps1' can be changed by S-1-5-32-545" }
         Mock Remove-AccucutTrustedTree { throw 'in use' }
-        { Invoke-AccucutInstallFirstHalf -ZipPath $script:ZipFile -Sha256 $script:ZipHash -Root 'C:\Accucut' } | Should -Throw '*did not finish*'
+        { Invoke-AccucutInstallFirstHalf -ZipPath $script:ZipFile -Sha256 $script:ZipHash -Root 'C:\Accucut' } | Should -Throw '*can be changed by*'
         Should -Invoke Write-Host -ParameterFilter { $Object -like '*could not be removed*Delete it by hand*' }
     }
 }

@@ -349,7 +349,7 @@ Describe 'module hygiene (ADR-015 Amendment 2, test 4)' {
         $exported = @((Get-Module -Name AccucutOps).ExportedFunctions.Keys)
         $exported.Count | Should -BeGreaterThan 20
         foreach ($name in $exported) {
-            $name | Should -Match '^[A-Z][A-Za-z]+-Accucut[A-Za-z]+$'
+            $name | Should -Match '^[A-Z][A-Za-z]+-Accucut[A-Za-z0-9]+$'
             $script:BlockNames | Should -Not -Contain $name
         }
         @((Get-Module -Name AccucutOps).ExportedAliases.Keys).Count | Should -Be 0
