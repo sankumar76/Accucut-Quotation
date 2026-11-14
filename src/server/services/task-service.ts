@@ -68,6 +68,11 @@ export interface QueueTask {
   readonly assignedByName: string;
 }
 
+/** One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's, worded by `taskStatusOf`. */
+export interface TaskDetail extends QueueTask {
+  readonly notes: string | null;
+}
+
 /** One page of one tab, and how many tasks each tab holds for this person. */
 export interface TaskQueue {
   readonly tab: QueueTab;
@@ -103,6 +108,12 @@ export interface TaskService {
   assignTask(assignedById: string, input: AssignInput): Promise<AssignedTask>;
   /** A page of a tab for this person, with the count of every tab (STORY-04.02 AC-1, AC-2). */
   listQueue(viewer: QueueViewer, query: QueueQuery): Promise<TaskQueue>;
+  /**
+   * One task for this person with the status of its estimate (STORY-04.04 AC-1, AC-4; `GET /api/v1/tasks/{id}`): an Engineer's own, or any for a Lead and an Admin. Null
+   * for an ID that is no task, and for an Engineer asking for another's task: the same answer, so the route's 404 cannot be used to probe which tasks exist (CR-33). The
+   * answer has the same shape for every role and no cost.
+   */
+  getTask(viewer: QueueViewer, id: string): Promise<TaskDetail | null>;
   /** The bell's count for this person at the server's clock: own overdue (Engineer), overdue they assigned (Lead), all overdue (Admin). STORY-04.03 AC-2. */
   countOverdue(viewer: QueueViewer): Promise<number>;
 }
@@ -214,6 +225,11 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
         nextCursor: rows.length > limit && last !== undefined ? encodeTaskQueueCursor({ deadlineAt: last.deadlineAt, code: last.code }) : null,
         asOf: now,
       };
+    },
+
+    async getTask(viewer, id) {
+      const row = await tasks.findTask(id, scopeOf(viewer));
+      return row === null ? null : { ...toQueueTask(row), notes: row.notes };
     },
 
     countOverdue: (viewer) => tasks.countOverdue(bellScopeOf(viewer), clock.now()),

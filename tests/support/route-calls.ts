@@ -106,16 +106,23 @@ function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
 }
 
 /**
- * STORY-04.01: the task routes. The Engineer is the harness's spare Engineer (`context.targetId`), who is active, and the deadline is far in the future, so the
+ * STORY-04.01, STORY-04.04: the task routes. The Engineer is the harness's spare Engineer (`context.targetId`), who is active, and the deadline is far in the future, so the
  * valid call is accepted whatever instant the held clock stands at. `GET /api/v1/options/assign-context` has no ID or body: the default call is its valid call.
  */
 function taskCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
-  if (`${method} ${path}` !== 'POST /api/v1/tasks') return undefined;
-  return {
-    id: NO_RECIPE_ID,
-    body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
-    status: 201,
-  };
+  switch (`${method} ${path}`) {
+    case 'POST /api/v1/tasks':
+      return {
+        id: NO_RECIPE_ID,
+        body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
+        status: 201,
+      };
+    // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
+    case 'GET /api/v1/tasks/[id]':
+      return { id: context.targetId, status: 200 };
+    default:
+      return undefined;
+  }
 }
 
 /**

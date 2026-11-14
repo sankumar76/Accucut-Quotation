@@ -1,14 +1,15 @@
-import { CalendarClock, Lock, Pencil, Send, type LucideIcon } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { FolderPath } from '@/components/shared/folder-path';
 import { Icon } from '@/components/shared/icon';
 import { PageHeader } from '@/components/shared/page-header';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
+import type { EstimateStatus } from '@/lib/estimate/state-machine';
 
-import { FOLDER_TITLE, NO_LINK_NOTE, NOTES_FROM_PREFIX, STATUS_LABELS } from './estimate-texts';
+import { FOLDER_TITLE, NO_LINK_NOTE, NOTES_FROM_PREFIX } from './estimate-texts';
 
 /**
  * The top of SCR-05 and of the short header a Lead or an Admin sees until SCR-06 (STORY-05.01 AC-1; UX-15): the task code, its status, the deadline, the folder
@@ -18,7 +19,7 @@ import { FOLDER_TITLE, NO_LINK_NOTE, NOTES_FROM_PREFIX, STATUS_LABELS } from './
 
 export interface WorkspaceHeaderView {
   readonly code: string;
-  readonly status: keyof typeof STATUS_LABELS;
+  readonly status: EstimateStatus;
   /** The deadline written in IST, for example "12 Nov 2026, 17:00 IST". */
   readonly deadlineLabel: string;
   readonly folderPath: string;
@@ -27,22 +28,6 @@ export interface WorkspaceHeaderView {
   readonly title: string | null;
   readonly notes: string | null;
   readonly assignedByName: string;
-}
-
-const STATUS_LOOK: Readonly<Record<keyof typeof STATUS_LABELS, { readonly tone: BadgeTone; readonly icon: LucideIcon }>> = {
-  DRAFT: { tone: 'neutral', icon: Pencil },
-  SUBMITTED: { tone: 'info', icon: Send },
-  APPROVED: { tone: 'success', icon: Lock },
-};
-
-function StatusBadge({ status }: { readonly status: WorkspaceHeaderView['status'] }) {
-  const { tone, icon } = STATUS_LOOK[status];
-  return (
-    <Badge tone={tone}>
-      <Icon icon={icon} size="badge" />
-      {STATUS_LABELS[status]}
-    </Badge>
-  );
 }
 
 export function WorkspaceHeader({ view }: { readonly view: WorkspaceHeaderView }) {

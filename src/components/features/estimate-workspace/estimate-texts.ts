@@ -6,8 +6,6 @@
 export const ESTIMATE_META_TITLE = 'Estimate';
 export const ESTIMATE_META_DESCRIPTION = 'Open an estimate and enter the inputs of its parts.';
 
-export const STATUS_LABELS = { DRAFT: 'Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved and locked' } as const;
-
 export const FOLDER_TITLE = 'Task folder';
 export const NOTES_FROM_PREFIX = 'Notes from';
 export const NO_LINK_NOTE = 'This path has no link. Select it and copy it yourself.';
