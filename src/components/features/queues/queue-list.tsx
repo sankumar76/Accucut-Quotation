@@ -1,19 +1,16 @@
-import { Lock, Pencil, Send, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { FOLDER_LINK_NOTE, FolderPath } from '@/components/shared/folder-path';
-import { Icon } from '@/components/shared/icon';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import type { QueueRowData } from '@/lib/tasks/queue-client';
-import type { TaskEstimateStatus } from '@/lib/tasks/queue';
 import { formatIst } from '@/lib/time';
 
 import { lateTextFor, OVERDUE_CARD_CLASS, OVERDUE_ROW_CLASS, OverdueMarker } from './overdue-marker';
-import { CARD_DEADLINE_LABEL, COLUMNS, DEADLINE_COLUMN, LIST_LABEL, NOT_CHOSEN_YET, STATUS_LABELS, TABLE_CAPTION, TABLE_REGION_LABEL } from './queue-texts';
+import { CARD_DEADLINE_LABEL, COLUMNS, DEADLINE_COLUMN, LIST_LABEL, NOT_CHOSEN_YET, TABLE_CAPTION, TABLE_REGION_LABEL } from './queue-texts';
 
 /**
  * The tasks of SCR-03 (STORY-04.02 AC-3, AC-6, AC-7): a table from 768 px, which scrolls inside its own container only, and one card for each task below it.
@@ -32,20 +29,8 @@ export interface QueueListProps {
   readonly asOf: string;
 }
 
-const STATUS_TONE: Readonly<Record<TaskEstimateStatus, BadgeTone>> = { DRAFT: 'neutral', SUBMITTED: 'info', APPROVED: 'success' };
-const STATUS_ICON: Readonly<Record<TaskEstimateStatus, LucideIcon>> = { DRAFT: Pencil, SUBMITTED: Send, APPROVED: Lock };
-
 /** The page address of a task: its code, in the workspace's path (SCR-05). */
 const taskHref = (code: string): string => `/estimates/${encodeURIComponent(code)}`;
-
-function StatusBadge({ status }: { readonly status: TaskEstimateStatus }) {
-  return (
-    <Badge tone={STATUS_TONE[status]}>
-      <Icon icon={STATUS_ICON[status]} size="hint" />
-      {STATUS_LABELS[status]}
-    </Badge>
-  );
-}
 
 /** The folder as a link and Copy path, or the path as plain text for a stored path that has no link. */
 function Folder({ task }: { readonly task: QueueRowData }) {
@@ -110,7 +95,7 @@ function TaskTable({ role, tasks, asOf }: QueueListProps) {
               <DeadlineCell task={task} late={lateTextFor(task, asOf)} />
             </TableCell>
             <TableCell>
-              <StatusBadge status={task.status} />
+              <StatusBadge status={task.status} iconSize="hint" />
             </TableCell>
             <TableCell className={cn('hidden lg:table-cell', BREAK_LONG_NAMES)}>{task.assignedByName}</TableCell>
           </TableRow>
@@ -140,7 +125,7 @@ function TaskCards({ role, tasks, asOf }: QueueListProps) {
             <div className="min-w-0">
               <TaskCell task={task} />
             </div>
-            <StatusBadge status={task.status} />
+            <StatusBadge status={task.status} iconSize="hint" />
           </div>
           <div className="text-body text-ink-2 tabular-nums">
             {CARD_DEADLINE_LABEL}: {formatIst(new Date(task.deadlineAt))}

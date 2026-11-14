@@ -44,10 +44,10 @@ describe('a dynamic route needs a real-value recipe (AC-6)', () => {
   });
 
   it('a planted Engineer API route with a dynamic segment and no recipe is named, for each method', () => {
-    const planted = plantedRow({ path: '/api/v1/tasks/[id]', kind: 'api', methods: ['GET', 'PATCH'] });
+    const planted = plantedRow({ path: '/api/v1/invented-things/[id]', kind: 'api', methods: ['GET', 'PATCH'] });
     expect(rowsWithoutRecipe([planted], CONTEXT)).toEqual([
-      'GET /api/v1/tasks/[id]: add a real-value recipe for /api/v1/tasks/[id] to tests/support/route-calls.ts (AC-6)',
-      'PATCH /api/v1/tasks/[id]: add a real-value recipe for /api/v1/tasks/[id] to tests/support/route-calls.ts (AC-6)',
+      'GET /api/v1/invented-things/[id]: add a real-value recipe for /api/v1/invented-things/[id] to tests/support/route-calls.ts (AC-6)',
+      'PATCH /api/v1/invented-things/[id]: add a real-value recipe for /api/v1/invented-things/[id] to tests/support/route-calls.ts (AC-6)',
     ]);
   });
 
