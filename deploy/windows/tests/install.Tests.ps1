@@ -15,6 +15,7 @@ BeforeAll {
     # Dot-sourcing defines the functions and does not run the install (the script runs it only when it is started, not sourced).
     . (Join-Path $script:WindowsDirectory 'install.ps1')
     $script:RealGetSecurity = (Get-Command -Name Get-AccucutPathSecurity -CommandType Function).ScriptBlock
+    $script:RealImportBootstrap = (Get-Command -Name Import-AccucutBootstrapModule -CommandType Function).ScriptBlock
 
     $script:FakeOwnerPassword = 'FAKEownerPassword0001'
     $script:FakeAppPassword = 'FAKEappPassword00002'
@@ -46,6 +47,7 @@ Describe 'install.ps1 refuses before it changes anything (AC-1, AC-5)' {
     }
 
     It 'stops when no zip is given, or its SHA-256 is missing or wrong, and creates nothing' {
+        Mock Import-AccucutBootstrapModule { }
         Mock Test-InstallerIsAdministrator { $true }
         $root = Join-Path $TestDrive 'a2'
         { Start-AccucutInstall -Root $root } | Should -Throw '*Give the release zip*'
@@ -79,8 +81,9 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     }
 
     BeforeEach {
+        Mock Import-AccucutBootstrapModule { }
         Mock Set-AccucutDirectoryAcl { }
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
         # The real permission checks read the test machine's own folders; the tests of those checks are further down, on folders that the tests lock themselves.
         Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null }
     }
@@ -116,7 +119,7 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     }
 
     It 'refuses an existing empty folder whose permissions let another user write or delete, and does not touch it' {
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = $false }) } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = $false }) } }
         $root = Join-Path $TestDrive 'empty-but-writable-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*can be changed by S-1-5-32-545*'
@@ -128,13 +131,13 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         # Simulates the race: the folder exists, owned by another user, when the locked creation runs.
         $root = Join-Path $TestDrive 'raced-root'
         Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null; New-Item -ItemType Directory -Path (Join-Path $Path 'releases') | Out-Null }
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*'
         Test-Path -LiteralPath (Join-Path $root 'releases') | Should -BeTrue
     }
 
     It 'accepts an empty folder owned by SYSTEM' {
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @() } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @() } }
         $root = Join-Path $TestDrive 'empty-system-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Not -Throw
@@ -151,7 +154,7 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     }
 
     It 'refuses an existing folder owned by someone else, even when it is empty' {
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
         $root = Join-Path $TestDrive 'foreign-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*owned by S-1-5-21-1111111111-2222222222-3333333333-1001, not by Administrators or SYSTEM*'
@@ -296,19 +299,19 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         $grand = Join-Path $TestDrive 'ancestor-box'
         $root = Join-Path $grand 'parent\Accucut'
         New-Item -ItemType Directory -Path (Join-Path $root 'releases') -Force | Out-Null
-        Mock Get-AccucutPathSecurity {
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity {
             param($Path)
             if ($Path -like '*ancestor-box') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 64; InheritOnly = $false }) } }
             [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
         }
         { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw "*ancestor-box' can be changed by S-1-5-32-545*"
-        Mock Get-AccucutPathSecurity {
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity {
             param($Path)
             if ($Path -like '*ancestor-box?parent') { return [pscustomobject]@{ Owner = 'S-1-5-21-1-2-3-1001'; Rules = @() } }
             [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
         }
         { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw "*parent' is owned by S-1-5-21-1-2-3-1001*"
-        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
         $realRoot = Join-Path $TestDrive 'link-ancestor\real'
         New-Item -ItemType Directory -Path (Join-Path $realRoot 'Accucut\releases') -Force | Out-Null
         New-Item -ItemType Junction -Path (Join-Path $TestDrive 'link-ancestor\lnk') -Target $realRoot | Out-Null
@@ -322,7 +325,7 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         Set-Content -LiteralPath (Join-Path $release 'install.ps1') -Value '# script'
         Set-Content -LiteralPath (Join-Path $release 'AccucutOps.psm1') -Value '# module'
         { Assert-AccucutLockedInstallRoot -Root $root -VerifiedRelease $release } | Should -Not -Throw
-        Mock Get-AccucutPathSecurity {
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity {
             param($Path)
             if ($Path -like '*AccucutOps.psm1') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = $false }) } }
             [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
@@ -340,6 +343,32 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         $security = & $script:RealGetSecurity -Path $folder
         $security.Owner | Should -Be 'S-1-5-32-544'
         @($security.Rules | Where-Object { @('S-1-5-32-544', 'S-1-5-18') -notcontains $_.Sid }).Count | Should -Be 0
+    }
+
+    It 'the first half loads the module from the unpacked folder only if it is byte for byte the module inside the zip' {
+        Mock Import-Module { }
+        $same = Join-Path $TestDrive 'pkg-same'
+        New-Item -ItemType Directory -Path $same | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $same 'AccucutOps.psm1'), '# the real module, from the zip')
+        { & $script:RealImportBootstrap -ZipPath $script:Zip -PackageRoot $same } | Should -Not -Throw
+        Should -Invoke Import-Module -Times 1 -Exactly
+        $changed = Join-Path $TestDrive 'pkg-changed'
+        New-Item -ItemType Directory -Path $changed | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $changed 'AccucutOps.psm1'), "# the real module, from the zip`nInvoke-Evil")
+        { & $script:RealImportBootstrap -ZipPath $script:Zip -PackageRoot $changed } | Should -Throw '*is not the one inside the zip*Nothing was changed*'
+        Should -Invoke Import-Module -Times 1 -Exactly
+        { & $script:RealImportBootstrap -ZipPath (Join-Path $TestDrive 'no-such.zip') -PackageRoot $same } | Should -Throw '*Give the release zip*'
+        { & $script:RealImportBootstrap -ZipPath $script:Zip -PackageRoot (Join-Path $TestDrive 'no-package-here') } | Should -Throw '*was not found*'
+    }
+
+    It 'a second half started by hand (no module loaded yet) loads the module first, because nothing else can check, and checks the folder before anything runs' {
+        $script:Order = New-Object System.Collections.Generic.List[string]
+        Mock Get-Module { $null }
+        Mock Assert-AccucutLockedInstallRoot { $script:Order.Add('assert') }
+        Mock Import-Module { $script:Order.Add('import') }
+        Mock Invoke-AccucutInstall { $script:Order.Add('install') }
+        Start-AccucutInstall -Root (Join-Path $TestDrive 'by-hand-root') -VerifiedRelease (Join-Path $TestDrive 'by-hand-root\releases\t-ok')
+        ($script:Order -join ',') | Should -Be 'import,assert,install'
     }
 
     It 'the second half refuses to run from anywhere but the verified release folder' {

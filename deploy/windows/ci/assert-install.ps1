@@ -111,6 +111,7 @@ $logFiles = @(Get-ChildItem -LiteralPath $paths.Logs -File -Force)
 Assert-That ($logFiles.Count -gt 0) "logs exist under $($paths.Logs): $((($logFiles | ForEach-Object { $_.Name }) -join ', '))"
 foreach ($file in $logFiles) {
     $text = Get-Content -LiteralPath $file.FullName -Raw
+    if ([string]::IsNullOrEmpty($text)) { continue }
     foreach ($secret in $secrets) {
         if ($text.Contains($secret)) { throw "ASSERTION FAILED: a secret value is in the log '$($file.Name)'." }
     }

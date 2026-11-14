@@ -436,6 +436,45 @@ Describe 'one rule for path trust: Assert-AccucutPathTrusted (security review)' 
         { Assert-AccucutPathTrusted -Path $script:Leaf -AllowedWriter @('S-1-5-32-545') } | Should -Throw "*anc' can be changed by*"
     }
 
+    It 'maps generic rights to the specific rights they stand for: GENERIC_ALL and GENERIC_WRITE for another user are writers, on the target and (GENERIC_ALL) on an ancestor' -ForEach @(
+        @{ Name = 'GENERIC_ALL'; Rights = 268435456; Where = 'leaf' }
+        @{ Name = 'GENERIC_WRITE'; Rights = 1073741824; Where = 'leaf' }
+        @{ Name = 'GENERIC_ALL (also with other bits)'; Rights = 268435457; Where = 'leaf' }
+        @{ Name = 'GENERIC_ALL'; Rights = 268435456; Where = 'anc' }
+    ) {
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\$Where') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = $Rights; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*$Where' can be changed by S-1-5-32-545*"
+    }
+
+    It 'generic rights that only read or execute are not writers, and a plain read-only rule for Users is accepted on the target' {
+        # GENERIC_READ 0x80000000 as the signed number that FileSystemRights gives (-2147483648), GENERIC_EXECUTE 0x20000000, ReadAndExecute 1179817.
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = -2147483648; InheritOnly = `$false }, [pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 536870912; InheritOnly = `$false }, [pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 1179817; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
+    }
+
+    It 'CREATOR OWNER is a writer on the target, even through an inherit-only rule or generic rights, and is allowed where Windows puts it (inherit-only on the drive root)' {
+        # CREATOR OWNER (S-1-3-0) with FullControl, inherit-only, on the target: it becomes whoever creates a file there.
+        $onTarget = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-3-0'; Rights = 2032127; InheritOnly = `$true }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $onTarget
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*leaf' can be changed by S-1-3-0*"
+        # The same, as the signed number of the generic bits that a default C:\ holds for CREATOR OWNER (-536805376 = 0xE0010000), on the target.
+        $generic = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-3-0'; Rights = -536805376; InheritOnly = `$true }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $generic
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*leaf' can be changed by S-1-3-0*"
+        # On the drive root (an ancestor) it is inherit-only and reaches what is created inside the root, so it is allowed there, as on every Windows.
+        $onRoot = [scriptblock]::Create("param(`$Path) if (`$Path -match '^[A-Za-z]:\\?`$') { return [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @([pscustomobject]@{ Sid = 'S-1-3-0'; Rights = -536805376; InheritOnly = `$true }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $onRoot
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
+    }
+
+    It 'names the identity, the rights and whether the rule is inherited in the refusal, so a failure diagnoses itself' {
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 1245631; InheritOnly = `$false; Inherited = `$true }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw '*S-1-5-11 (rights: *Modify*; inherited: True; inherit-only: False)*'
+    }
+
     It 'checks a file the same way (a script or the module), and refuses a path that is not full and local or does not exist' {
         $file = Join-Path $script:Leaf 'AccucutOps.psm1'
         Set-Content -LiteralPath $file -Value '# module'

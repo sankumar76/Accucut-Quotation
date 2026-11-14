@@ -126,19 +126,21 @@ Describe 'update.ps1' {
         Mock Import-Module { $script:Order.Add('import') }
         $real = Import-AccucutVerifiedModule -ScriptRoot $current -ScriptPath (Join-Path $current 'update.ps1')
         $real | Should -Be $release
-        ($script:Order -join ',') | Should -Be 'assert:t-1,assert:update.ps1,assert:AccucutOps.psm1,import'
+        # The rule is in the module, so the module is loaded first (loading only defines functions), and the check runs at once, before anything of the update.
+        ($script:Order -join ',') | Should -Be 'import,assert:t-1,assert:update.ps1,assert:AccucutOps.psm1'
         Should -Invoke Import-Module -Times 1 -Exactly -ParameterFilter { $Name -like '*releases?t-1?AccucutOps.psm1' }
     }
 
-    It 'security review: loads nothing when the check of the module fails' {
+    It 'security review: stops, before any function of the update runs, when the check of the module or of a folder above it fails' {
         $release = Join-Path $TestDrive 'import-box-2\Accucut\releases\t-1'
         New-Item -ItemType Directory -Path $release -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $release 'update.ps1') -Value '# script'
         Set-Content -LiteralPath (Join-Path $release 'AccucutOps.psm1') -Value '# module'
+        Mock Import-Module { }
         Mock Assert-AccucutPathTrusted { if ($Path -like '*AccucutOps.psm1') { throw "'$Path' can be changed by S-1-5-32-545, who is not an administrator. Refusing to use it." } }
-        Mock Import-Module { throw 'must not load' }
         { Import-AccucutVerifiedModule -ScriptRoot $release -ScriptPath (Join-Path $release 'update.ps1') } | Should -Throw '*can be changed by S-1-5-32-545*'
-        Should -Invoke Import-Module -Times 0 -Exactly
+        Mock Assert-AccucutPathTrusted { if ($Path -like '*releases?t-1') { throw "'$Path' is owned by S-1-5-21-1-2-3-1001, not by Administrators. Refusing to use it." } }
+        { Import-AccucutVerifiedModule -ScriptRoot $release -ScriptPath (Join-Path $release 'update.ps1') } | Should -Throw '*is owned by S-1-5-21-1-2-3-1001*'
     }
 
     It 'AC-3: stops before changing anything when the release backup cannot be taken' {

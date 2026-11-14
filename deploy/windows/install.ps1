@@ -96,244 +96,41 @@ function Test-InstallerIsAdministrator {
     return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# ---- First half: nothing here uses the shared module or any other file of the unpacked folder. The unpacked folder is not trusted: anyone
-# ---- who could write to it could change a file after the zip was checked. These functions use PowerShell's own commands only.
+# ---- First half. The unpacked folder is not trusted: anyone who could write to it could change a file after the zip was checked. The shared module is
+# ---- the one exception, and only because it is compared with the module INSIDE the checked zip first (Import-AccucutBootstrapModule): the path trust
+# ---- rule exists once, in the module, and the first half needs it. Nothing else from the unpacked folder is read or run after the check.
 
-# BEGIN shared path trust (install.ps1, update.ps1 and AccucutOps.psm1 hold this block word for word; tests/unit/windows-deploy-files.test.ts fails if they differ)
-function Get-AccucutPathSecurity {
-    <# The owner and the allow rules of a file or folder as plain data (SIDs and numbers). A function of its own, so that Pester can mock it. #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Path)
-
-    $item = Get-Item -LiteralPath $Path -Force
-    $security = $item.GetAccessControl()
-    $rules = New-Object System.Collections.Generic.List[object]
-    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
-        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-        $rules.Add([pscustomobject]@{
-                Sid         = $rule.IdentityReference.Value
-                Rights      = [int]$rule.FileSystemRights
-                InheritOnly = [bool]($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)
-                Inherited   = [bool]$rule.IsInherited
-            })
-    }
-    return [pscustomobject]@{ Owner = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; Rules = $rules.ToArray() }
-}
-
-function Assert-AccucutPathTrusted {
+function Import-AccucutBootstrapModule {
     <#
-    THE rule for trusting a path, used everywhere a path is trusted: the install folder, releases, a release, config, logs, and the scripts and the module
-    before they are run or loaded. It walks every part of the path, from the drive root down to the target, and stops with an error for the first part that
-    is not safe. For every part:
-      - it must not be a link (a junction or symbolic link could send the path somewhere else). One exception, asked for with -AllowLinkAtLeaf: the last
-        part may be a link, for `current`; the caller then checks where it points;
-      - its owner must be Administrators (S-1-5-32-544), SYSTEM (S-1-5-18) or TrustedInstaller (the owner of system folders such as Program Files);
-      - nobody else may be able to replace or remove it, or change who controls it: no allow rule for another principal may carry Delete,
-        DeleteSubdirectoriesAndFiles (delete a child), ChangePermissions or TakeOwnership.
-    The last part (the target) gets the stricter rule, because what is inside it is run: nobody else may carry WriteData (create files), AppendData (create
-    folders), WriteExtendedAttributes or WriteAttributes either, and the rules that only reach what is inside it (inherit only) count too.
-
-    What is allowed on the drive root and on any other part above the target, and why. Windows gives every user "create folders" and "create files" on
-    the drive root (for example `Authenticated Users: create folders / append data` and `create files`, on that folder only) and `Modify` on what is
-    inside it (inherit-only). Those do not let a user delete, replace or take over an existing folder that an administrator owns, so they must not make
-    every install fail: a part above the target is refused only for Delete, DeleteSubdirectoriesAndFiles, ChangePermissions or TakeOwnership, and rules
-    marked inherit-only (they reach the children of that part, not the part itself) are not counted. The target and everything made inside it are
-    protected by the target's own rule above, which is the strict one.
-
-    -AllowedWriter names SIDs (never account names) that may also write to the target, for example the two service accounts for the logs folder.
+    Loads AccucutOps.psm1 from the folder this script was started from, but only if it is byte for byte the module that is inside the zip (the SHA-256
+    of the file equals the SHA-256 of the zip's entry). The zip's own hash is checked by Initialize-AccucutVerifiedRelease before anything is changed, so a
+    module that matches the zip is as trusted as the zip. A changed module is refused.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [string[]]$AllowedWriter = @(),
-        [switch]$AllowLinkAtLeaf
-    )
-
-    if ($Path.StartsWith('\\') -or -not [System.IO.Path]::IsPathRooted($Path)) { throw "'$Path' is not a full local path. Refusing to use it." }
-    $full = [System.IO.Path]::GetFullPath($Path)
-    if ($full.Length -gt 3) { $full = $full.TrimEnd('\') }
-    $driveRoot = [System.IO.Path]::GetPathRoot($full)
-    $trustedSids = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
-    $rights = [System.Security.AccessControl.FileSystemRights]
-    $replaceMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
-    $writeMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership -bor $rights::WriteData -bor $rights::AppendData -bor $rights::WriteExtendedAttributes -bor $rights::WriteAttributes)
-
-    $chain = New-Object System.Collections.Generic.List[string]
-    $chain.Add($driveRoot)
-    $current = $driveRoot
-    foreach ($segment in ($full.Substring($driveRoot.Length) -split '\\')) {
-        if ($segment -eq '') { continue }
-        $current = Join-Path $current $segment
-        $chain.Add($current)
-    }
-
-    for ($index = 0; $index -lt $chain.Count; $index++) {
-        $part = $chain[$index]
-        $isTarget = ($index -eq $chain.Count - 1)
-        if (-not (Test-Path -LiteralPath $part)) { throw "'$part' does not exist. Refusing to use '$full'." }
-        $item = Get-Item -LiteralPath $part -Force
-        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            if ($isTarget -and $AllowLinkAtLeaf) { continue }
-            throw "'$part' is a link, not a real folder, so '$full' could lead somewhere else. Refusing to use it."
-        }
-        $security = Get-AccucutPathSecurity -Path $part
-        if ($trustedSids -notcontains $security.Owner) {
-            throw "'$part' is owned by $($security.Owner), not by Administrators, SYSTEM or TrustedInstaller, so someone else controls it. Refusing to use '$full'."
-        }
-        $mask = $replaceMask
-        if ($isTarget) { $mask = $writeMask }
-        foreach ($rule in $security.Rules) {
-            if ($rule.InheritOnly -and -not $isTarget) { continue }
-            if ($trustedSids -contains $rule.Sid) { continue }
-            if ($isTarget -and ($AllowedWriter -contains $rule.Sid)) { continue }
-            if (($rule.Rights -band $mask) -ne 0) {
-                $inherited = $false
-                if ($rule.PSObject.Properties.Name -contains 'Inherited') { $inherited = [bool]$rule.Inherited }
-                $named = ([System.Security.AccessControl.FileSystemRights]$rule.Rights).ToString()
-                throw "'$part' can be changed by $($rule.Sid) (rights: $named; inherited: $inherited), who is not an administrator, so '$full' could be replaced or changed. Refusing to use it."
-            }
-        }
-    }
-}
-# END shared path trust
-
-function Assert-AccucutFreshRoot {
-    <#
-    The install folder must not exist, or must be an EMPTY real folder owned by Administrators or SYSTEM. Anything else could be under the control
-    of a user who is not an administrator (they could have made the folder, or put a file or a link in it, and kept their rights), and the install
-    would then run programs from it as a service. Returns 'New' or 'Empty'. (Whether an existing empty folder may be used also depends on who can
-    write to it and to the folders above it: Assert-AccucutPathTrusted, run by the caller.)
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Root)
-
-    if ($Root.StartsWith('\\') -or -not [System.IO.Path]::IsPathRooted($Root)) { throw "The install folder '$Root' must be a full local path such as C:\Accucut." }
-    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
-    if ($full.Length -le 3) { throw 'The install folder cannot be the root of a drive.' }
-    if (-not (Test-Path -LiteralPath $full)) { return 'New' }
-    $item = Get-Item -LiteralPath $full -Force
-    if (-not $item.PSIsContainer) { throw "'$full' exists and is a file. Nothing was changed." }
-    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$full' is a link, not a real folder. Nothing was changed." }
-    $owner = (Get-AccucutPathSecurity -Path $full).Owner
-    if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner) {
-        throw "'$full' already exists and is owned by $owner, not by Administrators or SYSTEM. A folder made by someone else is not trusted. Nothing was changed. Rename or delete it, or choose another -Root."
-    }
-    if (@(Get-ChildItem -LiteralPath $full -Force).Count -gt 0) {
-        throw "'$full' already exists and is not empty. The install only uses a folder it makes itself, or an empty one owned by Administrators. Nothing was changed. If it is an earlier install, use update.ps1."
-    }
-    return 'Empty'
-}
-
-function Assert-AccucutLockedInstallRoot {
-    <#
-    The trust check of the install, run again and again between the steps (after the folder is locked, before the verified script is started, and before
-    the second half loads anything from it), so that a swap at any moment is caught. It applies Assert-AccucutPathTrusted, the one rule, to the install
-    folder (and so to every folder above it), to releases and, when -VerifiedRelease is given, to the release folder and to the two files that are run
-    from it: install.ps1 and AccucutOps.psm1. The release must be directly inside releases.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Root,
-        [string]$VerifiedRelease,
-        [switch]$RootOnly
-    )
-
-    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
-    Assert-AccucutPathTrusted -Path $full
-    if ($RootOnly) { return }
-    $releases = Join-Path $full 'releases'
-    Assert-AccucutPathTrusted -Path $releases
-    if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
-        $release = [System.IO.Path]::GetFullPath($VerifiedRelease).TrimEnd('\')
-        if ((Split-Path -Parent $release) -ine $releases) { throw "'$release' is not directly inside '$releases'. Refusing to use it." }
-        Assert-AccucutPathTrusted -Path $release
-        foreach ($file in 'install.ps1', 'AccucutOps.psm1') { Assert-AccucutPathTrusted -Path (Join-Path $release $file) }
-    }
-}
-
-
-function New-AccucutDirectorySecurity {
-    <# The permissions of a locked folder: owned by Administrators, no inheritance, full control for Administrators and SYSTEM, plus the given accounts. #>
-    [CmdletBinding()]
-    param(
-        [string[]]$ReadAndExecute = @(),
-        [string[]]$Modify = @()
-    )
-
-    $security = New-Object System.Security.AccessControl.DirectorySecurity
-    $security.SetOwner((New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)))
-    $security.SetAccessRuleProtection($true, $false)
-    $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-    $none = [System.Security.AccessControl.PropagationFlags]::None
-    $allow = [System.Security.AccessControl.AccessControlType]::Allow
-    $administrators = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-    $system = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-    foreach ($sid in @($administrators, $system)) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', $inherit, $none, $allow)))
-    }
-    foreach ($account in $ReadAndExecute) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'ReadAndExecute', $inherit, $none, $allow)))
-    }
-    foreach ($account in $Modify) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'Modify', $inherit, $none, $allow)))
-    }
-    return $security
-}
-
-function New-AccucutLockedDirectory {
-    <#
-    Creates a folder WITH its locked permissions in one call (CreateDirectory with a security descriptor), so there is no moment at which it
-    exists with the permissions of its parent. If it exists already, nothing is changed and nothing is returned as new: the caller checks the
-    owner and the permissions afterwards and refuses a folder that is not its own.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Path)
-
-    [void][System.IO.Directory]::CreateDirectory($Path, (New-AccucutDirectorySecurity))
-}
-
-function Expand-AccucutBootstrapZip {
-    <# Unpacks a zip into a new folder, refusing any entry that would land outside it. (The shared module has the same function; it cannot be used yet.) #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$ZipPath,
-        [Parameter(Mandatory)][string]$Destination
+        [Parameter(Mandatory)][string]$PackageRoot
     )
 
+    if ([string]::IsNullOrWhiteSpace($ZipPath) -or -not (Test-Path -LiteralPath $ZipPath -PathType Leaf)) { throw 'Give the release zip: install.ps1 -ZipPath <the release zip>. Its SHA-256 is checked first.' }
+    $module = Join-Path $PackageRoot 'AccucutOps.psm1'
+    if (-not (Test-Path -LiteralPath $module -PathType Leaf)) { throw "'$module' was not found. Run install.ps1 from the unpacked release." }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $root = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\') + '\'
     $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
     try {
-        foreach ($entry in $archive.Entries) {
-            $target = [System.IO.Path]::GetFullPath((Join-Path $Destination $entry.FullName))
-            if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { throw "The zip holds an entry outside its folder ('$($entry.FullName)'). Refusing to unpack it." }
-            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
-                if (-not (Test-Path -LiteralPath $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
-                continue
-            }
-            $parent = Split-Path -Parent $target
-            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+        $entry = $archive.Entries | Where-Object { $_.FullName -eq 'AccucutOps.psm1' } | Select-Object -First 1
+        if ($null -eq $entry) { throw 'The zip holds no AccucutOps.psm1: it is not an Accucut release package.' }
+        $stream = $entry.Open()
+        try {
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try { $inZip = (($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) -join '') } finally { $sha.Dispose() }
         }
+        finally { $stream.Dispose() }
     }
-    finally {
-        $archive.Dispose()
-    }
-}
-
-function Remove-AccucutBootstrapFolder {
-    <# Deletes a folder this run made inside the install folder, with `rd` on a \\?\ path. Refuses a folder that is not directly inside -Within. #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$Within
-    )
-
-    $full = [System.IO.Path]::GetFullPath($Path).TrimEnd('\')
-    $parent = [System.IO.Path]::GetFullPath($Within).TrimEnd('\')
-    if ((Split-Path -Parent $full) -ne $parent) { throw "Refusing to delete '$full': it is not directly inside '$parent'." }
-    if (Test-Path -LiteralPath $full) { & "$env:SystemRoot\System32\cmd.exe" /c rd /s /q "\\?\$full" }
+    finally { $archive.Dispose() }
+    $onDisk = (Get-FileHash -LiteralPath $module -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($onDisk -ne $inZip) { throw "AccucutOps.psm1 in '$PackageRoot' is not the one inside the zip (SHA-256 $onDisk, the zip has $inZip). It was changed after unpacking. Nothing was changed. Unpack the zip again." }
+    Import-Module $module -Force -DisableNameChecking
 }
 
 function Initialize-AccucutVerifiedRelease {
@@ -399,7 +196,7 @@ function Initialize-AccucutVerifiedRelease {
         if ($copyHash -ne $expected) { throw "The SHA-256 of the copy of the zip does not match (expected $expected, the copy is $copyHash). The file changed while it was being copied. Nothing was installed." }
 
         $unpacked = Join-Path $incoming 'unpacked'
-        Expand-AccucutBootstrapZip -ZipPath $copy -Destination $unpacked
+        Expand-AccucutZip -ZipPath $copy -Destination $unpacked
         $infoFile = Join-Path $unpacked 'release.json'
         if (-not (Test-Path -LiteralPath $infoFile -PathType Leaf)) { throw 'The zip has no release.json: it is not an Accucut release package.' }
         $tag = [string](Get-Content -LiteralPath $infoFile -Raw | ConvertFrom-Json).tag
@@ -407,7 +204,7 @@ function Initialize-AccucutVerifiedRelease {
         $target = Join-Path $releases $tag
         [System.IO.Directory]::Move($unpacked, $target)
         Set-Content -LiteralPath (Join-Path $target '.zip-sha256') -Value $expected -Encoding ASCII
-        Remove-AccucutBootstrapFolder -Path $incoming -Within $full
+        Remove-AccucutDirectory -Path $incoming -Within $full
         Assert-AccucutLockedInstallRoot -Root $full -VerifiedRelease $target
 
         # The scripts and the two programs only: Node does not look at the downloaded-file mark, and node_modules holds thousands of files.
@@ -417,7 +214,7 @@ function Initialize-AccucutVerifiedRelease {
         return $target
     }
     catch {
-        if ($rootVerified) { foreach ($folder in @($releases, $incoming)) { if (Test-Path -LiteralPath $folder) { Remove-AccucutBootstrapFolder -Path $folder -Within $full } } }
+        if ($rootVerified) { foreach ($folder in @($releases, $incoming)) { if (Test-Path -LiteralPath $folder) { Remove-AccucutDirectory -Path $folder -Within $full } } }
         if ($createdRoot -and (Test-Path -LiteralPath $full) -and @(Get-ChildItem -LiteralPath $full -Force).Count -eq 0) { [System.IO.Directory]::Delete($full, $false) }
         throw
     }
@@ -578,37 +375,6 @@ function Get-AccucutInstallSettings {
 
     $superuserPassword = Get-AccucutInstallValue -Name 'PG_SUPERUSER_PASSWORD' -Prompt 'The password of the PostgreSQL administrator (set when PostgreSQL was installed)' -Supplied $supplied -Secret -Required -NonInteractive:$ni
     return [pscustomobject]@{ Values = $values; PgSuperuserPassword = $superuserPassword; OwnerPassword = $ownerPassword; AppPassword = $appPassword }
-}
-
-function Set-AccucutDirectoryAcl {
-    <#
-    Makes Administrators the OWNER of a folder, cuts inheritance, and sets exactly: full control for Administrators and SYSTEM, plus the given
-    accounts at the given rights. The old list is replaced, not added to, so a right that someone else had given themselves is gone.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [string[]]$ReadAndExecute = @(),
-        [string[]]$Modify = @()
-    )
-
-    [System.IO.Directory]::SetAccessControl($Path, (New-AccucutDirectorySecurity -ReadAndExecute $ReadAndExecute -Modify $Modify))
-}
-
-function Grant-AccucutFolderAccess {
-    <# Adds one allow rule (ReadAndExecute or Modify, inherited by what the folder holds) to a folder's existing list. #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$Account,
-        [Parameter(Mandatory)][ValidateSet('ReadAndExecute', 'Modify')][string]$Rights
-    )
-
-    $security = [System.IO.Directory]::GetAccessControl($Path)
-    $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule((ConvertTo-AccucutIdentity -Account $Account), $Rights, $inherit, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
-    $security.AddAccessRule($rule)
-    [System.IO.Directory]::SetAccessControl($Path, $security)
 }
 
 function Set-AccucutDefenderExclusion {
@@ -945,10 +711,18 @@ function Start-AccucutInstall {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
-        # The first thing the second half does, before it loads the module from the folder: the install folder and the release are still the real,
-        # locked folders that the first half left (nothing was swapped for a link, nothing is writable by anyone else).
-        Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease
-        Import-Module (Join-Path $VerifiedRelease 'AccucutOps.psm1') -Force -DisableNameChecking
+        $verifiedModule = Join-Path $VerifiedRelease 'AccucutOps.psm1'
+        if ($null -ne (Get-Module -Name AccucutOps)) {
+            # The normal case: the first half runs this script in the same session, with the module that was compared with the zip. The install folder and
+            # the release are checked with it BEFORE anything is loaded from the verified folder (nothing swapped for a link, nothing writable by anyone else).
+            Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease
+            Import-Module $verifiedModule -Force -DisableNameChecking
+        }
+        else {
+            # Started by hand with -VerifiedRelease: the module has to be loaded to check anything, and the folder is checked before anything is run from it.
+            Import-Module $verifiedModule -Force -DisableNameChecking
+            Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease
+        }
         Invoke-AccucutInstall @secondHalf -PackageRoot $VerifiedRelease
         return
     }
@@ -956,6 +730,8 @@ function Start-AccucutInstall {
     if (-not (Test-InstallerIsAdministrator)) {
         throw 'Run this script as an administrator: right-click Windows PowerShell, choose Run as administrator, and start it again.'
     }
+    # The shared module holds the one path trust rule, and the first half needs it before it unpacks anything: it is loaded only if it equals the zip's own copy.
+    Import-AccucutBootstrapModule -ZipPath $ZipPath -PackageRoot $script:ScriptRoot
     $verified = Initialize-AccucutVerifiedRelease -ZipPath $ZipPath -Sha256 $Sha256 -Root $Root
     # Checked again right before the script is started from the folder: the check at the end of the first half could have gone stale.
     Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $verified
