@@ -172,7 +172,7 @@ export function getEstimateService(): EstimateService {
       estimates: createEstimateRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
-      // The part form (STORY-05.03): a part's material is checked in the Material Master (a name and Material Considered, no number), and the form is built from the current registry.
+      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
       materials: createMasterRepository(runtimeClient()),
       currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
     });
