@@ -168,7 +168,8 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await expect(page.getByText('3 parts deleted')).toHaveCount(1);
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
     await page.reload();
-    await showTree(page);
+    // With no part there is no tree element, only the words; on a phone they are in the drawer.
+    if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
   });
 
