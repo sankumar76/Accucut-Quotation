@@ -32,7 +32,7 @@ import {
  */
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const APP_PATHS = ['/(portal)/page', '/(portal)/account/page', '/(portal)/queue/page', '/(portal)/design-system/page', '/(portal)/users/page', '/(portal)/audit/page', '/(portal)/masters/materials/page', '/(portal)/masters/process/page', '/(public)/sign-in/page', '/_not-found/page', '/api/auth/[...nextauth]/route'];
+const APP_PATHS = ['/(portal)/page', '/(portal)/account/page', '/(portal)/queue/page', '/(portal)/design-system/page', '/(portal)/users/page', '/(portal)/audit/page', '/(portal)/config/fields/page', '/(portal)/masters/materials/page', '/(portal)/masters/process/page', '/(public)/sign-in/page', '/_not-found/page', '/api/auth/[...nextauth]/route'];
 const OVERRUN_BYTES = 210_000;
 const LIMIT = 200_000;
 
@@ -48,6 +48,7 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/assign': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/estimates/${STUB_ESTIMATE_CODE}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/config/fields': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -107,6 +108,7 @@ describe('the check against a stub portal and a fixture build', () => {
       ['/', true],
       ['/account', true],
       ['/audit', true],
+      ['/config/fields', true],
       ['/design-system', true],
       ['/masters/materials', true],
       ['/masters/process', true],
@@ -135,7 +137,7 @@ describe('the check against a stub portal and a fixture build', () => {
 
   it('fails a route that answers 500, names it, and still reports every other route', () => {
     expect(byRoute(serverError, '/queue')).toMatchObject({ ok: false, note: 'ADMIN got HTTP 500, not HTTP 200' });
-    expect(serverError.rows).toHaveLength(10);
+    expect(serverError.rows).toHaveLength(11);
     expect(byRoute(serverError, '/')?.ok).toBe(true);
   });
 
@@ -149,7 +151,7 @@ describe('the check against a stub portal and a fixture build', () => {
   });
 
   it('fails every route when the server cannot be reached, skipping none', () => {
-    expect(unreachable.rows).toHaveLength(10);
+    expect(unreachable.rows).toHaveLength(11);
     for (const row of unreachable.rows) {
       expect(row.ok).toBe(false);
       expect(row.note).toContain('the request did not complete');
@@ -224,15 +226,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/account', '/assign', '/audit', '/design-system', '/estimates/[code]', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 14 rows are within their limit');
+    for (const route of ['/', '/account', '/assign', '/audit', '/config/fields', '/design-system', '/estimates/[code]', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 15 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 14 rows failed');
+    expect(overrun.output).toContain('1 of 15 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -251,6 +253,6 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.output).toContain('/masters/customers/[id]');
     expect(noRecords.output).toContain('/estimates/[code]');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('2 of 14 rows failed');
+    expect(noRecords.output).toContain('2 of 15 rows failed');
   });
 });

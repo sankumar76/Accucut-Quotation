@@ -9,6 +9,7 @@ import { createEstimateService, type EstimateService } from '@/server/services/e
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { inputsDependencies } from '../../support/estimate-inputs-deps';
 
 /**
  * STORY-05.01 T3 (AC-1, AC-3, AC-4, AC-5) against real PostgreSQL in a throwaway database: the estimate service over the real repository. The workspace is read
@@ -31,7 +32,7 @@ let marlowId: string;
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
+  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions: createTransactionRunner(db.prisma), ...inputsDependencies() });
   leadId = await insertPersonAsOwner(db, 'Estimate Lead', 'LEAD');
   adminId = await insertPersonAsOwner(db, 'Estimate Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Estimate Arjun', 'ENGINEER');

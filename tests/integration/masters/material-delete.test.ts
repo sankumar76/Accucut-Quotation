@@ -1,12 +1,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, MasterInUseError, MATERIAL_IN_USE_CODE, NAME_TAKEN_CODE, NotFoundError } from '@/lib/errors';
-import { createEstimateRepository } from '@/server/repositories/estimate-repository';
-import { clientFor, createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
+import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
-import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../support/hold-before-commit';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 
 /**
@@ -14,12 +12,12 @@ import { createLateFailingRunner } from '../../support/late-failure-runner';
  * (`deleted_at`); it is refused with the estimates named while a Draft or Submitted estimate has the material in a part (`estimate_nodes.inputs`), whatever the
  * shape the part form will give that value, and allowed when only Approved ones do; the hidden "Not applicable" row is a 404 and never deleted; one
  * `master.deleted` entry is written in the transaction of the delete and none when it is refused; the name of a deleted material stays taken (the unique indexes
- * are not partial); a guard that is asked about something that is not a material ID throws and never answers "unused"; and a delete and a writer of a part's
- * Material in Drawing serialise, in both orders, so the two can never both succeed (AC-5). Every name, path and code is invented.
+ * are not partial); a guard that is asked about something that is not a material ID throws and never answers "unused"; and the lock a writer of a part's Material
+ * in Drawing takes (`lockMaterialForUse`). Every name, path and code is invented.
  *
- * **The writer.** The part form (STORY-05.03) does not exist yet, so the writer in the race tests is written here as its contract says (documented on
- * `MaterialMethods.lockMaterialForUse`): the estimate's row lock first, then the material `FOR SHARE` in the same transaction, then the write to the part's
- * inputs. `createHoldingRunner` keeps that transaction open, uncommitted, until the test lets it go, and the test sees the other request wait on a lock.
+ * **The race (AC-5).** A delete and a writer of a part's material serialise, in both orders, so the two can never both succeed. The writer is the part form's real
+ * `saveInputs` (STORY-05.03), held before commit, and that test is `tests/integration/estimates/material-race.test.ts`; the hand-written writer that stood here
+ * before the part form existed was replaced by it (review SQR-11).
  *
  * The audit entry commits with its change or not at all: the late-failure test uses the shared runner of tech-debt #130 (`tests/support/late-failure-runner.ts`).
  */
@@ -112,15 +110,6 @@ async function inUse(materialId: string): Promise<MasterInUseError> {
   expect(refusal).toBeInstanceOf(MasterInUseError);
   if (!(refusal instanceof MasterInUseError)) throw new Error('the delete was not refused');
   return refusal;
-}
-
-/** Is any session of this database waiting for a lock? `pg_locks` is readable by every role, and so are the process IDs of `pg_stat_activity`. */
-async function someoneIsWaitingForALock(): Promise<boolean> {
-  const { rows } = await db.owner.query<{ waiting: number }>(
-    `SELECT count(*)::int AS waiting FROM pg_locks l
-     WHERE NOT l.granted AND l.pid IN (SELECT pid FROM pg_stat_activity WHERE datname = current_database())`,
-  );
-  return defined(rows[0]).waiting > 0;
 }
 
 describe('AC-3: a material no open estimate uses is soft-deleted', () => {
@@ -269,84 +258,8 @@ describe('AC-8: the name of a deleted material', () => {
   });
 });
 
-describe('AC-5: the delete and a writer of a part\'s material serialise, in both orders', () => {
-  /** What the part form's save must do (the contract of `lockMaterialForUse`): the estimate's row lock, then the material `FOR SHARE`, then the write. It stays uncommitted until `hold` is resolved. */
-  function writeMaterialIntoPart(estimateId: string, nodeId: string, materialId: string, hold: Promise<void>, onHolding: () => void): Promise<void> {
-    const runner = createHoldingRunner(db, hold, onHolding);
-    const estimates = createEstimateRepository(db.prisma);
-    return runner.run(async (tx) => {
-      await estimates.lockEstimate(estimateId, tx);
-      if (!(await db.masterRepository.lockMaterialForUse(materialId, tx))) throw new FieldValidationError([{ field: FIELD, message: 'Choose a material from the list.' }]);
-      await clientFor(db.prisma, tx).$executeRaw`
-        UPDATE estimate_nodes SET inputs = jsonb_build_object(${FIELD}::text, jsonb_build_object('id', ${materialId}::text)) WHERE id = ${nodeId}::uuid`;
-    });
-  }
-
-  const partInputs = async (nodeId: string) => {
-    const { rows } = await db.owner.query<{ inputs: unknown }>('SELECT inputs FROM estimate_nodes WHERE id = $1::uuid', [nodeId]);
-    return defined(rows[0]).inputs;
-  };
-
-  const gate = () => {
-    let release: () => void = () => undefined;
-    const hold = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let reachedHolding: () => void = () => undefined;
-    const isHolding = new Promise<void>((resolve) => {
-      reachedHolding = resolve;
-    });
-    return { hold, release, isHolding, reachedHolding };
-  };
-
-  it('a write that holds the material first: the delete waits, then sees the part and is refused; the part keeps the material', async () => {
-    const alpha = await material('Alpha-sheet');
-    const { estimateId, nodeIds } = await estimateWith('DRAFT', [{}]);
-    const nodeId = defined(nodeIds[0]);
-    const writing = gate();
-    const write = writeMaterialIntoPart(estimateId, nodeId, alpha.id, writing.hold, writing.reachedHolding);
-    // If the write fails before it holds, the race rejects with its error and the test says why.
-    await Promise.race([writing.isHolding, write]);
-
-    let deleteDone = false;
-    const deletion = db.mastersService.deleteMaterial(by(), alpha.id).finally(() => {
-      deleteDone = true;
-    });
-    // The delete has either finished (nothing made it wait) or is waiting for the lock the write holds on the material. Only then is the write let go.
-    await expect.poll(async () => deleteDone || (await someoneIsWaitingForALock()), { message: 'the delete waits for the material\'s lock, or has finished' }).toBe(true);
-    expect(deleteDone, 'the delete did not wait for the write').toBe(false);
-    writing.release();
-    await write;
-    await expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
-
-    expect(await stored(alpha.id)).toEqual({ deleted: false });
-    expect(await partInputs(nodeId)).toEqual({ [FIELD]: { id: alpha.id } });
-    expect(await deletedEntries(alpha.id)).toEqual([]);
-  });
-
-  it('a delete that holds the material first: the write waits, then finds no material and is refused; the part keeps no material', async () => {
-    const alpha = await material('Alpha-sheet');
-    const { estimateId, nodeIds } = await estimateWith('DRAFT', [{}]);
-    const nodeId = defined(nodeIds[0]);
-    const deleting = gate();
-    const deletion = createServiceHoldingBeforeCommit(db, deleting.hold, deleting.reachedHolding).deleteMaterial(by(), alpha.id);
-    await Promise.race([deleting.isHolding, deletion]);
-
-    let writeDone = false;
-    const write = writeMaterialIntoPart(estimateId, nodeId, alpha.id, Promise.resolve(), () => undefined).finally(() => {
-      writeDone = true;
-    });
-    await expect.poll(async () => writeDone || (await someoneIsWaitingForALock()), { message: 'the write waits for the material\'s lock, or has finished' }).toBe(true);
-    expect(writeDone, 'the write did not wait for the delete').toBe(false);
-    deleting.release();
-    await deletion;
-    await expect(write).rejects.toBeInstanceOf(FieldValidationError);
-
-    expect((await stored(alpha.id)).deleted).toBe(true);
-    expect(await partInputs(nodeId)).toEqual({});
-    expect(await deletedEntries(alpha.id)).toHaveLength(1);
-  });
-
+// The race of the delete against a writer of a part's material (both orders) is held by the real `saveInputs`: tests/integration/estimates/material-race.test.ts (STORY-05.03, review SQR-11).
+describe('AC-5: the lock a writer of a part\'s material takes, and two deletes at once', () => {
   it('lockMaterialForUse: a live material is locked (the hidden "Not applicable" row too), a deleted one, an unknown one and a non-ID are not', async () => {
     const alpha = await material('Alpha-sheet');
     const gone = await material('Gone-sheet');

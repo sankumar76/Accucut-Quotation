@@ -10,6 +10,7 @@ import { createEstimateService, type EstimateService } from '@/server/services/e
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { inputsDependencies } from '../../support/estimate-inputs-deps';
 
 /**
  * STORY-06.01 T5 (AC-1 to AC-6) against real PostgreSQL in a throwaway database: the estimate service's `transition` over the real repository and the real row
@@ -37,7 +38,7 @@ beforeAll(async () => {
   db = await openAuthDatabase();
   estimates = createEstimateRepository(db.prisma);
   runner = createTransactionRunner(db.prisma);
-  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: runner });
+  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: runner, ...inputsDependencies() });
   const version = await db.owner.query<{ id: string }>("INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'Invented transition test') RETURNING id::text AS id");
   configVersionId = defined(version.rows[0]).id;
   leadId = await insertPersonAsOwner(db, 'Transition Lead', 'LEAD');
@@ -273,7 +274,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   it('without tx it opens one transaction of its own; with tx it opens none and writes in the caller\'s', async () => {
     await setUpEstimate('SUBMITTED');
     const own = countingRunner();
-    const counted = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: own.counted });
+    const counted = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: own.counted, ...inputsDependencies() });
     await counted.transition(lead(), estimateId, 'RECALCULATE');
     expect(own.opened()).toBe(1);
     await own.counted.run((tx) => counted.transition(lead(), estimateId, 'APPROVE', tx));

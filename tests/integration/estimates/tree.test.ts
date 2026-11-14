@@ -13,6 +13,7 @@ import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { buildTree500 } from '../../support/builders/tree500';
 import { defined } from '../../support/defined';
+import { inputsDependencies } from '../../support/estimate-inputs-deps';
 
 /**
  * STORY-05.02 T3 (AC-1 to AC-8) against real PostgreSQL in a throwaway database: the estimate service over the real repositories. What only the database can show is
@@ -38,7 +39,7 @@ const nodeRepository = (): ReturnType<typeof createEstimateNodeRepository> => cr
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({ estimates: estimateRepository(), nodes: nodeRepository(), transactions: createTransactionRunner(db.prisma) });
+  service = createEstimateService({ estimates: estimateRepository(), nodes: nodeRepository(), transactions: createTransactionRunner(db.prisma), ...inputsDependencies() });
   leadId = await insertPersonAsOwner(db, 'Tree Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Tree Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Tree Priya', 'ENGINEER');
@@ -263,6 +264,7 @@ describe('AC-4, AC-5: refused moves change nothing, and a change that fails leav
       estimates: { ...estimateRepository(), bumpInputsRevision: () => Promise.reject(new Error('the revision write failed')) },
       nodes: nodeRepository(),
       transactions: createTransactionRunner(db.prisma),
+      ...inputsDependencies(),
     });
     await expect(failing.addPart(arjun, estimateId, { kind: 'item' })).rejects.toThrow('the revision write failed');
     expect(await stored()).toHaveLength(0);

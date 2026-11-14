@@ -28,6 +28,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/users/[id]/password-reset': ['ADMIN'],
   // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
   '/api/v1/audit': ['ADMIN'],
+  // The API behind Fields and formulas (STORY-08.01; architecture section 6 row "Configuration": A L): the Admin and the Lead read the formulas, an Engineer never does (NFR-002, CR-33).
+  '/api/v1/config/fields': ['ADMIN', 'LEAD'],
+  '/api/v1/config/current': ['ADMIN', 'LEAD'],
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],
@@ -53,4 +56,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/nodes/[nodeId]': ['ADMIN', 'LEAD', 'ENGINEER'],
   // STORY-04.04 (architecture section 6, "Task detail": A L; E own): one task and the status of its estimate, every role, an Engineer their own only.
   '/api/v1/tasks/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],
 };

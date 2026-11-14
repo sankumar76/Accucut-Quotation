@@ -8,6 +8,7 @@ import { partsTreeSchema } from '@/server/views/schemas';
 import { MAX_PARTS_PER_ESTIMATE } from '@/server/services/estimate-service';
 
 import { defined } from '../support/defined';
+import { seedFieldAt } from '../support/seed-config';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
@@ -299,7 +300,7 @@ describe('AC-8 (NFR-002): one strict shape for every role, with no figure', () =
     expect(nodes[1]).toMatchObject({ slNo: '1.1', parentId: canary(), label: '', completeness: 'EMPTY', revision: 1 });
   });
 
-  it('one part is read with its inputs, the same for every role, and an empty object', async () => {
+  it('one part is read with its inputs, the same for every role, and an empty list', async () => {
     const answers = [];
     for (const role of ['ENGINEER', 'LEAD', 'ADMIN'] as const) {
       harness.signInAs(role);
@@ -309,14 +310,25 @@ describe('AC-8 (NFR-002): one strict shape for every role, with no figure', () =
     }
     expect(answers[1]).toEqual(answers[0]);
     expect(answers[2]).toEqual(answers[0]);
-    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, inputs: {} });
+    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, inputs: [] });
   });
 
-  it('a part whose inputs hold anything fails closed (500 with the generic body) until the part form names the fields that may leave', async () => {
-    defined(harness.estimateWorld.nodes[0]).inputs = { invented: 'typed text' };
+  it('only the values of fields of the form leave, by field ID: a stored value that is not one (an unknown key, Material Rate / Kg) is dropped (review SQR-09, STORY-05.03)', async () => {
+    const length = seedFieldAt('J').id;
+    defined(harness.estimateWorld.nodes[0]).inputs = { [length]: '10.00', [seedFieldAt('I').id]: '917373.37', invented: 'typed text' };
     const response = await getNode(request('GET', `${base()}/nodes/${canary()}`), forNode(owned(), canary()));
-    expect(response.status).toBe(500);
-    expect(JSON.stringify(await response.json())).not.toContain('typed text');
+    expect(response.status).toBe(200);
+    const body = record.parse(await response.json());
+    expect(body['inputs']).toEqual([{ fieldId: length, value: '10.00' }]);
+    expect(body['completeness']).toBe('PARTIAL');
+    expect(JSON.stringify(body)).not.toMatch(/917373\.37|typed text/);
+  });
+
+  it('a stored value of a field of the form that is not text (a number in the JSON) is not sent either: only text leaves', async () => {
+    defined(harness.estimateWorld.nodes[0]).inputs = { [seedFieldAt('J').id]: 12.5 };
+    const response = await getNode(request('GET', `${base()}/nodes/${canary()}`), forNode(owned(), canary()));
+    expect(response.status).toBe(200);
+    expect(record.parse(await response.json())['inputs']).toEqual([]);
   });
 
   it('the tree, move and delete routes all answer with the one tree schema, so a key planted into one is refused on every one', async () => {

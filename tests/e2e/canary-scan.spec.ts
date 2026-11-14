@@ -20,6 +20,7 @@ import {
   ensureCanaryMaterials,
   ensureCanaryProcessRates,
   ensureCanaryUser,
+  fillCanaryPart,
   readExchangeRatesFromDatabase,
   readFormulaTexts,
   signInThroughThePage,
@@ -96,7 +97,11 @@ async function prepare(
   await ensureCanaryMaterials();
   await ensureCanaryExchangeRates();
   await ensureCanaryCustomers();
-  return { forbidden: forbiddenStrings(await readFormulaTexts()), engineer: await createDisposableUser('scan', testInfo) };
+  const forbidden = forbiddenStrings(await readFormulaTexts());
+  const engineer = await createDisposableUser('scan', testInfo);
+  // STORY-05.04 AC-7, review SQR-05: the person's canary part holds what an Engineer types into every section of the form, and a Restricted price and a key that is no field, which no answer may carry.
+  await fillCanaryPart(engineer.id);
+  return { forbidden, engineer };
 }
 
 /**

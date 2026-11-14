@@ -11,6 +11,8 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/me': () => import('@/app/api/v1/me/route'),
   '/api/v1/account/password': () => import('@/app/api/v1/account/password/route'),
   '/api/v1/audit': () => import('@/app/api/v1/audit/route'),
+  '/api/v1/config/fields': () => import('@/app/api/v1/config/fields/route'),
+  '/api/v1/config/current': () => import('@/app/api/v1/config/current/route'),
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
   '/api/v1/users/[id]': () => import('@/app/api/v1/users/[id]/route'),
   '/api/v1/users/[id]/password-reset': () => import('@/app/api/v1/users/[id]/password-reset/route'),
@@ -34,6 +36,8 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/estimates/[id]/tree/move': () => import('@/app/api/v1/estimates/[id]/tree/move/route'),
   '/api/v1/estimates/[id]/nodes': () => import('@/app/api/v1/estimates/[id]/nodes/route'),
   '/api/v1/estimates/[id]/nodes/[nodeId]': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/route'),
+  '/api/v1/estimates/[id]/form': () => import('@/app/api/v1/estimates/[id]/form/route'),
+  '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/inputs/route'),
   '/api/v1/options/assign-context': () => import('@/app/api/v1/options/assign-context/route'),
 };
 
@@ -46,6 +50,7 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/account': () => import('@/app/(portal)/account/page'),
   '/users': () => import('@/app/(portal)/users/page'),
   '/audit': () => import('@/app/(portal)/audit/page'),
+  '/config/fields': () => import('@/app/(portal)/config/fields/page'),
   '/masters/process': () => import('@/app/(portal)/masters/process/page'),
   '/masters/materials': () => import('@/app/(portal)/masters/materials/page'),
   '/masters/customers': () => import('@/app/(portal)/masters/customers/page'),

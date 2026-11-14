@@ -18,6 +18,8 @@ export interface FormFieldProps {
   readonly label: string;
   /** Shown beside the label, for example a column tag. */
   readonly tag?: ReactNode;
+  /** The tag comes before the label (the estimate form's column letter, which a screen reader then reads first: "Excel column J, Length"). Default: after. */
+  readonly tagFirst?: boolean;
   readonly hint?: string;
   /** The label is read by assistive technology but not drawn: for a field in a table cell, where the column heading and the row name say what it is. */
   readonly labelHidden?: boolean;
@@ -31,7 +33,7 @@ export interface FormFieldProps {
  * alert icon (UX spec section 6.0 "Forms"). The control is created by the caller from the props this passes
  * in, so `aria-describedby` and `aria-invalid` are always wired.
  */
-export function FormField({ id, label, tag, hint, labelHidden = false, error, children }: FormFieldProps) {
+export function FormField({ id, label, tag, tagFirst = false, hint, labelHidden = false, error, children }: FormFieldProps) {
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   const describedBy = [hint === undefined ? undefined : hintId, error === undefined ? undefined : errorId]
@@ -41,8 +43,10 @@ export function FormField({ id, label, tag, hint, labelHidden = false, error, ch
   return (
     <div className="flex min-w-0 flex-col gap-s-2">
       <Label htmlFor={id} className={labelHidden ? 'sr-only' : undefined}>
+        {tagFirst ? tag : null}
+        {tagFirst && tag !== undefined ? ' ' : null}
         {label}
-        {tag}
+        {tagFirst ? null : tag}
       </Label>
       {children({
         id,

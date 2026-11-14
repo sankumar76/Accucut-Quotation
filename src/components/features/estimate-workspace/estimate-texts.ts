@@ -35,7 +35,39 @@ export const keepLabel = (name: string): string => `Keep ${name}`;
 
 export const FORM_AREA_TITLE = 'Parts and inputs';
 export const FORM_AREA_LOCKED = 'The parts tree and the form open here once the customer is chosen.';
-export const FORM_AREA_OPEN = 'The form for the part you select opens here.';
+
+/**
+ * The part form (STORY-05.03; UX spec SCR-05 "Content and microcopy", "States"). The labels, letters, hints and ranges of the fields come from the server, from the registry, and are
+ * not written here; these are the words around them. None of them names a rate, a price or a formula (UX-24).
+ */
+export const partFormTitle = (slNo: string): string => `Part ${slNo}`;
+export const FORM_INTRO = 'Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.';
+export const FORM_LOADING = 'Loading the form';
+export const FORM_LOAD_FAILED_TITLE = 'We could not load the form';
+export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "New item".';
+export const FORM_LOCKED = 'This estimate can no longer be changed.';
+export const lastSavedText = (when: string): string => `Last saved ${when}`;
+export const NOT_SAVED_YET = 'Nothing saved yet';
+export const PART_SAVED = 'Saved';
+export const PART_SAVE_FAILED_TITLE = 'The change was not saved';
+export const PART_CHANGED_NOTICE = 'This part was changed by someone else. It has been reloaded. Check it and try again.';
+export const PART_LOAD_FAILED_TITLE = 'We could not load this part';
+export const MATERIAL_PLACEHOLDER = 'Choose a material';
+export const MATERIAL_LOADING = 'Loading materials';
+export const MATERIAL_LOAD_FAILED_TITLE = 'We could not load the materials';
+export const sectionRegionLabel = (number: number, name: string): string => `${String(number).padStart(2, '0')} ${name}`;
+export const columnRangeLabel = (range: string): string => `Excel columns ${range}`;
+
+/**
+ * The other sections of the form (STORY-05.04; UX spec SCR-05 "Layout rules": the section strip, "n of m" on every card). The sentences under "not available yet" are about the form and
+ * name no rate, price or formula (UX-24).
+ */
+export const SECTION_STRIP_LABEL = 'Sections of the form';
+export const sectionLinkText = (number: number, shortName: string): string => `${String(number).padStart(2, '0')} ${shortName}`;
+export const SECTION_COMPLETE_TEXT = 'All filled in';
+export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
+export const PLACEHOLDER_TITLE = 'Not available yet';
+export const PLACEHOLDER_BODY = 'These are added to the form in a later update. There is nothing to fill in here yet.';
 
 export const REVIEW_CUSTOMER_LABEL = 'Customer';
 export const REVIEW_NO_CUSTOMER = 'Not chosen yet';

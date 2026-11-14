@@ -1,3 +1,4 @@
+import { inputEntriesOf } from '@/lib/estimate/part-view';
 import { getEstimateService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
 import { deleteNodeQuerySchema, moveNodeBodySchema, nodeDetailSchema, nodeParamsSchema, partsTreeSchema } from '@/server/views/schemas';
@@ -14,9 +15,12 @@ export const GET = withRoute({
   method: 'GET',
   params: nodeParamsSchema,
   output: nodeDetailSchema,
-  // The part is read through its own strict schema here as well as by `withRoute`: `inputs` is strictly empty until STORY-05.03 names the fields, so a value
-  // that nothing declared fails closed (a generic 500) instead of leaving, and the handler returns the schema's own type.
-  handler: async ({ user, params }) => nodeDetailSchema.parse(await getEstimateService().getNode({ id: user.id, role: user.role }, params.id, params.nodeId)),
+  // The part is read through its own strict schema here as well as by `withRoute`: `inputs` is a list of field ID and text entries (STORY-05.03, review SQR-09), of fields
+  // of the form only (the service projects them), so a value that nothing declared fails closed (a generic 500) instead of leaving, and the handler returns the schema's own type.
+  handler: async ({ user, params }) => {
+    const { inputs, ...part } = await getEstimateService().getNode({ id: user.id, role: user.role }, params.id, params.nodeId);
+    return nodeDetailSchema.parse({ ...part, inputs: inputEntriesOf(inputs) });
+  },
 });
 
 /** Move the part to another parent or place: the same move as `POST /tree/move`, with the part in the path. Answers with the tree. */

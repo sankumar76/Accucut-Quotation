@@ -9,6 +9,24 @@
  */
 export type Completeness = 'EMPTY' | 'PARTIAL' | 'COMPLETE';
 
+/**
+ * How complete a part is from what is stored in it: nothing typed is `EMPTY`, anything typed is `PARTIAL` (the part form stores only a value that is there: a cleared one
+ * is removed). `COMPLETE` is the Calculate story's (STORY-05.11).
+ */
+export const completenessOf = (inputs: Readonly<Record<string, unknown>>): Completeness => (Object.keys(inputs).length === 0 ? 'EMPTY' : 'PARTIAL');
+
+/** One stored value of a part, as it leaves the server: the field's ID and the text. A list of these and not an object, so every object of an answer has keys that are named (the strict schemas). */
+export interface InputEntry {
+  readonly fieldId: string;
+  readonly value: string;
+}
+
+/** The typed inputs of a part (by field ID) as entries, in the order of the field IDs, so the same inputs are always sent in the same order. */
+export const inputEntriesOf = (inputs: Readonly<Record<string, string>>): InputEntry[] =>
+  Object.entries(inputs)
+    .map(([fieldId, value]) => ({ fieldId, value }))
+    .sort((a, b) => (a.fieldId < b.fieldId ? -1 : a.fieldId > b.fieldId ? 1 : 0));
+
 /** `label` is the part's name, empty until the part form stores one (STORY-05.03). `slNo` is derived from the tree and never stored. */
 export interface PartView {
   readonly id: string;
