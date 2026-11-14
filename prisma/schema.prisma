@@ -40,6 +40,8 @@ model User {
   configVersions ConfigVersion[]
   auditEntries   AuditLog[]
   exchangeRates  ExchangeRate[]
+  tasksToDo      Task[]          @relation("TaskEngineer")
+  tasksAssigned  Task[]          @relation("TaskAssigner")
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -208,7 +210,8 @@ model Customer {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  rates CustomerRate[]
+  rates     CustomerRate[]
+  estimates Estimate[]
 
   @@unique([name], map: "uq_customers_name")
   @@map("customers")
@@ -232,4 +235,77 @@ model CustomerRate {
   @@index([customerId], map: "idx_customer_rates_customer_id")
   @@index([processItemId], map: "idx_customer_rates_process_item_id")
   @@map("customer_rates")
+}
+
+/// The estimate status of architecture section 4.4. A new estimate is DRAFT; the other two arrive with EPIC-06.
+enum EstimateStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+
+  @@map("estimate_status")
+}
+
+/// The last number issued for each year, so a task code is `Q-<year>-<4 digits>` (STORY-04.01, FR-041; architecture section 5.1). The year is taken in IST.
+/// The number is taken with one `INSERT ... ON CONFLICT DO UPDATE` inside the assigning transaction, which locks the year's row until that transaction ends,
+/// so two requests at once get different numbers and a task that fails to save gives its number back. Departs from the SQL conventions (section 10) on purpose,
+/// as architecture section 5.1 specifies: the table is keyed by `year` (one row per year) instead of an `id` UUID.
+model TaskSequence {
+  year      Int      @id
+  lastValue Int      @map("last_value")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("task_sequences")
+}
+
+/// One piece of estimation work assigned to an Engineer by a Lead or Admin (STORY-04.01, FR-032, FR-033; architecture sections 4.1, 5.1 and 6). `code` is the
+/// `Q-YYYY-NNNN` of the page addresses. `folderPath` is a UNC path kept as text (the portal never reads the share; the `file:` link is built from it on the
+/// server). `deadlineAt` is the instant in UTC; the screens show it in IST. `assignmentRevision` is raised by a reassign (STORY-04.07) and is part of the key
+/// of the "task assigned" e-mail (architecture section 4.7). The CHECKs (the path starts with two backslashes, the title and notes lengths, the revision is
+/// at least 1) are hand-written in the migration: Prisma cannot express them. A task is never deleted, so the runtime role has no DELETE. Class Internal.
+model Task {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String
+  engineerId         String   @map("engineer_id") @db.Uuid
+  assignedById       String   @map("assigned_by") @db.Uuid
+  folderPath         String   @map("folder_path")
+  deadlineAt         DateTime @map("deadline_at") @db.Timestamptz(6)
+  title              String?
+  notes              String?
+  assignmentRevision Int      @default(1) @map("assignment_revision")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  engineer   User      @relation("TaskEngineer", fields: [engineerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tasks_engineer_id")
+  assignedBy User      @relation("TaskAssigner", fields: [assignedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tasks_assigned_by")
+  estimate   Estimate?
+
+  @@unique([code], map: "uq_tasks_code")
+  @@index([engineerId, deadlineAt], map: "idx_tasks_engineer_id_deadline_at")
+  @@index([assignedById, deadlineAt], map: "idx_tasks_assigned_by_deadline_at")
+  @@index([deadlineAt], map: "idx_tasks_deadline_at")
+  @@map("tasks")
+}
+
+/// The estimate of a task (STORY-04.01; architecture sections 4.4, 4.8 and 5.1): one per task, created empty (DRAFT, customer not chosen) in the same transaction
+/// as the task. `inputsRevision` is bumped by every input change (EPIC-05). `currentCalculationId` has no foreign key until `calculations` exists (STORY-03.05).
+/// Class Confidential. The estimate is never deleted, so the runtime role has no DELETE.
+model Estimate {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId               String         @map("task_id") @db.Uuid
+  customerId           String?        @map("customer_id") @db.Uuid
+  status               EstimateStatus @default(DRAFT)
+  inputsRevision       Int            @default(0) @map("inputs_revision")
+  currentCalculationId String?        @map("current_calculation_id") @db.Uuid
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  task     Task      @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
+
+  @@unique([taskId], map: "uq_estimates_task_id")
+  @@index([status], map: "idx_estimates_status")
+  @@index([customerId], map: "idx_estimates_customer_id")
+  @@map("estimates")
 }

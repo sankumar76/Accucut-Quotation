@@ -44,6 +44,7 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/account': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/queue': { signedIn: { status: 200, html: pageNaming('shell.js', 'queue.js') } },
   '/users': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/assign': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -217,15 +218,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/account', '/audit', '/design-system', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 12 rows are within their limit');
+    for (const route of ['/', '/account', '/assign', '/audit', '/design-system', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 13 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 12 rows failed');
+    expect(overrun.output).toContain('1 of 13 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -241,6 +242,6 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.code).toBe(1);
     expect(noRecords.output).toContain('/masters/customers/[id]');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('1 of 12 rows failed');
+    expect(noRecords.output).toContain('1 of 13 rows failed');
   });
 });

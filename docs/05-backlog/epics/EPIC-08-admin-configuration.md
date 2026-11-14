@@ -28,8 +28,8 @@ The Admin changes fields and formulas without a developer, with Excel-style re-l
 
 | # | Story ID | Title | Intent (one line) | Splitting pattern | Depends on | Status |
 |---|----------|-------|-------------------|-------------------|------------|--------|
-| 1 | STORY-08.01 | Fields and formulas list | Letter, label, section, type, formula; Admin and Lead views (FR-072) | Workflow step (read) | 03.01 | Draft |
-| 2 | STORY-08.02 | Edit a formula | Autocomplete, live check, preview on a sample node; unknown name, syntax error and cycle cannot be saved; password re-entry through the step-up check built in STORY-06.14 (FR-073, FR-080 part). BL is listed as `SUM(BG)`, a system formula that can be edited and re-lettered like any other | Happy path, then unhappy paths | 08.01, 03.02, 06.14 | Draft |
+| 1 | STORY-08.01 | Fields and formulas list | Letter, label, section, type, formula; Admin and Lead views (FR-072) | Workflow step (read) | 03.01 | Ready for Dev (AQP-337, 2026-11-13, fast track CLAUDE.md §9, light DoR; no PO validation round). |
+| 2 | STORY-08.02 | Edit a formula | Autocomplete, live check, preview on a sample node; unknown name, syntax error and cycle cannot be saved; password re-entry through the step-up check built in STORY-06.14 (FR-073, FR-080 part). BL is listed as `SUM(BG)`, a system formula that can be edited and re-lettered like any other | Happy path, then unhappy paths | 08.01, 03.02, 06.14 | Ready for Dev (AQP-338, 2026-11-13, fast track CLAUDE.md §9, light DoR; no PO validation round). |
 | 3 | STORY-08.03 | Insert a field with re-lettering | Choose position and group; preview letter changes; new inputs mandatory and visible to Engineers, new outputs hidden; formulas keep results (FR-074, 075) | Workflow step | 08.02 | Draft |
 | 4 | STORY-08.04 | Delete a field | Refused while any formula references it, listing them; password re-entry (FR-076, FR-080 part) | Business rule | 08.02 | Draft |
 | 5 | STORY-08.05 | Configuration versions | Every change creates an immutable version; each estimate records its version; approved estimates pinned (FR-077) | Workflow step | 08.02, 03.05 | Draft |

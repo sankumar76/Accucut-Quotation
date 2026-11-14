@@ -10,6 +10,7 @@ import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
+import { createTaskRepository } from './repositories/task-repository';
 import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
@@ -19,6 +20,7 @@ import { type AuthService, createAuthService } from './services/auth-service';
 import { getCurrentVersion } from './services/config-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
+import { createTaskService, type TaskService } from './services/task-service';
 import { createUserService, type UserService } from './services/user-service';
 
 /**
@@ -37,6 +39,7 @@ let stepUpService: StepUpService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
+let taskService: TaskService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -139,6 +142,19 @@ export function getMastersService(): MastersService {
     });
   }
   return mastersService;
+}
+
+/**
+ * Tasks (STORY-04.01): assigning a task makes the task, its empty estimate and its number in one transaction. The deadline is judged against the system clock,
+ * and the year of the task code is the year in IST.
+ */
+export function getTaskService(): TaskService {
+  taskService ??= createTaskService({
+    tasks: createTaskRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    clock: systemClock,
+  });
+  return taskService;
 }
 
 /**
