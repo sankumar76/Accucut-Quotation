@@ -5,7 +5,9 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { createDisposableUser } from './support/auth';
 import { API, JSON_HEADERS, makeCustomer, newCustomerName, openCustomers, rowOf, type MadeCustomer } from './support/customers';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
-import { DEVELOPMENT_URL } from './support/servers';
+import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * STORY-02.07 T7 (AC-1, AC-2, AC-6, AC-7): the Delete action of SCR-12 "Customers", at 360x800, 768x1024 and 1366x768 on the development server, signed in as the
