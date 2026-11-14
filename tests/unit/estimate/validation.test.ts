@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_LONG_TEXT_LENGTH,
   MAX_PART_TEXT_LENGTH,
   NUMBER_RULE_MESSAGE,
   NUMBER_TOO_LARGE_MESSAGE,
   TEXT_TOO_LONG_MESSAGE,
   TEXT_CHARACTERS_MESSAGE,
+  textTooLongMessage,
   validateNumberInput,
   validateTextInput,
 } from '@/lib/estimate/validation';
@@ -57,6 +59,36 @@ describe('AC-4: validateNumberInput', () => {
 
   it.each([[''], ['   ']])('a blank (%j) is allowed: it clears the value', (typed) => {
     expect(validateNumberInput(typed)).toEqual({ ok: true, value: null });
+  });
+});
+
+/** STORY-05.04 AC-4 (assumption A-1): a single-line text is 200 characters at most and the multi-line Remarks 1,000, each with its own words on the screen. */
+describe('AC-4: the length of a text is the field\'s own', () => {
+  it('names the limits: 200 for Part No., Description and Fasteners, 1,000 for Remarks', () => {
+    expect(MAX_PART_TEXT_LENGTH).toBe(200);
+    expect(MAX_LONG_TEXT_LENGTH).toBe(1000);
+  });
+
+  it('says the limit in words, with a thousands separator, and keeps the 200-character words as they were', () => {
+    expect(textTooLongMessage(1000)).toBe('Use 1,000 characters or fewer.');
+    expect(textTooLongMessage(MAX_PART_TEXT_LENGTH)).toBe(TEXT_TOO_LONG_MESSAGE);
+    expect(TEXT_TOO_LONG_MESSAGE).toBe('Use 200 characters or fewer.');
+  });
+
+  it('allows 1,000 characters in Remarks and refuses 1,001 with the visible message', () => {
+    const rule = { multiline: true, maxLength: MAX_LONG_TEXT_LENGTH };
+    expect(validateTextInput('a'.repeat(MAX_LONG_TEXT_LENGTH), rule)).toEqual({ ok: true, value: 'a'.repeat(MAX_LONG_TEXT_LENGTH) });
+    expect(validateTextInput('a'.repeat(MAX_LONG_TEXT_LENGTH + 1), rule)).toEqual({ ok: false, message: 'Use 1,000 characters or fewer.' });
+  });
+
+  it('counts a line break as one character, so "\\r\\n" typed on Windows is not two', () => {
+    const rule = { multiline: true, maxLength: 5 };
+    expect(validateTextInput('ab\r\ncd', rule)).toEqual({ ok: true, value: 'ab\ncd' });
+    expect(validateTextInput('ab\r\ncde', rule)).toEqual({ ok: false, message: textTooLongMessage(5) });
+  });
+
+  it('a field without its own limit keeps the 200 of Part No.', () => {
+    expect(validateTextInput('a'.repeat(MAX_PART_TEXT_LENGTH + 1), { multiline: false })).toEqual({ ok: false, message: TEXT_TOO_LONG_MESSAGE });
   });
 });
 
@@ -121,6 +153,12 @@ describe('validateTextInput', () => {
     expect(validateTextInput('one\ntwo', { multiline: true })).toEqual({ ok: true, value: 'one\ntwo' });
     expect(validateTextInput('one\r\ntwo', { multiline: true })).toEqual({ ok: true, value: 'one\ntwo' });
     expect(validateTextInput('nul\u0000byte', { multiline: true })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+  });
+
+  it('a lone UTF-16 surrogate is refused with the words of the rule, and a valid pair (an emoji) is not (review SQR-13)', () => {
+    expect(validateTextInput('FR\uD800321', { multiline: false })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+    expect(validateTextInput('FR\uDC00321', { multiline: true })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+    expect(validateTextInput('FR\u{1F600}', { multiline: false })).toEqual({ ok: true, value: 'FR\u{1F600}' });
   });
 
   it('keeps text that looks like a formula, as typed: the export neutralises it, not this rule', () => {

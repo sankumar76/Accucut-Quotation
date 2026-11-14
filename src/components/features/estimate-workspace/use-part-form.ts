@@ -185,8 +185,11 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
       return;
     }
     clearError(field.id);
-    showText(field.id, check.value ?? '');
-    if ((heldRef.current[field.id] ?? null) === check.value) return;
+    // A field with a default (Fasteners: "None") shows it again when it is left blank, and a blank over a default is the same as the default: nothing is stored for either, so leaving
+    // the box alone changes nothing and a part with nothing typed stays EMPTY (STORY-05.04 AC-3).
+    const standIn = (value: string | null): string | null => value ?? field.defaultValue;
+    showText(field.id, standIn(check.value) ?? '');
+    if (standIn(heldRef.current[field.id] ?? null) === standIn(check.value)) return;
     const value = check.value ?? '';
     queueRef.current = queueRef.current.then(() => send(field.id, value));
   }

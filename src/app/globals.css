@@ -41,6 +41,8 @@
   --radius-pill: 999px;
   --control-h: 44px;
   --control-h-row: 36px;
+  /* The least height of a multi-line box: about three lines of body text. A named token, as the spacing scale is replaced (`--spacing-*: initial`) and a default size such as `min-h-24` does nothing (#395). */
+  --textarea-min-h: 96px;
   --topbar-h: 64px;
   --side-w: 248px;
   --drawer-w: 288px;

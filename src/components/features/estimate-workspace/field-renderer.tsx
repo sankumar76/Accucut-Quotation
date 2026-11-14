@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import type { FormField as FormFieldView, MaterialChoice } from '@/lib/estimates/form-client';
+import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
 import type { Loaded } from './use-part-form';
@@ -16,7 +17,7 @@ export const FIELD_MARK = 'data-part-field';
 
 export interface FieldRendererProps {
   readonly field: FormFieldView;
-  /** The text shown: what the person typed, or what the server holds. For a derived field, the text it follows (Sl. No., Material Considered). */
+  /** The text shown: what the person typed, or what the server holds, or the field's default. For a derived field, the text it follows (Sl. No., Material Considered). */
   readonly text: string;
   readonly error: string | undefined;
   /** False once the estimate may no longer be changed by this person: every control is read-only. */
@@ -41,9 +42,11 @@ export function FieldRenderer({ field, text, error, editable, materials, onChang
   const mark = field.editable && editable ? 'true' : undefined;
   const tag = <ColumnTag letter={field.letter} kind={field.kind} />;
   const common = { name: field.id, 'data-part-field': mark };
+  // A long text is told so while it is typed (Remarks, STORY-05.04 AC-4): the box lets it run over, so the message is seen and the text is kept; the same words come back on leaving.
+  const shownError = error ?? lengthProblem(field.rule, text);
 
   return (
-    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(error === undefined ? {} : { error })}>
+    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(shownError === undefined ? {} : { error: shownError })}>
       {(control) => {
         const rule = field.rule;
         if (rule.type === 'select') {
@@ -77,7 +80,7 @@ export function FieldRenderer({ field, text, error, editable, materials, onChang
               {...control}
               {...common}
               readOnly={readOnly}
-              maxLength={rule.maxLength}
+              enterKeyHint="next"
               value={text}
               onChange={(event) => onChange(event.target.value)}
               onBlur={() => onCommit()}

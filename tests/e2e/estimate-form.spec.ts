@@ -1,14 +1,10 @@
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { CUSTOMER_CANARIES } from '../support/customer-canary';
-import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
-import { MATERIAL_CANARIES } from '../support/material-master-canary';
-import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
-import { columnLetterToIndex } from '../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, expectOnQueue, signInThroughThePage, useFreshAddress } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { useFreshAddress } from './support/auth';
+import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { ALPHA_MATERIAL, control, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.03 T8 (AC-1 to AC-6, AC-8, AC-9; review SQR-11): the part form of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test
@@ -25,57 +21,9 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
-const ALPHA_CUSTOMER = defined(CUSTOMER_CANARIES[0]).name;
-const ALPHA_MATERIAL = defined(MATERIAL_CANARIES[0]);
-const PHONE_MAX = 767;
-const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
 const QTY_HINT = 'Enter the count for the whole order, not per assembly. For example, 24 lids in all, even if each pipe has 4.';
-
-/** The control of a field: its ID is the registry's, and the page's control ID is made from it. */
-const control = (page: Page, letter: string): Locator => page.locator(`#part-field-${seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter))}`);
-const partForm = (page: Page): Locator => page.locator('form[data-part-form]');
-const tree = (page: Page): Locator => page.getByRole('tree', { name: 'Parts tree' });
-const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
-const isPatchOfInputs = (url: string, method: string): boolean => method === 'PATCH' && /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+\/inputs$/.test(new URL(url).pathname);
-
-/** Waits for the save that leaving a field starts, and answers its status. */
-function nextSave(page: Page): Promise<number> {
-  return page.waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method())).then((response) => response.status());
-}
-
-async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
-  await page.context().clearCookies();
-  const person = await createDisposableUser('scan', testInfo);
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expectOnQueue(page, 'My tasks');
-  return person;
-}
-
-/** Signs in as a person who owns a task, chooses the customer, and waits for the form of the first part. On a phone the tree is in a drawer that stays shut. */
-async function openForm(page: Page, testInfo: TestInfo): Promise<void> {
-  await ensureCanaryCustomers();
-  await ensureCanaryMaterials();
-  const owner = await signInAsNewEngineer(page, testInfo);
-  await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-  await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-  await expect(page.locator('#estimate-customer')).toBeEnabled();
-  await page.locator('#estimate-customer').selectOption({ label: ALPHA_CUSTOMER });
-  await expect(page.getByText('Customer saved.')).toBeVisible();
-  await waitForForm(page);
-}
-
-async function waitForForm(page: Page): Promise<void> {
-  await expect(partForm(page)).toBeVisible();
-  await expect(control(page, 'J')).toBeEnabled();
-  // The materials come with the form: the list is enabled once they are here.
-  await expect(control(page, 'E')).toBeEnabled();
-}
-
-async function showTree(page: Page): Promise<void> {
-  if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
-  await expect(tree(page)).toBeVisible();
-}
+/** The words with "cost" in them that the form may say: the four typed inputs (FR-008) and the name of section 08 (SPEC 7.1). */
+const ALLOWED_COST_WORDS = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'];
 
 test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
   test('AC-1: sections 01 and 02 with their numbers, names and column ranges, and an Excel letter on every field that a screen reader reads first', async ({ page }, testInfo) => {
@@ -84,7 +32,8 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     const second = page.getByRole('region', { name: '02 Material and Dimensions' });
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
-    await expect(first).toContainText('A, B, D, H');
+    // STORY-05.04: the tag of 01 also names the placeholder of Treatment / Color (G), which is in the card but is not typed into until story 05.06.
+    await expect(first).toContainText('A, B, D, G, H');
     await expect(second).toContainText('E, F, J–L, N');
 
     for (const [letter, name, role] of [
@@ -103,8 +52,8 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
       await expect(page.getByRole(role, { name: new RegExp(`^Excel column ${letter}\\s+${name.replaceAll('.', '\\.')}`) })).toHaveCount(1);
       await expect(control(page, letter)).toBeVisible();
     }
-    // Letters the story does not build are not on the form.
-    for (const letter of ['C', 'G', 'I', 'P']) await expect(page.getByRole('textbox', { name: new RegExp(`^Excel column ${letter}\\s`) })).toHaveCount(0);
+    // Letters that are not typed into on the form are not controls: the picture, the placeholder of Treatment / Color, and Material Rate / Kg.
+    for (const letter of ['C', 'G', 'I']) await expect(page.getByRole('textbox', { name: new RegExp(`^Excel column ${letter}\\s`) })).toHaveCount(0);
   });
 
   test('AC-2, AC-3, AC-8: the label stays "QTY per Assy" with the hint; Sl. No. and Material Considered are read-only; no rate, price, cost or formula is on the form', async ({ page }, testInfo) => {
@@ -115,7 +64,9 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     await expect(control(page, 'A')).toHaveValue('1');
     await expect(control(page, 'F')).toHaveAttribute('readonly', '');
     await expect(control(page, 'F')).toHaveValue('');
-    await expect(partForm(page)).not.toContainText(/rate|price|cost|formula/i);
+    // The word "cost" is in the labels of the four inputs an Engineer types and in the name of section 08, and nowhere else (STORY-05.04 AC-7).
+    const text = await partForm(page).innerText();
+    expect(ALLOWED_COST_WORDS.reduce((left, words) => left.replaceAll(words, ''), text)).not.toMatch(/rate|price|cost|formula/i);
     expect(await page.content()).not.toMatch(/Material Rate|Rate \/ Kg/);
   });
 
@@ -238,17 +189,16 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 });
 
 test.describe('AC-6: Enter moves to the next field', () => {
-  test('AC-6: Enter goes through Part No., Description, QTY per Assy, Material in Drawing, Length, Width, Thickness and Part Weight, skips the read-only fields, and never submits; on the last field it leaves the field', async ({ page }, testInfo) => {
+  test('AC-6: Enter goes through Part No., Description, QTY per Assy, Material in Drawing, Length, Width, Thickness, Part Weight and on into section 03, skips the read-only fields, and never submits', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     const address = page.url();
     await control(page, 'B').focus();
     await control(page, 'B').fill('FR-1');
-    for (const next of ['D', 'H', 'E', 'J', 'K', 'L', 'N']) {
+    // The chain goes on through every section after 02 (STORY-05.04): the whole chain, to Remarks and the heading, is in `estimate-form-sections.spec.ts`.
+    for (const next of ['D', 'H', 'E', 'J', 'K', 'L', 'N', 'P']) {
       await page.keyboard.press('Enter');
       await expect(control(page, next), `Enter should reach ${next}`).toBeFocused();
     }
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { name: 'Part 1', exact: true })).toBeFocused();
     expect(page.url()).toBe(address);
     // The form was not submitted: the typed text is still there, saved by leaving its field.
     await expect(control(page, 'B')).toHaveValue('FR-1');
