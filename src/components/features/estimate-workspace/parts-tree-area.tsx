@@ -71,7 +71,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart }: PartsTreeAreaProps
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-s-3 lg:w-72 lg:shrink-0">
+    <div className="flex min-w-0 flex-col gap-s-3 lg:w-(--tree-w) lg:shrink-0">
       {viewport === 'tablet' ? (
         <Button variant="secondary" className="justify-start" aria-expanded={panelOpen} aria-controls="parts-tree-panel" onClick={() => setPanelOpen((open) => !open)}>
           <Icon icon={ListTree} />
