@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError } from '@/lib/errors';
+import { NOT_APPLICABLE_MATERIAL_ID, NOT_APPLICABLE_NAME } from '@/lib/masters/system-entries';
 import { MasterConstraintError } from '@/server/repositories/master-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 
@@ -12,6 +13,7 @@ import { defined } from '../../support/defined';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { MATERIAL_CANARIES } from '../../support/material-master-canary';
+import { clearMaterials } from '../../support/system-rows';
 import { withoutUuids } from '../../support/random-members';
 import { refusal } from '../../support/user-service-fixture';
 
@@ -47,9 +49,11 @@ interface MaterialDbRow {
   readonly is_hidden: boolean;
 }
 
+/** Every row the test or the Admin made. The hidden "Not applicable" row the migration inserts (STORY-02.06) is always there and is left out; its own tests are `not-applicable-*.test.ts`. */
 async function rows(): Promise<MaterialDbRow[]> {
   const { rows: found } = await db.owner.query<MaterialDbRow>(
-    'SELECT id::text, material_in_drawing, material_considered, price_per_kg::text, specific_gravity::text, scrap_rate::text, is_hidden FROM materials ORDER BY created_at, id',
+    'SELECT id::text, material_in_drawing, material_considered, price_per_kg::text, specific_gravity::text, scrap_rate::text, is_hidden FROM materials WHERE id <> $1::uuid ORDER BY created_at, id',
+    [NOT_APPLICABLE_MATERIAL_ID],
   );
   return found;
 }
@@ -61,9 +65,9 @@ async function byName(name: string): Promise<MaterialDbRow | undefined> {
 const insert =
   'INSERT INTO materials (material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate) VALUES ($1, $2, $3, $4, $5)';
 
-/** Empties the table after a test, whether it passed or failed, so one failure is reported once and not again by every test after it (QLT-05). */
+/** Empties the table after a test, whether it passed or failed, so one failure is reported once and not again by every test after it (QLT-05). The migration's hidden row stays (it cannot be deleted). */
 const emptyTable = async (): Promise<void> => {
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
 };
 
 beforeAll(async () => {
@@ -82,7 +86,8 @@ describe('AC-1 (T1): the table starts empty, and the repository lists only what 
   it('holds no material after the migration: no price is committed (ADR-014)', async () => {
     expect(await rows()).toEqual([]);
     expect(await db.masterRepository.listMaterials()).toEqual([]);
-    expect(await db.mastersService.listMaterialOptions()).toEqual([]);
+    // The one choice there is: the hidden "Not applicable" entry (STORY-02.06).
+    expect(await db.mastersService.listMaterialOptions()).toEqual([{ id: NOT_APPLICABLE_MATERIAL_ID, name: NOT_APPLICABLE_NAME, materialConsidered: null }]);
   });
 
   it('never lists a hidden material, or one that is deleted, and never finds one by ID (architecture section 4.9)', async () => {
@@ -126,7 +131,10 @@ describe('AC-1 (T1): the table starts empty, and the repository lists only what 
   it('reads no number for the options: they are the ID, the name and Material Considered, and nothing else', async () => {
     await db.owner.query(insert, ['Options-material', 'Invented options', '917.37', '737.37', '717.37']);
     const options = await db.mastersService.listMaterialOptions();
-    expect(options).toEqual([{ id: expect.any(String), name: 'Options-material', materialConsidered: 'Invented options' }]);
+    expect(options).toEqual([
+      { id: expect.any(String), name: 'Options-material', materialConsidered: 'Invented options' },
+      { id: NOT_APPLICABLE_MATERIAL_ID, name: NOT_APPLICABLE_NAME, materialConsidered: null },
+    ]);
     // `id` is made by gen_random_uuid() and can hold "717", "737" or "917" by chance (DEF-028); the well-formed UUID is the only thing left out.
     expect(withoutUuids(JSON.stringify(options))).not.toMatch(/917|737|717/);
   });

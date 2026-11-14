@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConflictError, FieldValidationError, NAME_RESERVED_CODE, NAME_TAKEN_CODE, NotFoundError, TREATMENT_LOCKED_CODE } from '@/lib/errors';
+import { NOT_APPLICABLE_NAME } from '@/lib/masters/system-entries';
 import { createAuditService } from '@/server/services/audit-service';
 import { createMastersService } from '@/server/services/masters-service';
 import { isReservedTreatmentName } from '@/server/services/treatment-service';
@@ -50,7 +51,8 @@ describe('listing (AC-1, AC-5)', () => {
   it('lists the options as an ID and a name, "Other" included, and nothing else', async () => {
     const { service } = build();
     const options = await service.listTreatmentOptions();
-    expect(options.map((option) => option.name)).toEqual(['Other', 'Canary-Treatment-Alpha', 'Canary-Treatment-Beta']);
+    // The hidden "Not applicable" entry comes last (STORY-02.06 AC-5).
+    expect(options.map((option) => option.name)).toEqual(['Other', 'Canary-Treatment-Alpha', 'Canary-Treatment-Beta', NOT_APPLICABLE_NAME]);
     for (const option of options) expect(Object.keys(option).sort()).toEqual(['id', 'name']);
   });
 });

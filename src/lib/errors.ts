@@ -130,7 +130,7 @@ export class ActiveAdminExistsError extends ConflictError {
 /** A name that another master entry (a rate, a material or a treatment) already has, ignoring letter case (STORY-02.01 AC-2, STORY-02.03 AC-2, STORY-02.05 AC-2): said under the name field. */
 export const NAME_TAKEN_CODE = 'NAME_TAKEN';
 
-/** A treatment name the system keeps for itself ("Other", "Not applicable") in any letter case (STORY-02.05 AC-2; architecture section 4.9). The message does not name the hidden entry. */
+/** A treatment or material name the system keeps for itself ("Other" for a treatment, "Not applicable" for both) in any letter case (STORY-02.05 AC-2, STORY-02.06 AC-6; architecture section 4.9). The message does not name the hidden entry. */
 export const NAME_RESERVED_CODE = 'NAME_RESERVED';
 
 /** A change or a delete was asked of a locked system entry, the treatment "Other" (STORY-02.05 AC-3): refused with 409, nothing changes. */

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { NOT_APPLICABLE_NAME, NOT_APPLICABLE_TREATMENT_ID } from '@/lib/masters/system-entries';
+
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 import { FRESH_TREATMENTS, OTHER_TREATMENT_ID, TREATMENT_CANARIES, TREATMENT_RECIPE_ID } from '../support/treatment-canary';
 
@@ -235,7 +237,11 @@ describe('GET /api/v1/options/treatments (AC-5)', () => {
     const body = record.parse(await response.json());
     expect(Object.keys(body)).toEqual(['options']);
     const options = z.array(record).parse(body['options']);
-    expect(options).toEqual([...FRESH_TREATMENTS, ...TREATMENT_CANARIES].map((treatment) => ({ id: treatment.id, name: treatment.name })));
+    // "Other" first, the others in the order they were added, then the hidden "Not applicable" entry (STORY-02.06 AC-5).
+    expect(options).toEqual([
+      ...[...FRESH_TREATMENTS, ...TREATMENT_CANARIES].map((treatment) => ({ id: treatment.id, name: treatment.name })),
+      { id: NOT_APPLICABLE_TREATMENT_ID, name: NOT_APPLICABLE_NAME },
+    ]);
     for (const option of options) expect(Object.keys(option).sort()).toEqual(['id', 'name']);
   });
 });

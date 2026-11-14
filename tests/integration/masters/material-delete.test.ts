@@ -1,11 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, MasterInUseError, MATERIAL_IN_USE_CODE, NAME_TAKEN_CODE, NotFoundError } from '@/lib/errors';
+import { NOT_APPLICABLE_MATERIAL_ID } from '@/lib/masters/system-entries';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
+import { clearMaterials } from '../../support/system-rows';
 
 /**
  * STORY-02.07 (AC-3, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a material over the real repositories. It is soft
@@ -54,7 +56,7 @@ afterEach(async () => {
   await db.owner.query('DELETE FROM estimate_nodes');
   await db.owner.query('DELETE FROM estimates');
   await db.owner.query('DELETE FROM tasks');
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
   codes = 0;
 });
 
@@ -151,14 +153,10 @@ describe('AC-3: a material no open estimate uses is soft-deleted', () => {
     expect(await entryCount(db)).toBe(entries);
   });
 
-  it('the hidden "Not applicable" row is a 404 and is never deleted', async () => {
-    const hidden = await db.owner.query<{ id: string }>(
-      "INSERT INTO materials (material_in_drawing, material_considered, is_hidden) VALUES ('Hidden-entry-for-test', NULL, true) RETURNING id::text AS id",
-    );
-    const hiddenId = defined(hidden.rows[0]).id;
+  it('the hidden "Not applicable" row (the migration\'s own) is a 404 and is never deleted', async () => {
     const entries = await entryCount(db);
-    await expect(db.mastersService.deleteMaterial(by(), hiddenId)).rejects.toBeInstanceOf(NotFoundError);
-    expect(await stored(hiddenId)).toEqual({ deleted: false });
+    await expect(db.mastersService.deleteMaterial(by(), NOT_APPLICABLE_MATERIAL_ID)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await stored(NOT_APPLICABLE_MATERIAL_ID)).toEqual({ deleted: false });
     expect(await entryCount(db)).toBe(entries);
   });
 
@@ -264,12 +262,9 @@ describe('AC-5: the lock a writer of a part\'s material takes, and two deletes a
     const alpha = await material('Alpha-sheet');
     const gone = await material('Gone-sheet');
     await db.mastersService.deleteMaterial(by(), gone.id);
-    const hidden = await db.owner.query<{ id: string }>(
-      "INSERT INTO materials (material_in_drawing, material_considered, is_hidden) VALUES ('Hidden-entry-for-test', NULL, true) RETURNING id::text AS id",
-    );
     const locked = (id: string) => db.transactions.run((tx) => db.masterRepository.lockMaterialForUse(id, tx));
     expect(await locked(alpha.id)).toBe(true);
-    expect(await locked(defined(hidden.rows[0]).id)).toBe(true);
+    expect(await locked(NOT_APPLICABLE_MATERIAL_ID)).toBe(true);
     expect(await locked(gone.id)).toBe(false);
     expect(await locked(MISSING_ID)).toBe(false);
     expect(await locked('not-an-id')).toBe(false);

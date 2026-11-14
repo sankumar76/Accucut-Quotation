@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { contextOf, entriesFor, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
 import { createServiceHoldingBeforeCommit } from '../../support/hold-before-commit';
-import { OTHER_TREATMENT_ID } from '../../support/treatment-canary';
+import { clearTreatments } from '../../support/system-rows';
 
 /**
  * STORY-02.05, QLT-03 of the G6 (NFR-007; architecture section 6, PRF-01): two changes of one treatment are SERIALISED, so the audit entry of the second
@@ -36,7 +36,7 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
-  await db.owner.query('DELETE FROM treatments WHERE id <> $1::uuid', [OTHER_TREATMENT_ID]);
+  await clearTreatments(db.owner);
 });
 
 /** Is any session of this database waiting for a lock? `pg_locks` is readable by every role, and so are the process IDs of `pg_stat_activity`. */

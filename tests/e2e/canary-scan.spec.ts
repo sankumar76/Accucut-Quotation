@@ -303,6 +303,20 @@ test('AC-4, AC-6 (STORY-02.03): the options list an Engineer is sent names the c
   const ours = options.filter((option) => MATERIAL_CANARIES.some((material) => material.id === option['id']));
   expect(ours.map((option) => option['name']).sort()).toEqual(MATERIAL_CANARIES.map((material) => material.materialInDrawing).sort());
   for (const option of ours) expect(Object.keys(option).sort(), 'no rate of any kind').toEqual(['id', 'materialConsidered', 'name']);
+  // STORY-02.06 AC-5: the hidden "Not applicable" entries are offered to an Engineer too, with no Material Considered and no number (a literal ID, as the migration writes it).
+  expect(options.find((option) => option['id'] === '00000000-0000-4000-8000-000500000001'), 'the hidden material is offered').toEqual({
+    id: '00000000-0000-4000-8000-000500000001',
+    name: 'Not applicable',
+    materialConsidered: null,
+  });
+  const treatmentAnswer = await callInBrowser(recorder, page, 'GET /api/v1/options/treatments (API, Engineer)', '/api/v1/options/treatments');
+  expect(treatmentAnswer.status).toBe(200);
+  const treatments = optionsBody.parse(JSON.parse(treatmentAnswer.body ?? '{}')).options;
+  expect(treatments.find((option) => option['id'] === '00000000-0000-4000-8000-000700000002'), 'the hidden treatment is offered').toEqual({
+    id: '00000000-0000-4000-8000-000700000002',
+    name: 'Not applicable',
+  });
+  for (const option of treatments) expect(Object.keys(option).sort(), 'no rate of any kind').toEqual(['id', 'name']);
   await recorder.settled();
   expect(sentences(recorder, forbidden)).toEqual([]);
 });
