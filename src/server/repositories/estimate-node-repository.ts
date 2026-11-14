@@ -42,6 +42,15 @@ export interface EstimateNodeRepository {
   placeNodes(estimateId: string, placements: ReadonlyArray<NodePlacement>, tx: Transaction): Promise<void>;
   /** Deletes exactly these parts, in one statement. Throws when one of them is not in the estimate. */
   deleteNodes(estimateId: string, ids: ReadonlyArray<string>, tx: Transaction): Promise<void>;
+  /** The part with this ID **in this estimate**, or null (unknown, another estimate's, or not an ID). Takes no lock: the caller holds the estimate's. */
+  findNode(estimateId: string, nodeId: string, tx: Transaction): Promise<NodeRecord | null>;
+  /**
+   * Replaces the part's inputs and raises its `revision` by one, and returns it as written (STORY-05.03: every input save moves the part's own revision, so a delete
+   * that was confirmed for the part as it was is refused, review SQR-01 (b)). The estimate's ID is a condition of the statement. Throws when the part is not in the estimate.
+   */
+  saveInputs(estimateId: string, nodeId: string, inputs: Readonly<Record<string, string>>, tx: Transaction): Promise<NodeRecord>;
+  /** The latest time any part of the estimate was written (an add, a move or an input), or null when it has no part. Takes no lock. */
+  lastWrittenAt(estimateId: string): Promise<Date | null>;
 }
 
 const NODE_SELECT = { id: true, parentId: true, sortIndex: true, revision: true, inputs: true } as const;
@@ -90,6 +99,32 @@ export function createEstimateNodeRepository(db: PrismaClient): EstimateNodeRepo
       withDatabaseErrors(async () => {
         const { count } = await clientFor(db, tx).estimateNode.deleteMany({ where: { estimateId, id: { in: [...ids] } } });
         if (count !== ids.length) throw new Error('A part to delete is not in this estimate.');
+      }),
+
+    findNode: (estimateId, nodeId, tx) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a part asked for by one is not found.
+        if (!z.uuid().safeParse(nodeId).success) return null;
+        const row = await clientFor(db, tx).estimateNode.findFirst({ where: { id: nodeId, estimateId }, select: NODE_SELECT });
+        return row === null ? null : toRecord(row);
+      }),
+
+    saveInputs: (estimateId, nodeId, inputs, tx) =>
+      withDatabaseErrors(async () => {
+        // The estimate is part of the condition, so a part ID of another estimate can never be written through this one.
+        // Raw, like `placeNodes`, so `updated_at` is set here and the text is bound as a parameter and read by the database as JSON.
+        const changed = await clientFor(db, tx).$executeRaw`
+          UPDATE estimate_nodes SET inputs = ${JSON.stringify(inputs)}::jsonb, revision = revision + 1, updated_at = now()
+          WHERE id = ${nodeId}::uuid AND estimate_id = ${estimateId}::uuid`;
+        if (changed !== 1) throw new Error('A part to change is not in this estimate.');
+        const row = await clientFor(db, tx).estimateNode.findFirstOrThrow({ where: { id: nodeId, estimateId }, select: NODE_SELECT });
+        return toRecord(row);
+      }),
+
+    lastWrittenAt: (estimateId) =>
+      withDatabaseErrors(async () => {
+        const { _max: latest } = await db.estimateNode.aggregate({ where: { estimateId }, _max: { updatedAt: true } });
+        return latest.updatedAt;
       }),
   };
 }

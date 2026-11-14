@@ -131,7 +131,7 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
 }
 
 /**
- * STORY-05.01 and STORY-05.02: the estimate routes. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the
+ * STORY-05.01, STORY-05.02 and STORY-05.03: the estimate routes. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the
  * customer is the canary customer, which the in-memory repository of the security tests and the E2E database both hold. Every call must answer the same at any state,
  * because the matrix and the scan repeat them for each role:
  *   - choosing the customer the estimate already has is a no-op that answers 200;
@@ -148,7 +148,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
     case 'GET /api/v1/estimates/[id]/tree':
     case 'GET /api/v1/estimates/[id]/nodes/[nodeId]':
+    case 'GET /api/v1/estimates/[id]/form':
       return { id, status: 200 };
+    // STORY-05.03: a save with no value changes nothing, so the canary part keeps revision 1 and the call answers 200 at any state, for every role, however often it is repeated.
+    case 'PATCH /api/v1/estimates/[id]/nodes/[nodeId]/inputs':
+      return { id, body: { revision: 1, values: {} }, status: 200 };
     case 'POST /api/v1/estimates/[id]/nodes':
       return { id, body: { kind: 'item' }, status: 201 };
     case 'POST /api/v1/estimates/[id]/tree/move':

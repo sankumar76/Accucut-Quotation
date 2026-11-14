@@ -1,7 +1,7 @@
 import type { RoleName } from '../../lib/auth/roles';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, TreeChangedError, ValidationError } from '../../lib/errors';
 import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
-import type { Completeness, PartView } from '../../lib/estimate/part-view';
+import { completenessOf, type PartView } from '../../lib/estimate/part-view';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
 import { buildTree, canMove, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, siblingIndex, type PlacedNode } from '../../lib/estimate/tree';
@@ -10,6 +10,8 @@ import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimat
 import type { CustomerChoice, EstimateRepository } from '../repositories/estimate-repository';
 import type { EstimateStatus } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
+
+import { createEstimateInputs, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
 
 /**
  * The estimate workspace (STORY-05.01; FR-042; architecture sections 4.1, 4.8 and 6, "Set customer"): opening a task's estimate and choosing the customer
@@ -68,7 +70,7 @@ export interface EstimateCustomer {
 
 /** One part with what was typed into it. */
 export interface PartDetail extends PartView {
-  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
 /** The tree in reading order, depth first. */
@@ -162,6 +164,10 @@ export interface EstimateService {
   moveNode(viewer: EstimateViewer, estimateId: string, request: MovePartRequest): Promise<PartsTree>;
   /** Deletes a part and its sub-parts (`DELETE .../nodes/{nodeId}`). 404, 409 (not editable by this person, a stale revision, or a count that is no longer right, with the tree). Answers with the tree. */
   deleteNode(viewer: EstimateViewer, estimateId: string, request: DeletePartRequest): Promise<PartsTree>;
+  /** The sections of the part form and the time of the last save (`GET /api/v1/estimates/{id}/form`, STORY-05.03): the same for every role, built from the registry, no cost. 404 for an estimate that is not this person's. */
+  getForm: EstimateInputs['getForm'];
+  /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`, STORY-05.03). 404, 409 (not editable by this person, or a stale revision), 422 under each field at fault. A real change raises the part's revision and `inputs_revision`; the same value again raises neither. */
+  saveInputs: EstimateInputs['saveInputs'];
 
   /**
    * Applies one event of the state machine to an estimate (STORY-06.01), under its row lock, and answers the status it had and the status it has. 404 for an
@@ -179,11 +185,12 @@ export interface EstimateDependencies {
   readonly estimates: EstimateRepository;
   readonly nodes: EstimateNodeRepository;
   readonly transactions: TransactionRunner;
+  /** The Material Master lookup of a part's material and the field registry the form is built from (STORY-05.03; see `estimate-inputs.ts`). */
+  readonly materials: EstimateInputsDependencies['materials'];
+  readonly currentConfiguration: EstimateInputsDependencies['currentConfiguration'];
 }
 
 const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.role !== 'ENGINEER' || viewer.id.toLowerCase() === engineerId.toLowerCase();
-
-const completenessOf = (inputs: Readonly<Record<string, unknown>>): Completeness => (Object.keys(inputs).length === 0 ? 'EMPTY' : 'PARTIAL');
 
 /** The parts in reading order, each with its Sl. No read from the layout. */
 function viewsOf(records: ReadonlyArray<NodeRecord>): PartView[] {
@@ -240,7 +247,7 @@ async function applyTransition(
 }
 
 // Over 40 lines on purpose (coding standards section 1): one object of the service's methods, each a few lines; the longer steps are the named helpers above and inside.
-export function createEstimateService({ estimates, nodes, transactions }: EstimateDependencies): EstimateService {
+export function createEstimateService({ estimates, nodes, transactions, materials, currentConfiguration }: EstimateDependencies): EstimateService {
   /** Locks the estimate for a change: 404 when it is not this person's, 409 when this person may no longer change its inputs (`assertEditable`). Returns the estimate's ID. */
   async function lockForChange(viewer: EstimateViewer, estimateId: string, tx: Transaction): Promise<string> {
     const estimate = await estimates.lockEstimate(estimateId, tx);
@@ -267,7 +274,13 @@ export function createEstimateService({ estimates, nodes, transactions }: Estima
     return viewsOf(await nodes.listNodes(id, tx));
   }
 
+  // The part form shares the estimate's lock and its rules for who may open or change it, so they are handed over and not written twice.
+  const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx) });
+
   return {
+    getForm: inputs.getForm,
+    saveInputs: inputs.saveInputs,
+
     async getWorkspace(viewer, code) {
       const record = await estimates.findWorkspaceByCode(code);
       if (record === null || !mayOpen(viewer, record.engineerId)) return null;
@@ -310,7 +323,8 @@ export function createEstimateService({ estimates, nodes, transactions }: Estima
       const record = partIn(records, nodeId);
       const view = viewsOf(records).find((candidate) => candidate.id === record.id);
       if (view === undefined) throw new NotFoundError();
-      return { ...view, inputs: record.inputs };
+      // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
+      return { ...view, inputs: await inputs.visibleInputs(record.inputs) };
     },
 
     addPart(viewer, estimateId, request) {

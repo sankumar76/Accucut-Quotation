@@ -18,6 +18,7 @@ import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepos
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
+import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
@@ -181,7 +182,7 @@ export function createSessionHarness(): SessionHarness {
     masters,
     taskWorld,
     estimateWorld,
-    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions }),
+    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({
