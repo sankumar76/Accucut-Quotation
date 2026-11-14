@@ -27,6 +27,8 @@ export interface SavedPart {
   readonly id: string;
   readonly revision: number;
   readonly completeness: Completeness;
+  /** What the part holds now, by field ID: Calculate's list of missing fields takes the ones that now have a value off it (STORY-05.09). */
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
 const loadedFrom = <T>(outcome: Outcome<T>): Loaded<T> => (outcome.status === 'ok' ? { status: 'ready', value: outcome.value } : { status: 'failed' });
@@ -170,7 +172,7 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     revisionRef.current = outcome.value.revision;
     heldRef.current = outcome.value.inputs;
     setProblem(null);
-    onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness });
+    onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
   }
 
   /**

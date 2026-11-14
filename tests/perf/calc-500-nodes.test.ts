@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { Decimal } from '@/lib/decimal';
 import { calculateProductTotals } from '@/lib/estimate/product-totals';
@@ -9,6 +9,8 @@ import { storeRowOutputs } from '@/lib/estimate/row-outputs';
 import { createPlanCache } from '@/lib/formula';
 
 import { buildTree500, TREE500_NODE_COUNT } from '../support/builders/tree500';
+import { addTree500Estimate } from '../support/calculate-tree';
+import { type CalculationDatabase, openCalculationDatabase } from '../support/calculation-database';
 import { formatReport, summarise } from '../support/perf-stats';
 import { EXCHANGE, MATERIAL, TYPED_RATES } from '../support/row-oracle';
 import { SEED_PROCESS_ITEMS, seedConfig } from '../support/seed-config';
@@ -16,11 +18,12 @@ import { SEED_PROCESS_ITEMS, seedConfig } from '../support/seed-config';
 /**
  * STORY-03.06 AC-1, AC-2 (NFR-008; test strategy sections 4 and 8): recalculating the `tree500` estimate, 20 times, has a p95 under 2 seconds.
  *
- * The path measured is the row calculator (03.03) for each of the 500 nodes, the product totals (03.04), and the in-memory build of the
- * stored record (every output as full-precision text), with the compiled plan cached by version as in architecture section 4.2. The first
- * run builds the plan and the other 19 reuse it, so the p95 includes that cost only as one of the 20 samples. It does not include the
- * database: until the Calculate flow exists (STORY-05.09) there is no insert to time (assumption A-1 of the story). When 05.09 lands, point
- * this test at the full `calculation-service` and record the change in that pull request.
+ * **Two paths are measured (STORY-05.09 AC-8).** (1) The pure one, kept: the row calculator (03.03) for each of the 500 nodes, the product totals (03.04), and the in-memory build of the
+ * stored record (every output as full-precision text), with the compiled plan cached by version as in architecture section 4.2. The first run builds the plan and the other 19 reuse it, so
+ * the p95 includes that cost only as one of the 20 samples. (2) The whole path, which STORY-05.09 made possible: `calculation-service.calculate` against PostgreSQL, which reads the 500
+ * parts, checks each, reads the masters in its one transaction, calculates and inserts the 500 rows and sets the status. It needs a PostgreSQL the test can create a database in (the same
+ * settings as the integration tests: `MIGRATE_DATABASE_URL` and `DATABASE_URL`, from `.env`), which `npm run test:perf` has when the development database is up; the pull-request path runs the same call as a correctness test with a
+ * loose bound (`tests/integration/calc/calculate-timing.test.ts`) and prints its measure. The estimate of each run is built before the clock starts.
  *
  * Not part of the per-pull-request path (AC-4): `vitest.config.ts` excludes `tests/perf/`, and `npm run test:perf` runs it on demand, on a
  * quiet machine, and in the nightly set once that job is added. The machine differs between runs, so the report below names it. The 2-second
@@ -65,6 +68,34 @@ describe('NFR-008: recalculating tree500 takes under 2 seconds (p95 of 20 runs)'
     expect(firstTotal).not.toBeNull();
     const summary = summarise(samples);
     process.stdout.write(`\n${formatReport(`NFR-008 tree500, ${TREE500_NODE_COUNT} nodes, row calculator + product totals + record build`, summary)}`);
+    expect(summary.p95Ms).toBeLessThan(P95_LIMIT_MS);
+  });
+});
+
+describe('NFR-008 through the whole path: calculation-service.calculate of tree500 against PostgreSQL (p95 of 20 runs under 2 seconds)', { timeout: 600_000 }, () => {
+  let db: CalculationDatabase;
+
+  beforeAll(async () => {
+    db = await openCalculationDatabase();
+  }, 120_000);
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  it('has a p95 under 2 s from the press to the commit, and the machine, p95, median and max are printed', async () => {
+    const viewer = { id: db.engineerId, role: 'ENGINEER' as const };
+    const samples: number[] = [];
+    for (let run = 0; run < RUNS; run += 1) {
+      // The estimate of each run is built before the clock starts: a Calculate submits it, so each run needs a draft of its own.
+      const estimateId = await addTree500Estimate(db);
+      const started = performance.now();
+      const answer = await db.service.calculate(viewer, estimateId);
+      samples.push(performance.now() - started);
+      expect(answer.status).toBe('SUBMITTED');
+    }
+    const summary = summarise(samples);
+    process.stdout.write(`\n${formatReport(`NFR-008 tree500, ${TREE500_NODE_COUNT} nodes, the whole path of calculation-service.calculate (PostgreSQL)`, summary)}`);
     expect(summary.p95Ms).toBeLessThan(P95_LIMIT_MS);
   });
 });

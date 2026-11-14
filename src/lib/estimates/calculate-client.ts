@@ -50,6 +50,17 @@ function toBlockedPart(value: unknown): BlockedPartView | null {
 }
 
 /**
+ * What is still missing after a part was saved (STORY-05.09): the fields of that part that now hold a value come off the list, and a part with none left is no longer listed. `null` when nothing is
+ * left, so the screen has no summary to show. Pure: the list is the server's from the blocked answer, this only strikes what the person has since filled in, and the next press asks the server again.
+ */
+export function withoutFilled(parts: ReadonlyArray<BlockedPartView>, partId: string, inputs: Readonly<Record<string, string>>): ReadonlyArray<BlockedPartView> | null {
+  const next = parts
+    .map((part) => (part.nodeId === partId ? { ...part, fields: part.fields.filter((field) => (inputs[field.fieldId] ?? '').trim() === '') } : part))
+    .filter((part) => part.fields.length > 0);
+  return next.length === 0 ? null : next;
+}
+
+/**
  * The parts of a refused Calculate that was blocked by missing inputs (422 `CALCULATE_BLOCKED`), or `null` for any other refusal, or a body whose parts are not the expected shape (then
  * the screen shows the server's own sentence and no list). A part that is listed with no field is dropped: there is nothing to link to.
  */

@@ -243,6 +243,43 @@ describe('SQR-03 of STORY-05.04: a default is read through the field\'s rule, an
   });
 });
 
+describe('a registry that differs from the seed: the check follows the registry and fails closed', () => {
+  const without = (...keys: string[]): ConfigDocument => ({ ...document, fields: document.fields.filter((field) => !keys.includes(field.key)) });
+  const changed = (key: string, change: { mandatory?: boolean; defaultValue?: string | null }): ConfigDocument => ({
+    ...document,
+    fields: document.fields.map((field) => (field.key === key && field.kind === 'input' ? { ...field, ...change } : field)),
+  });
+
+  it('a field the registry does not mark mandatory is not needed: blank, it does not block, and it is not in the numbers', () => {
+    const optional = changed('length', { mandatory: false });
+    const inputs = Object.fromEntries(Object.entries(completePartInputs()).filter(([id]) => id !== fieldIdOf('length')));
+    const [checked] = passed(validateForCalculate([part({ inputs })], optional));
+    expect(checked?.numbers[fieldIdOf('length')]).toBeUndefined();
+  });
+
+  it('a registry with no Material in Drawing cannot be calculated: every part is blocked, naming nothing', () => {
+    const noMaterial = without('material-in-drawing');
+    expect(blocked(validateForCalculate([part()], noMaterial))).toEqual([{ nodeId: '00000000-0000-4000-8000-0000000000b1', slNo: '1', name: INVENTED_TEXT, fields: [] }]);
+  });
+
+  it('a registry with neither Part No. nor Description names its blocked parts with null', () => {
+    const noNames = without('part-no', 'description');
+    expect(blocked(validateForCalculate([part({ inputs: {} })], noNames))[0]?.name).toBeNull();
+  });
+
+  it('a flag with no default and nothing stored is left out (it is 0 to the calculation), and a flag stored with a value the rule refuses is not trusted and is left out too', () => {
+    const noDefault = changed('primer', { defaultValue: null });
+    expect(passed(validateForCalculate([part()], noDefault))[0]?.numbers[fieldIdOf('primer')]).toBeUndefined();
+    const refused = { ...completePartInputs(), [fieldIdOf('primer')]: 'abc' };
+    expect(passed(validateForCalculate([part({ inputs: refused })], document))[0]?.numbers[fieldIdOf('primer')]).toBeUndefined();
+  });
+
+  it('Fasteners with a default the rule refuses is blank, so Fasteners Qty and Cost stay hidden and the part is blocked only for Fasteners itself', () => {
+    const refusedDefault = changed('fasteners', { defaultValue: 'x'.repeat(201) });
+    expect(blocked(validateForCalculate([part()], refusedDefault))[0]?.fields.map((field) => field.label)).toEqual(['Fasteners']);
+  });
+});
+
 describe('the check does not change what it is given', () => {
   it('the parts and their inputs are left as they were', () => {
     const inputs = { ...completePartInputs(), [fieldIdOf('fasteners-qty')]: '5.00' };

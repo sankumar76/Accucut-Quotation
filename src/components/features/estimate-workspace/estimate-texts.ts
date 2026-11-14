@@ -107,3 +107,24 @@ export const deleteDescription = (slNo: string, parts: number): string =>
     : `This also deletes its ${subPartCount(parts - 1)}, and everything typed into them. This cannot be undone.`;
 export const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete part' : `Delete ${parts} parts`);
 export const DELETE_CANCEL = 'Cancel';
+
+/**
+ * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Submitted"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
+ * summary of a blocked one is built from the same function the server uses (`blockedSummary`), so the page and the 422 say one thing. None of these words names a rate, a price or a formula
+ * (UX-24), and none holds a figure.
+ */
+export const CALCULATE_LABEL = 'Calculate';
+export const CALCULATING_LABEL = 'Calculating';
+export const SUBMITTED_LABEL = 'Submitted';
+export const CALCULATE_HINT = 'Every part is checked. Nothing is submitted until all of them are complete.';
+export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
+export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
+export const CALCULATE_BAR_LABEL = 'Calculate';
+export const MISSING_SUMMARY_LABEL = 'Parts with missing inputs';
+export const missingPartLabel = (slNo: string, name: string | null): string => (name === null ? `Part ${slNo}` : `${slNo} ${name}`);
+/** The words under a field that Calculate found blank (UX spec SCR-05 "Fields"): a number says what to do when a part needs nothing. */
+export const MISSING_TEXT_MESSAGE = 'Enter this value.';
+export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does not need it.';
+export const MISSING_CHOICE_MESSAGE = 'Choose a material.';
+export const TREE_MISSING_INPUTS = 'Missing inputs';
+export const SECTION_MISSING_TEXT = 'Missing inputs';
