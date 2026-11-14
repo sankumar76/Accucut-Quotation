@@ -54,6 +54,8 @@ function fakeRepository(initial: ReadonlyArray<ConfigVersionRecord>): FakeReposi
       calls.byId.push(id);
       return versions.find((row) => row.id === id) ?? null;
     },
+    // The version line of SCR-17 is read by `config-read-service.ts`, whose own test fakes it; this file tests the cache only.
+    readVersionUse: () => Promise.resolve({ savedByName: null, estimatesInUse: 0 }),
   };
 }
 
