@@ -291,11 +291,11 @@ export function refusedPages(): ReadonlyArray<RouteRow> {
  * story that adds a route with a body adds it once. `targetId` is a person who is not the caller, or the owner of the record to open.
  * Throws for a dynamic route that has no real-value recipe (AC-6, QLT-02, QLT-08).
  */
-export function validCall(call: ApiCall, targetId: string): { readonly id: string; readonly body: unknown; readonly status: number } {
-  const { id, body, status } = validCallFor(call.method, call.row.path, { targetId });
+export function validCall(call: ApiCall, targetId: string): { readonly id: string; readonly body: unknown; readonly query: string; readonly status: number } {
+  const { id, body, query = '', status } = validCallFor(call.method, call.row.path, { targetId });
   const problem = recipeProblem(call.row.path, id);
   if (problem !== null) throw new Error(`${call.name}: ${problem}`);
-  return { id, body, status };
+  return { id, body, query, status };
 }
 
 export interface EngineerScan {
@@ -331,7 +331,7 @@ async function callEngineerRoutes(page: Page, recorder: ScanRecorder, owner: { r
   const calls = engineerApiCalls();
   for (const call of calls) {
     const recipe = validCall(call, owner.id);
-    const path = fillPath(call.row.path, recipe.id);
+    const path = `${fillPath(call.row.path, recipe.id)}${recipe.query}`;
     const answer = await callInBrowser(recorder, page, `${call.method} ${path} (API)`, path, {
       method: call.method,
       ...(call.method === 'GET' ? {} : { body: recipe.body }),

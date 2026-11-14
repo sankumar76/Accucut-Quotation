@@ -99,7 +99,7 @@ const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented
 const moduleShape = z.record(z.string(), z.unknown());
 
 /** A call to the route: the ID goes into the path, and a body, when given, is sent as JSON. */
-async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unknown): Promise<Response> {
+async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unknown, query = ''): Promise<Response> {
   const loader = API_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const handler = moduleShape.parse(await loader())[method];
@@ -107,7 +107,7 @@ async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unk
   const { url, params } = fill(row.path, id);
   // A GET or HEAD request cannot carry a body.
   const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
-  const request = new Request(`https://portal.example.test${url}`, {
+  const request = new Request(`https://portal.example.test${url}${query}`, {
     method,
     headers: { origin: 'https://portal.example.test', ...(hasBody ? { 'content-type': 'application/json' } : {}) },
     ...(hasBody ? { body: JSON.stringify(body) } : {}),
@@ -125,7 +125,7 @@ function validCall(row: RouteRow, method: HttpMethod): ValidCall {
 /** Calls the route with its valid ID and body. A refused role gets this call too: nothing about it may change the answer. */
 function callValid(row: RouteRow, method: HttpMethod): Promise<Response> {
   const call = validCall(row, method);
-  return callApi(row, method, call.id, call.body);
+  return callApi(row, method, call.id, call.body, call.query);
 }
 
 type PageOutcome = 'renders' | 'forbidden' | 'not-found' | `redirect:${string}`;

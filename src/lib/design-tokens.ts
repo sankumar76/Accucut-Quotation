@@ -8,6 +8,9 @@ export type IconSize = keyof typeof ICON_SIZE;
 /** The width at which the side menu becomes persistent. Tailwind's `lg` breakpoint is the same 1024 px. */
 export const PERSISTENT_MENU_MIN_WIDTH = 1024;
 
+/** The width from which a tablet layout applies (Tailwind `md`): the parts tree is a collapsible panel from here and a drawer below it (UX spec SCR-05 "Responsive"). */
+export const TABLET_MIN_WIDTH = 768;
+
 /**
  * The colour tokens of UX spec section 7.3 and the pairs whose contrast the design system promises.
  * Names only: the values live in `src/app/globals.css`, the one token file (NFR-020), and

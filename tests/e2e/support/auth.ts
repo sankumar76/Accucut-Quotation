@@ -174,6 +174,8 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
     [ownerId, canaryTaskCodeFor(ownerId), lead.id, CANARY_FOLDER_PATH],
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
+  // The one part the node routes of STORY-05.02 open: its ID is the estimate's too (`estimate-recipe.ts`), first at the top.
+  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index) VALUES ($1::uuid, $1::uuid, 0) ON CONFLICT DO NOTHING', [ownerId]);
 }
 
 /**

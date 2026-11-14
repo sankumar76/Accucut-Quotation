@@ -1,8 +1,12 @@
 import type { RoleName } from '../../lib/auth/roles';
-import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, TreeChangedError, ValidationError } from '../../lib/errors';
 import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
+import type { Completeness, PartView } from '../../lib/estimate/part-view';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
+import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
+import { buildTree, canMove, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, siblingIndex, type PlacedNode } from '../../lib/estimate/tree';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
+import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
 import type { CustomerChoice, EstimateRepository } from '../repositories/estimate-repository';
 import type { EstimateStatus } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
@@ -25,6 +29,13 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
  *   - **Nothing but an ID and a name of a customer** is read or returned. The figures that depend on the customer are the Admin's and Lead's, never this file's.
  *
  * There is no audit entry: the audit log of architecture section 8 lists no event for a customer chosen on an estimate.
+ *
+ * **The parts tree (STORY-05.02; FR-043, FR-044; architecture sections 4.8, 5.1 and 6).** Reading the tree is open to whoever may open the estimate. Every write
+ * (add, move, delete) follows one order, so the answer depends on the estimate before it depends on what was sent: the estimate is locked (404 when it is not the
+ * person's or does not exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a submitted estimate for a Lead or an Admin, never an approved one), the part named must be in it (404), the part's `revision` and, for a delete, the count and the
+ * fingerprint of the parts the person was shown must still be right (409, with the fresh tree), and only then does the content of a move count (422). All of it is one transaction with the
+ * estimate's row lock, so two changes to one tree are serialised and `inputs_revision` rises by one with the change or not at all. A change that moves nothing
+ * writes nothing. **The Sl. No is never stored**; it is read from the layout each time (`lib/estimate/tree.ts`). No answer carries a rate, a cost or a formula.
  */
 
 /** Who is asking: the ID and the role of the signed-in person, read from the session on this request. */
@@ -54,6 +65,55 @@ export interface EstimateCustomer {
   readonly status: EstimateStatus;
   readonly customer: CustomerChoice;
 }
+
+/** One part with what was typed into it. */
+export interface PartDetail extends PartView {
+  readonly inputs: Readonly<Record<string, unknown>>;
+}
+
+/** The tree in reading order, depth first. */
+export type PartsTree = ReadonlyArray<PartView>;
+
+/** What a person asks to add: a new top-level item, a sub-part (last under the part named) or a part beside (right after the part named). */
+export type AddPartRequest = { readonly kind: 'item' } | { readonly kind: 'sub-part' | 'beside'; readonly nodeId: string };
+
+/** Move a part (with its sub-parts) under `parentId` (null: the top) so that it ends up at place `index` (0 is first) among its new siblings. */
+export interface MovePartRequest {
+  readonly nodeId: string;
+  readonly revision: number;
+  readonly parentId: string | null;
+  readonly index: number;
+}
+
+/**
+ * Delete a part and its sub-parts. `parts` is the number the person was told would go (the part and every sub-part) and `subtree` the fingerprint of those parts with
+ * their revisions (`subtreeFingerprint`): a different number, or a different set, or a part of it typed into since, is a 409 and nothing is deleted (review SQR-01).
+ */
+export interface DeletePartRequest {
+  readonly nodeId: string;
+  readonly revision: number;
+  readonly parts: number;
+  readonly subtree: string;
+}
+
+/**
+ * The most parts one estimate may hold. **Assumption, to be confirmed by the architect or the product manager**: NFR-008 sizes Calculate and the screens at 500 parts,
+ * and this is four times that. Depth stays unlimited (FR-043), but every change reads and answers the whole tree, and the Sl. No of a deep part grows with its depth, so
+ * an estimate with no bound could make each request cost seconds and megabytes (review SQR-02).
+ */
+export const MAX_PARTS_PER_ESTIMATE = 2000;
+/** The `code` of the 422 of an add to an estimate that already holds the most parts. */
+export const TREE_FULL_CODE = 'TREE_FULL';
+export const TREE_FULL_MESSAGE = `This estimate already has ${MAX_PARTS_PER_ESTIMATE.toLocaleString('en-US')} parts, the most it can hold. Delete a part before adding another.`;
+
+/** The part added and the tree as it is now. */
+export interface AddedPart {
+  readonly nodeId: string;
+  readonly nodes: PartsTree;
+}
+
+export const CANNOT_MOVE_MESSAGE = 'A part cannot be moved under itself or under one of its own sub-parts.';
+export const MOVE_PARENT_UNKNOWN_MESSAGE = 'Choose a part of this estimate.';
 
 /** The `code` of the 409 of a change to an estimate that is no longer a draft. */
 export const ESTIMATE_NOT_EDITABLE_CODE = 'ESTIMATE_NOT_EDITABLE';
@@ -92,6 +152,17 @@ export interface EstimateService {
    * is not editable by this person (`assertEditable`: an Engineer's submitted estimate, anyone's approved one), 422 under `customerId` for a customer that does not exist or was deleted. The same customer again writes nothing.
    */
   setCustomer(viewer: EstimateViewer, estimateId: string, customerId: string): Promise<EstimateCustomer>;
+  /** The parts tree (`GET /api/v1/estimates/{id}/tree`): 404 for an estimate that is not this person's or does not exist. The same answer for every role. */
+  getTree(viewer: EstimateViewer, estimateId: string): Promise<PartsTree>;
+  /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
+  getNode(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartDetail>;
+  /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
+  addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest): Promise<AddedPart>;
+  /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
+  moveNode(viewer: EstimateViewer, estimateId: string, request: MovePartRequest): Promise<PartsTree>;
+  /** Deletes a part and its sub-parts (`DELETE .../nodes/{nodeId}`). 404, 409 (not editable by this person, a stale revision, or a count that is no longer right, with the tree). Answers with the tree. */
+  deleteNode(viewer: EstimateViewer, estimateId: string, request: DeletePartRequest): Promise<PartsTree>;
+
   /**
    * Applies one event of the state machine to an estimate (STORY-06.01), under its row lock, and answers the status it had and the status it has. 404 for an
    * estimate that is not this person's or does not exist, and for an Engineer's event that is not Calculate (the same answer, so nothing is told); 403 for a
@@ -106,10 +177,42 @@ export interface EstimateService {
 
 export interface EstimateDependencies {
   readonly estimates: EstimateRepository;
+  readonly nodes: EstimateNodeRepository;
   readonly transactions: TransactionRunner;
 }
 
 const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.role !== 'ENGINEER' || viewer.id.toLowerCase() === engineerId.toLowerCase();
+
+const completenessOf = (inputs: Readonly<Record<string, unknown>>): Completeness => (Object.keys(inputs).length === 0 ? 'EMPTY' : 'PARTIAL');
+
+/** The parts in reading order, each with its Sl. No read from the layout. */
+function viewsOf(records: ReadonlyArray<NodeRecord>): PartView[] {
+  return buildTree(records).map(({ node, slNo }) => ({ id: node.id, parentId: node.parentId, slNo, label: '', completeness: completenessOf(node.inputs), revision: node.revision }));
+}
+
+/** The part with this ID in a list read from the estimate (never a part of another estimate), or a 404. An ID is compared in lower case, as the database writes it. */
+function partIn(records: ReadonlyArray<NodeRecord>, nodeId: string): NodeRecord {
+  const found = records.find((record) => record.id === nodeId.toLowerCase());
+  if (found === undefined) throw new NotFoundError();
+  return found;
+}
+
+const placedOf = (records: ReadonlyArray<NodeRecord>): PlacedNode[] => records.map(({ id, parentId, sortIndex }) => ({ id, parentId, sortIndex }));
+
+/** Where a new part goes: a new item last at the top, a sub-part last under the part named, a part beside right after it. */
+function placeForAdd(records: ReadonlyArray<NodeRecord>, request: AddPartRequest): { readonly parentId: string | null; readonly index: number } {
+  if (request.kind === 'item') return { parentId: null, index: childCount(records, null) };
+  const target = partIn(records, request.nodeId);
+  return request.kind === 'sub-part' ? { parentId: target.id, index: childCount(records, target.id) } : { parentId: target.parentId, index: siblingIndex(records, target.id) + 1 };
+}
+
+/** The 422 of a parent that cannot be: not in this estimate, or the part itself or one of its own descendants. */
+function movableParent(records: ReadonlyArray<NodeRecord>, id: string, parentId: string | null): string | null {
+  const parent = parentId === null ? null : records.find((record) => record.id === parentId.toLowerCase());
+  if (parent === undefined) throw new FieldValidationError([{ field: 'parentId', message: MOVE_PARENT_UNKNOWN_MESSAGE }]);
+  if (!canMove(records, id, parent?.id ?? null)) throw new FieldValidationError([{ field: 'parentId', message: CANNOT_MOVE_MESSAGE }]);
+  return parent?.id ?? null;
+}
 
 /** Locks the estimate, lets the state machine decide, and writes the new status, all in `tx`. The caller owns the transaction. */
 async function applyTransition(
@@ -136,7 +239,34 @@ async function applyTransition(
   return { id: estimate.id, from: decision.from, to: decision.to };
 }
 
-export function createEstimateService({ estimates, transactions }: EstimateDependencies): EstimateService {
+// Over 40 lines on purpose (coding standards section 1): one object of the service's methods, each a few lines; the longer steps are the named helpers above and inside.
+export function createEstimateService({ estimates, nodes, transactions }: EstimateDependencies): EstimateService {
+  /** Locks the estimate for a change: 404 when it is not this person's, 409 when this person may no longer change its inputs (`assertEditable`). Returns the estimate's ID. */
+  async function lockForChange(viewer: EstimateViewer, estimateId: string, tx: Transaction): Promise<string> {
+    const estimate = await estimates.lockEstimate(estimateId, tx);
+    if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
+    assertEditable(viewer, estimate);
+    return estimate.id;
+  }
+
+  /** The estimate's ID for a read: 404 when it is not this person's or does not exist. */
+  async function openForRead(viewer: EstimateViewer, estimateId: string): Promise<string> {
+    const estimate = await estimates.findEstimateAccess(estimateId);
+    if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
+    return estimate.id;
+  }
+
+  /** What every change to the tree ends with: the places of the siblings that shifted (they get no new revision), the input change, and the tree as it is now. */
+  async function finishChange(id: string, shifted: ReadonlyArray<PlacedNode>, tx: Transaction): Promise<PartsTree> {
+    await nodes.placeNodes(
+      id,
+      shifted.map((place) => ({ ...place, bumpRevision: false })),
+      tx,
+    );
+    await estimates.bumpInputsRevision(id, tx);
+    return viewsOf(await nodes.listNodes(id, tx));
+  }
+
   return {
     async getWorkspace(viewer, code) {
       const record = await estimates.findWorkspaceByCode(code);
@@ -168,6 +298,70 @@ export function createEstimateService({ estimates, transactions }: EstimateDepen
         }
         await estimates.setCustomer(estimate.id, customer.id, tx);
         return { id: estimate.id, status: estimate.status, customer };
+      });
+    },
+
+    async getTree(viewer, estimateId) {
+      return viewsOf(await nodes.listNodes(await openForRead(viewer, estimateId)));
+    },
+
+    async getNode(viewer, estimateId, nodeId) {
+      const records = await nodes.listNodes(await openForRead(viewer, estimateId));
+      const record = partIn(records, nodeId);
+      const view = viewsOf(records).find((candidate) => candidate.id === record.id);
+      if (view === undefined) throw new NotFoundError();
+      return { ...view, inputs: record.inputs };
+    },
+
+    addPart(viewer, estimateId, request) {
+      return transactions.run(async (tx) => {
+        const id = await lockForChange(viewer, estimateId, tx);
+        const before = await nodes.listNodes(id, tx);
+        // Under the lock, so two adds at once cannot both pass the limit.
+        if (before.length >= MAX_PARTS_PER_ESTIMATE) throw new ValidationError(TREE_FULL_MESSAGE, { code: TREE_FULL_CODE });
+        const { parentId, index } = placeForAdd(before, request);
+        const created = await nodes.insertNode(id, parentId, index, tx);
+        const after = insertNode(placedOf(before), { id: created.id, parentId, index });
+        const shifted = changedPlacements([...placedOf(before), { id: created.id, parentId, sortIndex: index }], after);
+        return { nodeId: created.id, nodes: await finishChange(id, shifted, tx) };
+      });
+    },
+
+    moveNode(viewer, estimateId, request) {
+      return transactions.run(async (tx) => {
+        const id = await lockForChange(viewer, estimateId, tx);
+        const before = await nodes.listNodes(id, tx);
+        const part = partIn(before, request.nodeId);
+        if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before));
+        const parentId = movableParent(before, part.id, request.parentId);
+        const placed = placedOf(before);
+        const changed = changedPlacements(placed, moveNode(placed, part.id, parentId, request.index));
+        // A part that is already where it was asked to go changes nothing: no write, no new revision, and the figures are not cleared for it.
+        if (!changed.some((place) => place.id === part.id)) return viewsOf(before);
+        await nodes.placeNodes(
+          id,
+          changed.map((place) => ({ ...place, bumpRevision: place.id === part.id })),
+          tx,
+        );
+        await estimates.bumpInputsRevision(id, tx);
+        return viewsOf(await nodes.listNodes(id, tx));
+      });
+    },
+
+    deleteNode(viewer, estimateId, request) {
+      return transactions.run(async (tx) => {
+        const id = await lockForChange(viewer, estimateId, tx);
+        const before = await nodes.listNodes(id, tx);
+        const part = partIn(before, request.nodeId);
+        const doomed = [part.id, ...descendantIds(before, part.id)];
+        // What the person confirmed must be what would go: the part as they saw it, the same number of parts, and the same parts in the same state. A part added below,
+        // moved in or out, replaced by another or typed into since then changes the fingerprint, so it is not deleted unseen (SQR-01).
+        const members = before.filter((record) => doomed.includes(record.id));
+        if (part.revision !== request.revision || doomed.length !== request.parts || subtreeFingerprint(members) !== request.subtree) throw new TreeChangedError(viewsOf(before));
+        await nodes.deleteNodes(id, doomed, tx);
+        const placed = placedOf(before);
+        const remaining = placed.filter((place) => !doomed.includes(place.id));
+        return finishChange(id, changedPlacements(remaining, removeNodes(placed, doomed)), tx);
       });
     },
 

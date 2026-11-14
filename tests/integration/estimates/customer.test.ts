@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
+import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService } from '@/server/services/estimate-service';
@@ -30,7 +31,7 @@ let marlowId: string;
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
+  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
   leadId = await insertPersonAsOwner(db, 'Estimate Lead', 'LEAD');
   adminId = await insertPersonAsOwner(db, 'Estimate Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Estimate Arjun', 'ENGINEER');

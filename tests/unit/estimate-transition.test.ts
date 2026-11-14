@@ -48,7 +48,7 @@ const admin: EstimateViewer = { id: ADMIN, role: 'ADMIN' };
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()]) {
   const world = createFakeEstimateWorld(() => [{ id: CUSTOMER, name: 'Brightwater Controls', deleted: false }], initial);
-  const service = createEstimateService({ estimates: world.repository, transactions: world.transactions });
+  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions });
   const stored = (): FakeEstimate => {
     const found = world.estimates[0];
     if (found === undefined) throw new Error('no estimate');
@@ -331,7 +331,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   function setUpStrict(initial: ReadonlyArray<FakeEstimate>) {
     const world = createFakeEstimateWorld(() => [{ id: CUSTOMER, name: 'Brightwater Controls', deleted: false }], initial);
     const strict = strictRunner(world.transactions);
-    const service = createEstimateService({ estimates: world.repository, transactions: strict.runner });
+    const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: strict.runner });
     const stored = (): FakeEstimate => {
       const found = world.estimates[0];
       if (found === undefined) throw new Error('no estimate');

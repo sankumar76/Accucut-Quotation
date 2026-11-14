@@ -21,6 +21,8 @@ export interface ValidCall {
   /** The value for the `[id]` segment of the path, when the route has one. */
   readonly id: string;
   readonly body?: unknown;
+  /** The query string, with its `?`, of a route that takes its input there (a DELETE carries no body: `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=`). */
+  readonly query?: string;
   /** The status the allowed role gets. */
   readonly status: number;
 }
@@ -119,13 +121,35 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
 }
 
 /**
- * STORY-05.01: the estimate route. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the customer is the
- * canary customer, which the in-memory repository of the security tests and the E2E database both hold. Choosing the customer the estimate already has is a no-op that
- * answers 200, so the scan can repeat the call at any state.
+ * STORY-05.01 and STORY-05.02: the estimate routes. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the
+ * customer is the canary customer, which the in-memory repository of the security tests and the E2E database both hold. Every call must answer the same at any state,
+ * because the matrix and the scan repeat them for each role:
+ *   - choosing the customer the estimate already has is a no-op that answers 200;
+ *   - the parts tree has one part, the canary part, whose ID is the estimate's too (one value fills every dynamic segment of a path), first at the top with revision 1.
+ *     Adding an item appends it, so the canary part stays first; moving it to where it is changes nothing and answers 200;
+ *   - a delete would remove the canary part and every later call would answer 404, so its valid call names a revision the part never has: it is refused 409 with the tree,
+ *     which is also the one answer of the tree routes that carries parts in an error body, so the confidentiality scan reads it.
  */
 function estimateCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
-  if (`${method} ${path}` !== 'PUT /api/v1/estimates/[id]/customer') return undefined;
-  return { id: context.targetId, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
+  const id = context.targetId;
+  const stay = { revision: 1, parentId: null, index: 0 };
+  switch (`${method} ${path}`) {
+    case 'PUT /api/v1/estimates/[id]/customer':
+      return { id, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
+    case 'GET /api/v1/estimates/[id]/tree':
+    case 'GET /api/v1/estimates/[id]/nodes/[nodeId]':
+      return { id, status: 200 };
+    case 'POST /api/v1/estimates/[id]/nodes':
+      return { id, body: { kind: 'item' }, status: 201 };
+    case 'POST /api/v1/estimates/[id]/tree/move':
+      return { id, body: { nodeId: id, ...stay }, status: 200 };
+    case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]':
+      return { id, body: stay, status: 200 };
+    case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
+      return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
+    default:
+      return undefined;
+  }
 }
 
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.

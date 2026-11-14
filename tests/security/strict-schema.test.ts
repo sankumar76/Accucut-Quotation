@@ -73,7 +73,7 @@ async function callAsEngineer(row: RouteRow, method: HttpMethod): Promise<Respon
   const call = validCallFor(method, row.path, { targetId: harness.targetId });
   const path = row.path.replace(/\[(?:\.\.\.)?[^\]]+\]/g, call.id);
   const hasBody = call.body !== undefined && method !== 'GET';
-  const request = new Request(`${ORIGIN}${path}`, {
+  const request = new Request(`${ORIGIN}${path}${call.query ?? ''}`, {
     method,
     headers: { origin: ORIGIN, ...(hasBody ? { 'content-type': 'application/json' } : {}) },
     ...(hasBody ? { body: JSON.stringify(call.body) } : {}),
@@ -154,6 +154,12 @@ describe.each(ENGINEER_CALLS)('$name (AC-2)', ({ row, method }) => {
   it('refuses an unknown key planted in a real answer, at every object level', async () => {
     const { responseSchema } = await handlerFor(row, method);
     const answer = await callAsEngineer(row, method);
+    const recipe = validCallFor(method, row.path, { targetId: harness.targetId });
+    expect(answer.status).toBe(recipe.status);
+    // A valid call that is documented as a refusal (STORY-05.02: a delete would remove the one canary part, so its call is refused 409 and can be repeated) has no
+    // success body to plant a key in. Its schema is the one object the tree and move routes answer with, planted into there (`estimate-tree-route.test.ts` holds
+    // that the delete route answers with that very schema), and the refusal's own body is read by the confidentiality scan.
+    if (recipe.status >= 300) return;
     expect(answer.status).toBeLessThan(300);
     if (answer.status === 204) {
       // A 204 has no body, so there is no object to plant a key in: its schema accepts "no body" and nothing else, so no field can leave.
