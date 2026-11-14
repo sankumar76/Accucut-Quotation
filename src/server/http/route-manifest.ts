@@ -239,6 +239,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/estimates/[id]/tree/move', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/nodes', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/nodes/[nodeId]', kind: 'api', methods: ['GET', 'PUT', 'DELETE'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-05.03 (SCR-05's part form; architecture section 6 "Estimate form", "Save inputs"): A L, and an Engineer on their own estimate; a save only while this person may change its inputs. The form is built
+  // from the registry through one strict schema with no rate, cost or formula in it, and a save answers with the part's revision and what is stored, so both are in the Engineer's list and the cost scan calls them.
+  { path: '/api/v1/estimates/[id]/form', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/inputs', kind: 'api', methods: ['PATCH'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },

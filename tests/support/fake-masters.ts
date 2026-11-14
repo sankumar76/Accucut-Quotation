@@ -79,6 +79,10 @@ function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => v
       const found = materials[indexOf(id)];
       return Promise.resolve(found === undefined ? null : { id: found.id, materialInDrawing: found.materialInDrawing, materialConsidered: found.materialConsidered, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
     },
+    findMaterialOption(id: string) {
+      const found = materials[indexOf(id)];
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.materialInDrawing, materialConsidered: found.materialConsidered });
+    },
     lockMaterials() {
       onLock();
       return Promise.resolve();
@@ -137,7 +141,7 @@ function createFakeExchangeMethods(state: MutableExchangeRates, onLock: () => vo
 
 type ExchangeMethod = 'readExchangeRates' | 'lockExchangeRates' | 'findExchangeRatesForUpdate' | 'saveExchangeRates';
 
-type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'findMaterialForCalculation' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
+type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'findMaterialForCalculation' | 'findMaterialOption' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
 
 type TreatmentMethod =
   | 'listTreatments'

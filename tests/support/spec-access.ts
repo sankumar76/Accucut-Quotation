@@ -51,4 +51,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes/[nodeId]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],
 };

@@ -7,9 +7,12 @@ import type { CustomerView } from '@/lib/estimates/estimates-client';
 
 import { ChangeCustomerDialog } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
-import { FORM_AREA_LOCKED, FORM_AREA_OPEN, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
+import { FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
+import { focusFirstField } from './part-fields';
+import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
 import { useCustomerChoice } from './use-customer-choice';
+import { usePartsTree } from './use-parts-tree';
 import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
 
 /**
@@ -29,6 +32,9 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const editable = canEditInputs(header.status, 'ENGINEER');
   const choice = useCustomerChoice({ estimateId, initial: customer, editable });
   const hasCustomer = choice.current !== null;
+  // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
+  const tree = usePartsTree(estimateId);
+  const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
 
   /** The dialog closes: focus goes back to the field it was opened from. */
   const returnFocus = (event: Event): void => {
@@ -62,8 +68,12 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           <CardTitle id="estimate-form-area-title">{FORM_AREA_TITLE}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-s-4 lg:flex-row">
-          <PartsTreeArea estimateId={estimateId} editable={editable} />
-          <p className="min-w-0 flex-1 text-body text-ink-2">{hasCustomer ? FORM_AREA_OPEN : FORM_AREA_LOCKED}</p>
+          <PartsTreeArea tree={tree} editable={editable} onOpenPart={focusFirstField} />
+          {hasCustomer ? (
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={tree.applySaved} onChanged={tree.readAgain} />
+          ) : (
+            <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_AREA_LOCKED}</p>
+          )}
         </CardContent>
       </Card>
     </>

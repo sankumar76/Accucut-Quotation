@@ -71,6 +71,13 @@ export interface MaterialMethods {
    * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). A plain read.
    */
   findMaterialForCalculation(id: string): Promise<MaterialValuesRecord | null>;
+  /**
+   * The material with this ID as a choice (ID, name, Material Considered, **no number**), or null (unknown, deleted, or not an ID alike), read `FOR SHARE` until the
+   * transaction ends, so a material that is being deleted waits for the part that names it, and one already deleted is not found (STORY-05.03: a part's Material in
+   * Drawing is one of these). Unlike the lists it **finds the hidden "Not applicable" row**, which a part may name. A change to a material locks its row `FOR UPDATE`, so
+   * the two serialise.
+   */
+  findMaterialOption(id: string, tx: Transaction): Promise<MaterialOptionRecord | null>;
   /** Takes the lock that serialises changes to the materials until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
   lockMaterials(tx: Transaction): Promise<void>;
   /** The listed material with this ID, or null (unknown, hidden or deleted alike), read **with its row locked** until the transaction ends. */
@@ -161,6 +168,18 @@ async function readMaterialValues(db: PrismaClient, id: string): Promise<Materia
   };
 }
 
+const OPTION_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), materialConsidered: z.string().nullable() }));
+
+async function selectMaterialOption(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialOptionRecord | null> {
+  // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
+  if (!z.uuid().safeParse(id).success) return null;
+  // Only the three columns of a choice are selected: no price, gravity or scrap rate is read (ARCH-R2). The ID is a bound parameter.
+  const rows = await clientFor(db, tx).$queryRaw`
+    SELECT id::text AS "id", material_in_drawing AS "name", material_considered AS "materialConsidered"
+    FROM materials WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
+  return OPTION_ROWS.parse(rows)[0] ?? null;
+}
+
 async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialRecord | null> {
   // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
   if (!z.uuid().safeParse(id).success) return null;
@@ -201,6 +220,7 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
     listMaterials: () => withDatabaseErrors(() => readMaterials(db)),
     listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
     findMaterialForCalculation: (id) => withDatabaseErrors(() => readMaterialValues(db, id)),
+    findMaterialOption: (id, tx) => withDatabaseErrors(() => selectMaterialOption(db, id, tx)),
     lockMaterials: (tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).$executeRaw`LOCK TABLE materials IN SHARE ROW EXCLUSIVE MODE`;
