@@ -27,11 +27,14 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/customers/[id]': () => import('@/app/api/v1/customers/[id]/route'),
   '/api/v1/customers/[id]/reset-rates': () => import('@/app/api/v1/customers/[id]/reset-rates/route'),
   '/api/v1/options/customers': () => import('@/app/api/v1/options/customers/route'),
+  '/api/v1/tasks': () => import('@/app/api/v1/tasks/route'),
+  '/api/v1/options/assign-context': () => import('@/app/api/v1/options/assign-context/route'),
 };
 
 export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/': () => import('@/app/(portal)/page'),
   '/queue': () => import('@/app/(portal)/queue/page'),
+  '/assign': () => import('@/app/(portal)/assign/page'),
   '/design-system': () => import('@/app/(portal)/design-system/page'),
   '/account': () => import('@/app/(portal)/account/page'),
   '/users': () => import('@/app/(portal)/users/page'),

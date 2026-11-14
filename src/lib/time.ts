@@ -45,6 +45,7 @@ export const MILLISECONDS_PER_SECOND = 1_000;
 export const MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND;
 export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 export const MILLISECONDS_PER_DAY = 24 * MILLISECONDS_PER_HOUR;
+const MINUTES_PER_HOUR = 60;
 
 /** The portal's time zone (FR-088): every time on a screen, in an e-mail or in a file is shown in it. */
 export const IST_TIME_ZONE = 'Asia/Kolkata';
@@ -113,6 +114,25 @@ export function startOfIstDay(isoDate: string): Date {
   const date = calendarDateOf(isoDate);
   if (date === null) throw new RangeError('startOfIstDay needs a real date written YYYY-MM-DD.');
   return new Date(Date.UTC(date.year, date.month - 1, date.day) - IST_OFFSET_MILLISECONDS);
+}
+
+const IST_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * The instant of a wall-clock time in IST, as a person types it into a date field and a time field: `2026-11-09` and `23:30` is 18:00 UTC the same day,
+ * `03:00` is 21:30 UTC the evening before (STORY-04.01 AC-2, NFR-015). `null` for a date that is not real or a time that is not `HH:mm` on a 24-hour clock,
+ * so a form and a server can refuse it with a message instead of throwing.
+ */
+export function parseIstDateTime(isoDate: string, time: string): Date | null {
+  const match = IST_TIME.exec(time);
+  if (match === null || !isIsoDate(isoDate)) return null;
+  const minutes = Number(match[1]) * MINUTES_PER_HOUR + Number(match[2]);
+  return new Date(startOfIstDay(isoDate).getTime() + minutes * MILLISECONDS_PER_MINUTE);
+}
+
+/** The calendar year an instant falls in when read in IST: 2026-12-31 18:31 UTC is 00:01 on 1 January 2027 there, so its year is 2027 (STORY-04.01 AC-2). */
+export function istYearOf(instant: Date): number {
+  return new Date(instant.getTime() + IST_OFFSET_MILLISECONDS).getUTCFullYear();
 }
 
 /** The instant the day after begins in IST: the exclusive end of the day, so "to 06 Nov" includes everything on 06 Nov. */
