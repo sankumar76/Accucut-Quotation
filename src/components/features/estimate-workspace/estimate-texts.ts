@@ -58,6 +58,17 @@ export const MATERIAL_LOAD_FAILED_TITLE = 'We could not load the materials';
 export const sectionRegionLabel = (number: number, name: string): string => `${String(number).padStart(2, '0')} ${name}`;
 export const columnRangeLabel = (range: string): string => `Excel columns ${range}`;
 
+/**
+ * The other sections of the form (STORY-05.04; UX spec SCR-05 "Layout rules": the section strip, "n of m" on every card). The sentences under "not available yet" are about the form and
+ * name no rate, price or formula (UX-24).
+ */
+export const SECTION_STRIP_LABEL = 'Sections of the form';
+export const sectionLinkText = (number: number, shortName: string): string => `${String(number).padStart(2, '0')} ${shortName}`;
+export const SECTION_COMPLETE_TEXT = 'All filled in';
+export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
+export const PLACEHOLDER_TITLE = 'Not available yet';
+export const PLACEHOLDER_BODY = 'These are added to the form in a later update. There is nothing to fill in here yet.';
+
 export const REVIEW_CUSTOMER_LABEL = 'Customer';
 export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
 

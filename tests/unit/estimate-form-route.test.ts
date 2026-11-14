@@ -105,13 +105,37 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
     expect(Object.keys(record.parse(answers[0])).sort()).toEqual(['lastSavedAt', 'sections']);
   });
 
-  it('has sections 01 and 02 with their numbers, names and column ranges, and the letter of every field', async () => {
+  it('has the eight sections with their numbers, names and column ranges, and the letter of every field (STORY-05.04 AC-1)', async () => {
     const body = formResponseSchema.parse(await (await form()).json());
     expect(body.sections.map((section) => [section.number, section.name, section.columnRange])).toEqual([
-      [1, 'Part Details', 'A, B, D, H'],
+      [1, 'Part Details', 'A, B, D, G, H'],
       [2, 'Material and Dimensions', 'E, F, J–L, N'],
+      [3, 'Cutting Process', 'P, Q'],
+      [4, 'Bending', 'R'],
+      [5, 'Fasteners', 'S–U'],
+      [6, 'Welding', 'V–Y'],
+      [7, 'Surface Treatment', 'Z–AG'],
+      [8, 'Other Costs and Remarks', 'AJ, AP, AU, BM'],
     ]);
-    expect(body.sections.flatMap((section) => section.fields.map((field) => field.letter))).toEqual(['A', 'B', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N']);
+    expect(body.sections.flatMap((section) => section.fields.map((field) => field.letter))).toEqual([
+      ...['A', 'B', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'],
+      ...['AP', 'AU', 'BM', 'AJ'],
+    ]);
+  });
+
+  it('AC-6: sends Treatment / Color (G) and the eight surface treatments as placeholders, with a letter and a label and nothing else', async () => {
+    const body = formResponseSchema.parse(await (await form()).json());
+    expect(body.sections.map((section) => section.reserved.map((field) => field.letter))).toEqual([['G'], [], [], [], [], [], ['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'], []]);
+    expect(defined(body.sections[0]).reserved).toEqual([{ id: seedFieldAt('G').id, letter: 'G', label: 'Treatment / Color' }]);
+  });
+
+  it('AC-2, AC-3, AC-4: carries the rupee add-on and the hint of the cost-typed inputs, the default and hint of Fasteners, and the hint of Remarks', async () => {
+    const body = formResponseSchema.parse(await (await form()).json());
+    const field = (letter: string) => defined(body.sections.flatMap((section) => section.fields).find((candidate) => candidate.letter === letter));
+    for (const letter of ['U', 'AP', 'AU', 'BM']) expect(field(letter), letter).toMatchObject({ unit: '₹', hint: 'Enter 0 if there is none.' });
+    expect(field('S')).toMatchObject({ defaultValue: 'None', hint: 'Type "None" if the part has no fasteners.', rule: { type: 'text', maxLength: 200, multiline: false } });
+    expect(field('AJ')).toMatchObject({ hint: 'Write "None" if there is nothing to add.', rule: { type: 'text', maxLength: 1000, multiline: true } });
+    expect(field('B').defaultValue).toBeNull();
   });
 
   it('keeps the label "QTY per Assy" and carries the hint of the delivery lead (AC-2)', async () => {
@@ -127,7 +151,19 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
     const fields = body.sections.flatMap((section) => section.fields);
     expect(defined(fields.find((field) => field.letter === 'F')).editable).toBe(false);
     expect(fields.map((field) => field.id)).not.toContain(RATE);
-    expect(text).not.toMatch(/\{\{|formula|price|cost|rate|917373/i);
+    // "cost" is the word of the four typed inputs and of the name of section 08 only (AC-7: what an Engineer types is no cost shown to them, FR-008).
+    const allowed = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'];
+    const rest = allowed.reduce((left, words) => left.replaceAll(words, ''), text);
+    expect(rest).not.toMatch(/\{\{|formula|price|cost|rate|917373/i);
+    for (const words of allowed) expect(text).toContain(words);
+  });
+
+  it('AC-7: no calculated field of any section is on the form: not one of the cost columns after Remarks, and not Total Process Cost', async () => {
+    const body = formResponseSchema.parse(await (await form()).json());
+    const ids = new Set([...body.sections.flatMap((section) => section.fields.map((field) => field.id)), ...body.sections.flatMap((section) => section.reserved.map((field) => field.id))]);
+    for (const letter of ['M', 'O', 'AH', 'AI', 'AK', 'AL', 'AM', 'AN', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AV', 'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BG', 'BL', 'BN', 'BO']) {
+      expect(ids.has(seedFieldAt(letter).id), letter).toBe(false);
+    }
   });
 
   it('is 404 for another Engineer\'s estimate and for one that does not exist: the same answer', async () => {
@@ -249,6 +285,77 @@ describe('AC-4, AC-7: PATCH /estimates/{id}/nodes/{nodeId}/inputs', () => {
       body: JSON.stringify({ revision: 1, values: { [LENGTH]: '1' } }),
     });
     expect((await saveInputs(foreign, forNode(owned(), canary()))).status).toBe(403);
+    expect(stored().inputs).toEqual({});
+  });
+});
+
+describe('STORY-05.04 AC-1, AC-4, AC-5: saving the fields of the other sections', () => {
+  const PICK = (letter: string): string => seedFieldAt(letter).id;
+  const COST_LETTERS = ['U', 'AP', 'AU', 'BM'];
+
+  it('stores every number of sections 03 to 08 as decimal text with two decimals, and answers with what was typed, no figure of its own', async () => {
+    const letters = ['P', 'Q', 'R', 'T', 'V', 'W', 'X', 'Y', ...COST_LETTERS];
+    const values = Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.5`]));
+    const response = await save({ revision: 1, values });
+    expect(response.status).toBe(200);
+    const body = savedInputsSchema.parse(await response.json());
+    expect(body.revision).toBe(2);
+    expect(Object.fromEntries(body.inputs.map((item) => [item.fieldId, item.value]))).toEqual(Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.50`])));
+    expect(estimate().inputsRevision).toBe(1);
+  });
+
+  it('AC-5: the number rule is the same as in 05.03 for every new number: -1, 1.234 and abc are 422 with the words of the rule, and a repeat of the same value is no change', async () => {
+    for (const letter of ['P', 'U', 'AP', 'AU', 'BM']) {
+      for (const typed of ['-1', '1.234', 'abc']) {
+        const response = await save({ revision: 1, values: { [PICK(letter)]: typed } });
+        expect(response.status, `${letter} ${typed}`).toBe(422);
+        expect(record.parse(await response.json())['errors']).toEqual([{ field: PICK(letter), message: NUMBER_RULE_MESSAGE }]);
+      }
+    }
+    await save({ revision: 1, values: { [PICK('BM')]: '4.5' } });
+    const again = await save({ revision: 2, values: { [PICK('BM')]: '4.50' } });
+    expect(savedInputsSchema.parse(await again.json()).revision).toBe(2);
+    expect(estimate().inputsRevision).toBe(1);
+  });
+
+  it('AC-3: Fasteners (S) is saved as typed, and a part that never had it saved has no value for it: the default "None" is the form\'s, not stored', async () => {
+    const untouched = await save({ revision: 1, values: { [PICK('P')]: '3' } });
+    expect(savedInputsSchema.parse(await untouched.json()).inputs.map((item) => item.fieldId)).toEqual([PICK('P')]);
+    const typed = await save({ revision: 2, values: { [PICK('S')]: '  M6 bolt ' } });
+    expect(savedInputsSchema.parse(await typed.json()).inputs).toContainEqual(entry(PICK('S'), 'M6 bolt'));
+  });
+
+  it('AC-4 (assumption A-1): Remarks (AJ) takes 1,000 characters and 422s one more with the words "Use 1,000 characters or fewer."; Part No. (B) still stops at 200', async () => {
+    const full = await save({ revision: 1, values: { [PICK('AJ')]: 'x'.repeat(1000) } });
+    expect(full.status).toBe(200);
+    const over = await save({ revision: 2, values: { [PICK('AJ')]: 'x'.repeat(1001) } });
+    expect(over.status).toBe(422);
+    expect(record.parse(await over.json())['errors']).toEqual([{ field: PICK('AJ'), message: 'Use 1,000 characters or fewer.' }]);
+    const partNo = await save({ revision: 2, values: { [PART_NO]: 'x'.repeat(201) } });
+    expect(partNo.status).toBe(422);
+    expect(record.parse(await partNo.json())['errors']).toEqual([{ field: PART_NO, message: 'Use 200 characters or fewer.' }]);
+  });
+
+  it('AC-4: Remarks keeps its line breaks, a lone surrogate is 422 and not a 500 (review SQR-13), and a control character is 422', async () => {
+    const lines = await save({ revision: 1, values: { [PICK('AJ')]: 'one\r\ntwo' } });
+    expect(savedInputsSchema.parse(await lines.json()).inputs).toContainEqual(entry(PICK('AJ'), 'one\ntwo'));
+    for (const typed of ['bad\uD800text', 'nul\u0000byte']) {
+      const refused = await save({ revision: 2, values: { [PART_NO]: typed } });
+      expect(refused.status, typed).toBe(422);
+    }
+  });
+
+  it.each([
+    ['Treatment / Color (G)', 'G'],
+    ['Hot Dip Galvanizing (Z)', 'Z'],
+    ['Soft Anodize (AG)', 'AG'],
+    ['Part Model (C)', 'C'],
+    ['Total Process Cost (AY), the calculated twin of Machining Cost', 'AY'],
+    ['Approved Quote Price (BO)', 'BO'],
+  ])('%s is 422 "This field cannot be saved.", and nothing is stored', async (_name, letter) => {
+    const response = await save({ revision: 1, values: { [PICK(letter)]: '1' } });
+    expect(response.status).toBe(422);
+    expect(record.parse(await response.json())['errors']).toEqual([{ field: PICK(letter), message: 'This field cannot be saved.' }]);
     expect(stored().inputs).toEqual({});
   });
 });

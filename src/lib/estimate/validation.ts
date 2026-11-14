@@ -9,7 +9,7 @@ import { DECIMAL_TEXT_PATTERN, normaliseDecimalText } from '../masters/master-ru
  *   - **A number** is digits with up to two decimals and no sign, separator or exponent (the API takes plain decimals only). It is stored as text with exactly two
  *     decimals and no leading zeros (`12.5` is `12.50`, `003.37` is `3.37`), so two spellings of one number are one stored value and a repeated save changes
  *     nothing (architecture section 4.8). It is never a JavaScript number.
- *   - **A text** is trimmed, at most `MAX_PART_TEXT_LENGTH` characters, and holds no control character (a line break only in a multi-line field).
+ *   - **A text** is trimmed, at most its field's length (`MAX_PART_TEXT_LENGTH`, or `MAX_LONG_TEXT_LENGTH` for the multi-line Remarks), and holds no control character (a line break only in a multi-line field).
  *     It is kept as typed otherwise: a text that starts with `=` is a value, and neutralising it for a spreadsheet is the export's job (STORY-08).
  */
 
@@ -26,7 +26,14 @@ const TOO_MANY_DIGITS = new RegExp(`^\\d{${MAX_NUMBER_DIGITS + 1},}(?:\\.\\d{1,2
  * 200 and no source gives a longer one: it bounds the row of `estimate_nodes.inputs` and what a tree and an export carry.
  */
 export const MAX_PART_TEXT_LENGTH = 200;
-export const TEXT_TOO_LONG_MESSAGE = `Use ${MAX_PART_TEXT_LENGTH} characters or fewer.`;
+/**
+ * The longest typed text of a multi-line field (Remarks, AJ; STORY-05.04 AC-4). Assumption A-1: no source gives a maximum, so 1,000 characters, which is about a paragraph and
+ * still bounds the row; the product owner may change it. The field's own limit is in its rule (`FormRule.maxLength`), so the screen and the server read one number.
+ */
+export const MAX_LONG_TEXT_LENGTH = 1000;
+/** The words under a text that is too long, with the limit of its field: "Use 1,000 characters or fewer." */
+export const textTooLongMessage = (maxLength: number): string => `Use ${maxLength.toLocaleString('en-US')} characters or fewer.`;
+export const TEXT_TOO_LONG_MESSAGE = textTooLongMessage(MAX_PART_TEXT_LENGTH);
 export const TEXT_CHARACTERS_MESSAGE = 'Use letters, numbers and punctuation only.';
 
 /** The result of reading one typed value: the text to store (`null`: nothing, the value is cleared), or the words to show under the field. */
@@ -37,9 +44,10 @@ export type InputCheck = { readonly ok: true; readonly value: string | null } | 
  * the bidirectional overrides, embeddings and isolates, the soft hyphen) and the line and paragraph separators (Zl, Zp). They are invisible or reorder what is shown, so a part number
  * could display other than it is stored (reviews SQR-04 and the security review). There is **no exception**: the zero-width joiner and non-joiner (U+200D, U+200C), which some Indian
  * scripts need, are blocked too, as no source asks for them. **Assumption, to be confirmed by the product owner if a script needs them.** A line feed is let through by the
- * multi-line rule below, after a carriage return is folded into it.
+ * multi-line rule below, after a carriage return is folded into it. A **lone surrogate** (Cs: half of a pair, which JSON can carry as `\ud800`) is refused as well: PostgreSQL's
+ * `jsonb` cannot store it, so it would be a 500 and not a 422 (review SQR-13); a valid pair, an emoji for one, is not Cs once read as one character.
  */
-const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u;
 const LINE_BREAKS = /\r\n?/g;
 const LINE_FEED = /\n/g;
 
@@ -55,13 +63,16 @@ export function validateNumberInput(typed: string): InputCheck {
 export interface TextRule {
   /** The text is entered over several lines (Remarks): a line break is part of it. */
   readonly multiline: boolean;
+  /** The longest text, in characters, from the field's rule. Absent means `MAX_PART_TEXT_LENGTH`. */
+  readonly maxLength?: number;
 }
 
 /** One typed text: blank clears, too long or holding a control character is refused. The stored text is trimmed. */
 export function validateTextInput(typed: string, rule: TextRule): InputCheck {
   const text = (rule.multiline ? typed.replace(LINE_BREAKS, '\n') : typed).trim();
   if (text === '') return { ok: true, value: null };
-  if (text.length > MAX_PART_TEXT_LENGTH) return { ok: false, message: TEXT_TOO_LONG_MESSAGE };
+  const maxLength = rule.maxLength ?? MAX_PART_TEXT_LENGTH;
+  if (text.length > maxLength) return { ok: false, message: textTooLongMessage(maxLength) };
   const withoutLineFeeds = rule.multiline ? text.replace(LINE_FEED, '') : text;
   return CONTROL_CHARACTERS.test(withoutLineFeeds) ? { ok: false, message: TEXT_CHARACTERS_MESSAGE } : { ok: true, value: text };
 }

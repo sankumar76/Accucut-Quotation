@@ -46,7 +46,8 @@ const CANARY_INPUTS: Readonly<Record<string, string>> = {
   length: '412.5',
   width: '318.25',
   thickness: '2.75',
-  'part-weight': '4.125',
+  // Two decimals, as the part form takes (SPEC section 7.3): a value a person cannot type is no canary (`canary-part-inputs.ts`).
+  'part-weight': '4.13',
   'cutting-time': '38.5',
   'cutting-length': '960.5',
   'bend-count': '6',

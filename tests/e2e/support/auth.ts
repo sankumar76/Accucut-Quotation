@@ -5,7 +5,9 @@ import { Client } from 'pg';
 import { z } from 'zod';
 
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
+import type { ConfigDocument } from '../../../src/lib/fields/schema';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
+import { canaryPartInputs } from '../../support/canary-part-inputs';
 import { loadCanaryCustomers } from '../../support/customer-canary-loader';
 import { EXCHANGE_RATE_CANARIES } from '../../support/exchange-rate-canary';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from '../../support/estimate-recipe';
@@ -220,6 +222,26 @@ export async function putMaterialInCanaryPart(ownerId: string, materialId: strin
 }
 
 /**
+ * Fills the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` the way the scan needs it (STORY-05.04 AC-7; review SQR-05 of STORY-05.03;
+ * `tests/support/canary-part-inputs.ts`): every value an Engineer types into the part form, stored as the form stores it (Tool, Machining, Plating and Fasteners Cost among them), and,
+ * beside them, a canary price under Material Rate / Kg and a key that is no field. The routes that return a part, and the page, must send the typed values and never the other two, so
+ * the scan reads a part that really holds a Restricted value. Only the scan's own person has such a part, so no other spec sees it. The statement replaces the inputs and is repeatable.
+ */
+export async function fillCanaryPart(ownerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    // The registry is the newest version stored in this database, which the server's form is built from. It is read as stored: a Playwright process cannot load the formula engine that
+    // `parseConfigDocument` uses, and the shape was checked when the version was written.
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const snapshot = registryShape.parse(rows[0]?.snapshot);
+    const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
+    await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Puts the Process Master canary rates (STORY-02.01's name and values, `tests/support/process-master-canary.ts`) into the database
  * the servers use, so the confidentiality scan has Restricted values to look for. They are three new rates, never the 15 seed rows
  * that other specs read, and the statement is repeatable and safe when three screen sizes run it at once (`ON CONFLICT DO NOTHING`,
@@ -322,6 +344,9 @@ export async function ensureCanaryExchangeRates(): Promise<void> {
     await client.end();
   }
 }
+
+/** The registry as stored: its sections and fields are lists (every other property is the registry's own schema's, checked when the version was written). */
+const registryShape = z.looseObject({ sections: z.array(z.looseObject({})), fields: z.array(z.looseObject({ id: z.string(), key: z.string() })) });
 
 const snapshotShape = z.looseObject({
   fields: z.array(z.looseObject({ id: z.string(), position: z.number().int(), formula: z.string().nullish() })),
