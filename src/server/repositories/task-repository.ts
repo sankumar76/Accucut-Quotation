@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { Prisma } from '../../generated/prisma/client';
+import type { Prisma } from '../../generated/prisma/client';
 import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
 
 import { withDatabaseErrors } from './database-errors';

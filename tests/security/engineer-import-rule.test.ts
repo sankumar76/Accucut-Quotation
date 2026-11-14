@@ -87,6 +87,7 @@ const SERVICES = {
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
     'step-up-service',
+    'task-queue-cursor',
     'task-service',
     'treatment-service',
   ],

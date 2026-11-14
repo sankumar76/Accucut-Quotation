@@ -20,7 +20,7 @@ export const QUEUE_DEFAULT_LIMIT = 50;
 export const QUEUE_MAX_LIMIT = 200;
 
 export function isQueueTab(value: string): value is QueueTab {
-  return (QUEUE_TABS as ReadonlyArray<string>).includes(value);
+  return QUEUE_TABS.some((tab) => tab === value);
 }
 
 /** The status of an estimate, which is what a row shows until story 04.04 words it for the Engineer. */
