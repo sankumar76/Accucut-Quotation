@@ -6,11 +6,12 @@ import { StatusBadge } from '@/components/shared/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
+import { isTaskClosed } from '@/lib/estimate/task-status';
 import type { QueueRowData } from '@/lib/tasks/queue-client';
 import { formatIst } from '@/lib/time';
 
 import { lateTextFor, OVERDUE_CARD_CLASS, OVERDUE_ROW_CLASS, OverdueMarker } from './overdue-marker';
-import { CARD_DEADLINE_LABEL, COLUMNS, DEADLINE_COLUMN, LIST_LABEL, NOT_CHOSEN_YET, TABLE_CAPTION, TABLE_REGION_LABEL } from './queue-texts';
+import { CARD_DEADLINE_LABEL, CLOSED_ROW_WORD, COLUMNS, DEADLINE_COLUMN, LIST_LABEL, NOT_CHOSEN_YET, TABLE_CAPTION, TABLE_REGION_LABEL } from './queue-texts';
 
 /**
  * The tasks of SCR-03 (STORY-04.02 AC-3, AC-6, AC-7): a table from 768 px, which scrolls inside its own container only, and one card for each task below it.
@@ -18,7 +19,9 @@ import { CARD_DEADLINE_LABEL, COLUMNS, DEADLINE_COLUMN, LIST_LABEL, NOT_CHOSEN_Y
  * (rows are not clickable as a whole, so a keyboard and a screen reader meet one link for the task); the folder is the shared `FolderPath` (its `file:` link
  * and Copy path), whose explanation is said once above the list. An Engineer's list has no Engineer or Customer column, and the Customer, Folder and
  * Assigned by columns drop out of the table below 1024 px, so at 768 px it keeps Task, Engineer, Deadline and Status. Deadlines are shown in IST.
- * No row edits or reassigns anything (story 04.07). An open row past its deadline carries the three cues of FR-036 together (STORY-04.03: clock icon, "Overdue by …",
+ * No row edits or reassigns anything (story 04.07). A closed row says "Closed" in place of the row actions, for a Lead and an Admin (STORY-04.05 AC-5, UX-20; an approved
+ * task cannot be reassigned, A-14). The Actions column is drawn only when the list holds a closed row, because nothing is drawn for an action that does not exist yet
+ * (04.07 adds the open rows' button); an Engineer's row has no action column. "Closed" is the word of that column and never a second status badge. An open row past its deadline carries the three cues of FR-036 together (STORY-04.03: clock icon, "Overdue by …",
  * amber bar and tint; `overdue-marker.tsx`), judged at `asOf`.
  */
 
@@ -61,8 +64,18 @@ function DeadlineCell({ task, late }: { readonly task: QueueRowData; readonly la
   );
 }
 
+/** The word of the action column for a closed row, nothing for an open one. `isTaskClosed` is the one rule, shared with the tabs and the overdue cue. */
+function ClosedAction({ task }: { readonly task: QueueRowData }) {
+  return isTaskClosed(task.status) ? (
+    <span data-closed-action="" className="font-semibold text-ink-2">
+      {CLOSED_ROW_WORD}
+    </span>
+  ) : null;
+}
+
 function TaskTable({ role, tasks, asOf }: QueueListProps) {
   const manager = role !== 'ENGINEER';
+  const actions = manager && tasks.some((task) => isTaskClosed(task.status));
   return (
     <Table regionLabel={TABLE_REGION_LABEL} caption={TABLE_CAPTION}>
       <TableHeader>
@@ -74,6 +87,7 @@ function TaskTable({ role, tasks, asOf }: QueueListProps) {
           <TableHead>{DEADLINE_COLUMN}</TableHead>
           <TableHead>{COLUMNS.status}</TableHead>
           <TableHead className="hidden lg:table-cell">{COLUMNS.assignedBy}</TableHead>
+          {actions ? <TableHead>{COLUMNS.actions}</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -98,6 +112,11 @@ function TaskTable({ role, tasks, asOf }: QueueListProps) {
               <StatusBadge status={task.status} iconSize="hint" />
             </TableCell>
             <TableCell className={cn('hidden lg:table-cell', BREAK_LONG_NAMES)}>{task.assignedByName}</TableCell>
+            {actions ? (
+              <TableCell>
+                <ClosedAction task={task} />
+              </TableCell>
+            ) : null}
           </TableRow>
         ))}
       </TableBody>
@@ -142,6 +161,7 @@ function TaskCards({ role, tasks, asOf }: QueueListProps) {
             {COLUMNS.assignedBy}: {task.assignedByName}
           </div>
           <Folder task={task} />
+          {manager ? <ClosedAction task={task} /> : null}
         </li>
       ))}
     </ul>

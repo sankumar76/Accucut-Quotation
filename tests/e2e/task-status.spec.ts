@@ -73,6 +73,8 @@ test.describe('an Engineer', () => {
     await expect(approved).toHaveText('Approved');
     await expect(approved.locator('svg')).toHaveCount(1);
     await expect(approved).toBeVisible();
+    // STORY-04.05 AC-6: an Engineer's closed row has no action column and no "Closed" word beside the badge.
+    await expect(page.locator('[data-closed-action]')).toHaveCount(0);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
@@ -150,6 +152,8 @@ test.describe('a Lead', () => {
     await tab(page, 'Closed').click();
     const approved = page.locator('[data-slot="status-badge"][data-status="APPROVED"]:visible').first();
     await expect(approved).toHaveText('Approved');
+    // STORY-04.05 AC-5: a closed row says "Closed" in place of the row actions (an approved task cannot be reassigned), beside the one badge "Approved".
+    await expect(page.locator('[data-closed-action]:visible').first()).toHaveText('Closed');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
