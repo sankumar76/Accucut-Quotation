@@ -22,7 +22,7 @@ import {
   type FormulaUse,
 } from '../../lib/errors';
 import type { PartView } from '../../lib/estimate/part-view';
-import type { BlockedPart } from '../../lib/estimate/validation';
+import type { BlockedPart } from '../../lib/estimate/calculate-check';
 
 /**
  * The error answer of every API route (architecture section 6, "Error model"): `application/problem+json`

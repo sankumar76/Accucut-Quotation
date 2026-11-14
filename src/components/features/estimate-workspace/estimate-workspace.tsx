@@ -1,25 +1,25 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
+import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CustomerView } from '@/lib/estimates/estimates-client';
 
-import { CalculateBar } from './calculate-bar';
-import { CalculateSummary, SubmittedNotice } from './calculate-summary';
-import { ChangeCustomerDialog } from './change-customer-dialog';
+import type { CalculateBarProps } from './calculate-bar';
+import type { CalculateSummaryProps } from './calculate-summary';
+import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
-import { CALCULATE_FAILED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
-import { focusFieldWhenPresent } from './focus-field';
+import { CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
 import { focusFirstField } from './part-fields';
 import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
 import { useCalculate } from './use-calculate';
 import { useCustomerChoice } from './use-customer-choice';
+import { useLazyComponent } from './use-lazy-component';
 import type { SavedPart } from './use-part-form';
 import { usePartsTree } from './use-parts-tree';
 import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
@@ -33,6 +33,11 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
  * under each blank field and a triangle on each card and in the section strip; a good one turns the page to "Submitted": the badge, the sentence, inputs read-only, part actions hidden and
  * the button "Submitted" (`canEditInputs`, the same rule the server asks again). The page holds the status from the answer, not a guess: the server decided it.
  */
+
+/** The code of the three parts that nobody needs before the page is up, each fetched after it is (`use-lazy-component.ts`; NFR-009: this page's first load has no room left in 200 KB). */
+const loadBar = () => import('./calculate-bar').then((module) => module.CalculateBar);
+const loadSummary = () => import('./calculate-summary').then((module) => module.CalculateSummary);
+const loadChangeDialog = () => import('./change-customer-dialog').then((module) => module.ChangeCustomerDialog);
 
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
@@ -51,6 +56,17 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const tree = usePartsTree(estimateId);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   const calculation = useCalculate({ estimateId, onSubmitted: () => setStatus('SUBMITTED') });
+  const bar = useLazyComponent<CalculateBarProps>(loadBar, true);
+  const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, calculation.blocked !== null);
+  const changeDialog = useLazyComponent<ChangeCustomerDialogProps>(loadChangeDialog, choice.pending !== null);
+  const Bar = bar.Component;
+  const Summary = summary.Component;
+  const ChangeDialog = changeDialog.Component;
+  const submittedNotice = useRef<HTMLDivElement>(null);
+  // The press that submitted the estimate: the button has become "Submitted" and is off, so focus goes to the notice. A reload of a submitted estimate steals nothing (`done` is null).
+  useEffect(() => {
+    if (calculation.done !== null) submittedNotice.current?.focus();
+  }, [calculation.done]);
   const missingFields = useMemo(() => new Map((calculation.blocked ?? []).map((part) => [part.nodeId, new Set(part.fields.map((field) => field.fieldId))])), [calculation.blocked]);
   const missingParts = useMemo(() => new Set(missingFields.keys()), [missingFields]);
   const noFields: ReadonlySet<string> = useMemo(() => new Set<string>(), []);
@@ -67,30 +83,36 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
     calculation.filled(part.id, part.inputs);
   };
 
-  /** A link of the summary: choose the part, then focus the field once that part's form is on the page. */
-  const goToField = (nodeId: string, fieldId: string): void => {
-    tree.select(nodeId);
-    focusFieldWhenPresent(nodeId, fieldId);
-  };
-
   return (
     <>
       <WorkspaceHeader view={{ ...header, status }} />
-      {calculation.blocked === null ? null : <CalculateSummary parts={calculation.blocked} onGo={goToField} focusRequest={calculation.focusRequest} />}
+      {calculation.blocked === null ? null : Summary === null ? (
+        // The list's code is on its way (or could not be fetched): the sentence is the server's, and it is never missing.
+        <Notice tone="danger" title={blockedSummary(calculation.blocked.length)} />
+      ) : (
+        <Summary parts={calculation.blocked} onChoosePart={tree.select} focusRequest={calculation.focusRequest} />
+      )}
       {calculation.problem === null ? null : (
         <Notice tone="danger" title={calculation.problem.kind === 'refused' ? calculation.problem.message : CALCULATE_FAILED_TITLE}>
           {calculation.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
-      {status === 'SUBMITTED' ? <SubmittedNotice message={calculation.done ?? CALCULATE_MESSAGE} takeFocus={calculation.done !== null} /> : null}
+      {status === 'SUBMITTED' ? (
+        // The state "Submitted": the one sentence the server answers with and nothing else. No number from the calculation is anywhere (NFR-002). Focus comes here after the press that submitted it.
+        <div ref={submittedNotice} tabIndex={-1} data-calculate-submitted="" className="rounded-md">
+          <Notice tone="success" title={CALCULATE_SUBMITTED_TITLE}>
+            {calculation.done ?? CALCULATE_MESSAGE}
+          </Notice>
+        </div>
+      ) : null}
       {hasCustomer || !editable ? null : (
         <Notice tone="info" title={NO_CUSTOMER_TITLE}>
           {NO_CUSTOMER_BODY}
         </Notice>
       )}
       <CustomerPicker choice={choice} editable={editable} />
-      {choice.current === null || choice.pending === null ? null : (
-        <ChangeCustomerDialog
+      {ChangeDialog === null || choice.current === null || choice.pending === null ? null : (
+        <ChangeDialog
           current={choice.current}
           pending={choice.pending}
           open={choice.dialogOpen}
@@ -114,7 +136,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           )}
         </CardContent>
       </Card>
-      {status === 'APPROVED' ? null : <CalculateBar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />}
+      {status === 'APPROVED' || Bar === null ? null : <Bar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />}
     </>
   );
 }

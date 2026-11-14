@@ -3,7 +3,7 @@ import { Check, TriangleAlert } from 'lucide-react';
 import { Icon } from '@/components/shared/icon';
 import type { FormSection } from '@/lib/estimates/form-client';
 
-import { SECTION_COMPLETE_TEXT, SECTION_MISSING_TEXT, SECTION_STRIP_LABEL, sectionLinkText } from './estimate-texts';
+import { SECTION_COMPLETE_TEXT, TREE_MISSING_INPUTS, SECTION_STRIP_LABEL, sectionLinkText } from './estimate-texts';
 import { sectionTitleId } from './section-card';
 
 export interface SectionStripItem {
@@ -52,7 +52,7 @@ export function SectionStrip({ items }: SectionStripProps) {
               {missing ? (
                 <>
                   <Icon icon={TriangleAlert} size="small" className="text-danger" />
-                  <span className="sr-only">{` ${SECTION_MISSING_TEXT}`}</span>
+                  <span className="sr-only">{` ${TREE_MISSING_INPUTS}`}</span>
                 </>
               ) : complete ? (
                 <>

@@ -1,25 +1,13 @@
 import { CALCULATE_BLOCKED_CODE, CALCULATE_SUBMITTED_STATUS } from '../estimate/calculate-words';
 import { ACCEPT_JSON, isRecord, sendJson, type Fetch, type Outcome, type Refusal } from '../api-client';
 
+import type { BlockedPartView, MissingFieldView } from './calculate-missing';
+
 /**
  * The browser's side of Calculate (STORY-05.09; SCR-05 "Calculate blocked" and "Submitted"; architecture section 6 "Calculate"): press the button, and read the answer. Nothing here decides
  * anything: whether the estimate is the person's, whether it is a draft, which inputs are missing and whether the masters allow a calculation are the server's, and this file only reads what it says
  * (an answer of the wrong shape is a failure, not a crash). **The one good answer is a status and a sentence**; there is no figure in it to read, and none is asked for (NFR-002).
  */
-
-/** A needed field that a part does not show a value for: its ID, to link to it, and its label. */
-export interface MissingFieldView {
-  readonly fieldId: string;
-  readonly label: string;
-}
-
-/** A part that Calculate found a missing input in: its ID, Sl. No, name (null while it has none) and the fields. */
-export interface BlockedPartView {
-  readonly nodeId: string;
-  readonly slNo: string;
-  readonly name: string | null;
-  readonly fields: ReadonlyArray<MissingFieldView>;
-}
 
 /** What a good Calculate answers: the estimate is now submitted, and the sentence to show. */
 export interface CalculateDone {
@@ -47,17 +35,6 @@ function toBlockedPart(value: unknown): BlockedPartView | null {
   const fields = value['fields'].map(toField);
   if (typeof nodeId !== 'string' || typeof slNo !== 'string' || (name !== null && typeof name !== 'string') || !fields.every((field) => field !== null)) return null;
   return { nodeId, slNo, name, fields };
-}
-
-/**
- * What is still missing after a part was saved (STORY-05.09): the fields of that part that now hold a value come off the list, and a part with none left is no longer listed. `null` when nothing is
- * left, so the screen has no summary to show. Pure: the list is the server's from the blocked answer, this only strikes what the person has since filled in, and the next press asks the server again.
- */
-export function withoutFilled(parts: ReadonlyArray<BlockedPartView>, partId: string, inputs: Readonly<Record<string, string>>): ReadonlyArray<BlockedPartView> | null {
-  const next = parts
-    .map((part) => (part.nodeId === partId ? { ...part, fields: part.fields.filter((field) => (inputs[field.fieldId] ?? '').trim() === '') } : part))
-    .filter((part) => part.fields.length > 0);
-  return next.length === 0 ? null : next;
 }
 
 /**

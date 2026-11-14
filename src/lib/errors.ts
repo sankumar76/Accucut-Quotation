@@ -1,6 +1,6 @@
 import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
-import type { BlockedPart } from './estimate/validation';
+import type { BlockedPart } from './estimate/calculate-check';
 
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
