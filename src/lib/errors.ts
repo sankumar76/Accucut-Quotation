@@ -160,6 +160,34 @@ export class ProcessItemInUseError extends ConflictError {
   }
 }
 
+/** A customer was deleted while a Draft or Submitted estimate uses it (STORY-02.07 AC-2, BR-053): 409, nothing changes. */
+export const CUSTOMER_IN_USE_CODE = 'CUSTOMER_IN_USE';
+
+/** A material was deleted while a Draft or Submitted estimate uses it (STORY-02.07 AC-3, BR-053): 409, nothing changes. */
+export const MATERIAL_IN_USE_CODE = 'MATERIAL_IN_USE';
+
+/** One open estimate that uses a customer or a material, as the refusal names it: the task's code and the estimate's status. Neither is a cost figure. */
+export interface EstimateUse {
+  readonly code: string;
+  readonly status: 'DRAFT' | 'SUBMITTED';
+}
+
+/**
+ * The refusal of deleting a customer or a material that a Draft or Submitted estimate uses: 409, with the estimates named so the screen can list them
+ * (architecture section 6, "409 with the open estimates using it"). `estimates` holds the first few only; `total` is how many there are in all, so the
+ * screen can say "and N more". The message holds the master's own name, which is structure and not a value (ADR-014); no rate, price or figure is carried.
+ */
+export class MasterInUseError extends ConflictError {
+  constructor(
+    code: typeof CUSTOMER_IN_USE_CODE | typeof MATERIAL_IN_USE_CODE,
+    name: string,
+    readonly estimates: ReadonlyArray<EstimateUse>,
+    readonly total: number,
+  ) {
+    super(`${name} cannot be deleted while an open estimate uses it`, { code });
+  }
+}
+
 /** The process was started with a missing or invalid setting. Never carries a setting's value. */
 export class ConfigurationError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {

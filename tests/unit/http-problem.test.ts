@@ -6,9 +6,12 @@ import {
   ActiveAdminExistsError,
   ConfigurationError,
   ConflictError,
+  CUSTOMER_IN_USE_CODE,
   DatabaseBusyError,
   FieldValidationError,
   ForbiddenError,
+  MasterInUseError,
+  MATERIAL_IN_USE_CODE,
   NotFoundError,
   StepUpFailed,
   StepUpLocked,
@@ -146,6 +149,20 @@ describe('the problem of an application error', () => {
 
   it('a second Admin whose current Admin could not be read back names nobody and omits the member', () => {
     expect(problemFromAppError(new ActiveAdminExistsError(null), ID)).not.toHaveProperty('currentAdmin');
+  });
+
+  it('STORY-02.07 AC-2, AC-3: the refusal to delete a customer or a material an open estimate uses is a 409 that names the estimates and counts them, and carries nothing else', () => {
+    const estimates = [{ code: 'Q-2026-0101', status: 'DRAFT' as const }, { code: 'Q-2026-0102', status: 'SUBMITTED' as const }];
+    expect(problemFromAppError(new MasterInUseError(CUSTOMER_IN_USE_CODE, 'Invented Works', estimates, 12), ID)).toEqual({
+      type: 'about:blank',
+      title: 'Invented Works cannot be deleted while an open estimate uses it',
+      status: 409,
+      code: 'CUSTOMER_IN_USE',
+      requestId: ID,
+      estimates,
+      estimateTotal: 12,
+    });
+    expect(problemFromAppError(new MasterInUseError(MATERIAL_IN_USE_CODE, 'Invented-grade-A', estimates, 2), ID)).toMatchObject({ code: 'MATERIAL_IN_USE', estimateTotal: 2 });
   });
 
   it('never carries the cause of an error', () => {

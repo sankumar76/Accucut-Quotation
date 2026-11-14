@@ -11,10 +11,12 @@ import {
   DatabaseBusyError,
   FieldValidationError,
   ForbiddenError,
+  MasterInUseError,
   ProcessItemInUseError,
   StepUpFailed,
   StepUpLocked,
   UnauthorizedError,
+  type EstimateUse,
   type FormulaUse,
 } from '../../lib/errors';
 
@@ -51,6 +53,9 @@ export interface Problem {
   readonly currentAdmin?: { readonly id: string; readonly name: string };
   /** Extension member of the refusal to delete a rate a formula uses (STORY-02.01 AC-4): each formula's column letter and label. */
   readonly usedBy?: ReadonlyArray<FormulaUse>;
+  /** Extension members of the refusal to delete a customer or a material an open estimate uses (STORY-02.07): the first estimates, and how many there are in all. */
+  readonly estimates?: ReadonlyArray<EstimateUse>;
+  readonly estimateTotal?: number;
 }
 
 /** Fixed words for the refusals, so a role refusal reads the same for every route and every ID asked for (CR-33). */
@@ -125,6 +130,13 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
   }
   if (error instanceof ProcessItemInUseError) {
     return { ...problem(error.httpStatus, error.code, error.message, requestId), usedBy: error.usedBy.map(({ letter, label }) => ({ letter, label })) };
+  }
+  if (error instanceof MasterInUseError) {
+    return {
+      ...problem(error.httpStatus, error.code, error.message, requestId),
+      estimates: error.estimates.map(({ code, status }) => ({ code, status })),
+      estimateTotal: error.total,
+    };
   }
   if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError)) {
     return problem(error.httpStatus, error.code, INTERNAL_TITLE, requestId);
