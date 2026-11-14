@@ -33,10 +33,14 @@ export interface QueueCounts {
   readonly overdue: number;
 }
 
-/** `tab=overdue&cursor=...`: the query string of one page of a tab; the cursor is the one the server sent, passed back unchanged. */
-export function queueQueryString(tab: QueueTab, cursor?: string): string {
+/**
+ * `tab=overdue&assignedBy=me&cursor=...`: the query string of one page of a tab; the cursor is the one the server sent, passed back unchanged. `assignedByMe`
+ * narrows the tab to the tasks the signed-in person assigned (STORY-04.03: a Lead's bell opens the Overdue tab this way).
+ */
+export function queueQueryString(tab: QueueTab, cursor?: string, assignedByMe = false): string {
   const params = new URLSearchParams();
   params.set('tab', tab);
+  if (assignedByMe) params.set('assignedBy', 'me');
   if (cursor !== undefined) params.set('cursor', cursor);
   return params.toString();
 }

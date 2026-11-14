@@ -21,7 +21,7 @@ export const meResponseSchema = z.strictObject({
   email: z.string().min(1),
   role: z.enum(['ADMIN', 'LEAD', 'ENGINEER']),
   navigation: z.array(meNavigationItemSchema),
-  /** Zero until the overdue count exists (STORY-04.03). */
+  /** The overdue tasks relevant to the caller's role: an Engineer's own, those a Lead assigned, all for an Admin (STORY-04.03 AC-2, FR-037). A count, never a task or a cost. */
   overdueCount: z.number().int().nonnegative(),
 });
 

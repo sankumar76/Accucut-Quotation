@@ -14,5 +14,6 @@ export function queueAnswer(queue: TaskQueue): z.input<typeof taskQueueSchema> {
     tasks: queue.tasks.map((task) => ({ ...task, deadlineAt: task.deadlineAt.toISOString() })),
     counts: queue.counts,
     nextCursor: queue.nextCursor,
+    asOf: queue.asOf.toISOString(),
   };
 }

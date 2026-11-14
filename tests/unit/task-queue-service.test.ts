@@ -78,7 +78,14 @@ describe('AC-1: Open, Closed and Overdue, each by deadline, earliest first', () 
 
   it('answers an Engineer with nothing assigned with empty tabs and zero counts', async () => {
     const empty = await service.listQueue({ id: OTHER_ENGINEER_ID, role: 'ENGINEER' }, { tab: 'closed' });
-    expect(empty).toEqual({ tab: 'closed', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null });
+    expect(empty).toEqual({ tab: 'closed', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
+  });
+
+  it('says at which instant it judged overdue (STORY-04.03 AC-1), so the rows and their "Overdue by" text use the same clock as the counts', async () => {
+    const clock = createFixedClock(NOW);
+    const later = createTaskService({ tasks: world.repository, transactions: world.transactions, clock });
+    clock.advance(DAY);
+    expect((await later.listQueue(asViewer(BOSS), { tab: 'open' })).asOf).toEqual(at(DAY));
   });
 });
 

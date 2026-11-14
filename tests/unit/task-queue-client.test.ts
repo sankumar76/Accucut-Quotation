@@ -19,7 +19,8 @@ const ROW = {
   status: 'DRAFT',
   assignedByName: 'Invented Boss',
 };
-const BODY = { tab: 'open', tasks: [ROW], counts: { open: 1, closed: 0, overdue: 0 }, nextCursor: null };
+const AS_OF = '2026-11-09T04:00:00.000Z';
+const BODY = { tab: 'open', tasks: [ROW], counts: { open: 1, closed: 0, overdue: 0 }, nextCursor: null, asOf: AS_OF };
 
 const answering = (status: number, body: unknown) => vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })));
 
@@ -43,6 +44,7 @@ describe('reading a page', () => {
       ],
       counts: { open: 1, closed: 0, overdue: 0 },
       nextCursor: 'abc',
+      asOf: AS_OF,
     });
   });
 
@@ -59,6 +61,8 @@ describe('reading a page', () => {
     ['negative counts', { ...BODY, counts: { open: -1, closed: 0, overdue: 0 } }],
     ['no counts', { ...BODY, counts: null }],
     ['a cursor that is not text', { ...BODY, nextCursor: 5 }],
+    ['no instant the overdue rows are judged at (STORY-04.03)', { ...BODY, asOf: undefined }],
+    ['an instant that is not a date', { ...BODY, asOf: 'yesterday' }],
     ['a row with no engineer', { ...BODY, tasks: [{ ...ROW, engineer: null }] }],
     ['a row with a status it does not know', { ...BODY, tasks: [{ ...ROW, status: 'PRICED' }] }],
     ['a row with a code that is not text', { ...BODY, tasks: [{ ...ROW, code: 7 }] }],
@@ -72,6 +76,12 @@ describe('reading a page', () => {
 });
 
 describe('asking for a page', () => {
+  it('adds assignedBy=me when asked to, which is how a Lead\'s Overdue tab matches the bell (STORY-04.03 AC-3)', async () => {
+    const doFetch = answering(200, BODY);
+    await fetchQueuePage('overdue', undefined, doFetch, undefined, true);
+    expect(doFetch).toHaveBeenCalledWith('/api/v1/tasks?tab=overdue&assignedBy=me', expect.objectContaining({ method: 'GET' }));
+  });
+
   it('sends a GET for the tab, with the cursor when there is one, as JSON and with the session cookie', async () => {
     const doFetch = answering(200, BODY);
     await fetchQueuePage('overdue', 'a+b', doFetch);
