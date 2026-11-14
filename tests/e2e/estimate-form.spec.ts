@@ -123,12 +123,19 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     await openForm(page, testInfo);
     const first = defined(await page.getByRole('region', { name: '01 Part Details' }).boundingBox());
     const second = defined(await page.getByRole('region', { name: '02 Material and Dimensions' }).boundingBox());
+    // What the layout is, so a failure says why: the width of the form and the columns the grid made.
+    const layout = await partForm(page).evaluate((form) => ({
+      formWidth: form.getBoundingClientRect().width,
+      columns: getComputedStyle(form.querySelector('[data-part-grid]') ?? form).gridTemplateColumns,
+      viewport: window.innerWidth,
+    }));
+    const why = `layout ${JSON.stringify(layout)}, first ${JSON.stringify(first)}, second ${JSON.stringify(second)}`;
     if (isPhone(page)) {
-      expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
-      expect(Math.abs(second.x - first.x)).toBeLessThan(2);
+      expect(second.y, why).toBeGreaterThanOrEqual(first.y + first.height);
+      expect(Math.abs(second.x - first.x), why).toBeLessThan(2);
     } else {
-      expect(Math.abs(second.y - first.y)).toBeLessThan(2);
-      expect(second.x).toBeGreaterThan(first.x + first.width - 2);
+      expect(Math.abs(second.y - first.y), why).toBeLessThan(2);
+      expect(second.x, why).toBeGreaterThan(first.x + first.width - 2);
     }
   });
 });

@@ -126,7 +126,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           </Button>
         </Notice>
       ) : null}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
+      <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
         {form.sections.map((section: FormSection) => (
           <SectionCard key={section.id} section={section}>
             {section.fields.map((field) => (
