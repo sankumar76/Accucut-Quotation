@@ -2,6 +2,7 @@
 
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import type { CustomerView } from '@/lib/estimates/estimates-client';
 
 import { ChangeCustomerDialog } from './change-customer-dialog';
@@ -23,7 +24,8 @@ export interface EstimateWorkspaceProps {
 }
 
 export function EstimateWorkspace({ header, estimateId, customer }: EstimateWorkspaceProps) {
-  const editable = header.status === 'DRAFT';
+  // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked.
+  const editable = canEditInputs(header.status, 'ENGINEER');
   const choice = useCustomerChoice({ estimateId, initial: customer, editable });
   const hasCustomer = choice.current !== null;
 
