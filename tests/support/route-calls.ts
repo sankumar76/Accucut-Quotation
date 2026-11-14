@@ -161,6 +161,12 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, body: stay, status: 200 };
     case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
+    // STORY-05.09: a good Calculate would submit the canary estimate and every later call would be the 409 "already submitted", so its valid call is the one that cannot change anything: the
+    // canary part is never complete (its material is not stored; the registry's treatment is not on the form), so Calculate is refused 422 `CALCULATE_BLOCKED` with the parts and fields
+    // missing, and writes nothing, at any state of the customer, for the one role that may call it. The 422 body is read by the confidentiality scan; the success body is held by
+    // `calculate-route.test.ts` and the strict-schema planted-key check of the route's own schema.
+    case 'POST /api/v1/estimates/[id]/calculate':
+      return { id, status: 422 };
     default:
       return undefined;
   }

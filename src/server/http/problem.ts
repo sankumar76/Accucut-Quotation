@@ -7,6 +7,7 @@ import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '../../lib/auth/s
 
 import {
   ActiveAdminExistsError,
+  CalculateBlockedError,
   AppError,
   DatabaseBusyError,
   FieldValidationError,
@@ -21,6 +22,7 @@ import {
   type FormulaUse,
 } from '../../lib/errors';
 import type { PartView } from '../../lib/estimate/part-view';
+import type { BlockedPart } from '../../lib/estimate/validation';
 
 /**
  * The error answer of every API route (architecture section 6, "Error model"): `application/problem+json`
@@ -57,6 +59,8 @@ export interface Problem {
   readonly usedBy?: ReadonlyArray<FormulaUse>;
   /** Extension member of the 409 of a parts tree that changed under the person (STORY-05.02 AC-6): the tree as it is now, the same six facts per part as `GET /tree`, and no figure. */
   readonly tree?: ReadonlyArray<PartView>;
+  /** Extension member of the 422 of a Calculate that found missing inputs (STORY-05.09 AC-1): each part with its Sl. No, name and missing fields. No value and no figure. */
+  readonly parts?: ReadonlyArray<BlockedPart>;
   /** Extension members of the refusal to delete a customer or a material an open estimate uses (STORY-02.07): the first estimates, and how many there are in all. */
   readonly estimates?: ReadonlyArray<EstimateUse>;
   readonly estimateTotal?: number;
@@ -134,6 +138,11 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
   }
   if (error instanceof ProcessItemInUseError) {
     return { ...problem(error.httpStatus, error.code, error.message, requestId), usedBy: error.usedBy.map(({ letter, label }) => ({ letter, label })) };
+  }
+  if (error instanceof CalculateBlockedError) {
+    // Named field by field, so a part can never carry more than its Sl. No, name and missing fields even if the service one day hands over a richer record (NFR-002).
+    const parts = error.parts.map(({ nodeId, slNo, name, fields }) => ({ nodeId, slNo, name, fields: fields.map(({ fieldId, label }) => ({ fieldId, label })) }));
+    return { ...problem(error.httpStatus, error.code, error.message, requestId), parts };
   }
   if (error instanceof TreeChangedError) {
     // Named field by field, so a part can never carry more than the six facts of the tree even if the service one day hands over a richer record.

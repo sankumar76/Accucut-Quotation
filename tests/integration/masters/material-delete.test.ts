@@ -234,8 +234,8 @@ describe('AC-4: a material used only by Approved estimates may be deleted, and t
     expect(part.rows).toEqual([{ inputs: { [FIELD]: { id: alpha.id, text: 'Alpha-sheet' } } }]);
     const kept = await db.owner.query<{ status: string }>('SELECT status::text AS status FROM estimates WHERE id = $1::uuid', [estimateId]);
     expect(kept.rows).toEqual([{ status: 'APPROVED' }]);
-    // The master's own lookup does not find a deleted material: what an Approved estimate shows is its own stored copy (the calculation's snapshot and resolved text), not this lookup.
-    expect(await db.masterRepository.findMaterialForCalculation(alpha.id)).toBeNull();
+    // The calculation's lookup finds a deleted material and says so (STORY-05.09: Calculate answers the specific 409 MATERIAL_DELETED); what an Approved estimate shows is its own stored copy (the calculation's snapshot and resolved text), not this lookup.
+    expect((await db.masterRepository.findMaterialsForCalculation([alpha.id])).map((record) => record.deleted)).toEqual([true]);
   });
 });
 

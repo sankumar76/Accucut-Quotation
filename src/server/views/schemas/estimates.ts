@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
+
 /**
  * The contract of the estimate routes (STORY-05.01, architecture section 6 "Set customer"). Every body, path parameter and answer is a strict object: a key
  * that is not named is an error, so nothing is sent that is not meant to be, and a client cannot set a field the route does not offer. The route is open to
@@ -26,4 +28,14 @@ export const estimateCustomerSchema = z.strictObject({
   id: z.string().min(1),
   status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
   customer: customerChoiceSchema,
+});
+
+/**
+ * The whole answer of `POST /api/v1/estimates/{id}/calculate` (STORY-05.09 AC-2, AC-6; architecture section 6 "Calculate"; NFR-002): the status the estimate now has and the one fixed sentence,
+ * and nothing else, with or without anything sent. Both values are literals, so even a handler that put a figure in either would fail the parse and answer 500 with fixed words: the schema
+ * is the last guard of "the Engineer never receives a cost", behind the service (which returns exactly this) and the import rule (which keeps the Restricted tables out of its reach).
+ */
+export const calculateAnswerSchema = z.strictObject({
+  status: z.literal(CALCULATE_SUBMITTED_STATUS),
+  message: z.literal(CALCULATE_MESSAGE),
 });
