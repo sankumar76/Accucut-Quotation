@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createDisposableUser, E2E_PASSWORD, expectOnQueue, signInThroughThePage, useFreshAddress, type E2eUser } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 import { seedQueueTask } from './support/queue';
-import { DEVELOPMENT_URL } from './support/servers';
+import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-04.03 T5 (AC-1 to AC-5, AC-7): the overdue cues of SCR-03 and the bell of SCR-25, at 360x800, 768x1024 and 1366x768 on the development server. Every test signs in as a
@@ -199,16 +199,23 @@ test.describe('a Lead', () => {
 });
 
 test.describe('an Admin', () => {
+  // The portal allows one active Admin, so the saved browser state of the E2E Admin (the set-up project) is used and no Admin is made for the test.
+  test.use({ storageState: ADMIN_STATE });
+
   test('AC-2, AC-3: the bell counts every overdue task (at least the ones seeded here), and opens the whole Overdue tab', async ({ page }, testInfo) => {
     const engineer = await createDisposableUser('queue', testInfo);
-    await openAs(page, testInfo, 'ADMIN', async () => {
-      await seedQueueTask(engineer.id, ago(LATE), 'DRAFT', 'E2E admin sees one');
-      await seedQueueTask(engineer.id, ago(DAY_MS), 'DRAFT', 'E2E admin sees two');
-    });
-    const me = meSchema.parse(await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/me`)).json());
-    expect(me.overdueCount).toBeGreaterThanOrEqual(2);
-    const bell = page.getByRole('link', { name: `Overdue tasks: ${me.overdueCount}` });
+    await seedQueueTask(engineer.id, ago(LATE), 'DRAFT', 'E2E admin sees one');
+    await seedQueueTask(engineer.id, ago(DAY_MS), 'DRAFT', 'E2E admin sees two');
+    await page.goto('/queue');
+    await expectOnQueue(page, 'Task queue');
+    await waitUntilHydrated(page, '[role="tab"]', 'onMouseDown');
+    // Other specs seed overdue tasks into the shared database at the same time, so the count is read from the bell's own name, and only a floor is asserted.
+    const bell = page.getByRole('link', { name: /^Overdue tasks: \d+$/ });
     await expect(bell).toBeVisible();
+    const shown = Number(/(\d+)$/.exec((await bell.getAttribute('aria-label')) ?? '')?.[1]);
+    expect(shown).toBeGreaterThanOrEqual(2);
+    const me = meSchema.parse(await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/me`)).json());
+    expect(me.overdueCount).toBeGreaterThanOrEqual(shown);
     await bell.click();
     await expect(page).toHaveURL(/\/queue\?tab=overdue$/);
     await expect(tab(page, 'Overdue')).toHaveAttribute('aria-selected', 'true');
