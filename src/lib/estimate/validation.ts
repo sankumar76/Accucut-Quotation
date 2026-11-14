@@ -1,10 +1,10 @@
-import { findFieldById, findFieldByKey } from '../fields/registry';
+import { findFieldByKey } from '../fields/registry';
 import type { ConfigDocument } from '../fields/schema';
 import { MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { isFieldShown } from '../fields/visibility';
 import { DECIMAL_TEXT_PATTERN, normaliseDecimalText } from '../masters/master-rules';
 
-import { buildFormSections, type FormFieldView } from './form-fields';
+import { buildFormSections, type FormFieldView, type FormRule } from './form-fields';
 import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 
 /**
@@ -131,10 +131,18 @@ const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
 /** What a number the registry hides for a part is read as: 0, in the form every stored number has (two decimals). */
 const HIDDEN_NUMBER = '0.00';
 
-type Values = ReadonlyMap<string, string | null>;
+/** A field of the form that a person types or chooses: its rule is a number, a text or a choice, never "follows another field". */
+type TypedField = FormFieldView & { readonly rule: Exclude<FormRule, { readonly type: 'derived' }> };
+const isTyped = (field: FormFieldView): field is TypedField => field.rule.type !== 'derived';
+
+/** One field of the form as one part holds it: its value read by its rule (`null`: none, or refused). */
+interface FieldValue {
+  readonly field: TypedField;
+  readonly value: string | null;
+}
 
 /** The value of a field as the part holds it: the stored text if there is one, otherwise the field's default, read by the field's rule; `null` when there is none or the rule refuses it. */
-function readField(field: FormFieldView, stored: unknown): string | null {
+function readField(field: TypedField, stored: unknown): string | null {
   const typed = typeof stored === 'string' ? stored : '';
   const raw = typed.trim() === '' ? (field.defaultValue ?? '') : typed;
   switch (field.rule.type) {
@@ -148,15 +156,11 @@ function readField(field: FormFieldView, stored: unknown): string | null {
     }
     case 'select':
       return raw.trim() === '' ? null : raw.trim().toLowerCase();
-    case 'derived':
-      return null;
   }
 }
 
 /** Every field of the form that a person types or chooses, in the order of the form. */
-function typedFieldsOf(document: ConfigDocument): ReadonlyArray<FormFieldView> {
-  return buildFormSections(document).flatMap((section) => section.fields.filter((field) => field.editable));
-}
+const typedFieldsOf = (document: ConfigDocument): ReadonlyArray<TypedField> => buildFormSections(document).flatMap((section) => section.fields.filter(isTyped));
 
 /** The registry's inputs that are not on the form but that the calculation or the record reads: the flags (numbers) and the words of Treatment / Color. */
 function reservedInputs(document: ConfigDocument, dataType: 'flag' | 'select_other') {
@@ -164,35 +168,28 @@ function reservedInputs(document: ConfigDocument, dataType: 'flag' | 'select_oth
 }
 
 /** The words of a part's name: the first of `PART_NAME_KEYS` that holds a value. */
-function nameOf(document: ConfigDocument, values: Values): string | null {
+function nameOf(document: ConfigDocument, read: ReadonlyArray<FieldValue>): string | null {
   for (const key of PART_NAME_KEYS) {
-    const field = findFieldByKey(document, key);
-    const value = field === undefined ? null : (values.get(field.id) ?? null);
+    const value = read.find(({ field }) => field.id === findFieldByKey(document, key)?.id)?.value ?? null;
     if (value !== null) return value;
   }
   return null;
 }
 
-/** The values of every field of the form for one part, and whether the registry shows a field of it. */
-function readPart(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<FormFieldView>) {
-  const values: Values = new Map(fields.map((field) => [field.id, readField(field, part.inputs[field.id])]));
-  const shown = (fieldId: string): boolean => {
-    const found = findFieldById(document, fieldId);
-    return found === undefined || isFieldShown(found, (watched) => values.get(watched) ?? undefined);
-  };
-  return { values, shown };
-}
-
-function missingOf(fields: ReadonlyArray<FormFieldView>, values: Values, shown: (fieldId: string) => boolean): MissingField[] {
-  return fields.filter((field) => field.required && shown(field.id) && values.get(field.id) === null).map((field) => ({ fieldId: field.id, label: field.label }));
+/** Every field of the form, as one part holds it, and the IDs of the registry's inputs that the registry hides for it (`visibleWhen`, through `isFieldShown`, the one copy of the rule). */
+function readPart(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<TypedField>) {
+  const read: FieldValue[] = fields.map((field) => ({ field, value: readField(field, part.inputs[field.id]) }));
+  const watched = new Map(read.map(({ field, value }) => [field.id, value]));
+  const hidden = new Set(document.fields.filter((definition) => !isFieldShown(definition, (fieldId) => watched.get(fieldId) ?? undefined)).map((definition) => definition.id));
+  return { read, hidden };
 }
 
 /** The typed numbers: a shown one as read, a hidden one as 0, and the flags, which are not on the form yet and are read as numbers (an absent one is its default, 0). */
-function numbersOf(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<FormFieldView>, values: Values, shown: (fieldId: string) => boolean): Record<string, string> {
+function numbersOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyArray<FieldValue>, hidden: ReadonlySet<string>): Record<string, string> {
   const numbers: Record<string, string> = {};
-  for (const field of fields.filter((candidate) => candidate.rule.type === 'number')) {
-    const value = shown(field.id) ? values.get(field.id) : HIDDEN_NUMBER;
-    if (value !== null && value !== undefined) numbers[field.id] = value;
+  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'number')) {
+    const used = hidden.has(field.id) ? HIDDEN_NUMBER : value;
+    if (used !== null) numbers[field.id] = used;
   }
   for (const flag of reservedInputs(document, 'flag')) {
     const stored = part.inputs[flag.id];
@@ -203,11 +200,10 @@ function numbersOf(part: PartToCheck, document: ConfigDocument, fields: Readonly
 }
 
 /** The typed words, and the word kept for Treatment / Color once its story builds the control (until then nothing is stored for it, and nothing is made up). */
-function textsOf(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<FormFieldView>, values: Values): Record<string, string> {
+function textsOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyArray<FieldValue>): Record<string, string> {
   const texts: Record<string, string> = {};
-  for (const field of fields.filter((candidate) => candidate.rule.type === 'text')) {
-    const value = values.get(field.id);
-    if (value !== null && value !== undefined) texts[field.id] = value;
+  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'text')) {
+    if (value !== null) texts[field.id] = value;
   }
   for (const treatment of reservedInputs(document, 'select_other')) {
     const stored = part.inputs[treatment.id];
@@ -218,22 +214,24 @@ function textsOf(part: PartToCheck, document: ConfigDocument, fields: ReadonlyAr
 
 /**
  * Checks every part, in the order given (the tree's reading order). Passes with the numbers and words of each part, or blocks with each part that has a missing field; it is never both. An
- * estimate with no part passes with nothing: that it must have one is the service's to say.
+ * estimate with no part passes with nothing: that it must have one is the service's to say. A registry with no Material in Drawing cannot be calculated, so every part is blocked, with
+ * nothing named (fail closed: a calculation needs a material).
  */
 export function validateForCalculate(parts: ReadonlyArray<PartToCheck>, document: ConfigDocument): CalculateCheck {
   const fields = typedFieldsOf(document);
-  const material = findFieldByKey(document, MATERIAL_IN_DRAWING_KEY);
+  const materialId = findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id;
   const blocked: BlockedPart[] = [];
   const checked: CheckedPart[] = [];
   for (const part of parts) {
-    const { values, shown } = readPart(part, document, fields);
-    const missing = missingOf(fields, values, shown);
-    const materialId = material === undefined ? null : (values.get(material.id) ?? null);
-    if (missing.length > 0 || materialId === null) {
-      blocked.push({ nodeId: part.id, slNo: part.slNo, name: nameOf(document, values), fields: missing });
+    const { read, hidden } = readPart(part, document, fields);
+    const missing = read.filter(({ field, value }) => field.required && !hidden.has(field.id) && value === null).map(({ field }) => ({ fieldId: field.id, label: field.label }));
+    const material = read.find(({ field }) => field.id === materialId)?.value ?? null;
+    if (missing.length > 0 || material === null) {
+      blocked.push({ nodeId: part.id, slNo: part.slNo, name: nameOf(document, read), fields: missing });
     } else {
-      checked.push({ id: part.id, slNo: part.slNo, materialId, numbers: numbersOf(part, document, fields, values, shown), texts: textsOf(part, document, fields, values) });
+      checked.push({ id: part.id, slNo: part.slNo, materialId: material, numbers: numbersOf(part, document, read, hidden), texts: textsOf(part, document, read) });
     }
   }
   return blocked.length > 0 ? { ok: false, parts: blocked } : { ok: true, parts: checked };
 }
+

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
 import { CUSTOMER_CANARIES, CUSTOMER_CANARY_PHONE, CUSTOMER_CANARY_VALUES } from '../support/customer-canary';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from '../support/exchange-rate-canary';
 import { MATERIAL_CANARIES } from '../support/material-master-canary';
 import { defined } from '../support/defined';
@@ -21,6 +22,9 @@ import {
   ensureCanaryProcessRates,
   ensureCanaryUser,
   fillCanaryPart,
+  insertPrivateMaterial,
+  makeCanaryEstimateCalculable,
+  readEstimateState,
   readExchangeRatesFromDatabase,
   readFormulaTexts,
   signInThroughThePage,
@@ -38,6 +42,7 @@ import {
   validCall,
   type Plant,
 } from './support/canary-scan';
+import { waitUntilHydrated } from './support/design-system';
 import { seedQueueTask, setEstimateStatus, type SeededQueueTask } from './support/queue';
 import { PRODUCTION_URL } from './support/servers';
 
@@ -503,6 +508,84 @@ test('AC-6 (negative control, STORY-04.04): a sentinel planted in the task route
     findings.some((finding) => finding.label.includes(`/api/v1/tasks/${tasks.approved.id}`) && finding.found === customer),
     'the sentinel planted in the task route\'s answer',
   ).toBe(true);
+});
+
+/**
+ * STORY-05.09 AC-6 (NFR-002; test strategy section 6, "Also asserted: Calculate's Engineer response equals exactly {status, message}"): the Calculate journey. The Engineer owns an estimate that
+ * can be calculated, with the canary customer's rates and a canary material, and presses Calculate in the browser; the page afterwards, the routes that read the estimate, and a second press are
+ * recorded too. Every Restricted value exists in the database, as plain digits, in Indian grouping and in two-decimal form, and none of them, nor any calculated output, may be in anything the
+ * Engineer was sent. The answer to the press is exactly `{status, message}`, and a second press is the 409 and sends nothing either. The part also holds a planted price under Material Rate / Kg
+ * and an unknown key (`fillCanaryPart`), which Calculate must ignore.
+ */
+const CALCULATE_ANSWER = { status: 'SUBMITTED', message: 'Cost will be calculated based on the input fields and sent for review/approval.' };
+
+test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted value, and the answer is exactly {status, message}', async ({ page, context }, testInfo) => {
+  const { forbidden, engineer } = await prepare(testInfo);
+  await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
+  const code = canaryTaskCodeFor(engineer.id);
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  const before = await recorder.recordNavigation(`GET /estimates/${code} (page, before Calculate)`, await page.goto(`/estimates/${code}`));
+  expect(before.status).toBe(200);
+  await waitUntilHydrated(page, '#calculate-button', 'onClick');
+  const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${engineer.id}/calculate`));
+  await page.locator('#calculate-button').click();
+  const response = await answered;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual(CALCULATE_ANSWER);
+  await expect(page.locator('#calculate-button')).toHaveText('Submitted');
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  // After the press: the page, the routes that read the estimate, and a second press.
+  const after = await recorder.recordNavigation(`GET /estimates/${code} (page, after Calculate)`, await page.goto(`/estimates/${code}`));
+  expect(after.status).toBe(200);
+  expect(after.body ?? '').toContain('Submitted');
+  for (const path of [`/api/v1/estimates/${engineer.id}/form`, `/api/v1/estimates/${engineer.id}/tree`, `/api/v1/estimates/${engineer.id}/nodes/${engineer.id}`, `/api/v1/tasks/${engineer.id}`]) {
+    expect((await callInBrowser(recorder, page, `GET ${path} (API, after Calculate)`, path)).status, path).toBe(200);
+  }
+  const again = await callInBrowser(recorder, page, 'POST calculate (API, second press)', `/api/v1/estimates/${engineer.id}/calculate`, { method: 'POST' });
+  expect(again.status).toBe(409);
+  expect(JSON.parse(again.body ?? '{}')).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  // The scan looked at something: the estimate really was calculated, once.
+  expect(await readEstimateState(engineer.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
+});
+
+test('AC-6 (STORY-05.09): the same estimate calculated under two sets of masters gives identical answers', async ({ page, context }, testInfo) => {
+  const { engineer: first } = await prepare(testInfo);
+  const second = await createDisposableUser('scan', testInfo);
+  await fillCanaryPart(second.id);
+  // Two materials of the test's own, with different numbers (the canary materials are shared with other tests and are not touched).
+  const cheap = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
+  const dear = await insertPrivateMaterial({ pricePerKg: '9137.73', specificGravity: '2.73', scrapRate: '93.73' });
+  await makeCanaryEstimateCalculable(first.id, cheap, defined(CUSTOMER_CANARIES[0]).id);
+  await makeCanaryEstimateCalculable(second.id, dear, defined(CUSTOMER_CANARIES[0]).id);
+
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  const bodies: string[] = [];
+  for (const person of [first, second]) {
+    await context.clearCookies();
+    await signIn(page, recorder, person);
+    const answer = await callInBrowser(recorder, page, `POST calculate (API, ${person.id})`, `/api/v1/estimates/${person.id}/calculate`, { method: 'POST' });
+    expect(answer.status).toBe(200);
+    bodies.push(answer.body ?? '');
+  }
+  expect(bodies[0]).toBe(JSON.stringify(CALCULATE_ANSWER));
+  expect(bodies[1]).toBe(bodies[0]);
+  expect(await readEstimateState(first.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(second.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {

@@ -1,15 +1,17 @@
-import { Check } from 'lucide-react';
+import { Check, TriangleAlert } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
 import type { FormSection } from '@/lib/estimates/form-client';
 
-import { SECTION_COMPLETE_TEXT, SECTION_STRIP_LABEL, sectionLinkText } from './estimate-texts';
+import { SECTION_COMPLETE_TEXT, SECTION_MISSING_TEXT, SECTION_STRIP_LABEL, sectionLinkText } from './estimate-texts';
 import { sectionTitleId } from './section-card';
 
 export interface SectionStripItem {
   readonly section: Pick<FormSection, 'id' | 'number' | 'shortName'>;
   /** Everything the card asks for is filled: a check follows the name. A card with nothing to fill never has one. */
   readonly complete: boolean;
+  /** Calculate found a field of the card blank (STORY-05.09): a triangle follows the name, spoken as "Missing inputs". Never with a check. */
+  readonly missing?: boolean;
 }
 
 export interface SectionStripProps {
@@ -39,7 +41,7 @@ export function SectionStrip({ items }: SectionStripProps) {
       className="sticky top-(--topbar-h) z-(--z-bar) min-w-0 rounded-md border border-border bg-surface px-s-2 shadow-card"
     >
       <ul className="flex min-w-0 gap-s-1 overflow-x-auto py-s-1">
-        {items.map(({ section, complete }) => (
+        {items.map(({ section, complete, missing = false }) => (
           <li key={section.id} className="shrink-0">
             <a
               href={`#${sectionTitleId(section.id)}`}
@@ -47,7 +49,12 @@ export function SectionStrip({ items }: SectionStripProps) {
               className="inline-flex min-h-(--control-h) items-center gap-s-1 rounded-md px-s-2 text-body whitespace-nowrap text-ink no-underline hover:bg-surface-2"
             >
               {sectionLinkText(section.number, section.shortName)}
-              {complete ? (
+              {missing ? (
+                <>
+                  <Icon icon={TriangleAlert} size="small" className="text-danger" />
+                  <span className="sr-only">{` ${SECTION_MISSING_TEXT}`}</span>
+                </>
+              ) : complete ? (
                 <>
                   <Icon icon={Check} size="small" className="text-success-ink" />
                   <span className="sr-only">{` ${SECTION_COMPLETE_TEXT}`}</span>

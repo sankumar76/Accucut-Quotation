@@ -258,18 +258,23 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     await expect(control(page, 'V')).toHaveValue('12.50');
   });
 
-  test('AC-6 (Enter): Enter goes through every typed field in the order of the form, Shift+Enter in Remarks stays, and on the last field Enter leaves it for the heading; the page address does not change', async ({
+  test('AC-6 (Enter): Enter goes through every typed field in the order of the form, Shift+Enter in Remarks stays, and on the last field Enter moves focus to Calculate and never presses it (STORY-05.09 AC-9, which replaced "the heading"); the page address does not change', async ({
     page,
   }, testInfo) => {
     await openForm(page, testInfo);
     const address = page.url();
+    let calculates = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/calculate')) calculates += 1;
+    });
     await control(page, 'B').focus();
     for (const next of FORM_ORDER.slice(1)) {
       await page.keyboard.press('Enter');
       await expect(control(page, next), `Enter should reach ${next}`).toBeFocused();
     }
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { name: 'Part 1', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Calculate', exact: true })).toBeFocused();
+    expect(calculates, 'Enter moved to Calculate and did not press it').toBe(0);
     expect(page.url()).toBe(address);
   });
 });
