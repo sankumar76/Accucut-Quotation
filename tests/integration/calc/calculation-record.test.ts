@@ -176,7 +176,8 @@ describe('AC-1: the estimate row lock orders a Calculate and an input change', (
         () => 'stored',
         (error: unknown) => (error instanceof Error && 'code' in error ? String(error.code) : 'failed'),
       );
-      await waitUntilAStatementWaitsOnALock(db.owner);
+      // The waiting statement is the runtime role's, and pg_stat_activity shows another role's sessions only to a member of it: look as the runtime role.
+      await waitUntilAStatementWaitsOnALock(db.runtime);
       await changer.query('UPDATE estimates SET inputs_revision = inputs_revision + 1 WHERE id = $1::uuid', [estimateId]);
       await changer.query('COMMIT');
       expect(await outcome).toBe('INPUTS_CHANGED');
