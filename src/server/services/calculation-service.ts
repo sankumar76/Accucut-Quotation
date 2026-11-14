@@ -10,6 +10,7 @@ import type { ConfigDocument } from '../../lib/fields/schema';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../../lib/fields/types';
 import { createPlanCache, type PlanCache, type RateValue } from '../../lib/formula';
 import type { CalculationRepository, MasterSnapshot, NewCalculationRow, StoredValues } from '../repositories/calculation-repository';
+import type { EstimateRepository } from '../repositories/estimate-repository';
 import type { MasterRepository, MaterialValuesRecord } from '../repositories/master-repository';
 import type { TransactionRunner, Transaction } from '../repositories/transaction';
 
@@ -117,7 +118,12 @@ export interface CalculationServiceDependencies {
    * Where a record is stored (STORY-03.05). Optional so the calculation alone (`calculateRow`, `calculateEstimate`) needs no database; `storeCalculation` on a
    * service built without it fails at once with a plain `Error`, a programming fault and never a user's, so it cannot be mistaken for a refusal.
    */
-  readonly storage?: { readonly calculations: CalculationRepository; readonly transactions: TransactionRunner };
+  readonly storage?: {
+    readonly calculations: CalculationRepository;
+    /** The estimate is locked, read and linked through its own repository (STORY-05.01's), so there is one lock on one row for every writer. */
+    readonly estimates: Pick<EstimateRepository, 'lockEstimate' | 'linkCalculation'>;
+    readonly transactions: TransactionRunner;
+  };
 }
 
 /** Digits, then optionally a point and digits: no sign, no exponent, no separator (architecture section 8, "the API accepts plain decimals only"). */
@@ -304,8 +310,12 @@ export function createCalculationService(dependencies: CalculationServiceDepende
   }
 
   /** The write, in the caller's transaction. The estimate is locked first and everything is read and checked before the first insert. */
-  async function store(calculations: CalculationRepository, request: StoreCalculationRequest, tx: Transaction): Promise<StoredCalculation> {
-    const estimate = await calculations.lockEstimate(request.estimateId, tx);
+  async function store(
+    { calculations, estimates }: NonNullable<CalculationServiceDependencies['storage']>,
+    request: StoreCalculationRequest,
+    tx: Transaction,
+  ): Promise<StoredCalculation> {
+    const estimate = await estimates.lockEstimate(request.estimateId, tx);
     if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
     if (estimate.status === 'APPROVED') throw new ConflictError(ESTIMATE_APPROVED_MESSAGE, { code: 'ESTIMATE_APPROVED' });
     if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: 'CUSTOMER_NOT_CHOSEN' });
@@ -348,7 +358,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
       tx,
     );
     // A first Calculate submits the estimate; a later one leaves the status as it is (architecture section 4.4).
-    await calculations.linkCurrentCalculation(estimate.id, stored.id, estimate.status === 'DRAFT' ? 'SUBMITTED' : estimate.status, tx);
+    await estimates.linkCalculation(estimate.id, stored.id, estimate.status === 'DRAFT' ? 'SUBMITTED' : estimate.status, tx);
     return stored;
   }
 
@@ -362,8 +372,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     async storeCalculation(request, tx) {
       if (storage === undefined) throw new Error('This calculation service was built without storage.');
       checkStoreRequest(request);
-      const { calculations, transactions } = storage;
-      return tx === undefined ? transactions.run((own) => store(calculations, request, own)) : store(calculations, request, tx);
+      return tx === undefined ? storage.transactions.run((own) => store(storage, request, own)) : store(storage, request, tx);
     },
   };
 }

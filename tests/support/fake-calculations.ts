@@ -1,39 +1,27 @@
-import type { EstimateStatus } from '../../src/server/repositories/task-repository';
-import type {
-  CalculationRecord,
-  CalculationRepository,
-  LockedEstimate,
-  NewCalculation,
-  NewCalculationRow,
-} from '../../src/server/repositories/calculation-repository';
-import { createTransactionHandle, type Transaction, type TransactionRunner } from '../../src/server/repositories/transaction';
+import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow } from '../../src/server/repositories/calculation-repository';
+import type { EstimateRepository } from '../../src/server/repositories/estimate-repository';
+import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
+
+import type { FakeEstimateWorld } from './fake-estimates';
 
 /**
- * An in-memory calculation repository and transaction runner, for unit tests of the rules (no database): the estimates are a list the test owns, a record
- * is kept with its rows, and a transaction that throws puts the records and the estimates back as they were, as PostgreSQL does. The real queries, the lock,
- * the constraints, the triggers and the grants are tested against PostgreSQL in `tests/integration/calc/calculation-record.test.ts` and `immutability.test.ts`.
- * Every name and number is invented.
+ * An in-memory calculation repository for unit tests of the rules (no database), built over the estimate fake (`fake-estimates.ts`): a record is kept with its
+ * rows, and the shared transaction runner puts the records AND the estimates back as they were when a transaction throws, as PostgreSQL does. The real queries,
+ * the lock, the constraints, the triggers and the grants are tested against PostgreSQL in `tests/integration/calc/calculation-record.test.ts` and
+ * `immutability.test.ts`. Every name and number is invented.
  */
-
-/** An estimate the test may change in place, as the repository reads it plus the link to its newest calculation. */
-export interface FakeEstimate {
-  id: string;
-  customerId: string | null;
-  status: EstimateStatus;
-  inputsRevision: number;
-  currentCalculationId: string | null;
-}
 
 export interface FakeCalculationWorld {
   readonly repository: CalculationRepository;
+  /** The estimate repository of the world, with `linkCalculation` able to fail on demand. */
+  readonly estimates: EstimateRepository;
   readonly transactions: TransactionRunner;
-  readonly estimates: FakeEstimate[];
   /** The records of committed transactions, oldest first. */
   readonly calculations: CalculationRecord[];
-  /** How many times an estimate was locked, so a test can see that the lock is the first thing a store does. */
-  lockCount(): number;
-  /** Makes the next `linkCurrentCalculation` fail once with this error, after the record and its rows were written (a late failure). */
+  /** Makes the next `linkCalculation` fail once with this error, after the record and its rows were written (a late failure). */
   failNextLinkWith(error: Error): void;
+  /** How many times an estimate was locked, so a test can see that the lock is taken. */
+  lockCount(): number;
 }
 
 let counter = 0;
@@ -42,65 +30,59 @@ const nextId = (): string => {
   return `00000000-0000-4000-8000-0ca1${String(counter).padStart(8, '0')}`;
 };
 
-export function createFakeCalculationWorld(estimates: FakeEstimate[]): FakeCalculationWorld {
+export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): FakeCalculationWorld {
   const calculations: CalculationRecord[] = [];
-  let locks = 0;
   let failure: Error | null = null;
+  let locks = 0;
 
   const repository: CalculationRepository = {
-    lockEstimate(estimateId: string): Promise<LockedEstimate | null> {
-      locks += 1;
-      const found = estimates.find((estimate) => estimate.id === estimateId);
-      return Promise.resolve(found === undefined ? null : { id: found.id, customerId: found.customerId, status: found.status, inputsRevision: found.inputsRevision });
-    },
     insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>) {
       const id = nextId();
       const createdAt = new Date('2026-11-14T05:00:00.000Z');
-      calculations.push({
-        ...calculation,
-        id,
-        warnings: [],
-        createdAt,
-        rows: rows.map((row) => ({ ...row, id: nextId() })),
-      });
+      calculations.push({ ...calculation, id, warnings: [], createdAt, rows: rows.map((row) => ({ ...row, id: nextId() })) });
       return Promise.resolve({ id, createdAt });
     },
-    linkCurrentCalculation(estimateId: string, calculationId: string, status: EstimateStatus) {
+    findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
+  };
+
+  const estimates: EstimateRepository = {
+    ...estimateWorld.repository,
+    lockEstimate: (id, tx) => {
+      locks += 1;
+      return estimateWorld.repository.lockEstimate(id, tx);
+    },
+    linkCalculation: (estimateId, calculationId, status, tx) => {
       if (failure !== null) {
         const error = failure;
         failure = null;
         return Promise.reject(error);
       }
-      const found = estimates.find((estimate) => estimate.id === estimateId);
-      if (found === undefined) return Promise.reject(new Error('No such estimate.'));
-      found.currentCalculationId = calculationId;
-      found.status = status;
-      return Promise.resolve();
+      return estimateWorld.repository.linkCalculation(estimateId, calculationId, status, tx);
     },
-    findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
   };
 
   const transactions: TransactionRunner = {
-    async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-      const before = { calculations: calculations.length, estimates: estimates.map((estimate) => ({ ...estimate })) };
-      try {
-        return await work(createTransactionHandle());
-      } catch (error) {
-        calculations.length = before.calculations;
-        estimates.forEach((estimate, index) => Object.assign(estimate, before.estimates[index]));
-        throw error;
-      }
+    run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+      const kept = calculations.length;
+      return estimateWorld.transactions.run(async (tx) => {
+        try {
+          return await work(tx);
+        } catch (error) {
+          calculations.length = kept;
+          throw error;
+        }
+      });
     },
   };
 
   return {
     repository,
-    transactions,
     estimates,
+    transactions,
     calculations,
-    lockCount: () => locks,
     failNextLinkWith(error) {
       failure = error;
     },
+    lockCount: () => locks,
   };
 }

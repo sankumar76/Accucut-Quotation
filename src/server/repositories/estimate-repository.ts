@@ -47,6 +47,8 @@ export interface EstimateLock {
   readonly engineerId: string;
   readonly status: EstimateStatus;
   readonly customerId: string | null;
+  /** The count of input changes so far (architecture section 4.8). A calculation is stored against the value read here, under this lock (STORY-03.05). */
+  readonly inputsRevision: number;
 }
 
 export interface EstimateRepository {
@@ -58,6 +60,12 @@ export interface EstimateRepository {
   findActiveCustomer(id: string, tx: Transaction): Promise<CustomerChoice | null>;
   /** Sets the customer and raises `inputs_revision` by one, in the caller's transaction. The caller has already checked the state and that the customer differs. */
   setCustomer(estimateId: string, customerId: string, tx: Transaction): Promise<void>;
+  /**
+   * Links the estimate to the calculation just stored for it and sets its status, in the caller's transaction (STORY-03.05; architecture sections 4.2 and 4.4).
+   * It leaves `inputs_revision` alone: a calculation is not an input change. The statement links only a calculation that belongs to this very estimate, and
+   * throws if it changed no row, so an estimate can never show another estimate's figures.
+   */
+  linkCalculation(estimateId: string, calculationId: string, status: EstimateStatus, tx: Transaction): Promise<void>;
 }
 
 const STATUS = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
@@ -77,7 +85,7 @@ const WORKSPACE_ROWS = z.array(
     assignedByName: z.string(),
   }),
 );
-const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable() }));
+const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int() }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -108,7 +116,8 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         if (!isUuid(id)) return null;
         // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter.
         const rows = await clientFor(db, tx).$queryRaw`
-          SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status", e.customer_id::text AS "customerId"
+          SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status", e.customer_id::text AS "customerId",
+                 e.inputs_revision::int AS "inputsRevision"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE e.id = ${id}::uuid
           FOR UPDATE OF e FOR SHARE OF t`;
@@ -126,6 +135,17 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
     setCustomer: (estimateId, customerId, tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).estimate.update({ where: { id: estimateId }, data: { customerId, inputsRevision: { increment: 1 } }, select: { id: true } });
+      }),
+
+    linkCalculation: (estimateId, calculationId, status, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(estimateId) || !isUuid(calculationId)) throw new Error('The calculation could not be linked to the estimate.');
+        // Raw, to make the ownership part of the write: the foreign key alone would accept another estimate's calculation. `updated_at` is set by hand.
+        const changed = await clientFor(db, tx).$executeRaw`
+          UPDATE estimates SET current_calculation_id = ${calculationId}::uuid, status = ${status}::estimate_status, updated_at = now()
+          WHERE id = ${estimateId}::uuid
+            AND EXISTS (SELECT 1 FROM calculations WHERE id = ${calculationId}::uuid AND estimate_id = ${estimateId}::uuid)`;
+        if (changed !== 1) throw new Error('The calculation could not be linked to the estimate.');
       }),
   };
 }

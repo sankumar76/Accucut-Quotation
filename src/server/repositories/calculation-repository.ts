@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
-import type { EstimateStatus } from './task-repository';
 import { clientFor, type Transaction } from './transaction';
 
 /**
@@ -16,9 +15,9 @@ import { clientFor, type Transaction } from './transaction';
  * **Immutable.** There is no update and no delete here, and none can be added by mistake: the database refuses them for every role (a trigger) and the
  * runtime role holds only SELECT and INSERT (ADR-007). A change is a new record, never an edit.
  *
- * **Every write takes the caller's `Transaction`, as required**, so a record, its rows and the estimate's new link to it are one commit or none (AC-1).
- * `lockEstimate` is the first call of that transaction: it holds the estimate's row until the commit, so a Calculate cannot overlap an input change or
- * another Calculate (architecture section 4.8).
+ * **Every write takes the caller's `Transaction`, as required**, so a record and its rows are one commit or none, together with the estimate's new link to
+ * them (AC-1). The estimate's row is locked, read and linked through `estimate-repository.ts` (`lockEstimate`, `linkCalculation`), in the same transaction: that
+ * lock is the one that serialises Calculate against every input change (architecture section 4.8).
  *
  * **Reading a figure.** `findCalculation` returns what is stored and decides nothing about whether it may be shown: a caller reads a figure for a screen
  * or a file only through `lib/estimate/figure-state.ts` (architecture section 10).
@@ -60,15 +59,6 @@ export type ProductValues = z.infer<typeof productValuesSchema>;
 export const storedValuesSchema = z.record(z.string(), decimalTextOrNull);
 export type StoredValues = z.infer<typeof storedValuesSchema>;
 
-/** The estimate row as `lockEstimate` reads it: what a record is made from and what it may be stored against. */
-export interface LockedEstimate {
-  readonly id: string;
-  /** Null until the Engineer chooses the customer; nothing can be calculated before. */
-  readonly customerId: string | null;
-  readonly status: EstimateStatus;
-  readonly inputsRevision: number;
-}
-
 export interface NewCalculation {
   readonly estimateId: string;
   readonly configVersionId: string;
@@ -103,19 +93,11 @@ export interface CalculationRecord extends NewCalculation {
 }
 
 export interface CalculationRepository {
-  /** The estimate with this ID, **locked until the transaction ends**; null for an unknown ID. The first call of a Calculate. */
-  lockEstimate(estimateId: string, tx: Transaction): Promise<LockedEstimate | null>;
   /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` takes its default, `[]`. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
-  /** Links the estimate to its newest calculation and sets its status. The only write to `estimates` this file makes. */
-  linkCurrentCalculation(estimateId: string, calculationId: string, status: EstimateStatus, tx: Transaction): Promise<void>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
 }
-
-const LOCKED_ROWS = z.array(
-  z.strictObject({ id: z.string(), customerId: z.string().nullable(), status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']), inputsRevision: z.number().int() }),
-);
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -127,17 +109,6 @@ const WARNINGS = z.array(z.unknown());
 /** Builds the calculation methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createCalculationRepository(db: PrismaClient): CalculationRepository {
   return {
-    lockEstimate: (estimateId, tx) =>
-      withDatabaseErrors(async () => {
-        // PostgreSQL would refuse a text that is not a UUID with an error; an estimate asked for by one is not found.
-        if (!isUuid(estimateId)) return null;
-        // Prisma has no row lock, so this is a raw statement: the ID is a bound parameter.
-        const rows = await clientFor(db, tx).$queryRaw`
-          SELECT id::text AS "id", customer_id::text AS "customerId", status::text AS "status", inputs_revision::int AS "inputsRevision"
-          FROM estimates WHERE id = ${estimateId}::uuid FOR UPDATE`;
-        return LOCKED_ROWS.parse(rows)[0] ?? null;
-      }),
-
     insertCalculation: (calculation, rows, tx) =>
       withDatabaseErrors(async () => {
         const client = clientFor(db, tx);
@@ -167,11 +138,6 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
           });
         }
         return created;
-      }),
-
-    linkCurrentCalculation: (estimateId, calculationId, status, tx) =>
-      withDatabaseErrors(async () => {
-        await clientFor(db, tx).estimate.update({ where: { id: estimateId }, data: { currentCalculationId: calculationId, status } });
       }),
 
     findCalculation: (id) =>
