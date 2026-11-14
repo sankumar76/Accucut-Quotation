@@ -57,21 +57,23 @@ export type PruneResult =
   | { readonly status: 'skipped'; readonly reason: string }
   | { readonly status: 'pruned'; readonly removed: number; readonly failed: number };
 
-/** `LOG_DIRECTORY` as a usable folder name: set, absolute, and not a network path. A reason, or null when it is fine. */
-function refusalFor(directory: string | undefined): string | null {
-  if (directory === undefined || directory.trim() === '') return 'LOG_DIRECTORY is not set';
-  if (!isAbsolute(directory)) return 'LOG_DIRECTORY is not an absolute path';
-  if (/^[\\/]{2}/.test(directory)) return 'LOG_DIRECTORY is a network path';
-  return null;
+/** `LOG_DIRECTORY` as a usable folder name (set, absolute, not a network path): the folder, or the reason it is refused. */
+function checkDirectory(directory: string | undefined): { readonly folder: string } | { readonly reason: string } {
+  if (directory === undefined || directory.trim() === '') return { reason: 'LOG_DIRECTORY is not set' };
+  // The network path first: on a POSIX machine (the unit tests) `\\server\share` is not "absolute", and the reason must be the same everywhere.
+  if (/^[\\/]{2}/.test(directory)) return { reason: 'LOG_DIRECTORY is a network path' };
+  if (!isAbsolute(directory)) return { reason: 'LOG_DIRECTORY is not an absolute path' };
+  return { folder: directory };
 }
 
 /**
  * Deletes the prunable logs older than {@link LOG_RETENTION_DAYS} days from `directory`. Never throws for a file system problem: a folder it cannot use is
  * a skipped run with a reason, and a file it cannot delete is counted and left.
  */
-export async function pruneLogs(directory: string | undefined, now: Date, fs: PruneFileSystem = nodeFileSystem): Promise<PruneResult> {
-  const refusal = refusalFor(directory);
-  if (refusal !== null || directory === undefined) return { status: 'skipped', reason: refusal ?? 'LOG_DIRECTORY is not set' };
+export async function pruneLogs(configured: string | undefined, now: Date, fs: PruneFileSystem = nodeFileSystem): Promise<PruneResult> {
+  const checked = checkDirectory(configured);
+  if ('reason' in checked) return { status: 'skipped', reason: checked.reason };
+  const directory = checked.folder;
 
   let names: string[];
   try {
@@ -111,12 +113,13 @@ export function describePrune(result: PruneResult): string {
  * Schedules the daily run, or returns `undefined` (and says why) when `LOG_DIRECTORY` is missing or not an absolute path. The folder is checked again at
  * every run, because it may change between runs.
  */
-export function scheduleLogPrune(directory: string | undefined, log: (message: string) => void): ScheduledTask | undefined {
-  const refusal = refusalFor(directory);
-  if (refusal !== null || directory === undefined) {
-    log(`log-prune is off: ${refusal ?? 'LOG_DIRECTORY is not set'}`);
+export function scheduleLogPrune(configured: string | undefined, log: (message: string) => void): ScheduledTask | undefined {
+  const checked = checkDirectory(configured);
+  if ('reason' in checked) {
+    log(`log-prune is off: ${checked.reason}`);
     return undefined;
   }
+  const directory = checked.folder;
   const task = schedule(
     LOG_PRUNE_CRON,
     async () => {
