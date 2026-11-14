@@ -75,6 +75,10 @@ function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => v
   return {
     listMaterials: () => Promise.resolve(materials.map((material) => ({ ...material }))),
     listMaterialOptions: () => Promise.resolve(materials.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered }))),
+    findMaterialForCalculation(id: string) {
+      const found = materials[indexOf(id)];
+      return Promise.resolve(found === undefined ? null : { id: found.id, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
+    },
     lockMaterials() {
       onLock();
       return Promise.resolve();
@@ -133,7 +137,7 @@ function createFakeExchangeMethods(state: MutableExchangeRates, onLock: () => vo
 
 type ExchangeMethod = 'readExchangeRates' | 'lockExchangeRates' | 'findExchangeRatesForUpdate' | 'saveExchangeRates';
 
-type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
+type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'findMaterialForCalculation' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
 
 type TreatmentMethod =
   | 'listTreatments'

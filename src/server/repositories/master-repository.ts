@@ -89,7 +89,7 @@ export type {
   NewCustomer,
 } from './customer-repository';
 export type { ExchangeRateMethods, ExchangeRateStamp, ExchangeRatesRecord, NewExchangeRateStamp } from './exchange-rate-repository';
-export type { MaterialChanges, MaterialMethods, MaterialOptionRecord, MaterialRecord, NewMaterial } from './material-repository';
+export type { MaterialChanges, MaterialMethods, MaterialOptionRecord, MaterialRecord, MaterialValuesRecord, NewMaterial } from './material-repository';
 export { TreatmentNameTakenError } from './treatment-repository';
 export type { TreatmentMethods, TreatmentOptionRecord, TreatmentRecord } from './treatment-repository';
 

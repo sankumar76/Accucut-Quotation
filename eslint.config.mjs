@@ -56,6 +56,14 @@ const FORMULA_IMPORT = {
   message: 'This code must not import the formula engine (ADR-008, NFR-002).',
 };
 
+// The calculated outputs of a row (STORY-03.03 AC-7; ADR-008, NFR-002): the Restricted types and the calculators that make them. Other modules of
+// `lib/estimate` (the tree, the validation) hold nothing Restricted, so only these two are named.
+const ROW_OUTPUTS_IMPORT = {
+  group: ['**/lib/estimate/row-outputs', '**/lib/estimate/row-calculator', '**/lib/estimate/product-totals'],
+  regex: `(^|${SLASH})lib${SLASH}estimate${SLASH}(row-(outputs|calculator)|product-totals)${END}`,
+  message: 'Engineer views must not import the calculated row outputs, the product totals or the calculators: outputs live only in Restricted types (ADR-008, NFR-002).',
+};
+
 // Presentation code reaches data through services and views only (architecture section 4.1, 10). Pages
 // are shared by role (ADR-008), so no path marks an "Engineer page": the rule covers all of src/app and
 // src/components, Lead and Admin pages included (QLT-01).
@@ -114,6 +122,7 @@ const ENGINEER_VIEW_IMPORTS = [
     regex: `(^|${SLASH})schemas(${SLASH}index)?$`,
     message: 'Engineer views import the one schema file they need (schemas/me), not the barrel that re-exports the Admin schemas.',
   },
+  ROW_OUTPUTS_IMPORT,
   FORMULA_IMPORT,
   PRISMA_IMPORT,
 ];
