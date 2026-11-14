@@ -114,6 +114,33 @@ Describe 'update.ps1' {
         Should -Invoke Expand-AccucutZip -Times 1 -Exactly -ParameterFilter { $ZipPath -like '*releases?.in-*?package.zip' -and $Destination -like '*releases?.in-*?unpacked' }
     }
 
+    It 'security review: the script, the module and every folder above them are checked with the one trust rule BEFORE the module is loaded, and the current link is followed once to the real folder' {
+        $release = Join-Path $TestDrive 'import-box\Accucut\releases\t-1'
+        New-Item -ItemType Directory -Path $release -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $release 'update.ps1') -Value '# script'
+        Set-Content -LiteralPath (Join-Path $release 'AccucutOps.psm1') -Value '# module'
+        $current = Join-Path $TestDrive 'import-box\Accucut\current'
+        New-Item -ItemType Junction -Path $current -Target $release | Out-Null
+        $script:Order = New-Object System.Collections.Generic.List[string]
+        Mock Assert-AccucutPathTrusted { $script:Order.Add("assert:$(Split-Path -Leaf $Path)") }
+        Mock Import-Module { $script:Order.Add('import') }
+        $real = Import-AccucutVerifiedModule -ScriptRoot $current -ScriptPath (Join-Path $current 'update.ps1')
+        $real | Should -Be $release
+        ($script:Order -join ',') | Should -Be 'assert:t-1,assert:update.ps1,assert:AccucutOps.psm1,import'
+        Should -Invoke Import-Module -Times 1 -Exactly -ParameterFilter { $Name -like '*releases?t-1?AccucutOps.psm1' }
+    }
+
+    It 'security review: loads nothing when the check of the module fails' {
+        $release = Join-Path $TestDrive 'import-box-2\Accucut\releases\t-1'
+        New-Item -ItemType Directory -Path $release -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $release 'update.ps1') -Value '# script'
+        Set-Content -LiteralPath (Join-Path $release 'AccucutOps.psm1') -Value '# module'
+        Mock Assert-AccucutPathTrusted { if ($Path -like '*AccucutOps.psm1') { throw "'$Path' can be changed by S-1-5-32-545, who is not an administrator. Refusing to use it." } }
+        Mock Import-Module { throw 'must not load' }
+        { Import-AccucutVerifiedModule -ScriptRoot $release -ScriptPath (Join-Path $release 'update.ps1') } | Should -Throw '*can be changed by S-1-5-32-545*'
+        Should -Invoke Import-Module -Times 0 -Exactly
+    }
+
     It 'AC-3: stops before changing anything when the release backup cannot be taken' {
         Mock Invoke-AccucutReleaseBackup { throw 'backup failed on purpose' }
         { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root } | Should -Throw '*backup failed on purpose*'

@@ -99,20 +99,110 @@ function Test-InstallerIsAdministrator {
 # ---- First half: nothing here uses the shared module or any other file of the unpacked folder. The unpacked folder is not trusted: anyone
 # ---- who could write to it could change a file after the zip was checked. These functions use PowerShell's own commands only.
 
-function Get-AccucutPathOwner {
-    <# The owner of a folder as a SID (text). A function of its own, so that Pester can mock it. #>
+# BEGIN shared path trust (install.ps1, update.ps1 and AccucutOps.psm1 hold this block word for word; tests/unit/windows-deploy-files.test.ts fails if they differ)
+function Get-AccucutPathSecurity {
+    <# The owner and the allow rules of a file or folder as plain data (SIDs and numbers). A function of its own, so that Pester can mock it. #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
 
-    $security = [System.IO.Directory]::GetAccessControl($Path, [System.Security.AccessControl.AccessControlSections]::Owner)
-    return $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    $item = Get-Item -LiteralPath $Path -Force
+    $security = $item.GetAccessControl()
+    $rules = New-Object System.Collections.Generic.List[object]
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        $rules.Add([pscustomobject]@{
+                Sid         = $rule.IdentityReference.Value
+                Rights      = [int]$rule.FileSystemRights
+                InheritOnly = [bool]($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)
+                Inherited   = [bool]$rule.IsInherited
+            })
+    }
+    return [pscustomobject]@{ Owner = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; Rules = $rules.ToArray() }
 }
+
+function Assert-AccucutPathTrusted {
+    <#
+    THE rule for trusting a path, used everywhere a path is trusted: the install folder, releases, a release, config, logs, and the scripts and the module
+    before they are run or loaded. It walks every part of the path, from the drive root down to the target, and stops with an error for the first part that
+    is not safe. For every part:
+      - it must not be a link (a junction or symbolic link could send the path somewhere else). One exception, asked for with -AllowLinkAtLeaf: the last
+        part may be a link, for `current`; the caller then checks where it points;
+      - its owner must be Administrators (S-1-5-32-544), SYSTEM (S-1-5-18) or TrustedInstaller (the owner of system folders such as Program Files);
+      - nobody else may be able to replace or remove it, or change who controls it: no allow rule for another principal may carry Delete,
+        DeleteSubdirectoriesAndFiles (delete a child), ChangePermissions or TakeOwnership.
+    The last part (the target) gets the stricter rule, because what is inside it is run: nobody else may carry WriteData (create files), AppendData (create
+    folders), WriteExtendedAttributes or WriteAttributes either, and the rules that only reach what is inside it (inherit only) count too.
+
+    What is allowed on the drive root and on any other part above the target, and why. Windows gives every user "create folders" and "create files" on
+    the drive root (for example `Authenticated Users: create folders / append data` and `create files`, on that folder only) and `Modify` on what is
+    inside it (inherit-only). Those do not let a user delete, replace or take over an existing folder that an administrator owns, so they must not make
+    every install fail: a part above the target is refused only for Delete, DeleteSubdirectoriesAndFiles, ChangePermissions or TakeOwnership, and rules
+    marked inherit-only (they reach the children of that part, not the part itself) are not counted. The target and everything made inside it are
+    protected by the target's own rule above, which is the strict one.
+
+    -AllowedWriter names SIDs (never account names) that may also write to the target, for example the two service accounts for the logs folder.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$AllowedWriter = @(),
+        [switch]$AllowLinkAtLeaf
+    )
+
+    if ($Path.StartsWith('\\') -or -not [System.IO.Path]::IsPathRooted($Path)) { throw "'$Path' is not a full local path. Refusing to use it." }
+    $full = [System.IO.Path]::GetFullPath($Path)
+    if ($full.Length -gt 3) { $full = $full.TrimEnd('\') }
+    $driveRoot = [System.IO.Path]::GetPathRoot($full)
+    $trustedSids = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    $rights = [System.Security.AccessControl.FileSystemRights]
+    $replaceMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
+    $writeMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership -bor $rights::WriteData -bor $rights::AppendData -bor $rights::WriteExtendedAttributes -bor $rights::WriteAttributes)
+
+    $chain = New-Object System.Collections.Generic.List[string]
+    $chain.Add($driveRoot)
+    $current = $driveRoot
+    foreach ($segment in ($full.Substring($driveRoot.Length) -split '\\')) {
+        if ($segment -eq '') { continue }
+        $current = Join-Path $current $segment
+        $chain.Add($current)
+    }
+
+    for ($index = 0; $index -lt $chain.Count; $index++) {
+        $part = $chain[$index]
+        $isTarget = ($index -eq $chain.Count - 1)
+        if (-not (Test-Path -LiteralPath $part)) { throw "'$part' does not exist. Refusing to use '$full'." }
+        $item = Get-Item -LiteralPath $part -Force
+        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            if ($isTarget -and $AllowLinkAtLeaf) { continue }
+            throw "'$part' is a link, not a real folder, so '$full' could lead somewhere else. Refusing to use it."
+        }
+        $security = Get-AccucutPathSecurity -Path $part
+        if ($trustedSids -notcontains $security.Owner) {
+            throw "'$part' is owned by $($security.Owner), not by Administrators, SYSTEM or TrustedInstaller, so someone else controls it. Refusing to use '$full'."
+        }
+        $mask = $replaceMask
+        if ($isTarget) { $mask = $writeMask }
+        foreach ($rule in $security.Rules) {
+            if ($rule.InheritOnly -and -not $isTarget) { continue }
+            if ($trustedSids -contains $rule.Sid) { continue }
+            if ($isTarget -and ($AllowedWriter -contains $rule.Sid)) { continue }
+            if (($rule.Rights -band $mask) -ne 0) {
+                $inherited = $false
+                if ($rule.PSObject.Properties.Name -contains 'Inherited') { $inherited = [bool]$rule.Inherited }
+                $named = ([System.Security.AccessControl.FileSystemRights]$rule.Rights).ToString()
+                throw "'$part' can be changed by $($rule.Sid) (rights: $named; inherited: $inherited), who is not an administrator, so '$full' could be replaced or changed. Refusing to use it."
+            }
+        }
+    }
+}
+# END shared path trust
 
 function Assert-AccucutFreshRoot {
     <#
     The install folder must not exist, or must be an EMPTY real folder owned by Administrators or SYSTEM. Anything else could be under the control
     of a user who is not an administrator (they could have made the folder, or put a file or a link in it, and kept their rights), and the install
-    would then run programs from it as a service. Returns 'New' or 'Empty'.
+    would then run programs from it as a service. Returns 'New' or 'Empty'. (Whether an existing empty folder may be used also depends on who can
+    write to it and to the folders above it: Assert-AccucutPathTrusted, run by the caller.)
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Root)
@@ -124,7 +214,7 @@ function Assert-AccucutFreshRoot {
     $item = Get-Item -LiteralPath $full -Force
     if (-not $item.PSIsContainer) { throw "'$full' exists and is a file. Nothing was changed." }
     if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$full' is a link, not a real folder. Nothing was changed." }
-    $owner = Get-AccucutPathOwner -Path $full
+    $owner = (Get-AccucutPathSecurity -Path $full).Owner
     if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner) {
         throw "'$full' already exists and is owned by $owner, not by Administrators or SYSTEM. A folder made by someone else is not trusted. Nothing was changed. Rename or delete it, or choose another -Root."
     }
@@ -134,53 +224,12 @@ function Assert-AccucutFreshRoot {
     return 'Empty'
 }
 
-function Get-AccucutNonAdminWriters {
-    <#
-    The SIDs, other than Administrators and SYSTEM, that an allow rule on the folder lets write, delete, change permissions or take ownership.
-    -ParentCheck asks the narrower question that matters for the folder that CONTAINS the install folder: can anyone but an administrator delete or
-    replace the install folder (delete-child, delete, change permissions, take ownership)? Making a new folder there is not that, and the rules that
-    only reach what is inside the parent are skipped. (The shared module has the same check; it cannot be used yet.)
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [switch]$ParentCheck
-    )
-
-    $rights = [System.Security.AccessControl.FileSystemRights]
-    $mask = [int]($rights::WriteData -bor $rights::AppendData -bor $rights::WriteExtendedAttributes -bor $rights::WriteAttributes -bor $rights::Delete -bor $rights::DeleteSubdirectoriesAndFiles -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
-    if ($ParentCheck) { $mask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership) }
-    $security = [System.IO.Directory]::GetAccessControl($Path)
-    $found = New-Object System.Collections.Generic.List[string]
-    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
-        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-        if ($ParentCheck -and ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)) { continue }
-        if (@('S-1-5-32-544', 'S-1-5-18') -contains $rule.IdentityReference.Value) { continue }
-        if (([int]$rule.FileSystemRights -band $mask) -ne 0) { $found.Add($rule.IdentityReference.Value) }
-    }
-    return , $found.ToArray()
-}
-
-function Assert-AccucutBootstrapFolder {
-    <# One folder of the install: a real folder (not a link), owned by Administrators or SYSTEM, that no one else can write to or delete from. #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "The folder '$Path' does not exist." }
-    $item = Get-Item -LiteralPath $Path -Force
-    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$Path' is a link, not a real folder. Refusing to use it." }
-    $owner = Get-AccucutPathOwner -Path $Path
-    if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner) { throw "'$Path' is owned by $owner, not by Administrators or SYSTEM. Refusing to use it." }
-    $writers = @(Get-AccucutNonAdminWriters -Path $Path)
-    if ($writers.Count -gt 0) { throw "'$Path' can be changed by $($writers -join ', '), who is not an administrator. Refusing to use it." }
-}
-
 function Assert-AccucutLockedInstallRoot {
     <#
-    The trust check of the install folder, run again and again between the steps of the install (after the folder is locked, before the verified
-    script is started, and before the second half loads anything from it), so that a swap at any moment is caught: the install folder and its
-    releases folder are real folders owned by Administrators that no one else can change, nothing between the install folder and the verified
-    release is a link, and no one but an administrator can delete or replace the install folder from its parent.
+    The trust check of the install, run again and again between the steps (after the folder is locked, before the verified script is started, and before
+    the second half loads anything from it), so that a swap at any moment is caught. It applies Assert-AccucutPathTrusted, the one rule, to the install
+    folder (and so to every folder above it), to releases and, when -VerifiedRelease is given, to the release folder and to the two files that are run
+    from it: install.ps1 and AccucutOps.psm1. The release must be directly inside releases.
     #>
     [CmdletBinding()]
     param(
@@ -190,19 +239,18 @@ function Assert-AccucutLockedInstallRoot {
     )
 
     $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
-    Assert-AccucutBootstrapFolder -Path $full
-    $parent = Split-Path -Parent $full
-    $parentWriters = @(Get-AccucutNonAdminWriters -Path $parent -ParentCheck)
-    if ($parentWriters.Count -gt 0) { throw "'$parent', which holds the install folder, can be changed by $($parentWriters -join ', '), who is not an administrator, so the install folder could be replaced. Refusing to go on." }
+    Assert-AccucutPathTrusted -Path $full
     if ($RootOnly) { return }
     $releases = Join-Path $full 'releases'
-    Assert-AccucutBootstrapFolder -Path $releases
+    Assert-AccucutPathTrusted -Path $releases
     if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
         $release = [System.IO.Path]::GetFullPath($VerifiedRelease).TrimEnd('\')
         if ((Split-Path -Parent $release) -ine $releases) { throw "'$release' is not directly inside '$releases'. Refusing to use it." }
-        Assert-AccucutBootstrapFolder -Path $release
+        Assert-AccucutPathTrusted -Path $release
+        foreach ($file in 'install.ps1', 'AccucutOps.psm1') { Assert-AccucutPathTrusted -Path (Join-Path $release $file) }
     }
 }
+
 
 function New-AccucutDirectorySecurity {
     <# The permissions of a locked folder: owned by Administrators, no inheritance, full control for Administrators and SYSTEM, plus the given accounts. #>
@@ -336,7 +384,7 @@ function Initialize-AccucutVerifiedRelease {
         }
         else {
             # An existing empty folder is used only if no one but an administrator can write to it or delete from it; its permissions are then replaced.
-            Assert-AccucutBootstrapFolder -Path $full
+            Assert-AccucutPathTrusted -Path $full
             Set-AccucutDirectoryAcl -Path $full
             Assert-AccucutLockedInstallRoot -Root $full -RootOnly
         }
@@ -709,10 +757,9 @@ function Invoke-AccucutInstall {
         throw "'$PackageRoot' is not the verified release folder '$releaseDirectory'. The install only runs from the folder that was made from the checked zip."
     }
     # The same check once more, now with the module (which came from the verified folder): root, releases and the release itself, and the parent.
-    Assert-AccucutFolderTrusted -Path $paths.Root
-    Assert-AccucutFolderTrusted -Path $paths.Releases
-    Assert-AccucutFolderTrusted -Path $releaseDirectory
-    Assert-AccucutParentNotSwappable -Path $paths.Root
+    Assert-AccucutPathTrusted -Path $paths.Root
+    Assert-AccucutPathTrusted -Path $paths.Releases
+    Assert-AccucutPathTrusted -Path $releaseDirectory
     $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
     $logFile = Join-Path $paths.Logs "install-$stamp.log"
 

@@ -14,6 +14,7 @@ BeforeAll {
     Import-Module (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Force -DisableNameChecking
     # Dot-sourcing defines the functions and does not run the install (the script runs it only when it is started, not sourced).
     . (Join-Path $script:WindowsDirectory 'install.ps1')
+    $script:RealGetSecurity = (Get-Command -Name Get-AccucutPathSecurity -CommandType Function).ScriptBlock
 
     $script:FakeOwnerPassword = 'FAKEownerPassword0001'
     $script:FakeAppPassword = 'FAKEappPassword00002'
@@ -79,9 +80,8 @@ Describe 'the first half: a locked install folder and a release unpacked from th
 
     BeforeEach {
         Mock Set-AccucutDirectoryAcl { }
-        Mock Get-AccucutPathOwner { 'S-1-5-32-544' }
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
         # The real permission checks read the test machine's own folders; the tests of those checks are further down, on folders that the tests lock themselves.
-        Mock Get-AccucutNonAdminWriters { , @() }
         Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null }
     }
 
@@ -116,7 +116,7 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     }
 
     It 'refuses an existing empty folder whose permissions let another user write or delete, and does not touch it' {
-        Mock Get-AccucutNonAdminWriters { , @('S-1-5-32-545') }
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = $false }) } }
         $root = Join-Path $TestDrive 'empty-but-writable-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*can be changed by S-1-5-32-545*'
@@ -128,13 +128,13 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         # Simulates the race: the folder exists, owned by another user, when the locked creation runs.
         $root = Join-Path $TestDrive 'raced-root'
         Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null; New-Item -ItemType Directory -Path (Join-Path $Path 'releases') | Out-Null }
-        Mock Get-AccucutPathOwner { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*'
         Test-Path -LiteralPath (Join-Path $root 'releases') | Should -BeTrue
     }
 
     It 'accepts an empty folder owned by SYSTEM' {
-        Mock Get-AccucutPathOwner { 'S-1-5-18' }
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @() } }
         $root = Join-Path $TestDrive 'empty-system-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Not -Throw
@@ -151,7 +151,7 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     }
 
     It 'refuses an existing folder owned by someone else, even when it is empty' {
-        Mock Get-AccucutPathOwner { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
         $root = Join-Path $TestDrive 'foreign-root'
         New-Item -ItemType Directory -Path $root | Out-Null
         { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*owned by S-1-5-21-1111111111-2222222222-3333333333-1001, not by Administrators or SYSTEM*'
@@ -281,6 +281,10 @@ Describe 'the first half: a locked install folder and a release unpacked from th
 
         $good = Join-Path $TestDrive 'real-root-ok'
         New-Item -ItemType Directory -Path (Join-Path $good 'releases\t-ok'), (Join-Path $good 'elsewhere\t-ok') -Force | Out-Null
+        foreach ($place in 'releases\t-ok', 'elsewhere\t-ok') {
+            Set-Content -LiteralPath (Join-Path $good "$place\install.ps1") -Value '# script'
+            Set-Content -LiteralPath (Join-Path $good "$place\AccucutOps.psm1") -Value '# module'
+        }
         { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease (Join-Path $good 'releases\t-ok') } | Should -Not -Throw
         { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease (Join-Path $good 'elsewhere\t-ok') } | Should -Throw '*is not directly inside*'
         $releaseLink = Join-Path $good 'releases\t-link'
@@ -288,16 +292,42 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease $releaseLink } | Should -Throw '*is a link*'
     }
 
-    It 'the trust check refuses a parent folder in which another user could delete or replace the install folder, and a folder owned or writable by someone else' {
-        Mock Get-AccucutNonAdminWriters { param($Path, [switch]$ParentCheck) if ($ParentCheck) { , @('S-1-5-32-545') } else { , @() } }
-        $root = Join-Path $TestDrive 'parent-swappable-root'
+    It 'the trust check covers every folder above the install folder: a parent or a grandparent that another user can delete from, or that someone else owns, or that is a link' {
+        $grand = Join-Path $TestDrive 'ancestor-box'
+        $root = Join-Path $grand 'parent\Accucut'
         New-Item -ItemType Directory -Path (Join-Path $root 'releases') -Force | Out-Null
-        { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw '*could be replaced*'
-        Mock Get-AccucutNonAdminWriters { , @('S-1-5-32-545') }
-        { Assert-AccucutBootstrapFolder -Path $root } | Should -Throw '*can be changed by S-1-5-32-545*'
-        Mock Get-AccucutNonAdminWriters { , @() }
-        Mock Get-AccucutPathOwner { 'S-1-5-21-1-2-3-1001' }
-        { Assert-AccucutBootstrapFolder -Path $root } | Should -Throw '*is owned by S-1-5-21-1-2-3-1001*'
+        Mock Get-AccucutPathSecurity {
+            param($Path)
+            if ($Path -like '*ancestor-box') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 64; InheritOnly = $false }) } }
+            [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
+        }
+        { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw "*ancestor-box' can be changed by S-1-5-32-545*"
+        Mock Get-AccucutPathSecurity {
+            param($Path)
+            if ($Path -like '*ancestor-box?parent') { return [pscustomobject]@{ Owner = 'S-1-5-21-1-2-3-1001'; Rules = @() } }
+            [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
+        }
+        { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw "*parent' is owned by S-1-5-21-1-2-3-1001*"
+        Mock Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
+        $realRoot = Join-Path $TestDrive 'link-ancestor\real'
+        New-Item -ItemType Directory -Path (Join-Path $realRoot 'Accucut\releases') -Force | Out-Null
+        New-Item -ItemType Junction -Path (Join-Path $TestDrive 'link-ancestor\lnk') -Target $realRoot | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root (Join-Path $TestDrive 'link-ancestor\lnk\Accucut') } | Should -Throw "*lnk' is a link*"
+    }
+
+    It 'the check also covers the two files that are run from the release: a script or a module that another user can write to is refused' {
+        $root = Join-Path $TestDrive 'files-box\Accucut'
+        $release = Join-Path $root 'releases\t-ok'
+        New-Item -ItemType Directory -Path $release -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $release 'install.ps1') -Value '# script'
+        Set-Content -LiteralPath (Join-Path $release 'AccucutOps.psm1') -Value '# module'
+        { Assert-AccucutLockedInstallRoot -Root $root -VerifiedRelease $release } | Should -Not -Throw
+        Mock Get-AccucutPathSecurity {
+            param($Path)
+            if ($Path -like '*AccucutOps.psm1') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = $false }) } }
+            [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
+        }
+        { Assert-AccucutLockedInstallRoot -Root $root -VerifiedRelease $release } | Should -Throw "*AccucutOps.psm1' can be changed by S-1-5-32-545*"
     }
 
     It 'a locked folder is made in one call with Administrators as owner, no inheritance and Administrators and SYSTEM only' -Skip:(-not $script:IsAdmin) {
@@ -307,7 +337,9 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         $security.AreAccessRulesProtected | Should -BeTrue
         $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value | Should -Be 'S-1-5-32-544'
         @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) | Should -Be @('S-1-5-18', 'S-1-5-32-544')
-        (Get-AccucutNonAdminWriters -Path $folder).Count | Should -Be 0
+        $security = & $script:RealGetSecurity -Path $folder
+        $security.Owner | Should -Be 'S-1-5-32-544'
+        @($security.Rules | Where-Object { @('S-1-5-32-544', 'S-1-5-18') -notcontains $_.Sid }).Count | Should -Be 0
     }
 
     It 'the second half refuses to run from anywhere but the verified release folder' {
@@ -460,8 +492,7 @@ Describe 'the second half reads only from the verified release folder, and a fai
 
     BeforeEach {
         Mock Test-InstallerIsAdministrator { $true }
-        Mock Assert-AccucutFolderTrusted { }
-        Mock Assert-AccucutParentNotSwappable { }
+        Mock Assert-AccucutPathTrusted { }
         Mock Get-Command { [pscustomobject]@{ Source = 'C:\fake\node.exe' } } -ParameterFilter { $Name -eq 'node' }
         Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'C:\fake\pg\data'; ServiceStatus = 'Running' } }
         Mock Get-Service { $null }
@@ -490,7 +521,7 @@ Describe 'the second half reads only from the verified release folder, and a fai
         Should -Invoke Read-AccucutReleaseInfo -Times 1 -Exactly -ParameterFilter { $PackageRoot -like '*reads-install?releases?t-fail' }
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $File -like '*reads-install?releases?t-fail?sql?create-roles.psql' }
         Should -Invoke Invoke-AccucutMigration -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*reads-install?releases?t-fail' }
-        Should -Invoke Assert-AccucutFolderTrusted -Times 1 -Exactly -ParameterFilter { $Path -like '*reads-install' }
+        Should -Invoke Assert-AccucutPathTrusted -Times 1 -Exactly -ParameterFilter { $Path -like '*reads-install' }
         # The unverified folder was never named: no call mentions it.
         Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { "$File $Command" -like '*unverified-unpacked*' }
         Should -Invoke Invoke-AccucutMigration -Times 0 -Exactly -ParameterFilter { $ReleaseDirectory -like '*unverified-unpacked*' }
@@ -538,7 +569,7 @@ Describe 'the second half reads only from the verified release folder, and a fai
     It 'a folder that the install made is unusable by anyone else afterwards: the install folder is checked as trusted before anything is written' {
         $folders = New-VerifiedReleaseFolder -Name 'untrusted' -Tag 't-bad'
         Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-bad' } }
-        Mock Assert-AccucutFolderTrusted { throw 'is owned by S-1-5-21-9-9-9-1001' }
+        Mock Assert-AccucutPathTrusted { throw 'is owned by S-1-5-21-9-9-9-1001' }
         { Invoke-AccucutInstall -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*owned by*'
         Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly
         Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly

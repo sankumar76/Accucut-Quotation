@@ -42,7 +42,136 @@ param(
 Set-StrictMode -Version 2.0
 
 $script:ScriptRoot = $PSScriptRoot
-Import-Module (Join-Path $script:ScriptRoot 'AccucutOps.psm1') -Force -DisableNameChecking
+
+# The shared module is loaded only after this script and the module have been checked with the one trust rule below, so that code that someone else
+# could have put in the folder is never loaded. The rule is in this file too (word for word the same as in AccucutOps.psm1) because the module cannot be
+# used before it is checked.
+
+# BEGIN shared path trust (install.ps1, update.ps1 and AccucutOps.psm1 hold this block word for word; tests/unit/windows-deploy-files.test.ts fails if they differ)
+function Get-AccucutPathSecurity {
+    <# The owner and the allow rules of a file or folder as plain data (SIDs and numbers). A function of its own, so that Pester can mock it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $item = Get-Item -LiteralPath $Path -Force
+    $security = $item.GetAccessControl()
+    $rules = New-Object System.Collections.Generic.List[object]
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        $rules.Add([pscustomobject]@{
+                Sid         = $rule.IdentityReference.Value
+                Rights      = [int]$rule.FileSystemRights
+                InheritOnly = [bool]($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)
+                Inherited   = [bool]$rule.IsInherited
+            })
+    }
+    return [pscustomobject]@{ Owner = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; Rules = $rules.ToArray() }
+}
+
+function Assert-AccucutPathTrusted {
+    <#
+    THE rule for trusting a path, used everywhere a path is trusted: the install folder, releases, a release, config, logs, and the scripts and the module
+    before they are run or loaded. It walks every part of the path, from the drive root down to the target, and stops with an error for the first part that
+    is not safe. For every part:
+      - it must not be a link (a junction or symbolic link could send the path somewhere else). One exception, asked for with -AllowLinkAtLeaf: the last
+        part may be a link, for `current`; the caller then checks where it points;
+      - its owner must be Administrators (S-1-5-32-544), SYSTEM (S-1-5-18) or TrustedInstaller (the owner of system folders such as Program Files);
+      - nobody else may be able to replace or remove it, or change who controls it: no allow rule for another principal may carry Delete,
+        DeleteSubdirectoriesAndFiles (delete a child), ChangePermissions or TakeOwnership.
+    The last part (the target) gets the stricter rule, because what is inside it is run: nobody else may carry WriteData (create files), AppendData (create
+    folders), WriteExtendedAttributes or WriteAttributes either, and the rules that only reach what is inside it (inherit only) count too.
+
+    What is allowed on the drive root and on any other part above the target, and why. Windows gives every user "create folders" and "create files" on
+    the drive root (for example `Authenticated Users: create folders / append data` and `create files`, on that folder only) and `Modify` on what is
+    inside it (inherit-only). Those do not let a user delete, replace or take over an existing folder that an administrator owns, so they must not make
+    every install fail: a part above the target is refused only for Delete, DeleteSubdirectoriesAndFiles, ChangePermissions or TakeOwnership, and rules
+    marked inherit-only (they reach the children of that part, not the part itself) are not counted. The target and everything made inside it are
+    protected by the target's own rule above, which is the strict one.
+
+    -AllowedWriter names SIDs (never account names) that may also write to the target, for example the two service accounts for the logs folder.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$AllowedWriter = @(),
+        [switch]$AllowLinkAtLeaf
+    )
+
+    if ($Path.StartsWith('\\') -or -not [System.IO.Path]::IsPathRooted($Path)) { throw "'$Path' is not a full local path. Refusing to use it." }
+    $full = [System.IO.Path]::GetFullPath($Path)
+    if ($full.Length -gt 3) { $full = $full.TrimEnd('\') }
+    $driveRoot = [System.IO.Path]::GetPathRoot($full)
+    $trustedSids = @('S-1-5-32-544', 'S-1-5-18', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    $rights = [System.Security.AccessControl.FileSystemRights]
+    $replaceMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
+    $writeMask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership -bor $rights::WriteData -bor $rights::AppendData -bor $rights::WriteExtendedAttributes -bor $rights::WriteAttributes)
+
+    $chain = New-Object System.Collections.Generic.List[string]
+    $chain.Add($driveRoot)
+    $current = $driveRoot
+    foreach ($segment in ($full.Substring($driveRoot.Length) -split '\\')) {
+        if ($segment -eq '') { continue }
+        $current = Join-Path $current $segment
+        $chain.Add($current)
+    }
+
+    for ($index = 0; $index -lt $chain.Count; $index++) {
+        $part = $chain[$index]
+        $isTarget = ($index -eq $chain.Count - 1)
+        if (-not (Test-Path -LiteralPath $part)) { throw "'$part' does not exist. Refusing to use '$full'." }
+        $item = Get-Item -LiteralPath $part -Force
+        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            if ($isTarget -and $AllowLinkAtLeaf) { continue }
+            throw "'$part' is a link, not a real folder, so '$full' could lead somewhere else. Refusing to use it."
+        }
+        $security = Get-AccucutPathSecurity -Path $part
+        if ($trustedSids -notcontains $security.Owner) {
+            throw "'$part' is owned by $($security.Owner), not by Administrators, SYSTEM or TrustedInstaller, so someone else controls it. Refusing to use '$full'."
+        }
+        $mask = $replaceMask
+        if ($isTarget) { $mask = $writeMask }
+        foreach ($rule in $security.Rules) {
+            if ($rule.InheritOnly -and -not $isTarget) { continue }
+            if ($trustedSids -contains $rule.Sid) { continue }
+            if ($isTarget -and ($AllowedWriter -contains $rule.Sid)) { continue }
+            if (($rule.Rights -band $mask) -ne 0) {
+                $inherited = $false
+                if ($rule.PSObject.Properties.Name -contains 'Inherited') { $inherited = [bool]$rule.Inherited }
+                $named = ([System.Security.AccessControl.FileSystemRights]$rule.Rights).ToString()
+                throw "'$part' can be changed by $($rule.Sid) (rights: $named; inherited: $inherited), who is not an administrator, so '$full' could be replaced or changed. Refusing to use it."
+            }
+        }
+    }
+}
+# END shared path trust
+
+
+function Import-AccucutVerifiedModule {
+    <#
+    Resolves the folder this script runs from (normally C:\Accucut\current, a link: it is followed once, to the real release folder, so that what is
+    checked is the path that is used), checks the script and the module there with Assert-AccucutPathTrusted, and only then loads the module from that
+    real path. Returns the real folder.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ScriptRoot,
+        [Parameter(Mandatory)][string]$ScriptPath
+    )
+
+    $real = [System.IO.Path]::GetFullPath($ScriptRoot).TrimEnd('\')
+    $item = Get-Item -LiteralPath $real -Force
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        $target = @($item.Target)[0]
+        if ([string]::IsNullOrWhiteSpace($target)) { throw "'$real' is a link that points nowhere. Refusing to run from it." }
+        $real = [System.IO.Path]::GetFullPath($target).TrimEnd('\')
+    }
+    Assert-AccucutPathTrusted -Path $real
+    Assert-AccucutPathTrusted -Path (Join-Path $real (Split-Path -Leaf $ScriptPath))
+    $module = Join-Path $real 'AccucutOps.psm1'
+    Assert-AccucutPathTrusted -Path $module
+    Import-Module $module -Force -DisableNameChecking
+    return $real
+}
 
 function Assert-AccucutUpdateRunsFromInstall {
     <# This script and the shared module it loaded must come from the install folder (normally C:\Accucut\current), not from a folder anyone could have changed. #>
@@ -257,11 +386,15 @@ function Invoke-AccucutUpdate {
 
 if ($MyInvocation.InvocationName -ne '.') {
     try {
+        # First of all, before anything of the install is loaded or run: the script, the module and every folder above them (Assert-AccucutPathTrusted).
+        $script:ScriptRoot = Import-AccucutVerifiedModule -ScriptRoot $PSScriptRoot -ScriptPath $PSCommandPath
         Invoke-AccucutUpdate @PSBoundParameters
         exit 0
     }
     catch {
-        Write-Host "The update stopped: $(Hide-AccucutSecrets -Text $_.Exception.Message)" -ForegroundColor Red
+        $message = $_.Exception.Message
+        if (Get-Command -Name Hide-AccucutSecrets -ErrorAction SilentlyContinue) { $message = Hide-AccucutSecrets -Text $message }
+        Write-Host "The update stopped: $message" -ForegroundColor Red
         exit 1
     }
 }

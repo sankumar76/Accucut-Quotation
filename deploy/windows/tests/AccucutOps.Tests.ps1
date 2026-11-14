@@ -347,90 +347,134 @@ Describe 'service accounts by SID' {
     }
 }
 
-Describe 'a folder is trusted only if administrators alone control it (update.ps1 checks this before it writes; security review)' {
+# The permissions of a part of a path are mocked (Get-AccucutPathSecurity returns an owner and a list of allow rules), so that every refusal can be
+# shown on any machine. Links are real: the tests make junctions. The right numbers are those of FileSystemRights.
+#   Delete 65536, DeleteSubdirectoriesAndFiles 64, ChangePermissions 262144, TakeOwnership 524288, WriteData 2, AppendData 4,
+#   ReadAndExecute 1179817, Modify 1245631.
+Describe 'one rule for path trust: Assert-AccucutPathTrusted (security review)' {
     BeforeEach {
-        $script:Folder = Join-Path $TestDrive ('trusted-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
-        New-Item -ItemType Directory -Path $script:Folder | Out-Null
-        Mock -ModuleName AccucutOps Get-AccucutFolderOwnerSid { 'S-1-5-32-544' }
+        $script:Base = Join-Path $TestDrive ('trust-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        $script:Leaf = Join-Path $script:Base 'anc\mid\leaf'
+        New-Item -ItemType Directory -Path $script:Leaf -Force | Out-Null
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() } }
     }
 
-    It 'refuses a folder whose owner is not Administrators or SYSTEM' {
-        Mock -ModuleName AccucutOps Get-AccucutFolderOwnerSid { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
-        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Throw '*is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*Refusing*'
+    It 'accepts a path whose every part is owned by Administrators, SYSTEM or TrustedInstaller and carries no foreign rule' {
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @() } }
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity { [pscustomobject]@{ Owner = 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'; Rules = @() } }
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
     }
 
-    It 'refuses a link, and a folder that does not exist' {
-        $target = Join-Path $TestDrive 'trust-link-target'
-        New-Item -ItemType Directory -Path $target | Out-Null
-        $junction = Join-Path $TestDrive 'trust-link'
-        New-Item -ItemType Junction -Path $junction -Target $target | Out-Null
-        { Assert-AccucutFolderTrusted -Path $junction } | Should -Throw '*is a link*'
-        { Assert-AccucutFolderTrusted -Path (Join-Path $TestDrive 'no-such-folder') } | Should -Throw '*does not exist*'
+    It 'refuses a link (a junction) at an ancestor, so the path cannot lead somewhere else' {
+        $real = Join-Path $script:Base 'real'
+        New-Item -ItemType Directory -Path (Join-Path $real 'mid\leaf') -Force | Out-Null
+        $link = Join-Path $script:Base 'lnk'
+        New-Item -ItemType Junction -Path $link -Target $real | Out-Null
+        { Assert-AccucutPathTrusted -Path (Join-Path $link 'mid\leaf') } | Should -Throw "*lnk' is a link*could lead somewhere else*"
     }
 
-    It 'accepts a folder that only Administrators and SYSTEM can change, refuses one that Users can change, and honours a named exception' -Skip:(-not $script:IsAdmin) {
-        $security = New-Object System.Security.AccessControl.DirectorySecurity
-        $security.SetAccessRuleProtection($true, $false)
-        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-        $none = [System.Security.AccessControl.PropagationFlags]::None
-        foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
-            $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier($sid)), 'FullControl', $inherit, $none, 'Allow')))
+    It 'refuses a link at the target, unless the caller says the target is a link on purpose (current)' {
+        $real = Join-Path $script:Base 'real-release'
+        New-Item -ItemType Directory -Path $real | Out-Null
+        $current = Join-Path $script:Base 'current'
+        New-Item -ItemType Junction -Path $current -Target $real | Out-Null
+        { Assert-AccucutPathTrusted -Path $current } | Should -Throw '*is a link*'
+        { Assert-AccucutPathTrusted -Path $current -AllowLinkAtLeaf } | Should -Not -Throw
+    }
+
+    It 'refuses an ancestor that someone else owns' {
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity {
+            param($Path)
+            if ($Path -like '*\mid') { return [pscustomobject]@{ Owner = 'S-1-5-21-1111111111-2222222222-3333333333-1001'; Rules = @() } }
+            [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }
         }
-        $users = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'ReadAndExecute', $inherit, $none, 'Allow')))
-        [System.IO.Directory]::SetAccessControl($script:Folder, $security)
-        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Not -Throw
-
-        $writable = [System.IO.Directory]::GetAccessControl($script:Folder)
-        $writable.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'Modify', $inherit, $none, 'Allow')))
-        [System.IO.Directory]::SetAccessControl($script:Folder, $writable)
-        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Throw '*can be changed by S-1-5-32-545*Refusing*'
-        { Assert-AccucutFolderTrusted -Path $script:Folder -AllowedWriter @('S-1-5-32-545') } | Should -Not -Throw
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*mid' is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*"
     }
 
-    It 'a parent folder in which another user could delete or replace the install folder is refused; making a new folder there is not' -Skip:(-not $script:IsAdmin) {
-        $parent = Join-Path $TestDrive 'parent-folder'
-        New-Item -ItemType Directory -Path (Join-Path $parent 'Accucut') -Force | Out-Null
-        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-        $none = [System.Security.AccessControl.PropagationFlags]::None
-        $inheritOnly = [System.Security.AccessControl.PropagationFlags]::InheritOnly
-        $users = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
-        $security = New-Object System.Security.AccessControl.DirectorySecurity
-        $security.SetAccessRuleProtection($true, $false)
-        foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
-            $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier($sid)), 'FullControl', $inherit, $none, 'Allow')))
-        }
-        # What Windows gives every user in C:\: make a folder here (this folder), and Modify for what is inside only (inherit only).
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'AppendData', 'None', $none, 'Allow')))
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'Modify', $inherit, $inheritOnly, 'Allow')))
-        [System.IO.Directory]::SetAccessControl($parent, $security)
-        { Assert-AccucutParentNotSwappable -Path (Join-Path $parent 'Accucut') } | Should -Not -Throw
-
-        $swappable = [System.IO.Directory]::GetAccessControl($parent)
-        $swappable.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'DeleteSubdirectoriesAndFiles', 'None', $none, 'Allow')))
-        [System.IO.Directory]::SetAccessControl($parent, $swappable)
-        { Assert-AccucutParentNotSwappable -Path (Join-Path $parent 'Accucut') } | Should -Throw '*can be changed by S-1-5-32-545*could be replaced*'
+    It 'refuses an ancestor on which another user has <Name>' -ForEach @(
+        @{ Name = 'Delete'; Rights = 65536 }
+        @{ Name = 'DeleteSubdirectoriesAndFiles'; Rights = 64 }
+        @{ Name = 'ChangePermissions'; Rights = 262144 }
+        @{ Name = 'TakeOwnership'; Rights = 524288 }
+        @{ Name = 'Modify (it includes Delete)'; Rights = 1245631 }
+    ) {
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\anc') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = $Rights; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*anc' can be changed by S-1-5-32-545*"
     }
 
-    It 'update.ps1 refuses a current link that does not point inside releases' {
-        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'current-link-root')
-        New-Item -ItemType Directory -Path (Join-Path $paths.Root 'elsewhere\t-x') -Force | Out-Null
-        New-Item -ItemType Junction -Path $paths.Current -Target (Join-Path $paths.Root 'elsewhere\t-x') | Out-Null
-        Mock -ModuleName AccucutOps Assert-AccucutFolderTrusted { }
-        Mock -ModuleName AccucutOps Assert-AccucutParentNotSwappable { }
-        { Assert-AccucutInstallTrusted -Paths $paths } | Should -Throw '*does not point at a folder directly inside*'
+    It 'the drive root rule: users may make folders and files in the drive root, and have Modify on what is inside it, and that is allowed; delete-child there is not' {
+        # What a default Windows C:\ holds, owned by SYSTEM: create folders (this folder), create files (this folder), Modify on what is inside (inherit only),
+        # read for Users. None of it lets a user delete, replace or take over an existing folder that an administrator owns.
+        $defaults = "@([pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 4; InheritOnly = `$false }, [pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 2; InheritOnly = `$false }, [pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 1245631; InheritOnly = `$true }, [pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 1179817; InheritOnly = `$false })"
+        $make = { param($extra) [scriptblock]::Create("param(`$Path) if (`$Path -match '^[A-Za-z]:\\?`$') { return [pscustomobject]@{ Owner = 'S-1-5-18'; Rules = @($defaults) + @($extra) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }") }
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity (& $make '')
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
+
+        # The same user with delete-child on the drive root itself is refused, whatever the folder is called.
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity (& $make "[pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 64; InheritOnly = `$false }")
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*can be changed by S-1-5-11*"
+
+        # The same right marked inherit-only reaches only what is inside the drive root, not the drive root, so it is not counted there.
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity (& $make "[pscustomobject]@{ Sid = 'S-1-5-11'; Rights = 64; InheritOnly = `$true }")
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Not -Throw
     }
 
-    It 'checks every folder that update.ps1 writes to, and lets only the two service accounts write to the logs' {
-        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'trusted-install')
-        Mock -ModuleName AccucutOps Assert-AccucutFolderTrusted { }
-        Mock -ModuleName AccucutOps Assert-AccucutParentNotSwappable { }
-        Assert-AccucutInstallTrusted -Paths $paths
-        Should -Invoke Assert-AccucutParentNotSwappable -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Path -like '*trusted-install' }
-        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 5 -Exactly
-        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 4 -Exactly -ParameterFilter { $AllowedWriter.Count -eq 0 }
-        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter {
-            $Path -like '*logs' -and $AllowedWriter.Count -eq 2 -and ($AllowedWriter | Where-Object { $_ -notmatch '^S-1-5-80(-\d+){5}$' }).Count -eq 0
-        }
+    It 'the target is held to the stricter rule: no other user may write, make folders or write attributes, and inherit-only rules count' {
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 2; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*leaf' can be changed by S-1-5-32-545*"
+        $inheritOnly = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\leaf') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 1245631; InheritOnly = `$true }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $inheritOnly
+        { Assert-AccucutPathTrusted -Path $script:Leaf } | Should -Throw "*leaf' can be changed by S-1-5-32-545*"
+        # A named account (the service accounts, for logs) may write to the target, and only to the target.
+        { Assert-AccucutPathTrusted -Path $script:Leaf -AllowedWriter @('S-1-5-32-545') } | Should -Not -Throw
+        $ancestor = [scriptblock]::Create("param(`$Path) if (`$Path -like '*\anc') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 65536; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $ancestor
+        { Assert-AccucutPathTrusted -Path $script:Leaf -AllowedWriter @('S-1-5-32-545') } | Should -Throw "*anc' can be changed by*"
+    }
+
+    It 'checks a file the same way (a script or the module), and refuses a path that is not full and local or does not exist' {
+        $file = Join-Path $script:Leaf 'AccucutOps.psm1'
+        Set-Content -LiteralPath $file -Value '# module'
+        { Assert-AccucutPathTrusted -Path $file } | Should -Not -Throw
+        $mock = [scriptblock]::Create("param(`$Path) if (`$Path -like '*.psm1') { return [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @([pscustomobject]@{ Sid = 'S-1-5-32-545'; Rights = 4; InheritOnly = `$false }) } } [pscustomobject]@{ Owner = 'S-1-5-32-544'; Rules = @() }")
+        Mock -ModuleName AccucutOps Get-AccucutPathSecurity $mock
+        { Assert-AccucutPathTrusted -Path $file } | Should -Throw "*psm1' can be changed by S-1-5-32-545*"
+        { Assert-AccucutPathTrusted -Path 'relative\path' } | Should -Throw '*not a full local path*'
+        { Assert-AccucutPathTrusted -Path '\\server\share\x' } | Should -Throw '*not a full local path*'
+        { Assert-AccucutPathTrusted -Path (Join-Path $script:Leaf 'missing') } | Should -Throw '*does not exist*'
+    }
+
+    It 'reads the real owner and rules of a real folder as plain data' {
+        $security = Get-AccucutPathSecurity -Path $script:Leaf
+        $security.Owner | Should -Match '^S-1-\d+(-\d+)+$'
+        $security.Rules.Count | Should -BeGreaterThan 0
+        $security.Rules[0].PSObject.Properties.Name | Should -Be @('Sid', 'Rights', 'InheritOnly')
     }
 }
+
+Describe 'update.ps1 uses the same rule on every folder it writes to' {
+    It 'checks the install folder, releases, config, services and logs (the two service accounts may write to logs only), and the folder that current points at' {
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'trusted-install')
+        New-Item -ItemType Directory -Path (Join-Path $paths.Releases 't-cur') -Force | Out-Null
+        New-Item -ItemType Junction -Path $paths.Current -Target (Join-Path $paths.Releases 't-cur') | Out-Null
+        Mock -ModuleName AccucutOps Assert-AccucutPathTrusted { }
+        Assert-AccucutInstallTrusted -Paths $paths
+        Should -Invoke Assert-AccucutPathTrusted -ModuleName AccucutOps -Times 7 -Exactly
+        Should -Invoke Assert-AccucutPathTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Path -like '*logs' -and $AllowedWriter.Count -eq 2 -and ($AllowedWriter | Where-Object { $_ -notmatch '^S-1-5-80(-\d+){5}$' }).Count -eq 0 }
+        Should -Invoke Assert-AccucutPathTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Path -like '*current' -and $AllowLinkAtLeaf }
+        Should -Invoke Assert-AccucutPathTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Path -like '*releases?t-cur' }
+    }
+
+    It 'refuses a current link that does not point directly inside releases' {
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'current-link-root')
+        New-Item -ItemType Directory -Path (Join-Path $paths.Root 'elsewhere\t-x'), $paths.Releases -Force | Out-Null
+        New-Item -ItemType Junction -Path $paths.Current -Target (Join-Path $paths.Root 'elsewhere\t-x') | Out-Null
+        Mock -ModuleName AccucutOps Assert-AccucutPathTrusted { }
+        { Assert-AccucutInstallTrusted -Paths $paths } | Should -Throw '*does not point at a folder directly inside*'
+    }
+}
+

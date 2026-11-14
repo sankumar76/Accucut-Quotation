@@ -174,7 +174,7 @@ describe('the scripts (AC-1, AC-5)', () => {
     const second = install.slice(install.indexOf('function Invoke-AccucutInstall'), install.indexOf('function Start-AccucutInstall'));
     expect(second).not.toContain('$ZipPath');
     expect(second).not.toContain('Copy-AccucutTree');
-    expect(second).toContain('Assert-AccucutFolderTrusted -Path $paths.Root');
+    expect(second).toContain('Assert-AccucutPathTrusted -Path $paths.Root');
     expect(second).toContain("(Join-Path $PackageRoot '.env.example')");
     expect(second).toContain("Join-Path $releaseDirectory 'sql\\create-roles.psql'");
     // The entry point runs the copy of the script that is in the unpacked release.
@@ -186,6 +186,39 @@ describe('the scripts (AC-1, AC-5)', () => {
     expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeGreaterThan(0);
     expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeLessThan(entry.indexOf('Import-Module (Join-Path $VerifiedRelease'));
     expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $verified')).toBeLessThan(entry.indexOf('& $verifiedScript'));
+  });
+
+  it('one rule for path trust: the same block of code is in install.ps1, update.ps1 and the module, and nothing else decides whether a path is trusted (security review)', () => {
+    const block = (path: string): string => {
+      const text = read(path);
+      const start = text.indexOf('# BEGIN shared path trust');
+      const end = text.indexOf('# END shared path trust');
+      expect(start, `${path} has no shared block`).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      return text.slice(start, end);
+    };
+    const reference = block('deploy/windows/AccucutOps.psm1');
+    expect(reference).toContain('function Assert-AccucutPathTrusted');
+    expect(block('deploy/windows/install.ps1')).toBe(reference);
+    expect(block('deploy/windows/update.ps1')).toBe(reference);
+    // The rule walks every part from the drive root, refuses links and owners other than Administrators, SYSTEM and TrustedInstaller, and names the four rights.
+    for (const part of ['GetPathRoot', 'ReparsePoint', 'S-1-5-32-544', 'S-1-5-18', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464', 'DeleteSubdirectoriesAndFiles', 'ChangePermissions', 'TakeOwnership', 'InheritOnly']) {
+      expect(reference, part).toContain(part);
+    }
+    // The earlier ad-hoc checks are gone: no script or module has its own writer or parent check any more.
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1']) {
+      const text = code(path);
+      for (const gone of ['Assert-AccucutFolderTrusted', 'Assert-AccucutParentNotSwappable', 'Assert-AccucutBootstrapFolder', 'Get-AccucutNonAdminWriters', 'Get-AccucutFolderOwnerSid']) {
+        expect(text, `${path} still has ${gone}`).not.toContain(gone);
+      }
+    }
+    // update.ps1 checks itself and the module with the rule before it loads the module, and loads it from the real folder.
+    const update = code('deploy/windows/update.ps1');
+    const importAt = update.indexOf('Import-Module $module -Force');
+    expect(update.indexOf('Assert-AccucutPathTrusted -Path $module')).toBeGreaterThan(0);
+    expect(update.indexOf('Assert-AccucutPathTrusted -Path $module')).toBeLessThan(importAt);
+    expect(update).not.toMatch(/^Import-Module/m);
+    expect(update.indexOf('Import-AccucutVerifiedModule -ScriptRoot $PSScriptRoot')).toBeLessThan(update.indexOf('Invoke-AccucutUpdate @PSBoundParameters'));
   });
 
   it('settings files: locked before they are filled', () => {
