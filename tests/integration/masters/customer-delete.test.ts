@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, MasterInUseError, NAME_TAKEN_CODE, NotFoundError, CUSTOMER_IN_USE_CODE } from '@/lib/errors';
+import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService } from '@/server/services/estimate-service';
@@ -34,6 +35,10 @@ let engineerId: string;
 let codes = 0;
 
 const by = () => contextOf(adminId);
+
+/** The estimate service over the real repositories and the transaction runner given (the real one, or one that holds before commit). */
+const estimateServiceOver = (transactions: TransactionRunner) =>
+  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions });
 
 beforeAll(async () => {
   db = await openAuditDatabase();
@@ -194,7 +199,7 @@ describe('AC-4: a customer used only by Approved estimates may be deleted, and t
     expect((await stored(alpha.id)).deleted).toBe(true);
     const kept = await db.owner.query<{ customer_id: string; status: string }>('SELECT customer_id::text, status::text FROM estimates WHERE id = $1::uuid', [estimateId]);
     expect(kept.rows).toEqual([{ customer_id: alpha.id, status: 'APPROVED' }]);
-    const estimates = createEstimateService({ estimates: createEstimateRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
+    const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
     expect((await estimates.getWorkspace({ id: adminId, role: 'ADMIN' }, code))?.customer).toEqual({ id: alpha.id, name: 'Alpha Works' });
   });
 });
@@ -224,7 +229,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     const isHolding = new Promise<void>((resolve) => {
       reachedHolding = resolve;
     });
-    const choosing = createEstimateService({ estimates: createEstimateRepository(db.prisma), transactions: createHoldingRunner(db, hold, reachedHolding) });
+    const choosing = estimateServiceOver(createHoldingRunner(db, hold, reachedHolding));
     const choice = choosing.setCustomer(adminViewer(), estimateId, alpha.id);
     // If the choice fails before it holds, the race rejects with its error and the test says why.
     await Promise.race([isHolding, choice]);
@@ -260,7 +265,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     const deletion = createServiceHoldingBeforeCommit(db, hold, reachedHolding).deleteCustomer(by(), alpha.id);
     await Promise.race([isHolding, deletion]);
 
-    const estimates = createEstimateService({ estimates: createEstimateRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
+    const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
     let choiceDone = false;
     const choice = estimates.setCustomer(adminViewer(), estimateId, alpha.id).finally(() => {
       choiceDone = true;
