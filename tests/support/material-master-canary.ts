@@ -48,3 +48,18 @@ export const MATERIAL_CANARIES: ReadonlyArray<MaterialCanary> = [
 
 /** The material a recipe for `PATCH /api/v1/materials/{id}` names: it exists wherever the canaries are loaded. */
 export const MATERIAL_RECIPE_ID: string = defined(MATERIAL_CANARIES[0]).id;
+
+/**
+ * The material the recipe for `DELETE /api/v1/materials/{id}` names (STORY-02.07). The valid call of an allowed role really deletes it, so it is **not** a canary above, which
+ * the scan and the other recipes keep reading: the in-memory repository of the security tests holds this one apart (`session-harness.ts`). No database holds it, and none
+ * needs to: the only database call with this ID is a refused one, which the role check answers before any lookup (CR-33). Its numbers are invented and Restricted like any
+ * material's, so they follow the `n.37` pattern and are in no response an Engineer can get.
+ */
+export const MATERIAL_DELETE_RECIPE: MaterialCanary = {
+  id: '00000000-0000-4000-8000-000500000c03',
+  materialInDrawing: 'Canary-Material-Disposable',
+  materialConsidered: 'Canary-Considered-Disposable',
+  pricePerKg: '17.37',
+  specificGravity: '2.37',
+  scrapRate: '3.37',
+};

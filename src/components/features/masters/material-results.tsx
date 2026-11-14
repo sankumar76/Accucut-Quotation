@@ -6,6 +6,8 @@ import { Icon } from '@/components/shared/icon';
 import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
+import type { MaterialRow } from '@/lib/masters/materials-client';
+
 import { MasterLoadError } from './master-load-error';
 import { CLEAR_FILTERS, SAVED_NOT_SHOWN_BODY } from './master-texts';
 import { MaterialList } from './material-list';
@@ -66,5 +68,9 @@ export function MaterialResults({ master, onClearFilters }: MaterialResultsProps
     );
   }
   if (list.shown.length === 0) return <NoMatch query={list.query} onClearFilters={onClearFilters} />;
-  return <MaterialList items={list.shown} pendingOpener={dialog.loader.pending ? dialog.pressed : null} onEdit={master.onEdit} />;
+  // Whichever dialog's code is still loading, its button keeps the pressed look and says it is busy.
+  const pendingOpener = master.remove.loader.pending ? master.remove.pressed : dialog.loader.pending ? dialog.pressed : null;
+  const onDelete = (item: MaterialRow, button: HTMLButtonElement, byKeyboard: boolean): void =>
+    master.remove.onDelete({ id: item.id, name: item.materialInDrawing }, button, byKeyboard);
+  return <MaterialList items={list.shown} pendingOpener={pendingOpener} onEdit={master.onEdit} onDelete={onDelete} />;
 }

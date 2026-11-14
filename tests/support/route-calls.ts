@@ -4,7 +4,7 @@ import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary
 import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
-import { MATERIAL_RECIPE_ID } from './material-master-canary';
+import { MATERIAL_DELETE_RECIPE, MATERIAL_RECIPE_ID } from './material-master-canary';
 import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
 /**
@@ -202,6 +202,9 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       };
     case 'PATCH /api/v1/materials/[id]':
       return { id: MATERIAL_RECIPE_ID, body: { scrapRate: '23.37' }, status: 200 };
+    // STORY-02.07: the delete of the allowed role really deletes, so it names a material of its own, not the canary the scan keeps reading.
+    case 'DELETE /api/v1/materials/[id]':
+      return { id: MATERIAL_DELETE_RECIPE.id, status: 204 };
     // STORY-02.04: the Exchange Rate Master route. It has no ID. The body is the pair of canary rates, which every database the scan reads holds already.
     case 'GET /api/v1/exchange-rates':
       return DEFAULT_CALL;

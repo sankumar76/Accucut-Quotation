@@ -14,8 +14,8 @@ test.use({ storageState: ADMIN_STATE });
  * E2E Admin (the saved browser state of the set-up project). Each test works on a customer it makes through the API (an invented name with the screen size, the
  * repeat, the retry and a random part), and the one that needs an estimate puts the customer on the draft estimate of a person it makes for itself, so the three
  * screen sizes and the retries never meet on one record. The words are the UX spec's (SCR-12 "Delete" and "Delete blocked"), written out here and not imported. What
- * the database holds (the soft delete, the one entry, the race) is judged in `tests/integration/masters/customer-delete.test.ts`. The Materials tab's Delete is
- * not here: it waits for the parts tree (STORY-05.02, assumption A-1 of the story).
+ * the database holds (the soft delete, the one entry, the race) is judged in `tests/integration/masters/customer-delete.test.ts`.
+ * The Materials tab's Delete, and the confirmation that cannot be closed while its request is out (SQR-03), are in `masters-delete-materials.spec.ts`.
  */
 
 const KEEP = 'Keep customer';

@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 
 import { Icon } from '@/components/shared/icon';
@@ -12,13 +12,13 @@ import type { MaterialRow } from '@/lib/masters/materials-client';
 
 import { isOpener, type Opener } from './master-opener';
 import { BREAK_LONG_NAMES } from './master-texts';
-import { editMaterialLabel, PRICE_HEADING, SCRAP_HEADING } from './material-texts';
+import { DELETE_ACTION, deleteMaterialLabel, editMaterialLabel, PRICE_HEADING, SCRAP_HEADING } from './material-texts';
 
 /**
  * The materials of SCR-13 (STORY-02.03 AC-1, AC-7): a table from 768 px, where it scrolls inside its own container only, and a card for
  * each material below it. Both carry the same action with the same name; the row action of the table is the 36 px icon button of dense
  * tables, the card's is full-size. It decides nothing: it draws the materials it is given and tells its parent which one was pressed, so
- * focus can return to its button. The numbers are the server's decimal text; Delete is story 02.07's.
+ * focus can return to its button. The numbers are the server's decimal text. The Actions column holds Edit and Delete, 112 px (, STORY-02.07 AC-7).
  */
 
 export interface MaterialListProps {
@@ -26,6 +26,7 @@ export interface MaterialListProps {
   /** The button whose dialog is still loading: it keeps its pressed look and says it is busy (UX spec 7.3.1 rule 11). */
   readonly pendingOpener: Opener | null;
   readonly onEdit: (item: MaterialRow, byKeyboard: boolean) => void;
+  readonly onDelete: (item: MaterialRow, button: HTMLButtonElement, byKeyboard: boolean) => void;
 }
 
 
@@ -54,10 +55,39 @@ function EditButton({ item, pendingOpener, onEdit, compact }: MaterialListProps 
   );
 }
 
+/** The Delete button of a row, named for the material. */
+function DeleteButton({ item, pendingOpener, onDelete, compact }: MaterialListProps & { readonly item: MaterialRow; readonly compact: boolean }) {
+  // Passed only when true: an explicit `aria-busy={undefined}` would replace the one a `loading` button sets itself.
+  const busy = isOpener(pendingOpener, item.id, 'delete') ? ({ 'aria-busy': true } as const) : {};
+  return (
+    <Button
+      variant={compact ? 'ghost' : 'secondary'}
+      size={compact ? 'icon-row' : 'default'}
+      data-action="delete"
+      aria-label={deleteMaterialLabel(item.materialInDrawing)}
+      {...busy}
+      onClick={(event) => onDelete(item, event.currentTarget, event.detail === 0)}
+    >
+      <Icon icon={Trash2} size={compact ? 'large' : 'default'} />
+      {compact ? null : DELETE_ACTION}
+    </Button>
+  );
+}
+
+/** Edit, then Delete (the mock-up's order): the table's are the 36 px icon buttons of dense tables, the cards' are full-size. */
+function RowButtons(props: MaterialListProps & { readonly item: MaterialRow; readonly compact: boolean }) {
+  return (
+    <>
+      <EditButton {...props} />
+      <DeleteButton {...props} />
+    </>
+  );
+}
+
 /** The table from 768 px: it scrolls inside its own container only. */
 function MaterialTable(props: MaterialListProps) {
   return (
-    <Table regionLabel="Material Master, scrollable" caption="Material Master" actionButtons={1}>
+    <Table regionLabel="Material Master, scrollable" caption="Material Master" actionButtons={2}>
       <TableHeader>
         <TableRow>
           <TableHead>{MATERIAL_FIELD_LABELS.materialInDrawing}</TableHead>
@@ -78,7 +108,7 @@ function MaterialTable(props: MaterialListProps) {
             <TableCell className="text-right tabular-nums">{item.scrapRate}</TableCell>
             <TableActionsCell>
               <div className="flex flex-nowrap items-center justify-end gap-s-2">
-                <EditButton {...props} item={item} compact />
+                <RowButtons {...props} item={item} compact />
               </div>
             </TableActionsCell>
           </TableRow>
@@ -114,7 +144,7 @@ function MaterialCards(props: MaterialListProps) {
             <CardFigure label={SCRAP_HEADING} value={item.scrapRate} />
           </dl>
           <div className="flex flex-wrap gap-s-2">
-            <EditButton {...props} item={item} compact={false} />
+            <RowButtons {...props} item={item} compact={false} />
           </div>
         </li>
       ))}

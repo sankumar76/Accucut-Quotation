@@ -203,6 +203,23 @@ export async function createDisposableUser(kind: DisposableKind, testInfo: TestI
 }
 
 /**
+ * Puts a material into the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` (the part has the owner's ID too,
+ * `insertCanaryEstimate`), the way the part form of STORY-05.03 will: the material's ID inside the value of a field. The delete guard of STORY-02.07 finds the ID
+ * wherever it is in the inputs, so the key and the shape here are invented. The estimate is a Draft, so the material is then "in use" (AC-3).
+ */
+export async function putMaterialInCanaryPart(ownerId: string, materialId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query(
+      `UPDATE estimate_nodes SET inputs = jsonb_build_object('invented-material-field', jsonb_build_object('id', $2::text, 'text', 'Invented material')) WHERE id = $1::uuid`,
+      [ownerId, materialId],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Puts the Process Master canary rates (STORY-02.01's name and values, `tests/support/process-master-canary.ts`) into the database
  * the servers use, so the confidentiality scan has Restricted values to look for. They are three new rates, never the 15 seed rows
  * that other specs read, and the statement is repeatable and safe when three screen sizes run it at once (`ON CONFLICT DO NOTHING`,

@@ -1,4 +1,12 @@
-import { FieldValidationError, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseError, type FormulaUse } from '../../lib/errors';
+import {
+  FieldValidationError,
+  MasterInUseError,
+  MATERIAL_IN_USE_CODE,
+  NAME_TAKEN_CODE,
+  NotFoundError,
+  ProcessItemInUseError,
+  type FormulaUse,
+} from '../../lib/errors';
 import { rateUsesOf } from '../../lib/fields/rate-usage';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import type { RateReference } from '../../lib/formula';
@@ -109,6 +117,12 @@ export interface MastersService extends CustomerOperations, ExchangeRateOperatio
   createMaterial(context: AuditContext, input: NewMaterial): Promise<MaterialRecord>;
   /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. 404 for an unknown or hidden ID. */
   updateMaterial(context: AuditContext, id: string, changes: MaterialChanges): Promise<MaterialRecord>;
+  /**
+   * Soft-deletes the material and writes one `master.deleted` entry in the same transaction (STORY-02.07 AC-3). Refused with `MasterInUseError` (409, naming the
+   * estimates) while a Draft or Submitted estimate has the material in a part; 404 for an unknown, already deleted or hidden ID (the "Not applicable" row). Nothing
+   * is written when it is refused.
+   */
+  deleteMaterial(context: AuditContext, id: string): Promise<void>;
 }
 
 /** What an audit entry keeps of a rate (`processItemState` in `audit-events.ts`). */
@@ -162,7 +176,7 @@ async function withMaterialNameRule<T>(write: () => Promise<T>): Promise<T> {
   }
 }
 
-type MaterialOperations = Pick<MastersService, 'listMaterials' | 'listMaterialOptions' | 'createMaterial' | 'updateMaterial'>;
+type MaterialOperations = Pick<MastersService, 'listMaterials' | 'listMaterialOptions' | 'createMaterial' | 'updateMaterial' | 'deleteMaterial'>;
 type MaterialDependencies = Pick<MastersServiceDependencies, 'masters' | 'transactions' | 'audit'>;
 
 /** A new material as it is stored: every number written to two decimals. */
@@ -204,6 +218,23 @@ async function changeMaterial(
 }
 
 /**
+ * Delete (STORY-02.07 AC-3). The table lock, then the material's row `FOR UPDATE` (PRF-01, the same order as every material change), **then** the estimates that
+ * have the material: the plain read runs after the lock, so a writer of a part's Material in Drawing (it holds the row `FOR SHARE` under the estimate's row lock,
+ * `lockMaterialForUse`) and this delete serialise. Either the delete waits and then sees the part (409), or the write waits and then finds no material. The
+ * delete takes no estimate or task row lock, so there is no cycle with that writer's order (estimate, task, material). `findMaterialForUpdate` skips the hidden
+ * "Not applicable" row, so it is a 404 here like an unknown ID.
+ */
+async function removeMaterial({ masters, audit }: MaterialDependencies, tx: Transaction, context: AuditContext, id: string): Promise<void> {
+  await masters.lockMaterials(tx);
+  const before = await masters.findMaterialForUpdate(id, tx);
+  if (before === null) throw new NotFoundError(MATERIAL_NOT_FOUND_MESSAGE);
+  const open = await masters.findOpenEstimatesOfMaterial(before.id, tx);
+  if (open.total > 0) throw new MasterInUseError(MATERIAL_IN_USE_CODE, before.materialInDrawing, open.estimates, open.total);
+  if (!(await masters.softDeleteMaterial(before.id, tx))) throw new NotFoundError(MATERIAL_NOT_FOUND_MESSAGE);
+  await audit.record(tx, { event: 'master.deleted', ...materialEntryFor(context, before), before: materialAuditState(before), after: null });
+}
+
+/**
  * The material methods of the service. Table lock first, then the row, in that order everywhere (PRF-01); nothing is read before the
  * transaction opens, because no check needs the configuration.
  */
@@ -223,6 +254,8 @@ function createMaterialOperations(dependencies: MaterialDependencies): MaterialO
       assertSpecificGravity(changes.specificGravity);
       return withMaterialNameRule(() => transactions.run((tx) => changeMaterial(dependencies, tx, context, id, changes)));
     },
+
+    deleteMaterial: (context, id) => transactions.run((tx) => removeMaterial(dependencies, tx, context, id)),
   };
 }
 
