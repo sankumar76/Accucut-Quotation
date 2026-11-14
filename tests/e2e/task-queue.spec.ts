@@ -31,7 +31,7 @@ test.beforeEach(async ({ context }) => {
 /** Signs in as a new Engineer, who has no task yet. */
 async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string; readonly name: string }> {
   await page.context().clearCookies();
-  const person = await createDisposableUser('scan', testInfo);
+  const person = await createDisposableUser('queue', testInfo);
   await page.goto('/sign-in');
   await signInThroughThePage(page, person.email, E2E_PASSWORD);
   await expectOnQueue(page, 'My tasks');
@@ -41,7 +41,7 @@ async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ re
 /** Signs in as a new Engineer after `seed` has put tasks in the database for them, and waits until the tabs are live. Returns the person and what `seed` returned. */
 async function openQueueAs<T>(page: Page, testInfo: TestInfo, seed: (engineerId: string) => Promise<T>): Promise<{ readonly person: { readonly id: string; readonly name: string }; readonly seeded: T }> {
   await page.context().clearCookies();
-  const person = await createDisposableUser('scan', testInfo);
+  const person = await createDisposableUser('queue', testInfo);
   const seeded = await seed(person.id);
   await page.goto('/sign-in');
   await signInThroughThePage(page, person.email, E2E_PASSWORD);
@@ -75,7 +75,7 @@ test.describe('an Engineer', () => {
     const { seeded: own } = await openQueueAs(page, testInfo, async (id) => {
       const set = await seedFour(id);
       // Another Engineer's task, which must never appear.
-      await seedQueueTask((await createDisposableUser('scan', testInfo)).id, '2030-03-01T10:00:00.000Z', 'DRAFT', 'E2E belongs to someone else');
+      await seedQueueTask((await createDisposableUser('queue', testInfo)).id, '2030-03-01T10:00:00.000Z', 'DRAFT', 'E2E belongs to someone else');
       return set;
     });
 
@@ -182,7 +182,7 @@ test.describe('an Engineer', () => {
   test('AC-2, AC-8: the API answers with their own tasks only, in a strict shape with no cost or rate, and refuses a filter that would widen it', async ({ page }, testInfo) => {
     const { person, seeded: otherCode } = await openQueueAs(page, testInfo, async (id) => {
       await seedFour(id);
-      return (await seedQueueTask((await createDisposableUser('scan', testInfo)).id, '2030-03-01T10:00:00.000Z', 'DRAFT', 'E2E belongs to someone else')).code;
+      return (await seedQueueTask((await createDisposableUser('queue', testInfo)).id, '2030-03-01T10:00:00.000Z', 'DRAFT', 'E2E belongs to someone else')).code;
     });
     const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/tasks?tab=open&limit=200`);
     expect(response.status()).toBe(200);
@@ -220,7 +220,7 @@ test.describe('an Engineer', () => {
 
 test.describe('a Lead', () => {
   test('AC-2, AC-3, AC-7: sees every Engineer\'s tasks with the Engineer, Customer, Folder and Assigned by columns by width, "Not chosen yet", and the Assign task button', async ({ page }, testInfo) => {
-    const engineer = await createDisposableUser('scan', testInfo);
+    const engineer = await createDisposableUser('queue', testInfo);
     const seeded = await seedQueueTask(engineer.id, '2000-01-01T00:00:00.000Z', 'DRAFT', 'E2E lead view');
     await page.goto('/queue');
     await expectOnQueue(page, 'Task queue');
@@ -243,7 +243,7 @@ test.describe('a Lead', () => {
   });
 
   test('AC-2, AC-5: GET /api/v1/tasks answers a Lead with every task, and a signed-out caller with 401', async ({ page, browser }, testInfo) => {
-    const engineer = await createDisposableUser('scan', testInfo);
+    const engineer = await createDisposableUser('queue', testInfo);
     const seeded = await seedQueueTask(engineer.id, '2030-03-01T10:00:00.000Z', 'DRAFT', 'E2E lead api');
     const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/tasks?tab=open&limit=200`);
     expect(response.status()).toBe(200);
