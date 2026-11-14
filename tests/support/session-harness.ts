@@ -7,6 +7,7 @@ import { type AccountService, createAccountService } from '../../src/server/serv
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { systemClock } from '../../src/lib/time';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
@@ -15,7 +16,9 @@ import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
+import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
@@ -81,6 +84,10 @@ export interface SessionHarness {
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
   readonly taskWorld: FakeTaskWorld;
+  /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
+  readonly estimateService: EstimateService;
+  /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
+  readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
   readonly throttles: FakeThrottleRepository;
   /** The real account service over the fake repository, for `POST /api/v1/account/password` (`getAccountService` in the composition mock). */
@@ -131,6 +138,25 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The recipe of the estimate routes (`estimate-recipe.ts`): the harness Engineer owns a draft whose ID is `targetId` and whose code is made from it.
+  const estimateWorld = createFakeEstimateWorld(
+    () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, deleted: customer.deleted })),
+    [
+      {
+        id: targetId,
+        code: canaryTaskCodeFor(targetId),
+        engineerId: idOf.ENGINEER,
+        assignedByName: 'Invented Lead',
+        folderPath: CANARY_FOLDER_PATH,
+        deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
+        title: 'Invented task',
+        notes: 'Invented notes.',
+        status: 'DRAFT',
+        customerId: null,
+        inputsRevision: 0,
+      },
+    ],
+  );
 
   return {
     users,
@@ -139,6 +165,8 @@ export function createSessionHarness(): SessionHarness {
     auditWorld,
     masters,
     taskWorld,
+    estimateWorld,
+    estimateService: createEstimateService({ estimates: estimateWorld.repository, transactions: estimateWorld.transactions }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({

@@ -6,6 +6,7 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { validCallFor, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
@@ -42,6 +43,7 @@ vi.mock('@/server/composition', async () => {
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
+    getEstimateService: () => shared.estimateService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -58,9 +60,7 @@ const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1
  */
 const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/test-only/leak'];
 
-function expectedRoles(path: string): ReadonlyArray<RoleName> {
-  return SPEC_ACCESS[path] ?? ROLES;
-}
+const expectedRoles = (path: string): ReadonlyArray<RoleName> => SPEC_ACCESS[path] ?? ROLES;
 
 const implemented = ROUTE_MANIFEST.filter((row) => row.status === 'implemented' && row.roles !== 'public');
 const apiRows = implemented.filter((row) => row.kind === 'api');
@@ -83,6 +83,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
+  '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
@@ -92,7 +93,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
 };
 
 /** The ID an allowed role opens a page with: a page with a dynamic segment needs a record that exists (an invented ID is SCR-26 "not found"); the others take any text. */
-const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID };
+const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID, '/estimates/[code]': canaryTaskCodeFor(harness.targetId) };
 const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented-id';
 
 const moduleShape = z.record(z.string(), z.unknown());

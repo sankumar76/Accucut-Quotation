@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 export const STUB_EMAIL = 'stub-admin@example.test';
 export const STUB_PASSWORD = 'invented-stub-password';
 export const STUB_CUSTOMER_ID = 'invented-stub-customer';
+export const STUB_ESTIMATE_CODE = 'Q-2026-0001';
 const SESSION = 'invented-stub-session';
 
 /** Bytes that gzip cannot shrink (a hash chain), so the compressed size is about the raw size and a test can plant an overrun. */
@@ -59,6 +60,8 @@ export function createStubBuild(staticFiles: Readonly<Record<string, Buffer | st
 export interface StubPortal {
   /** How many customers were added through `POST /api/v1/customers` (a signed-in caller). */
   customersAdded(): number;
+  /** How many tasks were assigned through `POST /api/v1/tasks` (a signed-in caller): the record the budget check opens `/estimates/[code]` at (STORY-05.01). */
+  tasksAssigned(): number;
   readonly baseUrl: string;
   close(): Promise<void>;
 }
@@ -74,6 +77,7 @@ function readBody(request: IncomingMessage): Promise<string> {
 /** Serves `pages` by path. A path not listed is a 404 page for a signed-in visitor and a redirect for a signed-out one. */
 export async function startStubPortal(pages: Readonly<Record<string, StubPage>>, notFoundHtml: string): Promise<StubPortal> {
   let customersAdded = 0;
+  let tasksAssigned = 0;
   const server: Server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://stub.invalid');
@@ -97,6 +101,13 @@ export async function startStubPortal(pages: Readonly<Record<string, StubPage>>,
         response.end(JSON.stringify(signedIn ? { id: STUB_CUSTOMER_ID } : {}));
         return;
       }
+      if ((url.pathname === '/api/v1/users' || url.pathname === '/api/v1/tasks') && request.method === 'POST') {
+        // The Engineer and the task the budget check opens `/estimates/[code]` at (STORY-05.01): a signed-in caller gets an ID, and a code, back.
+        if (signedIn && url.pathname === '/api/v1/tasks') tasksAssigned += 1;
+        response.writeHead(signedIn ? 201 : 401, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(signedIn ? (url.pathname === '/api/v1/users' ? { id: 'invented-stub-engineer' } : { code: STUB_ESTIMATE_CODE }) : {}));
+        return;
+      }
       const page = pages[url.pathname];
       if (!signedIn) {
         const anonymous = page?.anonymous ?? { status: 307, location: '/sign-in' };
@@ -114,6 +125,7 @@ export async function startStubPortal(pages: Readonly<Record<string, StubPage>>,
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
     customersAdded: () => customersAdded,
+    tasksAssigned: () => tasksAssigned,
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();
