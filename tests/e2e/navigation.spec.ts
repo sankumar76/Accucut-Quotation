@@ -79,10 +79,11 @@ test.describe('the Lead (saved browser state)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible();
     const menu = await openMenu(page, testInfo);
     // "Assign task" (STORY-04.01) is the Lead's and the Admin's first working page, so it is in the Lead's menu now, under Work, after the queue.
-    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', ...IMPLEMENTED_MENU]);
+    // STORY-08.01: Fields and formulas is the Lead's too, under Configuration, and its label says the page is view only (AC-4).
+    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', 'Home', 'Fields and formulas (view only)', 'Design system']);
     await expect(menu.getByText('Work', { exact: true })).toBeVisible();
     await expect(menu.getByText('Review', { exact: true })).toBeVisible();
-    for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
+    for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task' && item !== 'Fields and formulas')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
   });
 
   test('AC-6: the top bar has the logo, the name, the bell and the account menu, and the account menu shows who is signed in', async ({ page }) => {

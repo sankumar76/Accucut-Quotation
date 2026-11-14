@@ -19,6 +19,7 @@ import { createUserRepository, type UserRepository } from './repositories/user-r
 import { type AccountService, createAccountService } from './services/account-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion } from './services/config-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
@@ -44,6 +45,7 @@ let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
+let configReadService: ConfigReadService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -178,6 +180,15 @@ export function getEstimateService(): EstimateService {
     });
   }
   return estimateService;
+}
+
+/**
+ * The read side of the field registry (STORY-08.01): the list of fields and formulas and the line for the current version. Restricted: a formula and the rate names in it are
+ * for the Admin and the Lead only (NFR-002), and the routes and the page that call this are in the manifest for those two roles alone.
+ */
+export function getConfigReadService(): ConfigReadService {
+  configReadService ??= createConfigReadService({ configurations: createConfigRepository(runtimeClient()), masters: createMasterRepository(runtimeClient()) });
+  return configReadService;
 }
 
 /**

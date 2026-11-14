@@ -6,6 +6,7 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 
 import { forbiddenStrings, PROCESS_CANARY_RATES, SEED_RATE_SENTINELS } from '../support/canary-masters';
 import { recipeProblem, validCallFor } from '../support/route-calls';
+import { seedFormulaTexts } from '../support/seed-formula-texts';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { fixedForbiddenProblem, headersText, maskRequestId, scanResponse, type RecordedResponse } from '../support/scanner';
 import { nonEmpty } from '../support/security-loops';
@@ -43,6 +44,7 @@ vi.mock('@/server/composition', async () => {
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
+    getConfigReadService: () => shared.configReadService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -51,7 +53,8 @@ vi.mock('@/server/composition', async () => {
 const ORIGIN = 'https://portal.example.test';
 const REFUSED_ROLES: ReadonlyArray<RoleName> = ['LEAD', 'ENGINEER'];
 const INVENTED_ID = '00000000-0000-4000-8000-00000000dead';
-const FORBIDDEN = forbiddenStrings();
+// STORY-08.01: the formulas too, stored and as a person reads them, because the Configuration routes are the ones that hold them.
+const FORBIDDEN = forbiddenStrings(seedFormulaTexts());
 const moduleShape = z.record(z.string(), z.unknown());
 
 /** Every implemented API call that the role does not list, for each refused role. Throws when there is none. */
@@ -104,6 +107,8 @@ function watchLookups(): () => string[] {
   };
   watch('masters', harness.masters);
   watch('audit', harness.auditWorld.audit);
+  // STORY-08.01: the configuration versions, where the formulas are. A refused role must not cause a read of any of them.
+  watch('config', harness.configRepository);
   watch('users', harness.users, ['findAccountById']);
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }
