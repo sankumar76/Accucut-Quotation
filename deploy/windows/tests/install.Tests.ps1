@@ -15,7 +15,8 @@ BeforeAll {
     # Dot-sourcing defines the functions and does not run the install (the script runs it only when it is started, not sourced).
     . (Join-Path $script:WindowsDirectory 'install.ps1')
     $script:RealGetSecurity = (Get-Command -Name Get-AccucutPathSecurity -CommandType Function).ScriptBlock
-    $script:RealImportBootstrap = (Get-Command -Name Import-AccucutBootstrapModule -CommandType Function).ScriptBlock
+    $script:RealNewLockedDirectory = (Get-Command -Name New-AccucutLockedDirectory -CommandType Function).ScriptBlock
+    $script:RealImportBootstrap =(Get-Command -Name Import-AccucutBootstrapModule -CommandType Function).ScriptBlock
 
     $script:FakeOwnerPassword = 'FAKEownerPassword0001'
     $script:FakeAppPassword = 'FAKEappPassword00002'
@@ -335,7 +336,8 @@ Describe 'the first half: a locked install folder and a release unpacked from th
 
     It 'a locked folder is made in one call with Administrators as owner, no inheritance and Administrators and SYSTEM only' -Skip:(-not $script:IsAdmin) {
         $folder = Join-Path $TestDrive 'really-locked'
-        New-AccucutLockedDirectory -Path $folder
+        # The describe's BeforeEach replaces New-AccucutLockedDirectory by a mock; this test runs the real one.
+        & $script:RealNewLockedDirectory -Path $folder
         $security = [System.IO.Directory]::GetAccessControl($folder)
         $security.AreAccessRulesProtected | Should -BeTrue
         $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value | Should -Be 'S-1-5-32-544'

@@ -275,7 +275,7 @@ Describe 'the service files (AC-1, AC-6)' {
     It 'writes both service files and reports them as new, then as unchanged' {
         $script:Changed | Should -Be @('AccucutApp', 'AccucutWorker')
         Initialize-AccucutServiceFiles -Paths $script:ServicePaths -ReleaseDirectory $script:Release -NodeExe 'C:\Program Files\nodejs\node.exe' -Port 3000 -ListenAddress '0.0.0.0' | Should -BeNullOrEmpty
-        Initialize-AccucutServiceFiles -Paths $script:ServicePaths -ReleaseDirectory $script:Release -NodeExe 'C:\Program Files\nodejs\node.exe' -Port 8080 -ListenAddress '127.0.0.1' | Should -Be @('AccucutApp', 'AccucutWorker')
+        Initialize-AccucutServiceFiles -Paths $script:ServicePaths -ReleaseDirectory $script:Release -NodeExe 'C:\Program Files\nodejs\node.exe' -Port 8080 -ListenAddress '127.0.0.1' | Should -Be 'AccucutApp'
     }
 
     It 'registers each service after PostgreSQL, Automatic (Delayed Start), restarting after 10, 30 and 60 seconds, with logs that roll daily' -ForEach @(@{ Name = 'AccucutApp' }, @{ Name = 'AccucutWorker' }) {
@@ -491,7 +491,7 @@ Describe 'one rule for path trust: Assert-AccucutPathTrusted (security review)' 
         $security = Get-AccucutPathSecurity -Path $script:Leaf
         $security.Owner | Should -Match '^S-1-\d+(-\d+)+$'
         $security.Rules.Count | Should -BeGreaterThan 0
-        $security.Rules[0].PSObject.Properties.Name | Should -Be @('Sid', 'Rights', 'InheritOnly')
+        $security.Rules[0].PSObject.Properties.Name | Should -Be @('Sid', 'Rights', 'InheritOnly', 'Inherited')
     }
 }
 

@@ -108,7 +108,7 @@ function Import-AccucutBootstrapModule {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$ZipPath,
+        [AllowEmptyString()][string]$ZipPath,
         [Parameter(Mandatory)][string]$PackageRoot
     )
 

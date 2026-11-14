@@ -441,7 +441,8 @@ function Split-AccucutEnvValues {
         if ($script:DevelopmentOnlyNames -contains $entry.Name) { continue }
         $value = $entry.Default
         if ($Values.Contains($entry.Name)) { $value = [string]$Values[$entry.Name] }
-        if ($value.StartsWith($script:PlaceholderPrefix)) { $missing.Add($entry.Name); continue }
+        # A placeholder anywhere in the value (a connection string holds it after the user name), as src/lib/env.ts also refuses it.
+        if ($value.Contains($script:PlaceholderPrefix)) { $missing.Add($entry.Name); continue }
         $line = "$($entry.Name)=$(Format-AccucutEnvValue -Value $value)"
         if ($script:MigrateOnlyNames -contains $entry.Name) { $migrate.Add($line) } else { $runtime.Add($line) }
     }
@@ -987,7 +988,8 @@ function Assert-AccucutPathTrusted {
             if (($bits -band $mask) -ne 0) {
                 $inherited = $false
                 if ($rule.PSObject.Properties.Name -contains 'Inherited') { $inherited = [bool]$rule.Inherited }
-                $named = ([System.Security.AccessControl.FileSystemRights][int]$rule.Rights).ToString()
+                $named = '0x{0:X8}' -f $bits
+                try { $named = "$named $(([System.Security.AccessControl.FileSystemRights][int]$rule.Rights).ToString())" } catch { $null = $_ }
                 throw "'$part' can be changed by $($rule.Sid) (rights: $named; inherited: $inherited; inherit-only: $($rule.InheritOnly)), who is not an administrator, so '$full' could be replaced or changed. Refusing to use it."
             }
         }
