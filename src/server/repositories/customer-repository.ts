@@ -187,7 +187,7 @@ async function setRates(db: PrismaClient, customerId: string, values: ReadonlyAr
 }
 
 /** Builds the customer methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
-// Over 40 lines on purpose (coding standards section 1): one flat object of the nine customer methods, each about 15 lines or fewer; the longer statements are the named functions above.
+// Over 40 lines on purpose (coding standards section 1): one flat object of the eleven customer methods, each about 15 lines or fewer; the longer statements are the named functions above.
 export function createCustomerMethods(db: PrismaClient): CustomerMethods {
   return {
     listCustomers: () =>
@@ -257,7 +257,8 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
 
     findOpenEstimatesOfCustomer: (customerId, tx) =>
       withDatabaseErrors(async () => {
-        if (!isUuid(customerId)) return { total: 0, estimates: [] };
+        // Fails closed (SQR-02): an ID that is not a UUID is a programming fault, never "no open estimate", which would let a delete through.
+        if (!isUuid(customerId)) throw new Error('The open-estimate check needs a customer ID.');
         // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"

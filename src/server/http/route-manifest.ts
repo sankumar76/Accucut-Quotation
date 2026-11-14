@@ -165,8 +165,8 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is
-  // story 02.07's. `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
+  // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is the Admin's too (STORY-02.07
+  // AC-6, the delete of a material no open estimate uses). `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
   // Considered, and no rate of any kind, so the cost scan covers it as an Engineer route. The nav entry is the page's, from the planned row.
   {
     path: '/masters/materials',
@@ -179,7 +179,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Masters', label: 'Materials and lists', order: 30, icon: 'package' },
   },
   { path: '/api/v1/materials', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-02.04 (SCR-13, the Exchange rates tab). The Admin only (BR-004); an Engineer never receives a rate (BR-003), so the route is in no Engineer list.
   // The tab is in the page of the Materials row above: no new page, no new menu entry.

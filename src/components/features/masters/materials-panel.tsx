@@ -11,7 +11,7 @@ import type { MaterialRow } from '@/lib/masters/materials-client';
 import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
-import { FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
+import { FAILED_CONFIRMATION_TITLE, FAILED_DIALOGS_TITLE, type PageNotice } from './master-texts';
 import { MaterialResults } from './material-results';
 import { ADD_MATERIAL, materialSavedNotice, MATERIAL_SEARCH_LABEL, MATERIAL_SEARCH_PLACEHOLDER } from './material-texts';
 import { useMaterialMaster, type MaterialMaster } from './use-material-master';
@@ -54,9 +54,10 @@ function SavedNotice({ notice }: { readonly notice: PageNotice }) {
 
 export function MaterialsPanel({ initialItems }: MaterialsPanelProps) {
   const master = useMaterialMaster(initialItems);
-  const { list, dialog, notice } = master;
+  const { list, dialog, remove, notice } = master;
   const search = useRef<HTMLInputElement>(null);
   const Dialog = dialog.loader.shown ? dialog.loader.Overlay : null;
+  const DeleteDialogs = remove.loader.shown ? remove.loader.Overlay : null;
   const clearFilters = (): void => {
     list.setQuery('');
     search.current?.focus();
@@ -69,6 +70,7 @@ export function MaterialsPanel({ initialItems }: MaterialsPanelProps) {
           <AddMaterialButton master={master} />
         </div>
         {dialog.loader.failed ? <MasterDialogsFailed title={FAILED_DIALOGS_TITLE} /> : null}
+        {remove.loader.failed ? <MasterDialogsFailed title={FAILED_CONFIRMATION_TITLE} /> : null}
         {notice === null ? null : <SavedNotice notice={notice} />}
       </div>
       <MasterSearchBox
@@ -86,6 +88,18 @@ export function MaterialsPanel({ initialItems }: MaterialsPanelProps) {
           item={dialog.formItem}
           onClose={() => dialog.setOpen(false)}
           onSaved={(saved, kind) => void master.onSaved(materialSavedNotice(saved.materialInDrawing, kind === 'added' ? 'added' : 'saved'))}
+          onCloseAutoFocus={master.onCloseAutoFocus}
+        />
+      )}
+      {DeleteDialogs === null ? null : (
+        <DeleteDialogs
+          open={remove.open}
+          target={remove.target}
+          uses={remove.uses}
+          onClose={() => remove.setOpen(null)}
+          onDeleted={remove.onDeleted}
+          onBlocked={remove.onBlocked}
+          onGone={remove.onGone}
           onCloseAutoFocus={master.onCloseAutoFocus}
         />
       )}

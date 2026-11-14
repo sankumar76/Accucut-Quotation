@@ -21,7 +21,7 @@ import { fakeCustomer } from './fake-customers';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
-import { MATERIAL_CANARIES } from './material-master-canary';
+import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
@@ -126,7 +126,7 @@ export function createSessionHarness(): SessionHarness {
   const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
   // The Material Master holds the canary materials (STORY-02.03): a route that leaked a price, a gravity or a scrap rate to a role would send one.
-  const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES, [...FRESH_TREATMENTS, ...TREATMENT_CANARIES]);
+  const masters = createFakeMasterRepository(undefined, [...MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE], [...FRESH_TREATMENTS, ...TREATMENT_CANARIES]);
   // The Customer Master holds the canary customer (STORY-02.02): a route that leaked a customer's rate or contact detail to a role would send one.
   for (const canary of CUSTOMER_CANARIES) {
     const values = Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value]));

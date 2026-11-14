@@ -111,7 +111,7 @@ function DeleteBody({ target, texts, request }: { readonly target: DeleteTarget;
         </Notice>
       ) : null}
       <AlertDialogFooter>
-        <AlertDialogCancel>{texts.keep}</AlertDialogCancel>
+        <AlertDialogCancel disabled={request.submitting}>{texts.keep}</AlertDialogCancel>
         <AlertDialogAction
           disabled={request.submitting}
           aria-busy={request.submitting || undefined}
@@ -128,11 +128,15 @@ function DeleteBody({ target, texts, request }: { readonly target: DeleteTarget;
   );
 }
 
+/** Which of the two dialogs of a delete is open: the confirmation, or the refusal that names the open estimates. */
+export type MasterDeleteKind = 'delete' | 'blocked';
 
 export function MasterDeleteDialog({ open, target, texts, onClose, onCloseAutoFocus, ...handlers }: MasterDeleteDialogProps) {
   const request = useDeleteRequest(handlers);
   const onOpenChange = (next: boolean): void => {
-    if (next) return;
+    // While the request is out the dialog cannot be closed (SQR-03): Escape and Keep do nothing. A late answer would otherwise act on a screen that has moved on
+    // (open the refusal after the person dismissed it, leave a failure showing for the next record, or close a confirmation opened since for another one).
+    if (next || request.submitting) return;
     request.clearFailure();
     onClose();
   };
