@@ -185,9 +185,10 @@ describe('AC-5: the refusals', () => {
     expect(stored().inputsRevision).toBe(3);
   });
 
-  it('a Lead is refused on a submitted estimate too: the state decides, not the role', async () => {
-    const { service } = setUp([estimate({ status: 'SUBMITTED' })]);
+  it('a Lead and an Admin are refused on an approved estimate: nobody changes an approved estimate (STORY-06.01 replaced the draft-only check; FR-064 lets them edit a submitted one)', async () => {
+    const { service } = setUp([estimate({ status: 'APPROVED' })]);
     await expect(service.setCustomer(lead, ESTIMATE, MARLOW)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(admin, ESTIMATE, MARLOW)).rejects.toBeInstanceOf(ConflictError);
   });
 
   it.each([
