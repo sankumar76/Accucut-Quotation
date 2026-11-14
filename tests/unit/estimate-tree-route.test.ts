@@ -245,6 +245,16 @@ describe('AC-7: who may write, and when', () => {
     expect(estimate().inputsRevision).toBe(0);
   });
 
+  it('a Lead may still change a SUBMITTED estimate and nobody an APPROVED one (STORY-06.01)', async () => {
+    harness.signInAs('LEAD');
+    estimate().status = 'SUBMITTED';
+    expect((await add({ kind: 'item' })).status).toBe(201);
+    estimate().status = 'APPROVED';
+    const refused = await add({ kind: 'item' });
+    expect(refused.status).toBe(409);
+    expect(record.parse(await refused.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
+  });
+
   it('a Lead and an Admin may change any draft, the Engineer\'s included', async () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       harness.signInAs(role);

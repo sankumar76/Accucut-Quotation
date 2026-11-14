@@ -5,6 +5,7 @@ import type { PartView } from '@/lib/estimate/part-view';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
 import { buildTree500 } from '../support/builders/tree500';
+import { defined } from '../support/defined';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeNode } from '../support/fake-estimates';
 
 /**
@@ -316,7 +317,7 @@ describe('AC-6: two edits with a stale revision', () => {
 });
 
 describe('AC-7: who may write, and when', () => {
-  it('refuses a SUBMITTED and an APPROVED estimate with 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and changes nothing', async () => {
+  it('refuses the Engineer on a SUBMITTED and an APPROVED estimate with 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and changes nothing', async () => {
     for (const status of ['SUBMITTED', 'APPROVED'] as const) {
       const setUpped = setUp();
       const tree = await storyTree(setUpped);
@@ -332,6 +333,23 @@ describe('AC-7: who may write, and when', () => {
       for (const request of requests) await expect(request()).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE, httpStatus: 409 });
       expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
     }
+  });
+
+  it('a Lead and an Admin may still change a SUBMITTED estimate (the shared rule, STORY-06.01), and nobody may change an APPROVED one', async () => {
+    const setUpped = setUp();
+    const tree = await storyTree(setUpped);
+    const estimateRow = defined(setUpped.world.estimates[0]);
+    estimateRow.status = 'SUBMITTED';
+    const added = await setUpped.service.addPart(lead, ESTIMATE, { kind: 'item' });
+    expect(numbers(added.nodes)).toContain('3');
+    expect(numbers(await setUpped.service.moveNode(admin, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 }))[0]).toBe('1');
+    estimateRow.status = 'APPROVED';
+    const before = JSON.stringify(setUpped.world.nodes);
+    for (const viewer of [lead, admin]) {
+      await expect(setUpped.service.addPart(viewer, ESTIMATE, { kind: 'item' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
+      await expect(setUpped.service.deleteNode(viewer, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 9, parts: 1 })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
+    }
+    expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
   });
 
   it('another Engineer, and an estimate that does not exist, are the same 404 for every write and for the reads, even when the estimate is submitted', async () => {

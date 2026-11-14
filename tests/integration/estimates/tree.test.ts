@@ -261,6 +261,10 @@ describe('AC-7: who may write', () => {
     await expect(service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parts: 1 })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     expect(JSON.stringify(await stored())).toBe(rows);
     expect(await service.getTree(lead, estimateId)).toHaveLength(9);
+    // The shared rule (STORY-06.01): a Lead may still change a submitted estimate, nobody an approved one.
+    expect((await service.addPart(lead, estimateId, { kind: 'item' })).nodes).toHaveLength(10);
+    await db.owner.query(`UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid`, [estimateId]);
+    await expect(service.addPart(lead, estimateId, { kind: 'item' })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
   });
 });
 
