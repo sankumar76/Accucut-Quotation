@@ -6,7 +6,10 @@ import { createSessionCookieIssuer, type SessionCookieIssuer } from '../../src/s
 import { type AccountService, createAccountService } from '../../src/server/services/account-service';
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { systemClock } from '../../src/lib/time';
+import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
+import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -19,6 +22,7 @@ import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
+import { createFakeConfigRepository } from './fake-config';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
@@ -81,6 +85,10 @@ export interface SessionHarness {
   readonly mastersService: MastersService;
   /** The in-memory rates behind `mastersService`: a test sets values in them to look for in what a refused caller is sent. */
   readonly masters: FakeMasterRepository;
+  /** The read side of the field registry over the seed registry and the 15 seed rates, for the routes and the page of STORY-08.01 (`getConfigReadService` in the composition mock). */
+  readonly configReadService: ConfigReadService;
+  /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
+  readonly configRepository: ConfigRepository;
   /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
@@ -140,6 +148,7 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
+  const configRepository = createFakeConfigRepository();
   const taskWorld = createFakeTaskWorld(() => users.records);
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
@@ -185,6 +194,8 @@ export function createSessionHarness(): SessionHarness {
     estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    configRepository,
+    configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

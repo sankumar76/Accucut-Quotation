@@ -83,6 +83,7 @@ const SERVICES = {
     'audit-service',
     'bootstrap-admin-service',
     'calculation-service',
+    'config-read-service',
     'config-service',
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
