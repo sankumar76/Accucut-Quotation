@@ -31,7 +31,7 @@ function functionBody(text: string, name: string): string {
 
 const WORKFLOW = code('.github/workflows/windows-package.yml');
 const CI = read('.github/workflows/ci.yml');
-const SCRIPTS = ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1', 'deploy/windows/clean-logs.ps1', 'scripts/package-windows.ps1'];
+const SCRIPTS = ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1', 'scripts/package-windows.ps1'];
 
 describe('stage 13 workflow (AC-8, AC-9)', () => {
   it('has one job, named Stage 13: Windows package, on windows-latest, in Windows PowerShell 5.1', () => {
@@ -350,7 +350,8 @@ describe('the scripts (AC-1, AC-5)', () => {
     const pattern = /# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/;
     const reference = read('deploy/windows/install.ps1').match(pattern)?.[0] ?? '';
     const files = readdirSync(fileURLToPath(new URL('../../deploy/windows', import.meta.url))).filter((name) => /\.(ps1|psm1)$/.test(name));
-    expect(files).toEqual(expect.arrayContaining(['install.ps1', 'update.ps1', 'clean-logs.ps1', 'AccucutOps.psm1']));
+    expect(files).toEqual(expect.arrayContaining(['install.ps1', 'update.ps1', 'AccucutOps.psm1']));
+    expect(files).not.toContain('clean-logs.ps1');
     for (const name of files) {
       const source = code('deploy/windows/' + name);
       const loads = /Import-Module|Import-AccucutTrustedModule|Invoke-AccucutTrustedScript|Start-Process|Invoke-Expression|Process\]::Start|^\s*(?:&|\.)\s+[$'"(]/m.test(source);
@@ -360,22 +361,40 @@ describe('the scripts (AC-1, AC-5)', () => {
     }
   });
 
-  it('clean-logs.ps1 is self-contained (.NET only, no import, no other script), and its task runs as LOCAL SERVICE, not SYSTEM and not elevated', () => {
-    const clean = code('deploy/windows/clean-logs.ps1');
-    expect(clean).not.toMatch(/Import-Module|AccucutOps|Start-Process|Invoke-Expression|^\s*(?:&|\.)\s+[$'"(]/m);
-    expect(clean).toContain('[System.IO.Directory]::GetFiles($LogDirectory, \'*.log\')');
-    expect(clean).toContain('ReparsePoint');
-    const install = code('deploy/windows/install.ps1');
-    const task = functionBody(install, 'Register-AccucutLogCleanupTask');
-    expect(task).toContain("-UserId 'NT AUTHORITY\\LOCAL SERVICE' -LogonType ServiceAccount");
-    expect(task).not.toMatch(/SYSTEM'|RunLevel Highest/);
-    expect(install).toContain("$script:AccucutLogCleanupSid = 'S-1-5-19'");
-    expect(install).toContain('Grant-AccucutFolderAccess -Path $paths.Logs -Account $script:AccucutLogCleanupSid -Rights Modify');
-    expect(install).toContain('Grant-AccucutFolderAccess -Path $paths.Root -Account $script:AccucutLogCleanupSid -Rights ReadAndExecute');
-    // update.ps1 lets the same account write in the logs folder when it checks it (rule B, -Writer), and nobody else.
-    const update = code('deploy/windows/update.ps1');
-    expect(update).toContain("$script:AccucutLogCleanupSid = 'S-1-5-19'");
-    expect(update).toMatch(/Combine\(\$Root, 'logs'\)\) -Root \$Root -ProtectedRoot -Writer @\(\(Get-AccucutUpdateServiceSid -Name 'AccucutApp'\), \(Get-AccucutUpdateServiceSid -Name 'AccucutWorker'\), \$script:AccucutLogCleanupSid\)/);
+  it('the worker prunes the logs: there is no clean-logs.ps1, no scheduled task, no LOCAL SERVICE entry, and exactly the four entries of Amendment 2.1', () => {
+    expect(() => readFileSync(fileURLToPath(new URL('../../deploy/windows/clean-logs.ps1', import.meta.url)))).toThrow();
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1', 'deploy/windows/ci/assert-install.ps1', 'scripts/package-windows.ps1']) {
+      const source = code(path);
+      expect(source, path + ' registers a task or names clean-logs').not.toMatch(/Register-ScheduledTask|New-ScheduledTask|schtasks|clean-logs/);
+      if (path !== 'deploy/windows/ci/assert-install.ps1') expect(source, path + ' names a shared account').not.toMatch(/S-1-5-19|LOCAL SERVICE/);
+    }
+    // The only entries: Administrators and SYSTEM (made with the root), then Read and execute on the root and Modify on logs for the two service SIDs.
+    const grant = functionBody(code('deploy/windows/AccucutOps.psm1'), 'Grant-AccucutInstallFolderAccess');
+    expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Root -Account $account -Rights ReadAndExecute');
+    expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Logs -Account $account -Rights Modify');
+    expect((grant.match(/Grant-AccucutFolderAccess/g) ?? []).length).toBe(2);
+    expect(code('deploy/windows/install.ps1')).toContain('Grant-AccucutInstallFolderAccess -Paths $paths -ServiceSid $accounts');
+    expect((code('deploy/windows/install.ps1').match(/Grant-AccucutFolderAccess/g) ?? []).length).toBe(0);
+    // update.ps1 lets the two service accounts write in logs when it checks it (rule B, -Writer), and nobody else.
+    expect(code('deploy/windows/update.ps1')).toMatch(/Combine\(\$Root, 'logs'\)\) -Root \$Root -ProtectedRoot -Writer @\(\(Get-AccucutUpdateServiceSid -Name 'AccucutApp'\), \(Get-AccucutUpdateServiceSid -Name 'AccucutWorker'\)\)/);
+    // assert-install.ps1 checks the exact entries and that no task exists.
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    for (const part of ['Get-AceList', '0x1F01FF|False|3|Allow', '0x1200A9|False|3|Allow', '0x1301BF|False|3|Allow', "'S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0'", "Get-ScheduledTask -TaskName 'Accucut log cleanup'"]) {
+      expect(assertInstall, part).toContain(part);
+    }
+    // The install tells the worker which folder to prune, as an absolute path with forward slashes, and the worker runs the job.
+    expect(code('deploy/windows/install.ps1')).toContain("\"LOG_DIRECTORY=$($paths.Logs.Replace('\\', '/'))\"");
+    const worker = read('src/worker/main.ts');
+    expect(worker).toContain("import { scheduleLogPrune } from '../server/jobs/log-prune';");
+    expect(worker).toContain('scheduleLogPrune(process.env.LOG_DIRECTORY, log)');
+    const job = read('src/server/jobs/log-prune.ts');
+    expect(job).toContain("export const LOG_PRUNE_CRON = '30 3 * * *';");
+    expect(job).toContain("export const LOG_PRUNE_TIMEZONE = 'Asia/Kolkata';");
+    const jobCode = job
+      .split('\n')
+      .filter((line) => !/^\s*(\/\*|\*|\/\/)/.test(line))
+      .join('\n');
+    expect(jobCode).not.toMatch(/job_runs|jobRuns|readFile|createReadStream/);
   });
 
   it('install and update logs are new files with unpredictable names, created with CreateNew and held open; nothing appends to a log (review SQR-03)', () => {

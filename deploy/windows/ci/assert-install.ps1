@@ -86,11 +86,36 @@ $migrateAcl = Get-AclSids -Path $paths.MigrateEnvFile
 Assert-That ($migrateAcl.Protected -and (($migrateAcl.Sids -join ';') -eq $adminSid)) "migrate.env can be read by Administrators only (found: $($migrateAcl.Sids -join ', '))"
 $rootAcl = Get-AclSids -Path $paths.Root
 Assert-That ($rootAcl.Protected -and ($rootAcl.Owner -eq $adminSid)) 'the install folder is owned by Administrators and does not inherit permissions'
-$unexpectedRoot = @($rootAcl.Sids | Where-Object { @($adminSid, 'S-1-5-18', 'S-1-5-19', $appSid, $workerSid) -notcontains $_ })
-Assert-That ($unexpectedRoot.Count -eq 0) "the install folder is closed to ordinary users (found: $($rootAcl.Sids -join ', '))"
 foreach ($folder in $paths.Releases, $paths.Config, $paths.Services, $paths.Logs) {
     $folderAcl = Get-AclSids -Path $folder
     Assert-That ($folderAcl.Owner -eq $adminSid) "$folder is owned by Administrators"
+}
+
+# ADR-015 Amendment 2.1: EXACTLY these entries, each as SID, access mask, inherited, inheritance flags (1 container + 2 object = 3).
+function Get-AceList {
+    param([string]$Path)
+    $security = Get-Item -LiteralPath $Path -Force | ForEach-Object { $_.GetAccessControl() }
+    $rules = $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+    return @($rules | ForEach-Object { '{0}|0x{1:X}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.IsInherited, [int]$_.InheritanceFlags, $_.AccessControlType } | Sort-Object)
+}
+$systemSid = 'S-1-5-18'
+$rootExpected = @(
+    "$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow"
+) | Sort-Object
+$rootActual = Get-AceList -Path $paths.Root
+Assert-That (($rootActual -join "`n") -eq ($rootExpected -join "`n")) "the install folder holds exactly: Administrators and SYSTEM full control, and the two service accounts read and execute (found: $($rootActual -join '; '))"
+$logsExpected = @(
+    "$adminSid|0x1F01FF|True|3|Allow", "$systemSid|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow",
+    "$appSid|0x1301BF|False|3|Allow", "$workerSid|0x1301BF|False|3|Allow"
+) | Sort-Object
+$logsActual = Get-AceList -Path $paths.Logs
+Assert-That (($logsActual -join "`n") -eq ($logsExpected -join "`n")) "the logs folder holds exactly those four inherited entries plus Modify for the two service accounts (found: $($logsActual -join '; '))"
+$bannedSids = @('S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0')
+$currentRelease = Get-AccucutCurrentRelease -Paths $paths
+$checkedFolders = @($paths.Root, $paths.Releases, (Join-Path $paths.Releases $currentRelease), $paths.Config, $paths.Services, $paths.Logs)
+foreach ($folder in $checkedFolders) {
+    $present = (Get-AclSids -Path $folder).Sids | Where-Object { $bannedSids -contains $_ }
+    Assert-That (@($present).Count -eq 0) "$folder grants nothing to LOCAL SERVICE, NETWORK SERVICE, Authenticated Users, Users or Everyone (found: $(@($present) -join ', '))"
 }
 
 # ADR-015 Amendment 2: the real trust rules, on the real install. Every folder and file that update.ps1 loads, runs or writes to must pass (owner,
@@ -101,7 +126,7 @@ function Assert-Trusted {
     Write-Host "PASS  $Message"
 }
 $release = Get-AccucutTrustedCurrent -Root $paths.Root
-$logWriters = @($services | ForEach-Object { Get-AccucutUpdateServiceSid -Name $_ }) + @($script:AccucutLogCleanupSid)
+$logWriters = @($services | ForEach-Object { Get-AccucutUpdateServiceSid -Name $_ })
 Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Root -Root $paths.Root -ProtectedRoot } 'the install folder passes the trust check (owner, protected list, no other writer)'
 Assert-Trusted { Assert-AccucutTrustedPath -Path $release -Root $paths.Root -ProtectedRoot } 'the current release folder passes the trust check'
 Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'AccucutOps.psm1') -Root $paths.Root -ProtectedRoot } 'the module passes the trust check'
@@ -109,7 +134,7 @@ Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'update.ps1
 foreach ($folder in $paths.Config, $paths.Services) {
     Assert-Trusted { Assert-AccucutTrustedPath -Path $folder -Root $paths.Root -ProtectedRoot } "$folder passes the trust check"
 }
-Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Logs -Root $paths.Root -ProtectedRoot -Writer $logWriters } "$($paths.Logs) passes the trust check (the two service accounts and the log cleanup account may write there, nobody else)"
+Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Logs -Root $paths.Root -ProtectedRoot -Writer $logWriters } "$($paths.Logs) passes the trust check (the two service accounts may write there, nobody else)"
 Assert-Trusted { Assert-AccucutTrustedNoLinks -Path $release } 'the current release holds no link'
 foreach ($name in $services) {
     Assert-Trusted { [void](Resolve-AccucutTrustedExecutable -Path (Join-Path $paths.Services "$name.exe")) } "the WinSW program of $name passes the trust check"
@@ -126,6 +151,7 @@ Assert-That ((-not (Test-Path -LiteralPath $scratch)) -or @(Get-ChildItem -Liter
 $runtime = Read-AccucutEnvFile -Path $paths.EnvFile
 $migrate = Read-AccucutEnvFile -Path $paths.MigrateEnvFile
 Assert-That (-not $runtime.Contains('MIGRATE_DATABASE_URL') -and -not $runtime.Contains('ADMIN_INITIAL_PASSWORD')) 'the services never see the owner role or the first Admin password'
+Assert-That ($runtime.Contains('LOG_DIRECTORY') -and ([string]$runtime['LOG_DIRECTORY'] -eq $paths.Logs.Replace('\', '/'))) 'LOG_DIRECTORY in .env is the absolute logs folder (the worker prunes it daily)'
 Assert-That ($migrate.Contains('MIGRATE_DATABASE_URL') -and -not $migrate.Contains('ADMIN_INITIAL_PASSWORD')) 'the first Admin password was removed after its one use'
 
 # AC-5: no secret in any log.
@@ -149,15 +175,22 @@ foreach ($file in $logFiles) {
     }
 }
 Write-Host "PASS  no secret is in any of the $($logFiles.Count) log files"
+# ADR-015 Amendment 2.1: the worker says that it scheduled its daily log-prune job (it starts a moment after the app, so give it a few seconds).
+$scheduled = $false
+for ($attempt = 0; $attempt -lt 15 -and -not $scheduled; $attempt++) {
+    foreach ($file in @(Get-ChildItem -LiteralPath $paths.Logs -Filter 'AccucutWorker*.out.log' -File -Force)) {
+        $text = Get-Content -LiteralPath $file.FullName -Raw
+        if ($text -and $text.Contains('log-prune scheduled daily at 03:30 IST')) { $scheduled = $true }
+    }
+    if (-not $scheduled) { Start-Sleep -Seconds 2 }
+}
+Assert-That $scheduled 'the worker scheduled its daily log-prune job (03:30 IST)'
 $state = Get-Content -LiteralPath $paths.StateFile -Raw
 foreach ($secret in $secrets) { if ($state.Contains($secret)) { throw 'ASSERTION FAILED: a secret value is in install-state.json.' } }
 Write-Host 'PASS  no secret is in install-state.json'
 
 # AC-6, AC-7 and the helpers around them.
-$cleanupTask = Get-ScheduledTask -TaskName 'Accucut log cleanup' -ErrorAction SilentlyContinue
-Assert-That ($null -ne $cleanupTask) 'the log cleanup task is registered'
-Assert-That ([string]$cleanupTask.Principal.UserId -match 'LOCAL SERVICE|S-1-5-19') "the log cleanup task runs as LOCAL SERVICE, not SYSTEM (found '$($cleanupTask.Principal.UserId)')"
-Assert-That ([string]$cleanupTask.Principal.RunLevel -ne 'Highest') 'the log cleanup task does not run elevated'
+Assert-That ($null -eq (Get-ScheduledTask -TaskName 'Accucut log cleanup' -ErrorAction SilentlyContinue)) 'there is no Accucut log cleanup task: the worker prunes the logs itself'
 $info = Get-Content -LiteralPath $paths.StateFile -Raw | ConvertFrom-Json
 if ($null -ne (Get-Command -Name Get-MpPreference -ErrorAction SilentlyContinue)) {
     $excluded = @((Get-MpPreference).ExclusionPath)

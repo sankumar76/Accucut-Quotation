@@ -508,9 +508,6 @@ function Invoke-AccucutTrustedScript {
 
 # ---- Outside the trust block. Nothing below loads or runs code except through Import-AccucutTrustedModule and Invoke-AccucutTrustedScript.
 
-# NT AUTHORITY\LOCAL SERVICE: the account of the "Accucut log cleanup" task, which may write in the logs folder like the two services (ADR-015 Amendment 2.1).
-$script:AccucutLogCleanupSid = 'S-1-5-19'
-
 function Test-AccucutScriptAdministrator {
     # True when this process runs elevated. A function of its own, so that Pester can mock it.
     [CmdletBinding()]
@@ -572,7 +569,7 @@ function Import-AccucutUpdateEnvironment {
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($old, 'AccucutOps.psm1')) -Root $Root -ProtectedRoot
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'config')) -Root $Root -ProtectedRoot
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'services')) -Root $Root -ProtectedRoot
-    Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'logs')) -Root $Root -ProtectedRoot -Writer @((Get-AccucutUpdateServiceSid -Name 'AccucutApp'), (Get-AccucutUpdateServiceSid -Name 'AccucutWorker'), $script:AccucutLogCleanupSid)
+    Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'logs')) -Root $Root -ProtectedRoot -Writer @((Get-AccucutUpdateServiceSid -Name 'AccucutApp'), (Get-AccucutUpdateServiceSid -Name 'AccucutWorker'))
     Assert-AccucutTrustedNoLinks -Path $old
     Import-AccucutTrustedModule -Root $Root -Release $old
     return $old

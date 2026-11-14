@@ -94,8 +94,6 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 $script:DatabaseName = 'accucut'
-# NT AUTHORITY\LOCAL SERVICE: the account of the "Accucut log cleanup" task (ADR-015 Amendment 2.1).
-$script:AccucutLogCleanupSid = 'S-1-5-19'
 
 # >>> ACCUCUT TRUST BLOCK v1
 # One self-contained block, byte for byte the same in install.ps1 and update.ps1 (ADR-015 Amendment 2; tests/unit/windows-deploy-files.test.ts and
@@ -848,25 +846,6 @@ function Set-AccucutDefenderExclusion {
     return $true
 }
 
-function Register-AccucutLogCleanupTask {
-    <#
-    A daily task that deletes service logs older than 30 days (NFR-024). It runs as NT AUTHORITY\LOCAL SERVICE (S-1-5-19), not elevated, from the install folder
-    (which only Administrators can write): the account gets Modify on the logs folder and read and execute on the install folder, nothing else. The script is
-    self-contained (.NET only, no module, no other script), so it loads nothing that could be changed (ADR-015 Amendment 2.1).
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][object]$Paths)
-
-    $taskName = 'Accucut log cleanup'
-    $script = Join-Path $Paths.Current 'clean-logs.ps1'
-    $argument = "-NoProfile -NonInteractive -File `"$script`" -LogDirectory `"$($Paths.Logs)`" -KeepDays 30"
-    $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
-    $trigger = New-ScheduledTaskTrigger -Daily -At '03:30'
-    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\LOCAL SERVICE' -LogonType ServiceAccount
-    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Deletes Accucut service logs older than 30 days.' -Force | Out-Null
-}
-
 function Undo-AccucutInstallDatabase {
     <# Drops the database and roles that THIS run created (they are new and empty), so a failed install can be run again. Never touches anything else. #>
     [CmdletBinding()]
@@ -941,6 +920,8 @@ function Invoke-AccucutInstall {
         $settings = Get-AccucutInstallSettings -Template $template -ValuesFile $ValuesFile -NonInteractive:$NonInteractive -Port $Port -PgHost $PgHost -PgPort $PgPort -DatabaseName $script:DatabaseName
         Register-AccucutSecret -Value $settings.PgSuperuserPassword
         $envLines = Split-AccucutEnvValues -Template $template -Values $settings.Values
+        # The folder the worker's log-prune job prunes (an absolute path; forward slashes, so that no backslash can be read as an escape in .env).
+        $envLines.Runtime = @($envLines.Runtime) + "LOG_DIRECTORY=$($paths.Logs.Replace('\', '/'))"
         $effectiveListen = $ListenAddress
         if ([string]::IsNullOrWhiteSpace($effectiveListen)) { if ($WithProxy) { $effectiveListen = '127.0.0.1' } else { $effectiveListen = '0.0.0.0' } }
 
@@ -999,16 +980,12 @@ function Invoke-AccucutInstall {
 
         # Access for the service accounts, now that they exist (by SID computed from the service name). Read and execute on the root, Modify on logs.
         $accounts = @(Get-AccucutServiceNames | ForEach-Object { Get-AccucutServiceSid -Name $_ })
-        foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Root -Account $account -Rights ReadAndExecute }
-        foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Logs -Account $account -Rights Modify }
-        # The log cleanup task runs as LOCAL SERVICE (S-1-5-19): read and execute on the install folder (to read clean-logs.ps1), Modify on the logs folder only.
-        Grant-AccucutFolderAccess -Path $paths.Root -Account $script:AccucutLogCleanupSid -Rights ReadAndExecute
-        Grant-AccucutFolderAccess -Path $paths.Logs -Account $script:AccucutLogCleanupSid -Rights Modify
+        Grant-AccucutInstallFolderAccess -Paths $paths -ServiceSid $accounts
         Set-AccucutFileAcl -Path $paths.EnvFile -ReadAccount $accounts
 
-        # Logs: 30 days kept; Defender; firewall; the backup task (STORY-10.05 adds its script).
+        # Logs: 30 days kept (the worker's daily log-prune job keeps them so from then on; no timed task and no other account); Defender; firewall;
+        # the backup task (STORY-10.05 adds its script).
         [void](Remove-AccucutOldLogs -Path $paths.Logs -KeepDays 30)
-        Register-AccucutLogCleanupTask -Paths $paths
         [void](Set-AccucutDefenderExclusion -Path $postgres.DataDirectory -Decision $DefenderExclusion -NonInteractive:$NonInteractive -LogFile $logFile)
         if ($WithProxy) {
             if ($null -eq (Get-NetFirewallRule -DisplayName 'Accucut web (80, 443)' -ErrorAction SilentlyContinue)) {

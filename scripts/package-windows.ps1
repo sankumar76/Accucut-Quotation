@@ -12,7 +12,7 @@
     sql\        create-roles.psql, the one SQL source of the two database roles
     bin\        winsw.exe (WinSW 2.12.0), age.exe, age-keygen.exe, SHA256SUMS.txt, the licences
     services\   the WinSW service files
-    install.ps1, update.ps1, clean-logs.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
+    install.ps1, update.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
 
   WinSW and age are checked against the SHA-256 pinned in deploy\windows\tools.psd1 before they go in. The script stops if the package would hold a
   .env file or any other settings file.
@@ -247,7 +247,7 @@ function New-AccucutPackage {
     # scripts, service files, templates
     Write-Host 'Package: scripts'
     $windows = Join-Path $repo 'deploy\windows'
-    foreach ($file in 'install.ps1', 'update.ps1', 'clean-logs.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
+    foreach ($file in 'install.ps1', 'update.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
         Copy-Item -LiteralPath (Join-Path $windows $file) -Destination (Join-Path $stage $file)
     }
     Copy-PackageFolder -Source (Join-Path $windows 'services') -Destination (Join-Path $stage 'services')

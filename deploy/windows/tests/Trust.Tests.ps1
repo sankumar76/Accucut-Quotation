@@ -256,11 +256,11 @@ Describe 'every packaged script: the block where code is loaded or run, no load 
         $script:Packaged = @(Get-ChildItem -LiteralPath $script:WindowsDirectory -File | Where-Object { $_.Extension -in '.ps1', '.psm1' })
     }
 
-    It 'covers install.ps1, update.ps1, clean-logs.ps1 and the module (a new script is covered the moment it is added)' {
+    It 'covers install.ps1, update.ps1 and the module, and there is no clean-logs.ps1 any more (a new script is covered the moment it is added)' {
         $names = @($script:Packaged | ForEach-Object { $_.Name })
         $names | Should -Contain 'install.ps1'
         $names | Should -Contain 'update.ps1'
-        $names | Should -Contain 'clean-logs.ps1'
+        $names | Should -Not -Contain 'clean-logs.ps1'
         $names | Should -Contain 'AccucutOps.psm1'
     }
 
@@ -278,13 +278,11 @@ Describe 'every packaged script: the block where code is loaded or run, no load 
         }
     }
 
-    It 'clean-logs.ps1 is self-contained: no import, no dot-sourcing, no other script, .NET only' {
-        $text = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'clean-logs.ps1'))
-        Test-LoadSite -Text $text | Should -BeFalse
-        $text | Should -Not -Match 'AccucutOps'
-        $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$null)
-        $names = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { [string]$_.GetCommandName() })
-        foreach ($name in $names) { $name | Should -BeIn @('Set-StrictMode', 'Write-Output') }
+    It 'no script registers a scheduled task: the worker prunes the logs itself (Amendment 2.1); only the backup release may add a task' {
+        foreach ($file in $script:Packaged) {
+            $text = [System.IO.File]::ReadAllText($file.FullName)
+            $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask|schtasks' -Because "$($file.Name) must not register a task"
+        }
     }
 
     It 'Get-Item is called in one place only, Get-AccucutTrustedCurrent, and always module-qualified (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {

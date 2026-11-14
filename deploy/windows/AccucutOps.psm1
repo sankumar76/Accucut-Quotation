@@ -897,6 +897,23 @@ function Grant-AccucutFolderAccess {
     [System.IO.Directory]::SetAccessControl($Path, $security)
 }
 
+function Grant-AccucutInstallFolderAccess {
+    <#
+    The access of the two service accounts to the install folder, and no one else's (ADR-015 Amendment 2.1). On the root (inherited by everything under it):
+    read and execute (0x1200A9) for each service SID, next to the Administrators and SYSTEM entries that the root was made with. On the logs folder: Modify
+    (0x1301BF) for each, which is the one place the services write. No other account (not the shared service accounts, not Users) gets anything, and there is no timed
+    task: the worker prunes the logs itself.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string[]]$ServiceSid
+    )
+
+    foreach ($account in $ServiceSid) { Grant-AccucutFolderAccess -Path $Paths.Root -Account $account -Rights ReadAndExecute }
+    foreach ($account in $ServiceSid) { Grant-AccucutFolderAccess -Path $Paths.Logs -Account $account -Rights Modify }
+}
+
 #endregion
 
 function Invoke-AccucutMigration {
@@ -941,6 +958,6 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
-    'Grant-AccucutFolderAccess',
+    'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration'
 )

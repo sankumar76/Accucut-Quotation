@@ -31,7 +31,7 @@ Describe 'the update checks before it loads anything, and runs only from the ins
         Should -Invoke Import-AccucutTrustedModule -Times 1 -Exactly -ParameterFilter { $Root -eq 'C:\Accucut' -and $Release -eq 'C:\Accucut\releases\old1' }
         # Every check is made with a protected root; the logs folder lets the two service accounts write, and nobody else.
         Should -Invoke Assert-AccucutTrustedPath -Times 6 -Exactly -ParameterFilter { $Root -eq 'C:\Accucut' -and $ProtectedRoot }
-        Should -Invoke Assert-AccucutTrustedPath -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut\logs' -and @($Writer).Count -eq 3 -and @($Writer) -contains 'S-1-5-19' }
+        Should -Invoke Assert-AccucutTrustedPath -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut\logs' -and @($Writer).Count -eq 2 -and @($Writer) -notcontains 'S-1-5-19' }
     }
 
     It 'also accepts the script as it is inside the running release folder' {

@@ -1,10 +1,12 @@
 import { EnvValidationError, loadAppEnv } from '../lib/env';
+import { scheduleLogPrune } from '../server/jobs/log-prune';
 
 /**
  * The worker process (ADR-011, architecture sections 4.7 and 9.9): the entry point of the Windows service `AccucutWorker`.
  *
  * Scope note (STORY-10.04): this is the start-up shell only. It checks the settings exactly as the web process does, stays
- * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The cron jobs (outbox,
+ * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The one job it runs is
+ * `log-prune` (`src/server/jobs/log-prune.ts`, daily at 03:30 IST, only when LOG_DIRECTORY is set). The other cron jobs (outbox,
  * backup-watch, heartbeat) are the worker story's, which adds them here; nothing below changes how the service is installed.
  * It takes no part in coverage: it is a start-up file and the job logic belongs in `src/server/jobs` (test strategy section 11).
  */
@@ -29,8 +31,11 @@ function start(): void {
   }
 
   const keepAlive = setInterval(() => undefined, KEEP_ALIVE_MILLISECONDS);
+  // The daily log-prune job (ADR-015 Amendment 2.1): it runs only when the install has written LOG_DIRECTORY into `.env`.
+  const logPrune = scheduleLogPrune(process.env.LOG_DIRECTORY, log);
   const stop = (signal: string): void => {
     log(`worker stopping (${signal})`);
+    void logPrune?.stop();
     clearInterval(keepAlive);
   };
   process.once('SIGINT', () => stop('SIGINT'));

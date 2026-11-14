@@ -133,42 +133,57 @@ Describe 'install and update logs are new files that nobody else can swap (ADR-0
     }
 }
 
-Describe 'clean-logs.ps1 (AC-6; self-contained, runs as LOCAL SERVICE)' {
-    BeforeAll {
-        function Invoke-CleanLogs {
-            param([string]$Directory, [int]$KeepDays = 30)
-            # In a child powershell.exe, as the scheduled task runs it.
-            $script = Join-Path $script:WindowsDirectory 'clean-logs.ps1'
-            return (& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File $script -LogDirectory $Directory -KeepDays $KeepDays | Out-String)
+Describe 'the access of the service accounts, on a real folder (ADR-015 Amendment 2.1: exact entries, no LOCAL SERVICE, no task)' {
+    # Needs an elevated process: the test locks a folder to Administrators and SYSTEM, as the install does. CI stage 13 runs elevated; a plain user skips it.
+    It 'gives the two service accounts read and execute on the root and Modify on logs, exactly, and no other account anything' -Skip:(-not $script:IsAdmin) {
+        $root = Join-Path $TestDrive ('acl-root-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        $paths = Get-AccucutPaths -Root $root
+        $adminSid = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+        $systemSid = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+        $security = [System.Security.AccessControl.DirectorySecurity]::new()
+        $security.SetAccessRuleProtection($true, $false)
+        $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+        foreach ($sid in @($adminSid, $systemSid)) {
+            $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, $inherit, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+        }
+        [void][System.IO.Directory]::CreateDirectory($root, $security)
+        foreach ($folder in $paths.Releases, $paths.Config, $paths.Services, $paths.Logs) { [void][System.IO.Directory]::CreateDirectory($folder) }
+        $appSid = Get-AccucutServiceSid -Name 'AccucutApp'
+        $workerSid = Get-AccucutServiceSid -Name 'AccucutWorker'
+
+        Grant-AccucutInstallFolderAccess -Paths $paths -ServiceSid @($appSid, $workerSid)
+
+        $list = {
+            param([string]$Path)
+            $rules = ([System.IO.Directory]::GetAccessControl($Path)).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+            return @($rules | ForEach-Object { '{0}|0x{1:X}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.IsInherited, [int]$_.InheritanceFlags, $_.AccessControlType } | Sort-Object)
+        }
+        $admin = 'S-1-5-32-544'; $system = 'S-1-5-18'
+        $rootExpected = @("$admin|0x1F01FF|False|3|Allow", "$system|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow") | Sort-Object
+        (& $list $paths.Root) -join "`n" | Should -Be ($rootExpected -join "`n")
+        $logsExpected = @(
+            "$admin|0x1F01FF|True|3|Allow", "$system|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow",
+            "$appSid|0x1301BF|False|3|Allow", "$workerSid|0x1301BF|False|3|Allow"
+        ) | Sort-Object
+        (& $list $paths.Logs) -join "`n" | Should -Be ($logsExpected -join "`n")
+        # releases, config and services only inherit the root's four entries: read and execute for the services, nothing to write.
+        foreach ($folder in $paths.Releases, $paths.Config, $paths.Services) {
+            $inherited = @("$admin|0x1F01FF|True|3|Allow", "$system|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow") | Sort-Object
+            (& $list $folder) -join "`n" | Should -Be ($inherited -join "`n")
+        }
+        # Nobody else appears anywhere: not LOCAL SERVICE, NETWORK SERVICE, Authenticated Users, Users or Everyone.
+        foreach ($folder in $paths.Root, $paths.Releases, $paths.Config, $paths.Services, $paths.Logs) {
+            $text = (& $list $folder) -join "`n"
+            foreach ($banned in 'S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0') { $text | Should -Not -BeLike "*$banned|*" }
         }
     }
 
-    It 'deletes *.log files older than the limit, keeps newer ones and other files, and never follows a link' {
-        $logs = Join-Path $TestDrive 'cleanup-logs'
-        New-Item -ItemType Directory -Path $logs, (Join-Path $TestDrive 'cleanup-elsewhere') | Out-Null
-        $old = Join-Path $logs 'old.log'; $edge = Join-Path $logs 'edge.log'; $other = Join-Path $logs 'old.txt'
-        foreach ($file in $old, $edge, $other) { [System.IO.File]::WriteAllText($file, 'x') }
-        (Get-Item -LiteralPath $old).LastWriteTime = (Get-Date).AddDays(-31)
-        (Get-Item -LiteralPath $edge).LastWriteTime = (Get-Date).AddDays(-29)
-        (Get-Item -LiteralPath $other).LastWriteTime = (Get-Date).AddDays(-90)
-        $outside = Join-Path $TestDrive 'cleanup-elsewhere\keep.log'
-        [System.IO.File]::WriteAllText($outside, 'x')
-        (Get-Item -LiteralPath $outside).LastWriteTime = (Get-Date).AddDays(-90)
-        $folderLink = Join-Path $logs 'folder.log'
-        New-Item -ItemType Junction -Path $folderLink -Target (Join-Path $TestDrive 'cleanup-elsewhere') | Out-Null
-        try {
-            $output = Invoke-CleanLogs -Directory $logs
-            $output | Should -BeLike '*Removed 1 log file(s)*'
-            Test-Path -LiteralPath $old | Should -BeFalse
-            Test-Path -LiteralPath $edge | Should -BeTrue
-            Test-Path -LiteralPath $other | Should -BeTrue
-            Test-Path -LiteralPath $outside | Should -BeTrue
+    It 'has no scheduled task and no LOCAL SERVICE grant anywhere in the install or the module (the worker prunes the logs)' {
+        foreach ($file in 'install.ps1', 'update.ps1', 'AccucutOps.psm1') {
+            $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory $file) -Raw
+            $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask|S-1-5-19|LOCAL SERVICE'
         }
-        finally { [System.IO.Directory]::Delete($folderLink, $false) }
-    }
-
-    It 'does nothing, and does not fail, when the log folder does not exist' {
-        (Invoke-CleanLogs -Directory (Join-Path $TestDrive 'no-such-logs')) | Should -BeLike '*Removed 0 log file(s)*'
+        Test-Path -LiteralPath (Join-Path $script:WindowsDirectory 'clean-logs.ps1') | Should -BeFalse
     }
 }
 

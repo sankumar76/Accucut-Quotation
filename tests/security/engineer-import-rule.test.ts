@@ -262,6 +262,31 @@ describe('every repository and service file is classed, and the lint agrees with
   });
 });
 
+/**
+ * The worker's jobs (`src/server/jobs`, ADR-011, STORY-10.04). A job file is not a view and not part of the data layer, so the lint has no list for it; it is
+ * classed here instead. A job that reads the database is a service in all but name, so a job is allowed to exist only if it takes no repository, service, the
+ * container, the formula engine or the database driver: `log-prune` reads and deletes log files and holds no cost data, and its log lines hold counts only.
+ * A new job file fails this test until someone classes it, and a job that needs the data layer has to be classed (and reviewed) as the service it is.
+ */
+const JOBS = { holdsNoData: ['log-prune'] } as const;
+
+describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
+  it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
+    expect(filesIn('src/server/jobs').sort()).toEqual([...JOBS.holdsNoData].sort());
+  });
+
+  it.each(JOBS.holdsNoData)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
+    const source = readFileSync(`${ROOT}src/server/jobs/${job}.ts`, 'utf8');
+    const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
+    expect(specifiers.length).toBeGreaterThan(0);
+    for (const specifier of specifiers) {
+      expect(specifier, `${job} imports ${specifier}`).not.toMatch(/repositories|services|composition|@\/lib\/formula|lib\/formula|@prisma\/client|generated\/prisma|\/views\//);
+    }
+    // It never opens a file to read it: only lstat, readdir and unlink.
+    expect(source).not.toMatch(/readFile|createReadStream|open\(/);
+  });
+});
+
 describe('an Engineer page that imports cost data fails lint (AC-1)', () => {
   // A page reaches data through a service or a view, so what the rule forbids it is every repository, the engine and the database
   // driver (architecture section 10); a service is a page's normal neighbour and is judged by the views it feeds.
