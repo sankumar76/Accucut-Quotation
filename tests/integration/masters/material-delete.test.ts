@@ -121,7 +121,7 @@ describe('AC-3: a material no open estimate uses is soft-deleted', () => {
     await db.mastersService.deleteMaterial(by(), alpha.id);
     expect(await stored(alpha.id)).toEqual({ deleted: true });
     expect((await db.mastersService.listMaterials()).map((row) => row.materialInDrawing)).toEqual(['Bravo-sheet']);
-    expect((await db.mastersService.listMaterialOptions()).map((option) => option.id)).toEqual([bravo.id]);
+    expect((await db.mastersService.listMaterialOptions()).map((option) => option.id)).toEqual([bravo.id, NOT_APPLICABLE_MATERIAL_ID]);
     await expect(db.mastersService.updateMaterial(by(), alpha.id, { scrapRate: '23.37' })).rejects.toBeInstanceOf(NotFoundError);
     expect(await stored(bravo.id)).toEqual({ deleted: false });
   });
