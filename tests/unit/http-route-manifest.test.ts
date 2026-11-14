@@ -77,13 +77,29 @@ describe('the shape of the manifest', () => {
   });
 });
 
+describe('STORY-01.05 AC-5, QLT-06: the routes open to a person who must set a new password are named here', () => {
+  it('are exactly the account page and the change of the password, and no other row carries the flag', () => {
+    expect(ROUTE_MANIFEST.filter((row) => row.mustChangeAllowed === true).map((row) => `${row.kind} ${row.path}`)).toEqual([
+      'page /account',
+      'api /api/v1/account/password',
+    ]);
+  });
+
+  it('both are open to every role, so the change can be made by whoever is told to', () => {
+    for (const row of ROUTE_MANIFEST.filter((entry) => entry.mustChangeAllowed === true)) {
+      expect(row.roles, row.path).toEqual(['ADMIN', 'LEAD', 'ENGINEER']);
+    }
+  });
+});
+
 describe('BR-003: the routes an Engineer can reach are named here, so adding one is a visible decision', () => {
   /**
    * Edit this list only when a story adds a route that an Engineer is meant to open, and name that story in the commit.
    * Every route listed has an allow-list response with no cost field (architecture section 6, "Engineer-reachable routes").
    */
+  // `/account` and `/api/v1/account/password` are STORY-01.05's: the person's own name, e-mail and role, and the change of their own password (a 204 with no body).
   // `/api/v1/options/materials` is STORY-02.03's: IDs, names and Material Considered through one strict schema, no rate of any kind (AC-4); `/api/v1/options/treatments` is STORY-02.05's: IDs and names (AC-5); `/api/v1/options/customers` is STORY-02.02's: IDs and names (AC-5).
-  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/estimates/[code]', '/about', '/account/password'];
+  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/estimates/[code]', '/about', '/account', '/api/v1/account/password'];
 
   it('matches exactly', () => {
     const reachable = ROUTE_MANIFEST.filter((row) => row.roles !== 'public' && allowsRole(row, 'ENGINEER')).map((row) => row.path);

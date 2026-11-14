@@ -7,7 +7,7 @@ import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
 
 import { MasterLoadError } from './master-load-error';
-import { BREAK_LONG_NAMES, CLEAR_FILTERS, SAVED_NOT_SHOWN_BODY } from './master-texts';
+import { CLEAR_FILTERS, SAVED_NOT_SHOWN_BODY } from './master-texts';
 import { MaterialList } from './material-list';
 import {
   MATERIALS_EMPTY_DESCRIPTION,
@@ -40,7 +40,6 @@ function NoMatch({ query, onClearFilters }: { readonly query: string; readonly o
         icon={<Icon icon={SearchX} size="state" />}
         title={noMaterialMatchTitle(query)}
         description={MATERIALS_NO_MATCH_DESCRIPTION}
-        className={BREAK_LONG_NAMES}
         action={
           <Button variant="secondary" onClick={onClearFilters}>
             {CLEAR_FILTERS}

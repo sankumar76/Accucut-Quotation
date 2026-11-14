@@ -31,7 +31,7 @@ vi.mock('next/navigation', async () => {
   return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
@@ -42,13 +42,15 @@ vi.mock('@/server/composition', async () => {
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
+    getAccountService: () => shared.accountService,
+    getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
 });
 
 const ROLES: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'];
 
 /** Routes that are in no SPEC table: the shell and the account, open to everyone who is signed in. `/api/v1/options/materials` (STORY-02.03) is the safe list the estimate form chooses from: every role, no rate (architecture section 6 "Safe options"). */
-const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/account/password'];
+const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/account', '/api/v1/account/password'];
 
 /**
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
@@ -82,6 +84,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
+  '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
   '/masters/customers': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fcustomers',
@@ -307,9 +310,12 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
     if (record === undefined) throw new Error('no Engineer');
     try {
       for (const [row, method] of calls) {
+        // `signInAs` puts the person back on the first password, so the account recipe (current to a different new one) repeats (QLT-01).
         record.role = 'ENGINEER';
+        harness.signInAs('ENGINEER');
         const before = (await callValid(row, method)).status;
         record.role = 'LEAD';
+        harness.signInAs('ENGINEER');
         const after = (await callValid(row, method)).status;
         expect(before).toBe(expectedRoles(row.path).includes('ENGINEER') ? validCall(row, method).status : 403);
         expect(after).toBe(expectedRoles(row.path).includes('LEAD') ? validCall(row, method).status : 403);

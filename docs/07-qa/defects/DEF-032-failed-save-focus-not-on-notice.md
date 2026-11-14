@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (differs from the UX spec text; does not mislead; the notice is `role="alert"`, the typed values stay and Save is the retry control). Test plan section 6 |
 | Priority | P3 (Jira Medium) |
 | Type | Product (code defect: master read the spec row as Confirmed in DL-192) |
-| Status | New. Fix routed to round F2b of #297 (DL-192): after a failed Save, focus goes to the notice. Rides with DEF-031 |
+| Status | **Closed** 2026-11-12. Fixed in round F2b of #297 (DL-192; after a failed Save, focus goes to the notice), verified by QA on H4 `eb6bc66` (a 503 and a real 409, 3 widths), on `master` as `0ca47df`; push run 43339039704 5 of 5 (DL-197 (5)(h), DL-200). Jira AQP-286 and GitHub #344 closed |
 | Jira / GitHub | [AQP-286](https://sankumar76.atlassian.net/browse/AQP-286) / [#344](https://github.com/sankumar76/Accucut-Quotation/issues/344); relates to AQP-142 |
 | Found by / date | qa-engineer, G7 of AQP-142 (attempt 1), 2026-11-12 |
 | Build / commit | H1 `cb95102` (report at H2 `f269b05`) |
@@ -34,9 +34,9 @@ The failure branch of `save()` in `use-customer-edit.ts`. Master's ruling (DL-19
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | round F2b, head H3 |
+| Fixed | developer | 2026-11-12 | round F2b, H3 `7fd3cdd`; on `master` as `0ca47df` |
 | Regression test added | developer | | `customers.spec.ts` |
-| Verified | qa-engineer | | G7 attempt 2 |
+| Verified | qa-engineer | 2026-11-12 | G7 attempt 2 on H4 `eb6bc66`; push run 43339039704 |
 
 ## Severity history and routing
 - QA: Sev-3 on 2026-11-12; does not hold G7 by itself (Sev-3 is fixed before G8 or accepted by master in writing).

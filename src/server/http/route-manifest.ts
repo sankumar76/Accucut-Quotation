@@ -70,6 +70,12 @@ export interface RouteRow {
   readonly screen?: string;
   /** Present when the route is a menu entry; only a page with a fixed address can be one. */
   readonly nav?: NavMeta;
+  /**
+   * A route that a person who still has to set a new password may use (STORY-01.05 AC-5, FR-004): the account page and the change itself.
+   * Every other page redirects to the account page and every other API route answers 403 `PASSWORD_CHANGE_REQUIRED` until the flag is
+   * cleared. Deny by default: a row without this is closed to them.
+   */
+  readonly mustChangeAllowed?: true;
   /** A review page that a production build answers "not found" for (`/design-system`). */
   readonly hiddenInProduction?: true;
   /**
@@ -182,6 +188,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/treatments', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/treatments/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/treatments', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-01.05 (SCR-23). Every role. The page and the change are the two routes open to a person who must set a new password first (`mustChangeAllowed`).
+  { path: '/account', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-23', mustChangeAllowed: true },
+  { path: '/api/v1/account/password', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', mustChangeAllowed: true },
   // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's.
   // `/api/v1/options/customers` is the one route of the story that every role may call (AC-5): IDs and names, and no contact detail or rate of any kind, so
   // the cost scan covers it as an Engineer route.
@@ -258,7 +267,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
   },
 
-  // ---- Planned: Help and account (every role) ------------------------------------------------------------------------
+  // ---- Planned: Help (every role) ------------------------------------------------------------------------------------
   {
     path: '/about',
     kind: 'page',
@@ -269,7 +278,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
     screen: 'SCR-24',
     nav: { group: 'Help', label: 'About', order: 10, icon: 'info' },
   },
-  { path: '/account/password', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'planned', stage: 'R1', screen: 'SCR-23' },
 ];
 
 export const ROUTE_MANIFEST: ReadonlyArray<RouteRow> = deepFreeze([...ROWS]);

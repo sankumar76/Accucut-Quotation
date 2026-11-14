@@ -1,15 +1,16 @@
+import { PASSWORD_RULE_HINT } from '@/lib/auth/password-rule';
+
 import type { DialogKind } from './opener';
 
 /**
- * The words of SCR-14 that more than one component says (UX spec section 6, "SCR-14 Users"). The sentences of the password
- * rule (10 to 128 characters, a number and a symbol; FR-098) are left out of the two hints until story 01.05 applies the
- * rule: a hint must not promise a check that is not made.
+ * The words of SCR-14 that more than one component says (UX spec section 6, "SCR-14 Users"). Both password hints begin with the rule
+ * sentence (10 to 128 characters, a number and a symbol; FR-098), which story 01.05 restored when it applied the rule at both entry
+ * points: a hint must not promise a check that is not made, and now it is.
  */
 
-export const PASSWORD_HINT =
-  'Tell the person in person or by phone; the portal does not e-mail it until Release 2. The person must change it at their first sign-in.';
+export const PASSWORD_HINT = `${PASSWORD_RULE_HINT} Tell the person in person or by phone; the portal does not e-mail it until Release 2. The person must change it at their first sign-in.`;
 
-export const RESET_PASSWORD_HINT = 'The old password stops working straight away. The person must change it at their next sign-in.';
+export const RESET_PASSWORD_HINT = `${PASSWORD_RULE_HINT} The old password stops working straight away. The person must change it at their next sign-in.`;
 
 export const FAILED_ADD_MESSAGE = 'We could not add the user.';
 export const FAILED_EDIT_MESSAGE = 'We could not save the changes.';
@@ -19,6 +20,12 @@ export const FAILED_EDIT_MESSAGE = 'We could not save the changes.';
  * sentence is held exactly by `tests/unit/users-texts.test.ts` and `tests/e2e/users.spec.ts`.
  */
 export const OWN_PASSWORD_NAME = 'Reset password is not available for your own account. Use Change password in the account menu.';
+
+/**
+ * The visible reason under the buttons of the Admin's own phone card (UX spec v0.15, SCR-14 "The Admin's own row"). Phone card only: the
+ * table adds no text, because a disabled button cannot take focus or a tooltip, and its name carries the reason.
+ */
+export const OWN_PASSWORD_LINE = 'To change your own password, use Change password in the account menu.';
 
 export const FAILED_RESET_MESSAGE = 'We could not set the password.';
 export const FAILED_DEACTIVATE_MESSAGE = 'We could not deactivate the user.';

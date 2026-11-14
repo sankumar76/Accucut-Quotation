@@ -3,14 +3,16 @@
  *
  * Creates the first Admin from `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` (environment variables, read once), with
  * `must_change_password` set. It refuses, and changes nothing, when any Admin already exists. The password is stored
- * as an argon2id hash and is never printed. Uses the runtime database role (`DATABASE_URL`): it needs only INSERT.
+ * as an argon2id hash and is never printed. A password that does not meet the password rule (STORY-01.05: 10 to 128 characters, a
+ * number, a symbol, not the e-mail address, not a common password) is refused with the part that failed, and nothing is created.
+ * Uses the runtime database role (`DATABASE_URL`): it needs only INSERT.
  *
  * Usage: npx tsx scripts/bootstrap-admin.ts
  * Local use: set the two variables in `.env` (see `.env.example`), start the database, run `npx prisma migrate
  * deploy`, run this command, then sign in at http://localhost:3000/sign-in and remove the password from `.env`.
  */
 import { loadAdminBootstrapEnv, loadDatabaseEnv } from '../src/lib/env';
-import { isAppError } from '../src/lib/errors';
+import { isAppError, PASSWORD_RULE_CODE } from '../src/lib/errors';
 import { passwordHasher } from '../src/server/auth/password-hasher';
 import { createPrismaClient } from '../src/server/repositories/prisma-client';
 import { createUserRepository } from '../src/server/repositories/user-repository';
@@ -29,6 +31,12 @@ async function run(): Promise<void> {
   } catch (error) {
     if (isAppError(error) && error.code === ADMIN_EXISTS_CODE) {
       process.stderr.write('bootstrap-admin: an Admin already exists; nothing was changed.\n');
+      process.exitCode = 1;
+      return;
+    }
+    if (isAppError(error) && error.code === PASSWORD_RULE_CODE) {
+      // The message names the failing part and holds nothing of the password.
+      process.stderr.write(`bootstrap-admin: ADMIN_INITIAL_PASSWORD does not meet the password rule. ${error.message} Nothing was changed.\n`);
       process.exitCode = 1;
       return;
     }

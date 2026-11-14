@@ -6,7 +6,7 @@
 | Severity | **Sev-2 Major** (QA graded Sev-2; master confirmed in DL-192: an AC fails and WCAG 1.4.10 on a delivered screen, as DL-174 (3) for DEF-030). Test plan section 6 |
 | Priority | P2 (Jira High). **Blocks G7 of AQP-142** |
 | Type | Product, **in the story's own diff** (the customer page is new in PR #297) |
-| Status | New. Fix routed to round F2a of #297 (DL-192): the shared `PageHeader` `h1` always wraps |
+| Status | **Closed** 2026-11-12. Fixed in round F2a of #297 (DL-192; the shared `PageHeader` `h1` always wraps), verified by QA on H4 `eb6bc66`, on `master` as `0ca47df`; push run 43339039704 5 of 5 (DL-197 (5)(h), DL-200). Jira AQP-285 and GitHub #342 closed |
 | Jira / GitHub | [AQP-285](https://sankumar76.atlassian.net/browse/AQP-285) / [#342](https://github.com/sankumar76/Accucut-Quotation/issues/342); relates to AQP-142 |
 | Found by / date | qa-engineer, G7 of AQP-142 (attempt 1), 2026-11-12 |
 | Build / commit | H1 `cb95102` (report at H2 `f269b05`) |
@@ -41,9 +41,9 @@ The shared `PageHeader` `h1` (master's route in DL-192 F2a: it always wraps; `./
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | round F2a, head H3 |
+| Fixed | developer | 2026-11-12 | round F2a, H3 `7fd3cdd`; on `master` as `0ca47df` |
 | Regression test added | developer | | `customers.spec.ts` |
-| Verified | qa-engineer | | G7 attempt 2 |
+| Verified | qa-engineer | 2026-11-12 | G7 attempt 2 on H4 `eb6bc66`; push run 43339039704 |
 
 ## Severity history and routing
 - QA: Sev-2 on 2026-11-12, noting that DL-174 (3) set the same class (a long unbroken name, sideways scroll at every width) at Sev-2, and that master could reclassify it in writing.

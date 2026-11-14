@@ -40,7 +40,7 @@ vi.mock('next/navigation', async () => {
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
   return {
@@ -50,6 +50,8 @@ vi.mock('@/server/composition', async () => {
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
+    getAccountService: () => shared.accountService,
+    getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
 });
 vi.mock('@/server/http/route-manifest', async (importOriginal) => {

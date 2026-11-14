@@ -10,6 +10,9 @@
 /** Every role's home page until the role-specific homes arrive (AC-1: `/queue`). */
 export const HOME_PATH = '/queue';
 
+/** The account page (SCR-23): change your own password, and the page a person who must set a new password is sent to (FR-004). */
+export const ACCOUNT_PATH = '/account';
+
 /** The sign-in page. */
 export const SIGN_IN_PATH = '/sign-in';
 

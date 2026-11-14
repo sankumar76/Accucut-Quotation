@@ -68,15 +68,18 @@ const REPOSITORIES = {
 const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
+    'account-service',
     'audit-cursor',
     'audit-events',
     'audit-secrets',
     'audit-service',
     'bootstrap-admin-service',
+    'calculation-service',
     'config-service',
     'customer-service',
     'exchange-rate-service',
     'masters-service',
+    'password-policy',
     'rate-name-rules',
     'task-service',
     'treatment-service',
@@ -90,7 +93,6 @@ const FUTURE_IMPORTS: ReadonlyArray<string> = [
   '@/server/repositories/customer-rate-repository',
   '../repositories/master-repository',
   '../../server/repositories/calculation-repository',
-  '@/server/services/calculation-service',
   '@/server/services/approval-service',
   '@/server/services/customers-service',
   '@/server/services/materials-service',
@@ -113,6 +115,9 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
 
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
+/** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
+const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = ['@/lib/estimate/row-outputs', '@/lib/estimate/row-calculator', '@/lib/estimate/product-totals', '../../lib/estimate/row-outputs', '../../lib/estimate/product-totals'];
+
 const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generated/prisma/client'];
 
 const repositoryPath = (name: string): string => `@/server/repositories/${name}`;
@@ -133,6 +138,7 @@ const ALLOWED_IMPORTS: ReadonlyArray<string> = [
   '@/server/http/navigation',
   '@/server/views/schemas/me',
   './schemas/me',
+  '@/lib/estimate/validation',
   '../auth/resolve-session-user',
 ];
 
@@ -142,6 +148,7 @@ const BLOCKED_IMPORTS: ReadonlyArray<string> = [
   ...FUTURE_IMPORTS,
   ...CONTAINER_AND_BARREL_IMPORTS,
   ...FORMULA_IMPORTS,
+  ...ROW_OUTPUT_IMPORTS,
   ...PRISMA_IMPORTS,
 ];
 
