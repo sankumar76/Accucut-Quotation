@@ -8,13 +8,68 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Sprint 1, story cycles (G5 to G7). Resumed 2026-11-12 after the PC restart; see "Current state (2026-11-12, 18:45 UTC)" below, which supersedes both resume points |
+| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-12 18:45 UTC by orchestrator (records point before merging #329) |
+| Last updated       | 2026-11-14 by orchestrator (daily update, §9 item 6) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-14, orchestrator)
+
+> One ledger update a day (§9 item 6). It updates the resume point below; where they differ, this section wins.
+
+**`master` = be87ca2** (#371 AQP-148). Merged since the resume point (all squash, fully green CI, §9 item 1):
+
+| PR | Story | Merge | CI of record |
+|---|---|---|---|
+| #372 | AQP-291 (03.03 row outputs) | 8f0a82c | 6 of 6 (main session) |
+| #374 | AQP-292 (03.04 product total) | 6d8ee2e | 6 of 6 (main session) |
+| #375 | AQP-294 (03.06 performance gate) | 93283b9 | 43583045943: unit 4,388 / integration 7,024 / E2E 229 + 228 + 227 + 213. Fix: `resolve: base.resolve ?? {}` in `vitest.perf.config.ts` (`exactOptionalPropertyTypes`, TS2769) |
+| #371 | AQP-148 (04.01 assign a task) | be87ca2 | 43584335001 on the branch updated to 93283b9 (first green run 43583438803 on da0e3b0: 4,461 / 7,157 / 235 + 235 + 232 + 219). Master merge kept both sides in seven files; two stale unit tests fixed (`one-width-tag`, `portal-frame-props`) |
+
+Jira: AQP-291, AQP-292, AQP-294, AQP-148 are **Done**. Unblocked by AQP-148: AQP-298 (04.02), AQP-301 (05.01), AQP-299 (06.01 [c]), AQP-293 (03.05 [c]), AQP-306 (02.07 [c]).
+
+| Lane | Story | Branch / worktree | State |
+|---|---|---|---|
+| A | AQP-300 06.14 step-up check [c] | `feat/AQP-300-step-up`, new isolated worktree | Building; after CI green, one combined security-and-quality review (§9 item 2) before the squash |
+| B | AQP-301 05.01 open the task, choose the customer | `feat/AQP-301-open-task`, worktree `agent-a486200e388cf60a2` (reused) | Building; head of the long chain 05.01 to 05.09 to 06.02 |
+| Records | `docs/AQP-1-records-o`, PR #373 | this branch | Updated with `master`; touches `.claude/settings.json` (the merge allow, delivery lead option (a)) besides `docs/` |
+
+**Next in line (R1 core, 2 lanes):** AQP-298 (04.02), then AQP-302 (05.02 [c]) after 05.01, AQP-299 (06.01 [c]), AQP-293 (03.05 [c]). Wave 2 (AQP-310 to AQP-338, scrum-master 11814) follows the chain; AQP-310 (10.04, Windows install, [c]) and AQP-337 (08.01 [c]) have no blocker and wait for a third lane.
+
+**Memory:** 0.45 to 0.73 GB free today. Two lanes only; no third lane until at least 1.5 GB stays free. Developers run targeted Vitest and ESLint only; `tsc` and E2E in CI.
+
+**Tooling note (developer, AQP-148):** the allowed merge runs only as `git -C "<worktree>" merge origin/master`; a `cd ... &&` form was refused.
+
+**Follow-ups (hardening window / after G8):** AQP-294: add `test:perf` to the nightly set (frozen by §9 item 4) and re-point the timing test at `calculation-service` after 05.09. Earlier list unchanged (DEF-033, DEF-034, DEF-036, #369, #346, #348, #225, #319, #326, #328, #59).
+
+**Clean-up for the delivery lead (agents cannot delete):** in addition to the list below: branches `feat/AQP-294-calculation-performance`, `feat/AQP-148-assign-task`, `feat/AQP-291-row-level-outputs`, `feat/AQP-292-*` (merged); worktree `agent-ab9dbb50583f08c97` (AQP-294, merged, locked); `agent-a7d64835134a21382` (AQP-81-2) and `agent-aa8df85c937dd5f7f` (AQP-289) still listed; `C:\Users\sanku\Documents\Accucut-AQP-183-phone` (detached); the nine scratch worktrees under the earlier session's scratchpad.
+
+## Resume point (2026-11-13, session restart for the merge allow)
+
+> Written by the orchestrator before the delivery lead restarts the session so that the narrowed deny rule takes effect (exactly `git merge origin/master` is now allowed on a story's own branch; DL to follow; settings commit ee67669 on records branch `docs/AQP-1-records-o`). It supersedes the "Current state (2026-11-12, 18:45 UTC)" and both 2026-11-12 resume points below. **Delivery model: CLAUDE.md §9 fast track** (per-story gate = fully green CI; critical stories get one combined review; end review, regression and hardening before G8; one ledger update a day). G8 planning figure about 2026-12-07 / 08 with 2 lanes (DL-210, §9 dated note); nothing adopted.
+
+**`master` = 42f1dba** (records n). Code tip 0f5fb72 (AQP-81), push run 43400137399 green: 3,531 / 6,061 / 897 / 24 (four shards).
+
+**Merged since the 2026-11-12 restart:** #334 AQP-275 (8f66157), #329 records (b6b38c5), #297 AQP-142 (0ca47df), #358 records (e76b513), #336 AQP-276 four shards (cce9ea4), #363 records + CLAUDE.md §9 (4b3579f), #361 AQP-289 / DEF-035 (18c6a2d), #341 AQP-81 (0f5fb72), #370 records (42f1dba). Done in Jira: AQP-275, AQP-142, AQP-276, AQP-289, AQP-81 (and their defects DEF-030, DEF-031, DEF-032, DEF-035).
+
+| Item | Branch / PR | Head | State | Next action after the restart |
+|---|---|---|---|---|
+| Lane B: AQP-148 (04.01 Assign a task) | `feat/AQP-148-assign-task`, PR #371 | be7188b | Built; CONFLICTS with `master` (AQP-81's shared files); no CI yet. Worktree `.claude/worktrees/agent-a486200e388cf60a2` (clean) | Developer: `git fetch`, `git merge origin/master`, resolve keeping both sides (composition.ts, route-manifest.ts, schemas/index.ts, navigation.spec.ts, js-budget.test.ts, session-harness.ts, route-loaders.ts, route-calls.ts, the csrf / role-matrix / strict-schema / engineer-refused-before-lookup / engineer-import-rule tests), targeted tests, push, CI 6 of 6, then the orchestrator squashes |
+| Lane A: AQP-291 (03.03 row outputs) | `feat/AQP-291-row-level-outputs`, PR #372 | 08b0ba9 | Built, everything pushed; CI run 43401515095 running at the restart (stage 11b and shard 4 green) | Read the run; on 6 of 6 green with no conflict, the orchestrator squashes (§9); otherwise the developer fixes on the branch |
+| Records | `docs/AQP-1-records-o` (PR to open) | ee67669 | settings.json allow (delivery lead option (a)) | Open the draft PR; merge under docs-auto at the next records point |
+
+**Ready for Dev (wave 1, scrum-master, AQP-1 11803):** AQP-291 to AQP-309 (03.03 to 03.06, 04.02 to 04.05, 06.01, 06.14, 05.01 to 05.04, 02.06, 02.07, 02.09, 10.03, 10.12), plus AQP-148 and AQP-90. `critical-review` label: 03.05, 04.04, 06.01, 06.14, 05.02, 05.03, 05.04, 02.06, 02.07; 10.04, 10.05, 10.11 too (DL-211). Wave 2 (EPIC-05 to 07, 08.01, 08.02) and the Windows restatement of 10.04 / 10.05 / 10.11 / AQP-307 were in progress with the scrum-master at the restart; check Jira AQP-1 for its hand-off.
+
+**Lanes and memory:** PC about 0.7 GB free of 7.8 GB. Run 2 lanes (B, A); add lane C, then D, only when at least 1.5 GB stays free. Heavy E2E in CI only; locally only targeted unit tests and `tsc` when memory allows. Ports 3100 and 55450 and the procaliber / archery containers are not ours.
+
+**Decisions this run (delivery lead):** §9 fast track; AQP-148 first in line; all of R2 kept (date consequence); Windows Server target, native services (ADR-015, DL-211); one 100 GB disk, single-disk risk accepted, off-server copy recommended to Accucut IT; the merge allow (option (a)).
+
+**Open defects / follow-ups for the hardening window:** DEF-033 (AQP-287, #345, Sev-3), DEF-034 (AQP-288, #347, Sev-2), DEF-036 (AQP-290, #364, Sev-3; root cause on AQP-290 11774), #369 (queue wording), #346 (STD-03, STD-13, STD-14, O-1), #348 (RISK-028 guard), #225, #319, #326, #328, #59.
+
+**Clean-up for the delivery lead (agents cannot delete branches):** control and plant branches of #335, #337, #338, #340, #343, #349 to #357, #359, #360, #362, #365 to #368; remaining scratch worktrees under the session scratchpad (`qa81-ctl`, `qa81-report`, `qlt289-ctl`, `qlt289-h2`, `qlt81`, `qlt81-ctl`, `wt-control`, `wt-control-q12`, `wt-report`); worktrees `agent-a7d64835134a21382` (AQP-81, merged) and `agent-aa8df85c937dd5f7f` (AQP-289, merged); stopped containers `aqp142-db`, `aqp275-db`, `aqp113-db-1` and the older `qa122-db`, `qlt122-db`, `aqp57-db`, `aqp74-test-db`, `aqp65-db-1`.
 
 ## Current state (2026-11-12, 18:45 UTC)
 
@@ -283,6 +338,7 @@ Status from Jira (JQL, 2026-11-10 by master). Each gate decision is in `docs/00-
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
+| 2026-11-14 | orchestrator | Daily update (§9): #375 AQP-294 squashed (93283b9, CI 43583045943) and #371 AQP-148 squashed (be87ca2, CI 43584335001); Jira AQP-291, 292, 294, 148 Done; lanes A AQP-300 (step-up, critical-review) and B AQP-301 (05.01) started; records PR #373 updated with master | docs/project-state.md |
 | 2026-11-13 | master | DL-211 (records, no gate): **ADR-015 accepted and logged:** native Node 22 and PostgreSQL 17 as Windows services, PowerShell 5.1 scripts, WinSW, a JEA endpoint for A-35; supersedes ADR-002 for the runtime and install model only. A-01 restated (Windows Server 2022 recommended), A-35 Windows form (assumption). **OQ-ARCH-14 closed** by the delivery lead's own selection (provenance checked): one disk of about 100 GB, backups on it, single-disk loss accepted; ceiling about 10 GB of data, 2 years while data is under about 0.5 GB (architecture v0.44). +2 to 4 h, no new story, G8 planning figure +0 to 0.5 day (not adopted). **CI ruling:** the `windows-latest` stage 13 job is STORY-10.04's own scope, not frozen by §9 item 4 (not new, not an enabler, not a measure; not required; no branch-protection change). 10.04, 10.05, 10.11 are §9 item 2 critical. Risks: RISK-029 new (9), RISK-017 12 → 9, RISK-011, 018, 021 restated. **Merges:** #361 (DEF-035) as 18c6a2d, push run 43398773339 6 of 6 at 3,340 / 5,825 / 884 / 24 / 908 = DL-206's target; #341 H_f 62661e6 (`--cc` empty, 80 files, both DL-201 (3) comparisons equal), run 43398870641 6 of 6 at 3,531 / 6,061 / 897 / 24 / 921, 0 names missing, +13 = DL-196; squashed as 0f5fb72 (tree = H_f, Refs #346), push run 43400137399 in progress, expected the same totals | `docs/00-governance/decision-log.md` DL-211; `risk-register.md` RISK-011, 017, 018, 021, 029; this file (Open Questions); Jira AQP-1 |
 | 2026-11-13 | master | DL-209 and DL-210 (records of the delivery lead's decisions): **CLAUDE.md §9 fast track adopted until G8** (their own approval in the main session; 45e0511, on `master` in 4b3579f); measure windows void until G8. **"All of R2 is a must"** is a date consequence, not a scope change: scope A whole with no separate release, MoSCoW unchanged; G8 planning figure about 2026-12-03 (4 lanes) or 12-04 to 12-07 (3 lanes), not adopted (release plan v0.25 §3.17, PRD v0.28 §13.21). OQ-PM-09 closed as moot; DL-207 (6) narrowed to removing `sprint-01` and Jira sprint 37 from AQP-148 plus a one-line sprint plan close | `docs/00-governance/decision-log.md` DL-209, DL-210; Jira AQP-1 11800 |
 | 2026-11-13 | master | DL-208: **G7 AQP-81 (PR #341) attempt 1, GO** on H_r a5dbd99 (ceb6787 + QA report). Read by master: run 43378267495 6 of 6 (merge ref ded5a77 into cce9ea4, four shards), 3,524 / 6,054 / 894 / 24 / 918 = +191 / +236 / +13 / +0 against 43377388993, 0 of 896 names missing, 0 flaky, no leaks, `/account` 169,632 B; control #368 (43377097630) Blocked state, (d), (e) and (f) all pass at three widths. O-1 goes to #346 (by G8). Merge: #361 first (#341 changes `src/`, which would break #361's check Q), then H_f by update-branch, CI at the tip run +191 / +236 / +13 / +0 (expected 3,531 / 6,061 / 897 / 24 / 921), squash `feat(auth): AQP-81 STORY-01.05 ... [AQP-81]`, Refs #346 | `docs/00-governance/decision-log.md` DL-208; `gate-log.md` G7 AQP-81; Jira AQP-81 11799; PR #341 comment 6846037875 |
