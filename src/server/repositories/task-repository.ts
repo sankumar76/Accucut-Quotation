@@ -1,12 +1,15 @@
 import { z } from 'zod';
 
+import { Prisma } from '../../generated/prisma/client';
+import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of tasks and their estimates (STORY-04.01; architecture sections 4.1, 5.1 and 6). Three tables: `tasks`, `estimates` and `task_sequences`.
- * This story adds the writes of "Assign task" and the list of Engineers it chooses from; the queue's reads arrive with STORY-04.02.
+ * STORY-04.01 added the writes of "Assign task" and the list of Engineers it chooses from; STORY-04.02 adds the reads of the queue (`listQueue`, `countQueue`).
  *
  * **One transaction.** A task, its empty estimate and the number that names it are written with the caller's `Transaction`, so a failure of any
  * insert leaves none of them (AC-1). Every write method takes `tx` as required: none can run alone.
@@ -49,6 +52,40 @@ export interface EstimateRecord {
   readonly status: EstimateStatus;
 }
 
+/** Whose tasks a read covers: one Engineer's own, or every task (`null`, for a Lead and an Admin). Decided by the service from the session, never from a request. */
+export interface QueueScope {
+  readonly engineerId: string | null;
+}
+
+/** A place in the queue's order (deadline, then code): tasks strictly after this one come next. */
+export interface QueuePosition {
+  readonly deadlineAt: Date;
+  readonly code: string;
+}
+
+/** A task as a row of the queue reads it: the task, the people's names, the customer's name and the status of its estimate. Nothing about cost. */
+export interface QueueRow {
+  readonly id: string;
+  readonly code: string;
+  readonly title: string | null;
+  readonly folderPath: string;
+  readonly deadlineAt: Date;
+  readonly engineer: EngineerRecord;
+  readonly assignedByName: string;
+  /** Null until the Engineer chooses the customer. */
+  readonly customerName: string | null;
+  readonly status: EstimateStatus;
+}
+
+export interface QueueRequest {
+  readonly tab: QueueTab;
+  readonly scope: QueueScope;
+  /** The instant "overdue" is judged at: a task is overdue when its deadline is before it and it is not closed. */
+  readonly now: Date;
+  readonly limit: number;
+  readonly after: QueuePosition | null;
+}
+
 export interface TaskRepository {
   /** The active Engineers by name, ignoring letter case. Deactivated people and the other roles are not listed. */
   listActiveEngineers(): Promise<ReadonlyArray<EngineerRecord>>;
@@ -59,10 +96,44 @@ export interface TaskRepository {
   createTask(task: NewTask, tx: Transaction): Promise<TaskRecord>;
   /** An empty estimate for the task: DRAFT, no customer. */
   createEstimate(taskId: string, tx: Transaction): Promise<EstimateRecord>;
+  /** Up to `limit` tasks of the tab, earliest deadline first and then by code, after `after` when it is given (STORY-04.02 AC-1, AC-2). */
+  listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
+  /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
+  countQueue(scope: QueueScope, now: Date): Promise<QueueCounts>;
 }
 
 const ENGINEER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
 const NUMBER_ROWS = z.array(z.strictObject({ lastValue: z.number().int().positive() }));
+
+const QUEUE_SELECT = {
+  id: true,
+  code: true,
+  title: true,
+  folderPath: true,
+  deadlineAt: true,
+  engineer: { select: { id: true, name: true } },
+  assignedBy: { select: { name: true } },
+  estimate: { select: { status: true, customer: { select: { name: true } } } },
+} satisfies Prisma.TaskSelect;
+
+/** The tab as a filter on the task and on the status of its estimate; Open and Closed are derived from `estimates.status`, never stored (architecture section 4.4). */
+function tabFilter(tab: QueueTab, now: Date): Prisma.TaskWhereInput {
+  switch (tab) {
+    case 'open':
+      return { estimate: { is: { status: { not: 'APPROVED' } } } };
+    case 'closed':
+      return { estimate: { is: { status: 'APPROVED' } } };
+    case 'overdue':
+      return { estimate: { is: { status: { not: 'APPROVED' } } }, deadlineAt: { lt: now } };
+  }
+}
+
+function afterFilter(after: QueuePosition | null): Prisma.TaskWhereInput {
+  if (after === null) return {};
+  return { OR: [{ deadlineAt: { gt: after.deadlineAt } }, { deadlineAt: after.deadlineAt, code: { gt: after.code } }] };
+}
+
+const scopeFilter = (scope: QueueScope): Prisma.TaskWhereInput => (scope.engineerId === null ? {} : { engineerId: scope.engineerId });
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -118,5 +189,43 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
       withDatabaseErrors(() =>
         clientFor(db, tx).estimate.create({ data: { taskId }, select: { id: true, taskId: true, customerId: true, status: true } }),
       ),
+
+    listQueue: ({ tab, scope, now, limit, after }) =>
+      withDatabaseErrors(async () => {
+        // An ID that is not a UUID would make PostgreSQL refuse the statement; the session's ID always is one, but nothing here trusts that.
+        if (scope.engineerId !== null && !isUuid(scope.engineerId)) return [];
+        const rows = await db.task.findMany({
+          where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after)] },
+          orderBy: [{ deadlineAt: 'asc' }, { code: 'asc' }],
+          take: limit,
+          select: QUEUE_SELECT,
+        });
+        return rows.flatMap((row): QueueRow[] =>
+          // Every task has an estimate (made in the same transaction), and every tab filters on it, so this only narrows the type.
+          row.estimate === null
+            ? []
+            : [
+                {
+                  id: row.id,
+                  code: row.code,
+                  title: row.title,
+                  folderPath: row.folderPath,
+                  deadlineAt: row.deadlineAt,
+                  engineer: row.engineer,
+                  assignedByName: row.assignedBy.name,
+                  customerName: row.estimate.customer?.name ?? null,
+                  status: row.estimate.status,
+                },
+              ],
+        );
+      }),
+
+    countQueue: (scope, now) =>
+      withDatabaseErrors(async () => {
+        if (scope.engineerId !== null && !isUuid(scope.engineerId)) return { open: 0, closed: 0, overdue: 0 };
+        const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now)] } });
+        const [open, closed, overdue] = await Promise.all([count('open'), count('closed'), count('overdue')]);
+        return { open, closed, overdue };
+      }),
   };
 }
