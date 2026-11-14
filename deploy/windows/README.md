@@ -19,32 +19,75 @@ Standard, one disk of about 100 GB.
 ## Install (about 15 minutes)
 
 1. Right-click the zip, choose **Properties**, tick **Unblock** if it is there, and click OK. (Otherwise Windows may refuse to run the scripts.)
-2. Unpack the zip into a short folder such as `C:\accucut-pkg` (right-click, **Extract All**). Keep the path short.
-3. Open **Windows PowerShell as administrator** (right-click, **Run as administrator**) and run:
+2. Unpack the zip into a short folder that **only administrators can write**, such as `C:\Program Files\accucut-pkg` (right-click, **Extract All**).
+   This matters: `install.ps1` is where the trust starts. No script can check itself, so the copy you start must be one that nobody else could have
+   changed. (A folder such as `C:\accucut-pkg` that every user can write into is fine on a lab machine and not on a shared server.)
+3. Look up the zip's SHA-256 on the release page and keep it at hand. It is the only check that someone who can replace both the zip and its
+   `.sha256` file cannot fake.
+4. Open **Windows PowerShell as administrator** (right-click, **Run as administrator**) and run:
 
    ```powershell
-   cd C:\accucut-pkg
-   .\install.ps1 -ZipPath C:\path\to\accucut-<tag>-win-x64.zip
+   cd "C:\Program Files\accucut-pkg"
+   .\install.ps1 -ZipPath C:\path\to\accucut-<tag>-win-x64.zip -Sha256 <the SHA-256 from the release page>
    ```
 
-4. It checks the zip's SHA-256 first, then asks a few questions: the address people will type, the first Admin's e-mail address and a first
+   (Without `-Sha256` it uses the `.sha256` file next to the zip. That only guards against a damaged download.)
+5. It checks the zip's SHA-256 first, then asks a few questions: the address people will type, the first Admin's e-mail address and a first
    password, the PostgreSQL administrator password and, if you use it, mail settings. It invents every other secret itself.
-5. It installs, starts the portal and waits until `/api/health` answers. When it ends with **Done**, open the address you gave and sign in as
+6. It installs, starts the portal and waits until `/api/health` answers. When it ends with **Done**, open the address you gave and sign in as
    the first Admin. You will be asked to choose a new password.
 
 For an install with no one at the keyboard, copy `values.example.txt`, fill it in, and run
-`.\install.ps1 -ZipPath <zip> -ValuesFile <your copy> -NonInteractive`. **Delete your copy afterwards**: it holds the first password.
+`.\install.ps1 -ZipPath <zip> -Sha256 <hash> -ValuesFile <your copy> -NonInteractive`. **Delete your copy afterwards**: it holds the first password.
 
-Useful switches: `-Root` (not `C:\Accucut`), `-Port` (not 3000), `-WithProxy` (a TLS proxy such as Caddy or IIS will stand in front: the portal
+Useful switches: `-Root` (not `C:\Accucut`; exactly one folder below a drive, such as `D:\Accucut`), `-Port` (not 3000), `-NodeExe` (not
+`C:\Program Files\nodejs\node.exe`), `-WithProxy` (a TLS proxy such as Caddy or IIS will stand in front: the portal
 listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you install the proxy**), `-DefenderExclusion Yes|No|Ask`.
+
+### Why the install runs in two halves
+
+The rule is: **code is never loaded or run before it has been checked, and code is never checked with functions from the code being checked.**
+So `install.ps1` does the following, and nothing more, before any other script exists on the machine:
+
+1. **The first half** (the copy of `install.ps1` that you started) uses only the checks that are written inside it (the "trust block", a single
+   block of .NET calls that is byte for byte the same in `install.ps1` and `update.ps1`). It checks that you are an administrator, the shape of `-Root`,
+   and the zip's SHA-256. It creates the install folder (which must not exist), copies the zip into it, checks the SHA-256 of the **copy**, unpacks the
+   copy to `releases\<tag>`, refuses any link in it, and then starts the copy of `install.ps1` that is **in that release folder**, in a child
+   `powershell.exe`. It loads no module.
+2. **The second half** (`C:\Accucut\releases\<tag>\install.ps1`, started by the first half) refuses to run from anywhere else. It checks the install
+   folder, `releases`, the release folder and the module file, and only then loads `AccucutOps.psm1`. Node.js, `psql` and PowerShell are checked and
+   run by their **full path**, never found through `PATH`.
+
+A tampered `AccucutOps.psm1` placed beside the zip (or in the folder you unpacked into) is therefore never loaded: the module that is loaded is the one
+from the copy of the zip whose SHA-256 was checked, after it has passed the trust check.
+
+**The one thing the script cannot do for you** is check the first half itself: if someone changed `install.ps1` before you started it, nothing it does can
+be trusted. That is why step 2 says to start it from a folder only administrators can write, and why step 3 says to compare the zip's SHA-256 with the
+release page. Both are yours to do.
+
+**The trust rules** (the same two rules, in `update.ps1` too):
+
+- *Above the install folder* (the drive root and the folders between): not a link, owned by Administrators, SYSTEM or TrustedInstaller, and no other
+  account may be able to delete, replace or take over the folder (delete, delete child, change permissions, take ownership). The Windows default for the
+  root of a drive, where users may create folders, passes; deleting or replacing it does not.
+- *The install folder and everything checked below it* (and a program together with its own folder, because Windows looks there first for DLLs):
+  not a link, owned by Administrators, SYSTEM or TrustedInstaller, and every entry of any other account, inherited or not, may allow reading and executing
+  **only**. (The one exception: an entry that applies only to children and names CREATOR OWNER, as `C:\Program Files` has.) The install folder's own
+  permission list must not inherit. The logs folder alone lets the two service accounts write.
+
+**A note on who owns the files.** The install folder is created with Administrators as the owner. The files that the install and the unpacking write are owned
+by the account that creates them, which for an elevated administrator is, by Windows default, the Administrators group. If the server's security policy
+*System objects: Default owner for objects created by members of the Administrators group* is set to **Object creator**, they would be owned by your own user
+account instead, the trust rule would refuse them, and the install would stop with a message that names the owner. Set the policy back to its default,
+**Administrators group**, and run the install again.
 
 ### What the install does
 
 | Step | Result |
 |------|--------|
-| Checks | The zip's SHA-256 (nothing is changed if it differs), Node.js 22.12 or later, PostgreSQL 17. Unblocks the scripts. |
-| The install folder | `C:\Accucut` must **not exist yet**, or be an **empty** folder owned by Administrators or SYSTEM. A folder that someone else made or filled is refused (they could keep control of it and get their files run by a service). The install makes it with its permissions in one step (owned by Administrators, closed to everyone but Administrators and SYSTEM), so there is no moment when it is open. One rule, `Assert-AccucutPathTrusted`, decides whether a path may be trusted, for the install folder, `releases`, the release, `current`, `config`, `logs` and the scripts and module that are run: every part of the path from the drive root down must not be a link, must be owned by Administrators, SYSTEM or TrustedInstaller, and must not let another user delete or replace it or change its permissions (users may create folders in `C:\` itself; that is allowed, deleting or replacing is not). It is checked again between the steps and before anything is loaded or run. |
-| The zip, twice | It copies the zip into that locked folder, checks the SHA-256 of the **copy**, and unpacks the copy to `C:\Accucut\releases\<tag>`. From then on every file it reads or runs (this script, the module, `.env.example`, the SQL, WinSW and the programs) comes from that folder, never from the folder you unpacked into. |
+| Checks | The zip's SHA-256 (nothing is created if it differs), Node.js 22.12 or later (`C:\Program Files\nodejs\node.exe`, which with its folder must be writable by administrators only), PostgreSQL 17 (`psql.exe`, with its folder, the same). |
+| The install folder | `C:\Accucut` must **not exist yet**. Not even an empty folder is used: someone could have made it first and kept control of it. The install creates it with its permissions in one call (owner Administrators, no inheritance, Administrators and SYSTEM only), so there is no moment when it is open, and then checks it exactly (owner, protection, the two entries, empty). The folder must be exactly one folder below a fixed NTFS drive. The trust rules described above are applied to every path that is loaded or run, from the drive root down, and again between the steps. |
+| The zip, twice | It copies the zip into that locked folder, checks the SHA-256 of the **copy**, and unpacks the copy to `C:\Accucut\releases\<tag>`. From then on every file it reads or runs (the second half of this script, the module, `.env.example`, the SQL, WinSW and the programs) comes from that folder, never from the folder you unpacked into. |
 | Refuses | To run twice, and to touch a database called `accucut` or roles `accucut_app` or `accucut_owner` that already exist. It never changes existing data. |
 | Settings | `C:\Accucut\config\.env` for the web app and the worker, and `C:\Accucut\config\migrate.env` (the owner database role and the first Admin) for the install and update scripts only. Both are created empty, locked, and only then filled. |
 | Database | Creates the database and the two roles from `sql\create-roles.psql`, runs the migrations as the owner role, loads the field registry, creates the first Admin. |
@@ -53,8 +96,9 @@ listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you insta
 | Defender | **Offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning, and says so.** PostgreSQL advises it. You may refuse (`-DefenderExclusion No`, or answer no). Undo it with `Remove-MpPreference -ExclusionPath <folder>`. |
 | Backups | The weekly backup task and `backup.ps1` arrive with the backup release (STORY-10.05). |
 
-If a step fails after the database was created by this run, the install drops what it created (the database and the two roles, which are new
-and empty) so that you can run it again. Read the message, fix the cause, run it again. The log is `C:\Accucut\logs\install-<time>.log`.
+If a step fails before the services are registered, the install drops what it created (the database and the two roles, which are new and empty),
+copies its log to your temp folder (`%TEMP%\accucut-failed-install-<time>.log`) and removes the whole install folder that this run made, so that you can
+run it again. Read the message, fix the cause, run it again. The log is `C:\Accucut\logs\install-<time>.log` once the install has succeeded.
 
 ### Folders
 
@@ -78,10 +122,15 @@ cd C:\Accucut\current
 .\update.ps1 C:\path\to\accucut-<new-tag>-win-x64.zip
 ```
 
-It must be run from `C:\Accucut\current` (it refuses to run from the folder you unpacked the new zip into). It first checks that every folder it
-writes to is still owned by Administrators or SYSTEM and writable by no one else, and refuses if not. Then it checks the zip's SHA-256, takes a
-**release backup** (`backup.ps1 -Reason release`), copies the zip into `C:\Accucut\releases`, checks the copy and unpacks it, stops the two
-services, migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and the previous release are kept.
+It must be run as `C:\Accucut\current\update.ps1` (it refuses to run from anywhere else, such as the folder you unpacked the new zip into). It is one
+phase, run by the **installed** release, and it never runs a script from the new release (those first run at the next update). Before it loads anything
+it checks, with the trust rules above, the install folder, the running release folder, its `update.ps1` and `AccucutOps.psm1`, `config`, `services`
+and `logs`, and that the running release holds no link. If any of that fails, for instance because a user was given write access to the module, it
+**stops with exit code 1 and changes nothing**; the services keep running. Only then does it load the module. Then it checks the zip's SHA-256,
+takes a **release backup** (`backup.ps1 -Reason release`), copies the zip into the install folder and checks the copy, unpacks it to
+`C:\Accucut\releases\<tag>` (a folder of that tag that exists is deleted and unpacked again, never reused; the running release is refused), stops the
+two services, checks the new release again, migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and
+the previous release are kept.
 
 - **No backup script yet** (before STORY-10.05): the update refuses. If you accept that nothing can be restored if it goes wrong, add `-NoBackup`.
 - **If the migrations fail**, the junction is not moved and the previous release starts again.
@@ -103,11 +152,14 @@ After a Windows Update reboot both services start by themselves, a minute or so 
 
 ## The shared module (`AccucutOps.psm1`)
 
-STORY-10.05 (backup) and STORY-10.11 (restore, JEA) import this module and add their own functions to it. What it offers today:
+STORY-10.05 (backup) and STORY-10.11 (restore, JEA) import this module and add their own functions to it. The module is loaded only **after** it has passed
+the trust check, so it holds no trust, install-folder, zip, or script-running function (those are in the trust block of `install.ps1` and `update.ps1`),
+and it does nothing when it is loaded except define functions and constants (a test checks this on its syntax tree). New scripts that load or run code must
+use `Import-AccucutTrustedModule` and `Invoke-AccucutTrustedScript` from the trust block, not `Import-Module` or `&`. What it offers today:
 
 | Group | Functions |
 |-------|-----------|
-| Layout and files | `Get-AccucutPaths`, `Get-AccucutFileSha256`, `Read-AccucutSha256File`, `Assert-AccucutSha256`, `Read-AccucutReleaseInfo`, `Test-AccucutAdministrator`, `Assert-AccucutFreeSpace` |
+| Layout and files | `Get-AccucutPaths`, `Get-AccucutFileSha256`, `Read-AccucutSha256File`, `Read-AccucutReleaseInfo`, `Test-AccucutAdministrator`, `Assert-AccucutFreeSpace` |
 | Versions | `ConvertTo-AccucutVersion`, `Test-AccucutNodeVersion`, `Test-AccucutPostgresVersion` |
 | Prompts (so Pester can mock them) | `Read-AccucutHostInput`, `Read-AccucutSecretInput` |
 | Secrets, logs and child programs | `New-AccucutSecret`, `Register-AccucutSecret`, `Hide-AccucutSecrets`, `Write-AccucutLog`, `ConvertTo-AccucutArgumentString`, `Invoke-AccucutNative` (a secret goes in `-Environment` or `-StdIn`, never in the arguments) |
@@ -120,8 +172,11 @@ and the byte pipe (`pg_dump | age`, inside `cmd.exe /c`).
 
 ## Tests
 
-`Invoke-Pester deploy/windows/tests` (Pester 5): prompts, programs and services are mocked, so it changes nothing on the machine. CI stage 13
+`Invoke-Pester deploy/windows/tests` (Pester 5): prompts, programs and services are mocked, so it changes nothing on the machine. `Trust.Tests.ps1`
+tests the trust block (every rule, on invented security descriptors, plus real links, unpacking and child processes under `TestDrive`). CI stage 13
 (`.github/workflows/windows-package.yml`, job **Stage 13: Windows package**) builds the zip on a Windows runner, installs it, updates it, proves
-the rollback with a release that is broken on purpose, and runs those tests. It is not a required check; every pull request that touches
+the rollback with a release that is broken on purpose, and runs those tests. On the real install it also proves three things of ADR-015 Amendment 2:
+a tampered module planted beside the true zip is never loaded; an update is refused (exit code 1, services still running) when the Users group can write
+the running module; and `install.ps1 -Root C:\AccucutPre` over an existing empty folder is refused and leaves the folder untouched. It is not a required check; every pull request that touches
 `deploy/**`, `package.json`, `package-lock.json`, `next.config.ts`, `prisma/**` or the worker must still have it green.
 Not tested in CI: the timed walk-through of NFR-030 and a real Windows Update reboot (both by hand).

@@ -19,4 +19,14 @@
         File    = 'age-v1.3.2-windows-amd64.zip'
         Sha256  = 'f48d8f8f9ebe903ab5027ed067652f2cc1db94bc206976430133b905dcd8e8c7'
     }
+    # CI stage 13 only, and never part of the package. The install needs Node.js 22.12 or later in C:\Program Files\nodejs (ADR-015 Amendment 2: the
+    # program and its folder must be writable by administrators only, which an MSI install gives). The runner's own copy is used when it is new
+    # enough; otherwise this MSI is installed. The hash is the one on https://nodejs.org/dist/v22.23.4/SHASUMS256.txt, checked against the downloaded file.
+    Node  = @{
+        Version = '22.23.4'
+        Licence = 'MIT'
+        Url     = 'https://nodejs.org/dist/v22.23.4/node-v22.23.4-x64.msi'
+        File    = 'node-v22.23.4-x64.msi'
+        Sha256  = 'ca9303d3a12e8bec6de829fcb7812fc776930e0ce5c030328a24984ef928427e'
+    }
 }

@@ -21,6 +21,14 @@ function code(path: string): string {
     .join('\n');
 }
 
+/** The text of one PowerShell function, from `function Name {` to the next top-level function (or the end of the text). */
+function functionBody(text: string, name: string): string {
+  const start = text.indexOf(`function ${name} {`);
+  expect(start, `function ${name} is missing`).toBeGreaterThanOrEqual(0);
+  const next = text.indexOf('\nfunction ', start + 1);
+  return text.slice(start, next === -1 ? undefined : next);
+}
+
 const WORKFLOW = code('.github/workflows/windows-package.yml');
 const CI = read('.github/workflows/ci.yml');
 const SCRIPTS = ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1', 'deploy/windows/clean-logs.ps1', 'scripts/package-windows.ps1'];
@@ -81,6 +89,40 @@ describe('stage 13 workflow (AC-8, AC-9)', () => {
     }
   });
 
+  it('proves ADR-015 Amendment 2 end to end on the real install: a tampered module is never loaded, a writable module stops the update, an existing folder is refused', () => {
+    // (i) A module that writes a marker and throws is planted in the unpacked folder next to the true zip; the install must not load it.
+    expect(WORKFLOW).toContain("$package = 'C:\\accucut-pkg'");
+    expect(WORKFLOW).toContain('accucut-tampered-module-marker.txt');
+    expect(WORKFLOW).toContain("Join-Path $package 'AccucutOps.psm1'");
+    expect(WORKFLOW).toContain("if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module in the unpacked folder was loaded by the install.' }");
+    // (ii) The Users group may write the module of the running release: update.ps1 exits 1 before loading anything, the services keep running, and the permission is removed.
+    expect(WORKFLOW).toContain("/grant '*S-1-5-32-545:(W)'");
+    expect(WORKFLOW).toContain("/remove:g '*S-1-5-32-545'");
+    expect(WORKFLOW).toContain('if ($code -ne 1) { throw "update.ps1 should have exited with code 1');
+    expect(WORKFLOW).toContain('can be changed by S-1-5-32-545');
+    expect(WORKFLOW).toMatch(/finally \{[^}]*icacls\.exe[^}]*\/remove:g/);
+    // (iii) install.ps1 -Root C:\AccucutPre over an existing empty folder is refused, and the folder is left exactly as it was (same permissions, still empty).
+    expect(WORKFLOW).toContain('-Root $pre -NonInteractive');
+    expect(WORKFLOW).toContain("$pre = 'C:\\AccucutPre'");
+    expect(WORKFLOW).toContain('(Get-Acl -LiteralPath $pre).Sddl -ne $before');
+    // The steps run in the order that makes them meaningful: refuse the existing folder, then install, then update, then the writable-module refusal, then the broken release.
+    const order = ['Unpack the package', 'Refuse an install folder that already exists', 'Install from the unpacked zip', 'Update to the second release', 'Refuse an update when a user could have changed', 'Update to a broken release'];
+    let position = -1;
+    for (const marker of order) {
+      const found = WORKFLOW.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
+    }
+  });
+
+  it('runs the install with node.exe from C:\\Program Files\\nodejs by its full path, using the pinned MSI only when the image has no Node.js 22.12 or later', () => {
+    expect(WORKFLOW).toContain("$node = 'C:\\Program Files\\nodejs\\node.exe'");
+    expect(WORKFLOW).toContain('-NodeExe $env:ACCUCUT_NODE');
+    expect(WORKFLOW).toContain('(Import-PowerShellDataFile -LiteralPath deploy/windows/tools.psd1).Node');
+    expect(WORKFLOW).toContain('does not match its pinned SHA-256 (expected $($tool.Sha256)');
+    expect(WORKFLOW.indexOf('Make sure Node.js 22.12 or later')).toBeLessThan(WORKFLOW.indexOf('Install from the unpacked zip'));
+  });
+
   it('passes no secret on a command line: the administrator password goes in through standard input and the values file holds the rest', () => {
     expect(WORKFLOW).toContain('--file -');
     expect(WORKFLOW).not.toMatch(/(?<![-\w])-Password\b/i);
@@ -93,10 +135,11 @@ describe('stage 13 workflow (AC-8, AC-9)', () => {
 describe('the pinned programs (AC-8)', () => {
   const TOOLS = read('deploy/windows/tools.psd1');
 
-  it('names WinSW 2.12.0 and age with a version, an address and a 64-character SHA-256 each', () => {
+  it('names WinSW 2.12.0, age and (stage 13 only) Node.js with a version, an address and a 64-character SHA-256 each', () => {
     expect(TOOLS).toMatch(/Version = '2\.12\.0'/);
-    expect([...TOOLS.matchAll(/Sha256\s+= '([0-9a-f]{64})'/g)]).toHaveLength(2);
-    expect([...TOOLS.matchAll(/Url\s+= 'https:\/\/github\.com\/[^']+'/g)]).toHaveLength(2);
+    expect([...TOOLS.matchAll(/Sha256\s+= '([0-9a-f]{64})'/g)]).toHaveLength(3);
+    expect([...TOOLS.matchAll(/Url\s+= 'https:\/\/(?:github\.com|nodejs\.org)\/[^']+'/g)]).toHaveLength(3);
+    expect(TOOLS).toMatch(/Url\s+= 'https:\/\/nodejs\.org\/dist\/v22\.\d+\.\d+\/node-v22\.\d+\.\d+-x64\.msi'/);
     expect(TOOLS).toMatch(/releases\/download\/v2\.12\.0\/WinSW-x64\.exe/);
   });
 
@@ -149,17 +192,50 @@ describe('the scripts (AC-1, AC-5)', () => {
     }
   });
 
-  it('install: checks the zip, makes a fresh locked folder, checks the COPY of the zip, then reads only from the unpacked copy (security review)', () => {
+  it('the trust block (ADR-015 Amendment 2) is one copy, byte for byte the same in install.ps1 and update.ps1, and nowhere else', () => {
+    const install = read('deploy/windows/install.ps1');
+    const update = read('deploy/windows/update.ps1');
+    const pattern = /# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/;
+    for (const text of [install, update]) {
+      expect((text.match(/# >>> ACCUCUT TRUST BLOCK v1/g) ?? []).length).toBe(1);
+      expect((text.match(/# <<< ACCUCUT TRUST BLOCK v1/g) ?? []).length).toBe(1);
+    }
+    const block = install.match(pattern)?.[0] ?? '';
+    expect(block.length).toBeGreaterThan(10_000);
+    expect(update.match(pattern)?.[0]).toBe(block);
+    // The block defines its 18 functions, and none of them is defined outside it (in a script or in the module).
+    const names = [...block.matchAll(/^function ([\w-]+) \{$/gm)].map((match) => match[1] ?? '');
+    expect(names).toHaveLength(18);
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1']) {
+      const outside = read(path).replace(pattern, '');
+      for (const name of names) expect(outside, `${path} defines ${name} outside the block`).not.toContain(`function ${name}`);
+    }
+  });
+
+  it('the module holds no trust, root, package or script-running function: it is loaded only after it was checked, so it cannot check itself', () => {
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    for (const gone of [
+      'Assert-AccucutPathTrusted', 'Get-AccucutPathSecurity', 'Assert-AccucutFreshRoot', 'Assert-AccucutLockedInstallRoot', 'Assert-AccucutInstallTrusted', 'New-AccucutDirectorySecurity',
+      'New-AccucutLockedDirectory', 'Set-AccucutDirectoryAcl', 'Expand-AccucutZip', 'Assert-AccucutSha256', 'Import-AccucutBootstrapModule', 'Assert-AccucutFolderTrusted',
+      'Assert-AccucutParentNotSwappable', 'Assert-AccucutBootstrapFolder', 'Get-AccucutNonAdminWriters', 'Get-AccucutFolderOwnerSid',
+    ]) {
+      expect(ops, `the module still has ${gone}`).not.toContain(gone);
+    }
+    expect(ops).not.toMatch(/Import-Module|Start-Process|Invoke-Expression|powershell\.exe|ZipFile\]::/i);
+    expect(ops).not.toMatch(/^\s*(?:&|\.)\s+[$'"(]/m);
+  });
+
+  it('install: the first half checks the zip, makes the locked root, unpacks the checked copy and runs the release copy, in that order, and never loads the module', () => {
     const install = code('deploy/windows/install.ps1');
-    const first = install.slice(install.indexOf('function Initialize-AccucutVerifiedRelease'), install.indexOf('function Get-AccucutPostgresInstall'));
+    const first = functionBody(install, 'Invoke-AccucutInstallFirstHalf');
     const order = [
-      'Get-FileHash -LiteralPath $ZipPath',
-      'Assert-AccucutFreshRoot -Root $Root',
-      'New-AccucutLockedDirectory -Path $full',
-      'Assert-AccucutLockedInstallRoot -Root $full -RootOnly',
-      'Copy-Item -LiteralPath $ZipPath -Destination $copy',
-      'Get-FileHash -LiteralPath $copy',
-      'Expand-AccucutZip -ZipPath $copy',
+      'Test-AccucutScriptAdministrator',
+      'Assert-AccucutTrustedRootShape -Root $Root',
+      'Get-AccucutExpectedSha256 -ZipPath $ZipPath',
+      'Get-AccucutTrustedSha256 -Path $ZipPath',
+      'New-AccucutTrustedRoot -Root $Root',
+      'Expand-AccucutTrustedPackage -Root $Root -ZipPath $ZipPath -Sha256 $expected',
+      "Invoke-AccucutTrustedScript -Root $Root -Path ([System.IO.Path]::Combine($release, 'install.ps1'))",
     ];
     let position = -1;
     for (const marker of order) {
@@ -167,60 +243,105 @@ describe('the scripts (AC-1, AC-5)', () => {
       expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
       position = found;
     }
-    // The second half never touches the folder IT unpacked into or the zip: it has no zip parameter and copies no tree.
-    const second = install.slice(install.indexOf('function Invoke-AccucutInstall'), install.indexOf('function Start-AccucutInstall'));
-    expect(second).not.toContain('$ZipPath');
-    expect(second).not.toContain('Copy-AccucutTree');
-    expect(second).toContain('Assert-AccucutPathTrusted -Path $paths.Root');
-    expect(second).toContain("(Join-Path $PackageRoot '.env.example')");
-    expect(second).toContain("Join-Path $releaseDirectory 'sql\\create-roles.psql'");
-    // The entry point runs the copy of the script that is in the unpacked release.
-    expect(install).toContain("$verifiedScript = Join-Path $verified 'install.ps1'");
-    // The folder is made with its permissions in ONE call (no separate Set-ACL after New-Item), and the trust check runs again right before the verified
-    // script starts and right before the second half loads the module from the folder.
-    const ops = code('deploy/windows/AccucutOps.psm1');
-    expect(ops).toContain('[System.IO.Directory]::CreateDirectory($Path, (New-AccucutDirectorySecurity))');
-    // The folder is refused unless new, or empty and owned by Administrators or SYSTEM; the owner is set to Administrators.
-    expect(ops).toContain("@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner");
-    expect(ops).toMatch(/SetOwner\(\(New-Object System\.Security\.Principal\.SecurityIdentifier\(\[System\.Security\.Principal\.WellKnownSidType\]::BuiltinAdministratorsSid/);
-    const entry = install.slice(install.indexOf('function Start-AccucutInstall'));
-    // Second half, normal case (the module of the first half is loaded): the check, then the module is reloaded from the verified folder.
-    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeGreaterThan(0);
-    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeLessThan(entry.indexOf('Import-Module $verifiedModule'));
-    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $verified')).toBeLessThan(entry.indexOf('& $verifiedScript'));
-    // The module is loaded in the first half only after it was compared with the zip's own copy, and before the first path check.
-    expect(entry.indexOf('Import-AccucutBootstrapModule -ZipPath $ZipPath')).toBeLessThan(entry.indexOf('Initialize-AccucutVerifiedRelease -ZipPath'));
-    expect(install).toContain('is not the one inside the zip');
+    expect(first).toContain("@('-VerifiedRelease', $release)");
+    expect(first).not.toMatch(/Import-|\.psm1|Invoke-Accucut(?!Trusted|InstallFirst)/);
+    // On a failure the root that this run made is removed again, so the install can be run again.
+    expect(first).toContain('Remove-AccucutTrustedTree -Path $Root -Within $Root -IncludeWithin');
   });
 
-  it('one rule for path trust: it exists once, in the module, and install.ps1 and update.ps1 have no copy of it (security review)', () => {
-    const reference = read('deploy/windows/AccucutOps.psm1');
-    expect((reference.match(/function Assert-AccucutPathTrusted/g) ?? []).length).toBe(1);
-    expect(read('deploy/windows/install.ps1')).not.toContain('function Assert-AccucutPathTrusted');
-    expect(read('deploy/windows/update.ps1')).not.toContain('function Assert-AccucutPathTrusted');
-    expect(read('deploy/windows/install.ps1')).not.toContain('function Get-AccucutPathSecurity');
-    expect(read('deploy/windows/update.ps1')).not.toContain('function Get-AccucutPathSecurity');
-    // The rule walks every part from the drive root, refuses links and owners other than Administrators, SYSTEM and TrustedInstaller, names the four rights,
-    // maps the generic rights (GENERIC_ALL 0x10000000 and GENERIC_WRITE 0x40000000) and counts CREATOR OWNER and inherit-only rules for the target.
-    for (const part of ['GetPathRoot', 'ReparsePoint', 'S-1-5-32-544', 'S-1-5-18', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464', 'DeleteSubdirectoriesAndFiles', 'ChangePermissions', 'TakeOwnership', 'InheritOnly', '0x10000000', '0x40000000', '0x1F01FF', '0x120116', 'CREATOR OWNER']) {
-      expect(reference, part).toContain(part);
+  it('install: the second half runs only as <Root>\\releases\\<tag>\\install.ps1, checks the folder chain, and only then loads the module (the only load)', () => {
+    const install = code('deploy/windows/install.ps1');
+    const second = functionBody(install, 'Invoke-AccucutInstallSecondHalf');
+    const order = [
+      'Test-AccucutScriptAdministrator',
+      'Assert-AccucutSecondHalfLocation -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $ScriptPath',
+      'Assert-AccucutTrustedPath -Path $release -Root $Root -ProtectedRoot',
+      'Assert-AccucutTrustedNoLinks -Path $release',
+      'Import-AccucutTrustedModule -Root $Root -Release $release',
+      'Invoke-AccucutInstall -Root $Root -Release $release @InstallParameter',
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = second.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
     }
-    // The earlier ad-hoc checks are gone: no script or module has its own writer or parent check any more.
+    expect((install.match(/Import-AccucutTrustedModule -Root/g) ?? []).length).toBe(1);
+    expect((install.match(/Microsoft\.PowerShell\.Core\\Import-Module/g) ?? []).length).toBe(1);
+    // The entry point starts the first half, or (with -VerifiedRelease) the second half, with the script's own path; sourcing the file runs nothing.
+    expect(install).toContain("if ($MyInvocation.InvocationName -ne '.') {");
+    expect(install).toContain('Invoke-AccucutInstallSecondHalf -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $PSCommandPath');
+    // The install itself reads only from the release folder (no zip, no copy of a tree) and uses programs by their full path, checked, never through PATH.
+    const body = functionBody(install, 'Invoke-AccucutInstall');
+    expect(body).not.toContain('$ZipPath');
+    expect(body).not.toContain('Copy-AccucutTree');
+    expect(body).toContain("[System.IO.Path]::Combine($Release, '.env.example')");
+    expect(body).toContain("[System.IO.Path]::Combine($Release, 'sql\\create-roles.psql')");
+    for (const program of ['$nodeExe = Resolve-AccucutTrustedExecutable', '$psql = Resolve-AccucutTrustedExecutable', '$winsw = Resolve-AccucutTrustedExecutable']) expect(body).toContain(program);
+    expect(install).not.toMatch(/Get-Command -Name (?:node|psql)/);
+    expect(install).not.toMatch(/-FilePath ['"]?(?:node|psql|powershell)(?:\.exe)?['"]?(?:\s|$)/);
+    expect(install).toContain("[System.IO.Path]::Combine($env:ProgramFiles, 'nodejs\\node.exe')");
+  });
+
+  it('the root is made in one call with its permissions, must not exist, and is checked exactly; only an administrator-owned, protected root is accepted', () => {
+    const install = code('deploy/windows/install.ps1');
+    const root = functionBody(install, 'New-AccucutTrustedRoot');
+    expect(root).toContain('[System.IO.Directory]::CreateDirectory($Root, $security)');
+    expect(root).toContain('$security.SetAccessRuleProtection($true, $false)');
+    expect(root).toContain('$security.SetOwner($administrators)');
+    expect(root).toContain('already exists');
+    expect(root).toContain("never uses an existing one, empty or not");
+    expect(root.indexOf('Assert-AccucutTrustedAbove -Path $driveRoot -DriveRoot')).toBeLessThan(root.indexOf('CreateDirectory($Root, $security)'));
+    expect(root).toContain("$actual.Owner -eq 'S-1-5-32-544'");
+    expect(root).toContain('$actual.Protected');
+    expect(install).toContain("'^[A-Za-z]:\\\\[A-Za-z0-9_-]{1,32}$'");
+    // No separate step sets the permissions of the root after it is made.
+    expect(install).not.toMatch(/Set-Acl|SetAccessControl|icacls/i);
+  });
+
+  it('the zip is copied into the locked root, the COPY is checked with rule B and its SHA-256, and only the copy is unpacked; entries that leave the folder are refused', () => {
+    const install = code('deploy/windows/install.ps1');
+    const expand = functionBody(install, 'Expand-AccucutTrustedPackage');
+    const order = [
+      '[System.IO.FileMode]::CreateNew',
+      'Assert-AccucutTrustedPath -Path $copy -Root $Root -ProtectedRoot',
+      'Get-AccucutTrustedSha256 -Path $copy',
+      'ZipFile]::OpenRead($copy)',
+      'ExtractToFile($entry, $destination, $false)',
+      '[System.IO.Directory]::Move($unpacked, $release)',
+      'Assert-AccucutTrustedNoLinks -Path $release',
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = expand.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
+    }
+    expect(expand).toContain('Refusing to unpack it');
+    expect(expand).not.toContain('OpenRead($ZipPath');
+    expect(functionBody(install, 'Get-AccucutTrustedSha256')).toContain('[System.IO.FileShare]::Read');
+  });
+
+  it('rules A and B, with the SIDs, the masks, the generic-rights mapping and the CREATOR OWNER exception, are in the block', () => {
+    const block = read('deploy/windows/install.ps1').match(/# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/)?.[0] ?? '';
+    for (const part of [
+      "'S-1-5-32-544'", "'S-1-5-18'", "'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'", '0x1200A9', '0xD0040', '0xC0040', '0x1301BF',
+      '268435456', '1073741824', '2147483648', '536870912', '0x1F01FF', '0x120116', '0x120089', '0x1200A0', "'S-1-3-0'", 'ReparsePoint', 'IsCallback', 'not understood',
+    ]) {
+      expect(block, part).toContain(part);
+    }
+    // The block itself uses no cmdlet that a loaded module could shadow (see also Trust.Tests.ps1, which checks this on the syntax tree).
+    const commands = [...block.matchAll(/\b(Get-ChildItem|Get-Content|Set-Content|Get-Acl|Set-Acl|Test-Path|Join-Path|Split-Path|Remove-Item|New-Item|Copy-Item|Move-Item|Start-Process|Invoke-Expression|Write-Host|Get-Command)\b/g)].map((match) => match[1]);
+    expect(commands).toEqual([]);
+  });
+
+  it('old trust helpers and ad-hoc checks are gone from every script and from the module', () => {
     for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1']) {
       const text = code(path);
-      for (const gone of ['Assert-AccucutFolderTrusted', 'Assert-AccucutParentNotSwappable', 'Assert-AccucutBootstrapFolder', 'Get-AccucutNonAdminWriters', 'Get-AccucutFolderOwnerSid']) {
+      for (const gone of ['Assert-AccucutPathTrusted', 'Get-AccucutPathSecurity', 'Assert-AccucutInstallTrusted', 'Initialize-AccucutVerifiedRelease', 'Start-AccucutInstall', 'Import-AccucutVerifiedModule', 'Assert-AccucutUpdateRunsFromInstall']) {
         expect(text, `${path} still has ${gone}`).not.toContain(gone);
       }
     }
-    // update.ps1 loads the module from the real folder (the rule lives there) and checks the script, the module and every folder above them at once,
-    // before any function of the update runs.
-    const update = code('deploy/windows/update.ps1');
-    const importAt = update.indexOf('Import-Module $module -Force');
-    expect(importAt).toBeGreaterThan(0);
-    expect(update.indexOf('Assert-AccucutPathTrusted -Path $module')).toBeGreaterThan(importAt);
-    expect(update.indexOf('Assert-AccucutPathTrusted -Path $real')).toBeGreaterThan(importAt);
-    expect(update).not.toMatch(/^Import-Module/m);
-    expect(update.indexOf('Import-AccucutVerifiedModule -ScriptRoot $PSScriptRoot')).toBeLessThan(update.indexOf('Invoke-AccucutUpdate @PSBoundParameters'));
   });
 
   it('settings files: locked before they are filled', () => {
@@ -229,21 +350,59 @@ describe('the scripts (AC-1, AC-5)', () => {
     expect(ops.indexOf('Set-AccucutFileAcl -Path $Path')).toBeLessThan(ops.indexOf('WriteAllText($Path'));
   });
 
-  it('the update takes the backup before it stops anything, and rolls the junction back on a failed health check', () => {
+  it('update: runs only as the installed update.ps1, checks the whole chain before the module is loaded, takes the backup before it stops anything, and rolls the junction back on a failed health check', () => {
     const update = code('deploy/windows/update.ps1');
-    // Security review: the install folder is checked before anything is written, and the zip is copied in and its COPY checked before it is unpacked.
-    const trustAt = update.indexOf('Assert-AccucutInstallTrusted -Paths $paths');
-    expect(trustAt).toBeGreaterThan(0);
-    expect(update.indexOf('Assert-AccucutUpdateRunsFromInstall -Paths $paths')).toBeGreaterThan(0);
-    expect(trustAt).toBeLessThan(update.indexOf('Invoke-AccucutReleaseBackup -Paths $paths'));
-    const copyAt = update.indexOf('Copy-Item -LiteralPath $ZipPath -Destination $copy');
-    expect(copyAt).toBeGreaterThan(trustAt);
-    expect(update.indexOf('Assert-AccucutSha256 -Path $copy')).toBeGreaterThan(copyAt);
-    expect(update.indexOf('Expand-AccucutZip -ZipPath $copy')).toBeGreaterThan(update.indexOf('Assert-AccucutSha256 -Path $copy'));
-    expect(update.indexOf('Invoke-AccucutReleaseBackup -Paths $paths')).toBeLessThan(update.indexOf('Stop-AccucutServices\n'));
-    expect(update).toContain("Call your IT person");
-    expect(update.indexOf('Set-AccucutCurrentRelease -Paths $paths -Tag $oldTag')).toBeGreaterThan(update.indexOf('Set-AccucutCurrentRelease -Paths $paths -Tag $newTag'));
-    expect(update).toMatch(/Remove-AccucutOldReleases -Paths \$paths -Keep @\(\$newTag, \$oldTag\)/);
+    const environment = functionBody(update, 'Import-AccucutUpdateEnvironment');
+    const checks = [
+      'Test-AccucutScriptAdministrator',
+      'Assert-AccucutTrustedRootShape -Root $Root',
+      'Get-AccucutTrustedCurrent -Root $Root',
+      "'current\\update.ps1'",
+      'Assert-AccucutTrustedPath -Path $old -Root $Root -ProtectedRoot',
+      "Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($old, 'AccucutOps.psm1')) -Root $Root -ProtectedRoot",
+      "Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'config'))",
+      "Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'services'))",
+      "Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'logs'))",
+      'Assert-AccucutTrustedNoLinks -Path $old',
+      'Import-AccucutTrustedModule -Root $Root -Release $old',
+    ];
+    let position = -1;
+    for (const marker of checks) {
+      const found = environment.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
+    }
+    expect((update.match(/Import-AccucutTrustedModule -Root/g) ?? []).length).toBe(1);
+    expect(update.indexOf('$oldRelease = Import-AccucutUpdateEnvironment')).toBeLessThan(update.indexOf('Invoke-AccucutUpdate -ZipPath $ZipPath'));
+    expect(update).toContain("if ($MyInvocation.InvocationName -ne '.') {");
+
+    const body = functionBody(update, 'Invoke-AccucutUpdate');
+    const order = [
+      'Get-AccucutTrustedSha256 -Path $ZipPath',
+      'Invoke-AccucutReleaseBackup -Root $Root -OldRelease $OldRelease',
+      'Expand-AccucutTrustedPackage -Root $Root -ZipPath $ZipPath -Sha256 $expected -RefuseTag $oldTag -ReplaceExisting',
+      'Stop-AccucutServices',
+      'Assert-AccucutTrustedPath -Path $target -Root $Root -ProtectedRoot',
+      'Assert-AccucutTrustedNoLinks -Path $target',
+      '$nodeExe = Resolve-AccucutTrustedExecutable',
+      'Invoke-AccucutMigration -ReleaseDirectory $target',
+      'Set-AccucutCurrentRelease -Paths $paths -Tag $newTag',
+      '[void](Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($paths.Services, "$name.exe")))',
+      'Start-AccucutServicesAndCheck',
+      'Set-AccucutCurrentRelease -Paths $paths -Tag $oldTag',
+    ];
+    let place = -1;
+    for (const marker of order) {
+      const found = body.indexOf(marker, place + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(place);
+      place = found;
+    }
+    expect(body).toContain('Call your IT person');
+    expect(body).toMatch(/Remove-AccucutOldReleases -Paths \$paths -Keep @\(\$newTag, \$oldTag\)/);
+    expect(body).not.toContain('Copy-Item');
+    // The new release's scripts are never run by an update; the backup script is the running release's own, through the checked wrapper.
+    expect(update).not.toMatch(/Invoke-AccucutTrustedScript -Root \$Root -Path \$target/);
+    expect(functionBody(update, 'Invoke-AccucutReleaseBackup')).toContain('Invoke-AccucutTrustedScript -Root $Root -Path $script');
   });
 });
 

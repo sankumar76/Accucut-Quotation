@@ -22,6 +22,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+# The trust block of update.ps1 (byte for byte the one in install.ps1), to check the REAL install with the REAL rules. Dot-sourcing binds the parameters of
+# update.ps1 too, which would put $Root back to its default, so it is restored.
+$requestedRoot = $Root
+. (Join-Path $PSScriptRoot '..\update.ps1')
+$Root = $requestedRoot
 Import-Module (Join-Path $PSScriptRoot '..\AccucutOps.psm1') -Force -DisableNameChecking
 
 function Assert-That {
@@ -87,8 +92,35 @@ foreach ($folder in $paths.Releases, $paths.Config, $paths.Services, $paths.Logs
     $folderAcl = Get-AclSids -Path $folder
     Assert-That ($folderAcl.Owner -eq $adminSid) "$folder is owned by Administrators"
 }
-Assert-AccucutInstallTrusted -Paths $paths
-Write-Host 'PASS  every folder that update.ps1 writes to is trusted (owner and permissions)'
+
+# ADR-015 Amendment 2: the real trust rules, on the real install. Every folder and file that update.ps1 loads, runs or writes to must pass (owner,
+# no link, no write for any other account), and so must the programs that the services run.
+function Assert-Trusted {
+    param([Parameter(Mandatory)][scriptblock]$Check, [Parameter(Mandatory)][string]$Message)
+    try { & $Check } catch { throw "ASSERTION FAILED: $Message ($($_.Exception.Message))" }
+    Write-Host "PASS  $Message"
+}
+$release = Get-AccucutTrustedCurrent -Root $paths.Root
+$logWriters = @($services | ForEach-Object { Get-AccucutUpdateServiceSid -Name $_ })
+Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Root -Root $paths.Root -ProtectedRoot } 'the install folder passes the trust check (owner, protected list, no other writer)'
+Assert-Trusted { Assert-AccucutTrustedPath -Path $release -Root $paths.Root -ProtectedRoot } 'the current release folder passes the trust check'
+Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'AccucutOps.psm1') -Root $paths.Root -ProtectedRoot } 'the module passes the trust check'
+Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'update.ps1') -Root $paths.Root -ProtectedRoot } 'update.ps1 passes the trust check'
+foreach ($folder in $paths.Config, $paths.Services) {
+    Assert-Trusted { Assert-AccucutTrustedPath -Path $folder -Root $paths.Root -ProtectedRoot } "$folder passes the trust check"
+}
+Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Logs -Root $paths.Root -ProtectedRoot -Writer $logWriters } "$($paths.Logs) passes the trust check (the two service accounts may write there, nobody else)"
+Assert-Trusted { Assert-AccucutTrustedNoLinks -Path $release } 'the current release holds no link'
+foreach ($name in $services) {
+    Assert-Trusted { [void](Resolve-AccucutTrustedExecutable -Path (Join-Path $paths.Services "$name.exe")) } "the WinSW program of $name passes the trust check"
+}
+$installedState = Get-Content -LiteralPath $paths.StateFile -Raw | ConvertFrom-Json
+Assert-Trusted { [void](Resolve-AccucutTrustedExecutable -Path ([string]$installedState.nodeExe)) } "node.exe ($($installedState.nodeExe)) and its folder pass the trust check"
+# The install folder holds nothing but what the install makes, and the scratch folder of the unpacking is empty.
+$unexpected = @(Get-ChildItem -LiteralPath $paths.Root -Force | Where-Object { @('releases', 'current', 'config', 'services', 'logs', 'backups', '.in') -notcontains $_.Name } | ForEach-Object { $_.Name })
+Assert-That ($unexpected.Count -eq 0) "the install folder holds only what the install makes (unexpected: $($unexpected -join ', '))"
+$scratch = Join-Path $paths.Root '.in'
+Assert-That ((-not (Test-Path -LiteralPath $scratch)) -or @(Get-ChildItem -LiteralPath $scratch -Force).Count -eq 0) 'the scratch folder .in is empty'
 
 # The settings: the runtime file holds no owner role and no first-Admin password; the owner file holds no first-Admin password once it was used.
 $runtime = Read-AccucutEnvFile -Path $paths.EnvFile

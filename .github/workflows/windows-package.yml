@@ -15,7 +15,8 @@
 #   - Third-party actions are pinned to a commit SHA.
 #   - Every secret value is made inside the job (fake, throwaway, for a database and services that die with the runner), masked in the log, written only to a
 #     file in the runner's temp folder, and deleted at the end. None is on a command line.
-#   - WinSW and age are downloaded from the addresses in deploy/windows/tools.psd1 and refused unless their SHA-256 matches.
+#   - WinSW and age (and Node.js, when the image's own is too old) are downloaded from the addresses in deploy/windows/tools.psd1 and refused unless
+#     their SHA-256 matches.
 name: Windows package
 
 on:
@@ -154,17 +155,86 @@ jobs:
           [System.IO.File]::WriteAllText($values, ($lines -join "`r`n") + "`r`n")
           "ACCUCUT_VALUES=$values" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
-      - name: Install from the unpacked zip, non-interactively (install.ps1)
+      # ---- Node.js for the services (ADR-015 Amendment 2) -------------------------------------------------------------------
+      # The install runs node.exe by its FULL path, never through PATH, and refuses it unless it and its folder can be written by administrators only
+      # (an MSI install gives that). The image's own copy in C:\Program Files\nodejs is used when it is 22.12 or later; otherwise the Node.js MSI that is
+      # pinned in deploy/windows/tools.psd1 is installed there, after its SHA-256 has been checked.
+      - name: Make sure Node.js 22.12 or later is in C:\Program Files\nodejs
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $node = 'C:\Program Files\nodejs\node.exe'
+          $enough = $false
+          if (Test-Path -LiteralPath $node) {
+            $found = (& $node --version)
+            Write-Host "The image has node.exe $found in C:\Program Files\nodejs."
+            if ($found -match '^v(\d+)\.(\d+)') { $enough = ([int]$Matches[1] -gt 22) -or (([int]$Matches[1] -eq 22) -and ([int]$Matches[2] -ge 12)) }
+          }
+          else { Write-Host 'The image has no node.exe in C:\Program Files\nodejs.' }
+          if (-not $enough) {
+            $tool = (Import-PowerShellDataFile -LiteralPath deploy/windows/tools.psd1).Node
+            $msi = Join-Path $env:RUNNER_TEMP $tool.File
+            Invoke-WebRequest -Uri $tool.Url -OutFile $msi -UseBasicParsing
+            $actual = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $tool.Sha256) { throw "$($tool.File) does not match its pinned SHA-256 (expected $($tool.Sha256), got $actual)." }
+            Write-Host "$($tool.File) matches its pinned SHA-256. Installing it."
+            $process = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart') -Wait -PassThru
+            if (@(0, 3010) -notcontains $process.ExitCode) { throw "The Node.js installer failed (exit code $($process.ExitCode))." }
+          }
+          if (-not (Test-Path -LiteralPath $node)) { throw 'node.exe is not in C:\Program Files\nodejs.' }
+          Write-Host "The services will run $(& $node --version) from $node."
+          "ACCUCUT_NODE=$node" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ---- Unpack the package, and plant a tampered module next to it (ADR-015 Amendment 2, test (i)) ---------------------------
+      # install.ps1 is started from the unpacked folder, as an administrator does. A module that writes a marker file when it is loaded, and then throws,
+      # is put in that folder beside the true zip. The install must never load it (the first half imports nothing; the second half loads the module from
+      # the copy of the zip that it checked): the marker must not exist after the install.
+      - name: Unpack the package, and plant a tampered module in the unpacked folder (test i)
         run: |
           $ErrorActionPreference = 'Stop'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
           $package = 'C:\accucut-pkg'
           [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $package)
+          $marker = Join-Path $env:RUNNER_TEMP 'accucut-tampered-module-marker.txt'
+          if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force }
+          $tampered = "[System.IO.File]::WriteAllText('$marker', 'the tampered module was loaded')`r`nthrow 'the tampered module was loaded'`r`n"
+          [System.IO.File]::WriteAllText((Join-Path $package 'AccucutOps.psm1'), $tampered)
+          "ACCUCUT_MARKER=$marker" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ---- An existing install folder is refused, untouched (ADR-015 Amendment 2, test (iii)) -----------------------------------
+      - name: Refuse an install folder that already exists, empty or not (install.ps1 -Root C:\AccucutPre, test iii)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
+          $pre = 'C:\AccucutPre'
+          New-Item -ItemType Directory -Path $pre | Out-Null
+          $before = (Get-Acl -LiteralPath $pre).Sddl
           $ErrorActionPreference = 'Continue'
-          & powershell.exe -NoProfile -File "$package\install.ps1" -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes
+          $output = & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -Root $pre -NonInteractive 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          $ErrorActionPreference = 'Stop'
+          if ($code -eq 0) { throw 'install.ps1 should have refused the existing folder, and it did not.' }
+          if ($output -notmatch 'already exists') { throw 'The refusal does not say that the folder already exists.' }
+          if (-not (Test-Path -LiteralPath $pre)) { throw 'The existing folder was removed.' }
+          if (@(Get-ChildItem -LiteralPath $pre -Force).Count -ne 0) { throw 'Something was put in the existing folder.' }
+          if ((Get-Acl -LiteralPath $pre).Sddl -ne $before) { throw 'The permissions of the existing folder were changed.' }
+          if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module was loaded.' }
+          Remove-Item -LiteralPath $pre -Force
+          Write-Host 'PASS  the existing folder was refused and left exactly as it was.'
+
+      # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
+      - name: Install from the unpacked zip, non-interactively (install.ps1)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
+          $ErrorActionPreference = 'Continue'
+          & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes -NodeExe $env:ACCUCUT_NODE
           if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed (exit code $LASTEXITCODE)." }
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module in the unpacked folder was loaded by the install.' }
+          Write-Host 'PASS  the tampered module next to the zip was never loaded.'
 
       - name: Assert the install (services, health, sign-in, permissions, no secret in a log)
         run: |
@@ -184,6 +254,34 @@ jobs:
           $releases = @(Get-ChildItem -LiteralPath 'C:\Accucut\releases' -Directory | Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host "Releases kept: $($releases -join ', ')"
           if ($releases.Count -ne 2) { throw "Only the current and the previous release should be kept, found: $($releases -join ', ')" }
+
+      # ADR-015 Amendment 2, test (ii): the module of the running release is made writable for ordinary users (the Users group gets write access). update.ps1
+      # must refuse before it loads anything: exit code 1, the services still running, the release unchanged. The permission is removed again afterwards.
+      - name: Refuse an update when a user could have changed the running module (update.ps1, test ii)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Resolve-Path "dist-bad\accucut-$($env:ACCUCUT_TAG)-bad-win-x64.zip").Path
+          $module = "C:\Accucut\releases\$($env:ACCUCUT_TAG)-u2\AccucutOps.psm1"
+          & "$env:SystemRoot\System32\icacls.exe" $module /grant '*S-1-5-32-545:(W)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not add the test permission.' }
+          $output = ''
+          $code = -1
+          try {
+            $ErrorActionPreference = 'Continue'
+            $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup 2>&1 | Out-String
+            $code = $LASTEXITCODE
+          }
+          finally {
+            $ErrorActionPreference = 'Stop'
+            & "$env:SystemRoot\System32\icacls.exe" $module /remove:g '*S-1-5-32-545' | Out-Null
+          }
+          Write-Host $output
+          if ($code -ne 1) { throw "update.ps1 should have exited with code 1, and exited with $code." }
+          if ($output -notmatch 'can be changed by S-1-5-32-545') { throw 'The refusal does not say that the Users group can change the module.' }
+          foreach ($name in 'AccucutApp', 'AccucutWorker') {
+            if ((Get-Service -Name $name).Status -ne 'Running') { throw "$name is not running." }
+          }
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
 
       - name: Update to a broken release, and see it rolled back (update.ps1)
         run: |
