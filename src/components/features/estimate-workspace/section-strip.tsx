@@ -40,7 +40,8 @@ export function SectionStrip({ items }: SectionStripProps) {
       data-section-strip=""
       className="sticky top-(--topbar-h) z-(--z-bar) min-w-0 rounded-md border border-border bg-surface px-s-2 shadow-card"
     >
-      <ul className="flex min-w-0 gap-s-1 overflow-x-auto py-s-1">
+      {/* `relative`, so the spoken-only words of a link ("All filled in", "Missing inputs", positioned absolutely) are clipped by this list's own scroll and do not reach the page: their containing block would otherwise be the sticky bar around it, which does not clip, and a link far along the strip pushed the page sideways. */}
+      <ul className="relative flex min-w-0 gap-s-1 overflow-x-auto py-s-1">
         {items.map(({ section, complete, missing = false }) => (
           <li key={section.id} className="shrink-0">
             <a
