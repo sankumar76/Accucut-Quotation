@@ -44,7 +44,7 @@ describe('portal frame props (AC-9)', () => {
       for (const item of group.items) expect(Object.keys(item).sort()).toEqual(['href', 'icon', 'label']);
     }
     expect(props.navGroups[0]?.label).toBe('Work');
-    expect(props.navGroups[0]?.items.map((item) => item.href)).toEqual(['/queue', '/']);
+    expect(props.navGroups[0]?.items.map((item) => item.href)).toEqual(['/queue', '/assign', '/']);
   });
 
   it('carries neither the id nor mustChangePassword anywhere, in a key or in a value', () => {

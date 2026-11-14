@@ -5,7 +5,9 @@ import type { RoleName } from '../../src/lib/auth/roles';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from '../../src/server/auth/session-cookie';
 import { type AccountService, createAccountService } from '../../src/server/services/account-service';
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
+import { systemClock } from '../../src/lib/time';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
 import { CUSTOMER_CANARIES } from './customer-canary';
@@ -14,6 +16,7 @@ import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { fakeCustomer } from './fake-customers';
+import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
 import { MATERIAL_CANARIES } from './material-master-canary';
 import { seedConfig } from './seed-config';
@@ -74,6 +77,10 @@ export interface SessionHarness {
   readonly mastersService: MastersService;
   /** The in-memory rates behind `mastersService`: a test sets values in them to look for in what a refused caller is sent. */
   readonly masters: FakeMasterRepository;
+  /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
+  readonly taskService: TaskService;
+  /** The in-memory tasks behind `taskService`. */
+  readonly taskWorld: FakeTaskWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
   readonly throttles: FakeThrottleRepository;
   /** The real account service over the fake repository, for `POST /api/v1/account/password` (`getAccountService` in the composition mock). */
@@ -123,12 +130,17 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
+  const taskWorld = createFakeTaskWorld(() => users.records);
+
   return {
     users,
     throttles,
     auditService,
     auditWorld,
     masters,
+    taskWorld,
+    // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

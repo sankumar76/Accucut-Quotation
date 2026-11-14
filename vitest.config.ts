@@ -26,7 +26,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    exclude: ['tests/e2e/**', 'node_modules/**'],
+    // `tests/perf` holds timings: they run on demand (`npm run test:perf`, vitest.perf.config.ts), never in a pull request's path.
+    exclude: ['tests/e2e/**', 'tests/perf/**', 'node_modules/**'],
     // Refuses a wrong database or NODE_ENV=production before any suite starts (AC-10).
     globalSetup: ['./tests/support/global-setup.ts'],
     // Retries are off in unit and integration tests (test strategy section 10).

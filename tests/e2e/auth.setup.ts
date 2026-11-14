@@ -18,7 +18,7 @@ const COMPILE_TIMEOUT = 120_000;
 /** The set-up tests compile pages and hash passwords on a cold machine; they are allowed longer than a test (test strategy section 10). */
 const SETUP_TIMEOUT = 180_000;
 /** The development-server pages the width projects open. The signed-in Lead can open all three. */
-const WARMED_ROUTES = ['/', '/queue', '/design-system'] as const;
+const WARMED_ROUTES = ['/', '/queue', '/assign', '/design-system'] as const;
 
 setup('create the E2E users and save a signed-in Lead', async ({ page, context }) => {
   setup.setTimeout(SETUP_TIMEOUT);
@@ -38,6 +38,11 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
     await page.goto(`${DEVELOPMENT_URL}${route}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: COMPILE_TIMEOUT });
   }
+
+  // The routes behind Assign task (STORY-04.01), compiled for the same reason: an empty body is 422 and stores nothing.
+  const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+  expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/assign-context`)).status()).toBe(200);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, { headers, data: {} })).status()).toBe(422);
 
   await context.storageState({ path: SIGNED_IN_STATE });
 });

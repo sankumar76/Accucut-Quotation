@@ -102,6 +102,19 @@ function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
   }
 }
 
+/**
+ * STORY-04.01: the task routes. The Engineer is the harness's spare Engineer (`context.targetId`), who is active, and the deadline is far in the future, so the
+ * valid call is accepted whatever instant the held clock stands at. `GET /api/v1/options/assign-context` has no ID or body: the default call is its valid call.
+ */
+function taskCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
+  if (`${method} ${path}` !== 'POST /api/v1/tasks') return undefined;
+  return {
+    id: NO_RECIPE_ID,
+    body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
+    status: 201,
+  };
+}
+
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
@@ -148,7 +161,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return treatmentCall(method, path) ?? customerCall(method, path) ?? DEFAULT_CALL;
+      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? DEFAULT_CALL;
   }
 }
 

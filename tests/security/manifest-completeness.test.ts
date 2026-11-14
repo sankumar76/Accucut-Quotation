@@ -46,8 +46,8 @@ describe('the architecture test can fail (planted faults)', () => {
   const plant = (extra: RouteFile) => findRouteProblems([...FILES, extra], ROUTE_MANIFEST);
 
   it('a new route file with no manifest row fails', () => {
-    const problems = plant({ ...meFile, file: 'src/app/api/v1/tasks/route.ts', pattern: '/api/v1/tasks' });
-    expect(problems.join('\n')).toContain('no api row for /api/v1/tasks in the route manifest');
+    const problems = plant({ ...meFile, file: 'src/app/api/v1/invented-widgets/route.ts', pattern: '/api/v1/invented-widgets' });
+    expect(problems.join('\n')).toContain('no api row for /api/v1/invented-widgets in the route manifest');
   });
 
   it('a new page file with no manifest row fails', () => {
