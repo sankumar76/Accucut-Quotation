@@ -116,3 +116,25 @@ The part form is built carefully, and the security scope of the brief is met.
 - **orchestrator:** SQR-07 becomes a `follow-up` or `tech-debt` issue for the hardening window. It covers files outside this PR. Confirm that CI is green on the merge head before the squash.
 - **ux-expert / product-owner:** SQR-09 (should a Lead edit inputs on SCR-05 while the estimate is SUBMITTED?).
 - **reviewer-performance:** SQR-03 (pool connection inside the transaction).
+
+## Re-review, round 2 (2026-11-14)
+
+| Field | Value |
+|-------|-------|
+| Commits reviewed | e87bf6f (review fixes: SQR-01, 02, 03, 04, 11) and 566560f (the security review's Medium: Cf, Zl and Zp). Nothing else |
+| CI | Running on 566560f when I read it. The merge waits for 6 of 6 green |
+| Method | GitHub MCP `get_commit full_patch` for both commits and `get_file_contents` at 566560f. The regex was checked in Node 24 with sample strings. Nothing from the repository was run locally |
+| **Verdict** | **APPROVE.** Nothing blocks the merge once CI on 566560f is green |
+| PR review | https://github.com/sankumar76/Accucut-Quotation/pull/392#pullrequestreview-5905837260 (COMMENT). Replies in each round 1 thread (r4574656981 to r4574658860). Count correction: issue comment 6880731643 |
+
+| Finding | Result | Evidence |
+|---|---|---|
+| SQR-01 Major | **Verified** | `next = { ...part.inputs }`, so the save starts from the raw stored object. Only the submitted keys are set, and a blank deletes only its own key. The no-op check compares `part.inputs[k]` with `next[k]` for submitted keys only: `1.5` against a stored `1.50` is still a no-op, and a stored non-text value against new text is a change. The answer and the no-op return are both `typedValues`, so NFR-002 is unchanged. Unit and PostgreSQL tests plant `P`, an unknown key, a non-text value and a rate (unit only), and check that a save of WIDTH keeps them, that a clear removes only its own key, and that a no-op writes nothing. The old code would fail the first two |
+| SQR-02 Minor | **Verified** | `UPDATE ... AND revision = ${expectedRevision}::int`; `changed === 0` returns `null`, and the service answers 409 `PART_CHANGED` before `bumpInputsRevision`. The fake repository mirrors it. The direct tests (PostgreSQL: wrong revision, then right, then old revision gives null, written, null; unit: another writer overtakes the read and the answer is 409) are accepted in place of a race test |
+| SQR-03 Minor | **Verified** | `currentConfiguration()` is awaited before `transactions.run` |
+| SQR-04 Minor and the security review's Medium | **Verified** | `/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u`. The regex is valid (General_Category short names with the `u` flag). It refuses tab (single-line), C1, U+2028, U+2029, the bidi characters, ZWSP to RLM, U+061C, U+2060 to U+2064, U+FEFF, the soft hyphen, tag characters and U+FFF9. It accepts ASCII, precomposed é, e followed by U+0301, Devanagari, Tamil, CJK, Arabic, NBSP, U+FE0F and emoji. This is the only server-side text path in this story: numbers are ASCII through `DECIMAL_TEXT_PATTERN`, and the material value must be a UUID through `lockMaterialForUse`. The browser uses the same function. `trim()` removes a leading or trailing U+FEFF rather than refusing it, which is safe. Blocking ZWJ and ZWNJ is a labelled assumption (product owner to confirm) |
+| SQR-11 Info | **Verified** | `NUMBER_TOO_LARGE_MESSAGE` for 13 or more digits with a valid shape; the shape rule still wins for `…​.123` |
+| SQR-05, SQR-06, SQR-07, SQR-09 | Open | Deferred to the hardening window, as agreed (thread replies) |
+| SQR-13 Minor (new) | Open | A lone UTF-16 surrogate (`"\ud800"` in the JSON body) passes the rule. `JSON.stringify` emits `\ud800`, which PostgreSQL's jsonb refuses as an unpaired surrogate, so the user gets a generic 500 instead of a 422. Nothing is stored (fails closed). Fix: add `\p{Cs}` (checked: a lone surrogate matches it, a valid emoji pair does not), or refuse when `!text.isWellFormed()`. Test: `'FR\uD800321'` is refused and `'FR😀'` passes. In this PR or the hardening window |
+
+New counts: Blocker 0, Critical 0, Major 0, Minor 4 (SQR-05, 06, 07, 13), Info 4 (SQR-08, 09, 10, 12).
