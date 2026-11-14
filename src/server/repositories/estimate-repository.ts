@@ -51,15 +51,33 @@ export interface EstimateLock {
   readonly inputsRevision: number;
 }
 
+/** What the parts tree needs to decide who may read it and whether it may change: the estimate's owner and state, read without a lock. */
+export interface EstimateAccess {
+  readonly id: string;
+  readonly engineerId: string;
+  readonly status: EstimateStatus;
+}
+
 export interface EstimateRepository {
   /** The task with this code and its estimate, or null when there is none. */
   findWorkspaceByCode(code: string): Promise<WorkspaceRecord | null>;
+  /** The owner and state of the estimate with this ID, **without a lock** (a read of the tree); null for an unknown ID (or one that is not a UUID). */
+  findEstimateAccess(id: string): Promise<EstimateAccess | null>;
   /** The estimate with this ID, **locked for update until the transaction ends**; null for an unknown ID (or one that is not a UUID). */
   lockEstimate(id: string, tx: Transaction): Promise<EstimateLock | null>;
   /** The customer with this ID, locked for share; null for an unknown ID, a deleted customer or an ID that is not a UUID. */
   findActiveCustomer(id: string, tx: Transaction): Promise<CustomerChoice | null>;
   /** Sets the customer and raises `inputs_revision` by one, in the caller's transaction. The caller has already checked the state and that the customer differs. */
   setCustomer(estimateId: string, customerId: string, tx: Transaction): Promise<void>;
+  /** Raises `inputs_revision` by one, in the caller's transaction: a part added, deleted, moved or reordered is an input change (architecture section 4.8). The caller holds the estimate's lock. */
+  bumpInputsRevision(estimateId: string, tx: Transaction): Promise<void>;
+  /**
+   * Moves the estimate from one status to the next (STORY-06.01), in the caller's transaction, and answers whether it did. The write is conditional on the
+   * status the caller read under the row lock, so a status can only ever change from the one that was checked: it answers `false` (and writes nothing) when
+   * the estimate no longer has `from`, which the lock makes impossible unless a caller skipped it. Nothing else of the row changes, and not
+   * `inputs_revision`: a status change is not an input change (architecture section 4.8).
+   */
+  setStatus(estimateId: string, from: EstimateStatus, to: EstimateStatus, tx: Transaction): Promise<boolean>;
   /**
    * Links the estimate to the calculation just stored for it and sets its status, in the caller's transaction (STORY-03.05; architecture sections 4.2 and 4.4).
    * It leaves `inputs_revision` alone: a calculation is not an input change. The statement links only a calculation that belongs to this very estimate, and
@@ -86,6 +104,7 @@ const WORKSPACE_ROWS = z.array(
   }),
 );
 const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int() }));
+const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -108,6 +127,16 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         if (row === undefined) return null;
         const { customerId, customerName, ...rest } = row;
         return { ...rest, customer: customerId === null || customerName === null ? null : { id: customerId, name: customerName } };
+      }),
+
+    findEstimateAccess: (id) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return null;
+        const rows = await db.$queryRaw`
+          SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status"
+          FROM estimates e JOIN tasks t ON t.id = e.task_id
+          WHERE e.id = ${id}::uuid`;
+        return ACCESS_ROWS.parse(rows)[0] ?? null;
       }),
 
     lockEstimate: (id, tx) =>
@@ -135,6 +164,17 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
     setCustomer: (estimateId, customerId, tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).estimate.update({ where: { id: estimateId }, data: { customerId, inputsRevision: { increment: 1 } }, select: { id: true } });
+      }),
+
+    bumpInputsRevision: (estimateId, tx) =>
+      withDatabaseErrors(async () => {
+        await clientFor(db, tx).estimate.update({ where: { id: estimateId }, data: { inputsRevision: { increment: 1 } }, select: { id: true } });
+      }),
+
+    setStatus: (estimateId, from, to, tx) =>
+      withDatabaseErrors(async () => {
+        const { count } = await clientFor(db, tx).estimate.updateMany({ where: { id: estimateId, status: from }, data: { status: to } });
+        return count === 1;
       }),
 
     linkCalculation: (estimateId, calculationId, status, tx) =>

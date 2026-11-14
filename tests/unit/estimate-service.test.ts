@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeCustomerEntry, type FakeEstimate } from '../support/fake-estimates';
 
 /**
@@ -47,7 +48,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()]) {
   const world = createFakeEstimateWorld(() => customers, initial);
-  const service = createEstimateService({ estimates: world.repository, transactions: world.transactions });
+  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions, ...inputsDependencies() });
   const stored = (): FakeEstimate => {
     const found = world.estimates[0];
     if (found === undefined) throw new Error('no estimate');
@@ -185,9 +186,10 @@ describe('AC-5: the refusals', () => {
     expect(stored().inputsRevision).toBe(3);
   });
 
-  it('a Lead is refused on a submitted estimate too: the state decides, not the role', async () => {
-    const { service } = setUp([estimate({ status: 'SUBMITTED' })]);
+  it('a Lead and an Admin are refused on an approved estimate: nobody changes an approved estimate (STORY-06.01 replaced the draft-only check; FR-064 lets them edit a submitted one)', async () => {
+    const { service } = setUp([estimate({ status: 'APPROVED' })]);
     await expect(service.setCustomer(lead, ESTIMATE, MARLOW)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(admin, ESTIMATE, MARLOW)).rejects.toBeInstanceOf(ConflictError);
   });
 
   it.each([

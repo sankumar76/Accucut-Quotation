@@ -13,12 +13,14 @@ import type { MeResponse } from './schemas/me';
  * one schema, architecture section 6), and it imports the one schema file it needs, never the barrel.
  */
 
-/** No overdue count exists until STORY-04.03. */
-const OVERDUE_COUNT_BEFORE_04_03 = 0;
-
 export interface MeContext {
   /** Whether the review pages that a production build hides are listed (`isDesignSystemAvailable()`). */
   readonly includeHiddenInProduction: boolean;
+  /**
+   * The count of overdue tasks for the caller's role (STORY-04.03 AC-2), read by the route from the task service. It is a number the route hands in: this view imports no
+   * task service or repository (they are blocked for `engineer-*` views, NFR-002), so it can only copy the count, never reach a task, and it adds no field to the answer.
+   */
+  readonly overdueCount: number;
 }
 
 function navigationItem(entry: NavEntry): MeResponse['navigation'][number] {
@@ -31,6 +33,6 @@ export function buildMe(user: AuthenticatedUser, context: MeContext): MeResponse
     email: user.email,
     role: user.role,
     navigation: navigationFor(user.role, { includeHiddenInProduction: context.includeHiddenInProduction }).map(navigationItem),
-    overdueCount: OVERDUE_COUNT_BEFORE_04_03,
+    overdueCount: context.overdueCount,
   };
 }

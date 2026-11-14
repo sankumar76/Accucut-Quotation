@@ -1,14 +1,15 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { listCustomers, type CustomerRow, type CustomerSummaryRow } from '@/lib/masters/customers-client';
 
 import type { CustomerFormDialogProps } from './customer-form-dialog';
-import { customerAddedNotice } from './customer-texts';
-import { focusOpener } from './master-opener';
+import { customerAddedNotice, customerDeletedNotice, customerGoneNotice } from './customer-texts';
+import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
+import { remember, useMasterDelete } from './use-master-delete';
 import { useDialogOpener } from './use-dialog-opener';
 import { useMasterList } from './use-master-list';
 import { useReadAgain } from './use-read-again';
@@ -26,6 +27,9 @@ import { useReadAgain } from './use-read-again';
 /** The dialog's code: a bare `import()` that the loader can try again after a failure. */
 const loadDialog = () => import('./customer-form-dialog').then((module) => module.CustomerFormDialog);
 
+/** The delete dialogs' code, fetched the first time a Delete button is pressed (NFR-009). */
+const loadDeleteDialogs = () => import('./customer-delete-dialogs').then((module) => module.CustomerDeleteDialogs);
+
 /** Customers whose name contains what was typed, ignoring letter case and surrounding spaces. */
 export function filterCustomersByName(items: ReadonlyArray<CustomerSummaryRow>, query: string): ReadonlyArray<CustomerSummaryRow> {
   const wanted = query.trim().toLowerCase();
@@ -39,17 +43,26 @@ function useAddDialog() {
   return { open, setOpen, loader, pressed, opener, press };
 }
 
-/** The whole of SCR-12's list behaviour. The notice is replaced by the next one and cleared by the next press of a button. */
+/**
+ * The whole of SCR-12's list behaviour. The notice is replaced by the next one and cleared by the next press of a button. Two dialogs open from it, each with
+ * its own lazily fetched code (the Add dialog here, the delete dialogs in `useMasterDelete`), so the button that opened one is kept in `returnTo`, where
+ * focus returns to when either closes and after the list is read again.
+ */
 export function useCustomers(initialItems: ReadonlyArray<CustomerSummaryRow>) {
   const list = useMasterList({ readList: listCustomers, initialItems, filter: filterCustomersByName });
   const dialog = useAddDialog();
   const [notice, setNotice] = useState<PageNotice | null>(null);
-  const readAgain = useReadAgain({ status: list.status, result: list.items, opener: dialog.opener, refresh: list.refresh });
+  const returnTo = useRef<Opener | null>(null);
+  const readAgain = useReadAgain({ status: list.status, result: list.items, opener: returnTo, refresh: list.refresh });
+  const remove = useMasterDelete({ id: 'customer-delete-dialogs', load: loadDeleteDialogs, returnTo, setNotice, readAgain, deletedNotice: customerDeletedNotice, goneNotice: customerGoneNotice });
   const router = useRouter();
 
   function onAdd(byKeyboard: boolean): void {
-    const opened = dialog.press({ itemId: null, action: 'add' }, byKeyboard, () => dialog.setOpen(true));
-    if (opened) setNotice(null);
+    const from: Opener = { itemId: null, action: 'add' };
+    const opened = dialog.press(from, byKeyboard, () => dialog.setOpen(true));
+    if (!opened) return;
+    remember(returnTo, from);
+    setNotice(null);
   }
 
   /** The server added the customer: close, say so, read the list again. */
@@ -62,12 +75,13 @@ export function useCustomers(initialItems: ReadonlyArray<CustomerSummaryRow>) {
   /** Radix returns focus only to a trigger, and this dialog has none: the opener is remembered here. A list in error keeps focus on its title. */
   function onCloseAutoFocus(event: Event): void {
     event.preventDefault();
-    focusOpener(dialog.opener.current, list.status === 'error');
+    focusOpener(returnTo.current, list.status === 'error');
   }
 
   return {
     list,
     dialog,
+    remove,
     notice,
     readAgain,
     onAdd,

@@ -46,4 +46,14 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/options/assign-context': ['ADMIN', 'LEAD'],
   // STORY-05.01 (SCR-05; architecture section 6 "Set customer": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.02 (architecture section 6 "Tree", "Node", "Reorder": A L; E own, while editable): every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/tree': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/nodes': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/nodes/[nodeId]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-04.04 (architecture section 6, "Task detail": A L; E own): one task and the status of its estimate, every role, an Engineer their own only.
+  '/api/v1/tasks/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],
 };

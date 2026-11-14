@@ -76,8 +76,15 @@ describe('AC-1, AC-2: the query is strict', () => {
     ['a cursor that is not one', { cursor: 'junk' }],
     ['whose tasks to list (the scope is the session\'s)', { engineer: '00000000-0000-4000-8000-0000000000e1' }],
     ['a filter of story 04.06, which is not built yet', { q: 'hopper' }],
+    ['someone else\'s tasks by assignedBy (only "me" exists, STORY-04.03)', { assignedBy: '00000000-0000-4000-8000-0000000000b1' }],
+    ['an empty assignedBy', { assignedBy: '' }],
   ])('refuses %s', (_name, query) => {
     expect(taskQueueQuerySchema.safeParse(query).success).toBe(false);
+  });
+
+  it('reads assignedBy=me, the one filter a Lead\'s bell needs (STORY-04.03 AC-3), and leaves it out when it is not given', () => {
+    expect(taskQueueQuerySchema.parse({ tab: 'overdue', assignedBy: 'me' })).toMatchObject({ tab: 'overdue', assignedBy: 'me' });
+    expect(taskQueueQuerySchema.parse({}).assignedBy).toBeUndefined();
   });
 });
 
@@ -99,6 +106,7 @@ const queue: TaskQueue = {
   ],
   counts: { open: 1, closed: 0, overdue: 0 },
   nextCursor: null,
+  asOf: new Date('2026-11-09T04:00:00.000Z'),
 };
 
 describe('AC-8: the answer is strict and names no cost', () => {

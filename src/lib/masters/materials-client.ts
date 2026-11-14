@@ -48,3 +48,11 @@ export function updateMaterial(id: string, changes: MaterialFields, doFetch: Fet
     toMaterialRow,
   );
 }
+
+/** The reading of an answer that has no body (a 204): there is nothing to read, and it worked. */
+const readNothing = (): true => true;
+
+/** `DELETE /api/v1/materials/{id}`. The answer is 204; a 409 `MATERIAL_IN_USE` carries the open estimates that have the material (`estimateUsesOf`). */
+export function deleteMaterial(id: string, doFetch: Fetch = fetch): Promise<Outcome<true>> {
+  return sendJson(doFetch, `${MATERIALS_PATH}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: ACCEPT_JSON }, readNothing);
+}

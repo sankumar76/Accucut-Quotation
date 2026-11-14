@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
+import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService } from '@/server/services/estimate-service';
@@ -8,6 +9,7 @@ import { createEstimateService, type EstimateService } from '@/server/services/e
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { inputsDependencies } from '../../support/estimate-inputs-deps';
 
 /**
  * STORY-05.01 T3 (AC-1, AC-3, AC-4, AC-5) against real PostgreSQL in a throwaway database: the estimate service over the real repository. The workspace is read
@@ -30,7 +32,7 @@ let marlowId: string;
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), transactions: createTransactionRunner(db.prisma) });
+  service = createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions: createTransactionRunner(db.prisma), ...inputsDependencies() });
   leadId = await insertPersonAsOwner(db, 'Estimate Lead', 'LEAD');
   adminId = await insertPersonAsOwner(db, 'Estimate Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Estimate Arjun', 'ENGINEER');
@@ -163,11 +165,18 @@ describe('AC-5: the refusals leave the row as it was', () => {
     expect(await stored()).toEqual({ customerId: null, revision: 0, status: 'DRAFT' });
   });
 
-  it.each(['SUBMITTED', 'APPROVED'])('a %s estimate is a 409, even for a Lead', async (status) => {
+  it.each(['SUBMITTED', 'APPROVED'])('a %s estimate is a 409 for the Engineer', async (status) => {
     await setUpEstimate();
     await db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE id = $1::uuid', [estimateId, status]);
     await expect(service.setCustomer(arjun(), estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
+    expect(await stored()).toMatchObject({ customerId: null, revision: 0 });
+  });
+
+  it('an approved estimate is a 409 for a Lead and an Admin too (STORY-06.01: a submitted one is theirs to change, FR-064)', async () => {
+    await setUpEstimate();
+    await db.owner.query("UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid", [estimateId]);
     await expect(service.setCustomer({ id: leadId, role: 'LEAD' }, estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer({ id: adminId, role: 'ADMIN' }, estimateId, brightwaterId)).rejects.toBeInstanceOf(ConflictError);
     expect(await stored()).toMatchObject({ customerId: null, revision: 0 });
   });
 

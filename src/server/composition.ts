@@ -8,6 +8,7 @@ import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
+import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
@@ -162,13 +163,20 @@ export function getTaskService(): TaskService {
 
 /**
  * The estimate workspace (STORY-05.01): opening a task's estimate and choosing its customer. Choosing runs in one transaction with the estimate's input
- * revision, under the estimate's row lock.
+ * revision, under the estimate's row lock. From STORY-05.03 it also serves the part form and saves what is typed into a part.
  */
 export function getEstimateService(): EstimateService {
-  estimateService ??= createEstimateService({
-    estimates: createEstimateRepository(runtimeClient()),
-    transactions: createTransactionRunner(runtimeClient()),
-  });
+  if (estimateService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    estimateService = createEstimateService({
+      estimates: createEstimateRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      transactions: createTransactionRunner(runtimeClient()),
+      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
+      materials: createMasterRepository(runtimeClient()),
+      currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
+    });
+  }
   return estimateService;
 }
 

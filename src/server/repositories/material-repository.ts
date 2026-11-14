@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { isRecordNotFound, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
+import { ESTIMATE_USE_LIMIT, toEstimateUses, type EstimateUses } from './estimate-use';
 import { enforcingConstraints } from './master-constraints';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
@@ -79,6 +80,29 @@ export interface MaterialMethods {
   createMaterial(material: NewMaterial, tx: Transaction): Promise<MaterialRecord>;
   /** Changes a listed material and returns it, or null if there is none with this ID. Throws `MasterConstraintError` for a name that is taken. */
   updateMaterial(id: string, changes: MaterialChanges, tx: Transaction): Promise<MaterialRecord | null>;
+  /**
+   * The Draft and Submitted estimates that have this material in a part (STORY-02.07 AC-3): how many, and the first ten by task code. **Fails closed**: an ID that
+   * is not a UUID throws, it is never "no estimate". A plain read: it takes no lock, so it must run **after** `findMaterialForUpdate` in the same transaction. That
+   * lock waits for a writer of a part's Material in Drawing (which holds the material `FOR SHARE`, `lockMaterialForUse`) and, once granted, this statement (a new
+   * snapshot under READ COMMITTED) sees what that writer committed (AC-5).
+   *
+   * A part holds its material in `estimate_nodes.inputs`. The shape of that value belongs to the part form (STORY-05.03), so this does not depend on it: a part
+   * is a match when the material's ID, as a JSON string, is **anywhere** in its inputs. It can only over-match (an ID typed into free text), never miss a stored
+   * material, which is the safe side of a guard that protects data. The query reads the table directly, so a missing table is an error, never "unused".
+   */
+  findOpenEstimatesOfMaterial(materialId: string, tx: Transaction): Promise<EstimateUses>;
+  /**
+   * Soft-deletes a listed material (`deleted_at`, A-13) in the caller's transaction; false if there is none with this ID. The hidden "Not applicable" row is never
+   * deleted (the statement skips it, and so does a trigger). The runtime role cannot `DELETE` from `materials`; this is an `UPDATE`.
+   */
+  softDeleteMaterial(id: string, tx: Transaction): Promise<boolean>;
+  /**
+   * The lock that every **writer of a part's Material in Drawing** must take, in the transaction that writes it and **after** the estimate's row lock: the material
+   * `FOR SHARE`, found by ID with `deleted_at IS NULL` (the hidden "Not applicable" row is allowed: it is a choice). True when the material exists and is locked;
+   * false for an unknown, deleted or non-UUID ID, and the writer then refuses the choice. The delete takes the same row `FOR UPDATE`, so the two serialise
+   * (AC-5): a delete that finds the write first waits and then sees the part; a write that finds the delete first waits and then finds no material.
+   */
+  lockMaterialForUse(id: string, tx: Transaction): Promise<boolean>;
 }
 
 const MATERIAL_SELECT = {
@@ -195,6 +219,38 @@ async function changeMaterial(db: PrismaClient, id: string, changes: MaterialCha
   }
 }
 
+const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
+
+async function readOpenEstimatesOfMaterial(db: PrismaClient, materialId: string, tx: Transaction): Promise<EstimateUses> {
+  // Fails closed (SQR-02): an ID that is not a UUID is a programming fault, never "no open estimate", which would let a delete through.
+  if (!isUuid(materialId)) throw new Error('The open-estimate check needs a material ID.');
+  // The ID as PostgreSQL prints a JSON string: lower case, in double quotes. A UUID holds only hex digits and hyphens, so nothing in it is special to the text search.
+  const needle = `"${materialId.toLowerCase()}"`;
+  // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
+  const rows = await clientFor(db, tx).$queryRaw`
+    SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"
+    FROM estimates e
+    JOIN tasks t ON t.id = e.task_id
+    WHERE e.status IN ('DRAFT', 'SUBMITTED')
+      AND EXISTS (SELECT 1 FROM estimate_nodes n WHERE n.estimate_id = e.id AND position(${needle}::text IN lower(n.inputs::text)) > 0)
+    ORDER BY t.code, e.id
+    LIMIT ${ESTIMATE_USE_LIMIT}::int`;
+  return toEstimateUses(rows);
+}
+
+async function deleteListedMaterial(db: PrismaClient, id: string, tx: Transaction): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const changed = await clientFor(db, tx).$executeRaw`
+    UPDATE materials SET deleted_at = now(), updated_at = now() WHERE id = ${id}::uuid AND deleted_at IS NULL AND is_hidden = false AND is_system = false`;
+  return changed === 1;
+}
+
+async function shareMaterialRow(db: PrismaClient, id: string, tx: Transaction): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const rows = await clientFor(db, tx).$queryRaw`SELECT id::text AS "id" FROM materials WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
+  return z.array(z.strictObject({ id: z.string() })).parse(rows).length === 1;
+}
+
 /** Builds the material methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createMaterialMethods(db: PrismaClient): MaterialMethods {
   return {
@@ -211,5 +267,8 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
         enforcingConstraints(async () => toMaterialRecord(await clientFor(db, tx).material.create({ data: material, select: MATERIAL_SELECT }))),
       ),
     updateMaterial: (id, changes, tx) => withDatabaseErrors(() => enforcingConstraints(() => changeMaterial(db, id, changes, tx))),
+    findOpenEstimatesOfMaterial: (materialId, tx) => withDatabaseErrors(() => readOpenEstimatesOfMaterial(db, materialId, tx)),
+    softDeleteMaterial: (id, tx) => withDatabaseErrors(() => deleteListedMaterial(db, id, tx)),
+    lockMaterialForUse: (id, tx) => withDatabaseErrors(() => shareMaterialRow(db, id, tx)),
   };
 }

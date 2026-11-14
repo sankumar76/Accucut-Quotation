@@ -1,4 +1,12 @@
-import { ConflictError, FieldValidationError, NAME_TAKEN_CODE, NotFoundError, type FieldProblem } from '../../lib/errors';
+import {
+  ConflictError,
+  CUSTOMER_IN_USE_CODE,
+  FieldValidationError,
+  MasterInUseError,
+  NAME_TAKEN_CODE,
+  NotFoundError,
+  type FieldProblem,
+} from '../../lib/errors';
 import {
   canonicalCustomerName,
   changedContactFields,
@@ -43,10 +51,15 @@ import type { AuditContext, AuditService } from './audit-service';
  *   - **Reset to defaults** (AC-3) sets every rate that differs back to the item's current default and answers with the count; a customer that already
  *     has every default is a count of 0 and writes nothing. It is idempotent.
  *   - **A save or a reset that changes nothing writes no change and no entry** (AC-2, AC-6).
+ *   - **Delete is soft and guarded** (STORY-02.07; A-13, BR-053): a customer that a Draft or Submitted estimate has is refused with a 409 that names those estimates
+ *     (the first ten and the count), and nothing changes. An Approved estimate does not count: it keeps the customer's name and its own figures (NFR-026). The
+ *     customer's row is locked `FOR UPDATE` and **then** the estimates are read, so a request that is choosing this very customer (it holds the row `FOR SHARE`,
+ *     `estimate-repository.ts`) and the delete serialise: either the delete waits and then sees the estimate, or the choice waits and then finds no customer. Both
+ *     orders hold the customer's row last and take no estimate or task row here, so there is no cycle with the estimate service's lock order (AC-5).
  *
  * Each change is one method here and **one transaction** (STORY-01.07; architecture section 6, DEF-017): the change and its audit entry are written
- * together with the same `tx`, so the entry exists exactly when the change does, and a refused change writes none. The entries are `master.created`
- * and `master.edited` with `object_type` `customer` (architecture section 8, the AQP-142 ruling: a reset is `master.edited` too). The state is
+ * together with the same `tx`, so the entry exists exactly when the change does, and a refused change writes none. The entries are `master.created`,
+ * `master.edited` and `master.deleted` with `object_type` `customer` (architecture section 8, the AQP-142 ruling: a reset is `master.edited` too). The state is
  * `{ name, contact, rates }`: the names of the contact fields (never their values) and the rates that changed, all of them on a create. Every change
  * takes the Process Master's table lock first and then the customer's row, in that order everywhere (PRF-01), so a customer's change cannot wait on the
  * add or the delete of a Process Master item (AC-4), which takes the same lock first, and a customer added while an item is added cannot miss its rate.
@@ -81,6 +94,11 @@ export interface CustomerOperations {
   updateCustomer(context: AuditContext, id: string, changes: CustomerChanges): Promise<CustomerDetailRecord>;
   /** Every rate back to the current default; the count of the rates replaced (0 writes no entry). 404 for an unknown or deleted ID. */
   resetCustomerRates(context: AuditContext, id: string): Promise<CustomerResetResult>;
+  /**
+   * Soft-deletes the customer and writes one `master.deleted` entry in the same transaction. Refused with `MasterInUseError` (409, naming the estimates) while a
+   * Draft or Submitted estimate has the customer; 404 for an unknown or already deleted ID. Nothing is written when it is refused.
+   */
+  deleteCustomer(context: AuditContext, id: string): Promise<void>;
 }
 
 export interface CustomerDependencies {
@@ -234,6 +252,22 @@ async function reset(
   return { customer: after, count: writes.length };
 }
 
+/**
+ * The Process Master's lock first and the customer's row second (PRF-01, the same order as every other change), then the estimates that use the customer, then the
+ * delete and its entry. The entry keeps what a create's does: the name, the names of the contact fields given (never their values) and every rate.
+ */
+async function remove({ masters, audit }: CustomerDependencies, tx: Transaction, context: AuditContext, id: string): Promise<void> {
+  await masters.lockProcessItems(tx);
+  const before = await masters.findCustomerForUpdate(id, tx);
+  if (before === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
+  const open = await masters.findOpenEstimatesOfCustomer(before.id, tx);
+  if (open.total > 0) throw new MasterInUseError(CUSTOMER_IN_USE_CODE, before.name, open.estimates, open.total);
+  if (!(await masters.softDeleteCustomer(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
+  const given = CONTACT_FIELD_NAMES.filter((field) => before[field] !== null);
+  const state = auditState(before.name, given, ratesState(before.rates, (rate) => rate.value));
+  await audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: state, after: null });
+}
+
 /** The customer methods of the masters service. Nothing is read before the transaction opens, because no check needs the configuration. */
 export function createCustomerOperations(dependencies: CustomerDependencies): CustomerOperations {
   const { masters, transactions } = dependencies;
@@ -264,5 +298,7 @@ export function createCustomerOperations(dependencies: CustomerDependencies): Cu
     },
 
     resetCustomerRates: (context, id) => transactions.run((tx) => reset(dependencies, tx, context, id)),
+
+    deleteCustomer: (context, id) => transactions.run((tx) => remove(dependencies, tx, context, id)),
   };
 }

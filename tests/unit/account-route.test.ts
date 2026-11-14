@@ -32,6 +32,8 @@ vi.mock('@/server/composition', async () => {
     getUserRepository: () => shared.users,
     getUserService: () => shared.userService,
     getAccountService: () => shared.accountService,
+    // `GET /api/v1/me` reads the overdue count of the caller's role (STORY-04.03).
+    getTaskService: () => shared.taskService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
 });

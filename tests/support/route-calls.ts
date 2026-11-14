@@ -1,10 +1,10 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
-import { CUSTOMER_RECIPE_ID } from './customer-canary';
+import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary';
 import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
-import { MATERIAL_RECIPE_ID } from './material-master-canary';
+import { MATERIAL_DELETE_RECIPE, MATERIAL_RECIPE_ID } from './material-master-canary';
 import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
 /**
@@ -21,6 +21,8 @@ export interface ValidCall {
   /** The value for the `[id]` segment of the path, when the route has one. */
   readonly id: string;
   readonly body?: unknown;
+  /** The query string, with its `?`, of a route that takes its input there (a DELETE carries no body: `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=`). */
+  readonly query?: string;
   /** The status the allowed role gets. */
   readonly status: number;
 }
@@ -100,32 +102,68 @@ function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
       return { id: CUSTOMER_RECIPE_ID, body: { phone: '+99 555 0142' }, status: 200 };
     case 'POST /api/v1/customers/[id]/reset-rates':
       return { id: CUSTOMER_RECIPE_ID, status: 200 };
+    // STORY-02.07: the delete of the allowed role really deletes, so it names a customer of its own, not the canary the pages and the scan keep reading.
+    case 'DELETE /api/v1/customers/[id]':
+      return { id: CUSTOMER_DELETE_RECIPE_ID, status: 204 };
     default:
       return undefined;
   }
 }
 
 /**
- * STORY-04.01: the task routes. The Engineer is the harness's spare Engineer (`context.targetId`), who is active, and the deadline is far in the future, so the
+ * STORY-04.01, STORY-04.04: the task routes. The Engineer is the harness's spare Engineer (`context.targetId`), who is active, and the deadline is far in the future, so the
  * valid call is accepted whatever instant the held clock stands at. `GET /api/v1/options/assign-context` has no ID or body: the default call is its valid call.
  */
 function taskCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
-  if (`${method} ${path}` !== 'POST /api/v1/tasks') return undefined;
-  return {
-    id: NO_RECIPE_ID,
-    body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
-    status: 201,
-  };
+  switch (`${method} ${path}`) {
+    case 'POST /api/v1/tasks':
+      return {
+        id: NO_RECIPE_ID,
+        body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
+        status: 201,
+      };
+    // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
+    case 'GET /api/v1/tasks/[id]':
+      return { id: context.targetId, status: 200 };
+    default:
+      return undefined;
+  }
 }
 
 /**
- * STORY-05.01: the estimate route. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the customer is the
- * canary customer, which the in-memory repository of the security tests and the E2E database both hold. Choosing the customer the estimate already has is a no-op that
- * answers 200, so the scan can repeat the call at any state.
+ * STORY-05.01, STORY-05.02 and STORY-05.03: the estimate routes. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the
+ * customer is the canary customer, which the in-memory repository of the security tests and the E2E database both hold. Every call must answer the same at any state,
+ * because the matrix and the scan repeat them for each role:
+ *   - choosing the customer the estimate already has is a no-op that answers 200;
+ *   - the parts tree has one part, the canary part, whose ID is the estimate's too (one value fills every dynamic segment of a path), first at the top with revision 1.
+ *     Adding an item appends it, so the canary part stays first; moving it to where it is changes nothing and answers 200;
+ *   - a delete would remove the canary part and every later call would answer 404, so its valid call names a revision the part never has: it is refused 409 with the tree,
+ *     which is also the one answer of the tree routes that carries parts in an error body, so the confidentiality scan reads it.
  */
 function estimateCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
-  if (`${method} ${path}` !== 'PUT /api/v1/estimates/[id]/customer') return undefined;
-  return { id: context.targetId, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
+  const id = context.targetId;
+  const stay = { revision: 1, parentId: null, index: 0 };
+  switch (`${method} ${path}`) {
+    case 'PUT /api/v1/estimates/[id]/customer':
+      return { id, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
+    case 'GET /api/v1/estimates/[id]/tree':
+    case 'GET /api/v1/estimates/[id]/nodes/[nodeId]':
+    case 'GET /api/v1/estimates/[id]/form':
+      return { id, status: 200 };
+    // STORY-05.03: a save with no value changes nothing, so the canary part keeps revision 1 and the call answers 200 at any state, for every role, however often it is repeated.
+    case 'PATCH /api/v1/estimates/[id]/nodes/[nodeId]/inputs':
+      return { id, body: { revision: 1, values: {} }, status: 200 };
+    case 'POST /api/v1/estimates/[id]/nodes':
+      return { id, body: { kind: 'item' }, status: 201 };
+    case 'POST /api/v1/estimates/[id]/tree/move':
+      return { id, body: { nodeId: id, ...stay }, status: 200 };
+    case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]':
+      return { id, body: stay, status: 200 };
+    case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
+      return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
+    default:
+      return undefined;
+  }
 }
 
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
@@ -168,6 +206,9 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       };
     case 'PATCH /api/v1/materials/[id]':
       return { id: MATERIAL_RECIPE_ID, body: { scrapRate: '23.37' }, status: 200 };
+    // STORY-02.07: the delete of the allowed role really deletes, so it names a material of its own, not the canary the scan keeps reading.
+    case 'DELETE /api/v1/materials/[id]':
+      return { id: MATERIAL_DELETE_RECIPE.id, status: 204 };
     // STORY-02.04: the Exchange Rate Master route. It has no ID. The body is the pair of canary rates, which every database the scan reads holds already.
     case 'GET /api/v1/exchange-rates':
       return DEFAULT_CALL;

@@ -15,6 +15,9 @@ import {
   type TreatmentRecord,
 } from '../../src/server/repositories/master-repository';
 
+import type { EstimateUse } from '../../src/lib/errors';
+import { ESTIMATE_USE_LIMIT, type EstimateUses } from '../../src/server/repositories/estimate-use';
+
 import { createFakeCustomerMethods, type FakeCustomer } from './fake-customers';
 import { SEED_PROCESS_ITEMS } from './seed-config';
 import { FRESH_TREATMENTS } from './treatment-canary';
@@ -49,6 +52,8 @@ export interface FakeMasterRepository extends MasterRepository {
   treatmentLockCount(): number;
   /** The listed materials, mutable in the same way. There is no hidden row here: that is story 02.06's. */
   readonly materials: MutableMaterial[];
+  /** The Draft and Submitted estimates that have each material in a part, by material ID, in the order of their task code (STORY-02.07). A test sets an entry to make a material "in use". */
+  readonly materialOpenEstimates: Map<string, EstimateUse[]>;
   /** The Exchange Rate Master, mutable in the same way (STORY-02.04). Starts with no rate set. */
   readonly exchange: MutableExchangeRates;
   /** How many times the exchange rates' table lock was taken. */
@@ -67,7 +72,11 @@ export function seedRecords(): MutableProcessItem[] {
 const duplicateMaterial = (): MasterConstraintError => new MasterConstraintError('material-name', { cause: new Error('duplicate') });
 
 /** The material half of the fake: the same behaviour the service relies on (order, a name unique ignoring letter case, a lock that is a record). */
-function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => void): Pick<MasterRepository, MaterialMethod> {
+function createFakeMaterialMethods(
+  materials: MutableMaterial[],
+  openEstimates: Map<string, EstimateUse[]>,
+  onLock: () => void,
+): Pick<MasterRepository, MaterialMethod> {
   const indexOf = (id: string): number => materials.findIndex((material) => material.id.toLowerCase() === id.toLowerCase());
   const taken = (name: string, exceptId?: string): boolean =>
     materials.some((material) => material.materialInDrawing.toLowerCase() === name.toLowerCase() && material.id.toLowerCase() !== exceptId?.toLowerCase());
@@ -109,6 +118,17 @@ function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => v
       materials[index] = next;
       return Promise.resolve({ ...next });
     },
+    findOpenEstimatesOfMaterial(materialId: string): Promise<EstimateUses> {
+      const open = [...openEstimates.entries()].find(([id]) => id.toLowerCase() === materialId.toLowerCase())?.[1] ?? [];
+      return Promise.resolve({ total: open.length, estimates: open.slice(0, ESTIMATE_USE_LIMIT).map((use) => ({ ...use })) });
+    },
+    softDeleteMaterial(id: string) {
+      const index = indexOf(id);
+      if (index === -1) return Promise.resolve(false);
+      materials.splice(index, 1);
+      return Promise.resolve(true);
+    },
+    lockMaterialForUse: (id: string) => Promise.resolve(indexOf(id) !== -1),
   };
 }
 
@@ -137,7 +157,17 @@ function createFakeExchangeMethods(state: MutableExchangeRates, onLock: () => vo
 
 type ExchangeMethod = 'readExchangeRates' | 'lockExchangeRates' | 'findExchangeRatesForUpdate' | 'saveExchangeRates';
 
-type MaterialMethod = 'listMaterials' | 'listMaterialOptions' | 'findMaterialForCalculation' | 'lockMaterials' | 'findMaterialForUpdate' | 'createMaterial' | 'updateMaterial';
+type MaterialMethod =
+  | 'listMaterials'
+  | 'listMaterialOptions'
+  | 'findMaterialForCalculation'
+  | 'lockMaterials'
+  | 'findMaterialForUpdate'
+  | 'createMaterial'
+  | 'updateMaterial'
+  | 'findOpenEstimatesOfMaterial'
+  | 'softDeleteMaterial'
+  | 'lockMaterialForUse';
 
 type TreatmentMethod =
   | 'listTreatments'
@@ -202,6 +232,7 @@ export function createFakeMasterRepository(
   const records: MutableProcessItem[] = initial.map((record) => ({ ...record }));
   const customers: FakeCustomer[] = [];
   const materials: MutableMaterial[] = initialMaterials.map((material) => ({ ...material }));
+  const materialOpenEstimates = new Map<string, EstimateUse[]>();
   const treatments: MutableTreatment[] = initialTreatments.map((treatment) => ({ ...treatment }));
   let locks = 0;
   let materialLocks = 0;
@@ -214,6 +245,7 @@ export function createFakeMasterRepository(
   return {
     records,
     materials,
+    materialOpenEstimates,
     treatments,
     customers,
     exchange,
@@ -228,7 +260,7 @@ export function createFakeMasterRepository(
     ...createFakeExchangeMethods(exchange, () => {
       exchangeLocks += 1;
     }),
-    ...createFakeMaterialMethods(materials, () => {
+    ...createFakeMaterialMethods(materials, materialOpenEstimates, () => {
       materialLocks += 1;
     }),
 

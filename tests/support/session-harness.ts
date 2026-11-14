@@ -11,17 +11,18 @@ import { createEstimateService, type EstimateService } from '../../src/server/se
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
-import { CUSTOMER_CANARIES } from './customer-canary';
+import { CUSTOMER_CANARIES, CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_DELETE_RECIPE_NAME } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
+import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
-import { MATERIAL_CANARIES } from './material-master-canary';
+import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
@@ -126,18 +127,31 @@ export function createSessionHarness(): SessionHarness {
   const auditWorld = createFakeAuditWorld();
   const auditService = createAuditService({ audit: auditWorld.audit });
   // The Material Master holds the canary materials (STORY-02.03): a route that leaked a price, a gravity or a scrap rate to a role would send one.
-  const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES, [...FRESH_TREATMENTS, ...TREATMENT_CANARIES]);
+  const masters = createFakeMasterRepository(undefined, [...MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE], [...FRESH_TREATMENTS, ...TREATMENT_CANARIES]);
   // The Customer Master holds the canary customer (STORY-02.02): a route that leaked a customer's rate or contact detail to a role would send one.
   for (const canary of CUSTOMER_CANARIES) {
     const values = Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value]));
     masters.customers.push({ ...fakeCustomer(masters.records, canary.name, values, { phone: canary.phone }), id: canary.id });
   }
+  // The customer the recipe of `DELETE /api/v1/customers/{id}` deletes (STORY-02.07), kept apart so the canary above survives the Admin's valid call.
+  masters.customers.push({ ...fakeCustomer(masters.records, CUSTOMER_DELETE_RECIPE_NAME), id: CUSTOMER_DELETE_RECIPE_ID });
   // The Exchange Rate Master holds the canary rates (STORY-02.04): a route that leaked a rate to a role would send one.
   masters.exchange.usd = EXCHANGE_RATE_CANARIES.usd;
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
+  taskWorld.seed({
+    id: targetId,
+    code: canaryTaskCodeFor(targetId),
+    engineerId: idOf.ENGINEER,
+    assignedById: idOf.LEAD,
+    deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
+    title: 'Invented task',
+    notes: 'Invented notes.',
+    folderPath: CANARY_FOLDER_PATH,
+  });
   // The recipe of the estimate routes (`estimate-recipe.ts`): the harness Engineer owns a draft whose ID is `targetId` and whose code is made from it.
   const estimateWorld = createFakeEstimateWorld(
     () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, deleted: customer.deleted })),
@@ -156,6 +170,8 @@ export function createSessionHarness(): SessionHarness {
         inputsRevision: 0,
       },
     ],
+    // The one part the node routes of STORY-05.02 open: its ID is the estimate's, so the one value that fills every dynamic segment of a path names a real part of a real estimate.
+    [{ id: targetId, estimateId: targetId, parentId: null, sortIndex: 0, revision: 1, inputs: {} }],
   );
 
   return {
@@ -166,7 +182,7 @@ export function createSessionHarness(): SessionHarness {
     masters,
     taskWorld,
     estimateWorld,
-    estimateService: createEstimateService({ estimates: estimateWorld.repository, transactions: estimateWorld.transactions }),
+    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({

@@ -1,3 +1,5 @@
+import type { PartView } from './estimate/part-view';
+
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
  * map it to a response; never swallow an error silently (coding standards section 10).
@@ -157,6 +159,48 @@ export class ProcessItemInUseError extends ConflictError {
     readonly usedBy: ReadonlyArray<FormulaUse>,
   ) {
     super(`${rateName} cannot be deleted while a formula uses it`, { code: PROCESS_ITEM_IN_USE_CODE });
+  }
+}
+
+/** The `code` of the 409 of a change to a parts tree that is no longer as the person saw it (STORY-05.02 AC-6). */
+export const TREE_CHANGED_CODE = 'TREE_CHANGED';
+
+/**
+ * A part, or the count of parts under it, is no longer as the person saw it: another change got there first, so nothing was written. 409, and the body carries the
+ * tree as it is now (the same cost-free shape as a read, `tree`), so the screen can show it. It is raised only after the estimate was found to be the person's,
+ * so it never tells a stranger anything.
+ */
+export class TreeChangedError extends ConflictError {
+  constructor(readonly tree: ReadonlyArray<PartView>) {
+    super('The parts were changed by someone else. The tree has been refreshed. Check it and try again.', { code: TREE_CHANGED_CODE });
+  }
+}
+
+/** A customer was deleted while a Draft or Submitted estimate uses it (STORY-02.07 AC-2, BR-053): 409, nothing changes. */
+export const CUSTOMER_IN_USE_CODE = 'CUSTOMER_IN_USE';
+
+/** A material was deleted while a Draft or Submitted estimate uses it (STORY-02.07 AC-3, BR-053): 409, nothing changes. */
+export const MATERIAL_IN_USE_CODE = 'MATERIAL_IN_USE';
+
+/** One open estimate that uses a customer or a material, as the refusal names it: the task's code and the estimate's status. Neither is a cost figure. */
+export interface EstimateUse {
+  readonly code: string;
+  readonly status: 'DRAFT' | 'SUBMITTED';
+}
+
+/**
+ * The refusal of deleting a customer or a material that a Draft or Submitted estimate uses: 409, with the estimates named so the screen can list them
+ * (architecture section 6, "409 with the open estimates using it"). `estimates` holds the first few only; `total` is how many there are in all, so the
+ * screen can say "and N more". The message holds the master's own name, which is structure and not a value (ADR-014); no rate, price or figure is carried.
+ */
+export class MasterInUseError extends ConflictError {
+  constructor(
+    code: typeof CUSTOMER_IN_USE_CODE | typeof MATERIAL_IN_USE_CODE,
+    name: string,
+    readonly estimates: ReadonlyArray<EstimateUse>,
+    readonly total: number,
+  ) {
+    super(`${name} cannot be deleted while an open estimate uses it`, { code });
   }
 }
 

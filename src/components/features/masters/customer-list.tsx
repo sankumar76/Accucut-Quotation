@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,18 @@ import {
   CUSTOMER_HEADINGS,
   CUSTOMER_LIST_LABEL,
   CUSTOMER_REGION_LABEL,
+  DELETE_ACTION,
+  deleteCustomerLabel,
   differText,
   EDIT_ACTION,
   editCustomerLabel,
 } from './customer-texts';
+import { isOpener, type Opener } from './master-opener';
 import { BREAK_LONG_NAMES } from './master-texts';
 
 /**
- * The customers of SCR-12 (STORY-02.02 AC-1, AC-8): a masters table from 768 px (ux-spec section 6.0 "Masters tables" and "The Customers list from 768
- * px": the shared `Table` with its sticky Actions column holding **Edit only**, 68 px, until story 02.07 adds Delete; names wrap; the E-mail column is
+ * The customers of SCR-12 (STORY-02.02 AC-1, AC-8; STORY-02.07 AC-7): a masters table from 768 px (ux-spec section 6.0 "Masters tables" and "The Customers list from 768
+ * px": the shared `Table` with its sticky Actions column holding Edit and Delete, 112 px (`actionButtons={2}`); names wrap; the E-mail column is
  * hidden below 1024 px because the same value is on the edit page), and a card for each customer below it. The way in to a customer is the Edit button, named
  * `Edit <customer name>`; the name beside it is text and not a second link to the same page, so the first Tab from the table lands on a row action (the
  * masters-table rule of ux-spec section 6.0 "Tests", held by `masters-table-actions.spec.ts` for every table). It decides nothing: it draws the customers it
@@ -31,6 +34,9 @@ import { BREAK_LONG_NAMES } from './master-texts';
 export interface CustomerListProps {
   readonly items: ReadonlyArray<CustomerSummaryRow>;
   readonly onEdit: (id: string) => void;
+  /** The Delete button whose dialog is still loading: it keeps its pressed look and says it is busy (UX spec 7.3.1 rule 11). */
+  readonly pendingOpener: Opener | null;
+  readonly onDelete: (item: CustomerSummaryRow, button: HTMLButtonElement, byKeyboard: boolean) => void;
 }
 
 /** The Rates cell and line: how many differ, or that none does. Text, not colour alone. */
@@ -42,25 +48,38 @@ function NameText({ item }: { readonly item: CustomerSummaryRow }) {
   return <span className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{item.name}</span>;
 }
 
-function EditButton({ item, onEdit, compact }: Pick<CustomerListProps, 'onEdit'> & { readonly item: CustomerSummaryRow; readonly compact: boolean }) {
+/** The Edit and Delete buttons of a row: the table's are the 36 px icon buttons of dense tables, the cards' are full-size, and both are named for the customer. */
+function RowButtons({ item, onEdit, onDelete, pendingOpener, compact }: CustomerListProps & { readonly item: CustomerSummaryRow; readonly compact: boolean }) {
+  const size = compact ? 'icon-row' : 'default';
+  const variant = 'secondary';
+  // Passed only when true: an explicit `aria-busy={undefined}` would replace the one a `loading` button sets itself.
+  const busy = isOpener(pendingOpener, item.id, 'delete') ? ({ 'aria-busy': true } as const) : {};
   return (
-    <Button
-      variant="secondary"
-      size={compact ? 'icon-row' : 'default'}
-      data-action="edit"
-      aria-label={editCustomerLabel(item.name)}
-      onClick={() => onEdit(item.id)}
-    >
-      <Icon icon={Pencil} size={compact ? 'large' : 'default'} />
-      {compact ? null : EDIT_ACTION}
-    </Button>
+    <>
+      <Button variant={variant} size={size} data-action="edit" aria-label={editCustomerLabel(item.name)} onClick={() => onEdit(item.id)}>
+        <Icon icon={Pencil} size={compact ? 'large' : 'default'} />
+        {compact ? null : EDIT_ACTION}
+      </Button>
+      <Button
+        variant={variant}
+        size={size}
+        data-action="delete"
+        aria-label={deleteCustomerLabel(item.name)}
+        {...busy}
+        onClick={(event) => onDelete(item, event.currentTarget, event.detail === 0)}
+      >
+        <Icon icon={Trash2} size={compact ? 'large' : 'default'} />
+        {compact ? null : DELETE_ACTION}
+      </Button>
+    </>
   );
 }
 
-/** The table from 768 px: it scrolls inside its own container only, and its Actions column holds one button. */
-function CustomerTable({ items, onEdit }: CustomerListProps) {
+/** The table from 768 px: it scrolls inside its own container only, and its Actions column holds two buttons, Edit and Delete (112 px). */
+function CustomerTable(props: CustomerListProps) {
+  const { items } = props;
   return (
-    <Table regionLabel={CUSTOMER_REGION_LABEL} caption={CUSTOMER_LIST_LABEL} actionButtons={1}>
+    <Table regionLabel={CUSTOMER_REGION_LABEL} caption={CUSTOMER_LIST_LABEL} actionButtons={2}>
       <TableHeader>
         <TableRow>
           <TableHead>{CUSTOMER_HEADINGS.name}</TableHead>
@@ -83,7 +102,7 @@ function CustomerTable({ items, onEdit }: CustomerListProps) {
             </TableCell>
             <TableActionsCell>
               <div className="flex flex-nowrap items-center justify-end gap-s-2">
-                <EditButton item={item} onEdit={onEdit} compact />
+                <RowButtons {...props} item={item} compact />
               </div>
             </TableActionsCell>
           </TableRow>
@@ -93,8 +112,9 @@ function CustomerTable({ items, onEdit }: CustomerListProps) {
   );
 }
 
-/** A card for each customer below 768 px. */
-function CustomerCards({ items, onEdit }: CustomerListProps) {
+/** A card for each customer below 768 px. It carries the same two actions as the table (ux-spec section 6.0). */
+function CustomerCards(props: CustomerListProps) {
+  const { items } = props;
   return (
     <ul aria-label={CUSTOMER_LIST_LABEL} className="flex flex-col">
       {items.map((item) => (
@@ -107,7 +127,7 @@ function CustomerCards({ items, onEdit }: CustomerListProps) {
             </span>
           </div>
           <div className="flex flex-wrap gap-s-2">
-            <EditButton item={item} onEdit={onEdit} compact={false} />
+            <RowButtons {...props} item={item} compact={false} />
           </div>
         </li>
       ))}

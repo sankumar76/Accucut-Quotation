@@ -1,5 +1,5 @@
 import type { RoleName } from '@/lib/auth/roles';
-import type { QueueTab, TaskEstimateStatus } from '@/lib/tasks/queue';
+import type { QueueTab } from '@/lib/tasks/queue';
 
 /**
  * The words of SCR-03 "Task queue" and "My tasks" (UX spec section 6, SCR-03), written once. The empty-state sentences of the Open tab are the UX spec's, per role;
@@ -16,12 +16,20 @@ export const TABLE_REGION_LABEL = 'Tasks, scrollable table';
 export const TABLE_CAPTION = 'Tasks sorted by deadline, earliest first';
 export const LIST_LABEL = 'Tasks';
 
+/** The words in front of how late a task is (STORY-04.03 AC-1): "Overdue by 1 d 18 h". */
+export const OVERDUE_BY = 'Overdue by';
+/** Under the title when the page is cut to the tasks the person assigned (a Lead's bell, STORY-04.03 AC-3). */
+export const ASSIGNED_BY_ME_NOTE = 'Showing only the tasks you assigned.';
+export const SHOW_ALL_TASKS = 'Show all tasks';
+
 export const ASSIGN_TASK_LABEL = 'Assign task';
 export const NOT_CHOSEN_YET = 'Not chosen yet';
 export const DEADLINE_COLUMN = 'Deadline (IST)';
 /** The deadline's label on a phone's card, where the time already ends in "IST". */
 export const CARD_DEADLINE_LABEL = 'Due';
-export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by' } as const;
+export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by', actions: 'Actions' } as const;
+/** What a Lead and an Admin read in the action column of a closed task in place of the row actions (UX-20; STORY-04.05 AC-5). It is not a status badge. */
+export const CLOSED_ROW_WORD = 'Closed';
 
 export const LOADING_LABEL = 'Loading tasks';
 export const ERROR_TITLE = 'We could not load the tasks';
@@ -29,9 +37,6 @@ export const ERROR_RETRY = 'Try again';
 export const SHOW_MORE = 'Show more tasks';
 export const SHOW_MORE_FAILED_TITLE = 'We could not load more tasks';
 export const SHOW_MORE_FAILED_BODY = 'Check your connection and try again. The tasks above are unchanged.';
-
-/** The status of the estimate as a row says it, until story 04.04 words it for the Engineer. */
-export const STATUS_LABELS: Readonly<Record<TaskEstimateStatus, string>> = { DRAFT: 'Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
 
 export interface EmptyText {
   readonly title: string;

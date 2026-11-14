@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ESTIMATE_STATUSES } from '../../../lib/estimate/state-machine';
 import { DEFAULT_QUEUE_TAB, QUEUE_DEFAULT_LIMIT, QUEUE_MAX_LIMIT, QUEUE_TABS } from '../../../lib/tasks/queue';
 import { decodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '../../services/task-queue-cursor';
 
@@ -18,6 +19,9 @@ import { decodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '../../servi
 const MAX_TEXT_LENGTH = 5_000;
 
 const text = z.string().max(MAX_TEXT_LENGTH).default('');
+
+const MAX_ID_LENGTH = 100;
+
 
 /** `POST /api/v1/tasks` (AC-1, AC-3): the Engineer, the path, the deadline as `YYYY-MM-DDTHH:mm` in IST, and the optional title and notes. */
 export const assignTaskBodySchema = z.strictObject({
@@ -53,12 +57,14 @@ export const assignContextSchema = z.strictObject({ engineers: z.array(engineerS
 
 const LIMIT_MESSAGE = `The limit must be a whole number from 1 to ${QUEUE_MAX_LIMIT}.`;
 const CURSOR_MESSAGE = 'This is not a place in the list. Start again from the first page.';
+const ASSIGNED_BY_MESSAGE = 'The assignedBy filter can only be "me".';
 
 /**
- * `GET /api/v1/tasks?tab=&limit=&cursor=` (STORY-04.02 AC-1, AC-2; architecture section 6, "Tasks"). The query is a strict object, so a name that is not
- * offered is an error and is never read: in particular there is no field that names whose tasks to list (the scope comes from the session), and the filters
- * of STORY-04.06 (`assignedBy`, `engineer`, `customer`, `from`, `to`, `q`) are not accepted until that story adds them with their rules. Query strings arrive as
- * text: the limit becomes a whole number and the cursor the place it names.
+ * `GET /api/v1/tasks?tab=&limit=&cursor=&assignedBy=` (STORY-04.02 AC-1, AC-2; STORY-04.03 AC-3; architecture section 6, "Tasks"). The query is a strict object, so
+ * a name that is not offered is an error and is never read: in particular there is no field that names whose tasks to list (the scope comes from the session). Of
+ * the filters of STORY-04.06 (`assignedBy`, `engineer`, `customer`, `from`, `to`, `q`) only `assignedBy=me` exists, because a Lead's bell opens the Overdue tab
+ * with it (it names the signed-in person, never another, and can only narrow what the role may see); the rest are not accepted until that story adds them with
+ * their rules. Query strings arrive as text: the limit becomes a whole number and the cursor the place it names.
  */
 export const taskQueueQuerySchema = z.strictObject({
   tab: z.enum(QUEUE_TABS, { error: 'The tab must be open, closed or overdue.' }).default(DEFAULT_QUEUE_TAB),
@@ -80,6 +86,7 @@ export const taskQueueQuerySchema = z.strictObject({
       return position;
     })
     .optional(),
+  assignedBy: z.literal('me', { error: ASSIGNED_BY_MESSAGE }).optional(),
 });
 
 /**
@@ -97,7 +104,34 @@ const queueTaskSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///').nullable(),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+  status: z.enum(ESTIMATE_STATUSES),
+  assignedByName: z.string().min(1),
+});
+
+/** The path parameter of `/api/v1/tasks/{id}`: it only bounds the size of the text. Whether it names a task, and whose, is the service's to say, always as a 404. */
+export const taskIdParamsSchema = z.strictObject({ id: z.string().max(MAX_ID_LENGTH) });
+
+/**
+ * `GET /api/v1/tasks/{id}` (STORY-04.04 AC-1, AC-3; architecture section 6, "Task detail"): one task and the status of its estimate. The same strict schema answers an
+ * Engineer, a Lead and an Admin (one route, one schema: a Lead's or an Admin's extras come from separate routes, never from a role branch here). Every field is a name,
+ * a code, a path, a text the person typed, an instant or the status: no rate, cost, formula value, approver, price or override reason is in the schema, and a field that
+ * is not named cannot leave (NFR-002). "Approved" is the status word and carries no amount.
+ */
+export const taskDetailSchema = z.strictObject({
+  id: z.string().min(1),
+  code: z.string().regex(/^Q-\d{4}-\d{4,}$/),
+  title: z.string().nullable(),
+  /** What the person who assigned the task wrote for the Engineer; null when nothing was written. */
+  notes: z.string().nullable(),
+  engineer: engineerSchema,
+  /** Null until the Engineer chooses the customer. */
+  customerName: z.string().nullable(),
+  folderPath: z.string().min(1),
+  folderUrl: z.string().startsWith('file:///').nullable(),
+  /** An ISO 8601 instant in UTC; the screen shows it in IST. */
+  deadlineAt: z.iso.datetime(),
+  /** The status of the estimate, from `estimates.status`. The words come from `taskStatusOf`; an approved estimate is the closed task (`isTaskClosed`). */
+  status: z.enum(ESTIMATE_STATUSES),
   assignedByName: z.string().min(1),
 });
 
@@ -109,4 +143,6 @@ export const taskQueueSchema = z.strictObject({
   tasks: z.array(queueTaskSchema),
   counts: z.strictObject({ open: count, closed: count, overdue: count }),
   nextCursor: z.string().min(1).nullable(),
+  /** The instant overdue was judged at, as an ISO 8601 instant in UTC: the rows' "Overdue by" text is worded against it (STORY-04.03 AC-1). */
+  asOf: z.iso.datetime(),
 });

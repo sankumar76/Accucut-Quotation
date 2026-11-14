@@ -4,7 +4,7 @@ import type { MastersService } from '../../src/server/services/masters-service';
 import type { AuditDatabase } from './audit-database';
 
 /**
- * A masters service whose outermost transaction finishes its work (locks taken, change and audit entry written) and then WAITS, uncommitted, until the test
+ * A transaction runner whose outermost transaction finishes its work (locks taken, change and audit entry written) and then WAITS, uncommitted, until the test
  * releases it (QLT-03 of the G6 of AQP-130). A second change started meanwhile either waits for the locks the first one holds, or it does not: that is what a
  * test of serialisation needs to see, and a test that only runs two calls with `Promise.all` cannot, because the first often commits before the second reads.
  *
@@ -14,9 +14,9 @@ import type { AuditDatabase } from './audit-database';
  * @param hold resolved by the test to let the first transaction commit.
  * @param onHolding called once the first transaction's work is done and it is waiting.
  */
-export function createServiceHoldingBeforeCommit(db: AuditDatabase, hold: Promise<void>, onHolding: () => void): MastersService {
+export function createHoldingRunner(db: AuditDatabase, hold: Promise<void>, onHolding: () => void): TransactionRunner {
   const real = createTransactionRunner(db.prisma);
-  const runner: TransactionRunner = {
+  return {
     run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
       return real.run(async (tx) => {
         const result = await work(tx);
@@ -26,5 +26,9 @@ export function createServiceHoldingBeforeCommit(db: AuditDatabase, hold: Promis
       });
     },
   };
-  return db.buildMastersService({ transactions: runner });
+}
+
+/** A masters service over `createHoldingRunner`: its one change finishes its work and waits, uncommitted, until `hold` is resolved. */
+export function createServiceHoldingBeforeCommit(db: AuditDatabase, hold: Promise<void>, onHolding: () => void): MastersService {
+  return db.buildMastersService({ transactions: createHoldingRunner(db, hold, onHolding) });
 }

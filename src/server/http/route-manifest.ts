@@ -165,8 +165,8 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is
-  // story 02.07's. `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
+  // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is the Admin's too (STORY-02.07
+  // AC-6, the delete of a material no open estimate uses). `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
   // Considered, and no rate of any kind, so the cost scan covers it as an Engineer route. The nav entry is the page's, from the planned row.
   {
     path: '/masters/materials',
@@ -179,7 +179,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Masters', label: 'Materials and lists', order: 30, icon: 'package' },
   },
   { path: '/api/v1/materials', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/materials/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/materials', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-02.04 (SCR-13, the Exchange rates tab). The Admin only (BR-004); an Engineer never receives a rate (BR-003), so the route is in no Engineer list.
   // The tab is in the page of the Materials row above: no new page, no new menu entry.
@@ -192,7 +192,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // STORY-01.05 (SCR-23). Every role. The page and the change are the two routes open to a person who must set a new password first (`mustChangeAllowed`).
   { path: '/account', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-23', mustChangeAllowed: true },
   { path: '/api/v1/account/password', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', mustChangeAllowed: true },
-  // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's.
+  // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's (AC-6).
   // `/api/v1/options/customers` is the one route of the story that every role may call (AC-5): IDs and names, and no contact detail or rate of any kind, so
   // the cost scan covers it as an Engineer route.
   {
@@ -207,7 +207,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/masters/customers/[id]', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1', screen: 'SCR-12' },
   { path: '/api/v1/customers', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/customers/[id]/reset-rates', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/customers', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-04.01 (SCR-04). A Lead and an Admin assign (BR-004); an Engineer is refused on all three, with 403 for the routes and SCR-26 for the page (AC-5). The
@@ -227,12 +227,26 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // same path, one per method, because the roles differ: the POST row above stays Lead and Admin, so an Engineer's POST is still the fixed 403 before the body is read.
   // The answer is cut to the caller's own tasks by the service, from the session, and parsed with a strict schema that names no cost.
   { path: '/api/v1/tasks', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-04.04. One task and the status of its estimate: every role, because an Engineer's own task is the same call (architecture section 6, "Task detail": A L, E own).
+  // One route, one schema: a Lead and an Admin are answered with the same shape, and an Engineer's other-person task is the same 404 as a task that does not exist. `PATCH`
+  // (reassign) is story 04.07's and will be its own row, for the Lead and the Admin only.
+  { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
   // for any other, a Lead and an Admin a short header until SCR-06 (STORY-06.02). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
   // draft, an Engineer on their own while it is a draft (architecture section 6 "Set customer"), so it is in the Engineer's list and the cost scan calls it.
   { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-05' },
   { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-05.02 (SCR-05's parts tree; architecture section 6 "Tree", "Node", "Reorder"): A L, and an Engineer on their own estimate; a write only while this person may change its inputs (`assertEditable`, STORY-06.01). One response
+  // schema per route for every role, with no figure in it, so every one is in the Engineer's list and the cost scan calls it.
+  { path: '/api/v1/estimates/[id]/tree', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/tree/move', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/nodes', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]', kind: 'api', methods: ['GET', 'PUT', 'DELETE'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-05.03 (SCR-05's part form; architecture section 6 "Estimate form", "Save inputs"): A L, and an Engineer on their own estimate; a save only while this person may change its inputs. The form is built
+  // from the registry through one strict schema with no rate, cost or formula in it, and a save answers with the part's revision and what is stored, so both are in the Engineer's list and the cost scan calls them.
+  { path: '/api/v1/estimates/[id]/form', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/inputs', kind: 'api', methods: ['PATCH'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },

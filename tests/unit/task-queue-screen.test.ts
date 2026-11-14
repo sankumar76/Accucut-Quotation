@@ -30,16 +30,20 @@ const row = (overrides: Partial<QueueRowData> = {}): QueueRowData => ({
   ...overrides,
 });
 
+/** The instant the server judged overdue at: three days before the deadline of `row()`, so no default row is overdue. */
+const AS_OF = '2026-11-09T04:00:00.000Z';
+
 const page = (tasks: ReadonlyArray<QueueRowData>, overrides: Partial<QueuePageData> = {}): QueuePageData => ({
   tab: 'open',
   tasks,
   counts: { open: tasks.length, closed: 1, overdue: 2 },
   nextCursor: null,
+  asOf: AS_OF,
   ...overrides,
 });
 
-const screen = (role: RoleName, data: QueuePageData): string => renderToStaticMarkup(createElement(QueueScreen, { role, initialPage: data }));
-const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>): string => renderToStaticMarkup(createElement(QueueList, { role, tasks }));
+const screen = (role: RoleName, data: QueuePageData, assignedByMe = false): string => renderToStaticMarkup(createElement(QueueScreen, { role, initialPage: data, assignedByMe }));
+const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>, asOf: string = AS_OF): string => renderToStaticMarkup(createElement(QueueList, { role, tasks, asOf }));
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
 describe('AC-1: three tabs with counts, and the sort note', () => {
@@ -193,5 +197,64 @@ describe('AC-4: empty states by role and tab', () => {
   it('offers more tasks only while the server says more follow', () => {
     expect(screen('LEAD', page([row()], { nextCursor: 'abc' }))).toContain('Show more tasks');
     expect(screen('LEAD', page([row()]))).not.toContain('Show more tasks');
+  });
+});
+
+/** An instant 1 d 18 h after the deadline of `row()` (11:30 UTC on 12 November): the UX spec's example. */
+const LATE = '2026-11-14T05:30:00.000Z';
+
+describe('STORY-04.03 AC-1: an overdue row has the clock icon, "Overdue by", and the amber bar and tint, together', () => {
+  it('says "Overdue by 1 d 18 h" with a clock icon, a bar and a tint on the row of the table and on the card', () => {
+    const html = list('ENGINEER', [row()], LATE);
+    // One in the table and one on the phone's card (only one of the two is shown at any width).
+    expect(occurrences(html, 'data-overdue-marker')).toBe(2);
+    expect(occurrences(html, 'Overdue by 1 d 18 h')).toBe(2);
+    expect(occurrences(html, 'lucide-clock')).toBe(2);
+    expect(occurrences(html, 'border-l-accent')).toBe(2);
+    expect(occurrences(html, 'bg-accent-soft')).toBe(2);
+  });
+
+  it('marks nothing on a row whose deadline has not passed, and on the instant of the deadline itself (strict, as the queue is)', () => {
+    for (const asOf of [AS_OF, '2026-11-12T11:30:00.000Z']) {
+      const html = list('LEAD', [row()], asOf);
+      expect(html).not.toContain('data-overdue-marker');
+      expect(html).not.toContain('Overdue by');
+      expect(html).not.toContain('bg-accent-soft');
+    }
+  });
+
+  it('marks it from the next millisecond, and says "less than 1 min" then', () => {
+    expect(list('LEAD', [row()], '2026-11-12T11:30:00.001Z')).toContain('Overdue by less than 1 min');
+  });
+
+  it('never marks a closed (approved) task, whatever its deadline', () => {
+    expect(list('LEAD', [row({ status: 'APPROVED' })], LATE)).not.toContain('Overdue by');
+  });
+
+  it('marks the late rows and only them in one list', () => {
+    const html = list('LEAD', [row(), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', deadlineAt: '2026-11-20T11:30:00.000Z' })], LATE);
+    expect(occurrences(html, 'Overdue by 1 d 18 h')).toBe(2);
+    expect(occurrences(html, 'data-overdue-marker')).toBe(2);
+  });
+});
+
+describe('STORY-04.03 AC-1: the Overdue tab says how many tasks are overdue, in the singular where it is 1', () => {
+  it('adds the summary notice on the Overdue tab, "1 task is overdue" and "3 tasks are overdue"', () => {
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 1, closed: 0, overdue: 1 }, asOf: LATE }))).toContain('1 task is overdue');
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 3, closed: 0, overdue: 3 }, asOf: LATE }))).toContain('3 tasks are overdue');
+  });
+
+  it('has no summary notice on the other tabs', () => {
+    expect(screen('LEAD', page([row()], { tab: 'open', counts: { open: 1, closed: 0, overdue: 3 } }))).not.toContain('tasks are overdue');
+  });
+});
+
+describe('STORY-04.03 AC-3: the Lead\'s Overdue tab from the bell says it shows the tasks that Lead assigned', () => {
+  it('says so, with a way back to every task, only when it is cut that way', () => {
+    const cut = screen('LEAD', page([row()], { tab: 'overdue' }), true);
+    expect(cut).toContain('Showing only the tasks you assigned.');
+    expect(cut).toContain('href="/queue"');
+    expect(cut).toContain('Show all tasks');
+    expect(screen('LEAD', page([row()], { tab: 'overdue' }))).not.toContain('Showing only the tasks you assigned.');
   });
 });

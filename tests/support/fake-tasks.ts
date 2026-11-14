@@ -4,6 +4,8 @@ import type {
   EstimateStatus,
   NewTask,
   QueueRow,
+  QueueScope,
+  TaskDetailRow,
   TaskRecord,
   TaskRepository,
 } from '../../src/server/repositories/task-repository';
@@ -21,11 +23,14 @@ import { createTransactionHandle, type Transaction, type TransactionRunner } fro
 
 /** A task put in directly, for a test of the queue. */
 export interface SeededTask {
+  /** A fixed ID, for a recipe that names the task by it (`estimate-recipe.ts`); otherwise the next invented one. */
+  readonly id?: string;
   readonly code: string;
   readonly engineerId: string;
   readonly assignedById: string;
   readonly deadlineAt: Date;
   readonly title?: string | null;
+  readonly notes?: string | null;
   readonly folderPath?: string;
   readonly status?: EstimateStatus;
   readonly customerId?: string | null;
@@ -50,6 +55,8 @@ export interface FakeTaskWorld {
   readonly customers: Map<string, string>;
   /** Puts a task and its estimate in directly (any deadline, any status) and returns the task. */
   seed(task: SeededTask): TaskRecord;
+  /** Puts the estimate of a task into another status, as an approval, an unlock or a calculation would (a test of the status words). */
+  setStatus(taskId: string, status: EstimateStatus): void;
   /** Makes the next `createEstimate` fail once with this error, after the task and the number were written (a late failure). */
   failNextEstimateWith(error: Error): void;
 }
@@ -93,20 +100,33 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const inTab = (row: QueueRow, tab: 'open' | 'closed' | 'overdue', now: Date): boolean =>
     tab === 'closed' ? row.status === 'APPROVED' : row.status !== 'APPROVED' && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
 
+  /** The rows of a scope: one Engineer's own, the ones one person assigned, both, or all (the same cut as `scopeFilter` of the real repository). */
+  const inScope = (scope: QueueScope): QueueRow[] => {
+    const assignedBy = new Map(tasks.map((task) => [task.id, task.assignedById]));
+    return queueRows().filter((row) => (scope.engineerId === null || row.engineer.id === scope.engineerId) && (scope.assignedById === null || assignedBy.get(row.id) === scope.assignedById));
+  };
+
   const repository: TaskRepository = {
+    findTask: (id, scope) => {
+      const row = inScope(scope).find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+      const task = row === undefined ? undefined : tasks.find((candidate) => candidate.id === row.id);
+      const detail: TaskDetailRow | null = row === undefined || task === undefined ? null : { ...row, notes: task.notes };
+      return Promise.resolve(detail);
+    },
     listQueue: ({ tab, scope, now, limit, after }) => {
       const earlier = (row: QueueRow): boolean =>
         after === null || row.deadlineAt.getTime() > after.deadlineAt.getTime() || (row.deadlineAt.getTime() === after.deadlineAt.getTime() && row.code > after.code);
-      const rows = queueRows()
-        .filter((row) => (scope.engineerId === null || row.engineer.id === scope.engineerId) && inTab(row, tab, now) && earlier(row))
+      const rows = inScope(scope)
+        .filter((row) => inTab(row, tab, now) && earlier(row))
         .sort((a, b) => a.deadlineAt.getTime() - b.deadlineAt.getTime() || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
       return Promise.resolve(rows.slice(0, limit));
     },
     countQueue: (scope, now) => {
-      const mine = queueRows().filter((row) => scope.engineerId === null || row.engineer.id === scope.engineerId);
+      const mine = inScope(scope);
       const count = (tab: 'open' | 'closed' | 'overdue'): number => mine.filter((row) => inTab(row, tab, now)).length;
       return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
     },
+    countOverdue: (scope, now) => Promise.resolve(inScope(scope).filter((row) => inTab(row, 'overdue', now)).length),
     listActiveEngineers: () =>
       Promise.resolve(
         people()
@@ -170,13 +190,19 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
         folderPath: seeded.folderPath ?? '\\\\invented-server\\invented-share\\RFQ-1',
         deadlineAt: seeded.deadlineAt,
         title: seeded.title ?? null,
-        notes: null,
-        id: nextId(),
+        notes: seeded.notes ?? null,
+        id: seeded.id ?? nextId(),
         assignmentRevision: 1,
       };
       tasks.push(task);
       estimates.push({ id: nextId(), taskId: task.id, customerId: seeded.customerId ?? null, status: seeded.status ?? 'DRAFT' });
       return task;
+    },
+    setStatus(taskId, status) {
+      const index = estimates.findIndex((estimate) => estimate.taskId === taskId);
+      const held = estimates[index];
+      if (held === undefined) throw new Error('The task has no estimate to change.');
+      estimates.splice(index, 1, { ...held, status });
     },
     failNextEstimateWith(error) {
       failure = error;
