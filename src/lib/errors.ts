@@ -1,3 +1,5 @@
+import type { PartView } from './estimate/part-view';
+
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
  * map it to a response; never swallow an error silently (coding standards section 10).
