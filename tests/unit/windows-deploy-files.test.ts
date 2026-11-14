@@ -149,13 +149,39 @@ describe('the scripts (AC-1, AC-5)', () => {
     }
   });
 
-  it('check the zip hash before anything else is done, and lock the settings file before it is filled', () => {
+  it('install: checks the zip, makes a fresh locked folder, checks the COPY of the zip, then reads only from the unpacked copy (security review)', () => {
     const install = code('deploy/windows/install.ps1');
-    const hashAt = install.indexOf('Initialize-AccucutPackage -ZipPath $ZipPath');
-    expect(hashAt).toBeGreaterThan(0);
-    for (const later of ['New-Item -ItemType Directory', 'Write-AccucutSecureFile', 'Invoke-AccucutPsql']) {
-      expect(install.indexOf(later, install.indexOf('function Invoke-AccucutInstall')), later).toBeGreaterThan(hashAt);
+    const first = install.slice(install.indexOf('function Initialize-AccucutVerifiedRelease'), install.indexOf('function Get-AccucutPostgresInstall'));
+    const order = [
+      'Get-FileHash -LiteralPath $ZipPath',
+      'Assert-AccucutFreshRoot -Root $Root',
+      'New-Item -ItemType Directory -Path $full | Out-Null',
+      'Set-AccucutDirectoryAcl -Path $full',
+      'Copy-Item -LiteralPath $ZipPath -Destination $copy',
+      'Get-FileHash -LiteralPath $copy',
+      'Expand-AccucutBootstrapZip -ZipPath $copy',
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = first.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
     }
+    // The folder is refused unless new, or empty and owned by Administrators or SYSTEM; the owner is set to Administrators.
+    expect(install).toContain("@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner");
+    expect(install).toMatch(/SetOwner\(\(New-Object System\.Security\.Principal\.SecurityIdentifier\(\[System\.Security\.Principal\.WellKnownSidType\]::BuiltinAdministratorsSid/);
+    // The second half never touches the folder IT unpacked into or the zip: it has no zip parameter and copies no tree.
+    const second = install.slice(install.indexOf('function Invoke-AccucutInstall'), install.indexOf('function Start-AccucutInstall'));
+    expect(second).not.toContain('$ZipPath');
+    expect(second).not.toContain('Copy-AccucutTree');
+    expect(second).toContain('Assert-AccucutFolderTrusted -Path $paths.Root');
+    expect(second).toContain("(Join-Path $PackageRoot '.env.example')");
+    expect(second).toContain("Join-Path $releaseDirectory 'sql\\create-roles.psql'");
+    // The entry point runs the copy of the script that is in the unpacked release.
+    expect(install).toContain("$verifiedScript = Join-Path $verified 'install.ps1'");
+  });
+
+  it('settings files: locked before they are filled', () => {
     const ops = code('deploy/windows/AccucutOps.psm1');
     expect(ops.indexOf('WriteAllBytes($Path')).toBeLessThan(ops.indexOf('Set-AccucutFileAcl -Path $Path'));
     expect(ops.indexOf('Set-AccucutFileAcl -Path $Path')).toBeLessThan(ops.indexOf('WriteAllText($Path'));
@@ -163,6 +189,15 @@ describe('the scripts (AC-1, AC-5)', () => {
 
   it('the update takes the backup before it stops anything, and rolls the junction back on a failed health check', () => {
     const update = code('deploy/windows/update.ps1');
+    // Security review: the install folder is checked before anything is written, and the zip is copied in and its COPY checked before it is unpacked.
+    const trustAt = update.indexOf('Assert-AccucutInstallTrusted -Paths $paths');
+    expect(trustAt).toBeGreaterThan(0);
+    expect(update.indexOf('Assert-AccucutUpdateRunsFromInstall -Paths $paths')).toBeGreaterThan(0);
+    expect(trustAt).toBeLessThan(update.indexOf('Invoke-AccucutReleaseBackup -Paths $paths'));
+    const copyAt = update.indexOf('Copy-Item -LiteralPath $ZipPath -Destination $copy');
+    expect(copyAt).toBeGreaterThan(trustAt);
+    expect(update.indexOf('Assert-AccucutSha256 -Path $copy')).toBeGreaterThan(copyAt);
+    expect(update.indexOf('Expand-AccucutZip -ZipPath $copy')).toBeGreaterThan(update.indexOf('Assert-AccucutSha256 -Path $copy'));
     expect(update.indexOf('Invoke-AccucutReleaseBackup -Paths $paths')).toBeLessThan(update.indexOf('Stop-AccucutServices\n'));
     expect(update).toContain("Call your IT person");
     expect(update.indexOf('Set-AccucutCurrentRelease -Paths $paths -Tag $oldTag')).toBeGreaterThan(update.indexOf('Set-AccucutCurrentRelease -Paths $paths -Tag $newTag'));

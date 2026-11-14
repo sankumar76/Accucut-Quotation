@@ -43,6 +43,8 @@ listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you insta
 | Step | Result |
 |------|--------|
 | Checks | The zip's SHA-256 (nothing is changed if it differs), Node.js 22.12 or later, PostgreSQL 17. Unblocks the scripts. |
+| The install folder | `C:\Accucut` must **not exist yet**, or be an **empty** folder owned by Administrators or SYSTEM. A folder that someone else made or filled is refused (they could keep control of it and get their files run by a service). The install makes it, owns it as Administrators and closes it to everyone but Administrators and SYSTEM before anything else is put in it. |
+| The zip, twice | It copies the zip into that locked folder, checks the SHA-256 of the **copy**, and unpacks the copy to `C:\Accucut\releases\<tag>`. From then on every file it reads or runs (this script, the module, `.env.example`, the SQL, WinSW and the programs) comes from that folder, never from the folder you unpacked into. |
 | Refuses | To run twice, and to touch a database called `accucut` or roles `accucut_app` or `accucut_owner` that already exist. It never changes existing data. |
 | Settings | `C:\Accucut\config\.env` for the web app and the worker, and `C:\Accucut\config\migrate.env` (the owner database role and the first Admin) for the install and update scripts only. Both are created empty, locked, and only then filled. |
 | Database | Creates the database and the two roles from `sql\create-roles.psql`, runs the migrations as the owner role, loads the field registry, creates the first Admin. |
@@ -76,8 +78,10 @@ cd C:\Accucut\current
 .\update.ps1 C:\path\to\accucut-<new-tag>-win-x64.zip
 ```
 
-It checks the zip's SHA-256, takes a **release backup** (`backup.ps1 -Reason release`), unpacks the new release, stops the two services,
-migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and the previous release are kept.
+It must be run from `C:\Accucut\current` (it refuses to run from the folder you unpacked the new zip into). It first checks that every folder it
+writes to is still owned by Administrators or SYSTEM and writable by no one else, and refuses if not. Then it checks the zip's SHA-256, takes a
+**release backup** (`backup.ps1 -Reason release`), copies the zip into `C:\Accucut\releases`, checks the copy and unpacks it, stops the two
+services, migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and the previous release are kept.
 
 - **No backup script yet** (before STORY-10.05): the update refuses. If you accept that nothing can be restored if it goes wrong, add `-NoBackup`.
 - **If the migrations fail**, the junction is not moved and the previous release starts again.

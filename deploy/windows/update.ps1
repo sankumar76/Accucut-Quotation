@@ -44,34 +44,16 @@ Set-StrictMode -Version 2.0
 $script:ScriptRoot = $PSScriptRoot
 Import-Module (Join-Path $script:ScriptRoot 'AccucutOps.psm1') -Force -DisableNameChecking
 
-function Expand-AccucutZip {
-    <# Unpacks a zip into an empty folder, refusing any entry that would land outside it. #>
+function Assert-AccucutUpdateRunsFromInstall {
+    <# This script and the shared module it loaded must come from the install folder (normally C:\Accucut\current), not from a folder anyone could have changed. #>
     [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$ZipPath,
-        [Parameter(Mandatory)][string]$Destination
-    )
+    param([Parameter(Mandatory)][object]$Paths)
 
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $root = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\') + '\'
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
-    try {
-        foreach ($entry in $archive.Entries) {
-            $target = [System.IO.Path]::GetFullPath((Join-Path $Destination $entry.FullName))
-            if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { throw "The zip holds an entry outside its folder ('$($entry.FullName)'). Refusing to unpack it." }
-            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
-                if (-not (Test-Path -LiteralPath $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
-                continue
-            }
-            $parent = Split-Path -Parent $target
-            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
-        }
+    $here = [System.IO.Path]::GetFullPath($script:ScriptRoot).TrimEnd('\') + '\'
+    foreach ($base in $Paths.Current, $Paths.Releases) {
+        if ($here.StartsWith(([System.IO.Path]::GetFullPath($base).TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase)) { return }
     }
-    finally {
-        $archive.Dispose()
-    }
+    throw "Run this script from the install folder, not from the folder you unpacked the new zip into: cd $($Paths.Current); .\update.ps1 <the new zip>. Nothing was changed."
 }
 
 function Invoke-AccucutReleaseBackup {
@@ -143,6 +125,10 @@ function Invoke-AccucutUpdate {
     if ([string]::IsNullOrWhiteSpace($ZipPath)) { throw 'Give the new release zip: update.ps1 <zip>. Its SHA-256 is checked first.' }
     $paths = Get-AccucutPaths -Root $Root
     if (-not (Test-Path -LiteralPath $paths.StateFile)) { throw "No install was found under '$($paths.Root)'. Run install.ps1 first." }
+    # Before anything is written: this script comes from the install folder, and every folder it writes to is still owned by Administrators or SYSTEM
+    # and writable by no one else (an ordinary user who had gained rights there could otherwise get their files run by a service).
+    Assert-AccucutUpdateRunsFromInstall -Paths $paths
+    Assert-AccucutInstallTrusted -Paths $paths
     $state = Get-Content -LiteralPath $paths.StateFile -Raw | ConvertFrom-Json
 
     # 1. The zip's hash, before anything is changed.
@@ -173,24 +159,31 @@ function Invoke-AccucutUpdate {
 
     # 3. Unpack beside the running release.
     Assert-AccucutFreeSpace -Path $paths.Releases -MinimumBytes ((Get-Item -LiteralPath $ZipPath).Length * 4 + 512MB)
+    # The zip is copied into the install folder (which only administrators can write) and the COPY is checked again and unpacked, so the file that
+    # is unpacked is the file that was checked, even if the original is changed in between.
     $incoming = Join-Path $paths.Releases ".in-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $newTag = $null
     try {
-        Expand-AccucutZip -ZipPath $ZipPath -Destination $incoming
-        $info = Read-AccucutReleaseInfo -PackageRoot $incoming
+        New-Item -ItemType Directory -Path $incoming | Out-Null
+        $copy = Join-Path $incoming 'package.zip'
+        Copy-Item -LiteralPath $ZipPath -Destination $copy
+        Assert-AccucutSha256 -Path $copy -Expected $expected
+        $unpacked = Join-Path $incoming 'unpacked'
+        Expand-AccucutZip -ZipPath $copy -Destination $unpacked
+        $info = Read-AccucutReleaseInfo -PackageRoot $unpacked
         $newTag = [string]$info.tag
         $target = Join-Path $paths.Releases $newTag
         if (Test-Path -LiteralPath $target) {
             $recorded = Join-Path $target '.zip-sha256'
             $same = (Test-Path -LiteralPath $recorded) -and ((Get-Content -LiteralPath $recorded -TotalCount 1).Trim() -eq $zipHash)
             if (-not $same) { throw "A release folder named '$newTag' already exists and was made from a different zip. Nothing was changed." }
-            Remove-AccucutDirectory -Path $incoming -Within $paths.Releases
             Write-AccucutLog -Message "Release $newTag is already unpacked from this same zip; reusing it." -LogFile $logFile
         }
         else {
-            [System.IO.Directory]::Move($incoming, $target)
+            [System.IO.Directory]::Move($unpacked, $target)
             Set-Content -LiteralPath (Join-Path $target '.zip-sha256') -Value $zipHash -Encoding ASCII
         }
+        Remove-AccucutDirectory -Path $incoming -Within $paths.Releases
     }
     catch {
         if (Test-Path -LiteralPath $incoming) { Remove-AccucutDirectory -Path $incoming -Within $paths.Releases }

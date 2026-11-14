@@ -35,30 +35,183 @@ BeforeAll {
 Describe 'install.ps1 refuses before it changes anything (AC-1, AC-5)' {
     It 'stops when it is not run as an administrator' {
         Mock Test-InstallerIsAdministrator { $false }
-        { Invoke-AccucutInstall -ZipPath 'x.zip' -Root (Join-Path $TestDrive 'a1') } | Should -Throw '*as an administrator*'
+        { Start-AccucutInstall -ZipPath 'x.zip' -Root (Join-Path $TestDrive 'a1') } | Should -Throw '*as an administrator*'
         Test-Path -LiteralPath (Join-Path $TestDrive 'a1') | Should -BeFalse
     }
 
     It 'stops when no zip is given, or its SHA-256 is missing or wrong, and creates nothing' {
         Mock Test-InstallerIsAdministrator { $true }
         $root = Join-Path $TestDrive 'a2'
-        { Invoke-AccucutInstall -Root $root } | Should -Throw '*Give the release zip*'
+        { Start-AccucutInstall -Root $root } | Should -Throw '*Give the release zip*'
         $zip = Join-Path $TestDrive 'pkg.zip'
         [System.IO.File]::WriteAllText($zip, 'a stand-in for a zip')
-        { Invoke-AccucutInstall -ZipPath $zip -Root $root } | Should -Throw '*No SHA-256 given*'
-        { Invoke-AccucutInstall -ZipPath $zip -Sha256 ('0' * 64) -Root $root } | Should -Throw '*does not match*Nothing was changed*'
+        { Start-AccucutInstall -ZipPath $zip -Root $root } | Should -Throw '*No SHA-256 given*'
+        { Start-AccucutInstall -ZipPath $zip -Sha256 ('0' * 64) -Root $root } | Should -Throw '*does not match*Nothing was changed*'
         Test-Path -LiteralPath $root | Should -BeFalse
+    }
+}
+
+Describe 'the first half: a locked install folder and a release unpacked from the checked zip (security review)' {
+    BeforeAll {
+        # A small but real release zip: what the first half reads from it is what the test looks for afterwards.
+        function New-TestReleaseZip {
+            param([string]$Name, [string]$Tag)
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $source = Join-Path $TestDrive "src-$Name"
+            New-Item -ItemType Directory -Path (Join-Path $source 'sql'), (Join-Path $source 'bin') -Force | Out-Null
+            [System.IO.File]::WriteAllText((Join-Path $source 'release.json'), "{ `"tag`": `"$Tag`" }")
+            [System.IO.File]::WriteAllText((Join-Path $source 'install.ps1'), '# the real script, from the zip')
+            [System.IO.File]::WriteAllText((Join-Path $source 'AccucutOps.psm1'), '# the real module, from the zip')
+            [System.IO.File]::WriteAllText((Join-Path $source '.env.example'), 'APP_ORIGIN=http://localhost:3000')
+            [System.IO.File]::WriteAllText((Join-Path $source 'sql\create-roles.psql'), '-- the real SQL, from the zip')
+            $zip = Join-Path $TestDrive "$Name.zip"
+            [System.IO.Compression.ZipFile]::CreateFromDirectory($source, $zip)
+            return $zip
+        }
+        $script:Zip = New-TestReleaseZip -Name 'good' -Tag 't-ok'
+        $script:ZipHash = (Get-FileHash -LiteralPath $script:Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    BeforeEach {
+        Mock Set-AccucutDirectoryAcl { }
+        Mock Get-AccucutPathOwner { 'S-1-5-32-544' }
+    }
+
+    It 'makes a new install folder, locks it, copies the zip in, checks the copy and unpacks the copy: every file comes from the release folder' {
+        $root = Join-Path $TestDrive 'fresh-root'
+        $release = Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root
+        $release | Should -Be (Join-Path $root 'releases\t-ok')
+        Get-Content -LiteralPath (Join-Path $release 'install.ps1') -Raw | Should -BeLike '*from the zip*'
+        (Get-Content -LiteralPath (Join-Path $release '.zip-sha256') -Raw).Trim() | Should -Be $script:ZipHash
+        Test-Path -LiteralPath (Join-Path $root '.in') | Should -BeFalse
+        Should -Invoke Set-AccucutDirectoryAcl -Times 1 -Exactly -ParameterFilter { $Path -eq $root }
     }
 
     It 'takes the expected hash from the .sha256 file next to the zip' {
-        $zip = Join-Path $TestDrive 'pkg2.zip'
-        [System.IO.File]::WriteAllText($zip, 'another stand-in')
-        $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-        [System.IO.File]::WriteAllText("$zip.sha256", "$hash  pkg2.zip`n")
-        Mock Import-Module { }
-        { Initialize-AccucutPackage -ZipPath $zip -PackageRoot $TestDrive } | Should -Not -Throw
-        [System.IO.File]::WriteAllText("$zip.sha256", ('f' * 64) + "  pkg2.zip`n")
-        { Initialize-AccucutPackage -ZipPath $zip -PackageRoot $TestDrive } | Should -Throw '*does not match*'
+        $zip = Join-Path $TestDrive 'withfile.zip'
+        Copy-Item -LiteralPath $script:Zip -Destination $zip
+        [System.IO.File]::WriteAllText("$zip.sha256", "$($script:ZipHash)  withfile.zip`n")
+        { Initialize-AccucutVerifiedRelease -ZipPath $zip -Root (Join-Path $TestDrive 'root-sha-file') } | Should -Not -Throw
+        [System.IO.File]::WriteAllText("$zip.sha256", ('f' * 64) + "  withfile.zip`n")
+        { Initialize-AccucutVerifiedRelease -ZipPath $zip -Root (Join-Path $TestDrive 'root-sha-file-2') } | Should -Throw '*does not match*'
+        Test-Path -LiteralPath (Join-Path $TestDrive 'root-sha-file-2') | Should -BeFalse
+    }
+
+    It 'accepts an existing EMPTY folder owned by Administrators, and locks it (owner and list reset)' {
+        $root = Join-Path $TestDrive 'empty-admin-root'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root | Should -Be (Join-Path $root 'releases\t-ok')
+        Should -Invoke Set-AccucutDirectoryAcl -Times 1 -Exactly -ParameterFilter { $Path -eq $root }
+    }
+
+    It 'accepts an empty folder owned by SYSTEM' {
+        Mock Get-AccucutPathOwner { 'S-1-5-18' }
+        $root = Join-Path $TestDrive 'empty-system-root'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Not -Throw
+    }
+
+    It 'refuses a folder that already holds anything, changes nothing in it, and does not lock it' {
+        $root = Join-Path $TestDrive 'busy-root'
+        New-Item -ItemType Directory -Path (Join-Path $root 'releases') -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $root 'planted.txt'), 'planted by someone else')
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*not empty*Nothing was changed*'
+        Should -Invoke Set-AccucutDirectoryAcl -Times 0 -Exactly
+        Get-Content -LiteralPath (Join-Path $root 'planted.txt') -Raw | Should -Be 'planted by someone else'
+        Test-Path -LiteralPath (Join-Path $root 'releases\t-ok') | Should -BeFalse
+    }
+
+    It 'refuses an existing folder owned by someone else, even when it is empty' {
+        Mock Get-AccucutPathOwner { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
+        $root = Join-Path $TestDrive 'foreign-root'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*owned by S-1-5-21-1111111111-2222222222-3333333333-1001, not by Administrators or SYSTEM*'
+        Should -Invoke Set-AccucutDirectoryAcl -Times 0 -Exactly
+        @(Get-ChildItem -LiteralPath $root -Force).Count | Should -Be 0
+    }
+
+    It 'refuses a link (a junction) in place of the folder, a file, and a path that is not a full local path' {
+        $target = Join-Path $TestDrive 'link-target'
+        New-Item -ItemType Directory -Path $target | Out-Null
+        $junction = Join-Path $TestDrive 'link-root'
+        New-Item -ItemType Junction -Path $junction -Target $target | Out-Null
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $junction } | Should -Throw '*is a link*'
+        $file = Join-Path $TestDrive 'a-file-root'
+        [System.IO.File]::WriteAllText($file, 'x')
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $file } | Should -Throw '*exists and is a file*'
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root 'relative\accucut' } | Should -Throw '*full local path*'
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root '\\server\share\accucut' } | Should -Throw '*full local path*'
+        @(Get-ChildItem -LiteralPath $target -Force).Count | Should -Be 0
+        Should -Invoke Set-AccucutDirectoryAcl -Times 0 -Exactly
+    }
+
+    It 'does not use a tampered unpacked folder that sits next to a valid zip: only the zip is read' {
+        $tampered = Join-Path $TestDrive 'unpacked-and-tampered'
+        New-Item -ItemType Directory -Path (Join-Path $tampered 'sql') -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $tampered 'release.json'), '{ "tag": "evil" }')
+        [System.IO.File]::WriteAllText((Join-Path $tampered 'install.ps1'), '# EVIL script')
+        [System.IO.File]::WriteAllText((Join-Path $tampered 'sql\create-roles.psql'), '-- EVIL SQL')
+        $root = Join-Path $TestDrive 'root-with-tampered-neighbour'
+        $release = Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root
+        Split-Path -Leaf $release | Should -Be 't-ok'
+        Test-Path -LiteralPath (Join-Path $root 'releases\evil') | Should -BeFalse
+        Get-Content -LiteralPath (Join-Path $release 'install.ps1') -Raw | Should -Not -BeLike '*EVIL*'
+        Get-Content -LiteralPath (Join-Path $release 'sql\create-roles.psql') -Raw | Should -Not -BeLike '*EVIL*'
+        Get-Content -LiteralPath (Join-Path $release 'release.json') -Raw | Should -BeLike '*t-ok*'
+    }
+
+    It 'a zip that is swapped after its first check is caught by the check of the copy, and what was made is removed again' {
+        Mock Copy-Item { [System.IO.File]::WriteAllText($Destination, 'swapped for something else') }
+        $root = Join-Path $TestDrive 'root-with-swap'
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*copy of the zip does not match*'
+        Test-Path -LiteralPath $root | Should -BeFalse
+    }
+
+    It 'a zip whose entry climbs out of the folder is refused and nothing is left behind' {
+        Add-Type -AssemblyName System.IO.Compression
+        $evil = Join-Path $TestDrive 'climbing.zip'
+        $stream = [System.IO.File]::Create($evil)
+        $archive = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Create)
+        $entry = $archive.CreateEntry('..\..\escaped.txt')
+        $writer = New-Object System.IO.StreamWriter($entry.Open())
+        $writer.Write('x')
+        $writer.Dispose()
+        $archive.Dispose()
+        $stream.Dispose()
+        $hash = (Get-FileHash -LiteralPath $evil -Algorithm SHA256).Hash.ToLowerInvariant()
+        $root = Join-Path $TestDrive 'root-climbing'
+        { Initialize-AccucutVerifiedRelease -ZipPath $evil -Sha256 $hash -Root $root } | Should -Throw '*outside its folder*'
+        Test-Path -LiteralPath $root | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $TestDrive 'escaped.txt') | Should -BeFalse
+    }
+
+    It 'runs the copy of install.ps1 from the verified release folder, passing it where that is' {
+        $verified = Join-Path $TestDrive 'verified-release'
+        New-Item -ItemType Directory -Path $verified | Out-Null
+        $marker = Join-Path $TestDrive 'second-half-ran.txt'
+        [System.IO.File]::WriteAllText((Join-Path $verified 'install.ps1'), "param(`$VerifiedRelease)`n[System.IO.File]::WriteAllText('$marker', `$VerifiedRelease)`nexit 0`n")
+        Mock Test-InstallerIsAdministrator { $true }
+        Mock Initialize-AccucutVerifiedRelease { $verified }
+        Start-AccucutInstall -ZipPath 'ignored.zip' -Root (Join-Path $TestDrive 'any-root')
+        Get-Content -LiteralPath $marker -Raw | Should -Be $verified
+    }
+
+    It 'fails when the second half does not finish' {
+        $verified = Join-Path $TestDrive 'verified-release-2'
+        New-Item -ItemType Directory -Path $verified | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $verified 'install.ps1'), "param(`$VerifiedRelease)`nexit 1`n")
+        Mock Test-InstallerIsAdministrator { $true }
+        Mock Initialize-AccucutVerifiedRelease { $verified }
+        { Start-AccucutInstall -ZipPath 'ignored.zip' -Root (Join-Path $TestDrive 'any-root-2') } | Should -Throw '*did not finish*'
+    }
+
+    It 'the second half refuses to run from anywhere but the verified release folder' {
+        Mock Test-InstallerIsAdministrator { $true }
+        $root = Join-Path $TestDrive 'second-half-root'
+        $elsewhere = Join-Path $TestDrive 'unpacked-elsewhere'
+        New-Item -ItemType Directory -Path $elsewhere, (Join-Path $root 'releases\t-x') -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $elsewhere 'release.json'), '{ "tag": "t-x" }')
+        { Invoke-AccucutInstall -NonInteractive -Root $root -PackageRoot $elsewhere } | Should -Throw '*not the verified release folder*'
     }
 }
 
@@ -180,30 +333,32 @@ Describe 'Windows Defender (AC-7)' {
     }
 }
 
-Describe 'a failed install leaves nothing behind that this run made (AC-1)' {
+Describe 'the second half reads only from the verified release folder, and a failed install leaves nothing behind (AC-1, security review)' {
     BeforeAll {
         $script:LoggedMessages = New-Object System.Collections.Generic.List[string]
+
+        # What the first half leaves: the locked install folder with the unpacked release in releases\<tag>. The content of the folder that IT
+        # unpacked the zip into (here, $script:Unverified) is deliberately different and must never be read.
+        function New-VerifiedReleaseFolder {
+            param([string]$Name, [string]$Tag)
+            $root = Join-Path $TestDrive $Name
+            $release = Join-Path $root "releases\$Tag"
+            New-Item -ItemType Directory -Path (Join-Path $release 'sql') -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $script:WindowsDirectory '..\..\.env.example') -Destination (Join-Path $release '.env.example')
+            Set-Content -LiteralPath (Join-Path $release 'sql\create-roles.psql') -Value '-- the verified SQL'
+            return [pscustomobject]@{ Root = $root; Release = $release }
+        }
+        $script:Unverified = Join-Path $TestDrive 'unverified-unpacked'
+        New-Item -ItemType Directory -Path $script:Unverified | Out-Null
+        Set-Content -LiteralPath (Join-Path $script:Unverified '.env.example') -Value 'APP_ORIGIN=http://evil.example'
     }
 
-    It 'drops the database and roles that it created, never reveals a secret, and re-throws' {
-        $root = Join-Path $TestDrive 'failing-install'
-        $package = Join-Path $TestDrive 'package'
-        New-Item -ItemType Directory -Path (Join-Path $package 'sql') -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $script:WindowsDirectory '..\..\.env.example') -Destination (Join-Path $package '.env.example')
-        Set-Content -LiteralPath (Join-Path $package 'sql\create-roles.psql') -Value '-- stand-in'
-        $values = Write-FakeValuesFile -Name 'failing-values.txt'
-        $zip = Join-Path $TestDrive 'stand-in.zip'
-        [System.IO.File]::WriteAllText($zip, 'a stand-in for the release zip')
-        $script:LoggedMessages.Clear()
-
+    BeforeEach {
         Mock Test-InstallerIsAdministrator { $true }
-        Mock Initialize-AccucutPackage { }
-        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-fail' } }
+        Mock Assert-AccucutFolderTrusted { }
         Mock Get-Command { [pscustomobject]@{ Source = 'C:\fake\node.exe' } } -ParameterFilter { $Name -eq 'node' }
         Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'C:\fake\pg\data'; ServiceStatus = 'Running' } }
         Mock Get-Service { $null }
-        Mock Set-AccucutDirectoryAcl { }
-        Mock Copy-AccucutTree { New-Item -ItemType Directory -Path $Destination -Force | Out-Null }
         Mock Set-AccucutCurrentRelease { }
         Mock Write-AccucutSecureFile { }
         Mock Invoke-AccucutNative {
@@ -217,52 +372,70 @@ Describe 'a failed install leaves nothing behind that this run made (AC-1)' {
         }
         Mock Invoke-AccucutMigration { throw 'migration failed on purpose' }
         Mock Write-AccucutLog { $script:LoggedMessages.Add($Message) }
+        $script:LoggedMessages.Clear()
+    }
 
-        { Invoke-AccucutInstall -ZipPath $zip -ValuesFile $values -NonInteractive -Root $root -PackageRoot $package } | Should -Throw '*migration failed on purpose*'
+    It 'every file it reads or runs after the check comes from the release folder, never from the folder IT unpacked into' {
+        $folders = New-VerifiedReleaseFolder -Name 'reads-install' -Tag 't-fail'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-fail' } }
+        $values = Write-FakeValuesFile -Name 'reads-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*migration failed on purpose*'
+        # (A ? in a pattern stands for the path separator, so the filters hold no backslash.)
+        Should -Invoke Read-AccucutReleaseInfo -Times 1 -Exactly -ParameterFilter { $PackageRoot -like '*reads-install?releases?t-fail' }
+        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $File -like '*reads-install?releases?t-fail?sql?create-roles.psql' }
+        Should -Invoke Invoke-AccucutMigration -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*reads-install?releases?t-fail' }
+        Should -Invoke Assert-AccucutFolderTrusted -Times 1 -Exactly -ParameterFilter { $Path -like '*reads-install' }
+        # The unverified folder was never named: no call mentions it.
+        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { "$File $Command" -like '*unverified-unpacked*' }
+        Should -Invoke Invoke-AccucutMigration -Times 0 -Exactly -ParameterFilter { $ReleaseDirectory -like '*unverified-unpacked*' }
+        # Its .env.example (evil.example) was not the template: no setting came from it.
+        Should -Invoke Write-AccucutSecureFile -Times 2 -Exactly -ParameterFilter { ($Line -join "`n") -notlike '*evil.example*' }
+    }
+
+    It 'drops the database and roles that it created, clears the folders it made, never reveals a secret, and re-throws' {
+        $folders = New-VerifiedReleaseFolder -Name 'failing-install' -Tag 't-fail'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-fail' } }
+        $values = Write-FakeValuesFile -Name 'failing-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*migration failed on purpose*'
 
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -like 'CREATE DATABASE*' }
-        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $File -like '*create-roles.psql' }
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -like 'DROP DATABASE IF EXISTS*' }
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -like 'DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;' }
-        # The failure happened before any service was registered, so nothing was started.
+        # The failure happened before any service was registered, so nothing was started, and the install folder is empty again.
         Should -Invoke Invoke-AccucutNative -Times 0 -Exactly -ParameterFilter { $FilePath -like '*Accucut*.exe' }
+        @(Get-ChildItem -LiteralPath $folders.Root -Force).Count | Should -Be 0
         $script:LoggedMessages | Should -Not -BeNullOrEmpty
         foreach ($secret in $script:FakeOwnerPassword, $script:FakeAppPassword, $script:FakeAdminPassword, $script:FakePgPassword) {
             ($script:LoggedMessages -join "`n") | Should -Not -BeLike "*$secret*"
         }
     }
 
-    It 'refuses to start when the portal is already installed, and changes nothing' {
-        $root = Join-Path $TestDrive 'installed-already'
-        $paths = Get-AccucutPaths -Root $root
-        New-Item -ItemType Directory -Path $paths.Config -Force | Out-Null
-        Set-Content -LiteralPath $paths.EnvFile -Value 'A=1'
-        $package = Join-Path $TestDrive 'package'
-        Mock Test-InstallerIsAdministrator { $true }
-        Mock Initialize-AccucutPackage { }
+    It 'refuses to start when the services of an install already exist, and clears only what this run made' {
+        $folders = New-VerifiedReleaseFolder -Name 'installed-already' -Tag 't-again'
         Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-again' } }
-        Mock Get-Command { [pscustomobject]@{ Source = 'C:\fake\node.exe' } } -ParameterFilter { $Name -eq 'node' }
-        Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'C:\fake\pg\data'; ServiceStatus = 'Running' } }
-        Mock Invoke-AccucutNative {
-            if ($FilePath -like '*node.exe') { return [pscustomobject]@{ ExitCode = 0; Output = 'v22.12.0' } }
-            return [pscustomobject]@{ ExitCode = 0; Output = 'psql (PostgreSQL) 17.2' }
-        }
+        Mock Get-Service { [pscustomobject]@{ Name = 'AccucutApp' } }
         Mock Invoke-AccucutPsql { '' }
-        Mock Write-AccucutSecureFile { }
-        { Invoke-AccucutInstall -ZipPath 'ignored.zip' -NonInteractive -Root $root -PackageRoot $package } | Should -Throw '*already installed*run update.ps1*'
+        { Invoke-AccucutInstall -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*already exist*update.ps1*'
         Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly
         Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
-        (Get-Content -LiteralPath $paths.EnvFile -Raw).Trim() | Should -Be 'A=1'
     }
 
-    It 'stops on an old Node.js or a PostgreSQL that is not 17, before the first change' {
-        Mock Test-InstallerIsAdministrator { $true }
-        Mock Initialize-AccucutPackage { }
+    It 'stops on an old Node.js before any change, and leaves the install folder empty so that the install can be run again' {
+        $folders = New-VerifiedReleaseFolder -Name 'old-node' -Tag 't-old'
         Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-old' } }
-        Mock Get-Command { [pscustomobject]@{ Source = 'C:\fake\node.exe' } } -ParameterFilter { $Name -eq 'node' }
         Mock Invoke-AccucutNative { [pscustomobject]@{ ExitCode = 0; Output = 'v20.18.0' } }
-        $root = Join-Path $TestDrive 'old-node'
-        { Invoke-AccucutInstall -ZipPath 'ignored.zip' -NonInteractive -Root $root -PackageRoot $TestDrive } | Should -Throw '*too old*'
-        Test-Path -LiteralPath $root | Should -BeFalse
+        { Invoke-AccucutInstall -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*too old*'
+        @(Get-ChildItem -LiteralPath $folders.Root -Force).Count | Should -Be 0
+        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly
+    }
+
+    It 'a folder that the install made is unusable by anyone else afterwards: the install folder is checked as trusted before anything is written' {
+        $folders = New-VerifiedReleaseFolder -Name 'untrusted' -Tag 't-bad'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-bad' } }
+        Mock Assert-AccucutFolderTrusted { throw 'is owned by S-1-5-21-9-9-9-1001' }
+        { Invoke-AccucutInstall -NonInteractive -Root $folders.Root -PackageRoot $folders.Release } | Should -Throw '*owned by*'
+        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly
+        Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
     }
 }
+

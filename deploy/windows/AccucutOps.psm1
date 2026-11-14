@@ -467,6 +467,30 @@ function Read-AccucutEnvFile {
     return $values
 }
 
+function Get-AccucutServiceSid {
+    <#
+    The SID of a Windows service's own account (NT SERVICE\<name>), worked out from the name: S-1-5-80 plus the five 32-bit parts of the SHA-1 of the
+    upper-case name in UTF-16. Windows does the same, so it needs no look-up, and it works before the service is registered. A look-up by the name
+    NT SERVICE\<name> failed on the build runner, so permissions are always set by this SID.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Name)
+
+    $sha = [System.Security.Cryptography.SHA1]::Create()
+    try { $hash = $sha.ComputeHash([System.Text.Encoding]::Unicode.GetBytes($Name.ToUpperInvariant())) } finally { $sha.Dispose() }
+    $parts = foreach ($index in 0..4) { [System.BitConverter]::ToUInt32($hash, 4 * $index) }
+    return 'S-1-5-80-' + ($parts -join '-')
+}
+
+function ConvertTo-AccucutIdentity {
+    <# An account name or a SID in text, as the object that a permission rule needs. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Account)
+
+    if ($Account -match '^S-1-\d+(-\d+)+$') { return (New-Object System.Security.Principal.SecurityIdentifier($Account)) }
+    return (New-Object System.Security.Principal.NTAccount($Account))
+}
+
 function Set-AccucutFileAcl {
     <#
     Makes a file readable by Administrators and the named accounts only: inheritance is cut and no other entry is kept.
@@ -483,7 +507,7 @@ function Set-AccucutFileAcl {
     $administrators = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
     $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($administrators, 'FullControl', 'Allow')))
     foreach ($account in $ReadAccount) {
-        $identity = New-Object System.Security.Principal.NTAccount($account)
+        $identity = ConvertTo-AccucutIdentity -Account $account
         $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'Read', 'Allow')))
     }
     [System.IO.File]::SetAccessControl($Path, $security)
@@ -829,6 +853,92 @@ function Initialize-AccucutServiceFiles {
     return , $changed.ToArray()
 }
 
+function Expand-AccucutZip {
+    <# Unpacks a zip into a new folder, refusing any entry that would land outside it. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ZipPath,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $root = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\') + '\'
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        foreach ($entry in $archive.Entries) {
+            $target = [System.IO.Path]::GetFullPath((Join-Path $Destination $entry.FullName))
+            if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { throw "The zip holds an entry outside its folder ('$($entry.FullName)'). Refusing to unpack it." }
+            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
+                if (-not (Test-Path -LiteralPath $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+                continue
+            }
+            $parent = Split-Path -Parent $target
+            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+function Get-AccucutFolderOwnerSid {
+    <# The SID of the owner of a folder, as text. A function of its own, so that Pester can mock it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $security = [System.IO.Directory]::GetAccessControl($Path, [System.Security.AccessControl.AccessControlSections]::Owner)
+    return $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+}
+
+function Assert-AccucutFolderTrusted {
+    <#
+    Stops with an error unless a folder can be trusted to hold program files and settings: it is a real folder (not a link), it is owned by
+    Administrators or SYSTEM, and no allow rule gives anyone else a right to write, delete, change permissions or take ownership. The accounts in
+    -AllowedWriter (for example the two service accounts, for the logs folder) are the only exceptions. Run by update.ps1 before it writes anything.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$AllowedWriter = @()
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "The folder '$Path' does not exist." }
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$Path' is a link, not a real folder. Refusing to use it." }
+    $trusted = @('S-1-5-32-544', 'S-1-5-18')
+    $owner = Get-AccucutFolderOwnerSid -Path $Path
+    if ($trusted -notcontains $owner) { throw "'$Path' is owned by $owner, not by Administrators or SYSTEM. Someone else controls it, so it is not safe to install into. Refusing to go on." }
+
+    $allowed = New-Object System.Collections.Generic.List[string]
+    $allowed.AddRange([string[]]$trusted)
+    foreach ($account in $AllowedWriter) {
+        try { $allowed.Add((ConvertTo-AccucutIdentity -Account $account).Translate([System.Security.Principal.SecurityIdentifier]).Value) } catch { continue }
+    }
+    $writeMask = [int]([System.Security.AccessControl.FileSystemRights]::WriteData -bor [System.Security.AccessControl.FileSystemRights]::AppendData -bor
+        [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+        [System.Security.AccessControl.FileSystemRights]::Delete -bor [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+        [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor [System.Security.AccessControl.FileSystemRights]::TakeOwnership)
+    $security = [System.IO.Directory]::GetAccessControl($Path)
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        if (($allowed -notcontains $rule.IdentityReference.Value) -and (([int]$rule.FileSystemRights -band $writeMask) -ne 0)) {
+            throw "'$Path' can be changed by $($rule.IdentityReference.Value), who is not an administrator. It is not safe to install into. Refusing to go on."
+        }
+    }
+}
+
+function Assert-AccucutInstallTrusted {
+    <# Runs Assert-AccucutFolderTrusted on every folder that update.ps1 writes to: the install folder, releases, config, services and logs. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Paths)
+
+    $serviceAccounts = @($script:ServiceNames | ForEach-Object { Get-AccucutServiceSid -Name $_ })
+    foreach ($folder in @($Paths.Root, $Paths.Releases, $Paths.Config, $Paths.Services)) { Assert-AccucutFolderTrusted -Path $folder }
+    Assert-AccucutFolderTrusted -Path $Paths.Logs -AllowedWriter $serviceAccounts
+}
+
 function Invoke-AccucutMigration {
     <#
     The `migrate` step (architecture sections 5.6 and 9.9): `prisma migrate deploy` as the owner role, then ensure-seed-version.
@@ -868,8 +978,9 @@ Export-ModuleMember -Function @(
     'Read-AccucutHostInput', 'Read-AccucutSecretInput',
     'New-AccucutSecret', 'Register-AccucutSecret', 'Hide-AccucutSecrets', 'Write-AccucutLog', 'ConvertTo-AccucutArgumentString', 'Invoke-AccucutNative',
     'Read-AccucutValuesFile', 'Read-AccucutEnvTemplate', 'Format-AccucutEnvValue', 'Split-AccucutEnvValues', 'Read-AccucutEnvFile',
-    'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
+    'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
+    'Expand-AccucutZip', 'Get-AccucutFolderOwnerSid', 'Assert-AccucutFolderTrusted', 'Assert-AccucutInstallTrusted',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration'
 )

@@ -331,3 +331,71 @@ Describe 'the migrate step (AC-1, AC-5)' {
         Should -Invoke Invoke-AccucutNative -ModuleName AccucutOps -Times 0 -Exactly -ParameterFilter { ($ArgumentList -join ' ') -like '*FAKEownerPassword1*' }
     }
 }
+
+Describe 'service accounts by SID' {
+    It 'works out the SID of a service account from its name, as Windows does' {
+        # The well-known SID of NT SERVICE\TrustedInstaller is the published example of this rule.
+        Get-AccucutServiceSid -Name 'TrustedInstaller' | Should -Be 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
+        Get-AccucutServiceSid -Name 'trustedinstaller' | Should -Be (Get-AccucutServiceSid -Name 'TrustedInstaller')
+        Get-AccucutServiceSid -Name 'AccucutApp' | Should -Match '^S-1-5-80(-\d+){5}$'
+        Get-AccucutServiceSid -Name 'AccucutApp' | Should -Not -Be (Get-AccucutServiceSid -Name 'AccucutWorker')
+    }
+
+    It 'turns a SID in text into a SID and a name into an account' {
+        (ConvertTo-AccucutIdentity -Account 'S-1-5-32-544') | Should -BeOfType ([System.Security.Principal.SecurityIdentifier])
+        (ConvertTo-AccucutIdentity -Account 'NT AUTHORITY\SYSTEM') | Should -BeOfType ([System.Security.Principal.NTAccount])
+    }
+}
+
+Describe 'a folder is trusted only if administrators alone control it (update.ps1 checks this before it writes; security review)' {
+    BeforeEach {
+        $script:Folder = Join-Path $TestDrive ('trusted-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        New-Item -ItemType Directory -Path $script:Folder | Out-Null
+        Mock -ModuleName AccucutOps Get-AccucutFolderOwnerSid { 'S-1-5-32-544' }
+    }
+
+    It 'refuses a folder whose owner is not Administrators or SYSTEM' {
+        Mock -ModuleName AccucutOps Get-AccucutFolderOwnerSid { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
+        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Throw '*is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*Refusing*'
+    }
+
+    It 'refuses a link, and a folder that does not exist' {
+        $target = Join-Path $TestDrive 'trust-link-target'
+        New-Item -ItemType Directory -Path $target | Out-Null
+        $junction = Join-Path $TestDrive 'trust-link'
+        New-Item -ItemType Junction -Path $junction -Target $target | Out-Null
+        { Assert-AccucutFolderTrusted -Path $junction } | Should -Throw '*is a link*'
+        { Assert-AccucutFolderTrusted -Path (Join-Path $TestDrive 'no-such-folder') } | Should -Throw '*does not exist*'
+    }
+
+    It 'accepts a folder that only Administrators and SYSTEM can change, refuses one that Users can change, and honours a named exception' -Skip:(-not $script:IsAdmin) {
+        $security = New-Object System.Security.AccessControl.DirectorySecurity
+        $security.SetAccessRuleProtection($true, $false)
+        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        $none = [System.Security.AccessControl.PropagationFlags]::None
+        foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
+            $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier($sid)), 'FullControl', $inherit, $none, 'Allow')))
+        }
+        $users = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'ReadAndExecute', $inherit, $none, 'Allow')))
+        [System.IO.Directory]::SetAccessControl($script:Folder, $security)
+        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Not -Throw
+
+        $writable = [System.IO.Directory]::GetAccessControl($script:Folder)
+        $writable.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'Modify', $inherit, $none, 'Allow')))
+        [System.IO.Directory]::SetAccessControl($script:Folder, $writable)
+        { Assert-AccucutFolderTrusted -Path $script:Folder } | Should -Throw '*can be changed by S-1-5-32-545*Refusing*'
+        { Assert-AccucutFolderTrusted -Path $script:Folder -AllowedWriter @('S-1-5-32-545') } | Should -Not -Throw
+    }
+
+    It 'checks every folder that update.ps1 writes to, and lets only the two service accounts write to the logs' {
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'trusted-install')
+        Mock -ModuleName AccucutOps Assert-AccucutFolderTrusted { }
+        Assert-AccucutInstallTrusted -Paths $paths
+        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 5 -Exactly
+        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 4 -Exactly -ParameterFilter { $AllowedWriter.Count -eq 0 }
+        Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter {
+            $Path -like '*logs' -and $AllowedWriter.Count -eq 2 -and ($AllowedWriter | Where-Object { $_ -notmatch '^S-1-5-80(-\d+){5}$' }).Count -eq 0
+        }
+    }
+}

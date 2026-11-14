@@ -8,8 +8,13 @@
 
   What it does, in this order, and stops at the first problem:
     1.  Checks the SHA-256 of the zip, before anything else. A changed zip is refused and nothing is touched.
-    2.  Unblocks the scripts of the package, then checks the Node.js and PostgreSQL versions.
-    3.  Refuses to go on if the portal is already installed here (use update.ps1) or the database already exists (it never touches existing data).
+    2.  Makes the install folder: it must not exist, or be an EMPTY folder owned by Administrators or SYSTEM (a folder that someone else made, or
+        filled, could be kept under their control, so it is refused). It is owned by Administrators and locked to Administrators and SYSTEM at once.
+    3.  Copies the zip into that locked folder, checks the SHA-256 of the COPY, and unpacks the copy to C:\Accucut\releases\<tag>\. From here on every
+        file it reads or runs (this script itself, the shared module, .env.example, the SQL, WinSW, Node's programs) comes from that folder, never from
+        the folder you unpacked into, which anyone could have changed after the check. It then starts the copy of this script from there.
+    4.  Checks the Node.js and PostgreSQL versions. Refuses to go on if the portal is already installed here (use update.ps1) or the database already
+        exists (it never touches existing data).
     4.  Asks for the few values it cannot invent (or reads them from -ValuesFile), invents the rest, and writes
           C:\Accucut\config\.env         the settings of the app and the worker. Administrators and the two service accounts can read it.
           C:\Accucut\config\migrate.env  the owner database role's connection string and the first Admin. Administrators only.
@@ -54,8 +59,8 @@
   Ask (default), Yes or No: whether to exclude the PostgreSQL data folder from Windows Defender real-time scanning. With -NonInteractive, Ask means No.
 .PARAMETER HealthTimeoutSeconds
   How long to wait for /api/health. Default 180.
-.PARAMETER PackageRoot
-  The unpacked package (default: the folder of this script). For tests.
+.PARAMETER VerifiedRelease
+  Used by the script itself, never by you: the verified release folder under C:\Accucut\releases that the second half of the install runs from.
 #>
 [CmdletBinding()]
 param(
@@ -74,7 +79,7 @@ param(
     [string]$PgDataDirectory,
     [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
     [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
-    [string]$PackageRoot
+    [string]$VerifiedRelease
 )
 
 Set-StrictMode -Version 2.0
@@ -91,16 +96,106 @@ function Test-InstallerIsAdministrator {
     return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Initialize-AccucutPackage {
-    <# Checks the zip's SHA-256 (before any change), unblocks the package's scripts and programs, and loads the shared module. #>
+# ---- First half: nothing here uses the shared module or any other file of the unpacked folder. The unpacked folder is not trusted: anyone
+# ---- who could write to it could change a file after the zip was checked. These functions use PowerShell's own commands only.
+
+function Get-AccucutPathOwner {
+    <# The owner of a folder as a SID (text). A function of its own, so that Pester can mock it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $security = [System.IO.Directory]::GetAccessControl($Path, [System.Security.AccessControl.AccessControlSections]::Owner)
+    return $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+}
+
+function Assert-AccucutFreshRoot {
+    <#
+    The install folder must not exist, or must be an EMPTY real folder owned by Administrators or SYSTEM. Anything else could be under the control
+    of a user who is not an administrator (they could have made the folder, or put a file or a link in it, and kept their rights), and the install
+    would then run programs from it as a service. Returns 'New' or 'Empty'.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Root)
+
+    if ($Root.StartsWith('\\') -or -not [System.IO.Path]::IsPathRooted($Root)) { throw "The install folder '$Root' must be a full local path such as C:\Accucut." }
+    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    if ($full.Length -le 3) { throw 'The install folder cannot be the root of a drive.' }
+    if (-not (Test-Path -LiteralPath $full)) { return 'New' }
+    $item = Get-Item -LiteralPath $full -Force
+    if (-not $item.PSIsContainer) { throw "'$full' exists and is a file. Nothing was changed." }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$full' is a link, not a real folder. Nothing was changed." }
+    $owner = Get-AccucutPathOwner -Path $full
+    if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner) {
+        throw "'$full' already exists and is owned by $owner, not by Administrators or SYSTEM. A folder made by someone else is not trusted. Nothing was changed. Rename or delete it, or choose another -Root."
+    }
+    if (@(Get-ChildItem -LiteralPath $full -Force).Count -gt 0) {
+        throw "'$full' already exists and is not empty. The install only uses a folder it makes itself, or an empty one owned by Administrators. Nothing was changed. If it is an earlier install, use update.ps1."
+    }
+    return 'Empty'
+}
+
+function Expand-AccucutBootstrapZip {
+    <# Unpacks a zip into a new folder, refusing any entry that would land outside it. (The shared module has the same function; it cannot be used yet.) #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ZipPath,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $root = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\') + '\'
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        foreach ($entry in $archive.Entries) {
+            $target = [System.IO.Path]::GetFullPath((Join-Path $Destination $entry.FullName))
+            if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { throw "The zip holds an entry outside its folder ('$($entry.FullName)'). Refusing to unpack it." }
+            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
+                if (-not (Test-Path -LiteralPath $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+                continue
+            }
+            $parent = Split-Path -Parent $target
+            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+function Remove-AccucutBootstrapFolder {
+    <# Deletes a folder this run made inside the install folder, with `rd` on a \\?\ path. Refuses a folder that is not directly inside -Within. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Within
+    )
+
+    $full = [System.IO.Path]::GetFullPath($Path).TrimEnd('\')
+    $parent = [System.IO.Path]::GetFullPath($Within).TrimEnd('\')
+    if ((Split-Path -Parent $full) -ne $parent) { throw "Refusing to delete '$full': it is not directly inside '$parent'." }
+    if (Test-Path -LiteralPath $full) { & "$env:SystemRoot\System32\cmd.exe" /c rd /s /q "\\?\$full" }
+}
+
+function Initialize-AccucutVerifiedRelease {
+    <#
+    The first half of the install. In this order, changing nothing until the zip's hash matches:
+      1. the zip's SHA-256 (the file you gave);
+      2. the install folder: new, or empty and owned by Administrators or SYSTEM (Assert-AccucutFreshRoot);
+      3. the folder is made (or kept), owned by Administrators and locked to Administrators and SYSTEM, and must still be empty;
+      4. the zip is COPIED into the locked folder and the SHA-256 of the COPY is checked (so the file that is unpacked is the file that was checked);
+      5. the copy is unpacked to releases\<tag>.
+    Returns the verified release folder. If a step fails, what this run made is removed again.
+    #>
     [CmdletBinding()]
     param(
         [string]$ZipPath,
         [string]$Sha256,
-        [Parameter(Mandatory)][string]$PackageRoot
+        [Parameter(Mandatory)][string]$Root
     )
 
-    if ([string]::IsNullOrWhiteSpace($ZipPath)) { throw 'Give the release zip: install.ps1 -ZipPath <the zip you unpacked>. Its SHA-256 is checked first.' }
+    if ([string]::IsNullOrWhiteSpace($ZipPath)) { throw 'Give the release zip: install.ps1 -ZipPath <the release zip>. Its SHA-256 is checked first.' }
     if (-not (Test-Path -LiteralPath $ZipPath -PathType Leaf)) { throw "The zip '$ZipPath' was not found." }
     $expected = $Sha256
     if ([string]::IsNullOrWhiteSpace($expected)) {
@@ -110,18 +205,54 @@ function Initialize-AccucutPackage {
         $expected = ($first.Trim() -split '\s+')[0]
     }
     if ($expected -notmatch '^[0-9A-Fa-f]{64}$') { throw 'The expected SHA-256 is not 64 hexadecimal characters.' }
+    $expected = $expected.ToLowerInvariant()
     $actual = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $expected.ToLowerInvariant()) {
-        throw "The SHA-256 of the zip does not match (expected $($expected.ToLowerInvariant()), the file is $actual). Nothing was changed. Download the release again."
-    }
+    if ($actual -ne $expected) { throw "The SHA-256 of the zip does not match (expected $expected, the file is $actual). Nothing was changed. Download the release again." }
     Write-Host "SHA-256 of $(Split-Path -Leaf $ZipPath) matches."
 
-    # The scripts and the two programs only: Node does not look at the downloaded-file mark, and node_modules holds thousands of files.
-    $toUnblock = @(Get-ChildItem -LiteralPath $PackageRoot -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.ps1', '.psm1' })
-    $binFolder = Join-Path $PackageRoot 'bin'
-    if (Test-Path -LiteralPath $binFolder) { $toUnblock += @(Get-ChildItem -LiteralPath $binFolder -File -ErrorAction SilentlyContinue) }
-    foreach ($file in $toUnblock) { Unblock-File -LiteralPath $file.FullName -ErrorAction SilentlyContinue }
-    Import-Module (Join-Path $PackageRoot 'AccucutOps.psm1') -Force -DisableNameChecking
+    $state = Assert-AccucutFreshRoot -Root $Root
+    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $releases = Join-Path $full 'releases'
+    $incoming = Join-Path $full '.in'
+    $createdRoot = $false
+    try {
+        if ($state -eq 'New') {
+            # No -Force: if someone made the folder since the check, this fails instead of using theirs.
+            New-Item -ItemType Directory -Path $full | Out-Null
+            $createdRoot = $true
+        }
+        Set-AccucutDirectoryAcl -Path $full
+        if (@(Get-ChildItem -LiteralPath $full -Force).Count -gt 0) { throw "Something appeared in '$full' while it was being locked. Nothing was installed." }
+        New-Item -ItemType Directory -Path $releases | Out-Null
+        New-Item -ItemType Directory -Path $incoming | Out-Null
+
+        $copy = Join-Path $incoming 'package.zip'
+        Copy-Item -LiteralPath $ZipPath -Destination $copy
+        $copyHash = (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($copyHash -ne $expected) { throw "The SHA-256 of the copy of the zip does not match (expected $expected, the copy is $copyHash). The file changed while it was being copied. Nothing was installed." }
+
+        $unpacked = Join-Path $incoming 'unpacked'
+        Expand-AccucutBootstrapZip -ZipPath $copy -Destination $unpacked
+        $infoFile = Join-Path $unpacked 'release.json'
+        if (-not (Test-Path -LiteralPath $infoFile -PathType Leaf)) { throw 'The zip has no release.json: it is not an Accucut release package.' }
+        $tag = [string](Get-Content -LiteralPath $infoFile -Raw | ConvertFrom-Json).tag
+        if ($tag -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') { throw 'release.json has no valid tag (letters, digits, dot, dash and underscore only).' }
+        $target = Join-Path $releases $tag
+        [System.IO.Directory]::Move($unpacked, $target)
+        Set-Content -LiteralPath (Join-Path $target '.zip-sha256') -Value $expected -Encoding ASCII
+        Remove-AccucutBootstrapFolder -Path $incoming -Within $full
+
+        # The scripts and the two programs only: Node does not look at the downloaded-file mark, and node_modules holds thousands of files.
+        $toUnblock = @(Get-ChildItem -LiteralPath $target -File | Where-Object { $_.Extension -in '.ps1', '.psm1' })
+        $toUnblock += @(Get-ChildItem -LiteralPath (Join-Path $target 'bin') -File -ErrorAction SilentlyContinue)
+        foreach ($file in $toUnblock) { Unblock-File -LiteralPath $file.FullName -ErrorAction SilentlyContinue }
+        return $target
+    }
+    catch {
+        foreach ($folder in @($releases, $incoming)) { if (Test-Path -LiteralPath $folder) { Remove-AccucutBootstrapFolder -Path $folder -Within $full } }
+        if ($createdRoot -and (Test-Path -LiteralPath $full) -and @(Get-ChildItem -LiteralPath $full -Force).Count -eq 0) { [System.IO.Directory]::Delete($full, $false) }
+        throw
+    }
 }
 
 function Get-AccucutPostgresInstall {
@@ -282,7 +413,10 @@ function Get-AccucutInstallSettings {
 }
 
 function Set-AccucutDirectoryAcl {
-    <# Cuts inheritance on a folder and sets exactly: full control for Administrators and SYSTEM, plus the given accounts at the given rights. #>
+    <#
+    Makes Administrators the OWNER of a folder, cuts inheritance, and sets exactly: full control for Administrators and SYSTEM, plus the given
+    accounts at the given rights. The old list is replaced, not added to, so a right that someone else had given themselves is gone.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -291,6 +425,7 @@ function Set-AccucutDirectoryAcl {
     )
 
     $security = New-Object System.Security.AccessControl.DirectorySecurity
+    $security.SetOwner((New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)))
     $security.SetAccessRuleProtection($true, $false)
     $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
     $none = [System.Security.AccessControl.PropagationFlags]::None
@@ -320,7 +455,7 @@ function Grant-AccucutFolderAccess {
 
     $security = [System.IO.Directory]::GetAccessControl($Path)
     $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($Account)), $Rights, $inherit, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule((ConvertTo-AccucutIdentity -Account $Account), $Rights, $inherit, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
     $security.AddAccessRule($rule)
     [System.IO.Directory]::SetAccessControl($Path, $security)
 }
@@ -406,11 +541,40 @@ function Undo-AccucutInstallDatabase {
     }
 }
 
-function Invoke-AccucutInstall {
+function Remove-AccucutInstallLeftovers {
+    <#
+    After a failed install, before any service exists: removes what this run made inside the install folder (the release, config, services and logs
+    folders and the `current` junction), so that the folder is empty again and the install can be run again. The install log is first copied to the
+    temp folder of the person who ran the script. Never touches anything outside the install folder.
+    #>
     [CmdletBinding()]
     param(
-        [string]$ZipPath,
-        [string]$Sha256,
+        [Parameter(Mandatory)][object]$Paths,
+        [string]$LogFile
+    )
+
+    try {
+        if ($LogFile -and (Test-Path -LiteralPath $LogFile)) {
+            $kept = Join-Path $env:TEMP ('accucut-failed-' + (Split-Path -Leaf $LogFile))
+            Copy-Item -LiteralPath $LogFile -Destination $kept -Force
+            Write-Host "The install log was kept: $kept"
+        }
+        if ((Test-Path -LiteralPath $Paths.Current) -and ((Get-Item -LiteralPath $Paths.Current -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            [System.IO.Directory]::Delete($Paths.Current, $false)
+        }
+        foreach ($folder in @($Paths.Releases, $Paths.Config, $Paths.Services, $Paths.Logs)) {
+            if (Test-Path -LiteralPath $folder) { Remove-AccucutDirectory -Path $folder -Within $Paths.Root }
+        }
+    }
+    catch {
+        Write-Host "The folders of the failed install could not be cleared ($($_.Exception.Message)). Empty '$($Paths.Root)' by hand before running the install again." -ForegroundColor Yellow
+    }
+}
+
+function Invoke-AccucutInstall {
+    <# The second half of the install. It runs from the verified release folder only: -PackageRoot must be C:\Accucut\releases\<tag>, made by the first half. #>
+    [CmdletBinding()]
+    param(
         [string]$ValuesFile,
         [switch]$NonInteractive,
         [string]$Root = 'C:\Accucut',
@@ -424,67 +588,71 @@ function Invoke-AccucutInstall {
         [string]$PgDataDirectory,
         [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
         [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
-        [string]$PackageRoot
+        [Parameter(Mandatory)][string]$PackageRoot
     )
 
     $ErrorActionPreference = 'Stop'
-    if ([string]::IsNullOrWhiteSpace($PackageRoot)) { $PackageRoot = $script:ScriptRoot }
-
     if (-not (Test-InstallerIsAdministrator)) {
         throw 'Run this script as an administrator: right-click Windows PowerShell, choose Run as administrator, and start it again.'
     }
 
-    # 1 and 2. The zip's hash, before any change. Then the scripts are unblocked and the shared module is loaded.
-    Initialize-AccucutPackage -ZipPath $ZipPath -Sha256 $Sha256 -PackageRoot $PackageRoot
+    # 1 to 3 were done by the first half. Everything below reads from the verified release folder (its release.json, .env.example, SQL, WinSW, programs),
+    # and the install folder itself must still be as the first half left it.
     $paths = Get-AccucutPaths -Root $Root
     $release = Read-AccucutReleaseInfo -PackageRoot $PackageRoot
     $tag = [string]$release.tag
+    $releaseDirectory = Join-Path $paths.Releases $tag
+    if ([System.IO.Path]::GetFullPath($PackageRoot).TrimEnd('\') -ine [System.IO.Path]::GetFullPath($releaseDirectory).TrimEnd('\')) {
+        throw "'$PackageRoot' is not the verified release folder '$releaseDirectory'. The install only runs from the folder that was made from the checked zip."
+    }
+    Assert-AccucutFolderTrusted -Path $paths.Root
     $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
     $logFile = Join-Path $paths.Logs "install-$stamp.log"
 
-    # Versions (no change yet).
-    $node = Get-Command -Name node -ErrorAction SilentlyContinue
-    $nodeExe = $null
-    $nodeVersionText = $null
-    if ($null -ne $node) {
-        $nodeExe = $node.Source
-        $nodeVersionText = (Invoke-AccucutNative -FilePath $nodeExe -ArgumentList @('--version') -AllowFailure).Output
+    # Versions, an existing install, and the values: nothing is created yet. If one of them fails, what the first half made is removed again, so
+    # that the install folder is empty and the install can be run again.
+    try {
+        $node = Get-Command -Name node -ErrorAction SilentlyContinue
+        $nodeExe = $null
+        $nodeVersionText = $null
+        if ($null -ne $node) {
+            $nodeExe = $node.Source
+            $nodeVersionText = (Invoke-AccucutNative -FilePath $nodeExe -ArgumentList @('--version') -AllowFailure).Output
+        }
+        $nodeCheck = Test-AccucutNodeVersion -VersionText $nodeVersionText
+        if (-not $nodeCheck.Ok) { throw $nodeCheck.Message }
+        $postgres = Get-AccucutPostgresInstall -BinDirectory $PgBinDirectory -DataDirectory $PgDataDirectory
+        $psql = Join-Path $postgres.BinDirectory 'psql.exe'
+        $psqlVersion = (Invoke-AccucutNative -FilePath $psql -ArgumentList @('--version')).Output
+        $psqlCheck = Test-AccucutPostgresVersion -VersionText $psqlVersion
+        if (-not $psqlCheck.Ok) { throw $psqlCheck.Message }
+
+        if ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
+            throw "The services of an Accucut install already exist on this server. To install a new release, run update.ps1. Nothing was changed."
+        }
+
+        # The values. Asked for before anything is created, so a typing slip costs nothing.
+        $template = Read-AccucutEnvTemplate -Path (Join-Path $PackageRoot '.env.example')
+        $settings = Get-AccucutInstallSettings -Template $template -ValuesFile $ValuesFile -NonInteractive:$NonInteractive -Port $Port -PgHost $PgHost -PgPort $PgPort -DatabaseName $script:DatabaseName
+        Register-AccucutSecret -Value $settings.PgSuperuserPassword
+        $envLines = Split-AccucutEnvValues -Template $template -Values $settings.Values
+        $effectiveListen = $ListenAddress
+        if ([string]::IsNullOrWhiteSpace($effectiveListen)) { if ($WithProxy) { $effectiveListen = '127.0.0.1' } else { $effectiveListen = '0.0.0.0' } }
     }
-    $nodeCheck = Test-AccucutNodeVersion -VersionText $nodeVersionText
-    if (-not $nodeCheck.Ok) { throw $nodeCheck.Message }
-    $postgres = Get-AccucutPostgresInstall -BinDirectory $PgBinDirectory -DataDirectory $PgDataDirectory
-    $psql = Join-Path $postgres.BinDirectory 'psql.exe'
-    $psqlVersion = (Invoke-AccucutNative -FilePath $psql -ArgumentList @('--version')).Output
-    $psqlCheck = Test-AccucutPostgresVersion -VersionText $psqlVersion
-    if (-not $psqlCheck.Ok) { throw $psqlCheck.Message }
-
-    # 3. Refuse to touch an existing install.
-    if ((Test-Path -LiteralPath $paths.EnvFile) -or (Test-Path -LiteralPath $paths.StateFile) -or ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue))) {
-        throw "The portal is already installed under '$($paths.Root)'. To install a new release, run update.ps1. Nothing was changed."
+    catch {
+        Remove-AccucutInstallLeftovers -Paths $paths
+        throw
     }
 
-    # 4. The values. Asked for before anything is created, so a typing slip costs nothing.
-    $template = Read-AccucutEnvTemplate -Path (Join-Path $PackageRoot '.env.example')
-    $settings = Get-AccucutInstallSettings -Template $template -ValuesFile $ValuesFile -NonInteractive:$NonInteractive -Port $Port -PgHost $PgHost -PgPort $PgPort -DatabaseName $script:DatabaseName
-    Register-AccucutSecret -Value $settings.PgSuperuserPassword
-    $envLines = Split-AccucutEnvValues -Template $template -Values $settings.Values
-    $effectiveListen = $ListenAddress
-    if ([string]::IsNullOrWhiteSpace($effectiveListen)) { if ($WithProxy) { $effectiveListen = '127.0.0.1' } else { $effectiveListen = '0.0.0.0' } }
-
-    # The install folder is locked to Administrators and SYSTEM at once, before any file with a setting is created in it. The service accounts are
-    # added when the services exist. Windows gives Authenticated Users write access to new folders in C:\, which must not reach the program files.
-    foreach ($directory in @($paths.Root)) { if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null } }
-    Set-AccucutDirectoryAcl -Path $paths.Root
-    foreach ($directory in @($paths.Releases, $paths.Config, $paths.Services, $paths.Logs)) { if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null } }
+    # The install folder was locked by the first half (owned by Administrators, writable by Administrators and SYSTEM only), so the folders made
+    # here inherit that and carry no entry for anyone else. The service accounts are added when the services exist.
+    foreach ($directory in @($paths.Config, $paths.Services, $paths.Logs)) { New-Item -ItemType Directory -Path $directory | Out-Null }
     Write-AccucutLog -Message "Installing Accucut release $tag under '$($paths.Root)'. $($nodeCheck.Message). $($psqlCheck.Message)." -LogFile $logFile
 
     $connection = @{ Host = $PgHost; Port = $PgPort; User = $PgSuperuser; Password = $settings.PgSuperuserPassword }
     $created = @{ Database = $false; Roles = $false }
-    $releaseDirectory = Join-Path $paths.Releases $tag
     try {
-        # 5. The release folder and the `current` junction.
-        Copy-AccucutTree -Source $PackageRoot -Destination $releaseDirectory
-        Set-Content -LiteralPath (Join-Path $releaseDirectory '.zip-sha256') -Value (Get-AccucutFileSha256 -Path $ZipPath) -Encoding ASCII
+        # 5. The `current` junction (the release folder was unpacked from the checked copy of the zip by the first half).
         Set-AccucutCurrentRelease -Paths $paths -Tag $tag
         Write-AccucutLog -Message "Release folder: $releaseDirectory (current -> $tag)." -LogFile $logFile
 
@@ -537,7 +705,8 @@ function Invoke-AccucutInstall {
         Write-AccucutLog -Message "Services registered: $((Get-AccucutServiceNames) -join ', ') (Automatic, Delayed Start, own virtual account, after $(Get-AccucutPostgresServiceName))." -LogFile $logFile
 
         # 10. Access for the service accounts, now that they exist.
-        $accounts = @(Get-AccucutServiceNames | ForEach-Object { "NT SERVICE\$_" })
+        # By SID (computed from the service name): looking up the name NT SERVICE\<name> failed on the build runner.
+        $accounts = @(Get-AccucutServiceNames | ForEach-Object { Get-AccucutServiceSid -Name $_ })
         foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Root -Account $account -Rights ReadAndExecute }
         foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Logs -Account $account -Rights Modify }
         # The app's settings file: Administrators and the two service accounts only. migrate.env stays Administrators only.
@@ -574,11 +743,12 @@ function Invoke-AccucutInstall {
     }
     catch {
         Write-AccucutLog -Message "INSTALL FAILED: $($_.Exception.Message)" -Level Error -LogFile $logFile
-        if ($created.Database -or $created.Roles) {
-            # Only when the services were not registered yet: after that the database is in use and is left for IT to look at.
-            if ($null -eq (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
+        # Only while the services are not registered: after that the database is in use and the folders are left for IT to look at.
+        if ($null -eq (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
+            if ($created.Database -or $created.Roles) {
                 Undo-AccucutInstallDatabase -PsqlPath $psql -Connection $connection -Created $created -DatabaseName $script:DatabaseName -LogFile $logFile
             }
+            Remove-AccucutInstallLeftovers -Paths $paths -LogFile $logFile
         }
         throw
     }
@@ -587,9 +757,58 @@ function Invoke-AccucutInstall {
     Write-AccucutLog -Message "Install log: $logFile. If you used a values file, delete it now: it holds the first password." -LogFile $logFile
 }
 
+function Start-AccucutInstall {
+    <#
+    The entry point. Without -VerifiedRelease it is the first half: check the zip, make the locked install folder, copy and check the zip again,
+    unpack it, and start the copy of this script that is in the unpacked release. With -VerifiedRelease it is the second half, and it loads the
+    shared module from that folder only.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$ZipPath,
+        [string]$Sha256,
+        [string]$ValuesFile,
+        [switch]$NonInteractive,
+        [string]$Root = 'C:\Accucut',
+        [int]$Port = 3000,
+        [string]$ListenAddress,
+        [switch]$WithProxy,
+        [string]$PgHost = '127.0.0.1',
+        [int]$PgPort = 5432,
+        [string]$PgSuperuser = 'postgres',
+        [string]$PgBinDirectory,
+        [string]$PgDataDirectory,
+        [string]$DefenderExclusion = 'Ask',
+        [int]$HealthTimeoutSeconds = 180,
+        [string]$VerifiedRelease
+    )
+
+    $ErrorActionPreference = 'Stop'
+    $secondHalf = @{
+        ValuesFile = $ValuesFile; NonInteractive = $NonInteractive; Root = $Root; Port = $Port; ListenAddress = $ListenAddress; WithProxy = $WithProxy
+        PgHost = $PgHost; PgPort = $PgPort; PgSuperuser = $PgSuperuser; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory
+        DefenderExclusion = $DefenderExclusion; HealthTimeoutSeconds = $HealthTimeoutSeconds
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
+        Import-Module (Join-Path $VerifiedRelease 'AccucutOps.psm1') -Force -DisableNameChecking
+        Invoke-AccucutInstall @secondHalf -PackageRoot $VerifiedRelease
+        return
+    }
+
+    if (-not (Test-InstallerIsAdministrator)) {
+        throw 'Run this script as an administrator: right-click Windows PowerShell, choose Run as administrator, and start it again.'
+    }
+    $verified = Initialize-AccucutVerifiedRelease -ZipPath $ZipPath -Sha256 $Sha256 -Root $Root
+    # The second half runs from the verified folder: its own copy of this script, which loads its own copy of the module.
+    $verifiedScript = Join-Path $verified 'install.ps1'
+    & $verifiedScript @secondHalf -VerifiedRelease $verified
+    if ($LASTEXITCODE -ne 0) { throw 'The install did not finish (see the message above).' }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
     try {
-        Invoke-AccucutInstall @PSBoundParameters
+        Start-AccucutInstall @PSBoundParameters
         exit 0
     }
     catch {

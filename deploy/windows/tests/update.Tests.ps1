@@ -10,6 +10,7 @@ BeforeAll {
     # Dot-sourcing defines the functions and does not run the update (the script runs it only when it is started, not sourced).
     . (Join-Path $script:WindowsDirectory 'update.ps1')
     $script:RealExpand = (Get-Command -Name Expand-AccucutZip -CommandType Function).ScriptBlock
+    $script:RealAssertRuns = (Get-Command -Name Assert-AccucutUpdateRunsFromInstall -CommandType Function).ScriptBlock
 }
 
 Describe 'update.ps1' {
@@ -29,6 +30,8 @@ Describe 'update.ps1' {
         $script:Logged = New-Object System.Collections.Generic.List[string]
 
         Mock Test-AccucutAdministrator { $true }
+        Mock Assert-AccucutUpdateRunsFromInstall { }
+        Mock Assert-AccucutInstallTrusted { }
         Mock Get-AccucutCurrentRelease { 'old1' }
         Mock Assert-AccucutFreeSpace { }
         Mock Expand-AccucutZip {
@@ -74,6 +77,41 @@ Describe 'update.ps1' {
         Should -Invoke Expand-AccucutZip -Times 0 -Exactly
         Should -Invoke Stop-AccucutServices -Times 0 -Exactly
         Should -Invoke Set-AccucutCurrentRelease -Times 0 -Exactly
+    }
+
+    It 'security review: refuses to write into an install folder that an ordinary user could have changed, before anything else happens' {
+        Mock Assert-AccucutInstallTrusted { throw "'C:\Accucut\releases' can be changed by S-1-5-21-1-2-3-1001, who is not an administrator. Refusing to go on." }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root } | Should -Throw '*can be changed by*Refusing*'
+        Should -Invoke Invoke-AccucutReleaseBackup -Times 0 -Exactly
+        Should -Invoke Expand-AccucutZip -Times 0 -Exactly
+        Should -Invoke Stop-AccucutServices -Times 0 -Exactly
+        Should -Invoke Set-AccucutCurrentRelease -Times 0 -Exactly
+    }
+
+    It 'security review: refuses to run from the folder the new zip was unpacked into' {
+        Mock Assert-AccucutUpdateRunsFromInstall { throw 'Run this script from the install folder' }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root } | Should -Throw '*install folder*'
+        Should -Invoke Expand-AccucutZip -Times 0 -Exactly
+        Should -Invoke Stop-AccucutServices -Times 0 -Exactly
+    }
+
+    It 'security review: only a script inside the install folder may run the update' {
+        # The real check (Assert-AccucutUpdateRunsFromInstall is mocked above): this script lives in the repository, not under the install folder.
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'somewhere-else')
+        { & $script:RealAssertRuns -Paths $paths } | Should -Throw '*Run this script from the install folder*Nothing was changed*'
+    }
+
+    It 'security review: the zip is copied into the install folder and the COPY is checked, so a zip swapped after the first check is caught' {
+        Mock Copy-Item { [System.IO.File]::WriteAllText($Destination, 'swapped for something else') }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root } | Should -Throw '*does not match*'
+        Should -Invoke Expand-AccucutZip -Times 0 -Exactly
+        Should -Invoke Stop-AccucutServices -Times 0 -Exactly
+        Should -Invoke Set-AccucutCurrentRelease -Times 0 -Exactly
+    }
+
+    It 'security review: what is unpacked is the checked copy, inside the install folder' {
+        Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -NoBackup
+        Should -Invoke Expand-AccucutZip -Times 1 -Exactly -ParameterFilter { $ZipPath -like '*releases?.in-*?package.zip' -and $Destination -like '*releases?.in-*?unpacked' }
     }
 
     It 'AC-3: stops before changing anything when the release backup cannot be taken' {

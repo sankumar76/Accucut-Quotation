@@ -59,19 +59,36 @@ $current = Get-AccucutCurrentRelease -Paths $paths
 Assert-That ($current -eq $ExpectedRelease) "current points at release $ExpectedRelease (found '$current')"
 
 # AC-1, AC-5: who can read what.
-function Get-AclNames {
+function Get-AclSids {
+    # By SID: the name NT SERVICE\<name> is not always resolvable, the SID always is.
     param([string]$Path)
-    $acl = Get-Acl -LiteralPath $Path
-    return [pscustomobject]@{ Protected = $acl.AreAccessRulesProtected; Names = @($acl.Access | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) }
+    $security = Get-Item -LiteralPath $Path -Force | ForEach-Object { $_.GetAccessControl() }
+    $rules = $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+    return [pscustomobject]@{
+        Protected = $security.AreAccessRulesProtected
+        Owner     = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+        Sids      = @($rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)
+    }
 }
-$envAcl = Get-AclNames -Path $paths.EnvFile
+$adminSid = 'S-1-5-32-544'
+$appSid = Get-AccucutServiceSid -Name 'AccucutApp'
+$workerSid = Get-AccucutServiceSid -Name 'AccucutWorker'
+$envAcl = Get-AclSids -Path $paths.EnvFile
 Assert-That $envAcl.Protected '.env does not inherit permissions'
-$expectedEnv = @('BUILTIN\Administrators', 'NT SERVICE\AccucutApp', 'NT SERVICE\AccucutWorker') | Sort-Object
-Assert-That (($envAcl.Names -join ';') -eq ($expectedEnv -join ';')) ".env can be read by Administrators and the two service accounts only (found: $($envAcl.Names -join ', '))"
-$migrateAcl = Get-AclNames -Path $paths.MigrateEnvFile
-Assert-That ($migrateAcl.Protected -and (($migrateAcl.Names -join ';') -eq 'BUILTIN\Administrators')) "migrate.env can be read by Administrators only (found: $($migrateAcl.Names -join ', '))"
-$rootAcl = Get-AclNames -Path $paths.Root
-Assert-That ($rootAcl.Protected -and -not ($rootAcl.Names -match 'Users|Everyone|Authenticated')) "the install folder is closed to ordinary users (found: $($rootAcl.Names -join ', '))"
+$expectedEnv = @($adminSid, $appSid, $workerSid) | Sort-Object
+Assert-That (($envAcl.Sids -join ';') -eq ($expectedEnv -join ';')) ".env can be read by Administrators and the two service accounts only (found: $($envAcl.Sids -join ', '))"
+$migrateAcl = Get-AclSids -Path $paths.MigrateEnvFile
+Assert-That ($migrateAcl.Protected -and (($migrateAcl.Sids -join ';') -eq $adminSid)) "migrate.env can be read by Administrators only (found: $($migrateAcl.Sids -join ', '))"
+$rootAcl = Get-AclSids -Path $paths.Root
+Assert-That ($rootAcl.Protected -and ($rootAcl.Owner -eq $adminSid)) 'the install folder is owned by Administrators and does not inherit permissions'
+$unexpectedRoot = @($rootAcl.Sids | Where-Object { @($adminSid, 'S-1-5-18', $appSid, $workerSid) -notcontains $_ })
+Assert-That ($unexpectedRoot.Count -eq 0) "the install folder is closed to ordinary users (found: $($rootAcl.Sids -join ', '))"
+foreach ($folder in $paths.Releases, $paths.Config, $paths.Services, $paths.Logs) {
+    $folderAcl = Get-AclSids -Path $folder
+    Assert-That ($folderAcl.Owner -eq $adminSid) "$folder is owned by Administrators"
+}
+Assert-AccucutInstallTrusted -Paths $paths
+Write-Host 'PASS  every folder that update.ps1 writes to is trusted (owner and permissions)'
 
 # The settings: the runtime file holds no owner role and no first-Admin password; the owner file holds no first-Admin password once it was used.
 $runtime = Read-AccucutEnvFile -Path $paths.EnvFile
