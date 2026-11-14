@@ -48,11 +48,14 @@ export interface MaterialOptionRecord {
 }
 
 /**
- * What a calculation reads of a material (STORY-03.03; architecture section 4.2): the three numbers, as decimal text, and nothing else.
- * Restricted. The hidden "Not applicable" row has them all at 0 (SPEC section 18 D-17).
+ * What a calculation reads of a material (STORY-03.03; architecture section 4.2): the three numbers, as decimal text, and the two names the stored record
+ * keeps as text (STORY-03.05: Material in Drawing for E, Material Considered for F), so renaming the material later cannot change a stored estimate.
+ * Restricted. The hidden "Not applicable" row has the numbers all at 0 (SPEC section 18 D-17) and no Material Considered.
  */
 export interface MaterialValuesRecord {
   readonly id: string;
+  readonly materialInDrawing: string;
+  readonly materialConsidered: string | null;
   readonly pricePerKg: string;
   readonly specificGravity: string;
   readonly scrapRate: string;
@@ -147,10 +150,15 @@ async function readMaterialValues(db: PrismaClient, id: string): Promise<Materia
   if (!z.uuid().safeParse(id).success) return null;
   const row = await db.material.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, pricePerKg: true, specificGravity: true, scrapRate: true },
+    select: { id: true, materialInDrawing: true, materialConsidered: true, pricePerKg: true, specificGravity: true, scrapRate: true },
   });
   if (row === null) return null;
-  return { id: row.id, pricePerKg: decimalText(row.pricePerKg), specificGravity: decimalText(row.specificGravity), scrapRate: decimalText(row.scrapRate) };
+  return {
+    id: row.id,
+    materialInDrawing: row.materialInDrawing,
+    materialConsidered: row.materialConsidered,
+    pricePerKg: decimalText(row.pricePerKg), specificGravity: decimalText(row.specificGravity), scrapRate: decimalText(row.scrapRate),
+  };
 }
 
 async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialRecord | null> {

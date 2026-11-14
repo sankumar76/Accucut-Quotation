@@ -50,6 +50,8 @@ const REPOSITORIES = {
   allowed: ['user-repository', 'database-errors', 'transaction'],
   blocked: [
     'audit-repository',
+    // STORY-03.05 (AC-4, NFR-002): every column of the calculation record is cost data (calculations and calculation_rows are Restricted, architecture section 5.1).
+    'calculation-repository',
     'config-repository',
     'customer-repository',
     'decimal-text',
@@ -87,6 +89,7 @@ const SERVICES = {
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
     'step-up-service',
+    'task-queue-cursor',
     'task-service',
     'treatment-service',
   ],
@@ -94,7 +97,6 @@ const SERVICES = {
 
 /** Files that do not exist yet. The rule refuses them as well, because it lists what is allowed, not what is forbidden. */
 const FUTURE_IMPORTS: ReadonlyArray<string> = [
-  '@/server/repositories/calculation-repository',
   '@/server/repositories/approval-repository',
   '@/server/repositories/customer-rate-repository',
   '../repositories/master-repository',

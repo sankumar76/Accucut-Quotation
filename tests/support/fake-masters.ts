@@ -77,7 +77,7 @@ function createFakeMaterialMethods(materials: MutableMaterial[], onLock: () => v
     listMaterialOptions: () => Promise.resolve(materials.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered }))),
     findMaterialForCalculation(id: string) {
       const found = materials[indexOf(id)];
-      return Promise.resolve(found === undefined ? null : { id: found.id, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
+      return Promise.resolve(found === undefined ? null : { id: found.id, materialInDrawing: found.materialInDrawing, materialConsidered: found.materialConsidered, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
     },
     lockMaterials() {
       onLock();

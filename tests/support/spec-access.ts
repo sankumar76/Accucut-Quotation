@@ -5,7 +5,7 @@ import type { RoleName } from '../../src/lib/auth/roles';
  * matrix compares the manifest with the SPEC and not with itself. Kept apart from `tests/security/role-matrix.test.ts`, which is at its line limit.
  */
 
-/** What SPEC sections 3 and 9 say, written out (screen, then who may open it). */
+/** What SPEC sections 3 and 9 say, written out (screen, then who may open it). A key may start with the method (`GET /api/v1/tasks`) where the methods of one path differ. */
 export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/queue': ['ADMIN', 'LEAD', 'ENGINEER'], // Dashboard and task queues: all (an Engineer sees their own)
   '/assign': ['ADMIN', 'LEAD'], // Assign task
@@ -40,7 +40,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/customers/[id]': ['ADMIN'],
   '/api/v1/customers/[id]/reset-rates': ['ADMIN'],
   // The API behind Assign task (SPEC section 5.1, SCR-04; architecture section 6 rows "Create task" and "Assign context", STORY-04.01): a Lead and an Admin assign, an Engineer never does (BR-004, CR-33).
-  '/api/v1/tasks': ['ADMIN', 'LEAD'],
+  // Two rows, one per method, because the roles differ (STORY-04.02): the queue read is for every role (an Engineer is answered with their own tasks), the assignment is not.
+  'GET /api/v1/tasks': ['ADMIN', 'LEAD', 'ENGINEER'],
+  'POST /api/v1/tasks': ['ADMIN', 'LEAD'],
   '/api/v1/options/assign-context': ['ADMIN', 'LEAD'],
   // STORY-05.01 (SCR-05; architecture section 6 "Set customer": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD', 'ENGINEER'],

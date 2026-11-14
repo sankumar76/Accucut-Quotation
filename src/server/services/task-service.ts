@@ -1,10 +1,14 @@
+import type { RoleName } from '../../lib/auth/roles';
 import { FieldValidationError, type FieldProblem } from '../../lib/errors';
 import { checkAssign, ENGINEER_MESSAGE, type AssignErrors, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
+import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
 import { formatTaskCode } from '../../lib/tasks/task-code';
 import { istYearOf, type Clock } from '../../lib/time';
-import type { EngineerRecord, EstimateRecord, TaskRepository } from '../repositories/task-repository';
+import type { EngineerRecord, EstimateRecord, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
 import type { TransactionRunner } from '../repositories/transaction';
+
+import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor';
 
 /**
  * Tasks (STORY-04.01; FR-032, FR-033, FR-041; architecture sections 4.1, 5.1, 6 and 8). A Lead or an Admin assigns a task to an Engineer. Who may call is
@@ -19,6 +23,14 @@ import type { TransactionRunner } from '../repositories/transaction';
  *   - **The `file:` link is built here**, from the validated UNC path (AC-4); the browser is never asked to build one.
  *
  * There is no audit entry: the audit log of architecture section 8 lists a task change (STORY-04.07), not the assignment.
+ *
+ * The queue (STORY-04.02; FR-034, architecture sections 4.4 and 6): the Open, Closed and Overdue tabs, each sorted by deadline and then by code.
+ *
+ *   - **Who sees what is decided here, from the session's role** (AC-2): an Engineer is scoped to their own tasks by their own ID, a Lead and an Admin see every
+ *     task. No part of a request can widen the scope, because the request has no field for it (the filters of STORY-04.06 arrive with their own rules).
+ *   - **Open, Closed and Overdue are derived at read time** from the status of the estimate and the deadline against the server's clock (AC-1): a task whose
+ *     deadline is exactly now is not overdue yet, one a millisecond past it is; an overdue task is also in Open.
+ *   - **A row carries no cost** (AC-8): the code, the title, the people's names, the customer's name, the folder, the deadline and the status of the estimate.
  */
 
 /** A task as an assignment answers: what was stored, the link built from the path, and the empty estimate that was made with it. */
@@ -39,6 +51,43 @@ export interface AssignContext {
   readonly engineers: ReadonlyArray<EngineerRecord>;
 }
 
+/** A task as a row of the queue shows it. The deadline is an instant in UTC; the screen shows it in IST. */
+export interface QueueTask {
+  readonly id: string;
+  readonly code: string;
+  readonly title: string | null;
+  readonly engineer: EngineerRecord;
+  /** Null until the Engineer chooses the customer ("Not chosen yet"). */
+  readonly customerName: string | null;
+  readonly folderPath: string;
+  /** Built here from the path; null only for a path the portal would not have accepted, so the row then shows the path as text. */
+  readonly folderUrl: string | null;
+  readonly deadlineAt: Date;
+  readonly status: TaskEstimateStatus;
+  readonly assignedByName: string;
+}
+
+/** One page of one tab, and how many tasks each tab holds for this person. */
+export interface TaskQueue {
+  readonly tab: QueueTab;
+  readonly tasks: ReadonlyArray<QueueTask>;
+  readonly counts: QueueCounts;
+  /** Where the next page begins, or null on the last page. */
+  readonly nextCursor: string | null;
+}
+
+/** The person asking, from the session. */
+export interface QueueViewer {
+  readonly id: string;
+  readonly role: RoleName;
+}
+
+export interface QueueQuery {
+  readonly tab: QueueTab;
+  readonly limit?: number | undefined;
+  readonly cursor?: TaskQueueCursor | undefined;
+}
+
 export interface TaskService {
   /** The active Engineers, for the Engineer field (`GET /api/v1/options/assign-context`). */
   getAssignContext(): Promise<AssignContext>;
@@ -47,12 +96,40 @@ export interface TaskService {
    * Refused with a 422 naming each field that is wrong; nothing is stored then.
    */
   assignTask(assignedById: string, input: AssignInput): Promise<AssignedTask>;
+  /** A page of a tab for this person, with the count of every tab (STORY-04.02 AC-1, AC-2). */
+  listQueue(viewer: QueueViewer, query: QueueQuery): Promise<TaskQueue>;
 }
 
 export interface TaskDependencies {
   readonly tasks: TaskRepository;
   readonly transactions: TransactionRunner;
   readonly clock: Clock;
+}
+
+/** An Engineer sees their own tasks; a Lead and an Admin see all (AC-2). A switch, so a fourth role cannot compile without a decision. */
+function scopeOf(viewer: QueueViewer): QueueScope {
+  switch (viewer.role) {
+    case 'ENGINEER':
+      return { engineerId: viewer.id };
+    case 'LEAD':
+    case 'ADMIN':
+      return { engineerId: null };
+  }
+}
+
+function toQueueTask(row: QueueRow): QueueTask {
+  return {
+    id: row.id,
+    code: row.code,
+    title: row.title,
+    engineer: row.engineer,
+    customerName: row.customerName,
+    folderPath: row.folderPath,
+    folderUrl: folderUrlOf(row.folderPath),
+    deadlineAt: row.deadlineAt,
+    status: row.status,
+    assignedByName: row.assignedByName,
+  };
 }
 
 function problemsOf(errors: AssignErrors): ReadonlyArray<FieldProblem> {
@@ -93,6 +170,25 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
           estimate: { id: estimate.id, status: estimate.status, customerId: estimate.customerId },
         };
       });
+    },
+
+    async listQueue(viewer, query) {
+      const now = clock.now();
+      const scope = scopeOf(viewer);
+      const limit = query.limit ?? QUEUE_DEFAULT_LIMIT;
+      // One more than the page, to know whether another page follows without a count of its own.
+      const [rows, counts] = await Promise.all([
+        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null }),
+        tasks.countQueue(scope, now),
+      ]);
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
+      return {
+        tab: query.tab,
+        tasks: page.map(toQueueTask),
+        counts,
+        nextCursor: rows.length > limit && last !== undefined ? encodeTaskQueueCursor({ deadlineAt: last.deadlineAt, code: last.code }) : null,
+      };
     },
   };
 }

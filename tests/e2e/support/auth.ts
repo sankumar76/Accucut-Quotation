@@ -53,13 +53,14 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *   managed  is changed by the Admin on the Users screen (renamed, reset, deactivated), STORY-01.04;
  *   scan     is the Engineer whom the confidentiality scan signs in as (STORY-01.03), so no other spec's sign-out or lock-out reaches it;
  *   expiry   holds a session that ended and signs in again (STORY-01.06), which writes no failure and raises no `session_version`;
+ *   queue    is an Engineer with no task of their own, to whom the queue spec (STORY-04.02) assigns the tasks it needs and no others (a `scan` person owns a canary task);
  *   password changes their own password on the account page (STORY-01.05), which raises `session_version` and counts wrong current passwords
  *            on a key of its own; nobody else's sessions or counts are touched.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
