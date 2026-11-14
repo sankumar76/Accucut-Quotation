@@ -12,7 +12,8 @@ export interface BellLinkProps {
 
 /** The bell in the top bar: a 44 px link whose name says what it is and how many tasks are overdue. */
 export function BellLink({ href, count }: BellLinkProps) {
-  const label = count === undefined ? 'Overdue tasks' : `Overdue tasks: ${count}`;
+  // With nothing overdue there is no badge and the name is just "Overdue tasks" (STORY-04.03 AC-5); the count is in the name only when there is one to say.
+  const label = count === undefined || count === 0 ? 'Overdue tasks' : `Overdue tasks: ${count}`;
   return (
     <Link
       href={href}
