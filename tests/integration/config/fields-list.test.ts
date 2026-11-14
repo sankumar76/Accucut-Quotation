@@ -50,7 +50,7 @@ describe('AC-6: the version line, read as the runtime role', () => {
       `INSERT INTO config_versions (number, snapshot, reason, created_by) VALUES (2, $1::jsonb, 'Invented change', $2::uuid) RETURNING id::text`,
       [JSON.stringify(seedConfig), db.personId],
     );
-    expect(await repository.readVersionUse(defined(later.rows[0]).id)).toEqual({ savedByName: 'Calculation Lead', estimatesInUse: 0 });
+    expect(await repository.readVersionUse(defined(later.rows[0]).id)).toEqual({ savedByName: 'Invented Calculation Lead', estimatesInUse: 0 });
     // The estimates calculated with version 1 are still version 1's.
     expect((await repository.readVersionUse(db.configVersionId)).estimatesInUse).toBeGreaterThanOrEqual(2);
   });
@@ -73,7 +73,7 @@ describe('AC-1 and AC-6: the service over the stored version and the real Proces
   it('answers with the latest version: its number, its time and who made it', async () => {
     const service = createConfigReadService({ configurations: createConfigRepository(db.prisma), masters: db.masterRepository, cache: createConfigVersionCache() });
     const current = await service.getCurrent();
-    expect(current).toMatchObject({ number: 2, savedBy: 'Calculation Lead', estimatesInUse: 0 });
+    expect(current).toMatchObject({ number: 2, savedBy: 'Invented Calculation Lead', estimatesInUse: 0 });
     expect(new Date(current.savedAt).toISOString()).toBe(current.savedAt);
   });
 });
