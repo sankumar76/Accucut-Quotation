@@ -20,6 +20,11 @@ export interface FolderPathProps {
   readonly path: string;
   /** The `file:` link, built on the server from a valid UNC path. The browser never builds one (architecture section 8). */
   readonly url: string;
+  /**
+   * Whether the sentence that explains a link that does not open is shown under the path (default: yes). A list that has many rows says it once above the list
+   * instead (STORY-04.02, SCR-03), and the link keeps it as its tooltip.
+   */
+  readonly showNote?: boolean;
 }
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -32,7 +37,7 @@ const COPY_MESSAGES: Readonly<Record<CopyState, string>> = { idle: '', copied: P
  * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
  * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
  */
-export function FolderPath({ path, url }: FolderPathProps) {
+export function FolderPath({ path, url, showNote = true }: FolderPathProps) {
   const noteId = useId();
   const [state, setState] = useState<CopyState>('idle');
 
@@ -48,7 +53,7 @@ export function FolderPath({ path, url }: FolderPathProps) {
   return (
     <div className="flex min-w-0 flex-col gap-s-2">
       <div className="flex flex-wrap items-center gap-s-3">
-        <a href={url} title={FOLDER_LINK_NOTE} aria-describedby={noteId} className={cn('min-w-0 font-mono text-body text-primary-ink underline-offset-2 hover:underline', BREAK_LONG_NAMES)}>
+        <a href={url} title={FOLDER_LINK_NOTE} aria-describedby={showNote ? noteId : undefined} className={cn('min-w-0 font-mono text-body text-primary-ink underline-offset-2 hover:underline', BREAK_LONG_NAMES)}>
           {path}
         </a>
         <Button variant="secondary" onClick={() => void copy()}>
@@ -56,9 +61,11 @@ export function FolderPath({ path, url }: FolderPathProps) {
           {COPY_PATH_LABEL}
         </Button>
       </div>
-      <p id={noteId} className="text-label text-ink-2">
-        {FOLDER_LINK_NOTE}
-      </p>
+      {showNote ? (
+        <p id={noteId} className="text-label text-ink-2">
+          {FOLDER_LINK_NOTE}
+        </p>
+      ) : null}
       <p role="status" className="text-label font-semibold text-ink">
         {COPY_MESSAGES[state]}
       </p>

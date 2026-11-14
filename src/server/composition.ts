@@ -8,6 +8,7 @@ import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
+import { createEstimateRepository } from './repositories/estimate-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -18,7 +19,9 @@ import { type AccountService, createAccountService } from './services/account-se
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { getCurrentVersion } from './services/config-service';
+import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
 import { createUserService, type UserService } from './services/user-service';
 
@@ -34,10 +37,12 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let stepUpService: StepUpService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
+let estimateService: EstimateService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -97,6 +102,21 @@ export function getAccountService(): AccountService {
   return accountService;
 }
 
+/**
+ * The password step-up check (STORY-06.14): a protected action's handler calls `getStepUpService().verifyStepUp(context, password)` before it
+ * writes anything. Shares the runtime-role client, the real hasher and the throttle table; its attempts are counted on a `stepup` key of their own.
+ */
+export function getStepUpService(): StepUpService {
+  stepUpService ??= createStepUpService({
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    clock: systemClock,
+    keySecret: loadAppEnv().AUTH_SECRET,
+  });
+  return stepUpService;
+}
+
 /** Issues the fresh session cookie that follows a password change (STORY-01.05 AC-3): same secret, same cookie name as sign-in. */
 export function getSessionCookieIssuer(): SessionCookieIssuer {
   sessionCookieIssuer ??= createSessionCookieIssuer({
@@ -138,6 +158,18 @@ export function getTaskService(): TaskService {
     clock: systemClock,
   });
   return taskService;
+}
+
+/**
+ * The estimate workspace (STORY-05.01): opening a task's estimate and choosing its customer. Choosing runs in one transaction with the estimate's input
+ * revision, under the estimate's row lock.
+ */
+export function getEstimateService(): EstimateService {
+  estimateService ??= createEstimateService({
+    estimates: createEstimateRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+  });
+  return estimateService;
 }
 
 /**

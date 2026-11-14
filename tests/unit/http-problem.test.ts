@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '@/lib/auth/step-up';
 import {
   ActiveAdminExistsError,
   ConfigurationError,
@@ -9,6 +10,8 @@ import {
   FieldValidationError,
   ForbiddenError,
   NotFoundError,
+  StepUpFailed,
+  StepUpLocked,
   UnauthorizedError,
   ValidationError,
 } from '@/lib/errors';
@@ -78,6 +81,23 @@ describe('the problem of an application error', () => {
   it('a 403 with a code of its own (a service refusal) keeps its message and code', () => {
     const refused = problemFromAppError(new ForbiddenError('Only the Admin can do this.', { code: 'ADMIN_ONLY' }), ID);
     expect(refused).toMatchObject({ status: 403, code: 'ADMIN_ONLY', title: 'Only the Admin can do this.' });
+  });
+
+  it('STORY-06.14 AC-2, AC-3: the step-up refusals use fixed words and their own codes, 422 and 429, whatever the message says', () => {
+    expect(problemFromAppError(new StepUpFailed('the password of user 42 was wrong'), ID)).toEqual({
+      type: 'about:blank',
+      title: STEP_UP_FAILED_MESSAGE,
+      status: 422,
+      code: 'STEP_UP_FAILED',
+      requestId: ID,
+    });
+    expect(problemFromAppError(new StepUpLocked('user 42 is blocked until 10:15'), ID)).toEqual({
+      type: 'about:blank',
+      title: STEP_UP_LOCKED_MESSAGE,
+      status: 429,
+      code: 'STEP_UP_LOCKED',
+      requestId: ID,
+    });
   });
 
   it('other 4xx errors keep their safe message and code', () => {

@@ -243,12 +243,19 @@ describe('config_versions cannot be changed or removed (AC-6, NFR-026)', { timeo
     ['UPDATE of the snapshot', `UPDATE config_versions SET snapshot = '{}'::jsonb`],
     ['UPDATE of the number', 'UPDATE config_versions SET number = 2'],
     ['DELETE', 'DELETE FROM config_versions'],
-    ['TRUNCATE', 'TRUNCATE config_versions'],
+    // CASCADE since STORY-03.05: `calculations.config_version_id` references this table, so a plain TRUNCATE is stopped earlier by PostgreSQL itself (next test);
+    // CASCADE reaches past the foreign keys, so the trigger is what refuses it.
+    ['TRUNCATE ... CASCADE', 'TRUNCATE config_versions CASCADE'],
   ])('AC-6: a direct %s as the owner is refused by the trigger', async (_name, statement) => {
     await expect(session.owner.query(statement)).rejects.toMatchObject({
       code: '23000',
       message: expect.stringContaining('config_versions" is immutable'),
     });
+    await expectUnchanged();
+  });
+
+  it('AC-6: a plain TRUNCATE as the owner is refused too (by PostgreSQL, since a calculation record refers to the table) and nothing changes', async () => {
+    await expect(session.owner.query('TRUNCATE config_versions')).rejects.toBeInstanceOf(Error);
     await expectUnchanged();
   });
 

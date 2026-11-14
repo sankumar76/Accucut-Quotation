@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
-import { accountThrottleKey, passwordChangeThrottleKey } from '@/server/auth/throttle-key';
+import { accountThrottleKey, passwordChangeThrottleKey, stepUpThrottleKey } from '@/server/auth/throttle-key';
 import { UserConstraintError, type UserRepository } from '@/server/repositories/user-repository';
 import {
   CANNOT_RESET_OWN_PASSWORD_CODE,
@@ -235,6 +235,17 @@ describe('AC-5: resetting a password', () => {
     throttles.rows.set(key, { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') });
     await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
     expect(throttles.rows.get(key)).toMatchObject({ failures: 0, blockedUntil: null });
+  });
+
+  it('STORY-06.14 A-1: clears the step-up block of that person too, and leaves another person\'s step-up block alone', async () => {
+    const key = stepUpThrottleKey(KEY_SECRET, engineerId);
+    const otherKey = stepUpThrottleKey(KEY_SECRET, adminId);
+    const blocked = { failures: 5, windowStartedAt: new Date('2026-11-05T09:45:00.000Z'), blockedUntil: new Date('2026-11-05T10:00:00.000Z') };
+    throttles.rows.set(key, { ...blocked });
+    throttles.rows.set(otherKey, { ...blocked });
+    await service.resetPassword(by(adminId), engineerId, 'temporary-password-1');
+    expect(throttles.rows.get(key)).toMatchObject({ failures: 0, blockedUntil: null });
+    expect(throttles.rows.get(otherKey)?.failures).toBe(5);
   });
 
   it('QLT-03: a refused reset (own password, weak password) leaves the change-form block as it was', async () => {

@@ -9,10 +9,13 @@ import { allowsRole, findPage, findRoute, ROUTE_MANIFEST, type RouteRow } from '
  */
 
 describe('the shape of the manifest', () => {
-  it('has one row per path, with at least one method', () => {
-    const paths = ROUTE_MANIFEST.map((row) => row.path);
-    expect(new Set(paths).size).toBe(paths.length);
+  it('has one row per path and method (a path has two rows only when its methods differ in who may call them), with at least one method', () => {
+    const calls = ROUTE_MANIFEST.flatMap((row) => row.methods.map((method) => `${row.kind} ${method} ${row.path}`));
+    expect(new Set(calls).size).toBe(calls.length);
     for (const row of ROUTE_MANIFEST) expect(row.methods.length).toBeGreaterThan(0);
+    // The only path with two rows is the task queue (STORY-04.02): the read is for every role, the assignment for a Lead and an Admin.
+    const paths = ROUTE_MANIFEST.map((row) => `${row.kind} ${row.path}`);
+    expect(paths.filter((path, index) => paths.indexOf(path) !== index)).toEqual(['api /api/v1/tasks']);
   });
 
   it('writes a path the way Next.js does: a leading slash, no route group, no trailing slash', () => {
@@ -98,8 +101,10 @@ describe('BR-003: the routes an Engineer can reach are named here, so adding one
    * Every route listed has an allow-list response with no cost field (architecture section 6, "Engineer-reachable routes").
    */
   // `/account` and `/api/v1/account/password` are STORY-01.05's: the person's own name, e-mail and role, and the change of their own password (a 204 with no body).
+  // `/api/v1/tasks` is STORY-04.02's: `GET` only for an Engineer (their own tasks, no cost field, one strict schema); the `POST` row of the same path is Lead and Admin.
   // `/api/v1/options/materials` is STORY-02.03's: IDs, names and Material Considered through one strict schema, no rate of any kind (AC-4); `/api/v1/options/treatments` is STORY-02.05's: IDs and names (AC-5); `/api/v1/options/customers` is STORY-02.02's: IDs and names (AC-5).
-  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/estimates/[code]', '/about', '/account', '/api/v1/account/password'];
+  // `/estimates/[code]` and `/api/v1/estimates/[id]/customer` are STORY-05.01's: the Engineer's own task header and the choice of its customer, an ID and a name through one strict schema (AC-6).
+  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/api/v1/tasks', '/estimates/[code]', '/api/v1/estimates/[id]/customer', '/about', '/account', '/api/v1/account/password'];
 
   it('matches exactly', () => {
     const reachable = ROUTE_MANIFEST.filter((row) => row.roles !== 'public' && allowsRole(row, 'ENGINEER')).map((row) => row.path);
@@ -119,6 +124,15 @@ describe('lookups', () => {
     expect(findRoute('/api/v1/me', 'GET')?.kind).toBe('api');
     expect(findRoute('/api/v1/me', 'POST')).toBeUndefined();
     expect(findRoute('/missing', 'GET')).toBeUndefined();
+  });
+
+  it('STORY-04.02 AC-2, AC-5: takes the row of the method when a path has two: an Engineer may read the queue and may not assign', () => {
+    expect(findRoute('/api/v1/tasks', 'GET')?.roles).toEqual(['ADMIN', 'LEAD', 'ENGINEER']);
+    expect(findRoute('/api/v1/tasks', 'POST')?.roles).toEqual(['ADMIN', 'LEAD']);
+    const get = findRoute('/api/v1/tasks', 'GET');
+    const post = findRoute('/api/v1/tasks', 'POST');
+    expect(get !== undefined && allowsRole(get, 'ENGINEER')).toBe(true);
+    expect(post !== undefined && allowsRole(post, 'ENGINEER')).toBe(false);
   });
 
   it('finds a page row, and not an API row of the same path', () => {

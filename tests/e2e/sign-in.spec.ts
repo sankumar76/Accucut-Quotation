@@ -121,20 +121,23 @@ test.describe('SCR-01 at this width (AC-8)', () => {
 });
 
 test.describe('AC-1: the person lands on their role\'s home', () => {
-  test('an Engineer lands on "My tasks" with the empty-state text of SCR-03', { tag: '@one-width' }, async ({ page }) => {
+  // The queue now lists real tasks, and other specs assign some to these people in the same database, so what is checked here is the page itself (the tabs and
+  // the sort note of SCR-03), not an empty list. The empty-state words of each role and tab are judged in `tests/e2e/task-queue.spec.ts` (a person with no task)
+  // and `tests/unit/task-queue-screen.test.ts`.
+  test('an Engineer lands on "My tasks" with the tabs of SCR-03', { tag: '@one-width' }, async ({ page }) => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
     await expectOnQueue(page, 'My tasks');
-    await expect(page.getByText('Nothing assigned to you right now')).toBeVisible();
-    await expect(page.getByText('When a Lead assigns you a task it appears here, with its folder and deadline.')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Task queues' })).toBeVisible();
+    await expect(page.getByText('Sorted by deadline, earliest first. Overdue tasks stay in Open as well.')).toBeVisible();
   });
 
-  test('a Lead lands on "Task queue" with the empty-state text of SCR-03', { tag: '@one-width' }, async ({ page }) => {
+  test('a Lead lands on "Task queue" with the tabs of SCR-03 and the "Assign task" button', { tag: '@one-width' }, async ({ page }) => {
     await openSignIn(page);
     await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
     await expectOnQueue(page, 'Task queue');
-    await expect(page.getByText('No open tasks')).toBeVisible();
-    await expect(page.getByText('Assign a task to an Engineer and it appears here.')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Task queues' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Assign task' }).first()).toBeVisible();
   });
 
   test('the account menu shows who is signed in, with the e-mail and the role', async ({ page }) => {

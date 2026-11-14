@@ -91,7 +91,7 @@ describe('AC-5: the hidden "Not applicable" material is calculated, with O and A
       "INSERT INTO materials (material_in_drawing, material_considered, is_hidden) VALUES ('Hidden-entry-for-test', NULL, true) RETURNING id::text",
     );
     const hiddenId = defined(rows[0]).id;
-    expect(await db.masterRepository.findMaterialForCalculation(hiddenId)).toEqual({ id: hiddenId, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00' });
+    expect(await db.masterRepository.findMaterialForCalculation(hiddenId)).toEqual({ id: hiddenId, materialInDrawing: 'Hidden-entry-for-test', materialConsidered: null, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00' });
 
     const customerId = await addCustomer();
     await addExchangeRates(EXCHANGE.usd, EXCHANGE.eur);
@@ -105,7 +105,7 @@ describe('AC-5: the hidden "Not applicable" material is calculated, with O and A
 describe('findMaterialForCalculation', () => {
   it('gives the three numbers as decimal text with at least two decimals', async () => {
     const id = await addMaterial({ pricePerKg: '60', specificGravity: '7.8512', scrapRate: '25.5' });
-    expect(await db.masterRepository.findMaterialForCalculation(id)).toEqual({ id, pricePerKg: '60.00', specificGravity: '7.8512', scrapRate: '25.50' });
+    expect(await db.masterRepository.findMaterialForCalculation(id)).toEqual({ id, materialInDrawing: 'Invented-plate-grade', materialConsidered: 'Invented steel', pricePerKg: '60.00', specificGravity: '7.8512', scrapRate: '25.50' });
   });
 
   it('finds neither a deleted material, nor an unknown one, nor an ID that is not a UUID', async () => {

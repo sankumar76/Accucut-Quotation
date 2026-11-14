@@ -10,7 +10,7 @@ import { normaliseEmail } from '../repositories/user-repository';
  */
 
 /** `password-change` is the key of the change form of SCR-23 (STORY-01.05 AC-6, assumption A-2): its own, so a mistyped current password cannot block sign-in. */
-export type ThrottleKind = 'account' | 'ip' | 'password-change';
+export type ThrottleKind = 'account' | 'ip' | 'password-change' | 'stepup';
 
 export function throttleKey(secret: string, kind: ThrottleKind, value: string): string {
   return createHmac('sha256', secret).update(`${kind}:${value}`).digest('hex');
@@ -19,6 +19,14 @@ export function throttleKey(secret: string, kind: ThrottleKind, value: string): 
 /** The account key of an e-mail address, spelled as the database stores it (lower case, no surrounding spaces). */
 export function accountThrottleKey(secret: string, email: string): string {
   return throttleKey(secret, 'account', normaliseEmail(email));
+}
+
+/**
+ * The key of the step-up check for one person (STORY-06.14 AC-3, AC-4; ADR-009), by user ID: its own, so a slip in a protected action's
+ * password dialog can never block sign-in, and a blocked sign-in can never refuse a protected action.
+ */
+export function stepUpThrottleKey(secret: string, userId: string): string {
+  return throttleKey(secret, 'stepup', userId.toLowerCase());
 }
 
 /** The key of the change-password form for one person (by user ID, which never changes, unlike an e-mail), separate from their sign-in key. */

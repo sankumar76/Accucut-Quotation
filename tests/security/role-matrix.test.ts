@@ -6,6 +6,7 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { validCallFor, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
@@ -42,6 +43,7 @@ vi.mock('@/server/composition', async () => {
     getAuditService: () => shared.auditService,
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
+    getEstimateService: () => shared.estimateService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -58,9 +60,7 @@ const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1
  */
 const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/test-only/leak'];
 
-function expectedRoles(path: string): ReadonlyArray<RoleName> {
-  return SPEC_ACCESS[path] ?? ROLES;
-}
+const expectedRoles = (path: string, method: HttpMethod = 'GET'): ReadonlyArray<RoleName> => SPEC_ACCESS[`${method} ${path}`] ?? SPEC_ACCESS[path] ?? ROLES;
 
 const implemented = ROUTE_MANIFEST.filter((row) => row.status === 'implemented' && row.roles !== 'public');
 const apiRows = implemented.filter((row) => row.kind === 'api');
@@ -83,6 +83,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/design-system': 'redirect:/sign-in?callbackUrl=%2Fdesign-system',
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
+  '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
@@ -92,7 +93,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
 };
 
 /** The ID an allowed role opens a page with: a page with a dynamic segment needs a record that exists (an invented ID is SCR-26 "not found"); the others take any text. */
-const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID };
+const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID, '/estimates/[code]': canaryTaskCodeFor(harness.targetId) };
 const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented-id';
 
 const moduleShape = z.record(z.string(), z.unknown());
@@ -165,13 +166,13 @@ beforeEach(() => {
 
 describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
   it('has a row for every screen of the SPEC table, a row for every infrastructure route, and no other', () => {
-    const known = new Set([...Object.keys(SPEC_ACCESS), ...SIGNED_IN_ROUTES, ...PUBLIC_ROUTES]);
-    expect(ROUTE_MANIFEST.map((row) => row.path).sort()).toEqual([...known].sort());
+    const known = new Set([...Object.keys(SPEC_ACCESS).map((key) => key.replace(/^[A-Z]+ /, '')), ...SIGNED_IN_ROUTES, ...PUBLIC_ROUTES]);
+    expect([...new Set(ROUTE_MANIFEST.map((row) => row.path))].sort()).toEqual([...known].sort());
   });
 
   it('allows exactly the roles of the SPEC on each screen: 0 differences', () => {
     const differences = ROUTE_MANIFEST.filter((row) => row.roles !== 'public').flatMap((row) =>
-      ROLES.filter((role) => allowsRole(row, role) !== expectedRoles(row.path).includes(role)).map((role) => `${row.path} as ${role}`),
+      ROLES.filter((role) => allowsRole(row, role) !== expectedRoles(row.path, row.methods[0]).includes(role)).map((role) => `${row.path} as ${role}`),
     );
     expect(differences).toEqual([]);
   });
@@ -190,7 +191,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
 
 describe('every implemented route is in the matrix', () => {
   it('has a loader for each implemented API route and each implemented page', () => {
-    expect(apiRows.map((row) => row.path).sort()).toEqual(Object.keys(API_LOADERS).sort());
+    expect([...new Set(apiRows.map((row) => row.path))].sort()).toEqual(Object.keys(API_LOADERS).sort());
     expect(pageRows.map((row) => row.path).sort()).toEqual(Object.keys(PAGE_LOADERS).sort());
   });
 });
@@ -212,7 +213,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
       harness.signInAs(role);
       const response = await callValid(row, method);
       expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-      if (expectedRoles(row.path).includes(role)) {
+      if (expectedRoles(row.path, method).includes(role)) {
         expect(response.status).toBe(validCall(row, method).status);
       } else {
         expect(response.status).toBe(403);
@@ -225,7 +226,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
 
   describe(`QLT-64: the "${SAME_403_LOOP}" loop`, () => {
     // Built from the manifest and the SPEC table, and it throws when empty, so this loop cannot pass by finding nothing.
-    const refused = refusedRoleCalls((path, role) => expectedRoles(path).includes(role));
+    const refused = refusedRoleCalls((path, role, method) => expectedRoles(path, method).includes(role));
 
     it('has something to check, through the users routes, the audit route and the Process master routes: a Lead and an Engineer are refused on each of them', () => {
       const names = refused.map((call) => call.name);
@@ -290,7 +291,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
   });
 
   it('a session is 12 hours from sign-in on the held clock: refused at 12 hours and a second, accepted just before (STD-06)', async () => {
-    const call = calls.find(([row]) => expectedRoles(row.path).includes('LEAD'));
+    const call = calls.find(([row, method]) => expectedRoles(row.path, method).includes('LEAD'));
     if (call === undefined) throw new Error('no API route a Lead may call');
     const [row, method] = call;
     harness.signInAs('LEAD');
@@ -317,8 +318,8 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
         record.role = 'LEAD';
         harness.signInAs('ENGINEER');
         const after = (await callValid(row, method)).status;
-        expect(before).toBe(expectedRoles(row.path).includes('ENGINEER') ? validCall(row, method).status : 403);
-        expect(after).toBe(expectedRoles(row.path).includes('LEAD') ? validCall(row, method).status : 403);
+        expect(before).toBe(expectedRoles(row.path, method).includes('ENGINEER') ? validCall(row, method).status : 403);
+        expect(after).toBe(expectedRoles(row.path, method).includes('LEAD') ? validCall(row, method).status : 403);
       }
     } finally {
       record.role = 'ENGINEER';
