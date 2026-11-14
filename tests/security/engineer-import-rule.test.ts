@@ -53,6 +53,7 @@ const REPOSITORIES = {
     'config-repository',
     'customer-repository',
     'decimal-text',
+    'estimate-node-repository',
     'estimate-repository',
     'exchange-rate-repository',
     'master-constraints',

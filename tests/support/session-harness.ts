@@ -156,6 +156,8 @@ export function createSessionHarness(): SessionHarness {
         inputsRevision: 0,
       },
     ],
+    // The one part the node routes of STORY-05.02 open: its ID is the estimate's, so the one value that fills every dynamic segment of a path names a real part of a real estimate.
+    [{ id: targetId, estimateId: targetId, parentId: null, sortIndex: 0, revision: 1, inputs: {} }],
   );
 
   return {
@@ -166,7 +168,7 @@ export function createSessionHarness(): SessionHarness {
     masters,
     taskWorld,
     estimateWorld,
-    estimateService: createEstimateService({ estimates: estimateWorld.repository, transactions: estimateWorld.transactions }),
+    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({

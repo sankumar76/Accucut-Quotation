@@ -108,7 +108,7 @@ function watchLookups(): () => string[] {
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }
 
-async function callApi(row: RouteRow, method: HttpMethod, id: string, body: unknown): Promise<RecordedResponse> {
+async function callApi(row: RouteRow, method: HttpMethod, id: string, body: unknown, query = ''): Promise<RecordedResponse> {
   const loader = API_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const handler = moduleShape.parse(await loader())[method];
@@ -116,7 +116,7 @@ async function callApi(row: RouteRow, method: HttpMethod, id: string, body: unkn
   const path = row.path.replace(/\[(?:\.\.\.)?[^\]]+\]/g, id);
   const params = Object.fromEntries([...row.path.matchAll(/\[(?:\.\.\.)?([^\]]+)\]/g)].map((match) => [match[1] ?? '', id]));
   const hasBody = body !== undefined && method !== 'GET';
-  const request = new Request(`${ORIGIN}${path}`, {
+  const request = new Request(`${ORIGIN}${path}${query}`, {
     method,
     headers: { origin: ORIGIN, ...(hasBody ? { 'content-type': 'application/json' } : {}) },
     ...(hasBody ? { body: JSON.stringify(body) } : {}),
@@ -199,7 +199,7 @@ describe('AC-3: what an Engineer may call sends no Restricted value', () => {
     for (const row of rows) {
       for (const method of row.methods.filter((candidate) => candidate !== 'HEAD')) {
         const call = validCallFor(method, row.path, { targetId: harness.targetId });
-        const answer = await callApi(row, method, call.id, call.body);
+        const answer = await callApi(row, method, call.id, call.body, call.query);
         expect(answer.status, answer.label).toBeLessThan(500);
         expect(scanResponse(answer, FORBIDDEN), answer.label).toEqual([]);
         expect(headersText(answer.headers)).not.toContain('771.37');

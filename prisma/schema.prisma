@@ -303,9 +303,36 @@ model Estimate {
 
   task     Task      @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
+  nodes    EstimateNode[]
 
   @@unique([taskId], map: "uq_estimates_task_id")
   @@index([status], map: "idx_estimates_status")
   @@index([customerId], map: "idx_estimates_customer_id")
   @@map("estimates")
+}
+
+/// A part of an estimate's parts tree (STORY-05.02; architecture sections 4.8 and 5.1): one row per node, to any depth. `parentId` is null for a top-level item;
+/// `sortIndex` is the place among the siblings, kept 0, 1, 2, ... by the service. **The Sl. No is derived from the tree and never stored.** `inputs` holds only
+/// what a person typed, by field ID (empty until STORY-05.03); no rate, cost or formula is ever written here. `revision` is the node's own optimistic-lock count.
+/// `imageId` has no foreign key until the pictures exist (STORY-05.07). Class Confidential. A part can be deleted, with its sub-parts, so the runtime role has
+/// DELETE here; the foreign key to the parent has no cascade, so the service names every row it removes. Tree rules the schema cannot express (a parent in the
+/// same estimate, no node as its own parent) are in the migration or the service.
+model EstimateNode {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId String   @map("estimate_id") @db.Uuid
+  parentId   String?  @map("parent_id") @db.Uuid
+  sortIndex  Int      @map("sort_index")
+  inputs     Json     @default("{}") @db.JsonB
+  imageId    String?  @map("image_id") @db.Uuid
+  revision   Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_estimate_id")
+  parent   EstimateNode?  @relation("EstimateNodeChildren", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_parent_id")
+  children EstimateNode[] @relation("EstimateNodeChildren")
+
+  @@index([estimateId], map: "idx_estimate_nodes_estimate_id")
+  @@index([parentId], map: "idx_estimate_nodes_parent_id")
+  @@map("estimate_nodes")
 }

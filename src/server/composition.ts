@@ -8,6 +8,7 @@ import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
+import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
@@ -167,6 +168,7 @@ export function getTaskService(): TaskService {
 export function getEstimateService(): EstimateService {
   estimateService ??= createEstimateService({
     estimates: createEstimateRepository(runtimeClient()),
+    nodes: createEstimateNodeRepository(runtimeClient()),
     transactions: createTransactionRunner(runtimeClient()),
   });
   return estimateService;
