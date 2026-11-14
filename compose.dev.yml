@@ -1,5 +1,5 @@
-# Local development database only (STORY-10.01, AC-9). The deployment file, docker-compose.yml, is
-# STORY-10.04's.
+# Local development database only (STORY-10.01, AC-9). There is no deployment Compose file: the portal is
+# installed on a Windows Server with deploy/windows/install.ps1 (ADR-015, STORY-10.04).
 #
 #   cp .env.example .env        # then replace every CHANGE_ME value
 #   docker compose -f compose.dev.yml up -d db
@@ -19,12 +19,15 @@ services:
       POSTGRES_DB: accucut
       DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?Set DB_OWNER_PASSWORD in .env}
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+      # The role script runs the one SQL file that the Windows install reads too (deploy/db/create-roles.psql).
+      ROLES_SQL: /opt/accucut/db/create-roles.psql
     ports:
       # A private port: reachable from this machine only, never from the network.
       - '127.0.0.1:55432:5432'
     volumes:
       - accucut-dev-db:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./deploy/db:/opt/accucut/db:ro
     healthcheck:
       # TCP on 127.0.0.1: during first-run initialisation the image's temporary server listens on its socket only.
       test: ['CMD-SHELL', 'pg_isready --host 127.0.0.1 --username postgres --dbname accucut']

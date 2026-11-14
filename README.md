@@ -139,6 +139,24 @@ To start again from an empty database: `docker compose -f compose.dev.yml down -
 The app refuses to start if a required variable in `.env` is missing or still a `CHANGE_ME`
 placeholder; the message names the variable and never prints a value.
 
+## Install on a Windows Server
+
+The portal runs on **one Windows Server** as two Windows services (`AccucutApp`, `AccucutWorker`) next to PostgreSQL 17 (ADR-015). There is no
+Docker in production: `compose.dev.yml` is for a development database only, and there is no `Dockerfile`. The full guide, with the update, the
+rollback and the fixes, is [`deploy/windows/README.md`](deploy/windows/README.md). In short, for a Windows IT person:
+
+1. Install **Node.js 22 LTS** (22.12 or later) and **PostgreSQL 17** from their own installers. Note the `postgres` administrator password.
+2. Take the release zip `accucut-<tag>-win-x64.zip` and its `.sha256` file. Unblock the zip (Properties, Unblock) and unpack it to `C:\accucut-pkg`.
+3. In **Windows PowerShell as administrator**: `cd C:\accucut-pkg`, then `.\install.ps1 -ZipPath <the zip>`. Answer the questions. It checks the zip's
+   SHA-256 first, creates the database, the settings (readable by Administrators and the two service accounts only), the services, and waits for
+   `/api/health`. It offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning and says so; you may refuse.
+4. Open the address you gave and sign in as the first Admin. You will be asked to choose a new password.
+
+To **update**: `cd C:\Accucut\current`, then `.\update.ps1 <the new zip>`. It takes a release backup, migrates, switches releases and checks
+health; if the new release is not healthy it goes back to the previous one by itself and says "Call your IT person".
+
+The release zip is built by CI (`scripts/package-windows.ps1`, `.github/workflows/windows-package.yml`). Developers do not build it by hand.
+
 ## Adding a page or an API route (who may open it)
 
 Every page and every API route has one row in the route manifest, `src/server/http/route-manifest.ts`: its address, its
@@ -238,7 +256,9 @@ and runs its share of the E2E tests (`playwright test --shard=<i>/<N>`, four wor
 `Stages 1 to 11`, which waits for all of them and fails unless every one succeeded. That last job is the required check
 on `master` (the name was kept so the check keeps reporting and no repository setting changes). The first two kinds start
 together. The shard count is the length of `matrix.shard` in `ci.yml`: one line to change (test strategy 10.5).
-Stage 13 (image) is present and disabled until the Dockerfile story, STORY-10.04. The
+There is no image: the portal runs on Windows Server (ADR-015), so the disabled "Stage 13: image" step in `ci.yml` is dead and is
+replaced by the separate workflow `.github/workflows/windows-package.yml` (job **Stage 13: Windows package**, see "Install on a Windows
+Server" below). It is not a required check and sits outside `Stages 1 to 11`. The
 Next.js build cache and the Playwright browsers are cached between runs. The workflow uses no secret and no
 production setting. **Stage 11b, the first-load JavaScript budget, also blocks merge** (next section). A second workflow,
 `.github/workflows/nightly.yml`, runs the Lighthouse reference run and the CI feedback-time report every night; it is

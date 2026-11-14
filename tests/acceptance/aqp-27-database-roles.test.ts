@@ -49,7 +49,8 @@ describe('[AQP-27 AC-9] compose.dev.yml and the role script', () => {
   });
 
   it('[AQP-27 AC-9] the role script reads passwords from the environment, never from its own text', () => {
-    const script = readFileSync(join(ROOT, 'docker/postgres-init/01-create-roles.sh'), 'utf8');
+    // The statements are in the one SQL source that the Windows install reads too (STORY-10.04).
+    const script = readFileSync(join(ROOT, 'deploy/db/create-roles.psql'), 'utf8');
     expect(script).toContain('\\getenv owner_password DB_OWNER_PASSWORD');
     expect(script).toContain('\\getenv app_password DB_APP_PASSWORD');
     expect(script).not.toMatch(/PASSWORD\s+'[^']+'/);

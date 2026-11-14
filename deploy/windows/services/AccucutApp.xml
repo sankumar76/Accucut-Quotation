@@ -1,0 +1,41 @@
+<!--
+  WinSW 2.12.0 service file for the web app (STORY-10.04; ADR-015; architecture section 9.9).
+  install.ps1 and update.ps1 fill in the names between double braces below and write the result next to a copy of WinSW as C:\Accucut\services\AccucutApp.xml.
+  It holds paths and ports only. No setting and no secret: the process reads them from C:\Accucut\config\.env through Node's env-file option,
+  and that file can be read by Administrators and this service's own account only.
+
+  The service runs as its own virtual account, NT SERVICE\AccucutApp, never as LocalSystem. install.ps1 switches it with `sc.exe config`
+  right after WinSW registers it (WinSW registers as LocalSystem unless a password is given, and the service is not started before the switch).
+-->
+<service>
+  <id>AccucutApp</id>
+  <name>Accucut Quotation Portal (web app)</name>
+  <description>Serves the Accucut Quotation Portal (Next.js standalone server on Node.js).</description>
+
+  <executable>{{NODE_EXE}}</executable>
+  <arguments>--env-file="{{ENV_FILE}}" server.js</arguments>
+  <workingdirectory>{{CURRENT_DIR}}\app</workingdirectory>
+
+  <env name="NODE_ENV" value="production"/>
+  <env name="PORT" value="{{PORT}}"/>
+  <env name="HOSTNAME" value="{{LISTEN_ADDRESS}}"/>
+  <env name="NEXT_TELEMETRY_DISABLED" value="1"/>
+
+  <!-- Starts after PostgreSQL, a minute or so after boot, with no one signed in (NFR-012). -->
+  <depend>postgresql-x64-17</depend>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <!-- Restart after 10 s, then 30 s, then 60 s; the count starts again after a day without a failure. -->
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 day</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+
+  <!-- Standard output and error go to C:\Accucut\logs, a new file each day. The 30 days kept are enforced by clean-logs.ps1 (NFR-024). -->
+  <logpath>{{LOG_DIR}}</logpath>
+  <log mode="roll-by-time">
+    <pattern>yyyyMMdd</pattern>
+  </log>
+</service>

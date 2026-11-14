@@ -58,7 +58,7 @@ const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
  * the negative control of the confidentiality scan, which answers 404 everywhere except under NODE_ENV=test and is in no role's list).
  */
-const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/test-only/leak'];
+const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/health', '/api/test-only/leak'];
 
 const expectedRoles = (path: string, method: HttpMethod = 'GET'): ReadonlyArray<RoleName> => SPEC_ACCESS[`${method} ${path}`] ?? SPEC_ACCESS[path] ?? ROLES;
 
@@ -177,7 +177,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
     expect(differences).toEqual([]);
   });
 
-  it('keeps the public routes to sign-in, next-auth and the test-only negative control, and nothing else', () => {
+  it('keeps the public routes to sign-in, next-auth, the health check and the test-only negative control, and nothing else', () => {
     expect(ROUTE_MANIFEST.filter((row) => row.roles === 'public').map((row) => row.path).sort()).toEqual([...PUBLIC_ROUTES].sort());
   });
 
