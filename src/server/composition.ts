@@ -8,6 +8,7 @@ import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createConfigRepository } from './repositories/config-repository';
+import { createEstimateRepository } from './repositories/estimate-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -18,6 +19,7 @@ import { type AccountService, createAccountService } from './services/account-se
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { getCurrentVersion } from './services/config-service';
+import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
@@ -40,6 +42,7 @@ let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
+let estimateService: EstimateService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -155,6 +158,18 @@ export function getTaskService(): TaskService {
     clock: systemClock,
   });
   return taskService;
+}
+
+/**
+ * The estimate workspace (STORY-05.01): opening a task's estimate and choosing its customer. Choosing runs in one transaction with the estimate's input
+ * revision, under the estimate's row lock.
+ */
+export function getEstimateService(): EstimateService {
+  estimateService ??= createEstimateService({
+    estimates: createEstimateRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+  });
+  return estimateService;
 }
 
 /**

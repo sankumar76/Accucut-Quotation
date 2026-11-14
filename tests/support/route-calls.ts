@@ -1,6 +1,7 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
 import { CUSTOMER_RECIPE_ID } from './customer-canary';
+import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
 import { MATERIAL_RECIPE_ID } from './material-master-canary';
@@ -52,7 +53,7 @@ export function recipeProblem(path: string, id: string): string | null {
 /**
  * The address of a page for the scan. A page with a fixed address is that address. A page with a dynamic segment needs a recipe that
  * names a record the signed-in person really owns (`context.ownerId`), so the scan sees the page with its data and not "no access";
- * there is none yet, because no such page is implemented (`/estimates/[code]` arrives with story 05.x). Throws when there is none.
+ * `/estimates/[code]` (STORY-05.01) is the first. Throws when there is none.
  */
 export function validPageAddress(path: string, context: { readonly ownerId: string }): string {
   if (!DYNAMIC_SEGMENT.test(path)) return path;
@@ -61,10 +62,12 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
   return recipe(context);
 }
 
-/** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. Empty until one is implemented. */
+/** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
   // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
   '/masters/customers/[id]': () => `/masters/customers/${CUSTOMER_RECIPE_ID}`,
+  // SCR-05 (STORY-05.01): the canary task of the signed-in Engineer, who owns it (`estimate-recipe.ts`).
+  '/estimates/[code]': (context) => canaryEstimatePageFor(context.ownerId),
 };
 
 /**
@@ -115,6 +118,16 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
   };
 }
 
+/**
+ * STORY-05.01: the estimate route. The estimate is the one the caller's recipe owner has (`estimate-recipe.ts`: its ID is `context.targetId`), and the customer is the
+ * canary customer, which the in-memory repository of the security tests and the E2E database both hold. Choosing the customer the estimate already has is a no-op that
+ * answers 200, so the scan can repeat the call at any state.
+ */
+function estimateCall(method: HttpMethod, path: string, context: CallContext): ValidCall | undefined {
+  if (`${method} ${path}` !== 'PUT /api/v1/estimates/[id]/customer') return undefined;
+  return { id: context.targetId, body: { customerId: CUSTOMER_RECIPE_ID }, status: 200 };
+}
+
 // Over 40 lines on purpose (coding standards section 1): one `switch` of the valid calls of the routes, a line or two per route; a master's routes move into a helper like `treatmentCall`.
 export function validCallFor(method: HttpMethod, path: string, context: CallContext): ValidCall {
   switch (`${method} ${path}`) {
@@ -161,7 +174,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? DEFAULT_CALL;
+      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? estimateCall(method, path, context) ?? DEFAULT_CALL;
   }
 }
 
