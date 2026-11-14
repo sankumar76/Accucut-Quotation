@@ -34,8 +34,7 @@ const NOT_FOUND_MESSAGE = 'The customer or the material was not found.';
 /**
  * The calculation service (STORY-03.03 and 03.04; FR-024, FR-028 to FR-030; architecture sections 4.1 and 4.2). It holds the one thing the
  * rest is built on: `calculateRow` works out one node's calculated fields, M to BK, and `calculateEstimate` works out every row of an
- * estimate and then its product totals (BL, BN and the total Tool Cost), from the masters as they are now. The full Calculate flow (a
- * transaction, a locked estimate, the stored record) is STORY-05.09 and its neighbours.
+ * estimate and then its product totals (BL, BN and the total Tool Cost), from the masters as they are now. `calculate` (STORY-05.09) is the Engineer's whole Calculate in one transaction.
  *
  * `storeCalculation` (STORY-03.05; FR-031, NFR-026; ADR-007; architecture section 4.2) is the write half: it works the estimate out as above and stores
  * an immutable record of it, in one transaction with the estimate's new status and its link to that record. The record holds the configuration version,
