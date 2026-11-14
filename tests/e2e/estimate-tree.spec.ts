@@ -103,6 +103,8 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await openTree(page, testInfo);
     await part(page, '1').click();
     await action(page, 'Sub-part').click();
+    // One change at a time: a second press while the first is out is ignored, so wait for the part to appear.
+    await expect(part(page, '1.1')).toBeVisible();
     await action(page, 'New item').click();
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
@@ -141,6 +143,9 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await openTree(page, testInfo);
     await part(page, '1').click();
     await action(page, 'Sub-part').click();
+    await expect(part(page, '1.1')).toBeVisible();
+    // The new part is the selected one, so choose part 1 again for its second sub-part.
+    await part(page, '1').click();
     await action(page, 'Sub-part').click();
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
 
