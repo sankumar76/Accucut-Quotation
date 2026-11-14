@@ -56,11 +56,11 @@ async function addCustomer(): Promise<string> {
   return customerId;
 }
 
-async function addMaterial(values: { pricePerKg: string; specificGravity: string; scrapRate: string } = MATERIAL): Promise<string> {
+async function addMaterial(values: { pricePerKg: string; specificGravity: string; scrapRate: string } = MATERIAL, name = 'Invented-plate-grade'): Promise<string> {
   const { rows } = await db.owner.query<{ id: string }>(
     `INSERT INTO materials (material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate)
-     VALUES ('Invented-plate-grade', 'Invented steel', $1, $2, $3) RETURNING id::text`,
-    [values.pricePerKg, values.specificGravity, values.scrapRate],
+     VALUES ($4, 'Invented steel', $1, $2, $3) RETURNING id::text`,
+    [values.pricePerKg, values.specificGravity, values.scrapRate, name],
   );
   return defined(rows[0]).id;
 }
@@ -125,7 +125,7 @@ describe('findMaterialsForCalculation (STORY-05.09, SQR-01 of AQP-293: every mat
 
   it('reads several materials in one call, whatever the letter case of the ID, and a repeated ID once', async () => {
     const first = await addMaterial({ pricePerKg: '10', specificGravity: '2', scrapRate: '1' });
-    const second = await addMaterial({ pricePerKg: '20', specificGravity: '3', scrapRate: '2' });
+    const second = await addMaterial({ pricePerKg: '20', specificGravity: '3', scrapRate: '2' }, 'Invented-second-grade');
     const found = await db.masterRepository.findMaterialsForCalculation([first.toUpperCase(), second, first]);
     expect(found.map((record) => record.id).sort()).toEqual([first, second].sort());
   });
