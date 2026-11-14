@@ -92,6 +92,27 @@ describe('validateTextInput', () => {
     expect(validateTextInput(typed, { multiline: true })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
   });
 
+  it.each([
+    ['the zero-width space (U+200B)', 'FR\u200B321'],
+    ['the zero-width non-joiner (U+200C)', 'FR\u200C321'],
+    ['the zero-width joiner (U+200D)', 'FR\u200D321'],
+    ['the left-to-right mark (U+200E)', 'FR\u200E321'],
+    ['the right-to-left mark (U+200F)', 'FR\u200F321'],
+    ['the Arabic letter mark (U+061C)', 'FR\u061C321'],
+    ['the word joiner (U+2060)', 'FR\u2060321'],
+    ['the invisible times (U+2062)', 'FR\u2062321'],
+    ['the invisible plus (U+2064)', 'FR\u2064321'],
+    ['the byte order mark (U+FEFF)', 'FR\uFEFF321'],
+    ['the soft hyphen (U+00AD)', 'FR\u00AD321'],
+  ])('refuses %s, an invisible character that could spoof a part number (security review)', (_name, typed) => {
+    expect(validateTextInput(typed, { multiline: false })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+    expect(validateTextInput(typed, { multiline: true })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+  });
+
+  it('refuses an invisible character at the end of a text too, where trimming does not remove it', () => {
+    expect(validateTextInput(`FR321${String.fromCharCode(0x200b)}`, { multiline: false })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+  });
+
   it('still accepts text in other scripts and an accented letter', () => {
     expect(validateTextInput('Cover é नमस्ते 中文', { multiline: false }).ok).toBe(true);
   });

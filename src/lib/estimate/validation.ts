@@ -33,10 +33,13 @@ export const TEXT_CHARACTERS_MESSAGE = 'Use letters, numbers and punctuation onl
 export type InputCheck = { readonly ok: true; readonly value: string | null } | { readonly ok: false; readonly message: string };
 
 /**
- * Every control character (C0, DEL and C1), the line and paragraph separators, and the bidirectional overrides and isolates, which can make a part number display other than it is stored
- * (review SQR-04). A line feed is let through by the multi-line rule below, after a carriage return is folded into it.
+ * Every control character (Unicode category Cc: C0, DEL and C1), every **format** character (Cf: the zero-width characters U+200B to U+200F, U+061C, U+2060 to U+2064, U+FEFF,
+ * the bidirectional overrides, embeddings and isolates, the soft hyphen) and the line and paragraph separators (Zl, Zp). They are invisible or reorder what is shown, so a part number
+ * could display other than it is stored (reviews SQR-04 and the security review). There is **no exception**: the zero-width joiner and non-joiner (U+200D, U+200C), which some Indian
+ * scripts need, are blocked too, as no source asks for them. **Assumption, to be confirmed by the product owner if a script needs them.** A line feed is let through by the
+ * multi-line rule below, after a carriage return is folded into it.
  */
-const CONTROL_CHARACTERS = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
+const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const LINE_BREAKS = /\r\n?/g;
 const LINE_FEED = /\n/g;
 
