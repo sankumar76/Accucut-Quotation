@@ -95,6 +95,8 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // ---- Implemented -------------------------------------------------------------------------------------------------
   { path: '/sign-in', kind: 'page', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', screen: 'SCR-01' },
   { path: '/api/auth/[...nextauth]', kind: 'api', methods: ['GET', 'POST'], roles: 'public', status: 'implemented', stage: 'R1' },
+  // STORY-10.04 (architecture sections 9.4, 9.9). The health check the Windows install, the update and the uptime monitor call: public, no input, answers `ok` or `unavailable` and nothing else.
+  { path: '/api/health', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1' },
   {
     path: '/queue',
     kind: 'page',

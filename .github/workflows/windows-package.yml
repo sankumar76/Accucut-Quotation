@@ -1,0 +1,239 @@
+# Stage 13: Windows package (STORY-10.04, AC-8 and AC-9; ADR-015; test strategy section 10.8).
+#
+# Builds the Windows release zip on a Windows runner, installs it there with install.ps1, updates it with update.ps1, proves the rollback
+# with a release that is broken on purpose, and runs the Pester tests of the scripts. It is the test of 10.04, 10.05 and 10.11 on the target
+# operating system.
+#
+# Where it sits (master's ruling DL-211, AC-9):
+#   - It is NOT a required check, and it sits OUTSIDE the fan-in job `Stages 1 to 11` of ci.yml. Branch protection is unchanged. It is
+#     a separate workflow, so it cannot lengthen the NFR-009 path and a change to it cannot touch ci.yml.
+#   - The orchestrator treats it as must-be-green on every pull request where it runs.
+#
+# Security rules (architecture section 8, TB-6). The repository is public, so job logs are public.
+#   - The trigger is `pull_request`, never `pull_request_target`: a pull request from a fork runs without any secret and with a
+#     read-only token. This workflow uses no repository secret.
+#   - Third-party actions are pinned to a commit SHA.
+#   - Every secret value is made inside the job (fake, throwaway, for a database and services that die with the runner), masked in the log, written only to a
+#     file in the runner's temp folder, and deleted at the end. None is on a command line.
+#   - WinSW and age are downloaded from the addresses in deploy/windows/tools.psd1 and refused unless their SHA-256 matches.
+name: Windows package
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'deploy/**'
+      - 'scripts/package-windows.ps1'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'prisma/**'
+      - 'src/worker/**'
+      - 'src/app/api/health/**'
+      - '.env.example'
+      - '.github/workflows/windows-package.yml'
+  push:
+    branches: [master]
+  schedule:
+    # Nightly, after the other nightly jobs. A Windows-only defect must not wait for the next change to deploy/windows.
+    - cron: '47 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-package-${{ github.ref }}
+  # A run on master must finish; only a pull request run is replaced by a newer push.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: 'true'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+  # The same pins as ci.yml. Change them in both, in a reviewed change.
+  NODE_VERSION: '22'
+  NPM_VERSION: '11.17.0'
+
+jobs:
+  windows-package:
+    name: "Stage 13: Windows package"
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        # Windows PowerShell 5.1: the same shell as on the server (ADR-015). Not PowerShell 7.
+        shell: powershell
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # npm 11.17 enforces the `allowScripts` install-script allow-list in package.json (as in ci.yml).
+      - name: Use the pinned npm
+        run: npm install --global "npm@$env:NPM_VERSION"
+
+      - name: Install the packages (npm ci)
+        run: npm ci
+
+      - name: Build (npm run build)
+        run: npm run build
+
+      # ---- The two programs the package carries, checked against the pinned SHA-256 --------------------------------------
+      - name: Fetch WinSW and age (pinned, checksummed)
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $tools = Import-PowerShellDataFile -LiteralPath deploy/windows/tools.psd1
+          $directory = Join-Path $env:RUNNER_TEMP 'accucut-tools'
+          New-Item -ItemType Directory -Path $directory -Force | Out-Null
+          foreach ($tool in @($tools.WinSw, $tools.Age)) {
+            $file = Join-Path $directory $tool.File
+            Invoke-WebRequest -Uri $tool.Url -OutFile $file -UseBasicParsing
+            $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $tool.Sha256) { throw "$($tool.File) does not match its pinned SHA-256 (expected $($tool.Sha256), got $actual)." }
+            Write-Host "$($tool.File) matches its pinned SHA-256."
+          }
+          "ACCUCUT_TOOLS=$directory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ---- Package -----------------------------------------------------------------------------------------------------------
+      - name: Build the release package (accucut-<tag>-win-x64.zip and its SHA-256)
+        run: |
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $tag = "$version-$($env:GITHUB_SHA.Substring(0, 7))"
+          "ACCUCUT_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & .\scripts\package-windows.ps1 -Tag $tag -ToolsDirectory $env:ACCUCUT_TOOLS -OutputDirectory dist -Commit $env:GITHUB_SHA
+
+      # A second release of the same code under another tag, and a third that is broken on purpose, for the update and the rollback below.
+      - name: Build the second and the broken release (for the update and the rollback)
+        run: |
+          & .\scripts\package-windows.ps1 -Tag "$($env:ACCUCUT_TAG)-u2" -ToolsDirectory $env:ACCUCUT_TOOLS -OutputDirectory dist-u2 -Commit $env:GITHUB_SHA
+          & .\deploy\windows\ci\derive-release.ps1 -SourceZip "dist-u2\accucut-$($env:ACCUCUT_TAG)-u2-win-x64.zip" -Tag "$($env:ACCUCUT_TAG)-bad" -OutputDirectory dist-bad -BreakApp
+
+      # ---- The runner's own PostgreSQL 17 ----------------------------------------------------------------------------------
+      # `postgresql-x64-17` is installed but disabled on the image (user postgres, with the password that the image documents for it). It is set
+      # to Manual and started, and its administrator password is replaced by a fresh invented one at once, through standard input, so that the
+      # install is tested with a password that nobody could know beforehand.
+      - name: Start PostgreSQL 17 and change its administrator password
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Service -Name postgresql-x64-17 -StartupType Manual
+          Start-Service -Name postgresql-x64-17
+          $bin = $env:PGBIN
+          if (-not $bin) { $bin = 'C:\Program Files\PostgreSQL\17\bin' }
+          $imageDocumentedPassword = 'root'
+          $new = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 28 | ForEach-Object { [char]$_ })
+          Write-Host "::add-mask::$new"
+          $env:PGPASSWORD = $imageDocumentedPassword
+          $ready = $false
+          for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+            & "$bin\pg_isready.exe" --host 127.0.0.1 --port 5432 | Out-Null
+            if ($LASTEXITCODE -eq 0) { $ready = $true } else { Start-Sleep -Seconds 2 }
+          }
+          if (-not $ready) { throw 'PostgreSQL 17 did not become ready.' }
+          "ALTER ROLE postgres PASSWORD '$new';" | & "$bin\psql.exe" --host 127.0.0.1 --port 5432 --username postgres --no-password --quiet --set ON_ERROR_STOP=1 --dbname postgres --file -
+          if ($LASTEXITCODE -ne 0) { throw 'The administrator password could not be changed.' }
+          Remove-Item Env:\PGPASSWORD
+          $values = Join-Path $env:RUNNER_TEMP 'accucut-values.txt'
+          $admin = 'Ci' + (-join ((48..57) + (65..90) + (97..122) | Get-Random -Count 14 | ForEach-Object { [char]$_ })) + '-9!'
+          Write-Host "::add-mask::$admin"
+          $lines = @(
+            '# Invented for this run only. Deleted at the end of the job.',
+            'APP_ORIGIN=http://127.0.0.1:3000',
+            'ADMIN_EMAIL=ci-admin@example.test',
+            "ADMIN_INITIAL_PASSWORD=$admin",
+            "PG_SUPERUSER_PASSWORD=$new",
+            'SMTP_AUTH_MODE=none'
+          )
+          [System.IO.File]::WriteAllText($values, ($lines -join "`r`n") + "`r`n")
+          "ACCUCUT_VALUES=$values" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
+      - name: Install from the unpacked zip, non-interactively (install.ps1)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
+          $package = 'C:\accucut-pkg'
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $package)
+          $ErrorActionPreference = 'Continue'
+          & powershell.exe -NoProfile -File "$package\install.ps1" -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed (exit code $LASTEXITCODE)." }
+
+      - name: Assert the install (services, health, sign-in, permissions, no secret in a log)
+        run: |
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG
+
+      # ---- Update and rollback (AC-3, AC-4) ----------------------------------------------------------------------------------
+      # `backup.ps1` is STORY-10.05's. Until it exists the update is run with -NoBackup, which the script warns about; the test of the backup step
+      # itself (a failed or missing backup stops the update before any change) is in update.Tests.ps1.
+      - name: Update to the second release (update.ps1)
+        run: |
+          $zip = (Resolve-Path "dist-u2\accucut-$($env:ACCUCUT_TAG)-u2-win-x64.zip").Path
+          $ErrorActionPreference = 'Continue'
+          & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup
+          if ($LASTEXITCODE -ne 0) { throw "update.ps1 failed (exit code $LASTEXITCODE)." }
+          $ErrorActionPreference = 'Stop'
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          $releases = @(Get-ChildItem -LiteralPath 'C:\Accucut\releases' -Directory | Select-Object -ExpandProperty Name | Sort-Object)
+          Write-Host "Releases kept: $($releases -join ', ')"
+          if ($releases.Count -ne 2) { throw "Only the current and the previous release should be kept, found: $($releases -join ', ')" }
+
+      - name: Update to a broken release, and see it rolled back (update.ps1)
+        run: |
+          $zip = (Resolve-Path "dist-bad\accucut-$($env:ACCUCUT_TAG)-bad-win-x64.zip").Path
+          $ErrorActionPreference = 'Continue'
+          $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup -HealthTimeoutSeconds 40 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          $ErrorActionPreference = 'Stop'
+          if ($code -eq 0) { throw 'The update to the broken release should have failed, and it did not.' }
+          if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+
+      # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
+      # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.
+      - name: Pester tests of the scripts (deploy/windows/tests)
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0 -Force
+          $configuration = New-PesterConfiguration
+          $configuration.Run.Path = 'deploy/windows/tests'
+          $configuration.Run.Exit = $true
+          $configuration.Output.Verbosity = 'Detailed'
+          $configuration.TestResult.Enabled = $true
+          $configuration.TestResult.OutputPath = 'pester-results.xml'
+          Invoke-Pester -Configuration $configuration
+
+      - name: Show the install and update logs and the services' error logs (on failure only)
+        if: ${{ failure() }}
+        run: |
+          foreach ($pattern in 'install-*.log', 'update-*.log', '*.err.log', '*.wrapper.log') {
+            Get-ChildItem -LiteralPath 'C:\Accucut\logs' -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "===== $($_.Name)"
+              Get-Content -LiteralPath $_.FullName -Tail 60
+            }
+          }
+
+      - name: Delete the values file
+        if: ${{ always() }}
+        run: |
+          if ($env:ACCUCUT_VALUES -and (Test-Path -LiteralPath $env:ACCUCUT_VALUES)) { Remove-Item -LiteralPath $env:ACCUCUT_VALUES -Force }
+
+      # The zip and its checksum hold code and tools only, no data and no setting (the package script refuses a .env file).
+      - name: Keep the release package and the Pester results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accucut-windows-package
+          path: |
+            dist/accucut-*-win-x64.zip
+            dist/accucut-*-win-x64.zip.sha256
+            pester-results.xml
+          if-no-files-found: warn
+          retention-days: 14
