@@ -8,7 +8,8 @@ import base from './vitest.config';
  * nothing else. It shares the default configuration's aliases (`@`, and `server-only` as an empty module) and its wrong-database guard.
  */
 export default defineConfig({
-  resolve: base.resolve,
+  // `resolve` is optional in the base type and `exactOptionalPropertyTypes` is on, so an undefined value is not passed through.
+  resolve: base.resolve ?? {},
   test: {
     environment: 'node',
     include: ['tests/perf/**/*.test.ts'],
