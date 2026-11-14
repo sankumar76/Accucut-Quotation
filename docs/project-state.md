@@ -20,7 +20,7 @@
 
 > One ledger update a day (§9 item 6). It updates the resume point below; where they differ, this section wins.
 
-**`master` = d085973** (#380 AQP-293), updated later the same day. Merged since the resume point (all squash, fully green CI, §9 item 1):
+**`master` = 892579c** (#392 AQP-303), updated through the afternoon of the same day. Merged since the resume point (all squash, fully green CI, §9 item 1):
 
 | PR | Story | Merge | CI of record |
 |---|---|---|---|
@@ -33,18 +33,30 @@
 | #378 | AQP-301 (05.01 open the task, choose the customer) | 8d32a87 | 43591178390 on the branch updated to e31cc75 (first green 43589610084: 4,553 / 7,305; `/estimates/[code]` 188.4 of 200 KB) |
 | #381 | AQP-298 (04.02 task queues) | 1e8926e | 43594022009. Manifest now one row per path and method; focused guard check APPROVE WITH COMMENTS, 0 Blocker/Critical/Major (5904333687) |
 | #380 | AQP-293 (03.05 calculation record) [c] | d085973 | 43595315630 on the branch updated to 1e8926e. Combined review APPROVE WITH COMMENTS, 0 Blocker/Critical, **1 Major (SQR-01, pool connections under the estimate lock) routed to 05.09, follow-up #382** |
+| #383 | AQP-299 (06.01 estimate status flow) [c] | 38fe29f | 43598677144. Combined review APPROVE after fix round 1 (SQR-01 Major `transition(..., tx?)` fixed and verified); deviation 1 (Lead/Admin may edit SUBMITTED, FR-064) confirmed |
+| #385 | AQP-295 (04.03 overdue cues and bell) | 52b3953 | 43601463359 on the branch updated to 38fe29f |
+| #384 | AQP-302 (05.02 parts tree) [c] | 7d369e6 | 43602662539. Combined review APPROVE after fix round 1 (SQR-01 subtree fingerprint on delete, SQR-02 2,000-part limit, assumption) |
+| #388 | AQP-306 (02.07, customer half) [c] | ba059dd | 43605905979. Re-cut of #386 (DL-212). Combined review, 0 Blocker/Critical/Major |
+| #389 | AQP-296 (04.04 Engineer sees own status) [c] | fdb0b7d | 6 of 6 on the branch updated to ba059dd. Re-cut of #387 (DL-212). Combined review APPROVE after option A (one badge per status; product-owner amended AQP-296 AC-1 and AQP-297 AC-6) |
+| #390 | AQP-306 (AC-3 material guard and #388 review fixes) [c] | d60415d | 6 of 6 on the branch updated to fdb0b7d. Combined review, 0 Blocker/Critical/Major |
+| #393 | AQP-297 (04.05 task closes on approval) | 553fdcf | 43612177531 |
+| #392 | AQP-303 (05.03 part form) [c] | 892579c | 43615732244. Re-cut of #391 (DL-215). Combined review APPROVE after fix round 1 (SQR-01 Major: saves merge onto stored inputs) and an automated security review's Medium (text refuses Unicode Cc/Cf/Zl/Zp) |
 
-Jira **Done** today: AQP-291, 292, 294, 148, 300, 301, 298, 293. Unblocked: AQP-295, 296, 297 (04.03 to 04.05), AQP-306 (02.07 [c]), and AQP-317 (05.09) waits on 05.04.
+Jira **Done** today (15): AQP-291, 292, 294, 148, 300, 301, 298, 293, 299, 295, 302, 306, 296, 297, 303. Unblocked now: AQP-304 (05.04 [c]), AQP-315 (05.07), then AQP-313 / 317 after 05.04.
+
+**Denied merge and the re-cut rule (DL-212, DL-215, RISK-030):** `git merge origin/master` was denied in isolated worktrees from about 14:00Z (cause not established; it worked earlier in the day). The delivery lead first approved re-cuts of #386 and #387 (DL-212), then a standing rule (DL-215): on a denied merge the developer cherry-picks onto a `-2` branch from master, opens a new PR and closes the old one; the delivery lead deletes old branches in batches.
 
 **Gitleaks incident (2026-11-14, RISK-027 pattern, DL-188 repeat):** commit b105d09 on `feat/AQP-300-step-up` held a UUID literal in a unit test that Gitleaks flags as `generic-api-key` (a false positive, no credential). Stage 2 scans every ref, so `master` push run 43585583640 and every PR went red. The delivery lead deleted the branch (and the four merged story branches); the re-run of 43585583640 is 6 of 6. Briefs now tell developers to keep UUID / hex test IDs in named constants and to scan new fixtures before pushing.
 
 | Lane | Story | Branch / worktree | State |
 |---|---|---|---|
-| A | AQP-299 06.01 estimate status flow [c] | `feat/AQP-299-estimate-status`, new isolated worktree | Building; combined review before the squash; replaces AQP-301's local `assertEditable` |
-| B | AQP-302 05.02 parts tree [c] | `feat/AQP-302-parts-tree`, worktree `agent-a486200e388cf60a2` | Building; combined review before the squash |
-| Records | `docs/AQP-1-records-p`, PR #379 (draft) | this branch | Review reports for AQP-300, AQP-293, AQP-298; this update |
+| A | AQP-304 05.04 part form, remaining sections [c] | `feat/AQP-304-part-form-2`, new isolated worktree | Building; combined review before the squash |
+| B | AQP-310 10.04 Windows install and update [c] | `feat/AQP-310-windows-install`, isolated worktree `agent-a188f19b23200d394` | Building; includes CI Stage 13 as its own scope (DL-211: not a required check); combined review before the squash |
+| Records | `docs/AQP-1-records-p`, PR #379 (draft) | this branch | Review reports for AQP-300, 293, 298, 299, 302, 306 (two), 296, 303; DL-212 to DL-216; this update |
 
-**Next in line (R1 core, 2 lanes):** AQP-303 (05.03 [c]) after 05.02, AQP-295 / 296 [c] / 297 (04.03 to 04.05), AQP-306 (02.07 [c]). Wave 2 (AQP-310 to AQP-338, scrum-master 11814) follows the chain; AQP-310 (10.04, Windows install, [c]) and AQP-337 (08.01 [c]) have no blocker and wait for a third lane.
+**Next in line:** AQP-315 (05.07), AQP-313 (05.05) after 05.04, AQP-317 (05.09 [c], also carries #382) after 05.04, AQP-311 (10.05) after 10.04, AQP-337 (08.01 [c]), AQP-305 (02.06 [c]).
+
+**Open questions (non-blocking, AQP-1 11881):** 2,000-part limit (PM / architect); deleted names stay taken (AQP-306 SQR-04); ZWJ/ZWNJ blocked in typed text (product-owner); Admin cancel on DRAFT/SUBMITTED (AQP-299 SQR-03, before 06.12). New follow-ups: #394 (export must not turn typed text into formulas), #395 (default-scale Tailwind sizes do nothing).
 
 **Memory:** 0.45 to 0.73 GB free today. Two lanes only; no third lane until at least 1.5 GB stays free. Developers run targeted Vitest and ESLint only; `tsc` and E2E in CI.
 
