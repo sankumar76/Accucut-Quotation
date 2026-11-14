@@ -1,5 +1,5 @@
 import type { RoleName } from '@/lib/auth/roles';
-import type { QueueTab, TaskEstimateStatus } from '@/lib/tasks/queue';
+import type { QueueTab } from '@/lib/tasks/queue';
 
 /**
  * The words of SCR-03 "Task queue" and "My tasks" (UX spec section 6, SCR-03), written once. The empty-state sentences of the Open tab are the UX spec's, per role;
@@ -35,9 +35,6 @@ export const ERROR_RETRY = 'Try again';
 export const SHOW_MORE = 'Show more tasks';
 export const SHOW_MORE_FAILED_TITLE = 'We could not load more tasks';
 export const SHOW_MORE_FAILED_BODY = 'Check your connection and try again. The tasks above are unchanged.';
-
-/** The status of the estimate as a row says it, until story 04.04 words it for the Engineer. */
-export const STATUS_LABELS: Readonly<Record<TaskEstimateStatus, string>> = { DRAFT: 'Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
 
 export interface EmptyText {
   readonly title: string;

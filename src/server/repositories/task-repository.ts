@@ -81,6 +81,11 @@ export interface QueueRow {
   readonly status: EstimateStatus;
 }
 
+/** One task as the task route reads it: the row of the queue and the notes typed when it was assigned. Still nothing about cost. */
+export interface TaskDetailRow extends QueueRow {
+  readonly notes: string | null;
+}
+
 export interface QueueRequest {
   readonly tab: QueueTab;
   readonly scope: QueueScope;
@@ -100,6 +105,11 @@ export interface TaskRepository {
   createTask(task: NewTask, tx: Transaction): Promise<TaskRecord>;
   /** An empty estimate for the task: DRAFT, no customer. */
   createEstimate(taskId: string, tx: Transaction): Promise<EstimateRecord>;
+  /**
+   * The task with this ID **inside this scope**, or null: an ID that is not a UUID, an unknown one and a task outside the scope (an Engineer's other-person task) are all
+   * the same null, so nothing tells a task that exists from one that does not (STORY-04.04 AC-4). The scope is cut in the query, so another Engineer's row is never read.
+   */
+  findTask(id: string, scope: QueueScope): Promise<TaskDetailRow | null>;
   /** Up to `limit` tasks of the tab, earliest deadline first and then by code, after `after` when it is given (STORY-04.02 AC-1, AC-2). */
   listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
   /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
@@ -121,6 +131,26 @@ const QUEUE_SELECT = {
   assignedBy: { select: { name: true } },
   estimate: { select: { status: true, customer: { select: { name: true } } } },
 } satisfies Prisma.TaskSelect;
+
+const DETAIL_SELECT = { ...QUEUE_SELECT, notes: true } satisfies Prisma.TaskSelect;
+
+type QueueSelected = Prisma.TaskGetPayload<{ select: typeof QUEUE_SELECT }>;
+
+/** A task's row as the queue and the task route both read it. Every task has an estimate (made in the same transaction), so a row without one is not a row. */
+function toQueueRow(row: QueueSelected): QueueRow | null {
+  if (row.estimate === null) return null;
+  return {
+    id: row.id,
+    code: row.code,
+    title: row.title,
+    folderPath: row.folderPath,
+    deadlineAt: row.deadlineAt,
+    engineer: row.engineer,
+    assignedByName: row.assignedBy.name,
+    customerName: row.estimate.customer?.name ?? null,
+    status: row.estimate.status,
+  };
+}
 
 /** The tab as a filter on the task and on the status of its estimate; Open and Closed are derived from `estimates.status`, never stored (architecture section 4.4). */
 function tabFilter(tab: QueueTab, now: Date): Prisma.TaskWhereInput {
@@ -202,6 +232,15 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         clientFor(db, tx).estimate.create({ data: { taskId }, select: { id: true, taskId: true, customerId: true, status: true } }),
       ),
 
+    findTask: (id, scope) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a task asked for by one is not found.
+        if (!isUuid(id) || !isReadable(scope)) return null;
+        const row = await db.task.findFirst({ where: { AND: [{ id }, scopeFilter(scope)] }, select: DETAIL_SELECT });
+        const mapped = row === null ? null : toQueueRow(row);
+        return row === null || mapped === null ? null : { ...mapped, notes: row.notes };
+      }),
+
     listQueue: ({ tab, scope, now, limit, after }) =>
       withDatabaseErrors(async () => {
         if (!isReadable(scope)) return [];
@@ -211,24 +250,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
           take: limit,
           select: QUEUE_SELECT,
         });
-        return rows.flatMap((row): QueueRow[] =>
-          // Every task has an estimate (made in the same transaction), and every tab filters on it, so this only narrows the type.
-          row.estimate === null
-            ? []
-            : [
-                {
-                  id: row.id,
-                  code: row.code,
-                  title: row.title,
-                  folderPath: row.folderPath,
-                  deadlineAt: row.deadlineAt,
-                  engineer: row.engineer,
-                  assignedByName: row.assignedBy.name,
-                  customerName: row.estimate.customer?.name ?? null,
-                  status: row.estimate.status,
-                },
-              ],
-        );
+        // Every task has an estimate and every tab filters on it, so `toQueueRow` only narrows the type.
+        return rows.flatMap((row): QueueRow[] => {
+          const mapped = toQueueRow(row);
+          return mapped === null ? [] : [mapped];
+        });
       }),
 
     countQueue: (scope, now) =>

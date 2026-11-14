@@ -140,6 +140,17 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
+  taskWorld.seed({
+    id: targetId,
+    code: canaryTaskCodeFor(targetId),
+    engineerId: idOf.ENGINEER,
+    assignedById: idOf.LEAD,
+    deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
+    title: 'Invented task',
+    notes: 'Invented notes.',
+    folderPath: CANARY_FOLDER_PATH,
+  });
   // The recipe of the estimate routes (`estimate-recipe.ts`): the harness Engineer owns a draft whose ID is `targetId` and whose code is made from it.
   const estimateWorld = createFakeEstimateWorld(
     () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, deleted: customer.deleted })),
