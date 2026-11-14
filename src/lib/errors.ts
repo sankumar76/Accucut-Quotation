@@ -80,6 +80,29 @@ export class TooManyAttemptsError extends AppError {
   }
 }
 
+/** The `code` of the 422 of a wrong password given for a protected action (STORY-06.14 AC-2, ADR-009). The browser compares with it to show SCR-18's message. */
+export const STEP_UP_FAILED_CODE = 'STEP_UP_FAILED';
+
+/** The `code` of the 429 of a step-up that is blocked after five wrong passwords (STORY-06.14 AC-3, assumption A-1). */
+export const STEP_UP_LOCKED_CODE = 'STEP_UP_LOCKED';
+
+/**
+ * The password given with a protected action is not the signed-in person's own (STORY-06.14 AC-2). 422, never 401: a 401 reads as a
+ * lost session and the screen would sign the person out (ADR-009). The words are the caller's, one sentence for every wrong case.
+ */
+export class StepUpFailed extends AppError {
+  constructor(message: string) {
+    super(STEP_UP_FAILED_CODE, 422, message);
+  }
+}
+
+/** The step-up of this person is blocked, even for the right password, until the block ends (STORY-06.14 AC-3): 429. */
+export class StepUpLocked extends AppError {
+  constructor(message: string) {
+    super(STEP_UP_LOCKED_CODE, 429, message);
+  }
+}
+
 /** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
 export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';
 

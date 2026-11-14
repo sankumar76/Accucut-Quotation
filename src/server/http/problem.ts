@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 import { SESSION_ENDED_CODE } from '../../lib/auth/session-ended';
+import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '../../lib/auth/step-up';
 
 import {
   ActiveAdminExistsError,
@@ -11,6 +12,8 @@ import {
   FieldValidationError,
   ForbiddenError,
   ProcessItemInUseError,
+  StepUpFailed,
+  StepUpLocked,
   UnauthorizedError,
   type FormulaUse,
 } from '../../lib/errors';
@@ -112,6 +115,9 @@ export function validationProblem(error: z.ZodError, requestId: string): Problem
 export function problemFromAppError(error: AppError, requestId: string): Problem {
   if (error instanceof UnauthorizedError) return error.code === SESSION_ENDED_CODE ? sessionEndedProblem(requestId) : unauthorizedProblem(requestId);
   if (error instanceof ForbiddenError && error.code === FORBIDDEN_CODE) return forbiddenProblem(requestId);
+  // The step-up refusals (STORY-06.14 AC-2, AC-3): fixed words and a fixed code, the same for every wrong case, whatever the message says.
+  if (error instanceof StepUpFailed) return problem(error.httpStatus, error.code, STEP_UP_FAILED_MESSAGE, requestId);
+  if (error instanceof StepUpLocked) return problem(error.httpStatus, error.code, STEP_UP_LOCKED_MESSAGE, requestId);
   if (error instanceof FieldValidationError) return problem(error.httpStatus, error.code, VALIDATION_TITLE, requestId, error.fields);
   if (error instanceof ActiveAdminExistsError) {
     const base = problem(error.httpStatus, error.code, error.message, requestId);
