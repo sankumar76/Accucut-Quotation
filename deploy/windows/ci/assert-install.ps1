@@ -86,7 +86,7 @@ $migrateAcl = Get-AclSids -Path $paths.MigrateEnvFile
 Assert-That ($migrateAcl.Protected -and (($migrateAcl.Sids -join ';') -eq $adminSid)) "migrate.env can be read by Administrators only (found: $($migrateAcl.Sids -join ', '))"
 $rootAcl = Get-AclSids -Path $paths.Root
 Assert-That ($rootAcl.Protected -and ($rootAcl.Owner -eq $adminSid)) 'the install folder is owned by Administrators and does not inherit permissions'
-$unexpectedRoot = @($rootAcl.Sids | Where-Object { @($adminSid, 'S-1-5-18', $appSid, $workerSid) -notcontains $_ })
+$unexpectedRoot = @($rootAcl.Sids | Where-Object { @($adminSid, 'S-1-5-18', 'S-1-5-19', $appSid, $workerSid) -notcontains $_ })
 Assert-That ($unexpectedRoot.Count -eq 0) "the install folder is closed to ordinary users (found: $($rootAcl.Sids -join ', '))"
 foreach ($folder in $paths.Releases, $paths.Config, $paths.Services, $paths.Logs) {
     $folderAcl = Get-AclSids -Path $folder
@@ -101,7 +101,7 @@ function Assert-Trusted {
     Write-Host "PASS  $Message"
 }
 $release = Get-AccucutTrustedCurrent -Root $paths.Root
-$logWriters = @($services | ForEach-Object { Get-AccucutUpdateServiceSid -Name $_ })
+$logWriters = @($services | ForEach-Object { Get-AccucutUpdateServiceSid -Name $_ }) + @($script:AccucutLogCleanupSid)
 Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Root -Root $paths.Root -ProtectedRoot } 'the install folder passes the trust check (owner, protected list, no other writer)'
 Assert-Trusted { Assert-AccucutTrustedPath -Path $release -Root $paths.Root -ProtectedRoot } 'the current release folder passes the trust check'
 Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'AccucutOps.psm1') -Root $paths.Root -ProtectedRoot } 'the module passes the trust check'
@@ -109,7 +109,7 @@ Assert-Trusted { Assert-AccucutTrustedPath -Path (Join-Path $release 'update.ps1
 foreach ($folder in $paths.Config, $paths.Services) {
     Assert-Trusted { Assert-AccucutTrustedPath -Path $folder -Root $paths.Root -ProtectedRoot } "$folder passes the trust check"
 }
-Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Logs -Root $paths.Root -ProtectedRoot -Writer $logWriters } "$($paths.Logs) passes the trust check (the two service accounts may write there, nobody else)"
+Assert-Trusted { Assert-AccucutTrustedPath -Path $paths.Logs -Root $paths.Root -ProtectedRoot -Writer $logWriters } "$($paths.Logs) passes the trust check (the two service accounts and the log cleanup account may write there, nobody else)"
 Assert-Trusted { Assert-AccucutTrustedNoLinks -Path $release } 'the current release holds no link'
 foreach ($name in $services) {
     Assert-Trusted { [void](Resolve-AccucutTrustedExecutable -Path (Join-Path $paths.Services "$name.exe")) } "the WinSW program of $name passes the trust check"
@@ -154,7 +154,10 @@ foreach ($secret in $secrets) { if ($state.Contains($secret)) { throw 'ASSERTION
 Write-Host 'PASS  no secret is in install-state.json'
 
 # AC-6, AC-7 and the helpers around them.
-Assert-That ($null -ne (Get-ScheduledTask -TaskName 'Accucut log cleanup' -ErrorAction SilentlyContinue)) 'the log cleanup task is registered'
+$cleanupTask = Get-ScheduledTask -TaskName 'Accucut log cleanup' -ErrorAction SilentlyContinue
+Assert-That ($null -ne $cleanupTask) 'the log cleanup task is registered'
+Assert-That ([string]$cleanupTask.Principal.UserId -match 'LOCAL SERVICE|S-1-5-19') "the log cleanup task runs as LOCAL SERVICE, not SYSTEM (found '$($cleanupTask.Principal.UserId)')"
+Assert-That ([string]$cleanupTask.Principal.RunLevel -ne 'Highest') 'the log cleanup task does not run elevated'
 $info = Get-Content -LiteralPath $paths.StateFile -Raw | ConvertFrom-Json
 if ($null -ne (Get-Command -Name Get-MpPreference -ErrorAction SilentlyContinue)) {
     $excluded = @((Get-MpPreference).ExclusionPath)

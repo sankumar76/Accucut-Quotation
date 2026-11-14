@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -205,7 +205,7 @@ describe('the scripts (AC-1, AC-5)', () => {
     expect(update.match(pattern)?.[0]).toBe(block);
     // The block defines its 18 functions, and none of them is defined outside it (in a script or in the module).
     const names = [...block.matchAll(/^function ([\w-]+) \{$/gm)].map((match) => match[1] ?? '');
-    expect(names).toHaveLength(18);
+    expect(names).toHaveLength(19);
     for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/AccucutOps.psm1']) {
       const outside = read(path).replace(pattern, '');
       for (const name of names) expect(outside, `${path} defines ${name} outside the block`).not.toContain(`function ${name}`);
@@ -255,6 +255,8 @@ describe('the scripts (AC-1, AC-5)', () => {
     const order = [
       'Test-AccucutScriptAdministrator',
       'Assert-AccucutSecondHalfLocation -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $ScriptPath',
+      'Assert-AccucutTrustedRootShape -Root $Root',
+      'Test-AccucutInstallPresent -Root $Root',
       'Assert-AccucutTrustedPath -Path $release -Root $Root -ProtectedRoot',
       'Assert-AccucutTrustedNoLinks -Path $release',
       'Import-AccucutTrustedModule -Root $Root -Release $release',
@@ -344,6 +346,136 @@ describe('the scripts (AC-1, AC-5)', () => {
     }
   });
 
+  it('every script in deploy/windows that loads or runs code carries the identical trust block; every other script has no load site (Amendment 2.1, test 3)', () => {
+    const pattern = /# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/;
+    const reference = read('deploy/windows/install.ps1').match(pattern)?.[0] ?? '';
+    const files = readdirSync(fileURLToPath(new URL('../../deploy/windows', import.meta.url))).filter((name) => /\.(ps1|psm1)$/.test(name));
+    expect(files).toEqual(expect.arrayContaining(['install.ps1', 'update.ps1', 'clean-logs.ps1', 'AccucutOps.psm1']));
+    for (const name of files) {
+      const source = code('deploy/windows/' + name);
+      const loads = /Import-Module|Import-AccucutTrustedModule|Invoke-AccucutTrustedScript|Start-Process|Invoke-Expression|Process\]::Start|^\s*(?:&|\.)\s+[$'"(]/m.test(source);
+      const text = read('deploy/windows/' + name);
+      if (loads) expect(text.match(pattern)?.[0], name + ' loads or runs code, so it carries the block').toBe(reference);
+      else expect(text, name + ' has no load site and needs no block').not.toContain('ACCUCUT TRUST BLOCK');
+    }
+  });
+
+  it('clean-logs.ps1 is self-contained (.NET only, no import, no other script), and its task runs as LOCAL SERVICE, not SYSTEM and not elevated', () => {
+    const clean = code('deploy/windows/clean-logs.ps1');
+    expect(clean).not.toMatch(/Import-Module|AccucutOps|Start-Process|Invoke-Expression|^\s*(?:&|\.)\s+[$'"(]/m);
+    expect(clean).toContain('[System.IO.Directory]::GetFiles($LogDirectory, \'*.log\')');
+    expect(clean).toContain('ReparsePoint');
+    const install = code('deploy/windows/install.ps1');
+    const task = functionBody(install, 'Register-AccucutLogCleanupTask');
+    expect(task).toContain("-UserId 'NT AUTHORITY\\LOCAL SERVICE' -LogonType ServiceAccount");
+    expect(task).not.toMatch(/SYSTEM'|RunLevel Highest/);
+    expect(install).toContain("$script:AccucutLogCleanupSid = 'S-1-5-19'");
+    expect(install).toContain('Grant-AccucutFolderAccess -Path $paths.Logs -Account $script:AccucutLogCleanupSid -Rights Modify');
+    expect(install).toContain('Grant-AccucutFolderAccess -Path $paths.Root -Account $script:AccucutLogCleanupSid -Rights ReadAndExecute');
+    // update.ps1 lets the same account write in the logs folder when it checks it (rule B, -Writer), and nobody else.
+    const update = code('deploy/windows/update.ps1');
+    expect(update).toContain("$script:AccucutLogCleanupSid = 'S-1-5-19'");
+    expect(update).toMatch(/Combine\(\$Root, 'logs'\)\) -Root \$Root -ProtectedRoot -Writer @\(\(Get-AccucutUpdateServiceSid -Name 'AccucutApp'\), \(Get-AccucutUpdateServiceSid -Name 'AccucutWorker'\), \$script:AccucutLogCleanupSid\)/);
+  });
+
+  it('install and update logs are new files with unpredictable names, created with CreateNew and held open; nothing appends to a log (review SQR-03)', () => {
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    expect(ops).not.toMatch(/Add-Content|Out-File|Set-Content/);
+    const log = functionBody(ops, 'Write-AccucutLog');
+    expect(log).toContain('[System.IO.FileMode]::CreateNew');
+    expect(log).toContain('[System.IO.FileShare]::Read');
+    expect(log).toContain('already exists');
+    expect(functionBody(ops, 'New-AccucutLogFileName')).toContain('[guid]::NewGuid()');
+    expect(code('deploy/windows/install.ps1')).toContain("(New-AccucutLogFileName -Prefix 'install')");
+    expect(code('deploy/windows/update.ps1')).toContain("(New-AccucutLogFileName -Prefix 'update')");
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1']) expect(code(path)).not.toMatch(/Add-Content|Out-File|\.log"/);
+    // The root is removed only after the open log was closed and copied.
+    const remove = functionBody(code('deploy/windows/install.ps1'), 'Remove-AccucutInstallRoot');
+    expect(remove.indexOf('Close-AccucutLog')).toBeGreaterThan(0);
+    expect(remove.indexOf('Close-AccucutLog')).toBeLessThan(remove.indexOf('[System.IO.File]::Copy($LogFile'));
+    expect(remove.indexOf('[System.IO.File]::Copy($LogFile')).toBeLessThan(remove.indexOf('Remove-AccucutTrustedTree'));
+  });
+
+  it('update: every step from the junction switch to the health check is inside the rollback, which has its own try for each step and ends in "Call your IT person" (review SQR-02, SQR-09)', () => {
+    const update = code('deploy/windows/update.ps1');
+    const body = functionBody(update, 'Invoke-AccucutUpdate');
+    const order = [
+      '$exeSnapshot[$name] = [System.IO.File]::ReadAllBytes(',
+      'Stop-AccucutServices',
+      '$healthy = $false',
+      'try {\n        Set-AccucutCurrentRelease -Paths $paths -Tag $newTag',
+      'Initialize-AccucutServiceFiles',
+      'Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($paths.Services, "$name.exe"))',
+      'Update-AccucutServiceProgram -Paths $paths -Name @($changed)',
+      '$healthy = Start-AccucutServicesAndCheck',
+      'catch {\n        Invoke-AccucutRollback',
+      'if (-not $healthy) {\n        Invoke-AccucutRollback',
+      'Remove-AccucutOldReleases',
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = body.indexOf(marker, position + 1);
+      expect(found, marker + ' is missing or out of order').toBeGreaterThan(position);
+      position = found;
+    }
+    const rollback = functionBody(update, 'Invoke-AccucutRollback');
+    expect((rollback.match(/^\s*try \{/gm) ?? []).length).toBeGreaterThanOrEqual(4);
+    for (const step of ['Stop-AccucutServices', 'Set-AccucutCurrentRelease -Paths $Paths -Tag $OldTag', 'Restore-AccucutServiceFiles -Paths $Paths -Snapshot $Snapshot -ExeSnapshot $ExeSnapshot', 'Start-AccucutServicesAndCheck']) {
+      expect(rollback, step).toContain(step);
+    }
+    expect(rollback).toContain('Call your IT person');
+    expect(rollback.trimEnd().endsWith('}')).toBe(true);
+    // The WinSW programs are restored byte for byte, and each is trust-checked before the refresh.
+    const restore = functionBody(update, 'Restore-AccucutServiceFiles');
+    expect(restore.indexOf('WriteAllBytes($exe')).toBeGreaterThan(0);
+    expect(restore.indexOf('Resolve-AccucutTrustedExecutable -Path $exe')).toBeGreaterThan(restore.indexOf('WriteAllBytes($exe'));
+    expect(restore.indexOf('Update-AccucutServiceProgram')).toBeGreaterThan(restore.indexOf('Resolve-AccucutTrustedExecutable -Path $exe'));
+  });
+
+  it('the security of a path is read as attributes, descriptor, attributes again, and a difference is refused; Get-Item is used in one place (Amendment 2.1)', () => {
+    const install = code('deploy/windows/install.ps1');
+    const security = functionBody(install, 'Get-AccucutTrustSecurity');
+    expect((security.match(/Get-AccucutTrustAttributes -Path \$Path/g) ?? []).length).toBe(2);
+    expect(security.indexOf('Get-AccucutTrustAttributes')).toBeLessThan(security.indexOf('GetAccessControl'));
+    expect(security.indexOf('GetAccessControl')).toBeLessThan(security.lastIndexOf('Get-AccucutTrustAttributes'));
+    expect(security).toContain('changed while its permissions were being read');
+    expect(functionBody(install, 'Get-AccucutTrustAttributes')).toContain('[System.IO.File]::GetAttributes($Path)');
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1']) {
+      const text = code(path);
+      expect((text.match(/Get-Item\b/g) ?? []).length).toBe(1);
+      expect(functionBody(text, 'Get-AccucutTrustedCurrent')).toContain('Microsoft.PowerShell.Management\\Get-Item -LiteralPath $current -Force');
+    }
+  });
+
+  it('the second half of the install refuses an existing install and never removes one; programs are checked before each run (review SQR-05, SQR-06)', () => {
+    const install = code('deploy/windows/install.ps1');
+    const present = functionBody(install, 'Test-AccucutInstallPresent');
+    expect(present).toContain("[System.IO.Path]::Combine($Root, 'config')");
+    expect(present).toContain('install-state.json');
+    const body = functionBody(install, 'Invoke-AccucutInstall');
+    // node, psql and WinSW are resolved (trust-checked) in the text before the first call that runs them.
+    expect(body.indexOf('$nodeExe = Resolve-AccucutTrustedExecutable')).toBeLessThan(body.indexOf('Invoke-AccucutNative -FilePath $nodeExe'));
+    expect(body.indexOf('$psql = Resolve-AccucutTrustedExecutable')).toBeLessThan(body.indexOf('Invoke-AccucutNative -FilePath $psql'));
+    expect(body.indexOf('$winsw = Resolve-AccucutTrustedExecutable')).toBeLessThan(body.indexOf('Invoke-AccucutNative -FilePath $winsw'));
+    expect(body.indexOf('$nodeExe = Resolve-AccucutTrustedExecutable')).toBeLessThan(body.indexOf('Invoke-AccucutMigration'));
+    const update = code('deploy/windows/update.ps1');
+    const updateBody = functionBody(update, 'Invoke-AccucutUpdate');
+    expect(updateBody.indexOf('$nodeExe = Resolve-AccucutTrustedExecutable')).toBeLessThan(updateBody.indexOf('Invoke-AccucutMigration'));
+    expect(functionBody(update, 'Update-AccucutServiceProgram').indexOf('Resolve-AccucutTrustedExecutable')).toBeLessThan(functionBody(update, 'Update-AccucutServiceProgram').indexOf('Invoke-AccucutNative -FilePath $winsw'));
+  });
+
+  it('both READMEs: unpack into an administrator-only folder (never under C:\\), and every install or update command shows -Sha256 (review SQR-04, R-T1)', () => {
+    for (const path of ['README.md', 'deploy/windows/README.md']) {
+      const text = read(path);
+      expect(text, path + ' tells IT to unpack under C:\\').not.toMatch(/C:\\accucut-pkg/i);
+      const commands = text.split('\n').filter((line) => /(?:^|[\s\x60])\.\\(?:install|update)\.ps1 /.test(line) || /^\s*\x60?\.\\(?:install|update)\.ps1/.test(line));
+      expect(commands.length, path + ' shows no install or update command').toBeGreaterThan(0);
+      for (const line of commands) expect(line, path + ': ' + line).toContain('-Sha256');
+    }
+    expect(read('README.md')).toContain('C:\\Program Files\\accucut-pkg');
+    expect(read('deploy/windows/README.md')).toContain('C:\\Program Files\\accucut-pkg');
+  });
+
   it('settings files: locked before they are filled', () => {
     const ops = code('deploy/windows/AccucutOps.psm1');
     expect(ops.indexOf('WriteAllBytes($Path')).toBeLessThan(ops.indexOf('Set-AccucutFileAcl -Path $Path'));
@@ -389,7 +521,6 @@ describe('the scripts (AC-1, AC-5)', () => {
       'Set-AccucutCurrentRelease -Paths $paths -Tag $newTag',
       '[void](Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($paths.Services, "$name.exe")))',
       'Start-AccucutServicesAndCheck',
-      'Set-AccucutCurrentRelease -Paths $paths -Tag $oldTag',
     ];
     let place = -1;
     for (const marker of order) {

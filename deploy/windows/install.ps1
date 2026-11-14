@@ -94,6 +94,8 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 $script:DatabaseName = 'accucut'
+# NT AUTHORITY\LOCAL SERVICE: the account of the "Accucut log cleanup" task (ADR-015 Amendment 2.1).
+$script:AccucutLogCleanupSid = 'S-1-5-19'
 
 # >>> ACCUCUT TRUST BLOCK v1
 # One self-contained block, byte for byte the same in install.ps1 and update.ps1 (ADR-015 Amendment 2; tests/unit/windows-deploy-files.test.ts and
@@ -132,17 +134,29 @@ function ConvertTo-AccucutTrustMask {
     return ($mask -band [int64]0x0FFFFFFF)
 }
 
-function Get-AccucutTrustSecurity {
-    # The only reader of file and folder security (and the Pester mock point). The attributes come from File.GetAttributes, which does not follow a link.
-    # A null list and any entry that is not a plain allow or deny entry (an object, callback or compound entry) are refused.
+function Get-AccucutTrustAttributes {
+    # The attributes of a file or folder, read without following a link (File.GetAttributes). A function of its own so that a test can make a second read differ.
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
 
-    $attributes = [System.IO.File]::GetAttributes($Path)
+    return [System.IO.File]::GetAttributes($Path)
+}
+
+function Get-AccucutTrustSecurity {
+    # The only reader of file and folder security (and the Pester mock point). The attributes are read (without following a link), then the security
+    # descriptor (which is read by name, and does follow a link), then the attributes again: if the two reads differ, the path was changed while it was
+    # being read and is refused. A link shows as Reparse, which the callers refuse. A null list and any entry that is not a plain allow or deny entry
+    # (an object, callback or compound entry) are refused. (A swap that is undone before the second read is the accepted residual R-T5.)
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $attributes = Get-AccucutTrustAttributes -Path $Path
     $isDirectory = (($attributes -band [System.IO.FileAttributes]::Directory) -ne 0)
     $sections = [System.Security.AccessControl.AccessControlSections]::Owner -bor [System.Security.AccessControl.AccessControlSections]::Access
     if ($isDirectory) { $security = [System.IO.Directory]::GetAccessControl($Path, $sections) } else { $security = [System.IO.File]::GetAccessControl($Path, $sections) }
     $descriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($security.GetSecurityDescriptorBinaryForm(), 0)
+    $after = Get-AccucutTrustAttributes -Path $Path
+    if ([int]$after -ne [int]$attributes) { throw "'$Path' changed while its permissions were being read (its attributes were $([int]$attributes), then $([int]$after)). Refusing to use it." }
     return (ConvertFrom-AccucutTrustDescriptor -Descriptor $descriptor -Path $Path -Attributes $attributes)
 }
 
@@ -573,6 +587,15 @@ function Get-AccucutExpectedSha256 {
     return $expected.ToLowerInvariant()
 }
 
+function Test-AccucutInstallPresent {
+    # True when the root already holds an install: its config folder, or the state file in it, exists. A function of its own, so that Pester can mock it.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Root)
+
+    $config = [System.IO.Path]::Combine($Root, 'config')
+    return ([System.IO.Directory]::Exists($config) -or [System.IO.File]::Exists([System.IO.Path]::Combine($config, 'install-state.json')))
+}
+
 function Assert-AccucutSecondHalfLocation {
     # The second half runs only as <Root>\releases\<tag>\install.ps1, with -VerifiedRelease <Root>\releases\<tag>. A start by hand from anywhere else
     # stops here, before anything is loaded.
@@ -826,7 +849,11 @@ function Set-AccucutDefenderExclusion {
 }
 
 function Register-AccucutLogCleanupTask {
-    <# A daily task that deletes service logs older than 30 days (NFR-024). Runs as SYSTEM from the install folder, which only Administrators can write. #>
+    <#
+    A daily task that deletes service logs older than 30 days (NFR-024). It runs as NT AUTHORITY\LOCAL SERVICE (S-1-5-19), not elevated, from the install folder
+    (which only Administrators can write): the account gets Modify on the logs folder and read and execute on the install folder, nothing else. The script is
+    self-contained (.NET only, no module, no other script), so it loads nothing that could be changed (ADR-015 Amendment 2.1).
+    #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][object]$Paths)
 
@@ -835,7 +862,7 @@ function Register-AccucutLogCleanupTask {
     $argument = "-NoProfile -NonInteractive -File `"$script`" -LogDirectory `"$($Paths.Logs)`" -KeepDays 30"
     $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
     $trigger = New-ScheduledTaskTrigger -Daily -At '03:30'
-    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\LOCAL SERVICE' -LogonType ServiceAccount
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Deletes Accucut service logs older than 30 days.' -Force | Out-Null
 }
@@ -890,7 +917,8 @@ function Invoke-AccucutInstall {
     $paths = Get-AccucutPaths -Root $Root
     $releaseInfo = Read-AccucutReleaseInfo -PackageRoot $Release
     $tag = [string]$releaseInfo.tag
-    $logFile = [System.IO.Path]::Combine($paths.Logs, "install-$((Get-Date).ToString('yyyyMMdd-HHmmss')).log")
+    # A fresh, unpredictable name, created with CreateNew and held open by Write-AccucutLog (the logs folder is writable by the services).
+    $logFile = [System.IO.Path]::Combine($paths.Logs, (New-AccucutLogFileName -Prefix 'install'))
     $connection = $null
     $psql = $null
     $created = @{ Database = $false; Roles = $false }
@@ -973,6 +1001,9 @@ function Invoke-AccucutInstall {
         $accounts = @(Get-AccucutServiceNames | ForEach-Object { Get-AccucutServiceSid -Name $_ })
         foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Root -Account $account -Rights ReadAndExecute }
         foreach ($account in $accounts) { Grant-AccucutFolderAccess -Path $paths.Logs -Account $account -Rights Modify }
+        # The log cleanup task runs as LOCAL SERVICE (S-1-5-19): read and execute on the install folder (to read clean-logs.ps1), Modify on the logs folder only.
+        Grant-AccucutFolderAccess -Path $paths.Root -Account $script:AccucutLogCleanupSid -Rights ReadAndExecute
+        Grant-AccucutFolderAccess -Path $paths.Logs -Account $script:AccucutLogCleanupSid -Rights Modify
         Set-AccucutFileAcl -Path $paths.EnvFile -ReadAccount $accounts
 
         # Logs: 30 days kept; Defender; firewall; the backup task (STORY-10.05 adds its script).
@@ -1031,6 +1062,8 @@ function Remove-AccucutInstallRoot {
     )
 
     try {
+        # The log file is held open by Write-AccucutLog: close it before it is copied and the folder is deleted.
+        Close-AccucutLog
         if ($LogFile -and [System.IO.File]::Exists($LogFile)) {
             $kept = [System.IO.Path]::Combine($env:TEMP, 'accucut-failed-' + [System.IO.Path]::GetFileName($LogFile))
             [System.IO.File]::Copy($LogFile, $kept, $true)
@@ -1057,7 +1090,13 @@ function Invoke-AccucutInstallSecondHalf {
 
     if (-not (Test-AccucutScriptAdministrator)) { throw 'Run this script as an administrator: right-click Windows PowerShell, choose Run as administrator, and start it again.' }
     Assert-AccucutSecondHalfLocation -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $ScriptPath
-    $release = [System.IO.Path]::GetFullPath($VerifiedRelease).TrimEnd('\')
+    Assert-AccucutTrustedRootShape -Root $Root
+    # The first half has just made this root and holds only .in and releases. A root that already holds an install (config, or its state file) is never installed
+    # over, and never removed by a failed run: nothing has been created or changed when this stops.
+    if (Test-AccucutInstallPresent -Root $Root) {
+        throw "'$Root' already holds an install (its config folder exists). The second half of the install only runs on the empty folder that the first half has just made; to install a new release, run update.ps1. Nothing was changed."
+    }
+    $release =[System.IO.Path]::GetFullPath($VerifiedRelease).TrimEnd('\')
     Assert-AccucutTrustedPath -Path $release -Root $Root -ProtectedRoot
     Assert-AccucutTrustedNoLinks -Path $release
     Import-AccucutTrustedModule -Root $Root -Release $release

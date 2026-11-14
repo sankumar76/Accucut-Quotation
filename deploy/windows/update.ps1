@@ -84,17 +84,29 @@ function ConvertTo-AccucutTrustMask {
     return ($mask -band [int64]0x0FFFFFFF)
 }
 
-function Get-AccucutTrustSecurity {
-    # The only reader of file and folder security (and the Pester mock point). The attributes come from File.GetAttributes, which does not follow a link.
-    # A null list and any entry that is not a plain allow or deny entry (an object, callback or compound entry) are refused.
+function Get-AccucutTrustAttributes {
+    # The attributes of a file or folder, read without following a link (File.GetAttributes). A function of its own so that a test can make a second read differ.
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
 
-    $attributes = [System.IO.File]::GetAttributes($Path)
+    return [System.IO.File]::GetAttributes($Path)
+}
+
+function Get-AccucutTrustSecurity {
+    # The only reader of file and folder security (and the Pester mock point). The attributes are read (without following a link), then the security
+    # descriptor (which is read by name, and does follow a link), then the attributes again: if the two reads differ, the path was changed while it was
+    # being read and is refused. A link shows as Reparse, which the callers refuse. A null list and any entry that is not a plain allow or deny entry
+    # (an object, callback or compound entry) are refused. (A swap that is undone before the second read is the accepted residual R-T5.)
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $attributes = Get-AccucutTrustAttributes -Path $Path
     $isDirectory = (($attributes -band [System.IO.FileAttributes]::Directory) -ne 0)
     $sections = [System.Security.AccessControl.AccessControlSections]::Owner -bor [System.Security.AccessControl.AccessControlSections]::Access
     if ($isDirectory) { $security = [System.IO.Directory]::GetAccessControl($Path, $sections) } else { $security = [System.IO.File]::GetAccessControl($Path, $sections) }
     $descriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($security.GetSecurityDescriptorBinaryForm(), 0)
+    $after = Get-AccucutTrustAttributes -Path $Path
+    if ([int]$after -ne [int]$attributes) { throw "'$Path' changed while its permissions were being read (its attributes were $([int]$attributes), then $([int]$after)). Refusing to use it." }
     return (ConvertFrom-AccucutTrustDescriptor -Descriptor $descriptor -Path $Path -Attributes $attributes)
 }
 
@@ -496,6 +508,9 @@ function Invoke-AccucutTrustedScript {
 
 # ---- Outside the trust block. Nothing below loads or runs code except through Import-AccucutTrustedModule and Invoke-AccucutTrustedScript.
 
+# NT AUTHORITY\LOCAL SERVICE: the account of the "Accucut log cleanup" task, which may write in the logs folder like the two services (ADR-015 Amendment 2.1).
+$script:AccucutLogCleanupSid = 'S-1-5-19'
+
 function Test-AccucutScriptAdministrator {
     # True when this process runs elevated. A function of its own, so that Pester can mock it.
     [CmdletBinding()]
@@ -557,7 +572,7 @@ function Import-AccucutUpdateEnvironment {
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($old, 'AccucutOps.psm1')) -Root $Root -ProtectedRoot
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'config')) -Root $Root -ProtectedRoot
     Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'services')) -Root $Root -ProtectedRoot
-    Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'logs')) -Root $Root -ProtectedRoot -Writer @((Get-AccucutUpdateServiceSid -Name 'AccucutApp'), (Get-AccucutUpdateServiceSid -Name 'AccucutWorker'))
+    Assert-AccucutTrustedPath -Path ([System.IO.Path]::Combine($Root, 'logs')) -Root $Root -ProtectedRoot -Writer @((Get-AccucutUpdateServiceSid -Name 'AccucutApp'), (Get-AccucutUpdateServiceSid -Name 'AccucutWorker'), $script:AccucutLogCleanupSid)
     Assert-AccucutTrustedNoLinks -Path $old
     Import-AccucutTrustedModule -Root $Root -Release $old
     return $old
@@ -613,22 +628,74 @@ function Update-AccucutServiceProgram {
 }
 
 function Restore-AccucutServiceFiles {
-    # Writes back the service XML files as they were before the update, and refreshes WinSW so that a rolled-back service runs as before.
+    # Writes back the service XML files and the WinSW programs (.exe) as they were before the update, and refreshes WinSW so that a rolled-back service runs
+    # as before. A program that was written back is trust-checked before it is used (Update-AccucutServiceProgram checks it again before the refresh).
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$Paths,
-        [Parameter(Mandatory)][hashtable]$Snapshot
+        [Parameter(Mandatory)][hashtable]$Snapshot,
+        [hashtable]$ExeSnapshot = @{}
     )
 
     foreach ($name in $Snapshot.Keys) {
         $xml = [System.IO.Path]::Combine($Paths.Services, "$name.xml")
+        $exe = [System.IO.Path]::Combine($Paths.Services, "$name.exe")
+        $changed = $false
         $current = $null
         if ([System.IO.File]::Exists($xml)) { $current = [System.IO.File]::ReadAllText($xml) }
         if ($current -ne $Snapshot[$name]) {
             [System.IO.File]::WriteAllText($xml, $Snapshot[$name], [System.Text.UTF8Encoding]::new($false))
-            Update-AccucutServiceProgram -Paths $Paths -Name @($name)
+            $changed = $true
         }
+        if ($ExeSnapshot.ContainsKey($name)) {
+            $bytes = $null
+            if ([System.IO.File]::Exists($exe)) { $bytes = [System.IO.File]::ReadAllBytes($exe) }
+            $same = ($null -ne $bytes) -and ([System.Convert]::ToBase64String($bytes) -eq [System.Convert]::ToBase64String([byte[]]$ExeSnapshot[$name]))
+            if (-not $same) {
+                [System.IO.File]::WriteAllBytes($exe, [byte[]]$ExeSnapshot[$name])
+                [void](Resolve-AccucutTrustedExecutable -Path $exe)
+                $changed = $true
+            }
+        }
+        if ($changed) { Update-AccucutServiceProgram -Paths $Paths -Name @($name) }
     }
+}
+
+function Invoke-AccucutRollback {
+    # Puts the previous release back and ALWAYS ends in a throw that says "Call your IT person". Every step has its own try, so that one failure never
+    # skips "start the previous release"; what failed is named in the message.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$OldTag,
+        [Parameter(Mandatory)][string]$NewTag,
+        [Parameter(Mandatory)][hashtable]$Snapshot,
+        [Parameter(Mandatory)][hashtable]$ExeSnapshot,
+        [Parameter(Mandatory)][string]$HealthUrl,
+        [Parameter(Mandatory)][int]$TimeoutSeconds,
+        [Parameter(Mandatory)][string]$Reason,
+        [string]$LogFile
+    )
+
+    Write-AccucutLog -Message "$Reason Rolling back to $OldTag." -Level Error -LogFile $LogFile
+    $failed = [System.Collections.Generic.List[string]]::new()
+    try { Stop-AccucutServices } catch { $failed.Add("stopping the services ($($_.Exception.Message))") }
+    try { Set-AccucutCurrentRelease -Paths $Paths -Tag $OldTag } catch { $failed.Add("moving the current junction back ($($_.Exception.Message))") }
+    try { Restore-AccucutServiceFiles -Paths $Paths -Snapshot $Snapshot -ExeSnapshot $ExeSnapshot } catch { $failed.Add("restoring the service files ($($_.Exception.Message))") }
+    $back = $false
+    try { $back = Start-AccucutServicesAndCheck -HealthUrl $HealthUrl -TimeoutSeconds $TimeoutSeconds -LogFile $LogFile } catch { $failed.Add("starting the previous release ($($_.Exception.Message))") }
+    foreach ($problem in $failed) { Write-AccucutLog -Message "Rollback step failed: $problem" -Level Error -LogFile $LogFile }
+    if ($back) {
+        Write-AccucutLog -Message "Release $OldTag is running again. The data was migrated by the update; the old release still works with it (migrations only add)." -Level Warning -LogFile $LogFile
+    }
+    else {
+        Write-AccucutLog -Message "Release $OldTag did not answer either. The portal is DOWN." -Level Error -LogFile $LogFile
+    }
+    Write-AccucutLog -Message 'Call your IT person.' -Level Error -LogFile $LogFile
+    if ($failed.Count -gt 0) {
+        throw "The update to $NewTag failed and the rollback to $OldTag was incomplete: $($failed -join '; '). The portal may be DOWN. Call your IT person."
+    }
+    throw "The update to $NewTag failed ($Reason) and was rolled back to $OldTag. Call your IT person."
 }
 
 function Invoke-AccucutUpdate {
@@ -655,7 +722,8 @@ function Invoke-AccucutUpdate {
     $actual = Get-AccucutTrustedSha256 -Path $ZipPath
     if ($actual -ne $expected) { throw "The SHA-256 of the zip does not match (expected $expected, the file is $actual). Nothing was changed. Download the release again." }
     Assert-AccucutFreeSpace -Path $paths.Releases -MinimumBytes ([System.IO.FileInfo]::new($ZipPath).Length * 4 + 512MB)
-    $logFile = [System.IO.Path]::Combine($paths.Logs, "update-$((Get-Date).ToString('yyyyMMdd-HHmmss')).log")
+    # A fresh, unpredictable name, created with CreateNew and held open by Write-AccucutLog (the logs folder is writable by the services).
+    $logFile = [System.IO.Path]::Combine($paths.Logs, (New-AccucutLogFileName -Prefix 'update'))
     Write-AccucutLog -Message "Update started. Running release: $oldTag. Zip SHA-256 checked." -LogFile $logFile
 
     # The release backup. No backup, no update (unless -NoBackup was given on purpose).
@@ -674,10 +742,15 @@ function Invoke-AccucutUpdate {
     $newTag = [System.IO.Path]::GetFileName($target)
 
     # Stop, check the new release again, migrate, switch, start, check.
+    # What a rollback must put back: the service XML files and the WinSW programs (byte for byte), read before anything is stopped or changed.
+    $snapshot = @{}
+    $exeSnapshot = @{}
+    foreach ($name in (Get-AccucutServiceNames)) {
+        $snapshot[$name] = [System.IO.File]::ReadAllText([System.IO.Path]::Combine($paths.Services, "$name.xml"))
+        $exeSnapshot[$name] = [System.IO.File]::ReadAllBytes([System.IO.Path]::Combine($paths.Services, "$name.exe"))
+    }
     Write-AccucutLog -Message "Stopping the services and updating $oldTag -> $newTag." -LogFile $logFile
     Stop-AccucutServices
-    $snapshot = @{}
-    foreach ($name in (Get-AccucutServiceNames)) { $snapshot[$name] = [System.IO.File]::ReadAllText([System.IO.Path]::Combine($paths.Services, "$name.xml")) }
     $healthUrl = "http://127.0.0.1:$($state.port)/api/health"
     try {
         Assert-AccucutTrustedPath -Path $target -Root $Root -ProtectedRoot
@@ -696,28 +769,24 @@ function Invoke-AccucutUpdate {
         throw "The update stopped before the switch; release $oldTag is running again. Call your IT person."
     }
 
-    Set-AccucutCurrentRelease -Paths $paths -Tag $newTag
-    $changed = Initialize-AccucutServiceFiles -Paths $paths -ReleaseDirectory $target -NodeExe $nodeExe -Port ([int]$state.port) -ListenAddress ([string]$state.listenAddress)
-    # Every WinSW program is checked before it is used, whether or not its XML changed (the program itself may have been replaced by the new release's).
-    foreach ($name in (Get-AccucutServiceNames)) { [void](Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($paths.Services, "$name.exe"))) }
-    if (@($changed).Count -gt 0) { Update-AccucutServiceProgram -Paths $paths -Name @($changed) }
-    $healthy = Start-AccucutServicesAndCheck -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -LogFile $logFile
-
+    # Everything from the switch to the health check is inside the rollback: if any step throws, or the new release is not healthy, the previous release is
+    # put back and the script says "Call your IT person" (AC-4).
+    $healthy = $false
+    try {
+        Set-AccucutCurrentRelease -Paths $paths -Tag $newTag
+        $changed = Initialize-AccucutServiceFiles -Paths $paths -ReleaseDirectory $target -NodeExe $nodeExe -Port ([int]$state.port) -ListenAddress ([string]$state.listenAddress)
+        # Every WinSW program is checked before it is used, whether or not its XML changed (the program itself may have been replaced by the new release's).
+        foreach ($name in (Get-AccucutServiceNames)) { [void](Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($paths.Services, "$name.exe"))) }
+        if (@($changed).Count -gt 0) { Update-AccucutServiceProgram -Paths $paths -Name @($changed) }
+        $healthy = Start-AccucutServicesAndCheck -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -LogFile $logFile
+    }
+    catch {
+        Invoke-AccucutRollback -Paths $paths -OldTag $oldTag -NewTag $newTag -Snapshot $snapshot -ExeSnapshot $exeSnapshot -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -LogFile $logFile `
+            -Reason "A step after the switch to release $newTag failed: $($_.Exception.Message)"
+    }
     if (-not $healthy) {
-        # Roll back: the junction goes back, the previous release starts.
-        Write-AccucutLog -Message "Release $newTag did not answer 200 at $healthUrl within $HealthTimeoutSeconds seconds. Rolling back to $oldTag." -Level Error -LogFile $logFile
-        Stop-AccucutServices
-        Set-AccucutCurrentRelease -Paths $paths -Tag $oldTag
-        Restore-AccucutServiceFiles -Paths $paths -Snapshot $snapshot
-        $back = Start-AccucutServicesAndCheck -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -LogFile $logFile
-        if ($back) {
-            Write-AccucutLog -Message "Release $oldTag is running again. The data was migrated by the update; the old release still works with it (migrations only add)." -Level Warning -LogFile $logFile
-        }
-        else {
-            Write-AccucutLog -Message "Release $oldTag did not answer either. The portal is DOWN." -Level Error -LogFile $logFile
-        }
-        Write-AccucutLog -Message 'Call your IT person.' -Level Error -LogFile $logFile
-        throw "The update to $newTag failed its health check and was rolled back to $oldTag. Call your IT person."
+        Invoke-AccucutRollback -Paths $paths -OldTag $oldTag -NewTag $newTag -Snapshot $snapshot -ExeSnapshot $exeSnapshot -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -LogFile $logFile `
+            -Reason "Release $newTag did not answer 200 at $healthUrl within $HealthTimeoutSeconds seconds."
     }
 
     # Done: keep the current and the previous release only.

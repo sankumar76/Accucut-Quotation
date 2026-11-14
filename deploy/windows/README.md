@@ -21,7 +21,8 @@ Standard, one disk of about 100 GB.
 1. Right-click the zip, choose **Properties**, tick **Unblock** if it is there, and click OK. (Otherwise Windows may refuse to run the scripts.)
 2. Unpack the zip into a short folder that **only administrators can write**, such as `C:\Program Files\accucut-pkg` (right-click, **Extract All**).
    This matters: `install.ps1` is where the trust starts. No script can check itself, so the copy you start must be one that nobody else could have
-   changed. (A folder such as `C:\accucut-pkg` that every user can write into is fine on a lab machine and not on a shared server.)
+   changed. Do not unpack into a new folder directly under `C:\`: it inherits the drive's rights, so ordinary users may be able to replace files in it
+   before you run the script.
 3. Look up the zip's SHA-256 on the release page and keep it at hand. It is the only check that someone who can replace both the zip and its
    `.sha256` file cannot fake.
 4. Open **Windows PowerShell as administrator** (right-click, **Run as administrator**) and run:
@@ -92,7 +93,7 @@ account instead, the trust rule would refuse them, and the install would stop wi
 | Settings | `C:\Accucut\config\.env` for the web app and the worker, and `C:\Accucut\config\migrate.env` (the owner database role and the first Admin) for the install and update scripts only. Both are created empty, locked, and only then filled. |
 | Database | Creates the database and the two roles from `sql\create-roles.psql`, runs the migrations as the owner role, loads the field registry, creates the first Admin. |
 | Services | `AccucutApp` and `AccucutWorker` (WinSW 2.12.0): Automatic (Delayed Start), after PostgreSQL, restart after 10, 30 and 60 seconds, each as its own account (`NT SERVICE\AccucutApp`, `NT SERVICE\AccucutWorker`), **never LocalSystem**. |
-| Logs | `C:\Accucut\logs\`: a new file each day; a scheduled task, `Accucut log cleanup`, deletes files older than 30 days. |
+| Logs | `C:\Accucut\logs\`: the services write a new file each day. The install and update logs are new files with unpredictable names (`install-<time>-<random>.log`), created fresh and never appended to, because the two service accounts can write in this folder. A scheduled task, `Accucut log cleanup`, runs daily as `NT AUTHORITY\LOCAL SERVICE` (not SYSTEM, not elevated; it may write in `logs` and read the install folder, nothing else) and deletes files older than 30 days with a self-contained script that loads no module. |
 | Defender | **Offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning, and says so.** PostgreSQL advises it. You may refuse (`-DefenderExclusion No`, or answer no). Undo it with `Remove-MpPreference -ExclusionPath <folder>`. |
 | Backups | The weekly backup task and `backup.ps1` arrive with the backup release (STORY-10.05). |
 
@@ -119,8 +120,11 @@ files. `.env` can be read by Administrators and the two service accounts only; `
 
 ```powershell
 cd C:\Accucut\current
-.\update.ps1 C:\path\to\accucut-<new-tag>-win-x64.zip
+.\update.ps1 C:\path\to\accucut-<new-tag>-win-x64.zip -Sha256 <the SHA-256 from the release page>
 ```
+
+Type the SHA-256 from the release page, as for the install. (The `.sha256` file next to the zip only guards against a damaged download: whoever can replace the
+zip can replace that file too.)
 
 It must be run as `C:\Accucut\current\update.ps1` (it refuses to run from anywhere else, such as the folder you unpacked the new zip into). It is one
 phase, run by the **installed** release, and it never runs a script from the new release (those first run at the next update). Before it loads anything
@@ -134,6 +138,9 @@ the previous release are kept.
 
 - **No backup script yet** (before STORY-10.05): the update refuses. If you accept that nothing can be restored if it goes wrong, add `-NoBackup`.
 - **If the migrations fail**, the junction is not moved and the previous release starts again.
+- **If any step after the switch fails** (the service files, the WinSW check, the refresh) it is rolled back the same way, and the rollback puts the service
+  XML files **and the WinSW programs** back as they were, byte for byte. If a rollback step itself fails, the message names it, the previous release is still
+  started, and the script says "Call your IT person".
 - **If the new release is not healthy**, the junction moves back, the previous release starts, and the script says **"Call your IT person"**.
   Migrations only add things (expand, then contract: architecture section 9.7), so the previous release still works on the migrated database.
 - **To go back to an older release on purpose**, run `update.ps1` with that release's zip.

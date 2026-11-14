@@ -50,8 +50,8 @@ Describe 'versions (AC-1)' {
 Describe 'secrets never reach a log (AC-5)' {
     It 'blanks a registered secret in a log line, on screen and in the file' {
         Register-AccucutSecret -Value $script:FakeSecret
-        $logFile = Join-Path $TestDrive 'logs\run.log'
-        Write-AccucutLog -Message "connecting with $($script:FakeSecret) now" -LogFile $logFile 6>$null
+        $logFile = Join-Path $TestDrive "logs\$(New-AccucutLogFileName -Prefix 'secret')"
+        try { Write-AccucutLog -Message "connecting with $($script:FakeSecret) now" -LogFile $logFile 6>$null } finally { Close-AccucutLog }
         $text = Get-Content -LiteralPath $logFile -Raw
         $text | Should -Not -BeLike "*$($script:FakeSecret)*"
         $text | Should -BeLike '*connecting with *** now*'
@@ -82,6 +82,93 @@ Describe 'secrets never reach a log (AC-5)' {
         $first.Length | Should -Be 40
         $first | Should -Match '^[A-Za-z0-9]+$'
         $first | Should -Not -Be $second
+    }
+}
+
+Describe 'install and update logs are new files that nobody else can swap (ADR-015 Amendment 2 (d), review SQR-03)' {
+    AfterEach { Close-AccucutLog }
+
+    It 'gives every log a fresh, unpredictable name: prefix, time and 8 random hex characters' {
+        $first = New-AccucutLogFileName -Prefix 'update'
+        $second = New-AccucutLogFileName -Prefix 'update'
+        $first | Should -Match '^update-\d{8}-\d{6}-[0-9a-f]{8}\.log$'
+        $first | Should -Not -Be $second
+        { New-AccucutLogFileName -Prefix '..\evil' } | Should -Throw
+    }
+
+    It 'creates the file with CreateNew, writes every line to the same open file, and keeps it open so that it cannot be deleted, renamed or replaced meanwhile' {
+        $logFile = Join-Path $TestDrive "logs\$(New-AccucutLogFileName -Prefix 'open')"
+        Write-AccucutLog -Message 'first line' -LogFile $logFile 6>$null
+        Write-AccucutLog -Message 'second line' -LogFile $logFile -Level Warning 6>$null
+        { [System.IO.File]::Delete($logFile) } | Should -Throw
+        { [System.IO.File]::Move($logFile, "$logFile.moved") } | Should -Throw
+        { [System.IO.File]::WriteAllText($logFile, 'replaced') } | Should -Throw
+        Close-AccucutLog
+        $lines = @(Get-Content -LiteralPath $logFile)
+        $lines.Count | Should -Be 2
+        $lines[0] | Should -BeLike '* INFO    first line'
+        $lines[1] | Should -BeLike '* WARNING second line'
+    }
+
+    It 'refuses a log file that already exists (pre-created or left over), and never appends to it' {
+        $logFile = Join-Path $TestDrive "logs\$(New-AccucutLogFileName -Prefix 'exists')"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $logFile) -Force | Out-Null
+        [System.IO.File]::WriteAllText($logFile, 'planted by someone else')
+        { Write-AccucutLog -Message 'x' -LogFile $logFile 6>$null } | Should -Throw '*already exists*never appended to*'
+        (Get-Content -LiteralPath $logFile -Raw) | Should -Be 'planted by someone else'
+    }
+
+    It 'a log file can be moved and deleted once it is closed, and a closed name is refused when written again' {
+        $logFile = Join-Path $TestDrive "logs\$(New-AccucutLogFileName -Prefix 'closed')"
+        Write-AccucutLog -Message 'line' -LogFile $logFile 6>$null
+        Close-AccucutLog -LogFile $logFile
+        { Write-AccucutLog -Message 'again' -LogFile $logFile 6>$null } | Should -Throw '*already exists*'
+        [System.IO.File]::Delete($logFile)
+        Test-Path -LiteralPath $logFile | Should -BeFalse
+    }
+
+    It 'does not use Add-Content or Out-File for a log (static check on the module)' {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
+        $text | Should -Not -Match 'Add-Content|Out-File'
+    }
+}
+
+Describe 'clean-logs.ps1 (AC-6; self-contained, runs as LOCAL SERVICE)' {
+    BeforeAll {
+        function Invoke-CleanLogs {
+            param([string]$Directory, [int]$KeepDays = 30)
+            # In a child powershell.exe, as the scheduled task runs it.
+            $script = Join-Path $script:WindowsDirectory 'clean-logs.ps1'
+            return (& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File $script -LogDirectory $Directory -KeepDays $KeepDays | Out-String)
+        }
+    }
+
+    It 'deletes *.log files older than the limit, keeps newer ones and other files, and never follows a link' {
+        $logs = Join-Path $TestDrive 'cleanup-logs'
+        New-Item -ItemType Directory -Path $logs, (Join-Path $TestDrive 'cleanup-elsewhere') | Out-Null
+        $old = Join-Path $logs 'old.log'; $edge = Join-Path $logs 'edge.log'; $other = Join-Path $logs 'old.txt'
+        foreach ($file in $old, $edge, $other) { [System.IO.File]::WriteAllText($file, 'x') }
+        (Get-Item -LiteralPath $old).LastWriteTime = (Get-Date).AddDays(-31)
+        (Get-Item -LiteralPath $edge).LastWriteTime = (Get-Date).AddDays(-29)
+        (Get-Item -LiteralPath $other).LastWriteTime = (Get-Date).AddDays(-90)
+        $outside = Join-Path $TestDrive 'cleanup-elsewhere\keep.log'
+        [System.IO.File]::WriteAllText($outside, 'x')
+        (Get-Item -LiteralPath $outside).LastWriteTime = (Get-Date).AddDays(-90)
+        $folderLink = Join-Path $logs 'folder.log'
+        New-Item -ItemType Junction -Path $folderLink -Target (Join-Path $TestDrive 'cleanup-elsewhere') | Out-Null
+        try {
+            $output = Invoke-CleanLogs -Directory $logs
+            $output | Should -BeLike '*Removed 1 log file(s)*'
+            Test-Path -LiteralPath $old | Should -BeFalse
+            Test-Path -LiteralPath $edge | Should -BeTrue
+            Test-Path -LiteralPath $other | Should -BeTrue
+            Test-Path -LiteralPath $outside | Should -BeTrue
+        }
+        finally { [System.IO.Directory]::Delete($folderLink, $false) }
+    }
+
+    It 'does nothing, and does not fail, when the log folder does not exist' {
+        (Invoke-CleanLogs -Directory (Join-Path $TestDrive 'no-such-logs')) | Should -BeLike '*Removed 0 log file(s)*'
     }
 }
 
@@ -338,7 +425,7 @@ Describe 'module hygiene (ADR-015 Amendment 2, test 4)' {
         $errors = $null
         $script:ModuleAst = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
         $script:BlockNames = @(
-            'ConvertTo-AccucutTrustMask', 'Get-AccucutTrustSecurity', 'ConvertFrom-AccucutTrustDescriptor', 'Get-AccucutTrustComponent', 'Assert-AccucutTrustedAbove',
+            'ConvertTo-AccucutTrustMask', 'Get-AccucutTrustAttributes', 'Get-AccucutTrustSecurity', 'ConvertFrom-AccucutTrustDescriptor', 'Get-AccucutTrustComponent', 'Assert-AccucutTrustedAbove',
             'Assert-AccucutTrustedBelow', 'Assert-AccucutTrustedPath', 'Assert-AccucutTrustedRootShape', 'New-AccucutTrustedRoot', 'Get-AccucutTrustedSha256',
             'Remove-AccucutTrustedTree', 'Assert-AccucutTrustedNoLinks', 'Expand-AccucutTrustedPackage', 'Get-AccucutTrustedCurrent', 'Resolve-AccucutTrustedExecutable',
             'Import-AccucutTrustedModule', 'ConvertTo-AccucutTrustedArgument', 'Invoke-AccucutTrustedScript'

@@ -31,7 +31,7 @@ Describe 'the update checks before it loads anything, and runs only from the ins
         Should -Invoke Import-AccucutTrustedModule -Times 1 -Exactly -ParameterFilter { $Root -eq 'C:\Accucut' -and $Release -eq 'C:\Accucut\releases\old1' }
         # Every check is made with a protected root; the logs folder lets the two service accounts write, and nobody else.
         Should -Invoke Assert-AccucutTrustedPath -Times 6 -Exactly -ParameterFilter { $Root -eq 'C:\Accucut' -and $ProtectedRoot }
-        Should -Invoke Assert-AccucutTrustedPath -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut\logs' -and @($Writer).Count -eq 2 }
+        Should -Invoke Assert-AccucutTrustedPath -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Accucut\logs' -and @($Writer).Count -eq 3 -and @($Writer) -contains 'S-1-5-19' }
     }
 
     It 'also accepts the script as it is inside the running release folder' {
@@ -128,7 +128,10 @@ Describe 'Invoke-AccucutUpdate (AC-3, AC-4)' {
             New-Item -ItemType Directory -Path $directory -Force | Out-Null
         }
         [System.IO.File]::WriteAllText($script:Paths.StateFile, '{ "tag": "old1", "nodeExe": "C:\\fake\\node.exe", "port": 3000, "listenAddress": "0.0.0.0" }')
-        foreach ($name in 'AccucutApp', 'AccucutWorker') { [System.IO.File]::WriteAllText((Join-Path $script:Paths.Services "$name.xml"), "<service>old $name</service>") }
+        foreach ($name in 'AccucutApp', 'AccucutWorker') {
+            [System.IO.File]::WriteAllText((Join-Path $script:Paths.Services "$name.xml"), "<service>old $name</service>")
+            [System.IO.File]::WriteAllBytes((Join-Path $script:Paths.Services "$name.exe"), [System.Text.Encoding]::ASCII.GetBytes("old winsw $name"))
+        }
         $script:Zip = Join-Path $TestDrive ('new-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.zip')
         [System.IO.File]::WriteAllText($script:Zip, 'a stand-in for the new release zip')
         $script:ZipHash = Get-AccucutTrustedSha256 -Path $script:Zip
@@ -143,7 +146,7 @@ Describe 'Invoke-AccucutUpdate (AC-3, AC-4)' {
         Mock Stop-AccucutServices { $script:Trace.Add('stop') }
         Mock Assert-AccucutTrustedPath { $script:Trace.Add("path:$(Split-Path -Leaf $Path)") }
         Mock Assert-AccucutTrustedNoLinks { $script:Trace.Add('nolinks') }
-        Mock Resolve-AccucutTrustedExecutable { $Path }
+        Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("check:$(Split-Path -Leaf $Path)"); return $Path }
         Mock Read-AccucutEnvFile { [ordered]@{ MIGRATE_DATABASE_URL = 'postgresql://accucut_owner:FAKEownerPassword1@127.0.0.1:5432/accucut' } }
         Mock Invoke-AccucutMigration { $script:Trace.Add('migrate'); return [pscustomobject]@{ Deploy = 'migrations applied'; Seed = 'seed ok' } }
         Mock Set-AccucutCurrentRelease { $script:Trace.Add("switch:$Tag") }
@@ -160,7 +163,7 @@ Describe 'Invoke-AccucutUpdate (AC-3, AC-4)' {
 
     It 'AC-3: checks the zip, takes the release backup, unpacks the checked copy, stops, checks the new release, migrates, switches, starts, checks health, and keeps the current and the previous release only' {
         Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10
-        ($script:Trace -join '|') | Should -Be 'backup|expand|stop|path:new2|nolinks|migrate|switch:new2|start'
+        ($script:Trace -join '|') | Should -Be 'backup|expand|stop|path:new2|nolinks|check:node.exe|migrate|switch:new2|check:AccucutApp.exe|check:AccucutWorker.exe|start'
         Should -Invoke Expand-AccucutTrustedPackage -Times 1 -Exactly -ParameterFilter { $Root -eq $script:Root -and $ZipPath -eq $script:Zip -and $Sha256 -eq $script:ZipHash -and $RefuseTag -eq 'old1' -and $ReplaceExisting }
         Should -Invoke Invoke-AccucutMigration -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*\releases\new2' -and $MigrateDatabaseUrl -like '*accucut_owner*' }
         Should -Invoke Set-AccucutCurrentRelease -Times 0 -Exactly -ParameterFilter { $Tag -eq 'old1' }
@@ -256,6 +259,77 @@ Describe 'Invoke-AccucutUpdate (AC-3, AC-4)' {
         Should -Invoke Remove-AccucutOldReleases -Times 0 -Exactly
     }
 
+    It 'AC-4 (review SQR-02): a failure of Initialize-AccucutServiceFiles after the junction moved is rolled back, with the message' {
+        Mock Initialize-AccucutServiceFiles { throw 'the service files could not be written' }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*rolled back to old1*Call your IT person*'
+        ($script:Trace -join '|') | Should -BeLike '*switch:new2*stop*switch:old1*restore*start'
+        Should -Invoke Stop-AccucutServices -Times 2 -Exactly
+        Should -Invoke Start-AccucutServices -Times 1 -Exactly
+        Should -Invoke Remove-AccucutOldReleases -Times 0 -Exactly
+        $script:Logged | Should -Contain 'Call your IT person.'
+        ($script:Logged -join "`n") | Should -BeLike '*the service files could not be written*'
+        (Get-Content -LiteralPath $script:Paths.StateFile -Raw | ConvertFrom-Json).tag | Should -Be 'old1'
+    }
+
+    It 'AC-4 (review SQR-02): a WinSW program that fails the trust check after the switch is rolled back (the old release starts again)' {
+        Mock Resolve-AccucutTrustedExecutable {
+            $script:Trace.Add("check:$(Split-Path -Leaf $Path)")
+            if ($Path -like '*Accucut*.exe') { throw "'$Path' can be changed by S-1-5-32-545" }
+            return $Path
+        }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*rolled back to old1*Call your IT person*'
+        ($script:Trace -join '|') | Should -BeLike '*switch:new2*switch:old1*restore*start'
+        Should -Invoke Start-AccucutServices -Times 1 -Exactly
+        $script:Logged | Should -Contain 'Call your IT person.'
+    }
+
+    It 'AC-4 (review SQR-02): a failure of the service refresh after the switch is rolled back' {
+        Mock Initialize-AccucutServiceFiles { , @('AccucutApp') }
+        Mock Update-AccucutServiceProgram { throw 'refresh failed' }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*rolled back to old1*Call your IT person*'
+        ($script:Trace -join '|') | Should -BeLike '*switch:new2*switch:old1*restore*start'
+        Should -Invoke Start-AccucutServices -Times 1 -Exactly
+    }
+
+    It 'AC-4 (review SQR-02): a failure of the junction switch itself is rolled back (the junction may be half moved)' {
+        Mock Set-AccucutCurrentRelease { $script:Trace.Add("switch:$Tag"); if ($Tag -eq 'new2') { throw 'the junction could not be moved' } }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*rolled back to old1*Call your IT person*'
+        ($script:Trace -join '|') | Should -BeLike '*switch:new2*switch:old1*start'
+    }
+
+    It 'AC-4 (review SQR-02): the rollback puts the service XML and the WinSW programs back as they were before the update (the snapshot is of the bytes)' {
+        Mock Wait-AccucutHealth { $false }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*Call your IT person*'
+        Should -Invoke Restore-AccucutServiceFiles -Times 1 -Exactly -ParameterFilter {
+            $Snapshot['AccucutApp'] -eq '<service>old AccucutApp</service>' -and
+            [System.Text.Encoding]::ASCII.GetString([byte[]]$ExeSnapshot['AccucutWorker']) -eq 'old winsw AccucutWorker'
+        }
+    }
+
+    It 'AC-4 (review SQR-02): one failing rollback step never skips starting the previous release, and the message names what failed (<Step>)' -ForEach @(
+        @{ Step = 'stopping the services' }
+        @{ Step = 'moving the current junction back' }
+        @{ Step = 'restoring the service files' }
+    ) {
+        Mock Wait-AccucutHealth { $false }
+        $script:FailStep = $Step
+        $script:Stops = 0
+        Mock Stop-AccucutServices { $script:Stops++; if ($script:FailStep -eq 'stopping the services' -and $script:Stops -ge 2) { throw 'cannot stop' } }
+        Mock Set-AccucutCurrentRelease { if ($script:FailStep -eq 'moving the current junction back' -and $Tag -eq 'old1') { throw 'cannot move back' } }
+        Mock Restore-AccucutServiceFiles { if ($script:FailStep -eq 'restoring the service files') { throw 'cannot restore' } }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw "*rollback to old1 was incomplete*$Step*Call your IT person*"
+        Should -Invoke Start-AccucutServices -Times 2 -Exactly
+        $script:Logged | Should -Contain 'Call your IT person.'
+    }
+
+    It 'AC-4 (review SQR-02): when starting the previous release throws in the rollback, the message says so' {
+        $script:Starts = 0
+        Mock Start-AccucutServices { $script:Starts++; if ($script:Starts -eq 2) { throw 'the old service did not start' } }
+        Mock Wait-AccucutHealth { $false }
+        { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*Call your IT person*'
+        ($script:Logged -join "`n") | Should -BeLike '*DOWN*'
+    }
+
     It 'checks the new release again after it is unpacked and the services are stopped: a link or a changed permission stops the update, with no migration and the old release running again' {
         Mock Assert-AccucutTrustedNoLinks { throw "'C:\Accucut\releases\new2\app' is a link." }
         { Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10 } | Should -Throw '*stopped before the switch*Call your IT person*'
@@ -293,6 +367,60 @@ Describe 'Restore-AccucutServiceFiles puts the service files back as they were' 
         (Get-Content -LiteralPath (Join-Path $paths.Services 'AccucutApp.xml') -Raw) | Should -Be '<service>old</service>'
         Should -Invoke Update-AccucutServiceProgram -Times 1 -Exactly -ParameterFilter { @($Name) -contains 'AccucutApp' }
         Should -Invoke Update-AccucutServiceProgram -Times 0 -Exactly -ParameterFilter { @($Name) -contains 'AccucutWorker' }
+    }
+}
+
+Describe 'a release with a different WinSW program rolls back to the old bytes (ADR-015 Amendment 2.1, review SQR-09)' {
+    BeforeEach {
+        $script:RestoreRoot = Join-Path $TestDrive ('w-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        $script:RestorePaths = Get-AccucutPaths -Root $script:RestoreRoot
+        New-Item -ItemType Directory -Path $script:RestorePaths.Services -Force | Out-Null
+        $script:OldExe = [System.Text.Encoding]::ASCII.GetBytes('the old winsw program')
+        $script:NewExe = [System.Text.Encoding]::ASCII.GetBytes('the new release brought another winsw program')
+        foreach ($name in 'AccucutApp', 'AccucutWorker') {
+            [System.IO.File]::WriteAllText((Join-Path $script:RestorePaths.Services "$name.xml"), "<service>$name</service>")
+            [System.IO.File]::WriteAllBytes((Join-Path $script:RestorePaths.Services "$name.exe"), $script:OldExe)
+        }
+        $script:Trace.Clear()
+        Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("check:$(Split-Path -Leaf $Path)"); return $Path }
+        Mock Update-AccucutServiceProgram { $script:Trace.Add("refresh:$(@($Name) -join ',')") }
+    }
+
+    It 'writes back the old program, trust-checks it, and only then refreshes that service; the program that did not change is left alone' {
+        [System.IO.File]::WriteAllBytes((Join-Path $script:RestorePaths.Services 'AccucutApp.exe'), $script:NewExe)
+        $xml = @{ AccucutApp = '<service>AccucutApp</service>'; AccucutWorker = '<service>AccucutWorker</service>' }
+        $exe = @{ AccucutApp = $script:OldExe; AccucutWorker = $script:OldExe }
+        Restore-AccucutServiceFiles -Paths $script:RestorePaths -Snapshot $xml -ExeSnapshot $exe
+        [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $script:RestorePaths.Services 'AccucutApp.exe'))) | Should -Be ([System.Convert]::ToBase64String($script:OldExe))
+        ($script:Trace -join '|') | Should -Be 'check:AccucutApp.exe|refresh:AccucutApp'
+    }
+
+    It 'does nothing when neither the XML nor the program changed' {
+        $xml = @{ AccucutApp = '<service>AccucutApp</service>'; AccucutWorker = '<service>AccucutWorker</service>' }
+        $exe = @{ AccucutApp = $script:OldExe; AccucutWorker = $script:OldExe }
+        Restore-AccucutServiceFiles -Paths $script:RestorePaths -Snapshot $xml -ExeSnapshot $exe
+        $script:Trace.Count | Should -Be 0
+    }
+
+    It 'writes back a program that was deleted, and one that was changed together with its XML, with a single refresh each' {
+        Remove-Item -LiteralPath (Join-Path $script:RestorePaths.Services 'AccucutWorker.exe')
+        [System.IO.File]::WriteAllBytes((Join-Path $script:RestorePaths.Services 'AccucutApp.exe'), $script:NewExe)
+        [System.IO.File]::WriteAllText((Join-Path $script:RestorePaths.Services 'AccucutApp.xml'), '<service>changed</service>')
+        $xml = @{ AccucutApp = '<service>AccucutApp</service>'; AccucutWorker = '<service>AccucutWorker</service>' }
+        $exe = @{ AccucutApp = $script:OldExe; AccucutWorker = $script:OldExe }
+        Restore-AccucutServiceFiles -Paths $script:RestorePaths -Snapshot $xml -ExeSnapshot $exe
+        [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $script:RestorePaths.Services 'AccucutWorker.exe'))) | Should -Be ([System.Convert]::ToBase64String($script:OldExe))
+        [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $script:RestorePaths.Services 'AccucutApp.exe'))) | Should -Be ([System.Convert]::ToBase64String($script:OldExe))
+        (Get-Content -LiteralPath (Join-Path $script:RestorePaths.Services 'AccucutApp.xml') -Raw) | Should -Be '<service>AccucutApp</service>'
+        @($script:Trace | Where-Object { $_ -like 'refresh:*' }).Count | Should -Be 2
+    }
+
+    It 'stops, so that the caller says so, when a program that was written back fails the trust check' {
+        [System.IO.File]::WriteAllBytes((Join-Path $script:RestorePaths.Services 'AccucutApp.exe'), $script:NewExe)
+        Mock Resolve-AccucutTrustedExecutable { throw "'$Path' can be changed by S-1-5-32-545" }
+        $xml = @{ AccucutApp = '<service>AccucutApp</service>' }
+        { Restore-AccucutServiceFiles -Paths $script:RestorePaths -Snapshot $xml -ExeSnapshot @{ AccucutApp = $script:OldExe } } | Should -Throw '*can be changed by*'
+        Should -Invoke Update-AccucutServiceProgram -Times 0 -Exactly
     }
 }
 

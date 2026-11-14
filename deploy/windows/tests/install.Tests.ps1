@@ -156,20 +156,55 @@ Describe 'the arguments the first half passes to the second (AC-5)' {
 }
 
 Describe 'the second half starts only from the verified release folder (ADR-015 Amendment 2, required test 16)' {
+    BeforeAll {
+        # The real function, taken before any test mocks it.
+        $script:RealPresent = (Get-Command -Name Test-AccucutInstallPresent -CommandType Function).ScriptBlock
+    }
+
     BeforeEach {
         $script:Trace.Clear()
         Mock Test-AccucutScriptAdministrator { $true }
+        Mock Assert-AccucutTrustedRootShape { $script:Trace.Add('shape') }
+        Mock Test-AccucutInstallPresent { $script:Trace.Add('present?'); return $false }
         Mock Assert-AccucutTrustedPath { $script:Trace.Add("path:$Path") }
         Mock Assert-AccucutTrustedNoLinks { $script:Trace.Add('nolinks') }
         Mock Import-AccucutTrustedModule { $script:Trace.Add('import') }
         Mock Invoke-AccucutInstall { $script:Trace.Add('install') }
+        Mock Remove-AccucutTrustedTree { $script:Trace.Add('remove') }
     }
 
-    It 'checks where it is, then the release folder and its links, then loads the module, then installs: in that order' {
+    It 'checks where it is, the root shape, that no install is there yet, the release folder and its links, then loads the module, then installs: in that order' {
         Invoke-AccucutInstallSecondHalf -Root 'C:\Accucut' -VerifiedRelease 'C:\Accucut\releases\t1' -ScriptPath 'C:\Accucut\releases\t1\install.ps1' -InstallParameter @{ Port = 3002 }
-        ($script:Trace -join ',') | Should -Be 'path:C:\Accucut\releases\t1,nolinks,import,install'
+        ($script:Trace -join ',') | Should -Be 'shape,present?,path:C:\Accucut\releases\t1,nolinks,import,install'
         Should -Invoke Import-AccucutTrustedModule -Times 1 -Exactly -ParameterFilter { $Root -eq 'C:\Accucut' -and $Release -eq 'C:\Accucut\releases\t1' }
         Should -Invoke Invoke-AccucutInstall -Times 1 -Exactly -ParameterFilter { $Release -eq 'C:\Accucut\releases\t1' -and $Root -eq 'C:\Accucut' -and $Port -eq 3002 }
+    }
+
+    It 'run by hand on an existing install (review SQR-05) refuses before anything is loaded, created or removed, and never removes that install' {
+        Mock Test-AccucutInstallPresent { $script:Trace.Add('present?'); return $true }
+        { Invoke-AccucutInstallSecondHalf -Root 'C:\Accucut' -VerifiedRelease 'C:\Accucut\releases\t1' -ScriptPath 'C:\Accucut\releases\t1\install.ps1' -InstallParameter @{} } | Should -Throw '*already holds an install*Nothing was changed*'
+        ($script:Trace -join ',') | Should -Be 'shape,present?'
+        Should -Invoke Import-AccucutTrustedModule -Times 0 -Exactly
+        Should -Invoke Invoke-AccucutInstall -Times 0 -Exactly
+        Should -Invoke Remove-AccucutTrustedTree -Times 0 -Exactly
+    }
+
+    It 'checks the root shape before anything else is looked at (a root that is not exactly one folder below a drive stops it)' {
+        Mock Assert-AccucutTrustedRootShape { throw 'The install folder must be exactly one folder below a drive' }
+        { Invoke-AccucutInstallSecondHalf -Root 'C:\a\b' -VerifiedRelease 'C:\a\b\releases\t1' -ScriptPath 'C:\a\b\releases\t1\install.ps1' -InstallParameter @{} } | Should -Throw '*exactly one folder below a drive*'
+        Should -Invoke Test-AccucutInstallPresent -Times 0 -Exactly
+        Should -Invoke Import-AccucutTrustedModule -Times 0 -Exactly
+    }
+
+    It 'sees an existing install by its config folder or its state file' {
+        $root = Join-Path $TestDrive ('present-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        New-Item -ItemType Directory -Path $root | Out-Null
+        $real = $script:RealPresent
+        (& $real -Root $root) | Should -BeFalse
+        New-Item -ItemType Directory -Path (Join-Path $root 'releases') | Out-Null
+        (& $real -Root $root) | Should -BeFalse
+        New-Item -ItemType Directory -Path (Join-Path $root 'config') | Out-Null
+        (& $real -Root $root) | Should -BeTrue
     }
 
     It 'run by hand from anywhere else (the zip, a download folder, the unpacked folder) stops before anything is checked or loaded (<Where>)' -ForEach @(
@@ -405,6 +440,28 @@ Describe 'the install itself reads only from the verified release folder, uses p
         Should -Invoke Resolve-AccucutTrustedExecutable -Times 1 -Exactly -ParameterFilter { $Path -eq $expected }
     }
 
+    It 'checks each program with the trust check BEFORE it is run: every run is preceded by a check of the same path (review SQR-06)' {
+        $folders = New-VerifiedReleaseFolder -Name 'order-install' -Tag 't-order'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-order' } }
+        $script:Trace.Clear()
+        Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("check:$Path"); return $Path }
+        Mock Invoke-AccucutNative {
+            $script:Trace.Add("run:$FilePath")
+            if ($FilePath -like '*node.exe') { return [pscustomobject]@{ ExitCode = 0; Output = 'v22.12.0' } }
+            return [pscustomobject]@{ ExitCode = 0; Output = 'psql (PostgreSQL) 17.2' }
+        }
+        $values = Write-FakeValuesFile -Name 'order-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Throw '*migration failed on purpose*'
+        $trace = @($script:Trace)
+        $runs = @($trace | Where-Object { $_ -like 'run:*' })
+        $runs.Count | Should -Be 2
+        foreach ($run in $runs) {
+            $program = $run.Substring(4)
+            [array]::IndexOf($trace, "check:$program") | Should -BeGreaterOrEqual 0
+            [array]::IndexOf($trace, "check:$program") | Should -BeLessThan ([array]::IndexOf($trace, $run))
+        }
+    }
+
     It 'refuses a program that fails the trust check, and changes nothing' {
         $folders = New-VerifiedReleaseFolder -Name 'bad-node' -Tag 't-bad'
         Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-bad' } }
@@ -451,5 +508,23 @@ Describe 'the install itself reads only from the verified release folder, uses p
         { Invoke-AccucutInstall -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Throw '*too old*'
         Test-Path -LiteralPath $folders.Root | Should -BeFalse
         Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly
+    }
+}
+
+Describe 'a failed install removes the root even though its log is open (review SQR-03 with the removal of the root)' {
+    It 'closes the log, keeps a copy of it in the temp folder, and removes the whole install folder' {
+        $root = Join-Path $TestDrive ('rm-root-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        New-Item -ItemType Directory -Path (Join-Path $root 'logs') | Out-Null
+        $logFile = Join-Path $root ("logs\" + (New-AccucutLogFileName -Prefix 'install'))
+        Write-AccucutLog -Message 'before the failure' -LogFile $logFile 6>$null
+        Mock Write-Host { }
+        Remove-AccucutInstallRoot -Root $root -LogFile $logFile
+        Test-Path -LiteralPath $root | Should -BeFalse
+        $kept = Join-Path $env:TEMP ("accucut-failed-" + (Split-Path -Leaf $logFile))
+        try {
+            Test-Path -LiteralPath $kept | Should -BeTrue
+            (Get-Content -LiteralPath $kept -Raw) | Should -BeLike "*before the failure*"
+        }
+        finally { Remove-Item -LiteralPath $kept -Force -ErrorAction SilentlyContinue }
     }
 }

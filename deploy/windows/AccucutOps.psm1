@@ -49,6 +49,9 @@ $script:DevelopmentOnlyNames = @('DB_OWNER_PASSWORD', 'DB_APP_PASSWORD')
 # The prefix that marks a template value that must be replaced (src/lib/env.ts, PLACEHOLDER_PREFIX).
 $script:PlaceholderPrefix = 'CHANGE_ME'
 
+# The open log files of this process, by full path (see Write-AccucutLog). Filled while the process runs; nothing is opened when the module is loaded.
+$script:OpenLogWriters = @{}
+
 #region Layout, files, hashes
 
 function Get-AccucutPaths {
@@ -268,8 +271,35 @@ function Hide-AccucutSecrets {
     return $result
 }
 
+function New-AccucutLogFileName {
+    <# A fresh, unpredictable log file name: <prefix>-<yyyyMMdd-HHmmss>-<8 random hex>.log (ADR-015 Amendment 2 (d): a log in a folder that the services can write is never a name that someone could guess). #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_-]{1,32}$')][string]$Prefix)
+
+    return "$Prefix-$((Get-Date).ToString('yyyyMMdd-HHmmss'))-$([guid]::NewGuid().ToString('N').Substring(0, 8)).log"
+}
+
+function Close-AccucutLog {
+    <# Closes the log files that Write-AccucutLog has open (all of them, or the one named). Needed before a log file or its folder is copied, moved or deleted. #>
+    [CmdletBinding()]
+    param([string]$LogFile)
+
+    $keys = @($script:OpenLogWriters.Keys)
+    if ($LogFile) { $keys = @([System.IO.Path]::GetFullPath($LogFile)) }
+    foreach ($key in $keys) {
+        if ($script:OpenLogWriters.ContainsKey($key)) {
+            try { $script:OpenLogWriters[$key].Dispose() } finally { $script:OpenLogWriters.Remove($key) }
+        }
+    }
+}
+
 function Write-AccucutLog {
-    <# Writes one line to the console and, if -LogFile is given, to that file. The text passes through Hide-AccucutSecrets first. #>
+    <#
+    Writes one line to the console and, if -LogFile is given, to that file. The text passes through Hide-AccucutSecrets first.
+    A log file is created with FileMode.CreateNew and kept open (FileShare.Read: no one can delete, rename or replace it while it is open) for the rest of
+    the process, and an existing file is refused, never appended to (ADR-015 Amendment 2 (d): the folder is writable by the services, so a file there could
+    have been pre-created or swapped by them). Use New-AccucutLogFileName for the name, and Close-AccucutLog before the file is moved or deleted.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Message,
@@ -286,9 +316,17 @@ function Write-AccucutLog {
         default { Write-Host $line }
     }
     if ($LogFile) {
-        $directory = Split-Path -Parent $LogFile
-        if ($directory -and -not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-        Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
+        $full = [System.IO.Path]::GetFullPath($LogFile)
+        if (-not $script:OpenLogWriters.ContainsKey($full)) {
+            $directory = [System.IO.Path]::GetDirectoryName($full)
+            if ($directory -and -not [System.IO.Directory]::Exists($directory)) { [void][System.IO.Directory]::CreateDirectory($directory) }
+            if ([System.IO.File]::Exists($full)) { throw "The log file '$full' already exists. A log file is always new and is never appended to; use New-AccucutLogFileName for its name." }
+            $stream = [System.IO.FileStream]::new($full, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+            $writer = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
+            $writer.AutoFlush = $true
+            $script:OpenLogWriters[$full] = $writer
+        }
+        $script:OpenLogWriters[$full].WriteLine($line)
     }
 }
 
@@ -898,7 +936,7 @@ Export-ModuleMember -Function @(
     'Get-AccucutFileSha256', 'Read-AccucutSha256File', 'Read-AccucutReleaseInfo', 'Test-AccucutAdministrator',
     'ConvertTo-AccucutVersion', 'Test-AccucutNodeVersion', 'Test-AccucutPostgresVersion',
     'Read-AccucutHostInput', 'Read-AccucutSecretInput',
-    'New-AccucutSecret', 'Register-AccucutSecret', 'Hide-AccucutSecrets', 'Write-AccucutLog', 'ConvertTo-AccucutArgumentString', 'Invoke-AccucutNative',
+    'New-AccucutSecret', 'Register-AccucutSecret', 'Hide-AccucutSecrets', 'Write-AccucutLog', 'New-AccucutLogFileName', 'Close-AccucutLog','ConvertTo-AccucutArgumentString', 'Invoke-AccucutNative',
     'Read-AccucutValuesFile', 'Read-AccucutEnvTemplate', 'Format-AccucutEnvValue', 'Split-AccucutEnvValues', 'Read-AccucutEnvFile',
     'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',

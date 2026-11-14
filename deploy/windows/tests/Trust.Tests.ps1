@@ -127,7 +127,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
             return $Ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $Name }, $true)
         }
         $script:BlockFunctionNames = @(
-            'ConvertTo-AccucutTrustMask', 'Get-AccucutTrustSecurity', 'ConvertFrom-AccucutTrustDescriptor', 'Get-AccucutTrustComponent', 'Assert-AccucutTrustedAbove',
+            'ConvertTo-AccucutTrustMask', 'Get-AccucutTrustAttributes', 'Get-AccucutTrustSecurity', 'ConvertFrom-AccucutTrustDescriptor', 'Get-AccucutTrustComponent', 'Assert-AccucutTrustedAbove',
             'Assert-AccucutTrustedBelow', 'Assert-AccucutTrustedPath', 'Assert-AccucutTrustedRootShape', 'New-AccucutTrustedRoot', 'Get-AccucutTrustedSha256',
             'Remove-AccucutTrustedTree', 'Assert-AccucutTrustedNoLinks', 'Expand-AccucutTrustedPackage', 'Get-AccucutTrustedCurrent', 'Resolve-AccucutTrustedExecutable',
             'Import-AccucutTrustedModule', 'ConvertTo-AccucutTrustedArgument', 'Invoke-AccucutTrustedScript'
@@ -136,7 +136,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $script:Texts = @{ 'install.ps1' = $script:InstallText; 'update.ps1' = $script:UpdateText }
     }
 
-    It 'the block defines exactly its 18 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+    It 'the block defines exactly its 19 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
         $text = $script:Texts[$File]
         $start = $text.IndexOf('# >>> ACCUCUT TRUST BLOCK v1')
         $end = $text.IndexOf('# <<< ACCUCUT TRUST BLOCK v1')
@@ -213,7 +213,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
     ) {
         $ast = $script:Asts[$File]
         $function = Get-FunctionAst -Ast $ast -Name $Name
-        $allowed = $script:BlockFunctionNames + @('Test-AccucutScriptAdministrator', 'Assert-AccucutSecondHalfLocation', 'Get-AccucutUpdateServiceSid')
+        $allowed = $script:BlockFunctionNames + @('Test-AccucutScriptAdministrator', 'Assert-AccucutSecondHalfLocation', 'Test-AccucutInstallPresent', 'Get-AccucutUpdateServiceSid')
         $load = @(Get-CommandNames -Node $function | Where-Object { $_.Name -eq 'Import-AccucutTrustedModule' })[0]
         foreach ($call in (Get-CommandNames -Node $function | Where-Object { $_.Offset -lt $load.Offset })) {
             $call.Name | Should -BeIn $allowed -Because 'a function of the module may not run before the module has been checked and loaded'
@@ -232,6 +232,121 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
                 ($statement -is [System.Management.Automation.Language.PipelineAst] -and $text -match '^Set-StrictMode\b')
             $ok | Should -BeTrue -Because "the top level of $File may not run anything: $($text.Substring(0, [math]::Min(60, $text.Length)))"
         }
+    }
+}
+
+Describe 'every packaged script: the block where code is loaded or run, no load site anywhere else (ADR-015 Amendment 2.1, test 3)' {
+    BeforeAll {
+        function Test-LoadSite {
+            # True when a script has any way to load or run code: Import-Module, Start-Process, Invoke-Expression, a call or dot-source operator, a using
+            # statement, Process.Start, or a call of the trusted loaders of the block.
+            param([string]$Text)
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref]$null, [ref]$null)
+            $commands = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)
+            foreach ($command in $commands) {
+                $name = [string]$command.GetCommandName()
+                if ($name -like '*Import-Module' -or $name -in @('Start-Process', 'Invoke-Expression', 'Invoke-Item', 'Invoke-Command', 'Import-AccucutTrustedModule', 'Invoke-AccucutTrustedScript')) { return $true }
+                if ([string]$command.InvocationOperator -ne 'Unknown') { return $true }
+            }
+            if ($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.UsingStatementAst] }, $true).Count -gt 0) { return $true }
+            $starts = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and [string]$n.Member.Value -eq 'Start' -and $n.Expression.Extent.Text -like '*Diagnostics.Process*' }, $true)
+            return ($starts.Count -gt 0)
+        }
+        $script:BlockPattern = '(?s)# >>> ACCUCUT TRUST BLOCK v1\r?\n.*?# <<< ACCUCUT TRUST BLOCK v1'
+        $script:Packaged = @(Get-ChildItem -LiteralPath $script:WindowsDirectory -File | Where-Object { $_.Extension -in '.ps1', '.psm1' })
+    }
+
+    It 'covers install.ps1, update.ps1, clean-logs.ps1 and the module (a new script is covered the moment it is added)' {
+        $names = @($script:Packaged | ForEach-Object { $_.Name })
+        $names | Should -Contain 'install.ps1'
+        $names | Should -Contain 'update.ps1'
+        $names | Should -Contain 'clean-logs.ps1'
+        $names | Should -Contain 'AccucutOps.psm1'
+    }
+
+    It 'a script that loads or runs code carries the block, byte for byte the same; every other script has no load site' {
+        $reference = [regex]::Match($script:InstallText, $script:BlockPattern).Value
+        $reference.Length | Should -BeGreaterThan 10000
+        foreach ($file in $script:Packaged) {
+            $text = [System.IO.File]::ReadAllText($file.FullName)
+            if (Test-LoadSite -Text $text) {
+                [regex]::Match($text, $script:BlockPattern).Value | Should -BeExactly $reference -Because "$($file.Name) loads or runs code, so it must carry the trust block"
+            }
+            else {
+                $text | Should -Not -Match '# >>> ACCUCUT TRUST BLOCK' -Because "$($file.Name) has no load site and needs no block"
+            }
+        }
+    }
+
+    It 'clean-logs.ps1 is self-contained: no import, no dot-sourcing, no other script, .NET only' {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'clean-logs.ps1'))
+        Test-LoadSite -Text $text | Should -BeFalse
+        $text | Should -Not -Match 'AccucutOps'
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$null)
+        $names = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { [string]$_.GetCommandName() })
+        foreach ($name in $names) { $name | Should -BeIn @('Set-StrictMode', 'Write-Output') }
+    }
+
+    It 'Get-Item is called in one place only, Get-AccucutTrustedCurrent, and always module-qualified (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+        $text = if ($File -eq 'install.ps1') { $script:InstallText } else { $script:UpdateText }
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$null)
+        $function = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-AccucutTrustedCurrent' }, $true)
+        $items = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and ([string]$n.GetCommandName()) -like '*Get-Item' }, $true))
+        $items.Count | Should -Be 1
+        [string]$items[0].GetCommandName() | Should -Be 'Microsoft.PowerShell.Management\Get-Item'
+        $items[0].Extent.StartOffset | Should -BeGreaterThan $function.Extent.StartOffset
+        $items[0].Extent.StartOffset | Should -BeLessThan $function.Extent.EndOffset
+    }
+}
+
+Describe 'the security of a path is read twice around the descriptor (ADR-015 Amendment 2.1, R-T5)' {
+    BeforeEach {
+        $script:Probe = Join-Path $TestDrive ('probe-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.txt')
+        [System.IO.File]::WriteAllText($script:Probe, 'x')
+        $script:AttributeReads = [System.Collections.Generic.List[int]]::new()
+    }
+
+    It 'reads the attributes, then the descriptor, then the attributes again, and returns the data when both reads agree' {
+        Mock Get-AccucutTrustAttributes { $script:AttributeReads.Add(1); return [System.IO.FileAttributes]::Archive }
+        $security = Get-AccucutTrustSecurity -Path $script:Probe
+        $script:AttributeReads.Count | Should -Be 2
+        $security.Reparse | Should -BeFalse
+        $security.Aces.Count | Should -BeGreaterThan 0
+    }
+
+    It 'refuses a path whose attributes differ between the two reads (swapped while it was being read)' {
+        $script:Calls = 0
+        Mock Get-AccucutTrustAttributes {
+            $script:Calls++
+            if ($script:Calls -eq 1) { return [System.IO.FileAttributes]::Archive }
+            return ([System.IO.FileAttributes]::Archive -bor [System.IO.FileAttributes]::ReparsePoint)
+        }
+        { Get-AccucutTrustSecurity -Path $script:Probe } | Should -Throw '*changed while its permissions were being read*'
+    }
+
+    It 'refuses the other swap too: a link first, a plain file second' {
+        $script:Calls = 0
+        Mock Get-AccucutTrustAttributes {
+            $script:Calls++
+            if ($script:Calls -eq 1) { return ([System.IO.FileAttributes]::Archive -bor [System.IO.FileAttributes]::ReparsePoint) }
+            return [System.IO.FileAttributes]::Archive
+        }
+        { Get-AccucutTrustSecurity -Path $script:Probe } | Should -Throw '*changed while its permissions were being read*'
+    }
+
+    It 'reports a link that is a link on both reads as Reparse, which every caller refuses' {
+        Mock Get-AccucutTrustAttributes { return ([System.IO.FileAttributes]::Archive -bor [System.IO.FileAttributes]::ReparsePoint) }
+        (Get-AccucutTrustSecurity -Path $script:Probe).Reparse | Should -BeTrue
+    }
+
+    It 'the real attribute reader returns the attributes of a real file and of a junction without following it' {
+        (Get-AccucutTrustAttributes -Path $script:Probe) -band [System.IO.FileAttributes]::ReparsePoint | Should -Be 0
+        $target = Join-Path $TestDrive 'attr-target'
+        New-Item -ItemType Directory -Path $target | Out-Null
+        $junction = Join-Path $TestDrive 'attr-junction'
+        New-Item -ItemType Junction -Path $junction -Target $target | Out-Null
+        try { ([int](Get-AccucutTrustAttributes -Path $junction) -band 1024) | Should -Be 1024 }
+        finally { [System.IO.Directory]::Delete($junction, $false) }
     }
 }
 

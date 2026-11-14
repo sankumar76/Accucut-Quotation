@@ -146,14 +146,17 @@ Docker in production: `compose.dev.yml` is for a development database only, and 
 rollback and the fixes, is [`deploy/windows/README.md`](deploy/windows/README.md). In short, for a Windows IT person:
 
 1. Install **Node.js 22 LTS** (22.12 or later) and **PostgreSQL 17** from their own installers. Note the `postgres` administrator password.
-2. Take the release zip `accucut-<tag>-win-x64.zip` and its `.sha256` file. Unblock the zip (Properties, Unblock) and unpack it to `C:\accucut-pkg`.
-3. In **Windows PowerShell as administrator**: `cd C:\accucut-pkg`, then `.\install.ps1 -ZipPath <the zip>`. Answer the questions. It checks the zip's
+2. Take the release zip `accucut-<tag>-win-x64.zip` and note its SHA-256 from the release page. Unblock the zip (Properties, Unblock) and unpack it into a
+   folder that **only administrators can write**, such as `C:\Program Files\accucut-pkg`. Do not unpack it into a new folder under `C:\`: ordinary users
+   may be able to change files there before you run the script, and the script is where the trust starts.
+3. In **Windows PowerShell as administrator**: `cd "C:\Program Files\accucut-pkg"`, then
+   `.\install.ps1 -ZipPath <the zip> -Sha256 <the SHA-256 from the release page>`. Answer the questions. It checks the zip's
    SHA-256 first, creates the database, the settings (readable by Administrators and the two service accounts only), the services, and waits for
    `/api/health`. It offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning and says so; you may refuse.
 4. Open the address you gave and sign in as the first Admin. You will be asked to choose a new password.
 
-To **update**: `cd C:\Accucut\current`, then `.\update.ps1 <the new zip>`. It takes a release backup, migrates, switches releases and checks
-health; if the new release is not healthy it goes back to the previous one by itself and says "Call your IT person".
+To **update**: `cd C:\Accucut\current`, then `.\update.ps1 <the new zip> -Sha256 <the SHA-256 from the release page>`. It takes a release backup, migrates,
+switches releases and checks health; if the new release is not healthy it goes back to the previous one by itself and says "Call your IT person".
 
 The release zip is built by CI (`scripts/package-windows.ps1`, `.github/workflows/windows-package.yml`). Developers do not build it by hand.
 
