@@ -27,7 +27,9 @@ export const NOT_CHOSEN_YET = 'Not chosen yet';
 export const DEADLINE_COLUMN = 'Deadline (IST)';
 /** The deadline's label on a phone's card, where the time already ends in "IST". */
 export const CARD_DEADLINE_LABEL = 'Due';
-export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by' } as const;
+export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by', actions: 'Actions' } as const;
+/** What a Lead and an Admin read in the action column of a closed task in place of the row actions (UX-20; STORY-04.05 AC-5). It is not a status badge. */
+export const CLOSED_ROW_WORD = 'Closed';
 
 export const LOADING_LABEL = 'Loading tasks';
 export const ERROR_TITLE = 'We could not load the tasks';

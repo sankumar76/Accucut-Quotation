@@ -1,6 +1,7 @@
 import { Clock } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
+import { isTaskClosed } from '@/lib/estimate/task-status';
 import { overdueBy } from '@/lib/tasks/overdue';
 import type { TaskEstimateStatus } from '@/lib/tasks/queue';
 
@@ -18,9 +19,9 @@ export const OVERDUE_ROW_CLASS = 'bg-accent-soft [&>:first-child]:border-l-4 [&>
 /** The card of a phone: the same bar and tint. */
 export const OVERDUE_CARD_CLASS = 'border-l-4 border-l-accent bg-accent-soft';
 
-/** How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed (approved) task is never overdue, whatever its deadline. */
+/** How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`isTaskClosed`, the one rule) is never overdue, whatever its deadline. */
 export function lateTextFor(task: { readonly deadlineAt: string; readonly status: TaskEstimateStatus }, asOf: string): string | null {
-  return task.status === 'APPROVED' ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
+  return isTaskClosed(task.status) ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
 }
 
 export function OverdueMarker({ late }: { readonly late: string }) {
