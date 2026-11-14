@@ -223,6 +223,8 @@ jobs:
           if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module was loaded.' }
           Remove-Item -LiteralPath $pre -Force
           Write-Host 'PASS  the existing folder was refused and left exactly as it was.'
+          # The step's exit code is the last native exit code (here the expected 1 of install.ps1): reset it.
+          $global:LASTEXITCODE = 0
 
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
@@ -235,6 +237,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module in the unpacked folder was loaded by the install.' }
           Write-Host 'PASS  the tampered module next to the zip was never loaded.'
+          $global:LASTEXITCODE = 0
 
       - name: Assert the install (services, health, sign-in, permissions, no secret in a log)
         run: |
