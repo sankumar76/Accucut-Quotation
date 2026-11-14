@@ -11,11 +11,13 @@ import {
   DatabaseBusyError,
   FieldValidationError,
   ForbiddenError,
+  MasterInUseError,
   ProcessItemInUseError,
   StepUpFailed,
   StepUpLocked,
   TreeChangedError,
   UnauthorizedError,
+  type EstimateUse,
   type FormulaUse,
 } from '../../lib/errors';
 import type { PartView } from '../../lib/estimate/part-view';
@@ -55,6 +57,9 @@ export interface Problem {
   readonly usedBy?: ReadonlyArray<FormulaUse>;
   /** Extension member of the 409 of a parts tree that changed under the person (STORY-05.02 AC-6): the tree as it is now, the same six facts per part as `GET /tree`, and no figure. */
   readonly tree?: ReadonlyArray<PartView>;
+  /** Extension members of the refusal to delete a customer or a material an open estimate uses (STORY-02.07): the first estimates, and how many there are in all. */
+  readonly estimates?: ReadonlyArray<EstimateUse>;
+  readonly estimateTotal?: number;
 }
 
 /** Fixed words for the refusals, so a role refusal reads the same for every route and every ID asked for (CR-33). */
@@ -134,6 +139,13 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
     // Named field by field, so a part can never carry more than the six facts of the tree even if the service one day hands over a richer record.
     const tree = error.tree.map(({ id, parentId, slNo, label, completeness, revision }) => ({ id, parentId, slNo, label, completeness, revision }));
     return { ...problem(error.httpStatus, error.code, error.message, requestId), tree };
+  }
+  if (error instanceof MasterInUseError) {
+    return {
+      ...problem(error.httpStatus, error.code, error.message, requestId),
+      estimates: error.estimates.map(({ code, status }) => ({ code, status })),
+      estimateTotal: error.total,
+    };
   }
   if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError)) {
     return problem(error.httpStatus, error.code, INTERNAL_TITLE, requestId);

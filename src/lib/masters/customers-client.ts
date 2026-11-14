@@ -114,6 +114,14 @@ export function updateCustomer(id: string, changes: CustomerChangesBody, doFetch
   return sendJson(doFetch, pathOf(id), { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(changes) }, toCustomerRow);
 }
 
+/** The reading of an answer that has no body (a 204): there is nothing to read, and it worked. */
+const readNothing = (): true => true;
+
+/** `DELETE /api/v1/customers/{id}`. The answer is 204; a 409 `CUSTOMER_IN_USE` carries the open estimates that have the customer (`estimateUsesOf`). */
+export function deleteCustomer(id: string, doFetch: Fetch = fetch): Promise<Outcome<true>> {
+  return sendJson(doFetch, pathOf(id), { method: 'DELETE', headers: ACCEPT_JSON }, readNothing);
+}
+
 /** `POST /api/v1/customers/{id}/reset-rates`: every rate back to the current default. */
 export function resetCustomerRates(id: string, doFetch: Fetch = fetch): Promise<Outcome<ResetResult>> {
   return sendJson(doFetch, `${pathOf(id)}/reset-rates`, { method: 'POST', headers: ACCEPT_JSON }, toResetResult);

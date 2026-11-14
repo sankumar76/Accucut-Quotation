@@ -41,3 +41,11 @@ export const CUSTOMER_CANARIES: ReadonlyArray<CustomerCanary> = [
 
 /** The customer a recipe for `PATCH /api/v1/customers/{id}` and `POST .../reset-rates` names: it exists wherever the canaries are loaded. */
 export const CUSTOMER_RECIPE_ID: string = defined(CUSTOMER_CANARIES[0]).id;
+
+/**
+ * The customer the recipe for `DELETE /api/v1/customers/{id}` names (STORY-02.07). The valid call of an allowed role really deletes it, so it is **not** the canary
+ * above, which the pages, the scan and the other recipes keep reading: the in-memory repository of the security tests holds this one apart (`session-harness.ts`).
+ * No database holds it, and none needs to: the only database call with this ID is a refused one, which the role check answers before any lookup (CR-33).
+ */
+export const CUSTOMER_DELETE_RECIPE_ID = '00000000-0000-4000-8000-000800000c02';
+export const CUSTOMER_DELETE_RECIPE_NAME = 'Canary-Customer-Disposable';

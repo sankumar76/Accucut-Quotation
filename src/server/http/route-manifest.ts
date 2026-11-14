@@ -192,7 +192,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // STORY-01.05 (SCR-23). Every role. The page and the change are the two routes open to a person who must set a new password first (`mustChangeAllowed`).
   { path: '/account', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-23', mustChangeAllowed: true },
   { path: '/api/v1/account/password', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', mustChangeAllowed: true },
-  // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's.
+  // STORY-02.02 (SCR-12). The Admin only (BR-004): the list and the edit page are pages (adding a customer is a dialog on the list); `DELETE /customers/{id}` is story 02.07's (AC-6).
   // `/api/v1/options/customers` is the one route of the story that every role may call (AC-5): IDs and names, and no contact detail or rate of any kind, so
   // the cost scan covers it as an Engineer route.
   {
@@ -207,7 +207,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/masters/customers/[id]', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1', screen: 'SCR-12' },
   { path: '/api/v1/customers', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/customers/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/customers/[id]/reset-rates', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/customers', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-04.01 (SCR-04). A Lead and an Admin assign (BR-004); an Engineer is refused on all three, with 403 for the routes and SCR-26 for the page (AC-5). The
