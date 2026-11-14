@@ -232,8 +232,8 @@ describe('Playwright projects and the tag (AQP-199 AC-3)', () => {
 describe('set-up warm-up (AQP-199 AC-1)', () => {
   const setup = read(fileURLToPath(new URL('../e2e/auth.setup.ts', import.meta.url)));
 
-  it('opens /, /queue and /design-system on the development server before the width projects start', () => {
-    expect(setup).toContain("const WARMED_ROUTES = ['/', '/queue', '/design-system'] as const;");
+  it('opens /, /queue, /assign and /design-system on the development server before the width projects start', () => {
+    expect(setup).toContain("const WARMED_ROUTES = ['/', '/queue', '/assign', '/design-system'] as const;");
     expect(setup).toContain('for (const route of WARMED_ROUTES)');
     expect(setup).toContain('await page.goto(`${DEVELOPMENT_URL}${route}`);');
     // The warm-up runs before the signed-in state is saved, so the width projects start only after it.
