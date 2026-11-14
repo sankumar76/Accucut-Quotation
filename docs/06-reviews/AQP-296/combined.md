@@ -112,3 +112,25 @@ Under any option, NFR-002 holds: the badge takes only the status.
 - **product-owner and ux-expert:** decide A-1 (SQR-01): option A, B or C above. Then amend AQP-296 AC-1, AQP-297 AC-5 and AC-6, and the ux-spec if B or C is chosen.
 - **scrum-master:** AQP-297 Dev Context names `src/lib/tasks/task-state.ts` and says "06.01 reuses it". 06.01 has landed (`lib/estimate/state-machine.ts`), and this PR adds `lib/estimate/task-status.ts`. Point 04.05 at a single `isTaskClosed` (SQR-02).
 - **developer (06.06 and 06.08):** SQR-04, seed the approved and unlocked scan tasks through the real actions with a sentinel price and reason. **(04.07):** SQR-07, split the spec-access entry into method keys.
+
+## Re-review, round 2 (2026-11-14)
+
+| Field | Value |
+|-------|-------|
+| Commits reviewed | c6b9e88 (review fixes). The merge of master ba059dd (#388), 5364b02, was not reviewed, as the orchestrator directed |
+| CI | 6 of 6 green on c6b9e88 (run 43607951454) |
+| Method | GitHub commit patch of c6b9e88 (8 files); no local run |
+| A-1 decision | Option A, applied by the developer; the product-owner amended AQP-296 AC-1 and AQP-297 AC-6 |
+| **Verdict** | **APPROVE.** Nothing blocks the merge. |
+| PR review | Follow-up COMMENT review on c6b9e88; thread replies r4574196593, r4574196951, r4574197247, r4574197473, r4574197729 |
+
+| Finding | Result | Evidence |
+|---|---|---|
+| SQR-01 Major | **Verified** | `StatusBadge` draws one `Badge`; `CLOSED_LABEL`, `CircleCheck` and the `closed` branch are removed, so no surface draws "Closed" as a badge. Queue: "Approved" with a lock. `variant="header"`: "Approved and locked" for APPROVED only, used by `workspace-header.tsx`. Tests assert option A (one badge, one svg, no "Closed"; header words; "Approved" for three roles; E2E for Engineer and Lead). |
+| SQR-02 Minor | **Verified** | `isTaskClosed` exported from `lib/estimate/task-status.ts`; `closed` derived from it; unit test over `ESTIMATE_STATUSES`. Note for 04.05: the repository's SQL `tabFilter` is the SQL form of the same rule; the grep test should allow it. |
+| SQR-03 Minor | **Verified** | `z.enum(ESTIMATE_STATUSES)` for the queue row and the task detail; a test pins the options. |
+| SQR-08 Info | **Verified** | `TASK_STATUS_WORDS` removed. |
+| SQR-04 to SQR-07 Info | Open (forward notes) | SQR-04 for 06.06 and 06.08; SQR-07 for 04.07. |
+| Security scope | **Unchanged** | Route, repository, service, `engineer-task.ts`, manifest, registers and canary scan untouched; schema keys and strictness the same; AC-6 canary `includes('Approved')` still matches "Approved and locked". |
+
+New counts: Blocker 0, Critical 0, Major 0, Minor 0, Info 4.
