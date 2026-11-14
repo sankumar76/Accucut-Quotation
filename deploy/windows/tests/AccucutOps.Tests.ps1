@@ -388,10 +388,45 @@ Describe 'a folder is trusted only if administrators alone control it (update.ps
         { Assert-AccucutFolderTrusted -Path $script:Folder -AllowedWriter @('S-1-5-32-545') } | Should -Not -Throw
     }
 
+    It 'a parent folder in which another user could delete or replace the install folder is refused; making a new folder there is not' -Skip:(-not $script:IsAdmin) {
+        $parent = Join-Path $TestDrive 'parent-folder'
+        New-Item -ItemType Directory -Path (Join-Path $parent 'Accucut') -Force | Out-Null
+        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        $none = [System.Security.AccessControl.PropagationFlags]::None
+        $inheritOnly = [System.Security.AccessControl.PropagationFlags]::InheritOnly
+        $users = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+        $security = New-Object System.Security.AccessControl.DirectorySecurity
+        $security.SetAccessRuleProtection($true, $false)
+        foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
+            $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.SecurityIdentifier($sid)), 'FullControl', $inherit, $none, 'Allow')))
+        }
+        # What Windows gives every user in C:\: make a folder here (this folder), and Modify for what is inside only (inherit only).
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'AppendData', 'None', $none, 'Allow')))
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'Modify', $inherit, $inheritOnly, 'Allow')))
+        [System.IO.Directory]::SetAccessControl($parent, $security)
+        { Assert-AccucutParentNotSwappable -Path (Join-Path $parent 'Accucut') } | Should -Not -Throw
+
+        $swappable = [System.IO.Directory]::GetAccessControl($parent)
+        $swappable.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'DeleteSubdirectoriesAndFiles', 'None', $none, 'Allow')))
+        [System.IO.Directory]::SetAccessControl($parent, $swappable)
+        { Assert-AccucutParentNotSwappable -Path (Join-Path $parent 'Accucut') } | Should -Throw '*can be changed by S-1-5-32-545*could be replaced*'
+    }
+
+    It 'update.ps1 refuses a current link that does not point inside releases' {
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'current-link-root')
+        New-Item -ItemType Directory -Path (Join-Path $paths.Root 'elsewhere\t-x') -Force | Out-Null
+        New-Item -ItemType Junction -Path $paths.Current -Target (Join-Path $paths.Root 'elsewhere\t-x') | Out-Null
+        Mock -ModuleName AccucutOps Assert-AccucutFolderTrusted { }
+        Mock -ModuleName AccucutOps Assert-AccucutParentNotSwappable { }
+        { Assert-AccucutInstallTrusted -Paths $paths } | Should -Throw '*does not point at a folder directly inside*'
+    }
+
     It 'checks every folder that update.ps1 writes to, and lets only the two service accounts write to the logs' {
         $paths = Get-AccucutPaths -Root (Join-Path $TestDrive 'trusted-install')
         Mock -ModuleName AccucutOps Assert-AccucutFolderTrusted { }
+        Mock -ModuleName AccucutOps Assert-AccucutParentNotSwappable { }
         Assert-AccucutInstallTrusted -Paths $paths
+        Should -Invoke Assert-AccucutParentNotSwappable -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Path -like '*trusted-install' }
         Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 5 -Exactly
         Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 4 -Exactly -ParameterFilter { $AllowedWriter.Count -eq 0 }
         Should -Invoke Assert-AccucutFolderTrusted -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter {

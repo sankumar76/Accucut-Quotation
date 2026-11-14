@@ -675,7 +675,7 @@ function Get-AccucutServiceNames {
     [CmdletBinding()]
     param()
 
-    return , $script:ServiceNames
+    return $script:ServiceNames
 }
 
 function Get-AccucutPostgresServiceName {
@@ -929,14 +929,50 @@ function Assert-AccucutFolderTrusted {
     }
 }
 
+function Assert-AccucutParentNotSwappable {
+    <#
+    Stops with an error if anyone but an administrator can delete or replace the folder that holds the install folder (delete-child, delete, change
+    permissions, take ownership on the parent). Making a new folder there is allowed (Windows lets every user do that in C:\), and rules that only reach
+    what is inside the parent are not counted: neither lets anyone swap an existing folder.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $parent = Split-Path -Parent ([System.IO.Path]::GetFullPath($Path).TrimEnd('\'))
+    $rights = [System.Security.AccessControl.FileSystemRights]
+    $mask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
+    $security = [System.IO.Directory]::GetAccessControl($parent)
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        if ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) { continue }
+        if (@('S-1-5-32-544', 'S-1-5-18') -contains $rule.IdentityReference.Value) { continue }
+        if (([int]$rule.FileSystemRights -band $mask) -ne 0) {
+            throw "'$parent', which holds the install folder, can be changed by $($rule.IdentityReference.Value), who is not an administrator, so the install folder could be replaced. Refusing to go on."
+        }
+    }
+}
+
 function Assert-AccucutInstallTrusted {
-    <# Runs Assert-AccucutFolderTrusted on every folder that update.ps1 writes to: the install folder, releases, config, services and logs. #>
+    <#
+    Runs Assert-AccucutFolderTrusted on every folder that update.ps1 writes to (the install folder, releases, config, services and logs), checks that
+    no one else can replace the install folder from its parent, and that `current` is a link to a folder directly inside releases.
+    #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][object]$Paths)
 
     $serviceAccounts = @($script:ServiceNames | ForEach-Object { Get-AccucutServiceSid -Name $_ })
     foreach ($folder in @($Paths.Root, $Paths.Releases, $Paths.Config, $Paths.Services)) { Assert-AccucutFolderTrusted -Path $folder }
     Assert-AccucutFolderTrusted -Path $Paths.Logs -AllowedWriter $serviceAccounts
+    Assert-AccucutParentNotSwappable -Path $Paths.Root
+    if (Test-Path -LiteralPath $Paths.Current) {
+        $item = Get-Item -LiteralPath $Paths.Current -Force
+        $target = $null
+        if ($item.PSObject.Properties.Name -contains 'Target') { $target = @($item.Target)[0] }
+        if ([string]::IsNullOrWhiteSpace($target) -or (Split-Path -Parent ([System.IO.Path]::GetFullPath($target).TrimEnd('\'))) -ine [System.IO.Path]::GetFullPath($Paths.Releases).TrimEnd('\')) {
+            throw "'$($Paths.Current)' does not point at a folder directly inside '$($Paths.Releases)'. Refusing to go on."
+        }
+        Assert-AccucutFolderTrusted -Path $target
+    }
 }
 
 function Invoke-AccucutMigration {
@@ -981,6 +1017,6 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
-    'Expand-AccucutZip', 'Get-AccucutFolderOwnerSid', 'Assert-AccucutFolderTrusted', 'Assert-AccucutInstallTrusted',
+    'Expand-AccucutZip', 'Get-AccucutFolderOwnerSid', 'Assert-AccucutFolderTrusted', 'Assert-AccucutParentNotSwappable', 'Assert-AccucutInstallTrusted',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration'
 )

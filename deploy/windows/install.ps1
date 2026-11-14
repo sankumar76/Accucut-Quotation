@@ -134,6 +134,116 @@ function Assert-AccucutFreshRoot {
     return 'Empty'
 }
 
+function Get-AccucutNonAdminWriters {
+    <#
+    The SIDs, other than Administrators and SYSTEM, that an allow rule on the folder lets write, delete, change permissions or take ownership.
+    -ParentCheck asks the narrower question that matters for the folder that CONTAINS the install folder: can anyone but an administrator delete or
+    replace the install folder (delete-child, delete, change permissions, take ownership)? Making a new folder there is not that, and the rules that
+    only reach what is inside the parent are skipped. (The shared module has the same check; it cannot be used yet.)
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [switch]$ParentCheck
+    )
+
+    $rights = [System.Security.AccessControl.FileSystemRights]
+    $mask = [int]($rights::WriteData -bor $rights::AppendData -bor $rights::WriteExtendedAttributes -bor $rights::WriteAttributes -bor $rights::Delete -bor $rights::DeleteSubdirectoriesAndFiles -bor $rights::ChangePermissions -bor $rights::TakeOwnership)
+    if ($ParentCheck) { $mask = [int]($rights::DeleteSubdirectoriesAndFiles -bor $rights::Delete -bor $rights::ChangePermissions -bor $rights::TakeOwnership) }
+    $security = [System.IO.Directory]::GetAccessControl($Path)
+    $found = New-Object System.Collections.Generic.List[string]
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        if ($ParentCheck -and ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)) { continue }
+        if (@('S-1-5-32-544', 'S-1-5-18') -contains $rule.IdentityReference.Value) { continue }
+        if (([int]$rule.FileSystemRights -band $mask) -ne 0) { $found.Add($rule.IdentityReference.Value) }
+    }
+    return , $found.ToArray()
+}
+
+function Assert-AccucutBootstrapFolder {
+    <# One folder of the install: a real folder (not a link), owned by Administrators or SYSTEM, that no one else can write to or delete from. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "The folder '$Path' does not exist." }
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { throw "'$Path' is a link, not a real folder. Refusing to use it." }
+    $owner = Get-AccucutPathOwner -Path $Path
+    if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner) { throw "'$Path' is owned by $owner, not by Administrators or SYSTEM. Refusing to use it." }
+    $writers = @(Get-AccucutNonAdminWriters -Path $Path)
+    if ($writers.Count -gt 0) { throw "'$Path' can be changed by $($writers -join ', '), who is not an administrator. Refusing to use it." }
+}
+
+function Assert-AccucutLockedInstallRoot {
+    <#
+    The trust check of the install folder, run again and again between the steps of the install (after the folder is locked, before the verified
+    script is started, and before the second half loads anything from it), so that a swap at any moment is caught: the install folder and its
+    releases folder are real folders owned by Administrators that no one else can change, nothing between the install folder and the verified
+    release is a link, and no one but an administrator can delete or replace the install folder from its parent.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [string]$VerifiedRelease,
+        [switch]$RootOnly
+    )
+
+    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    Assert-AccucutBootstrapFolder -Path $full
+    $parent = Split-Path -Parent $full
+    $parentWriters = @(Get-AccucutNonAdminWriters -Path $parent -ParentCheck)
+    if ($parentWriters.Count -gt 0) { throw "'$parent', which holds the install folder, can be changed by $($parentWriters -join ', '), who is not an administrator, so the install folder could be replaced. Refusing to go on." }
+    if ($RootOnly) { return }
+    $releases = Join-Path $full 'releases'
+    Assert-AccucutBootstrapFolder -Path $releases
+    if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
+        $release = [System.IO.Path]::GetFullPath($VerifiedRelease).TrimEnd('\')
+        if ((Split-Path -Parent $release) -ine $releases) { throw "'$release' is not directly inside '$releases'. Refusing to use it." }
+        Assert-AccucutBootstrapFolder -Path $release
+    }
+}
+
+function New-AccucutDirectorySecurity {
+    <# The permissions of a locked folder: owned by Administrators, no inheritance, full control for Administrators and SYSTEM, plus the given accounts. #>
+    [CmdletBinding()]
+    param(
+        [string[]]$ReadAndExecute = @(),
+        [string[]]$Modify = @()
+    )
+
+    $security = New-Object System.Security.AccessControl.DirectorySecurity
+    $security.SetOwner((New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)))
+    $security.SetAccessRuleProtection($true, $false)
+    $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $none = [System.Security.AccessControl.PropagationFlags]::None
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    $administrators = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+    $system = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+    foreach ($sid in @($administrators, $system)) {
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', $inherit, $none, $allow)))
+    }
+    foreach ($account in $ReadAndExecute) {
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'ReadAndExecute', $inherit, $none, $allow)))
+    }
+    foreach ($account in $Modify) {
+        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'Modify', $inherit, $none, $allow)))
+    }
+    return $security
+}
+
+function New-AccucutLockedDirectory {
+    <#
+    Creates a folder WITH its locked permissions in one call (CreateDirectory with a security descriptor), so there is no moment at which it
+    exists with the permissions of its parent. If it exists already, nothing is changed and nothing is returned as new: the caller checks the
+    owner and the permissions afterwards and refuses a folder that is not its own.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    [void][System.IO.Directory]::CreateDirectory($Path, (New-AccucutDirectorySecurity))
+}
+
 function Expand-AccucutBootstrapZip {
     <# Unpacks a zip into a new folder, refusing any entry that would land outside it. (The shared module has the same function; it cannot be used yet.) #>
     [CmdletBinding()]
@@ -215,14 +325,23 @@ function Initialize-AccucutVerifiedRelease {
     $releases = Join-Path $full 'releases'
     $incoming = Join-Path $full '.in'
     $createdRoot = $false
+    $rootVerified = $false
     try {
         if ($state -eq 'New') {
-            # No -Force: if someone made the folder since the check, this fails instead of using theirs.
-            New-Item -ItemType Directory -Path $full | Out-Null
+            # Made WITH its locked permissions in one call, so there is no moment at which another user could write into it or swap it. If someone made
+            # the folder after the check above, CreateDirectory returns theirs unchanged, and the owner check below refuses it.
+            New-AccucutLockedDirectory -Path $full
+            Assert-AccucutLockedInstallRoot -Root $full -RootOnly
             $createdRoot = $true
         }
-        Set-AccucutDirectoryAcl -Path $full
+        else {
+            # An existing empty folder is used only if no one but an administrator can write to it or delete from it; its permissions are then replaced.
+            Assert-AccucutBootstrapFolder -Path $full
+            Set-AccucutDirectoryAcl -Path $full
+            Assert-AccucutLockedInstallRoot -Root $full -RootOnly
+        }
         if (@(Get-ChildItem -LiteralPath $full -Force).Count -gt 0) { throw "Something appeared in '$full' while it was being locked. Nothing was installed." }
+        $rootVerified = $true
         New-Item -ItemType Directory -Path $releases | Out-Null
         New-Item -ItemType Directory -Path $incoming | Out-Null
 
@@ -241,6 +360,7 @@ function Initialize-AccucutVerifiedRelease {
         [System.IO.Directory]::Move($unpacked, $target)
         Set-Content -LiteralPath (Join-Path $target '.zip-sha256') -Value $expected -Encoding ASCII
         Remove-AccucutBootstrapFolder -Path $incoming -Within $full
+        Assert-AccucutLockedInstallRoot -Root $full -VerifiedRelease $target
 
         # The scripts and the two programs only: Node does not look at the downloaded-file mark, and node_modules holds thousands of files.
         $toUnblock = @(Get-ChildItem -LiteralPath $target -File | Where-Object { $_.Extension -in '.ps1', '.psm1' })
@@ -249,7 +369,7 @@ function Initialize-AccucutVerifiedRelease {
         return $target
     }
     catch {
-        foreach ($folder in @($releases, $incoming)) { if (Test-Path -LiteralPath $folder) { Remove-AccucutBootstrapFolder -Path $folder -Within $full } }
+        if ($rootVerified) { foreach ($folder in @($releases, $incoming)) { if (Test-Path -LiteralPath $folder) { Remove-AccucutBootstrapFolder -Path $folder -Within $full } } }
         if ($createdRoot -and (Test-Path -LiteralPath $full) -and @(Get-ChildItem -LiteralPath $full -Force).Count -eq 0) { [System.IO.Directory]::Delete($full, $false) }
         throw
     }
@@ -424,24 +544,7 @@ function Set-AccucutDirectoryAcl {
         [string[]]$Modify = @()
     )
 
-    $security = New-Object System.Security.AccessControl.DirectorySecurity
-    $security.SetOwner((New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)))
-    $security.SetAccessRuleProtection($true, $false)
-    $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-    $none = [System.Security.AccessControl.PropagationFlags]::None
-    $allow = [System.Security.AccessControl.AccessControlType]::Allow
-    $administrators = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-    $system = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-    foreach ($sid in @($administrators, $system)) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', $inherit, $none, $allow)))
-    }
-    foreach ($account in $ReadAndExecute) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'ReadAndExecute', $inherit, $none, $allow)))
-    }
-    foreach ($account in $Modify) {
-        $security.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object System.Security.Principal.NTAccount($account)), 'Modify', $inherit, $none, $allow)))
-    }
-    [System.IO.Directory]::SetAccessControl($Path, $security)
+    [System.IO.Directory]::SetAccessControl($Path, (New-AccucutDirectorySecurity -ReadAndExecute $ReadAndExecute -Modify $Modify))
 }
 
 function Grant-AccucutFolderAccess {
@@ -605,7 +708,11 @@ function Invoke-AccucutInstall {
     if ([System.IO.Path]::GetFullPath($PackageRoot).TrimEnd('\') -ine [System.IO.Path]::GetFullPath($releaseDirectory).TrimEnd('\')) {
         throw "'$PackageRoot' is not the verified release folder '$releaseDirectory'. The install only runs from the folder that was made from the checked zip."
     }
+    # The same check once more, now with the module (which came from the verified folder): root, releases and the release itself, and the parent.
     Assert-AccucutFolderTrusted -Path $paths.Root
+    Assert-AccucutFolderTrusted -Path $paths.Releases
+    Assert-AccucutFolderTrusted -Path $releaseDirectory
+    Assert-AccucutParentNotSwappable -Path $paths.Root
     $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
     $logFile = Join-Path $paths.Logs "install-$stamp.log"
 
@@ -791,6 +898,9 @@ function Start-AccucutInstall {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
+        # The first thing the second half does, before it loads the module from the folder: the install folder and the release are still the real,
+        # locked folders that the first half left (nothing was swapped for a link, nothing is writable by anyone else).
+        Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease
         Import-Module (Join-Path $VerifiedRelease 'AccucutOps.psm1') -Force -DisableNameChecking
         Invoke-AccucutInstall @secondHalf -PackageRoot $VerifiedRelease
         return
@@ -800,6 +910,8 @@ function Start-AccucutInstall {
         throw 'Run this script as an administrator: right-click Windows PowerShell, choose Run as administrator, and start it again.'
     }
     $verified = Initialize-AccucutVerifiedRelease -ZipPath $ZipPath -Sha256 $Sha256 -Root $Root
+    # Checked again right before the script is started from the folder: the check at the end of the first half could have gone stale.
+    Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $verified
     # The second half runs from the verified folder: its own copy of this script, which loads its own copy of the module.
     $verifiedScript = Join-Path $verified 'install.ps1'
     & $verifiedScript @secondHalf -VerifiedRelease $verified

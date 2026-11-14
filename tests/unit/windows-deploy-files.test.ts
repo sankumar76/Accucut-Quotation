@@ -155,8 +155,8 @@ describe('the scripts (AC-1, AC-5)', () => {
     const order = [
       'Get-FileHash -LiteralPath $ZipPath',
       'Assert-AccucutFreshRoot -Root $Root',
-      'New-Item -ItemType Directory -Path $full | Out-Null',
-      'Set-AccucutDirectoryAcl -Path $full',
+      'New-AccucutLockedDirectory -Path $full',
+      'Assert-AccucutLockedInstallRoot -Root $full -RootOnly',
       'Copy-Item -LiteralPath $ZipPath -Destination $copy',
       'Get-FileHash -LiteralPath $copy',
       'Expand-AccucutBootstrapZip -ZipPath $copy',
@@ -179,6 +179,13 @@ describe('the scripts (AC-1, AC-5)', () => {
     expect(second).toContain("Join-Path $releaseDirectory 'sql\\create-roles.psql'");
     // The entry point runs the copy of the script that is in the unpacked release.
     expect(install).toContain("$verifiedScript = Join-Path $verified 'install.ps1'");
+    // The folder is made with its permissions in ONE call (no separate Set-ACL after New-Item), and the trust check runs again right before the verified
+    // script starts and right before the second half loads the module from the folder.
+    expect(install).toContain('[System.IO.Directory]::CreateDirectory($Path, (New-AccucutDirectorySecurity))');
+    const entry = install.slice(install.indexOf('function Start-AccucutInstall'));
+    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeGreaterThan(0);
+    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $VerifiedRelease')).toBeLessThan(entry.indexOf('Import-Module (Join-Path $VerifiedRelease'));
+    expect(entry.indexOf('Assert-AccucutLockedInstallRoot -Root $Root -VerifiedRelease $verified')).toBeLessThan(entry.indexOf('& $verifiedScript'));
   });
 
   it('settings files: locked before they are filled', () => {

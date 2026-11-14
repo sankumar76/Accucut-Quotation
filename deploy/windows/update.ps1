@@ -201,6 +201,8 @@ function Invoke-AccucutUpdate {
     # 4. Stop, migrate, switch, start, check.
     Write-AccucutLog -Message "Stopping the services and updating $oldTag -> $newTag." -LogFile $logFile
     Stop-AccucutServices
+    # The trust check once more, now that the new release is in releases and just before anything of it runs (it could have gone stale during the backup and the unpack).
+    Assert-AccucutInstallTrusted -Paths $paths
     $snapshot = @{}
     foreach ($name in (Get-AccucutServiceNames)) { $snapshot[$name] = Get-Content -LiteralPath (Join-Path $paths.Services "$name.xml") -Raw }
 

@@ -4,6 +4,11 @@
   stage 13 on a Windows runner. All values here are invented and clearly fake.
 #>
 
+BeforeDiscovery {
+    $principal = New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())
+    $script:IsAdmin = $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 BeforeAll {
     $script:WindowsDirectory = Split-Path -Parent $PSScriptRoot
     Import-Module (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Force -DisableNameChecking
@@ -75,16 +80,21 @@ Describe 'the first half: a locked install folder and a release unpacked from th
     BeforeEach {
         Mock Set-AccucutDirectoryAcl { }
         Mock Get-AccucutPathOwner { 'S-1-5-32-544' }
+        # The real permission checks read the test machine's own folders; the tests of those checks are further down, on folders that the tests lock themselves.
+        Mock Get-AccucutNonAdminWriters { , @() }
+        Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null }
     }
 
-    It 'makes a new install folder, locks it, copies the zip in, checks the copy and unpacks the copy: every file comes from the release folder' {
+    It 'makes a new install folder WITH its locked permissions in one call, copies the zip in, checks the copy and unpacks the copy: every file comes from the release folder' {
         $root = Join-Path $TestDrive 'fresh-root'
         $release = Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root
         $release | Should -Be (Join-Path $root 'releases\t-ok')
         Get-Content -LiteralPath (Join-Path $release 'install.ps1') -Raw | Should -BeLike '*from the zip*'
         (Get-Content -LiteralPath (Join-Path $release '.zip-sha256') -Raw).Trim() | Should -Be $script:ZipHash
         Test-Path -LiteralPath (Join-Path $root '.in') | Should -BeFalse
-        Should -Invoke Set-AccucutDirectoryAcl -Times 1 -Exactly -ParameterFilter { $Path -eq $root }
+        # One call makes the folder locked: no separate step sets the permissions afterwards, so there is no window in between.
+        Should -Invoke New-AccucutLockedDirectory -Times 1 -Exactly -ParameterFilter { $Path -eq $root }
+        Should -Invoke Set-AccucutDirectoryAcl -Times 0 -Exactly
     }
 
     It 'takes the expected hash from the .sha256 file next to the zip' {
@@ -102,6 +112,25 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         New-Item -ItemType Directory -Path $root | Out-Null
         Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root | Should -Be (Join-Path $root 'releases\t-ok')
         Should -Invoke Set-AccucutDirectoryAcl -Times 1 -Exactly -ParameterFilter { $Path -eq $root }
+        Should -Invoke New-AccucutLockedDirectory -Times 0 -Exactly
+    }
+
+    It 'refuses an existing empty folder whose permissions let another user write or delete, and does not touch it' {
+        Mock Get-AccucutNonAdminWriters { , @('S-1-5-32-545') }
+        $root = Join-Path $TestDrive 'empty-but-writable-root'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*can be changed by S-1-5-32-545*'
+        Should -Invoke Set-AccucutDirectoryAcl -Times 0 -Exactly
+        @(Get-ChildItem -LiteralPath $root -Force).Count | Should -Be 0
+    }
+
+    It 'refuses a folder that someone else made after the check (CreateDirectory returns theirs), and removes nothing of theirs' {
+        # Simulates the race: the folder exists, owned by another user, when the locked creation runs.
+        $root = Join-Path $TestDrive 'raced-root'
+        Mock New-AccucutLockedDirectory { New-Item -ItemType Directory -Path $Path | Out-Null; New-Item -ItemType Directory -Path (Join-Path $Path 'releases') | Out-Null }
+        Mock Get-AccucutPathOwner { 'S-1-5-21-1111111111-2222222222-3333333333-1001' }
+        { Initialize-AccucutVerifiedRelease -ZipPath $script:Zip -Sha256 $script:ZipHash -Root $root } | Should -Throw '*is owned by S-1-5-21-1111111111-2222222222-3333333333-1001*'
+        Test-Path -LiteralPath (Join-Path $root 'releases') | Should -BeTrue
     }
 
     It 'accepts an empty folder owned by SYSTEM' {
@@ -190,10 +219,16 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         New-Item -ItemType Directory -Path $verified | Out-Null
         $marker = Join-Path $TestDrive 'second-half-ran.txt'
         [System.IO.File]::WriteAllText((Join-Path $verified 'install.ps1'), "param(`$VerifiedRelease)`n[System.IO.File]::WriteAllText('$marker', `$VerifiedRelease)`nexit 0`n")
+        $script:MarkerPath = $marker
+        $script:Order = New-Object System.Collections.Generic.List[string]
         Mock Test-InstallerIsAdministrator { $true }
         Mock Initialize-AccucutVerifiedRelease { $verified }
+        # The trust check runs right before the verified script is started: when it runs, the script has not run yet.
+        Mock Assert-AccucutLockedInstallRoot { $script:Order.Add("assert (script already ran: $(Test-Path -LiteralPath $script:MarkerPath))") }
         Start-AccucutInstall -ZipPath 'ignored.zip' -Root (Join-Path $TestDrive 'any-root')
         Get-Content -LiteralPath $marker -Raw | Should -Be $verified
+        $script:Order | Should -Be @('assert (script already ran: False)')
+        Should -Invoke Assert-AccucutLockedInstallRoot -Times 1 -Exactly -ParameterFilter { $VerifiedRelease -like '*verified-release' }
     }
 
     It 'fails when the second half does not finish' {
@@ -202,7 +237,77 @@ Describe 'the first half: a locked install folder and a release unpacked from th
         [System.IO.File]::WriteAllText((Join-Path $verified 'install.ps1'), "param(`$VerifiedRelease)`nexit 1`n")
         Mock Test-InstallerIsAdministrator { $true }
         Mock Initialize-AccucutVerifiedRelease { $verified }
+        Mock Assert-AccucutLockedInstallRoot { }
         { Start-AccucutInstall -ZipPath 'ignored.zip' -Root (Join-Path $TestDrive 'any-root-2') } | Should -Throw '*did not finish*'
+    }
+
+    It 'does not start the verified script when the trust check fails right before it' {
+        $verified = Join-Path $TestDrive 'verified-release-3'
+        New-Item -ItemType Directory -Path $verified | Out-Null
+        $marker = Join-Path $TestDrive 'must-not-run.txt'
+        [System.IO.File]::WriteAllText((Join-Path $verified 'install.ps1'), "param(`$VerifiedRelease)`n[System.IO.File]::WriteAllText('$marker', 'ran')`nexit 0`n")
+        Mock Test-InstallerIsAdministrator { $true }
+        Mock Initialize-AccucutVerifiedRelease { $verified }
+        Mock Assert-AccucutLockedInstallRoot { throw "'C:\Accucut\releases' is a link, not a real folder. Refusing to use it." }
+        { Start-AccucutInstall -ZipPath 'ignored.zip' -Root (Join-Path $TestDrive 'any-root-3') } | Should -Throw '*is a link*'
+        Test-Path -LiteralPath $marker | Should -BeFalse
+    }
+
+    It 'the second half runs the trust check BEFORE it loads the module from the folder, and loads nothing if the check fails' {
+        $script:Order = New-Object System.Collections.Generic.List[string]
+        Mock Assert-AccucutLockedInstallRoot { $script:Order.Add('assert') }
+        Mock Import-Module { $script:Order.Add('import') }
+        Mock Invoke-AccucutInstall { $script:Order.Add('install') }
+        Start-AccucutInstall -Root (Join-Path $TestDrive 'second-root') -VerifiedRelease (Join-Path $TestDrive 'second-root\releases\t-ok')
+        ($script:Order -join ',') | Should -Be 'assert,import,install'
+
+        $script:Order.Clear()
+        Mock Assert-AccucutLockedInstallRoot { throw 'swapped' }
+        { Start-AccucutInstall -Root (Join-Path $TestDrive 'second-root') -VerifiedRelease (Join-Path $TestDrive 'second-root\releases\t-ok') } | Should -Throw '*swapped*'
+        $script:Order.Count | Should -Be 0
+    }
+
+    It 'a junction at the install folder or at releases is refused by the trust check, and so is a release that is not directly inside releases' {
+        $target = Join-Path $TestDrive 'trust-elsewhere'
+        New-Item -ItemType Directory -Path (Join-Path $target 'releases\t-ok') -Force | Out-Null
+        $junctionRoot = Join-Path $TestDrive 'junction-root'
+        New-Item -ItemType Junction -Path $junctionRoot -Target $target | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root $junctionRoot -VerifiedRelease (Join-Path $junctionRoot 'releases\t-ok') } | Should -Throw '*is a link*'
+
+        $root = Join-Path $TestDrive 'real-root-junction-releases'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        New-Item -ItemType Junction -Path (Join-Path $root 'releases') -Target $target | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw '*releases*is a link*'
+
+        $good = Join-Path $TestDrive 'real-root-ok'
+        New-Item -ItemType Directory -Path (Join-Path $good 'releases\t-ok'), (Join-Path $good 'elsewhere\t-ok') -Force | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease (Join-Path $good 'releases\t-ok') } | Should -Not -Throw
+        { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease (Join-Path $good 'elsewhere\t-ok') } | Should -Throw '*is not directly inside*'
+        $releaseLink = Join-Path $good 'releases\t-link'
+        New-Item -ItemType Junction -Path $releaseLink -Target (Join-Path $good 'elsewhere\t-ok') | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root $good -VerifiedRelease $releaseLink } | Should -Throw '*is a link*'
+    }
+
+    It 'the trust check refuses a parent folder in which another user could delete or replace the install folder, and a folder owned or writable by someone else' {
+        Mock Get-AccucutNonAdminWriters { param($Path, [switch]$ParentCheck) if ($ParentCheck) { , @('S-1-5-32-545') } else { , @() } }
+        $root = Join-Path $TestDrive 'parent-swappable-root'
+        New-Item -ItemType Directory -Path (Join-Path $root 'releases') -Force | Out-Null
+        { Assert-AccucutLockedInstallRoot -Root $root } | Should -Throw '*could be replaced*'
+        Mock Get-AccucutNonAdminWriters { , @('S-1-5-32-545') }
+        { Assert-AccucutBootstrapFolder -Path $root } | Should -Throw '*can be changed by S-1-5-32-545*'
+        Mock Get-AccucutNonAdminWriters { , @() }
+        Mock Get-AccucutPathOwner { 'S-1-5-21-1-2-3-1001' }
+        { Assert-AccucutBootstrapFolder -Path $root } | Should -Throw '*is owned by S-1-5-21-1-2-3-1001*'
+    }
+
+    It 'a locked folder is made in one call with Administrators as owner, no inheritance and Administrators and SYSTEM only' -Skip:(-not $script:IsAdmin) {
+        $folder = Join-Path $TestDrive 'really-locked'
+        New-AccucutLockedDirectory -Path $folder
+        $security = [System.IO.Directory]::GetAccessControl($folder)
+        $security.AreAccessRulesProtected | Should -BeTrue
+        $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value | Should -Be 'S-1-5-32-544'
+        @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) | Should -Be @('S-1-5-18', 'S-1-5-32-544')
+        (Get-AccucutNonAdminWriters -Path $folder).Count | Should -Be 0
     }
 
     It 'the second half refuses to run from anywhere but the verified release folder' {
@@ -356,6 +461,7 @@ Describe 'the second half reads only from the verified release folder, and a fai
     BeforeEach {
         Mock Test-InstallerIsAdministrator { $true }
         Mock Assert-AccucutFolderTrusted { }
+        Mock Assert-AccucutParentNotSwappable { }
         Mock Get-Command { [pscustomobject]@{ Source = 'C:\fake\node.exe' } } -ParameterFilter { $Name -eq 'node' }
         Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'C:\fake\pg\data'; ServiceStatus = 'Running' } }
         Mock Get-Service { $null }
