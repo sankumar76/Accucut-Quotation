@@ -90,7 +90,9 @@ describe('AC-1: the row is calculated from the stored customer rates, material a
 describe('AC-5: the hidden "Not applicable" material is calculated, with O and AK at 0', () => {
   it('finds the hidden row (the migration\'s own), which the other finders never do, and reads its three numbers as 0', async () => {
     const hiddenId = NOT_APPLICABLE_MATERIAL_ID;
-    expect(await db.masterRepository.findMaterialForCalculation(hiddenId)).toEqual({ id: hiddenId, materialInDrawing: NOT_APPLICABLE_NAME, materialConsidered: null, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00' });
+    expect(await db.masterRepository.findMaterialsForCalculation([hiddenId])).toEqual([
+      { id: hiddenId, materialInDrawing: NOT_APPLICABLE_NAME, materialConsidered: null, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00', deleted: false },
+    ]);
 
     const customerId = await addCustomer();
     await addExchangeRates(EXCHANGE.usd, EXCHANGE.eur);
@@ -101,20 +103,44 @@ describe('AC-5: the hidden "Not applicable" material is calculated, with O and A
   });
 });
 
-describe('findMaterialForCalculation', () => {
+describe('findMaterialsForCalculation (STORY-05.09, SQR-01 of AQP-293: every material in one statement, inside the caller\'s transaction)', () => {
   it('gives the three numbers as decimal text with at least two decimals', async () => {
     const id = await addMaterial({ pricePerKg: '60', specificGravity: '7.8512', scrapRate: '25.5' });
-    expect(await db.masterRepository.findMaterialForCalculation(id)).toEqual({ id, materialInDrawing: 'Invented-plate-grade', materialConsidered: 'Invented steel', pricePerKg: '60.00', specificGravity: '7.8512', scrapRate: '25.50' });
+    expect(await db.masterRepository.findMaterialsForCalculation([id])).toEqual([
+      { id, materialInDrawing: 'Invented-plate-grade', materialConsidered: 'Invented steel', pricePerKg: '60.00', specificGravity: '7.8512', scrapRate: '25.50', deleted: false },
+    ]);
   });
 
-  it('finds neither a deleted material, nor an unknown one, nor an ID that is not a UUID', async () => {
+  it('finds a deleted material and says it is deleted; an unknown ID, and one that is not a UUID, have no entry', async () => {
     const { rows } = await db.owner.query<{ id: string }>(
       `INSERT INTO materials (material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate, deleted_at)
        VALUES ('Deleted-entry-for-test', 'Invented gone', 1.37, 2.37, 3.37, now()) RETURNING id::text`,
     );
-    expect(await db.masterRepository.findMaterialForCalculation(defined(rows[0]).id)).toBeNull();
-    expect(await db.masterRepository.findMaterialForCalculation('00000000-0000-4000-8000-0ddd00000009')).toBeNull();
-    expect(await db.masterRepository.findMaterialForCalculation('not-an-id')).toBeNull();
+    const deletedId = defined(rows[0]).id;
+    expect(await db.masterRepository.findMaterialsForCalculation([deletedId, '00000000-0000-4000-8000-0ddd00000009', 'not-an-id'])).toEqual([
+      { id: deletedId, materialInDrawing: 'Deleted-entry-for-test', materialConsidered: 'Invented gone', pricePerKg: '1.37', specificGravity: '2.37', scrapRate: '3.37', deleted: true },
+    ]);
+    expect(await db.masterRepository.findMaterialsForCalculation([])).toEqual([]);
+  });
+
+  it('reads several materials in one call, whatever the letter case of the ID, and a repeated ID once', async () => {
+    const first = await addMaterial({ pricePerKg: '10', specificGravity: '2', scrapRate: '1' });
+    const second = await addMaterial({ pricePerKg: '20', specificGravity: '3', scrapRate: '2' });
+    const found = await db.masterRepository.findMaterialsForCalculation([first.toUpperCase(), second, first]);
+    expect(found.map((record) => record.id).sort()).toEqual([first, second].sort());
+  });
+
+  it('reads inside the caller\'s transaction: what the open transaction wrote is seen by a read that is given it, and by a plain read not until it commits', async () => {
+    const id = await addMaterial({ pricePerKg: '10', specificGravity: '2', scrapRate: '1' });
+    const rollBack = new Error('roll back');
+    await expect(
+      db.transactions.run(async (tx) => {
+        expect(await db.masterRepository.softDeleteMaterial(id, tx)).toBe(true);
+        expect((await db.masterRepository.findMaterialsForCalculation([id], tx)).map((record) => record.deleted)).toEqual([true]);
+        expect((await db.masterRepository.findMaterialsForCalculation([id])).map((record) => record.deleted)).toEqual([false]);
+        throw rollBack;
+      }),
+    ).rejects.toBe(rollBack);
   });
 });
 

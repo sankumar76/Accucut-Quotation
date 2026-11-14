@@ -16,7 +16,7 @@ import { clientFor, type Transaction } from './transaction';
  * **Materials**: every read and every lookup for a change applies the default filter `is_hidden = false AND deleted_at IS NULL`, so the
  * "Not applicable" row of story 02.06 and a deleted material are never listed and never found by ID: a change to one is "not found", the same
  * as an unknown ID. The hidden row has two readers, each named for it (STORY-02.06): `findNotApplicableMaterialOption`, for the estimate form's drop-down,
- * and `findMaterialForCalculation`, for a calculation. This file is the only one that names `is_hidden`. The three numbers of a material are Restricted:
+ * and `findMaterialsForCalculation`, for a calculation. This file is the only one that names `is_hidden`. The three numbers of a material are Restricted:
  * `listMaterialOptions` and `findNotApplicableMaterialOption` do not even read their columns.
  *
  * A material's numbers are carried as **decimal text** ("7.37"), never as a JavaScript number (coding standards section 10, "Money and rates"):
@@ -65,6 +65,11 @@ export interface MaterialValuesRecord {
   readonly scrapRate: string;
 }
 
+/** A material as a calculation reads it, with whether the Admin has deleted it since a part chose it (the row stays, A-13). */
+export interface MaterialCalculationRecord extends MaterialValuesRecord {
+  readonly deleted: boolean;
+}
+
 export interface MaterialMethods {
   /** Every listed material, in the order they were added. Hidden and deleted materials are not listed. */
   listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
@@ -76,10 +81,12 @@ export interface MaterialMethods {
    */
   findNotApplicableMaterialOption(): Promise<MaterialOptionRecord | null>;
   /**
-   * The numbers of the material with this ID for a calculation, or null (unknown, deleted, or not an ID alike). Unlike `findMaterialForUpdate` and the lists, it
-   * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). A plain read.
+   * The numbers of every material with one of these IDs for a calculation, **in one statement** (STORY-05.09, review SQR-01 of AQP-293: one read, not one per material). Pass `tx` to read
+   * inside the caller's transaction, so the read takes no second connection while the caller holds the estimate's lock. Unlike `findMaterialForUpdate` and the lists, it
+   * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). It also finds a **deleted** material and says so
+   * (`deleted`), so a part that still names one is answered with the specific 409 and not "not found" (STORY-02.07 A-13). An ID that is unknown or is not a UUID has no entry. Order is not promised.
    */
-  findMaterialForCalculation(id: string): Promise<MaterialValuesRecord | null>;
+  findMaterialsForCalculation(ids: ReadonlyArray<string>, tx?: Transaction): Promise<ReadonlyArray<MaterialCalculationRecord>>;
   /** Takes the lock that serialises changes to the materials until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
   lockMaterials(tx: Transaction): Promise<void>;
   /** The listed material with this ID, or null (unknown, hidden or deleted alike), read **with its row locked** until the transaction ends. */
@@ -186,20 +193,23 @@ async function readNotApplicableOption(db: PrismaClient): Promise<MaterialOption
   return row === null ? null : { id: row.id, name: row.materialInDrawing, materialConsidered: row.materialConsidered };
 }
 
-async function readMaterialValues(db: PrismaClient, id: string): Promise<MaterialValuesRecord | null> {
-  // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
-  if (!z.uuid().safeParse(id).success) return null;
-  const row = await db.material.findFirst({
-    where: { id, deletedAt: null },
-    select: { id: true, materialInDrawing: true, materialConsidered: true, pricePerKg: true, specificGravity: true, scrapRate: true },
+async function readMaterialsForCalculation(db: PrismaClient, ids: ReadonlyArray<string>, tx?: Transaction): Promise<ReadonlyArray<MaterialCalculationRecord>> {
+  // PostgreSQL would refuse a text that is not a UUID with an error; an ID that is not one has no entry, as an unknown one has none.
+  const valid = [...new Set(ids.filter((id) => z.uuid().safeParse(id).success).map((id) => id.toLowerCase()))];
+  if (valid.length === 0) return [];
+  const rows = await clientFor(db, tx).material.findMany({
+    where: { id: { in: valid } },
+    select: { id: true, materialInDrawing: true, materialConsidered: true, pricePerKg: true, specificGravity: true, scrapRate: true, deletedAt: true },
   });
-  if (row === null) return null;
-  return {
+  return rows.map((row) => ({
     id: row.id,
     materialInDrawing: row.materialInDrawing,
     materialConsidered: row.materialConsidered,
-    pricePerKg: decimalText(row.pricePerKg), specificGravity: decimalText(row.specificGravity), scrapRate: decimalText(row.scrapRate),
-  };
+    pricePerKg: decimalText(row.pricePerKg),
+    specificGravity: decimalText(row.specificGravity),
+    scrapRate: decimalText(row.scrapRate),
+    deleted: row.deletedAt !== null,
+  }));
 }
 
 async function selectMaterialForUpdate(db: PrismaClient, id: string, tx: Transaction): Promise<MaterialRecord | null> {
@@ -274,7 +284,7 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
     listMaterials: () => withDatabaseErrors(() => readMaterials(db)),
     listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
     findNotApplicableMaterialOption: () => withDatabaseErrors(() => readNotApplicableOption(db)),
-    findMaterialForCalculation: (id) => withDatabaseErrors(() => readMaterialValues(db, id)),
+    findMaterialsForCalculation: (ids, tx) => withDatabaseErrors(() => readMaterialsForCalculation(db, ids, tx)),
     lockMaterials: (tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).$executeRaw`LOCK TABLE materials IN SHARE ROW EXCLUSIVE MODE`;
