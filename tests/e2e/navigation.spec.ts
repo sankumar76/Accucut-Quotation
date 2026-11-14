@@ -101,16 +101,35 @@ test.describe('the Lead (saved browser state)', () => {
     await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
   });
 
-  test('AC-7: GET /api/v1/me returns the person, the same menu and an overdue count of 0, in a strict shape, not cached', async ({ page }, testInfo) => {
+  // The E2E Lead is shared: other specs assign overdue tasks as them (`support/queue.ts`), and a Lead's bell counts the tasks they assigned, so which count it is depends on which specs
+  // ran before in this database. The exact count of 0 is judged for a Lead of the test's own, below.
+  test('AC-7: GET /api/v1/me returns the person, the same menu and an overdue count, in a strict shape, not cached', async ({ page }, testInfo) => {
     await page.goto('/queue');
     const response = await page.request.get('/api/v1/me');
     expect(response.status()).toBe(200);
     expect(response.headers()['cache-control']).toBe('private, no-store');
     expect(response.headers()['x-request-id']).toMatch(/^req-[0-9a-f]{8}$/);
     const me = meSchema.parse(await response.json());
-    expect(me).toMatchObject({ name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD', overdueCount: 0 });
+    expect(me).toMatchObject({ name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD' });
+    expect(Number.isInteger(me.overdueCount) && me.overdueCount >= 0).toBe(true);
     expect(me.navigation.map((item) => item.label)).toEqual(await menuLabels(await openMenu(page, testInfo)));
     expect(JSON.stringify(me)).not.toMatch(/cost|rate|price/i);
+  });
+});
+
+test.describe('a Lead who has assigned nothing (AC-7)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test.beforeEach(async ({ context }) => {
+    await useFreshAddress(context);
+  });
+
+  test('AC-7: GET /api/v1/me gives an overdue count of 0, because a Lead\'s count is of the tasks they assigned and this Lead has assigned none', async ({ page }, testInfo) => {
+    const lead = await createDisposableUser('bell', testInfo, 'LEAD');
+    await signInAs(page, lead, 'Task queue');
+    const response = await page.request.get('/api/v1/me');
+    expect(response.status()).toBe(200);
+    expect(meSchema.parse(await response.json())).toMatchObject({ name: lead.name, email: lead.email, role: 'LEAD', overdueCount: 0 });
   });
 });
 

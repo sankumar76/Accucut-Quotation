@@ -191,7 +191,7 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
 });
 
 describe('review SQR-01, SQR-02: a save changes only the keys it names, and the write is conditional on the revision read', () => {
-  const CUTTING_TIME = seedFieldAt('P').id;
+  const NOT_BUILT = seedFieldAt('Z').id;
 
   async function plant(nodeId: string, inputs: Record<string, unknown>): Promise<void> {
     await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify(inputs)]);
@@ -199,7 +199,7 @@ describe('review SQR-01, SQR-02: a save changes only the keys it names, and the 
 
   it('a stored value of a field that is not on the form (a later story\'s, an unknown key, a non-text value) survives a save of another field; the answer lists only the form\'s', async () => {
     const nodeId = await setUpPart();
-    const planted = { [LENGTH]: '1.00', [CUTTING_TIME]: '7.00', invented: true, flags: { z: 1 } };
+    const planted = { [LENGTH]: '1.00', [NOT_BUILT]: '7.00', invented: true, flags: { z: 1 } };
     await plant(nodeId, planted);
     const saved = await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [WIDTH]: '2' } });
     expect((await row(nodeId)).inputs).toEqual({ ...planted, [WIDTH]: '2.00' });
@@ -208,17 +208,17 @@ describe('review SQR-01, SQR-02: a save changes only the keys it names, and the 
 
   it('clearing one field removes only its own key', async () => {
     const nodeId = await setUpPart();
-    await plant(nodeId, { [LENGTH]: '1.00', [WIDTH]: '2.00', [CUTTING_TIME]: '7.00', invented: true });
+    await plant(nodeId, { [LENGTH]: '1.00', [WIDTH]: '2.00', [NOT_BUILT]: '7.00', invented: true });
     await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [LENGTH]: '' } });
-    expect((await row(nodeId)).inputs).toEqual({ [WIDTH]: '2.00', [CUTTING_TIME]: '7.00', invented: true });
+    expect((await row(nodeId)).inputs).toEqual({ [WIDTH]: '2.00', [NOT_BUILT]: '7.00', invented: true });
   });
 
   it('the no-change check compares the submitted fields only: nothing is written however much else is stored', async () => {
     const nodeId = await setUpPart();
-    await plant(nodeId, { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true });
+    await plant(nodeId, { [LENGTH]: '1.50', [NOT_BUILT]: '7.00', invented: true });
     const before = await inputsRevision();
     await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [LENGTH]: '1.5' } });
-    expect(await row(nodeId)).toEqual({ inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true }, revision: 1 });
+    expect(await row(nodeId)).toEqual({ inputs: { [LENGTH]: '1.50', [NOT_BUILT]: '7.00', invented: true }, revision: 1 });
     expect(await inputsRevision()).toBe(before);
   });
 
@@ -262,7 +262,7 @@ describe('AC-8, SQR-01 (b), SQR-09: what the form and the part send, and the del
     await setUpPart();
     const started = Date.now();
     const form = await service.getForm(arjun, estimateId);
-    expect(form.sections.map((section) => section.number)).toEqual([1, 2]);
+    expect(form.sections.map((section) => section.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     // The database's clock and this process's may differ a little, so "just now" is within ten minutes.
     expect(Math.abs(Date.parse(defined(form.lastSavedAt)) - started)).toBeLessThan(10 * 60_000);
     await db.owner.query('DELETE FROM estimate_nodes');

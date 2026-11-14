@@ -102,7 +102,7 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
       case 'number':
         return validateNumberInput(typed);
       case 'text':
-        return validateTextInput(typed, { multiline: field.rule.multiline });
+        return validateTextInput(typed, { multiline: field.rule.multiline, maxLength: field.rule.maxLength });
       case 'select': {
         const id = typed.trim().toLowerCase();
         if (id === '') return { ok: true, value: null };
