@@ -85,13 +85,13 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
       code: 'Q-2026-0001',
       title: 'Hopper cover',
       notes: 'Sheet metal only.',
-      engineer: { id: arjunId, name: 'Status Arjun' },
+      engineer: { id: arjunId, name: 'Invented Status Arjun' },
       customerName: 'Invented status customer',
       folderPath: PATH,
       folderUrl: 'file:////invented-server/invented-share/RFQ-123',
       deadlineAt: DEADLINE,
       status: 'SUBMITTED',
-      assignedByName: 'Status Lead',
+      assignedByName: 'Invented Status Lead',
     });
   });
 });
