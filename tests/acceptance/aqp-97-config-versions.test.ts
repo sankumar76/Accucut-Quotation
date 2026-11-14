@@ -153,7 +153,9 @@ describe('[AQP-97 AC-6] config_versions cannot be changed or removed, by either 
     ['DELETE of the one row by number', `DELETE FROM config_versions WHERE number = 1`],
     ['DELETE ... RETURNING', `DELETE FROM config_versions RETURNING *`],
     ['DELETE ... USING', `DELETE FROM config_versions c USING (SELECT 1) AS other WHERE c.number = 1`],
-    ['TRUNCATE ONLY', `TRUNCATE ONLY config_versions`],
+    // CASCADE since STORY-03.05: `calculations.config_version_id` now references this table, so a plain TRUNCATE is stopped earlier by PostgreSQL itself (0A000, a table
+    // referenced in a foreign key), before the trigger. CASCADE reaches past the foreign keys, so the trigger is still what refuses it, as before.
+    ['TRUNCATE ONLY ... CASCADE', `TRUNCATE ONLY config_versions CASCADE`],
     ['TRUNCATE ... RESTART IDENTITY CASCADE', `TRUNCATE config_versions RESTART IDENTITY CASCADE`],
     ['an upsert (INSERT ... ON CONFLICT DO UPDATE)', `INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'x') ON CONFLICT (number) DO UPDATE SET snapshot = EXCLUDED.snapshot`],
     ['MERGE ... WHEN MATCHED THEN UPDATE', `MERGE INTO config_versions c USING (SELECT 1 AS n) s ON c.number = s.n WHEN MATCHED THEN UPDATE SET reason = 'x'`],

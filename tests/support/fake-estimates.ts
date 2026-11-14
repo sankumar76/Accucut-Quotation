@@ -21,6 +21,8 @@ export interface FakeEstimate {
   status: EstimateStatus;
   customerId: string | null;
   inputsRevision: number;
+  /** The calculation the estimate is linked to (STORY-03.05). Absent counts as none. */
+  currentCalculationId?: string | null;
 }
 
 export interface FakeCustomerEntry {
@@ -68,12 +70,19 @@ export function createFakeEstimateWorld(customers: () => ReadonlyArray<FakeCusto
     },
     lockEstimate: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
-      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId };
+      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, inputsRevision: estimate.inputsRevision };
       return Promise.resolve(lock);
     },
     findActiveCustomer: (id) => {
       const found = customers().find((customer) => same(customer.id, id) && !customer.deleted);
       return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+    },
+    linkCalculation: (estimateId, calculationId, status) => {
+      const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
+      if (estimate === undefined) return Promise.reject(new Error('The estimate to link does not exist.'));
+      estimate.currentCalculationId = calculationId;
+      estimate.status = status;
+      return Promise.resolve();
     },
     setCustomer: (estimateId, customerId) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
