@@ -5,7 +5,7 @@ import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../..
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import type { CustomerChoice, EstimateRepository } from '../repositories/estimate-repository';
 import type { EstimateStatus } from '../repositories/task-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 /**
  * The estimate workspace (STORY-05.01; FR-042; architecture sections 4.1, 4.8 and 6, "Set customer"): opening a task's estimate and choosing the customer
@@ -97,8 +97,11 @@ export interface EstimateService {
    * estimate that is not this person's or does not exist, and for an Engineer's event that is not Calculate (the same answer, so nothing is told); 403 for a
    * Lead's or an Admin's event that is not theirs (the Admin-only cancel); 409 with a named code for a pair the machine refuses (`TRANSITION_REFUSALS`). A
    * refusal writes nothing. The routes and the work of each event (Calculate, approve, unlock, cancel) call this inside their own steps as they arrive.
+   * Pass `tx` to run in the caller's transaction (as `storeCalculation` does): the lock and the write are then the caller's, so the status changes, or is put
+   * back, together with the caller's own writes (the approval row, the audit entry, the calculation link), and no second transaction is opened (one opened
+   * here would wait on the row lock its caller already holds). Without `tx` the service opens its own.
    */
-  transition(viewer: EstimateViewer, estimateId: string, event: EstimateEvent): Promise<EstimateTransition>;
+  transition(viewer: EstimateViewer, estimateId: string, event: EstimateEvent, tx?: Transaction): Promise<EstimateTransition>;
 }
 
 export interface EstimateDependencies {
@@ -107,6 +110,31 @@ export interface EstimateDependencies {
 }
 
 const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.role !== 'ENGINEER' || viewer.id.toLowerCase() === engineerId.toLowerCase();
+
+/** Locks the estimate, lets the state machine decide, and writes the new status, all in `tx`. The caller owns the transaction. */
+async function applyTransition(
+  estimates: EstimateRepository,
+  viewer: EstimateViewer,
+  estimateId: string,
+  event: EstimateEvent,
+  tx: Transaction,
+): Promise<EstimateTransition> {
+  const estimate = await estimates.lockEstimate(estimateId, tx);
+  if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
+  const decision = decideTransition(estimate.status, event, viewer.role);
+  if (!decision.allowed) {
+    // A role that may never apply the event is refused before the status is looked at. An Engineer gets the uniform "not found" (CR-33); a Lead gets 403.
+    if (decision.kind === 'ROLE') throw viewer.role === 'ENGINEER' ? new NotFoundError() : new ForbiddenError();
+    const refusal = TRANSITION_REFUSALS[decision.reason];
+    throw new ConflictError(refusal.message, { code: refusal.code });
+  }
+  // A transition that keeps the status (Recalculate of a submitted estimate, an edit, an export) writes nothing here; what it does is its own story's.
+  if (decision.to !== decision.from) {
+    const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx);
+    if (!moved) throw new ConflictError(STATUS_CHANGED_MESSAGE, { code: ESTIMATE_STATUS_CHANGED_CODE });
+  }
+  return { id: estimate.id, from: decision.from, to: decision.to };
+}
 
 export function createEstimateService({ estimates, transactions }: EstimateDependencies): EstimateService {
   return {
@@ -143,24 +171,9 @@ export function createEstimateService({ estimates, transactions }: EstimateDepen
       });
     },
 
-    transition(viewer, estimateId, event) {
-      return transactions.run(async (tx) => {
-        const estimate = await estimates.lockEstimate(estimateId, tx);
-        if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
-        const decision = decideTransition(estimate.status, event, viewer.role);
-        if (!decision.allowed) {
-          // A role that may never apply the event is refused before the status is looked at. An Engineer gets the uniform "not found" (CR-33); a Lead gets 403.
-          if (decision.kind === 'ROLE') throw viewer.role === 'ENGINEER' ? new NotFoundError() : new ForbiddenError();
-          const refusal = TRANSITION_REFUSALS[decision.reason];
-          throw new ConflictError(refusal.message, { code: refusal.code });
-        }
-        // A transition that keeps the status (Recalculate of a submitted estimate, an edit, an export) writes nothing here; what it does is its own story's.
-        if (decision.to !== decision.from) {
-          const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx);
-          if (!moved) throw new ConflictError(STATUS_CHANGED_MESSAGE, { code: ESTIMATE_STATUS_CHANGED_CODE });
-        }
-        return { id: estimate.id, from: decision.from, to: decision.to };
-      });
+    transition(viewer, estimateId, event, tx) {
+      const apply = (inTransaction: Transaction): Promise<EstimateTransition> => applyTransition(estimates, viewer, estimateId, event, inTransaction);
+      return tx === undefined ? transactions.run(apply) : apply(tx);
     },
   };
 }

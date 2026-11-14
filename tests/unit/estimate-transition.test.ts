@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { TRANSITION_REFUSALS, type EstimateEvent, type EstimateStatus } from '@/lib/estimate/state-machine';
+import type { Transaction, TransactionRunner } from '@/server/repositories/transaction';
 import {
   assertEditable,
   createEstimateService,
@@ -306,5 +307,81 @@ describe('AC-2: the customer is an input, so setCustomer follows the same rule',
     expect(stored().inputsRevision).toBe(3);
     stored().status = 'APPROVED';
     await expect(service.setCustomer(admin, ESTIMATE, CUSTOMER)).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe('SQR-01: transition joins the transaction its caller gives it', () => {
+  /** A runner that counts the transactions opened and refuses one opened inside another, which is what PostgreSQL answers with a wait on its own row lock. */
+  function strictRunner(inner: TransactionRunner) {
+    let open = 0;
+    let opened = 0;
+    const runner: TransactionRunner = {
+      run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+        if (open > 0) return Promise.reject(new Error('A transaction was opened inside another.'));
+        open += 1;
+        opened += 1;
+        return inner.run(work).finally(() => {
+          open -= 1;
+        });
+      },
+    };
+    return { runner, opened: () => opened };
+  }
+
+  function setUpStrict(initial: ReadonlyArray<FakeEstimate>) {
+    const world = createFakeEstimateWorld(() => [{ id: CUSTOMER, name: 'Brightwater Controls', deleted: false }], initial);
+    const strict = strictRunner(world.transactions);
+    const service = createEstimateService({ estimates: world.repository, transactions: strict.runner });
+    const stored = (): FakeEstimate => {
+      const found = world.estimates[0];
+      if (found === undefined) throw new Error('no estimate');
+      return found;
+    };
+    return { world, strict, service, stored };
+  }
+
+  it('without tx it opens exactly one transaction of its own', async () => {
+    const { strict, service, stored } = setUpStrict([estimate({ status: 'SUBMITTED' })]);
+    await service.transition(lead, ESTIMATE, 'APPROVE');
+    expect(strict.opened()).toBe(1);
+    expect(stored().status).toBe('APPROVED');
+  });
+
+  it("with tx it opens none: the caller's transaction is the only one, and the status is written in it", async () => {
+    const { strict, service, stored } = setUpStrict([estimate({ status: 'SUBMITTED' })]);
+    const answer = await strict.runner.run((tx) => service.transition(lead, ESTIMATE, 'APPROVE', tx));
+    expect(answer).toEqual({ id: ESTIMATE, from: 'SUBMITTED', to: 'APPROVED' });
+    expect(strict.opened()).toBe(1);
+    expect(stored().status).toBe('APPROVED');
+  });
+
+  it('a nested transaction is caught by the strict runner, so a transition that opened its own inside its caller\'s would fail these tests', async () => {
+    const { strict } = setUpStrict([estimate({ status: 'SUBMITTED' })]);
+    await expect(strict.runner.run(() => strict.runner.run(() => Promise.resolve()))).rejects.toThrow('inside another');
+  });
+
+  it("a failure after the transition, in the caller's transaction, puts the status back: the status and the caller's own write are one unit", async () => {
+    const { strict, service, world, stored } = setUpStrict([estimate({ status: 'SUBMITTED' })]);
+    await expect(
+      strict.runner.run(async (tx) => {
+        await service.transition(lead, ESTIMATE, 'APPROVE', tx);
+        expect(stored().status).toBe('APPROVED');
+        throw new Error("the caller's own write failed");
+      }),
+    ).rejects.toThrow("the caller's own write failed");
+    expect(stored().status).toBe('SUBMITTED');
+    expect(world.statusWrites()).toBe(1);
+    // The estimate is free again: the next transition runs.
+    await expect(service.transition(lead, ESTIMATE, 'APPROVE')).resolves.toMatchObject({ to: 'APPROVED' });
+  });
+
+  it("a refusal inside the caller's transaction is the same error as outside it, and writes nothing", async () => {
+    const { strict, service, stored } = setUpStrict([estimate({ status: 'APPROVED' })]);
+    const refusal = await caught(strict.runner.run((tx) => service.transition(lead, ESTIMATE, 'APPROVE', tx)));
+    expect(refusal).toBeInstanceOf(ConflictError);
+    expect((refusal as ConflictError).code).toBe(TRANSITION_REFUSALS.ALREADY_APPROVED.code);
+    expect(stored().status).toBe('APPROVED');
+    const stranger = await caught(strict.runner.run((tx) => service.transition(priya, ESTIMATE, 'CALCULATE', tx)));
+    expect(stranger).toBeInstanceOf(NotFoundError);
   });
 });
