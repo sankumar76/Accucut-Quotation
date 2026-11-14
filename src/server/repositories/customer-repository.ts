@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { withDatabaseErrors } from './database-errors';
 import { trimDecimalText } from './decimal-text';
+import { ESTIMATE_USE_LIMIT, toEstimateUses, type EstimateUses } from './estimate-use';
 import { enforcingConstraints } from './master-constraints';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
@@ -24,7 +25,8 @@ import { clientFor, type Transaction } from './transaction';
  *
  * Every method that changes a customer takes the caller's `Transaction`, because every such change is audited in the same one (STORY-01.07;
  * architecture section 6, DEF-017). The runtime role can read, add and change customers, delete a rate row (an unused Process Master item takes its
- * rows with it, AC-4) and cannot delete a customer or truncate either table.
+ * rows with it, AC-4) and cannot delete a customer or truncate either table: a customer is deleted **softly**, by an `UPDATE` of `deleted_at` (STORY-02.07, A-13),
+ * and keeps its rate rows. The name's unique indexes are not partial, so a deleted customer's name stays taken (STORY-02.07 AC-8).
  */
 
 /** A customer's details. A contact field that was not given is `null`. */
@@ -104,6 +106,17 @@ export interface CustomerMethods {
   addProcessItemToCustomers(processItemId: string, tx: Transaction): Promise<number>;
   /** A deleted Process Master item: its rate row of **every** customer is removed (SPEC section 4.2 rule 5). One statement. Returns the rows removed. */
   removeProcessItemFromCustomers(processItemId: string, tx: Transaction): Promise<number>;
+  /**
+   * The Draft and Submitted estimates that have this customer (STORY-02.07 AC-2): how many, and the first ten by task code. A plain read: it takes no lock, so
+   * it must run **after** `findCustomerForUpdate` in the same transaction. That lock waits for a request that is choosing this customer (it holds the
+   * customer `FOR SHARE`) and, once it is granted, this statement (a new snapshot under READ COMMITTED) sees that request's estimate (AC-5).
+   */
+  findOpenEstimatesOfCustomer(customerId: string, tx: Transaction): Promise<EstimateUses>;
+  /**
+   * Soft-deletes a listed customer (`deleted_at`, A-13) in the caller's transaction; false if there is none with this ID. The customer's rate rows stay, so a
+   * calculation that still names it is unharmed. The runtime role cannot `DELETE` from `customers`; this is an `UPDATE`.
+   */
+  softDeleteCustomer(id: string, tx: Transaction): Promise<boolean>;
 }
 
 /** The order of the SCR-12 table: the Process Master's order. */
@@ -241,5 +254,26 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
 
     removeProcessItemFromCustomers: (processItemId, tx) =>
       withDatabaseErrors(() => clientFor(db, tx).$executeRaw`DELETE FROM customer_rates WHERE process_item_id = ${processItemId}::uuid`),
+
+    findOpenEstimatesOfCustomer: (customerId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(customerId)) return { total: 0, estimates: [] };
+        // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"
+          FROM estimates e
+          JOIN tasks t ON t.id = e.task_id
+          WHERE e.customer_id = ${customerId}::uuid AND e.status IN ('DRAFT', 'SUBMITTED')
+          ORDER BY t.code, e.id
+          LIMIT ${ESTIMATE_USE_LIMIT}::int`;
+        return toEstimateUses(rows);
+      }),
+
+    softDeleteCustomer: (id, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return false;
+        const changed = await clientFor(db, tx).$executeRaw`UPDATE customers SET deleted_at = now(), updated_at = now() WHERE id = ${id}::uuid AND deleted_at IS NULL`;
+        return changed === 1;
+      }),
   };
 }

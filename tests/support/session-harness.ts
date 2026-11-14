@@ -11,7 +11,7 @@ import { createEstimateService, type EstimateService } from '../../src/server/se
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
-import { CUSTOMER_CANARIES } from './customer-canary';
+import { CUSTOMER_CANARIES, CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_DELETE_RECIPE_NAME } from './customer-canary';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
@@ -132,6 +132,8 @@ export function createSessionHarness(): SessionHarness {
     const values = Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value]));
     masters.customers.push({ ...fakeCustomer(masters.records, canary.name, values, { phone: canary.phone }), id: canary.id });
   }
+  // The customer the recipe of `DELETE /api/v1/customers/{id}` deletes (STORY-02.07), kept apart so the canary above survives the Admin's valid call.
+  masters.customers.push({ ...fakeCustomer(masters.records, CUSTOMER_DELETE_RECIPE_NAME), id: CUSTOMER_DELETE_RECIPE_ID });
   // The Exchange Rate Master holds the canary rates (STORY-02.04): a route that leaked a rate to a role would send one.
   masters.exchange.usd = EXCHANGE_RATE_CANARIES.usd;
   masters.exchange.eur = EXCHANGE_RATE_CANARIES.eur;

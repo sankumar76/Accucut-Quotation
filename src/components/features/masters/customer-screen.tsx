@@ -21,7 +21,7 @@ import {
 import { MasterDialogsFailed } from './master-dialogs-failed';
 import { isOpener } from './master-opener';
 import { MasterSearchBox } from './master-search-box';
-import { BREAK_LONG_NAMES, FAILED_DIALOGS_TITLE } from './master-texts';
+import { BREAK_LONG_NAMES, FAILED_CONFIRMATION_TITLE, FAILED_DIALOGS_TITLE } from './master-texts';
 import { useCustomers, type CustomersState } from './use-customers';
 
 /**
@@ -53,14 +53,16 @@ function AddCustomerButton({ customers }: { readonly customers: CustomersState }
 
 export function CustomerScreen({ initialItems }: CustomerScreenProps) {
   const customers = useCustomers(initialItems);
-  const { list, dialog, notice } = customers;
+  const { list, dialog, remove, notice } = customers;
   const search = useRef<HTMLInputElement>(null);
   const Dialog = dialog.loader.shown ? dialog.loader.Overlay : null;
+  const DeleteDialogs = remove.loader.shown ? remove.loader.Overlay : null;
 
   return (
     <>
       <PageHeader title={CUSTOMERS_TITLE} description={CUSTOMERS_DESCRIPTION} actions={<AddCustomerButton customers={customers} />} />
       {dialog.loader.failed ? <MasterDialogsFailed title={FAILED_DIALOGS_TITLE} /> : null}
+      {remove.loader.failed ? <MasterDialogsFailed title={FAILED_CONFIRMATION_TITLE} /> : null}
       {notice === null ? null : (
         <Notice tone={notice.tone} role="status" className={BREAK_LONG_NAMES} {...(notice.title === undefined ? {} : { title: notice.title })}>
           {notice.text}
@@ -79,6 +81,18 @@ export function CustomerScreen({ initialItems }: CustomerScreenProps) {
       </Card>
       {Dialog === null ? null : (
         <Dialog open={dialog.open} onClose={() => dialog.setOpen(false)} onSaved={customers.onSaved} onCloseAutoFocus={customers.onCloseAutoFocus} />
+      )}
+      {DeleteDialogs === null ? null : (
+        <DeleteDialogs
+          open={remove.open}
+          target={remove.target}
+          uses={remove.uses}
+          onClose={() => remove.setOpen(null)}
+          onDeleted={remove.onDeleted}
+          onBlocked={remove.onBlocked}
+          onGone={remove.onGone}
+          onCloseAutoFocus={customers.onCloseAutoFocus}
+        />
       )}
     </>
   );

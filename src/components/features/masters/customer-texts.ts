@@ -13,7 +13,8 @@ import type { PageNotice } from './master-texts';
  * does not give (the notices after a save and a reset, the failed writes) were the developer's proposal from the patterns of SCR-11 and the
  * Treatment / Color tab. The ux-expert confirmed them in ux-spec v0.24, SCR-12 "The Customers words: final words", and ruled the customer's page its own
  * load-error title. They follow the shared rule of ux-spec v0.21 section 6.0 that a failed write never says "Nothing was changed.". Delete and
- * Delete blocked are story 02.07's.
+ * Delete blocked (story 02.07) are the mock-up's words; the sentences it does not give are the developer's proposal from the Treatment / Color tab, for the
+ * ux-expert to rule on.
  */
 
 export const CUSTOMERS_TITLE = 'Customers';
@@ -48,6 +49,8 @@ export const differText = (count: number): string => `${count} differ`;
 
 export const editCustomerLabel = (name: string): string => `Edit ${name}`;
 export const EDIT_ACTION = 'Edit';
+export const DELETE_ACTION = 'Delete';
+export const deleteCustomerLabel = (name: string): string => `Delete ${name}`;
 
 export const FAILED_ADD_CUSTOMER_MESSAGE = 'We could not add the customer.';
 /** Under a failed Add or Save: the shared sentence of ux-spec v0.21 section 6.0 for a write that keeps what the person typed. It never says "Nothing was changed.". */
@@ -102,6 +105,26 @@ export const RESET_KEEP = 'Keep current rates';
 export const RESET_CONFIRM = 'Reset to defaults';
 export const RESETTING = 'Resetting';
 export const resetTitle = (name: string): string => `Reset ${name} to defaults?`;
+
+// ---- The delete dialogs (STORY-02.07; ux-spec SCR-12 "Delete" and "Delete blocked") ------------------------------------------------
+
+export const DELETE_KEEP_CUSTOMER = 'Keep customer';
+export const DELETE_CONFIRM_CUSTOMER = 'Delete customer';
+export const deleteCustomerTitle = (name: string): string => `Delete ${name}?`;
+/** The words of the mock-up. "You cannot undo this here" is true: the portal has no restore (the story's "not in scope"), so a deleted customer is gone from every screen. */
+export const deleteCustomerDescription = (name: string): string =>
+  `${name} no longer appears in this list or in the customer choice on new estimates. Estimates that are already calculated keep their figures. You cannot undo this here.`;
+export const FAILED_DELETE_CUSTOMER_MESSAGE = 'We could not delete the customer.';
+
+/** After a delete: one `master.deleted` entry is written with it, so the clause is always true (the pattern of the Treatment / Color tab). */
+export const customerDeletedNotice = (name: string): PageNotice => ({ tone: 'success', text: `${name} was deleted. The change is in the audit log.` });
+
+/** The customer was deleted elsewhere while the dialog was open (the pattern of ux-spec v0.17): nothing failed and nothing is at risk, so it is not an alert. */
+export const customerGoneNotice = (name: string): PageNotice => ({
+  tone: 'info',
+  title: `${name} was already deleted.`,
+  text: 'It was deleted after you opened this list, so there was nothing to delete.',
+});
 
 /** The value as the dialog and the table show it, with its sign: "₹ 0.50" and "11.00 %". */
 export function rateWords(rate: Pick<CustomerRate, 'unit'>, value: string): string {

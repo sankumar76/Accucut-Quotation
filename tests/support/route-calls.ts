@@ -1,6 +1,6 @@
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
 
-import { CUSTOMER_RECIPE_ID } from './customer-canary';
+import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary';
 import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
@@ -102,6 +102,9 @@ function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
       return { id: CUSTOMER_RECIPE_ID, body: { phone: '+99 555 0142' }, status: 200 };
     case 'POST /api/v1/customers/[id]/reset-rates':
       return { id: CUSTOMER_RECIPE_ID, status: 200 };
+    // STORY-02.07: the delete of the allowed role really deletes, so it names a customer of its own, not the canary the pages and the scan keep reading.
+    case 'DELETE /api/v1/customers/[id]':
+      return { id: CUSTOMER_DELETE_RECIPE_ID, status: 204 };
     default:
       return undefined;
   }

@@ -59,6 +59,8 @@ const REPOSITORIES = {
     'decimal-text',
     'estimate-node-repository',
     'estimate-repository',
+    // STORY-02.07: the open estimates that use a customer or a material, read for the delete guard of the Admin's masters. No Engineer view needs it.
+    'estimate-use',
     'exchange-rate-repository',
     'master-constraints',
     'master-repository',
