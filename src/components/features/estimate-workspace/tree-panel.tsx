@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { rowsOf, stepOf } from '@/lib/estimates/tree-moves';
 
-import { DeletePartDialog } from './delete-part-dialog';
+import type { DeletePartDialogProps } from './delete-part-dialog';
 import {
   FAILED_BODY,
   TREE_CHANGED_NOTICE,
@@ -28,6 +28,7 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { TreeNode } from './tree-node';
+import { useLazyComponent } from './use-lazy-component';
 import type { PartsTreeState } from './use-parts-tree';
 
 export interface TreePanelProps {
@@ -41,6 +42,9 @@ export interface TreePanelProps {
 }
 
 const TREE_ID = 'parts-tree';
+
+/** The delete dialog's code, fetched after the page is up (`use-lazy-component.ts`; NFR-009: the first load of this page has no room left in 200 KB). */
+const loadDeleteDialog = () => import('./delete-part-dialog').then((module) => module.DeletePartDialog);
 
 /** Where focus goes when the delete dialog closes: the tab stop of the tree. The deleted part has no element to return to. */
 function focusTree(event: Event): void {
@@ -69,6 +73,8 @@ function ToolbarButton({ icon, label, unavailable, onClick }: { readonly icon: L
  */
 export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
+  const deleteDialog = useLazyComponent<DeletePartDialogProps>(loadDeleteDialog, tree.deleting !== null);
+  const DeleteDialog = deleteDialog.Component;
   const rows = nodes === null ? [] : rowsOf(nodes);
   const canUp = selected !== null && nodes !== null && stepOf(nodes, selected, 'up') !== null;
   const canDown = selected !== null && nodes !== null && stepOf(nodes, selected, 'down') !== null;
@@ -152,7 +158,9 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
       <p role="status" className="sr-only">
         {tree.announcement}
       </p>
-      <DeletePartDialog target={tree.deleting} open={tree.deleteOpen} deleting={busy} onConfirm={() => void tree.confirmDelete()} onCancel={tree.cancelDelete} onCloseAutoFocus={focusTree} />
+      {DeleteDialog === null ? null : (
+        <DeleteDialog target={tree.deleting} open={tree.deleteOpen} deleting={busy} onConfirm={() => void tree.confirmDelete()} onCancel={tree.cancelDelete} onCloseAutoFocus={focusTree} />
+      )}
     </div>
   );
 }

@@ -11,8 +11,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 
-import { DELETE_CANCEL, deleteConfirm, deleteDescription, deleteTitle } from './estimate-texts';
+
 import type { DeleteTarget } from './use-parts-tree';
+
+/** The dialog's own words, here and not in `estimate-texts.ts`, which the first load carries whole: this dialog is fetched after the page is up (NFR-009). */
+const deleteTitle = (slNo: string): string => `Delete part ${slNo}?`;
+const subPartCount = (count: number): string => `${count} sub-part${count === 1 ? '' : 's'}`;
+/** "This also deletes its 2 sub-parts and everything typed into them. This cannot be undone." for a part with sub-parts; a shorter one for a part with none. */
+const deleteDescription = (slNo: string, parts: number): string =>
+  parts === 1
+    ? `Part ${slNo} and everything typed into it will be deleted. This cannot be undone.`
+    : `This also deletes its ${subPartCount(parts - 1)}, and everything typed into them. This cannot be undone.`;
+const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete part' : `Delete ${parts} parts`);
+const DELETE_CANCEL = 'Cancel';
 
 export interface DeletePartDialogProps {
   readonly target: DeleteTarget | null;

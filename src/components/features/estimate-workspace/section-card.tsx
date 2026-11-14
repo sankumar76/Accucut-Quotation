@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import type { FormSection } from '@/lib/estimates/form-client';
 import type { SectionProgress } from '@/lib/estimates/form-values';
 
-import { columnRangeLabel, progressText, SECTION_MISSING_TEXT, sectionRegionLabel } from './estimate-texts';
+import { columnRangeLabel, progressText, TREE_MISSING_INPUTS, sectionRegionLabel } from './estimate-texts';
 
 export interface SectionCardProps {
   readonly section: Pick<FormSection, 'id' | 'number' | 'name' | 'columnRange'>;
@@ -43,7 +43,7 @@ export function SectionCard({ section, progress, missing = false, children }: Se
         {missing ? (
           <p className="flex w-full items-center gap-s-1 text-label font-semibold text-danger">
             <Icon icon={TriangleAlert} size="hint" className="shrink-0" />
-            {SECTION_MISSING_TEXT}
+            {TREE_MISSING_INPUTS}
           </p>
         ) : null}
       </CardHeader>

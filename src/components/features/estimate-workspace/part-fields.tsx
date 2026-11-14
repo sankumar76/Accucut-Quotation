@@ -26,7 +26,7 @@ import {
   partFormTitle,
   TRY_AGAIN,
 } from './estimate-texts';
-import { focusCalculate } from './calculate-bar';
+import { focusCalculate } from './calculate-button';
 import { FIELD_MARK, FieldRenderer } from './field-renderer';
 import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';

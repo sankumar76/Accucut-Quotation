@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildFormSections } from '@/lib/estimate/form-fields';
-import { validateForCalculate, type BlockedPart, type CalculateCheck, type PartToCheck } from '@/lib/estimate/validation';
+import { validateForCalculate, type BlockedPart, type CalculateCheck, type PartToCheck } from '@/lib/estimate/calculate-check';
 import type { ConfigDocument } from '@/lib/fields/schema';
 
 import { completePartInputs, fieldIdOf, INVENTED_MATERIAL_ID, INVENTED_NUMBER, INVENTED_TEXT } from '../../support/complete-part';

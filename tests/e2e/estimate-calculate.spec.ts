@@ -43,28 +43,25 @@ async function makeComplete(page: Page, ownerId: string): Promise<void> {
 }
 
 /**
- * The page does not scroll sideways. When it does, the failure names the widest elements that reach past the right edge (outside the parts that scroll on their own, such as the section
- * strip), so the element at fault is in the message and not a bare number.
+ * The page does not scroll sideways. When it does, the failure names where it comes from: the boxes that reach past the right edge, and the boxes that do not clip what overflows them (an
+ * element with `overflow: visible` whose content is wider than it is), so the element at fault is in the message and not a bare number.
  */
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
   const overflow = await horizontalOverflow(page);
   if (overflow <= 0) return;
-  const wide = await page.evaluate(() => {
+  const report = await page.evaluate(() => {
     const limit = document.documentElement.clientWidth;
-    const scrolls = (element: Element): boolean => {
-      for (let node = element.parentElement; node !== null; node = node.parentElement) {
-        const overflowX = getComputedStyle(node).overflowX;
-        if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden') return true;
-      }
-      return false;
-    };
-    return [...document.querySelectorAll('body *')]
-      .filter((element) => element.getBoundingClientRect().right > limit + 0.5 && !scrolls(element))
-      .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)
-      .slice(0, 8)
-      .map((element) => `<${element.tagName.toLowerCase()} class="${String(element.getAttribute('class') ?? '').slice(0, 90)}"> right=${Math.round(element.getBoundingClientRect().right)} width=${Math.round(element.getBoundingClientRect().width)}`);
+    const describe = (element: Element): string =>
+      `<${element.tagName.toLowerCase()}${element.id === '' ? '' : `#${element.id}`} class="${String(element.getAttribute('class') ?? '').slice(0, 80)}" right=${Math.round(element.getBoundingClientRect().right)} client=${element.clientWidth} scroll=${element.scrollWidth}>`;
+    const all = [...document.querySelectorAll('body *')];
+    const past = all.filter((element) => element.getBoundingClientRect().right > limit + 0.5 && element.getBoundingClientRect().width > 2).slice(0, 6).map(describe);
+    const leaking = all
+      .filter((element) => element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0 && getComputedStyle(element).overflowX === 'visible')
+      .slice(0, 6)
+      .map(describe);
+    return { limit, html: document.documentElement.scrollWidth, body: document.body.scrollWidth, past, leaking };
   });
-  expect(overflow, `the page scrolls ${overflow}px sideways; elements past the edge (limit ${await page.evaluate(() => document.documentElement.clientWidth)}): ${wide.join(' | ')}`).toBeLessThanOrEqual(0);
+  expect(overflow, `the page scrolls ${overflow}px sideways (limit ${report.limit}, html ${report.html}, body ${report.body}). Past the edge: ${report.past.join(' | ')}. Not clipping: ${report.leaking.join(' | ')}`).toBeLessThanOrEqual(0);
 }
 
 async function press(page: Page): Promise<Response> {

@@ -52,6 +52,8 @@ export default defineConfig({
         ...target(COVERAGE_TARGET),
         'src/lib/formula/**': target(PURE_CODE_TARGET),
         'src/lib/estimate/validation.ts': target(PURE_CODE_TARGET),
+        // STORY-05.09: the check that every part is complete before Calculate, which the story put in validation.ts (see its header for why it is a file of its own).
+        'src/lib/estimate/calculate-check.ts': target(PURE_CODE_TARGET),
         'src/lib/estimate/figure-state.ts': { branches: FULL_BRANCH_TARGET },
         'src/lib/auth/password-rule.ts': { branches: FULL_BRANCH_TARGET },
       },
