@@ -58,8 +58,11 @@ export interface SavedInputs {
 
 export interface EstimateInputsDependencies {
   readonly nodes: EstimateNodeRepository;
-  /** Only the one lookup, which reads a name and Material Considered and no number. */
-  readonly materials: Pick<MasterRepository, 'findMaterialOption'>;
+  /**
+   * Only the one lock every writer of a part's Material in Drawing must take (`lockMaterialForUse`, STORY-02.07 AC-5): the material `FOR SHARE`, after the estimate's row
+   * lock, in the transaction that writes. It reads no number, and the delete of a material takes the same row `FOR UPDATE`, so the two serialise.
+   */
+  readonly materials: Pick<MasterRepository, 'lockMaterialForUse'>;
   /** The field registry the form is built from (the current version, cached per version by `getCurrentVersion`). */
   readonly currentConfiguration: () => Promise<ConfigDocument>;
   readonly transactions: TransactionRunner;
@@ -102,7 +105,9 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
       case 'select': {
         const id = typed.trim().toLowerCase();
         if (id === '') return { ok: true, value: null };
-        return (await materials.findMaterialOption(id, tx)) === null ? { ok: false, message: CHOOSE_MATERIAL_MESSAGE } : { ok: true, value: id };
+        // A form has one material field, so one material is locked per save. A later story that lets a save name more than one must lock them in ascending ID, so two
+        // saves cannot wait on each other's material.
+        return (await materials.lockMaterialForUse(id, tx)) ? { ok: true, value: id } : { ok: false, message: CHOOSE_MATERIAL_MESSAGE };
       }
       case 'derived':
         return { ok: false, message: FIELD_NOT_SAVABLE_MESSAGE };
