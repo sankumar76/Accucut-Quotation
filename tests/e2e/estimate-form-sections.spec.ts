@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { defined } from '../support/defined';
 
 import { useFreshAddress } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, isPatchOfInputs, NUMBER_RULE, nextSave, openForm, partForm } from './support/part-form';
+import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, NUMBER_RULE, nextSave, openForm, partForm } from './support/part-form';
 
 /**
  * STORY-05.04 T7 (AC-1 to AC-8): the other sections of the part form of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server: cards 03 to 08 with their
@@ -314,7 +314,7 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
   test('AC-8: no sideways scroll, axe finds nothing (with a message showing and with values saved), every control is 44 px high and the strip links too', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
 
     for (const letter of FORM_ORDER) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(TOUCH_TARGET);
     for (const link of await strip(page).getByRole('link').all()) expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
@@ -324,7 +324,7 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await control(page, 'AJ').fill('x'.repeat(1001));
     await expect(partForm(page).getByText(REMARKS_TOO_LONG)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
 
     await control(page, 'AJ').fill('Invented remark');
     await control(page, 'AJ').blur();
@@ -332,7 +332,7 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await control(page, 'P').blur();
     await expect(control(page, 'P')).toHaveValue('7.00');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
   });
 
   test('AC-8: tabbing through the whole form, a focused field is never behind the sticky strip or the top bar (WCAG 2.4.11)', async ({ page }, testInfo) => {

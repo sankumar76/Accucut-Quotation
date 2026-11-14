@@ -8,7 +8,7 @@ import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sec
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, expectOnQueue, signInThroughThePage } from './auth';
-import { waitUntilHydrated } from './design-system';
+import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -64,6 +64,16 @@ export async function openForm(page: Page, testInfo: TestInfo): Promise<{ readon
   await expect(page.getByText('Customer saved.')).toBeVisible();
   await waitForForm(page);
   return owner;
+}
+
+/**
+ * The axe scan of a form page, taken from the top of the page. Axe's target-size rule judges an element by what overlaps it in the layout as it is at that moment, and a page that has
+ * been scrolled by typing into a field far down the form can have the customer field half behind the sticky top bar (whose menu, bell and account buttons then overlap it): a state
+ * of the scroll and not of the page. From the top the sticky bars cover nothing, which is the page's own layout.
+ */
+export async function expectFormAccessible(page: Page): Promise<void> {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expectNoAxeViolations(page);
 }
 
 export async function showTree(page: Page): Promise<void> {

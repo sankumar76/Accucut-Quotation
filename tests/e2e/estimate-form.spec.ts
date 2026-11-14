@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 import { defined } from '../support/defined';
 
 import { useFreshAddress } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
+import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.03 T8 (AC-1 to AC-6, AC-8, AC-9; review SQR-11): the part form of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test
@@ -219,7 +219,7 @@ test.describe('AC-9: the screen', () => {
   test('AC-9: no sideways scroll, axe finds nothing (with an error showing and with a value saved), every control is 44 px high and every label is visible', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
 
     for (const letter of ['A', 'B', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N']) {
       expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(TOUCH_TARGET);
@@ -232,7 +232,7 @@ test.describe('AC-9: the screen', () => {
     await control(page, 'J').blur();
     await expect(partForm(page).getByText(NUMBER_RULE)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
 
     const saved = nextSave(page);
     await control(page, 'J').fill('7');
@@ -240,6 +240,6 @@ test.describe('AC-9: the screen', () => {
     expect(await saved).toBe(200);
     await expect(control(page, 'J')).toHaveValue('7.00');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await expectFormAccessible(page);
   });
 });
