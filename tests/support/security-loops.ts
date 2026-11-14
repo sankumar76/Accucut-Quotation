@@ -60,14 +60,14 @@ export function stateChangingCalls(manifest: ReadonlyArray<RouteRow> = ROUTE_MAN
  * itself. Throws when no role is refused anywhere.
  */
 export function refusedRoleCalls(
-  isAllowed: (path: string, role: RoleName) => boolean,
+  isAllowed: (path: string, role: RoleName, method: HttpMethod) => boolean,
   manifest: ReadonlyArray<RouteRow> = ROUTE_MANIFEST,
   roles: ReadonlyArray<RoleName> = ['ADMIN', 'LEAD', 'ENGINEER'],
 ): ReadonlyArray<RefusedRoleCall> {
   const calls = manifest.filter(isImplementedProtectedApi).flatMap((row) =>
     row.methods
       .filter((method) => method !== 'HEAD')
-      .flatMap((method) => roles.filter((role) => !isAllowed(row.path, role)).map((role) => ({ name: `${method} ${row.path} as ${role}`, row, method, role }))),
+      .flatMap((method) => roles.filter((role) => !isAllowed(row.path, role, method)).map((role) => ({ name: `${method} ${row.path} as ${role}`, row, method, role }))),
   );
   return nonEmpty(SAME_403_LOOP, calls);
 }

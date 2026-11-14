@@ -17,7 +17,8 @@ import type { RoleName } from '../../lib/auth/roles';
  * a planned row is neither reachable nor listed in the menu. The `planned` rows below are proposed from the screen list
  * (SPEC section 9, UX spec section 4, SCR-25) and the page addresses of architecture section 6; the story that builds
  * the page confirms or corrects the address. Engineer rows are the ones that list `ENGINEER`: nothing else is reachable
- * to an Engineer, whatever the menu shows (BR-003, NFR-001).
+ * to an Engineer, whatever the menu shows (BR-003, NFR-001). A path has one row for each set of roles: when the methods of one file differ in who may call
+ * them (`GET` and `POST` of `/api/v1/tasks`), each method has its own row, and `findRoute` takes the row that lists the method.
  */
 
 export type HttpMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -222,6 +223,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Work', label: 'Assign task', order: 20, icon: 'user-plus' },
   },
   { path: '/api/v1/tasks', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-04.02 (SCR-03). The queue read: every role, because an Engineer's own list is the same call (architecture section 6, "Tasks": A L, E own). It is a second row for the
+  // same path, one per method, because the roles differ: the POST row above stays Lead and Admin, so an Engineer's POST is still the fixed 403 before the body is read.
+  // The answer is cut to the caller's own tasks by the service, from the session, and parsed with a strict schema that names no cost.
+  { path: '/api/v1/tasks', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
   // for any other, a Lead and an Admin a short header until SCR-06 (STORY-06.02). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any

@@ -46,6 +46,12 @@ export type ExchangeCurrency = (typeof EXCHANGE_CURRENCIES)[number];
 export const MATERIAL_CONSIDERED_KEY = 'material-considered';
 
 /**
+ * Key of Material in Drawing (column E): the drop-down whose choice is a Material Master row. A stored calculation keeps its words, resolved at the
+ * moment of the calculation, so a rename later changes no stored estimate (STORY-03.05, NFR-026).
+ */
+export const MATERIAL_IN_DRAWING_KEY = 'material-in-drawing';
+
+/**
  * Key of Material Rate / Kg (column I): an `auto_lookup` field filled from the Material Master's price (SPEC section 7.1). The row
  * calculator supplies its value to the formulas that read it (Material Cost, AK).
  */

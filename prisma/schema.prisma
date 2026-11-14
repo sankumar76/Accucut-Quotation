@@ -42,6 +42,7 @@ model User {
   exchangeRates  ExchangeRate[]
   tasksToDo      Task[]          @relation("TaskEngineer")
   tasksAssigned  Task[]          @relation("TaskAssigner")
+  calculations   Calculation[]
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -78,7 +79,8 @@ model ConfigVersion {
   reason    String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  creator User? @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_versions_created_by")
+  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_versions_created_by")
+  calculations Calculation[]
 
   @@unique([number], map: "uq_config_versions_number")
   @@map("config_versions")
@@ -289,7 +291,7 @@ model Task {
 }
 
 /// The estimate of a task (STORY-04.01; architecture sections 4.4, 4.8 and 5.1): one per task, created empty (DRAFT, customer not chosen) in the same transaction
-/// as the task. `inputsRevision` is bumped by every input change (EPIC-05). `currentCalculationId` has no foreign key until `calculations` exists (STORY-03.05).
+/// as the task. `inputsRevision` is bumped by every input change (EPIC-05). `currentCalculationId` is the calculation the figures shown come from; its foreign key to `calculations` was added by STORY-03.05.
 /// Class Confidential. The estimate is never deleted, so the runtime role has no DELETE.
 model Estimate {
   id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -301,9 +303,11 @@ model Estimate {
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  task     Task      @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
-  nodes    EstimateNode[]
+  task               Task          @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
+  customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
+  currentCalculation Calculation?  @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
+  calculations       Calculation[] @relation("EstimateCalculations")
+  nodes              EstimateNode[]
 
   @@unique([taskId], map: "uq_estimates_task_id")
   @@index([status], map: "idx_estimates_status")
@@ -335,4 +339,57 @@ model EstimateNode {
   @@index([estimateId], map: "idx_estimate_nodes_estimate_id")
   @@index([parentId], map: "idx_estimate_nodes_parent_id")
   @@map("estimate_nodes")
+}
+
+/// One stored Calculate or Recalculate of an estimate (STORY-03.05, FR-031, NFR-026; ADR-007; architecture sections 4.2, 4.8 and 5.1): the configuration version it was
+/// worked out with, the `inputs_revision` of the estimate at that moment, every master value it used (`master_snapshot`: the customer's rates, the materials and the two
+/// exchange rates, with their names then, so a later change shows as a plain comparison, STORY-06.11), and the product figures (`product_values`: BL, BN and the total Tool
+/// Cost as decimal text). `warnings` is `[]` until STORY-05.12. Every press writes a new row, so the history is kept; the estimate points at the latest through
+/// `estimates.current_calculation_id`. Immutable: a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and the runtime role holds only SELECT and INSERT, so a stored
+/// figure cannot change when a master does. There is no `updated_at`: a row never changes after it is inserted (the immutable-table exception to coding standards section 10,
+/// "SQL"; architecture section 5.1). The CHECK constraints (the JSON columns have the expected shape, the revision is not negative) are hand-written in the migration: Prisma
+/// cannot express them. Class Restricted: every figure here is cost data and never reaches an Engineer (ADR-008, NFR-002).
+model Calculation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId      String   @map("estimate_id") @db.Uuid
+  configVersionId String   @map("config_version_id") @db.Uuid
+  inputsRevision  Int      @map("inputs_revision")
+  masterSnapshot  Json     @map("master_snapshot")
+  productValues   Json     @map("product_values")
+  warnings        Json     @default("[]")
+  createdById     String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  estimate        Estimate         @relation("EstimateCalculations", fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_estimate_id")
+  configVersion   ConfigVersion    @relation(fields: [configVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_config_version_id")
+  creator         User             @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_created_by")
+  rows            CalculationRow[]
+  linkedEstimates Estimate[]       @relation("CurrentCalculation")
+
+  @@index([estimateId, createdAt(sort: Desc)], map: "idx_calculations_estimate_id")
+  @@map("calculations")
+}
+
+/// One node of the tree as it was calculated (STORY-03.05; architecture section 5.1): a full copy, so the record needs nothing live. `sl_no` is the derived Sl. No as text,
+/// `inputs` holds the typed values and the RESOLVED display text for Material in Drawing (E), Material Considered (F) and Treatment / Color (G), so renaming a material or a
+/// treatment later cannot change a stored estimate (NFR-026), and `outputs` holds every calculated field as full-precision decimal text (`null` for no figure).
+/// `node_id`, `parent_id` and `image_id` are plain UUIDs with NO foreign key on purpose: a node deleted or an image replaced later must not break a record, and the
+/// tables they belong to (`estimate_nodes`, `part_images`) are created by later stories (assumption A-1 of the story). Immutable, like its calculation. Class Restricted.
+model CalculationRow {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  calculationId String   @map("calculation_id") @db.Uuid
+  nodeId        String   @map("node_id") @db.Uuid
+  parentId      String?  @map("parent_id") @db.Uuid
+  sortIndex     Int      @map("sort_index")
+  slNo          String   @map("sl_no")
+  inputs        Json
+  imageId       String?  @map("image_id") @db.Uuid
+  outputs       Json
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  calculation Calculation @relation(fields: [calculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculation_rows_calculation_id")
+
+  @@unique([calculationId, nodeId], map: "uq_calculation_rows_calculation_id_node_id")
+  @@index([calculationId, sortIndex], map: "idx_calculation_rows_calculation_id")
+  @@map("calculation_rows")
 }
