@@ -101,3 +101,24 @@ The two Majors:
 - **solution-architect / product-manager:** confirm a maximum number of parts per estimate for SQR-02 (proposed 2,000; architecture §5.1 and NFR-008/011 are sized for 500).
 - **orchestrator:** the CI check "Stages 1 to 11" took 7 s on run 43599999923. Confirm it is a gate alias.
 - **developer (05.03):** SQR-09 (name the fields in `nodeDetailSchema`), SQR-11 (`onOpen`). SQR-01 (b) becomes reachable as soon as sub-parts can be typed into.
+
+## Re-review, round 2 (2026-11-14)
+
+| Field | Value |
+|-------|-------|
+| Commits reviewed | d3d2eb9 (review fixes); head b9a740f (master 52b3953 merged in) |
+| CI | Run 43602662539, 6 of 6 green |
+| Method | GitHub commit patch of d3d2eb9 (17 files) and raw files at b9a740f; no local run |
+| **Verdict** | **APPROVE.** Nothing blocks the merge. |
+| PR review | Follow-up COMMENT review on b9a740f; thread replies r4573861126, r4573861665, r4573862019, r4573862376 |
+
+| Finding | Result | Evidence |
+|---|---|---|
+| SQR-01 Major | **Verified** | `estimate-service.ts:360` computes `subtreeFingerprint` of the part and its sub-parts with their stored revisions after `lockForChange` (FOR UPDATE), inside the delete transaction; a mismatch in count, revision or fingerprint throws `TreeChangedError` before `deleteNodes`. The browser runs the same pure function (`src/lib/estimate/subtree-fingerprint.ts`) on the tree the dialog showed: code-unit sort, lower-cased IDs, ASCII input, pinned value `61f703ce75ac3118`; a missing revision cannot occur (NOT NULL, DEFAULT 1, CHECK >= 1, client rejects). FNV-1a 64-bit instead of SHA-256 accepted (stale-view detector, not a token; `crypto.subtle` needs HTTPS). Unit and PostgreSQL tests keep the count and target revision equal so only the fingerprint refuses; route tests cover a missing or malformed `subtree`. |
+| SQR-02 Major | **Verified** | `MAX_PARTS_PER_ESTIMATE = 2000` checked on `before.length` after the row lock in the same transaction; concurrent adds serialise. 422 `TREE_FULL`, nothing written, `inputs_revision` unchanged. Tests at limit − 1, the limit, sub-part and part beside, and a delete making room. 2,000 is a labelled assumption (open question for the architect or product manager). |
+| SQR-04 Minor | **Verified** | Comments now describe `assertEditable`. |
+| SQR-06 Minor | **Verified** | Unit (`FOREIGN_NODE`) and PostgreSQL tests expect `FieldValidationError` under `parentId` with nothing written. |
+| SQR-03, SQR-05, SQR-07 Minor | Open | Hardening window (orchestrator). |
+| SQR-13 Info (new) | Note | No PostgreSQL test of two concurrent adds at limit − 1; correctness rests on the estimate row lock, shown by the "ten adds at once" test. |
+
+New counts: Blocker 0, Critical 0, Major 0, Minor 3, Info 6. Merged: PR #384 squash 7d369e6 (orchestrator, 2026-11-14).
