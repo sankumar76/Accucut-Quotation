@@ -5,7 +5,7 @@ import { defined } from '../support/defined';
 
 import { makeCanaryEstimateCalculable, readEstimateState, useFreshAddress } from './support/auth';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPhone, nextSave, openForm, partForm, tree } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPhone, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
 
 /**
  * STORY-05.09 T6 (AC-1, AC-2, AC-6, AC-7, AC-9): Calculate on SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in as a person of its own with an
@@ -42,6 +42,31 @@ async function makeComplete(page: Page, ownerId: string): Promise<void> {
   await expect(control(page, 'E')).toBeEnabled();
 }
 
+/**
+ * The page does not scroll sideways. When it does, the failure names the widest elements that reach past the right edge (outside the parts that scroll on their own, such as the section
+ * strip), so the element at fault is in the message and not a bare number.
+ */
+async function expectNoSidewaysScroll(page: Page): Promise<void> {
+  const overflow = await horizontalOverflow(page);
+  if (overflow <= 0) return;
+  const wide = await page.evaluate(() => {
+    const limit = document.documentElement.clientWidth;
+    const scrolls = (element: Element): boolean => {
+      for (let node = element.parentElement; node !== null; node = node.parentElement) {
+        const overflowX = getComputedStyle(node).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden') return true;
+      }
+      return false;
+    };
+    return [...document.querySelectorAll('body *')]
+      .filter((element) => element.getBoundingClientRect().right > limit + 0.5 && !scrolls(element))
+      .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)
+      .slice(0, 8)
+      .map((element) => `<${element.tagName.toLowerCase()} class="${String(element.getAttribute('class') ?? '').slice(0, 90)}"> right=${Math.round(element.getBoundingClientRect().right)} width=${Math.round(element.getBoundingClientRect().width)}`);
+  });
+  expect(overflow, `the page scrolls ${overflow}px sideways; elements past the edge (limit ${await page.evaluate(() => document.documentElement.clientWidth)}): ${wide.join(' | ')}`).toBeLessThanOrEqual(0);
+}
+
 async function press(page: Page): Promise<Response> {
   // A press before the page has its scripts does nothing (the early tap, DEF-013), so the button is waited for until React has given it its handler.
   await waitUntilHydrated(page, '#calculate-button', 'onClick');
@@ -68,7 +93,10 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     await expect(page.locator('[data-calculate-summary]')).toBeFocused();
 
     // The part's triangle (spoken as words) and the words under each blank.
+    // On a phone the tree is in a drawer that stays shut until it is opened.
+    await showTree(page);
     await expect(tree(page).getByRole('treeitem').first()).toContainText('Missing inputs');
+    if (isPhone(page)) await page.keyboard.press('Escape');
     await expect(partForm(page)).toContainText(NUMBER_MISSING);
     await expect(partForm(page)).toContainText(CHOICE_MISSING);
     await expect(partForm(page)).toContainText(TEXT_MISSING);
@@ -187,7 +215,7 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     const field = await control(page, 'AJ').boundingBox();
     const barBox = await bar.boundingBox();
     expect(field && barBox ? field.y + field.height <= barBox.y + 1 : false, 'the focused field ends above the action bar').toBe(true);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoSidewaysScroll(page);
   });
 
   test('AC-9: axe finds 0 violations in the blocked state and in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
@@ -195,13 +223,13 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await press(page);
     await expect(summary(page)).toBeVisible();
     await expectFormAccessible(page);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoSidewaysScroll(page);
 
     await makeComplete(page, owner.id);
     const response = await press(page);
     expect(response.status()).toBe(200);
     await expect(calculateButton(page)).toHaveText('Submitted');
     await expectFormAccessible(page);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoSidewaysScroll(page);
   });
 });
