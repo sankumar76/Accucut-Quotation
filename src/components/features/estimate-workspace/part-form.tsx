@@ -18,6 +18,8 @@ export interface PartFormProps {
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onChanged: () => void;
+  /** The IDs of this part's fields that Calculate found blank (STORY-05.09). */
+  readonly missing: ReadonlySet<string>;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, onSaved, onChanged, missing }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
 
   if (part === null) return <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
@@ -63,6 +65,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged }: Par
       onChanged={onChanged}
       onWrote={definition.wrote}
       onReadMaterialsAgain={definition.readAgain}
+      missing={missing}
     />
   );
 }

@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
 import type { ConfigDocument } from '../../../src/lib/fields/schema';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
-import { canaryPartInputs } from '../../support/canary-part-inputs';
+import { CANARY_PLANTED_RATE, CANARY_UNKNOWN_KEY, canaryPartInputs, canaryRateFieldId } from '../../support/canary-part-inputs';
+import { completePartInputsFor } from '../../support/complete-part-inputs';
 import { loadCanaryCustomers } from '../../support/customer-canary-loader';
 import { EXCHANGE_RATE_CANARIES } from '../../support/exchange-rate-canary';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from '../../support/estimate-recipe';
@@ -236,6 +237,60 @@ export async function fillCanaryPart(ownerId: string): Promise<void> {
     const snapshot = registryShape.parse(rows[0]?.snapshot);
     const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
     await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Makes the canary estimate of a person made by `createDisposableUser('scan', ...)` ready to Calculate (STORY-05.09): its one part holds every input Calculate needs
+ * (`tests/support/complete-part-inputs.ts`, with the material given), beside the planted Restricted price and unknown key of `fillCanaryPart` (Calculate must ignore both), and the customer is
+ * chosen. Only the scan's own person has such an estimate. The statements replace the inputs and set the customer, and are repeatable.
+ */
+export async function makeCanaryEstimateCalculable(ownerId: string, materialId: string, customerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const snapshot = registryShape.parse(rows[0]?.snapshot) as unknown as ConfigDocument;
+    const inputs = { ...completePartInputsFor(snapshot, materialId), [canaryRateFieldId(snapshot)]: CANARY_PLANTED_RATE, [CANARY_UNKNOWN_KEY]: 'x' };
+    await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+    await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * A material of the test's own, with these numbers (STORY-05.09: the same estimate calculated under two sets of masters). The name is unique to the call, so three screen sizes at once never
+ * meet on the name index, and the canary materials the other specs read are not touched. Answers its ID. Throwaway database only (guarded above); every value is invented.
+ */
+export async function insertPrivateMaterial(numbers: { readonly pricePerKg: string; readonly specificGravity: string; readonly scrapRate: string }): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const name = `E2E private material ${randomBytes(4).toString('hex')}`;
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO materials (material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate) VALUES ($1, $2, $3, $4, $5) RETURNING id::text`,
+      [name, `${name} considered`, numbers.pricePerKg, numbers.specificGravity, numbers.scrapRate],
+    );
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The private material could not be made.');
+    return id;
+  } finally {
+    await client.end();
+  }
+}
+
+/** Reads one estimate's status and whether it is linked to a calculation, as the database holds them (STORY-05.09: a blocked or refused Calculate writes nothing). */
+export async function readEstimateState(estimateId: string): Promise<{ readonly status: string; readonly calculations: number }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ status: string; calculations: string }>(
+      `SELECT e.status::text AS status, (SELECT count(*) FROM calculations c WHERE c.estimate_id = e.id) AS calculations FROM estimates e WHERE e.id = $1::uuid`,
+      [estimateId],
+    );
+    const row = rows[0];
+    if (row === undefined) throw new Error('The estimate does not exist.');
+    return { status: row.status, calculations: Number(row.calculations) };
   } finally {
     await client.end();
   }

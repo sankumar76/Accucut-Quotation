@@ -36,6 +36,8 @@ export interface TreePanelProps {
   readonly editable: boolean;
   /** Enter on a part opens its form (STORY-05.03). Until that story passes it, Enter does nothing more than the selection that focus already made. */
   readonly onOpen?: (id: string) => void;
+  /** The parts Calculate found a missing input in (STORY-05.09): each shows a triangle. Client state from the blocked answer. */
+  readonly missingIds?: ReadonlySet<string>;
 }
 
 const TREE_ID = 'parts-tree';
@@ -65,7 +67,7 @@ function ToolbarButton({ icon, label, unavailable, onClick }: { readonly icon: L
  * first and last, Right goes to the first sub-part and Left to the parent, Alt with Up or Down moves the part (no dragging is needed), and Enter opens the part once its
  * form exists. All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
-export function TreePanel({ tree, editable, onOpen }: TreePanelProps) {
+export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
   const rows = nodes === null ? [] : rowsOf(nodes);
   const canUp = selected !== null && nodes !== null && stepOf(nodes, selected, 'up') !== null;
@@ -122,7 +124,7 @@ export function TreePanel({ tree, editable, onOpen }: TreePanelProps) {
     body = (
       <ul id={TREE_ID} role="tree" aria-label={TREE_TITLE} onKeyDown={onKeyDown} className="flex flex-col gap-s-1">
         {rows.map((row) => (
-          <TreeNode key={row.part.id} row={row} selected={row.part.id === selected?.id} onFocusPart={tree.select} />
+          <TreeNode key={row.part.id} row={row} selected={row.part.id === selected?.id} missing={missingIds?.has(row.part.id) ?? false} onFocusPart={tree.select} />
         ))}
       </ul>
     );

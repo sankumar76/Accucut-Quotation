@@ -1,8 +1,11 @@
+import { TriangleAlert } from 'lucide-react';
+
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { Icon } from '@/components/shared/icon';
 import { cn } from '@/lib/cn';
 import type { PartRow } from '@/lib/estimates/tree-moves';
 
-import { TREE_ALL_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
+import { TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
 
 /** The indent of each level; a part deeper than the last entry keeps the last indent, so a deep tree never grows wider than the panel (no sideways scroll at 360 px). */
 const LEVEL_INDENT = ['pl-s-2', 'pl-s-4', 'pl-s-5', 'pl-s-6', 'pl-s-7'] as const;
@@ -12,6 +15,8 @@ const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, CO
 export interface TreeNodeProps {
   readonly row: PartRow;
   readonly selected: boolean;
+  /** Calculate found a missing input in this part (STORY-05.09; architecture A-16: client state from the blocked answer, never stored): a triangle and words follow the name. */
+  readonly missing?: boolean;
   /** The part took focus (a click or an arrow key): it becomes the selected one. */
   readonly onFocusPart: (id: string) => void;
 }
@@ -21,7 +26,7 @@ export interface TreeNodeProps {
  * the one tab stop of the tree while it is selected (roving tabindex), and taking focus selects it. What it is (its Sl. No and name) and how filled it is are text, so a
  * screen reader reads both; no figure is ever shown here. The name is empty until the part form stores one (STORY-05.03), so "Part" stands in.
  */
-export function TreeNode({ row, selected, onFocusPart }: TreeNodeProps) {
+export function TreeNode({ row, selected, missing = false, onFocusPart }: TreeNodeProps) {
   const { part, level, position, size } = row;
   return (
     <li
@@ -42,6 +47,12 @@ export function TreeNode({ row, selected, onFocusPart }: TreeNodeProps) {
     >
       <span className="shrink-0 tabular-nums">{part.slNo}</span>
       <span className="min-w-0">{part.label === '' ? TREE_PART_NAME : part.label}</span>
+      {missing ? (
+        <>
+          <Icon icon={TriangleAlert} size="small" className="shrink-0 text-danger" />
+          <span className="sr-only">{TREE_MISSING_INPUTS}</span>
+        </>
+      ) : null}
       <span className="sr-only">{COMPLETENESS_TEXT[part.completeness]}</span>
     </li>
   );

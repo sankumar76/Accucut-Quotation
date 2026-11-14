@@ -18,6 +18,8 @@ export interface PartsTreeAreaProps {
   readonly editable: boolean;
   /** Enter on a part: its form takes the focus (STORY-05.03, review SQR-11). On a phone the drawer closes first, and the focus goes to the form when it has. */
   readonly onOpenPart: () => void;
+  /** The parts Calculate found a missing input in (STORY-05.09). */
+  readonly missingIds?: ReadonlySet<string>;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface PartsTreeAreaProps {
  * current part ("Parts tree, part 1.1"). The tree is one component in one place at a time, so its ids and roles are never in the page twice. What the tree holds survives the
  * panel closing, because it lives here and not in the drawer.
  */
-export function PartsTreeArea({ tree, editable, onOpenPart }: PartsTreeAreaProps) {
+export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsTreeAreaProps) {
   const viewport = useViewport();
   const [panelOpen, setPanelOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -41,7 +43,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart }: PartsTreeAreaProps
       onOpenPart();
     }
   };
-  const panel = <TreePanel tree={tree} editable={editable} onOpen={open} />;
+  const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} />;
   const label = treeButtonLabel(tree.selected?.slNo ?? null);
 
   if (viewport === 'phone') {
