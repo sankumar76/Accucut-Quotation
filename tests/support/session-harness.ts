@@ -7,6 +7,7 @@ import { type AccountService, createAccountService } from '../../src/server/serv
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { systemClock } from '../../src/lib/time';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -19,6 +20,7 @@ import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
+import { createFakeCalculationWorld, type FakeCalculationWorld } from './fake-calculations';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
 import { createFakeMasterRepository, type FakeMasterRepository } from './fake-masters';
@@ -87,6 +89,10 @@ export interface SessionHarness {
   readonly taskWorld: FakeTaskWorld;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
+  /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
+  readonly calculationService: CalculationService;
+  /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
+  readonly calculationWorld: FakeCalculationWorld;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -173,6 +179,16 @@ export function createSessionHarness(): SessionHarness {
     // The one part the node routes of STORY-05.02 open: its ID is the estimate's, so the one value that fills every dynamic segment of a path names a real part of a real estimate.
     [{ id: targetId, estimateId: targetId, parentId: null, sortIndex: 0, revision: 1, inputs: {} }],
   );
+  const estimateService = createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) });
+  // The Engineer's Calculate over the same world (STORY-05.09). Its one part is empty, so the valid call of the recipe is the 422 that lists what is missing, which writes nothing: it answers the
+  // same at any state, for every caller, however often the matrix and the scan repeat it.
+  const calculationWorld = createFakeCalculationWorld(estimateWorld);
+  const calculationService = createCalculationService({
+    masters,
+    currentConfiguration: () => Promise.resolve({ id: '00000000-0000-4000-8000-0aaa00000001', document: seedConfig }),
+    storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
+    workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition },
+  });
 
   return {
     users,
@@ -182,7 +198,9 @@ export function createSessionHarness(): SessionHarness {
     masters,
     taskWorld,
     estimateWorld,
-    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) }),
+    estimateService,
+    calculationService,
+    calculationWorld,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     mastersService: createMastersService({

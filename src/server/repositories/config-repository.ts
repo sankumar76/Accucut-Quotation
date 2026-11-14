@@ -1,5 +1,6 @@
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
+import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the configuration versions (ADR-004, architecture section 5.1). A row is immutable: there
@@ -36,10 +37,10 @@ export interface ConfigRepository {
    * unique number settles it.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
-  /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. */
-  findLatestRef(): Promise<ConfigVersionRef | null>;
-  /** One version with its snapshot, or null if no version has this ID. */
-  findById(id: string): Promise<ConfigVersionRecord | null>;
+  /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. Pass `tx` to read inside the caller's transaction (STORY-05.09: Calculate holds a connection and must not take a second). */
+  findLatestRef(tx?: Transaction): Promise<ConfigVersionRef | null>;
+  /** One version with its snapshot, or null if no version has this ID. `tx` as above. */
+  findById(id: string, tx?: Transaction): Promise<ConfigVersionRecord | null>;
 }
 
 /**
@@ -61,16 +62,16 @@ export function createConfigRepository(db: PrismaClient): ConfigRepository {
       });
     },
 
-    findLatestRef() {
+    findLatestRef(tx) {
       // ORDER BY number DESC LIMIT 1 is a backward scan of uq_config_versions_number.
       return withDatabaseErrors(() =>
-        db.configVersion.findFirst({ orderBy: { number: 'desc' }, select: { id: true, number: true } }),
+        clientFor(db, tx).configVersion.findFirst({ orderBy: { number: 'desc' }, select: { id: true, number: true } }),
       );
     },
 
-    findById(id) {
+    findById(id, tx) {
       return withDatabaseErrors(() =>
-        db.configVersion.findUnique({
+        clientFor(db, tx).configVersion.findUnique({
           where: { id },
           select: { id: true, number: true, snapshot: true, createdBy: true, reason: true, createdAt: true },
         }),

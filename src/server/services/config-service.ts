@@ -2,6 +2,7 @@ import { deepFreeze } from '../../lib/deep-freeze';
 import { AppError } from '../../lib/errors';
 import { parseConfigDocument, type ConfigDocument } from '../../lib/fields/schema';
 import type { ConfigRepository } from '../repositories/config-repository';
+import type { Transaction } from '../repositories/transaction';
 
 /**
  * Use cases for the field registry versions (architecture sections 4.1 and 5.6; ADR-004). Release 1
@@ -85,15 +86,15 @@ const processCache = createConfigVersionCache();
  *
  * Returns the unprojected document, formulas and `engineerVisible` flags included. Never return it, or any
  * part of it, from a route an Engineer can call; build the Engineer's response from `engineerVisibleFields`
- * (ADR-008). `cache` is for tests.
+ * (ADR-008). `cache` is for tests. Pass `tx` to read inside the caller's transaction, so a caller that holds a connection (Calculate, under the estimate's lock) takes no second one.
  */
-export async function getCurrentVersion(repository: ConfigRepository, cache: ConfigVersionCache = processCache): Promise<ConfigVersion> {
-  const latest = await repository.findLatestRef();
+export async function getCurrentVersion(repository: ConfigRepository, cache: ConfigVersionCache = processCache, tx?: Transaction): Promise<ConfigVersion> {
+  const latest = await repository.findLatestRef(tx);
   if (latest === null) throw new ConfigVersionMissingError();
   const cached = cache.get(latest.id);
   if (cached !== undefined) return cached;
 
-  const record = await repository.findById(latest.id);
+  const record = await repository.findById(latest.id, tx);
   if (record === null) throw new ConfigVersionMissingError();
   const version = deepFreeze({
     id: record.id,

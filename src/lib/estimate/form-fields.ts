@@ -5,7 +5,7 @@ import { isEngineerVisibleAllowed } from '../fields/visibility';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { RUPEE } from '../masters/master-rules';
 
-import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './validation';
+import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 
 /**
  * What the part form offers, worked out from the field registry and nothing else (STORY-05.03 AC-1, AC-3, AC-8; architecture sections 4.5 and 6 "Estimate form";

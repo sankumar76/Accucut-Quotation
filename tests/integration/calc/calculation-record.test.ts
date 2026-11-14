@@ -138,7 +138,7 @@ describe('AC-1: one record, a row per node, the status and the link, in one tran
 
   it.each([
     ['an unknown estimate', async () => randomUUID(), 'NOT_FOUND'],
-    ['an approved estimate', async () => db.addEstimate({ status: 'APPROVED' }), 'ESTIMATE_APPROVED'],
+    ['an approved estimate', async () => db.addEstimate({ status: 'APPROVED' }), 'ESTIMATE_APPROVED_IS_LOCKED'],
     ['an estimate with no customer', async () => db.addEstimate({ withCustomer: false }), 'CUSTOMER_NOT_CHOSEN'],
     ['an estimate whose inputs changed since the nodes were read', async () => db.addEstimate({ revision: 9 }), 'INPUTS_CHANGED'],
   ])('%s is refused with its own code, before anything is written', async (_name, makeEstimate, code) => {

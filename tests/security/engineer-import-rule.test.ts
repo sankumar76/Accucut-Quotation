@@ -82,6 +82,8 @@ const SERVICES = {
     'audit-secrets',
     'audit-service',
     'bootstrap-admin-service',
+    // STORY-05.09: the masters one calculation reads (the customer's rates, every material's price and the exchange rates), in the caller's transaction. Restricted in full, like the service that reads it.
+    'calculation-masters',
     'calculation-service',
     'config-service',
     'customer-service',

@@ -1,18 +1,35 @@
 import { z } from 'zod';
 
 import { Decimal } from '../../lib/decimal';
-import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import {
+  CALCULATE_MESSAGE,
+  CALCULATE_SUBMITTED_STATUS,
+  CUSTOMER_NOT_CHOSEN_CODE,
+  CUSTOMER_NOT_CHOSEN_MESSAGE,
+  NO_PARTS_CODE,
+  NO_PARTS_MESSAGE,
+} from '../../lib/estimate/calculate-words';
 import { calculateProductTotals, type ProductTotals } from '../../lib/estimate/product-totals';
-import { calculateRowOutputs, type ExchangeValues, type MaterialValues } from '../../lib/estimate/row-calculator';
+import { calculateRowOutputs } from '../../lib/estimate/row-calculator';
 import { storeRowOutputs, type RowOutputs } from '../../lib/estimate/row-outputs';
+import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
+import { buildTree } from '../../lib/estimate/tree';
+import { validateForCalculate, type CheckedPart } from '../../lib/estimate/validation';
 import { findFieldById, findFieldByKey } from '../../lib/fields/registry';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../../lib/fields/types';
-import { createPlanCache, type PlanCache, type RateValue } from '../../lib/formula';
-import type { CalculationRepository, MasterSnapshot, NewCalculationRow, StoredValues } from '../repositories/calculation-repository';
+import { createPlanCache, type PlanCache } from '../../lib/formula';
+import type { CalculationRepository, NewCalculationRow, StoredValues } from '../repositories/calculation-repository';
+import type { EstimateNodeRepository } from '../repositories/estimate-node-repository';
 import type { EstimateRepository } from '../repositories/estimate-repository';
-import type { MasterRepository, MaterialValuesRecord } from '../repositories/master-repository';
+import type { MaterialValuesRecord } from '../repositories/master-repository';
 import type { TransactionRunner, Transaction } from '../repositories/transaction';
+
+import { readMasters, type CalculationMasters } from './calculation-masters';
+import type { EstimateService, EstimateViewer } from './estimate-service';
+
+const NOT_FOUND_MESSAGE = 'The customer or the material was not found.';
 
 /**
  * The calculation service (STORY-03.03 and 03.04; FR-024, FR-028 to FR-030; architecture sections 4.1 and 4.2). It holds the one thing the
@@ -106,12 +123,25 @@ export interface CalculationService {
    * no customer, or `inputsRevision` out of date) and `FieldValidationError` (a value that is not valid), each before anything is written.
    */
   storeCalculation(request: StoreCalculationRequest, tx?: Transaction): Promise<StoredCalculation>;
+  /**
+   * The Engineer's Calculate (`POST /api/v1/estimates/{id}/calculate`, STORY-05.09; architecture section 4.2), in **one transaction** under the estimate's row lock: the state machine decides
+   * (`transition(viewer, id, 'CALCULATE', tx)`: 404 for an estimate that is not this person's and for any other role, 409 for a status that is not DRAFT), every part is checked for missing inputs
+   * (422 `CALCULATE_BLOCKED`, which lists parts and fields and writes nothing), the customer must be chosen (409), the masters are read, the record is stored (`storeCalculation`'s work, with the
+   * configuration read once for the check and the calculation) and the status is SUBMITTED, all or nothing. It answers `{status, message}`: **no number from the calculation leaves it** (NFR-002).
+   */
+  calculate(viewer: EstimateViewer, estimateId: string): Promise<CalculateAnswer>;
+}
+
+/** The whole of an Engineer's good Calculate: the estimate's new status and the fixed sentence (FR-056). Nothing else, whatever the estimate costs. */
+export interface CalculateAnswer {
+  readonly status: typeof CALCULATE_SUBMITTED_STATUS;
+  readonly message: typeof CALCULATE_MESSAGE;
 }
 
 export interface CalculationServiceDependencies {
-  readonly masters: Pick<MasterRepository, 'findCustomer' | 'findMaterialForCalculation' | 'readExchangeRates'>;
-  /** The registry version in force, read on each calculation. */
-  readonly currentConfiguration: () => Promise<CalculationConfiguration>;
+  readonly masters: CalculationMasters;
+  /** The registry version in force, read on each calculation. Takes the caller's transaction, so a read under the estimate's lock takes no second connection (review SQR-01 of AQP-293). */
+  readonly currentConfiguration: (tx?: Transaction) => Promise<CalculationConfiguration>;
   /** Compiled plans by version. A test passes its own to count compiles; the default is one cache for the service. */
   readonly plans?: PlanCache;
   /**
@@ -124,13 +154,20 @@ export interface CalculationServiceDependencies {
     readonly estimates: Pick<EstimateRepository, 'lockEstimate' | 'linkCalculation'>;
     readonly transactions: TransactionRunner;
   };
+  /**
+   * What `calculate` needs besides storage (STORY-05.09): the parts of the estimate, and the estimate service's `transition`, which decides role, ownership and status in the caller's transaction
+   * (review of STORY-06.01), so the check is the state machine's and written once. Optional for the same reason as `storage`.
+   */
+  readonly workflow?: {
+    readonly nodes: Pick<EstimateNodeRepository, 'listNodes'>;
+    readonly transition: EstimateService['transition'];
+  };
 }
 
 /** Digits, then optionally a point and digits: no sign, no exponent, no separator (architecture section 8, "the API accepts plain decimals only"). */
 const TYPED_NUMBER_PATTERN = /^\d{1,12}(?:\.\d+)?$/;
 const NOT_A_NUMBER_MESSAGE = 'Enter a number with digits only, for example 12.5.';
 const NOT_A_NUMBER_FIELD_MESSAGE = 'This field does not take a typed number.';
-const NOT_FOUND_MESSAGE = 'The customer or the material was not found.';
 
 /** True for the fields a person types a number or a flag into: the only ones a row calculation reads from the request. */
 function takesTypedNumber(document: ConfigDocument, fieldId: string): boolean {
@@ -151,71 +188,9 @@ function parseInputs(document: ConfigDocument, inputs: Readonly<Record<string, s
   return parsed;
 }
 
-/** The masters one calculation reads, once: the customer's rates, each distinct material, and the two exchange rates, as numbers and as the text they were stored as. */
-interface MasterValues {
-  readonly rates: ReadonlyArray<RateValue>;
-  readonly materials: ReadonlyMap<string, MaterialValues>;
-  readonly exchange: ExchangeValues;
-  /** The same values as stored text, with the names then: the master snapshot of a stored record is built from these, so it is what the calculation used. */
-  readonly snapshot: MasterSnapshot;
-  /** Each material's record, for the words of E and F. */
-  readonly materialRecords: ReadonlyMap<string, MaterialValuesRecord>;
-}
-
-const decimalOrNull = (text: string | null): Decimal | null => (text === null ? null : new Decimal(text));
-
-async function readMasters(
-  masters: CalculationServiceDependencies['masters'],
-  customerId: string,
-  materialIds: ReadonlyArray<string>,
-): Promise<MasterValues> {
-  const materials = new Map<string, MaterialValues>();
-  const materialRecords = new Map<string, MaterialValuesRecord>();
-  const loadMaterials = Promise.all(
-    materialIds.map(async (id) => {
-      const material = await masters.findMaterialForCalculation(id);
-      if (material === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-      materialRecords.set(id, material);
-      materials.set(id, {
-        pricePerKg: new Decimal(material.pricePerKg),
-        specificGravity: new Decimal(material.specificGravity),
-        scrapRate: new Decimal(material.scrapRate),
-      });
-    }),
-  );
-  const [customer, exchange] = await Promise.all([masters.findCustomer(customerId), masters.readExchangeRates(), loadMaterials]);
-  if (customer === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  return {
-    rates: customer.rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: new Decimal(rate.value) })),
-    materials,
-    exchange: { usd: decimalOrNull(exchange.usd), eur: decimalOrNull(exchange.eur) },
-    materialRecords,
-    snapshot: {
-      customer: { id: customer.id, name: customer.name },
-      rates: customer.rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: rate.value })),
-      // In the order the materials were first used, so the same tree gives the same snapshot.
-      materials: materialIds.map((id) => {
-        const record = materialRecords.get(id);
-        if (record === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
-        return {
-          id: record.id,
-          materialInDrawing: record.materialInDrawing,
-          materialConsidered: record.materialConsidered,
-          pricePerKg: record.pricePerKg,
-          specificGravity: record.specificGravity,
-          scrapRate: record.scrapRate,
-        };
-      }),
-      exchangeRates: { usd: exchange.usd, eur: exchange.eur },
-    },
-  };
-}
-
 const ESTIMATE_NOT_FOUND_MESSAGE = 'The estimate was not found.';
 const NOT_VALID_MESSAGE = 'This value is not valid.';
 const TEXT_NOT_ALLOWED_MESSAGE = 'This field does not take typed text.';
-const ESTIMATE_APPROVED_MESSAGE = 'The estimate is approved and cannot be calculated again until it is unlocked.';
-const CUSTOMER_NOT_CHOSEN_MESSAGE = 'Choose the customer before calculating.';
 const INPUTS_CHANGED_MESSAGE = 'The estimate changed while it was being calculated. Calculate again.';
 
 /** Longest typed text a record keeps for one field. A generous bound (Remarks is the longest), so a record cannot be made enormous by one value. */
@@ -285,16 +260,16 @@ function storedInputs(document: ConfigDocument, node: CalculationNodeRequest, ma
 }
 
 export function createCalculationService(dependencies: CalculationServiceDependencies): CalculationService {
-  const { masters, currentConfiguration, plans = createPlanCache(), storage } = dependencies;
+  const { masters, currentConfiguration, plans = createPlanCache(), storage, workflow } = dependencies;
 
   /**
    * Every row, then the totals, from one configuration version (the caller's, or the one in force now). `prefixOf` names a row in a validation problem:
    * nothing for a single row, `rows[n].` for an estimate. Also returns what was read, because a stored record is made from the very values used.
    */
-  async function run(request: EstimateCalculationRequest, prefixOf: (index: number) => string, configuration?: CalculationConfiguration) {
-    const { id, document } = configuration ?? (await currentConfiguration());
+  async function run(request: EstimateCalculationRequest, prefixOf: (index: number) => string, configuration?: CalculationConfiguration, tx?: Transaction) {
+    const { id, document } = configuration ?? (await currentConfiguration(tx));
     const typed = request.rows.map((row, index) => ({ materialId: row.materialId, inputs: parseInputs(document, row.inputs, prefixOf(index)) }));
-    const values = await readMasters(masters, request.customerId, [...new Set(typed.map((row) => row.materialId))]);
+    const values = await readMasters(masters, request.customerId, [...new Set(typed.map((row) => row.materialId))], tx);
     const plan = plans.get(id, document.fields);
     const calculated = typed.map(({ materialId, inputs }) => {
       const material = values.materials.get(materialId);
@@ -314,17 +289,20 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     { calculations, estimates }: NonNullable<CalculationServiceDependencies['storage']>,
     request: StoreCalculationRequest,
     tx: Transaction,
+    known?: CalculationConfiguration,
   ): Promise<StoredCalculation> {
     const estimate = await estimates.lockEstimate(request.estimateId, tx);
     if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
-    if (estimate.status === 'APPROVED') throw new ConflictError(ESTIMATE_APPROVED_MESSAGE, { code: 'ESTIMATE_APPROVED' });
-    if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: 'CUSTOMER_NOT_CHOSEN' });
+    // One code and one sentence for "approved" on this path: the state machine's (review SQR-06 of STORY-06.01), so a client and a test learn one.
+    if (estimate.status === 'APPROVED') throw new ConflictError(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.message, { code: TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code });
+    if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: CUSTOMER_NOT_CHOSEN_CODE });
     if (estimate.inputsRevision !== request.inputsRevision) throw new ConflictError(INPUTS_CHANGED_MESSAGE, { code: 'INPUTS_CHANGED' });
 
-    // One configuration for the checks and the calculation: a version published in between must not split them.
-    const configuration = await currentConfiguration();
+    // One configuration for the checks and the calculation: a version published in between must not split them. A caller that already read one for its own checks passes it
+    // (`calculate`), and it is read in the transaction, so it takes no second connection (review SQR-01 of AQP-293).
+    const configuration = known ?? (await currentConfiguration(tx));
     request.nodes.forEach((node, index) => checkTexts(configuration.document, node.texts, `nodes[${index}].texts.`));
-    const { values, calculated, totals } = await run({ customerId: estimate.customerId, rows: request.nodes }, (index) => `nodes[${index}].inputs.`, configuration);
+    const { values, calculated, totals } = await run({ customerId: estimate.customerId, rows: request.nodes }, (index) => `nodes[${index}].inputs.`, configuration, tx);
 
     const rows = request.nodes.map((node, index): NewCalculationRow => {
       const material = values.materialRecords.get(node.materialId);
@@ -362,6 +340,47 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     return stored;
   }
 
+  /**
+   * The parts of the estimate in reading order, checked for missing inputs. A tree with no part is a 409 (`NO_PARTS`: nothing to calculate, and an immutable record of nothing must not be
+   * made), a part with a missing input is the 422 that names it, and a part that cannot be reached from the top is a fault in the data (a plain `Error`, a 500 with fixed words).
+   */
+  async function checkedPartsOf(nodes: NonNullable<CalculationServiceDependencies['workflow']>['nodes'], estimateId: string, document: ConfigDocument, tx: Transaction) {
+    const records = await nodes.listNodes(estimateId, tx);
+    if (records.length === 0) throw new ConflictError(NO_PARTS_MESSAGE, { code: NO_PARTS_CODE });
+    const entries = buildTree(records);
+    if (entries.length !== records.length) throw new Error('A part of the estimate cannot be reached from the top of its tree.');
+    const check = validateForCalculate(
+      entries.map(({ node, slNo }) => ({ id: node.id, slNo, inputs: node.inputs })),
+      document,
+    );
+    if (!check.ok) throw new CalculateBlockedError(check.parts);
+    return entries.map(({ node }, index): CalculationNodeRequest => {
+      const part: CheckedPart | undefined = check.parts[index];
+      if (part === undefined) throw new Error('The check of the parts returned fewer parts than it was given.');
+      return { nodeId: part.id, parentId: node.parentId, sortIndex: node.sortIndex, slNo: part.slNo, imageId: null, materialId: part.materialId, inputs: part.numbers, texts: part.texts };
+    });
+  }
+
+  /** The Engineer's Calculate in the caller's transaction. The order is the architecture's (section 4.2): role, ownership and status, then every input, then the customer, then the masters. */
+  async function submit(
+    { storage: stored, flow }: { readonly storage: NonNullable<CalculationServiceDependencies['storage']>; readonly flow: NonNullable<CalculationServiceDependencies['workflow']> },
+    viewer: EstimateViewer,
+    estimateId: string,
+    tx: Transaction,
+  ): Promise<CalculateAnswer> {
+    // 404 (not this person's, or a role that may not Calculate), 409 (not a draft), under the estimate's row lock; it also moves the status, and the transaction puts it back if anything below refuses.
+    await flow.transition(viewer, estimateId, 'CALCULATE', tx);
+    const estimate = await stored.estimates.lockEstimate(estimateId, tx);
+    if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
+    const configuration = await currentConfiguration(tx);
+    const nodes = await checkedPartsOf(flow.nodes, estimate.id, configuration.document, tx);
+    if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: CUSTOMER_NOT_CHOSEN_CODE });
+    const request: StoreCalculationRequest = { estimateId: estimate.id, createdById: viewer.id, inputsRevision: estimate.inputsRevision, nodes };
+    checkStoreRequest(request);
+    await store(stored, request, tx, configuration);
+    return { status: CALCULATE_SUBMITTED_STATUS, message: CALCULATE_MESSAGE };
+  }
+
   return {
     async calculateRow(request) {
       const [outputs] = (await calculate({ customerId: request.customerId, rows: [request] }, () => '')).rows;
@@ -373,6 +392,10 @@ export function createCalculationService(dependencies: CalculationServiceDepende
       if (storage === undefined) throw new Error('This calculation service was built without storage.');
       checkStoreRequest(request);
       return tx === undefined ? storage.transactions.run((own) => store(storage, request, own)) : store(storage, request, tx);
+    },
+    async calculate(viewer, estimateId) {
+      if (storage === undefined || workflow === undefined) throw new Error('This calculation service was built without storage or without the estimate workflow.');
+      return storage.transactions.run((tx) => submit({ storage, flow: workflow }, viewer, estimateId, tx));
     },
   };
 }
