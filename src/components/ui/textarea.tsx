@@ -11,7 +11,7 @@ export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
     <textarea
       data-slot="textarea"
       className={cn(
-        'min-h-24 w-full min-w-0 resize-y rounded-md border border-border-strong bg-surface px-s-3 py-s-2 text-body text-ink placeholder:text-ink-3 hover:border-ink-2',
+        'min-h-(--textarea-min-h) w-full min-w-0 resize-y rounded-md border border-border-strong bg-surface px-s-3 py-s-2 text-body text-ink placeholder:text-ink-3 hover:border-ink-2',
         'disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-2 disabled:text-ink-3',
         'aria-invalid:border-2 aria-invalid:border-danger aria-invalid:bg-danger-soft',
         className,

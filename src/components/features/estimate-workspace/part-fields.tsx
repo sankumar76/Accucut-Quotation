@@ -5,7 +5,8 @@ import { useRef, type KeyboardEvent } from 'react';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { FormField, FormSection, FormView, MaterialChoice } from '@/lib/estimates/form-client';
+import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
+import { isSectionComplete, sectionProgress, textOf } from '@/lib/estimates/form-values';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -23,7 +24,9 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { FIELD_MARK, FieldRenderer } from './field-renderer';
+import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';
+import { SectionStrip } from './section-strip';
 import { usePartValues, type Loaded, type PartTarget, type SavedPart } from './use-part-form';
 
 export const PART_FORM_ATTRIBUTE = 'data-part-form';
@@ -103,6 +106,8 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
 
   const problem = values.problem;
+  // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check.
+  const progress = form.sections.map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
   return (
     <form data-part-form="" noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
@@ -126,14 +131,15 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           </Button>
         </Notice>
       ) : null}
+      <SectionStrip items={progress.map(({ section, counts }) => ({ section, complete: isSectionComplete(counts) }))} />
       <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
-        {form.sections.map((section: FormSection) => (
-          <SectionCard key={section.id} section={section}>
+        {progress.map(({ section, counts }) => (
+          <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts}>
             {section.fields.map((field) => (
               <FieldRenderer
                 key={field.id}
                 field={field}
-                text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : (values.texts[field.id] ?? '')}
+                text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
                 error={values.errors[field.id]}
                 editable={editable}
                 materials={materials}
@@ -141,6 +147,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
                 onCommit={(override) => values.commit(field, override)}
               />
             ))}
+            {section.reserved.length === 0 ? null : <PlaceholderFields sectionId={section.id} fields={section.reserved} />}
           </SectionCard>
         ))}
       </div>

@@ -145,8 +145,8 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
 });
 
 describe('review SQR-01: a save changes only the keys it names', () => {
-  const CUTTING_TIME = field('P');
-  const stored = (): Record<string, unknown> => ({ [LENGTH]: '1.00', [CUTTING_TIME]: '7.00', invented: true, [field('I')]: '917373.37' });
+  const NOT_BUILT = field('Z');
+  const stored = (): Record<string, unknown> => ({ [LENGTH]: '1.00', [NOT_BUILT]: '7.00', invented: true, [field('I')]: '917373.37' });
 
   it('a stored value of a field that is not on the form (another story\'s, one not built yet, one that is not text) survives a save of another field; the answer lists only the form\'s', async () => {
     const setup = setUp([estimate()], [node(PART, { inputs: stored() })]);
@@ -160,12 +160,12 @@ describe('review SQR-01: a save changes only the keys it names', () => {
   it('clearing one field removes only its own key', async () => {
     const setup = setUp([estimate()], [node(PART, { inputs: stored() })]);
     const saved = await save(setup, { [LENGTH]: '' });
-    expect(setup.stored().inputs).toEqual({ [CUTTING_TIME]: '7.00', invented: true, [field('I')]: '917373.37' });
+    expect(setup.stored().inputs).toEqual({ [NOT_BUILT]: '7.00', invented: true, [field('I')]: '917373.37' });
     expect(saved).toMatchObject({ completeness: 'EMPTY', inputs: {} });
   });
 
   it('the no-change check looks at the submitted fields only: the same value spelled another way writes nothing, whatever else is stored', async () => {
-    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true } })]);
+    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [NOT_BUILT]: '7.00', invented: true } })]);
     const writes = setup.world.nodeWrites();
     await save(setup, { [LENGTH]: '1.5' });
     expect(setup.world.nodeWrites()).toBe(writes);
@@ -174,9 +174,88 @@ describe('review SQR-01: a save changes only the keys it names', () => {
   });
 
   it('naming a field that is not on the form is still refused, and the stored value of it is untouched', async () => {
-    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00' } })]);
-    await problemsOf(save(setup, { [LENGTH]: '2', [CUTTING_TIME]: '9' }));
-    expect(setup.stored().inputs).toEqual({ [LENGTH]: '1.50', [CUTTING_TIME]: '7.00' });
+    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [NOT_BUILT]: '7.00' } })]);
+    await problemsOf(save(setup, { [LENGTH]: '2', [NOT_BUILT]: '9' }));
+    expect(setup.stored().inputs).toEqual({ [LENGTH]: '1.50', [NOT_BUILT]: '7.00' });
+  });
+});
+
+describe('STORY-05.04 AC-1, AC-2, AC-4, AC-5: the fields of sections 03 to 08', () => {
+  const COST_FIELDS = ['U', 'AP', 'AU', 'BM'].map(field);
+  const NUMBER_FIELDS = ['P', 'Q', 'R', 'T', 'V', 'W', 'X', 'Y'].map(field);
+  const REMARKS = field('AJ');
+  const FASTENERS = field('S');
+
+  it('saves a number in every one of them as two-decimal text in one write, with one new revision of the part and of the estimate', async () => {
+    const setup = setUp();
+    const typed = Object.fromEntries([...NUMBER_FIELDS, ...COST_FIELDS].map((id, index) => [id, `${index + 1}.5`]));
+    const saved = await save(setup, { ...typed, [FASTENERS]: ' M6 bolt ', [REMARKS]: 'Line one\r\nLine two' });
+    expect(saved.revision).toBe(2);
+    expect(setup.inputsRevision()).toBe(1);
+    expect(saved.inputs).toEqual({
+      ...Object.fromEntries([...NUMBER_FIELDS, ...COST_FIELDS].map((id, index) => [id, `${index + 1}.50`])),
+      [FASTENERS]: 'M6 bolt',
+      [REMARKS]: 'Line one\nLine two',
+    });
+  });
+
+  it('AC-2: the typed Machining, Plating, Tool and Fasteners Cost come back as typed, to the person who typed them and to a Lead, and are no calculated value (FR-008)', async () => {
+    const setup = setUp();
+    const typed = { [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
+    await save(setup, typed);
+    for (const viewer of [arjun, lead, admin]) {
+      const part = await setup.service.getNode(viewer, ESTIMATE, PART);
+      expect(part.inputs).toEqual(typed);
+    }
+  });
+
+  it('AC-3: Fasteners left alone is not stored, so a part with nothing typed stays EMPTY; "None" typed is stored like any text', async () => {
+    const setup = setUp();
+    await save(setup, { [LENGTH]: '' });
+    expect(setup.stored().inputs).toEqual({});
+    const saved = await save(setup, { [FASTENERS]: 'None' });
+    expect(saved).toMatchObject({ completeness: 'PARTIAL', inputs: { [FASTENERS]: 'None' } });
+  });
+
+  it('AC-4 (A-1): Remarks takes 1,000 characters and is refused over that with "Use 1,000 characters or fewer."; Part No., Description and Fasteners stop at 200', async () => {
+    const setup = setUp();
+    expect((await save(setup, { [REMARKS]: 'x'.repeat(1000) })).inputs[REMARKS]).toHaveLength(1000);
+    expect(await problemsOf(save(setup, { [REMARKS]: 'x'.repeat(1001) }, { revision: 2 }))).toEqual([{ field: REMARKS, message: 'Use 1,000 characters or fewer.' }]);
+    for (const id of [PART_NO, DESCRIPTION, FASTENERS]) {
+      expect(await problemsOf(save(setup, { [id]: 'x'.repeat(201) }, { revision: 2 })), id).toEqual([{ field: id, message: TEXT_TOO_LONG_MESSAGE }]);
+    }
+  });
+
+  it('AC-5: a number of a new section follows the same rule as before: -1, 1.234 and abc are refused together, each under its own field, and nothing is stored', async () => {
+    const setup = setUp();
+    const problems = await problemsOf(save(setup, { [field('P')]: '-1', [field('AP')]: '1.234', [field('BM')]: 'abc', [field('Q')]: '5' }));
+    expect(problems).toEqual([field('P'), field('AP'), field('BM')].map((id) => ({ field: id, message: NUMBER_RULE_MESSAGE })));
+    expect(setup.stored().inputs).toEqual({});
+  });
+
+  it('AC-5: the real-change rule is unchanged: the same number spelled another way writes nothing and raises no revision', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: { [field('BM')]: '4.50' } })]);
+    const writes = setup.world.nodeWrites();
+    await save(setup, { [field('BM')]: '4.5' });
+    expect(setup.world.nodeWrites()).toBe(writes);
+    expect(setup.stored().revision).toBe(1);
+    expect(setup.inputsRevision()).toBe(0);
+  });
+
+  it('a text that is a lone surrogate or holds a control character is 422 in Remarks too, not stored', async () => {
+    const setup = setUp();
+    expect(await problemsOf(save(setup, { [REMARKS]: 'bad\uD800text' }))).toEqual([{ field: REMARKS, message: 'Use letters, numbers and punctuation only.' }]);
+    expect(setup.stored().inputs).toEqual({});
+  });
+
+  it('a stored Restricted value and an unknown key are read back by nobody: only what the form offers leaves, with the typed costs among it', async () => {
+    const stored = { [field('BM')]: '45678.75', [RATE_FIELD]: '917373.37', invented: 'x', [field('Z')]: '1.00' };
+    const setup = setUp([estimate()], [node(PART, { inputs: stored })]);
+    for (const viewer of [arjun, lead, admin]) {
+      const part = await setup.service.getNode(viewer, ESTIMATE, PART);
+      expect(part.inputs).toEqual({ [field('BM')]: '45678.75' });
+      expect(JSON.stringify(part)).not.toContain('917373.37');
+    }
   });
 });
 
@@ -256,7 +335,9 @@ describe('AC-3, AC-7: a field that is unknown or Restricted is a 422', () => {
     ['Material Considered (F), which follows the material', () => field('F')],
     ['Part Model (C), the picture of story 05.07', () => field('C')],
     ['Treatment / Color (G), story 05.06', () => field('G')],
-    ['Cutting Time (P), a section that is not built yet', () => field('P')],
+    ['Hot Dip Galvanizing (Z), a surface treatment that story 05.06 builds', () => field('Z')],
+    ['Total Process Cost (AY), the calculated twin of Machining Cost', () => field('AY')],
+    ['Approved Quote Price (BO), entered at approval', () => field('BO')],
     ['an ID the registry does not have', () => MISSING],
   ])('%s is refused with one message that says only that it cannot be saved', async (_name, idOf) => {
     const setup = setUp();
@@ -359,7 +440,7 @@ describe('AC-8: the form, and the part read back, carry no cost', () => {
     const forEngineer = await setup.service.getForm(arjun, ESTIMATE);
     expect(await setup.service.getForm(lead, ESTIMATE)).toEqual(forEngineer);
     expect(await setup.service.getForm(admin, ESTIMATE)).toEqual(forEngineer);
-    expect(forEngineer.sections.map((section) => section.number)).toEqual([1, 2]);
+    expect(forEngineer.sections.map((section) => section.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(forEngineer.lastSavedAt === null || typeof forEngineer.lastSavedAt === 'string').toBe(true);
     expect(Object.keys(forEngineer).sort()).toEqual(['lastSavedAt', 'sections']);
   });
@@ -370,7 +451,9 @@ describe('AC-8: the form, and the part read back, carry no cost', () => {
     const ids = form.sections.flatMap((section) => section.fields.map((candidate) => candidate.id));
     expect(ids).not.toContain(RATE_FIELD);
     expect(ids.every((id) => seedConfig.fields.find((candidate) => candidate.id === id)?.kind !== 'output')).toBe(true);
-    expect(JSON.stringify(form)).not.toMatch(/\{\{|formula|price|cost|rate/i);
+    // "cost" is in the labels of the four inputs an Engineer types and in the name of section 08, and nowhere else (STORY-05.04 AC-7).
+    const rest = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'].reduce((left, words) => left.replaceAll(words, ''), JSON.stringify(form));
+    expect(rest).not.toMatch(/\{\{|formula|price|cost|rate/i);
   });
 
   it('a form that is not the Engineer\'s is a 404, the same as an estimate that does not exist', async () => {
