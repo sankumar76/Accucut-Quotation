@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_PART_TEXT_LENGTH,
   NUMBER_RULE_MESSAGE,
+  NUMBER_TOO_LARGE_MESSAGE,
   TEXT_TOO_LONG_MESSAGE,
   TEXT_CHARACTERS_MESSAGE,
   validateNumberInput,
@@ -34,12 +35,21 @@ describe('AC-4: validateNumberInput', () => {
     expect(validateNumberInput('01.5')).toEqual(validateNumberInput('1.50'));
   });
 
-  it.each([['-1'], ['1.234'], ['abc'], ['1e3'], ['1,000'], ['12 5'], ['+5'], ['.5'], ['5.'], ['1.2.3'], ['NaN'], ['Infinity'], ['٣'], ['1000000000000']])(
+  it.each([['-1'], ['1.234'], ['abc'], ['1e3'], ['1,000'], ['12 5'], ['+5'], ['.5'], ['5.'], ['1.2.3'], ['NaN'], ['Infinity'], ['٣']])(
     'refuses %j with the words of the rule and says nothing else',
     (typed) => {
       expect(validateNumberInput(typed)).toEqual({ ok: false, message: NUMBER_RULE_MESSAGE });
     },
   );
+
+  it('a number with the right shape but more than 12 digits before the point says so, and is not told its decimals are wrong (review SQR-11)', () => {
+    expect(validateNumberInput('1000000000000')).toEqual({ ok: false, message: NUMBER_TOO_LARGE_MESSAGE });
+    expect(validateNumberInput('1000000000000.5')).toEqual({ ok: false, message: NUMBER_TOO_LARGE_MESSAGE });
+    expect(NUMBER_TOO_LARGE_MESSAGE).toBe('Use 12 digits or fewer before the point.');
+    // Too many digits and a wrong shape together is still the rule of the shape.
+    expect(validateNumberInput('1000000000000.123')).toEqual({ ok: false, message: NUMBER_RULE_MESSAGE });
+    expect(validateNumberInput('999999999999.99').ok).toBe(true);
+  });
 
   it('the words are the words of the screen', () => {
     expect(NUMBER_RULE_MESSAGE).toBe('Enter 0 or more, with up to 2 decimals.');
@@ -67,6 +77,23 @@ describe('validateTextInput', () => {
 
   it.each([['line\nbreak'], ['tab\there'], ['nul\u0000byte'], ['bell\u0007'], ['del\u007f']])('a single-line field refuses a control character: %j', (typed) => {
     expect(validateTextInput(typed, { multiline: false })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+  });
+
+  it.each([
+    ['a C1 control (next line)', 'A\u0085B'],
+    ['the line separator', 'x\u2028y'],
+    ['the paragraph separator', 'x\u2029y'],
+    ['a right-to-left override', 'FR\u202E321'],
+    ['a left-to-right embedding', 'FR\u202A321'],
+    ['a right-to-left isolate', 'FR\u2067321'],
+    ['a pop directional isolate', 'FR\u2069321'],
+  ])('refuses %s, which can make a part number display other than it is stored (review SQR-04)', (_name, typed) => {
+    expect(validateTextInput(typed, { multiline: false })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+    expect(validateTextInput(typed, { multiline: true })).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
+  });
+
+  it('still accepts text in other scripts and an accented letter', () => {
+    expect(validateTextInput('Cover é नमस्ते 中文', { multiline: false }).ok).toBe(true);
   });
 
   it('a multi-line field keeps a line break and still refuses the other control characters', () => {

@@ -16,6 +16,11 @@ import { DECIMAL_TEXT_PATTERN, normaliseDecimalText } from '../masters/master-ru
 /** The 422 and the field message of a number that is not 0 or more with up to 2 decimals (UX spec SCR-05 "Fields"). */
 export const NUMBER_RULE_MESSAGE = 'Enter 0 or more, with up to 2 decimals.';
 
+/** The most digits before the point (the shape of `DECIMAL_TEXT_PATTERN`, which keeps a value inside its column). */
+export const MAX_NUMBER_DIGITS = 12;
+export const NUMBER_TOO_LARGE_MESSAGE = `Use ${MAX_NUMBER_DIGITS} digits or fewer before the point.`;
+const TOO_MANY_DIGITS = new RegExp(`^\\d{${MAX_NUMBER_DIGITS + 1},}(?:\\.\\d{1,2})?$`);
+
 /**
  * The longest typed text of a part (Part No., Description, and the texts of the sections after them). An assumption, as the registry's own limit for a label is
  * 200 and no source gives a longer one: it bounds the row of `estimate_nodes.inputs` and what a tree and an export carry.
@@ -27,8 +32,11 @@ export const TEXT_CHARACTERS_MESSAGE = 'Use letters, numbers and punctuation onl
 /** The result of reading one typed value: the text to store (`null`: nothing, the value is cleared), or the words to show under the field. */
 export type InputCheck = { readonly ok: true; readonly value: string | null } | { readonly ok: false; readonly message: string };
 
-/** C0 controls and DEL. A line feed is let through by the multi-line rule below, after a carriage return is folded into it. */
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+/**
+ * Every control character (C0, DEL and C1), the line and paragraph separators, and the bidirectional overrides and isolates, which can make a part number display other than it is stored
+ * (review SQR-04). A line feed is let through by the multi-line rule below, after a carriage return is folded into it.
+ */
+const CONTROL_CHARACTERS = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
 const LINE_BREAKS = /\r\n?/g;
 const LINE_FEED = /\n/g;
 
@@ -36,7 +44,9 @@ const LINE_FEED = /\n/g;
 export function validateNumberInput(typed: string): InputCheck {
   const text = typed.trim();
   if (text === '') return { ok: true, value: null };
-  return DECIMAL_TEXT_PATTERN.test(text) ? { ok: true, value: normaliseDecimalText(text) } : { ok: false, message: NUMBER_RULE_MESSAGE };
+  if (DECIMAL_TEXT_PATTERN.test(text)) return { ok: true, value: normaliseDecimalText(text) };
+  // A number that has the right shape but too many digits is told so, not that its decimals are wrong (review SQR-11).
+  return { ok: false, message: TOO_MANY_DIGITS.test(text) ? NUMBER_TOO_LARGE_MESSAGE : NUMBER_RULE_MESSAGE };
 }
 
 export interface TextRule {

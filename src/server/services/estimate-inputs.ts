@@ -18,7 +18,8 @@ import type { EstimateViewer } from './estimate-service';
  * decimals (`"12.50"`, never a JavaScript number), a typed text trimmed, and for Material in Drawing (E) the **ID of the Material Master row** as lower-case UUID text
  * (`inputs[<ID of the field with key "material-in-drawing">] = "<materials.id>"`). A value that is cleared is not stored: its key is removed, so `{}` is a part with nothing
  * typed. Only fields of the form (`formFieldById`, `editable`) can be stored, so Material Rate (I), every calculated field, Material Considered (F), the Sl. No. (A)
- * and a field no story has built yet have no place to go; and only those are read back (`visibleInputs`).
+ * and a field no story has built yet have no place to go; and only those are read back (`visibleInputs`). **A save writes only the keys it names**: every other stored key
+ * (another story's field, one the registry moved or hid) stays as it is, whatever its value, and a cleared value removes only its own key.
  *
  * **A save** (`saveInputs`) runs in one transaction, in the order of the tree routes: the estimate is locked (404 when it is not this person's), this person must still
  * be allowed to change its inputs (409, `assertEditable`), the part must be in it (404), the part's `revision` must be the one the person saw (409), and then the
@@ -134,27 +135,35 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
       return { sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() };
     },
 
-    saveInputs(viewer, estimateId, request) {
+    async saveInputs(viewer, estimateId, request) {
+      // A registry version never changes, so it is read before the transaction: it holds neither a second connection nor the estimate's lock while it is read (review SQR-03).
+      const document = await currentConfiguration();
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const part = await nodes.findNode(id, request.nodeId, tx);
         if (part === null) throw new NotFoundError();
         if (part.revision !== request.revision) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
-        const document = await currentConfiguration();
         const { problems, changes } = await readValues(document, request.values, tx);
         if (problems.length > 0) throw new FieldValidationError(problems);
-        const current = typedValues(document, part.inputs);
-        const next = { ...current };
+        // The save changes **only the keys it names** and writes the stored object back with every other key as it was: a value of a field that is not on the form now (another
+        // story's, one the registry moved or hid, a non-text value) is never read, projected or dropped here (review SQR-01). A cleared value removes only its own key.
+        const next: Record<string, unknown> = { ...part.inputs };
         for (const [fieldId, value] of changes) {
           if (value === null) delete next[fieldId];
           else next[fieldId] = value;
         }
-        const changed = [...changes.keys()].some((fieldId) => (current[fieldId] ?? null) !== (next[fieldId] ?? null));
-        // Nothing really changed (the same value, spelled another way, or a blank where nothing was): no write, no new revision, and no figure is cleared (section 4.8).
-        if (!changed) return { id: part.id, revision: part.revision, completeness: completenessOf(current), inputs: current };
-        const saved = await nodes.saveInputs(id, part.id, next, tx);
+        // Nothing really changed (the same value, spelled another way, or a blank where nothing was), judged on the submitted keys only: no write, no new revision, and no figure is cleared (section 4.8).
+        const changed = [...changes.keys()].some((fieldId) => (part.inputs[fieldId] ?? null) !== (next[fieldId] ?? null));
+        if (!changed) {
+          const unchanged = typedValues(document, part.inputs);
+          return { id: part.id, revision: part.revision, completeness: completenessOf(unchanged), inputs: unchanged };
+        }
+        // The write is conditional on the revision that was read, so a writer that skipped the estimate's lock is a 409 here and not a lost update (review SQR-02).
+        const saved = await nodes.saveInputs(id, part.id, part.revision, next, tx);
+        if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
         await bumpInputsRevision(id, tx);
-        return { id: saved.id, revision: saved.revision, completeness: completenessOf(next), inputs: next };
+        const visible = typedValues(document, saved.inputs);
+        return { id: saved.id, revision: saved.revision, completeness: completenessOf(visible), inputs: visible };
       });
     },
 

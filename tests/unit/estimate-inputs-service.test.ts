@@ -144,6 +144,54 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
   });
 });
 
+describe('review SQR-01: a save changes only the keys it names', () => {
+  const CUTTING_TIME = field('P');
+  const stored = (): Record<string, unknown> => ({ [LENGTH]: '1.00', [CUTTING_TIME]: '7.00', invented: true, [field('I')]: '917373.37' });
+
+  it('a stored value of a field that is not on the form (another story\'s, one not built yet, one that is not text) survives a save of another field; the answer lists only the form\'s', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: stored() })]);
+    const saved = await save(setup, { [WIDTH]: '2' });
+    expect(setup.stored().inputs).toEqual({ ...stored(), [WIDTH]: '2.00' });
+    expect(saved.inputs).toEqual({ [LENGTH]: '1.00', [WIDTH]: '2.00' });
+    expect(saved.revision).toBe(2);
+    expect(JSON.stringify(saved)).not.toContain('917373.37');
+  });
+
+  it('clearing one field removes only its own key', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: stored() })]);
+    const saved = await save(setup, { [LENGTH]: '' });
+    expect(setup.stored().inputs).toEqual({ [CUTTING_TIME]: '7.00', invented: true, [field('I')]: '917373.37' });
+    expect(saved).toMatchObject({ completeness: 'EMPTY', inputs: {} });
+  });
+
+  it('the no-change check looks at the submitted fields only: the same value spelled another way writes nothing, whatever else is stored', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true } })]);
+    const writes = setup.world.nodeWrites();
+    await save(setup, { [LENGTH]: '1.5' });
+    expect(setup.world.nodeWrites()).toBe(writes);
+    expect(setup.stored().revision).toBe(1);
+    expect(setup.inputsRevision()).toBe(0);
+  });
+
+  it('naming a field that is not on the form is still refused, and the stored value of it is untouched', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00' } })]);
+    await problemsOf(save(setup, { [LENGTH]: '2', [CUTTING_TIME]: '9' }));
+    expect(setup.stored().inputs).toEqual({ [LENGTH]: '1.50', [CUTTING_TIME]: '7.00' });
+  });
+});
+
+describe('review SQR-02: the write is conditional on the revision that was read', () => {
+  it('a writer that overtook the read (the part changed after it) is a 409 PART_CHANGED and nothing is raised', async () => {
+    const setup = setUp();
+    const write = setup.world.nodeRepository.saveInputs;
+    setup.world.nodeRepository.saveInputs = (estimateId, nodeId, _expected, inputs, tx) => write(estimateId, nodeId, 99, inputs, tx);
+    await expect(save(setup, { [LENGTH]: '1' })).rejects.toMatchObject({ code: PART_CHANGED_CODE, httpStatus: 409 });
+    expect(setup.stored().inputs).toEqual({});
+    expect(setup.stored().revision).toBe(1);
+    expect(setup.inputsRevision()).toBe(0);
+  });
+});
+
 describe('AC-4: a blank is allowed while saving', () => {
   it('a blank clears the value, so a part with nothing typed is EMPTY again', async () => {
     const setup = setUp([estimate()], [node(PART, { inputs: { [LENGTH]: '10.00' } })]);

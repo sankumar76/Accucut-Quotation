@@ -174,9 +174,10 @@ export function createFakeEstimateWorld(
       const node = nodes.find((candidate) => same(candidate.id, nodeId) && same(candidate.estimateId, estimateId));
       return Promise.resolve(node === undefined ? null : recordOf(node));
     },
-    saveInputs: (estimateId, nodeId, inputs) => {
+    saveInputs: (estimateId, nodeId, expectedRevision, inputs) => {
       const node = nodes.find((candidate) => same(candidate.id, nodeId) && same(candidate.estimateId, estimateId));
       if (node === undefined) return Promise.reject(new Error('A part to change is not in this estimate.'));
+      if (node.revision !== expectedRevision) return Promise.resolve(null);
       node.inputs = { ...inputs };
       node.revision += 1;
       nodeWrites += 1;

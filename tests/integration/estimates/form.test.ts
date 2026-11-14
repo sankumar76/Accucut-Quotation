@@ -190,6 +190,51 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
   });
 });
 
+describe('review SQR-01, SQR-02: a save changes only the keys it names, and the write is conditional on the revision read', () => {
+  const CUTTING_TIME = seedFieldAt('P').id;
+
+  async function plant(nodeId: string, inputs: Record<string, unknown>): Promise<void> {
+    await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify(inputs)]);
+  }
+
+  it('a stored value of a field that is not on the form (a later story\'s, an unknown key, a non-text value) survives a save of another field; the answer lists only the form\'s', async () => {
+    const nodeId = await setUpPart();
+    const planted = { [LENGTH]: '1.00', [CUTTING_TIME]: '7.00', invented: true, flags: { z: 1 } };
+    await plant(nodeId, planted);
+    const saved = await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [WIDTH]: '2' } });
+    expect((await row(nodeId)).inputs).toEqual({ ...planted, [WIDTH]: '2.00' });
+    expect(saved.inputs).toEqual({ [LENGTH]: '1.00', [WIDTH]: '2.00' });
+  });
+
+  it('clearing one field removes only its own key', async () => {
+    const nodeId = await setUpPart();
+    await plant(nodeId, { [LENGTH]: '1.00', [WIDTH]: '2.00', [CUTTING_TIME]: '7.00', invented: true });
+    await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [LENGTH]: '' } });
+    expect((await row(nodeId)).inputs).toEqual({ [WIDTH]: '2.00', [CUTTING_TIME]: '7.00', invented: true });
+  });
+
+  it('the no-change check compares the submitted fields only: nothing is written however much else is stored', async () => {
+    const nodeId = await setUpPart();
+    await plant(nodeId, { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true });
+    const before = await inputsRevision();
+    await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [LENGTH]: '1.5' } });
+    expect(await row(nodeId)).toEqual({ inputs: { [LENGTH]: '1.50', [CUTTING_TIME]: '7.00', invented: true }, revision: 1 });
+    expect(await inputsRevision()).toBe(before);
+  });
+
+  it('the repository writes only for the revision it was given: another revision writes nothing and answers null, the right one writes and answers the part', async () => {
+    const nodeId = await setUpPart();
+    const runner = createTransactionRunner(db.prisma);
+    const repository = nodeRepository();
+    expect(await runner.run((tx) => repository.saveInputs(estimateId, nodeId, 7, { [LENGTH]: '9.00' }, tx))).toBeNull();
+    expect(await row(nodeId)).toEqual({ inputs: {}, revision: 1 });
+    const written = await runner.run((tx) => repository.saveInputs(estimateId, nodeId, 1, { [LENGTH]: '9.00' }, tx));
+    expect(written).toMatchObject({ id: nodeId, revision: 2, inputs: { [LENGTH]: '9.00' } });
+    expect(await runner.run((tx) => repository.saveInputs(estimateId, nodeId, 1, { [LENGTH]: '3.00' }, tx))).toBeNull();
+    expect((await row(nodeId)).inputs).toEqual({ [LENGTH]: '9.00' });
+  });
+});
+
 describe('AC-3, AC-5: the material, read from the Material Master without a number', () => {
   it('stores the ID of a listed material by the field of Material in Drawing, in lower case, and a repeat of it changes nothing', async () => {
     const nodeId = await setUpPart();

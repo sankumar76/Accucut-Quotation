@@ -46,9 +46,11 @@ export interface EstimateNodeRepository {
   findNode(estimateId: string, nodeId: string, tx: Transaction): Promise<NodeRecord | null>;
   /**
    * Replaces the part's inputs and raises its `revision` by one, and returns it as written (STORY-05.03: every input save moves the part's own revision, so a delete
-   * that was confirmed for the part as it was is refused, review SQR-01 (b)). The estimate's ID is a condition of the statement. Throws when the part is not in the estimate.
+   * that was confirmed for the part as it was is refused, review SQR-01 (b)). The estimate's ID **and the revision the caller read** are conditions of the statement, so a
+   * writer that did not hold the estimate's lock cannot overwrite a newer write: it gets `null` and nothing is written (review SQR-02). `inputs` is the whole object to store;
+   * the caller builds it from the stored one and changes only the keys it means to. Throws when the part is not in the estimate.
    */
-  saveInputs(estimateId: string, nodeId: string, inputs: Readonly<Record<string, string>>, tx: Transaction): Promise<NodeRecord>;
+  saveInputs(estimateId: string, nodeId: string, expectedRevision: number, inputs: Readonly<Record<string, unknown>>, tx: Transaction): Promise<NodeRecord | null>;
   /** The latest time any part of the estimate was written (an add, a move or an input), or null when it has no part. Takes no lock. */
   lastWrittenAt(estimateId: string): Promise<Date | null>;
 }
@@ -109,13 +111,14 @@ export function createEstimateNodeRepository(db: PrismaClient): EstimateNodeRepo
         return row === null ? null : toRecord(row);
       }),
 
-    saveInputs: (estimateId, nodeId, inputs, tx) =>
+    saveInputs: (estimateId, nodeId, expectedRevision, inputs, tx) =>
       withDatabaseErrors(async () => {
-        // The estimate is part of the condition, so a part ID of another estimate can never be written through this one.
+        // The estimate is part of the condition, so a part ID of another estimate can never be written through this one, and so is the revision that was read.
         // Raw, like `placeNodes`, so `updated_at` is set here and the text is bound as a parameter and read by the database as JSON.
         const changed = await clientFor(db, tx).$executeRaw`
           UPDATE estimate_nodes SET inputs = ${JSON.stringify(inputs)}::jsonb, revision = revision + 1, updated_at = now()
-          WHERE id = ${nodeId}::uuid AND estimate_id = ${estimateId}::uuid`;
+          WHERE id = ${nodeId}::uuid AND estimate_id = ${estimateId}::uuid AND revision = ${expectedRevision}::int`;
+        if (changed === 0) return null;
         if (changed !== 1) throw new Error('A part to change is not in this estimate.');
         const row = await clientFor(db, tx).estimateNode.findFirstOrThrow({ where: { id: nodeId, estimateId }, select: NODE_SELECT });
         return toRecord(row);
