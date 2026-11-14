@@ -103,7 +103,8 @@ describe('BR-003: the routes an Engineer can reach are named here, so adding one
   // `/account` and `/api/v1/account/password` are STORY-01.05's: the person's own name, e-mail and role, and the change of their own password (a 204 with no body).
   // `/api/v1/tasks` is STORY-04.02's: `GET` only for an Engineer (their own tasks, no cost field, one strict schema); the `POST` row of the same path is Lead and Admin.
   // `/api/v1/options/materials` is STORY-02.03's: IDs, names and Material Considered through one strict schema, no rate of any kind (AC-4); `/api/v1/options/treatments` is STORY-02.05's: IDs and names (AC-5); `/api/v1/options/customers` is STORY-02.02's: IDs and names (AC-5).
-  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/api/v1/tasks', '/estimates/[code]', '/about', '/account', '/api/v1/account/password'];
+  // `/estimates/[code]` and `/api/v1/estimates/[id]/customer` are STORY-05.01's: the Engineer's own task header and the choice of its customer, an ID and a name through one strict schema (AC-6).
+  const ENGINEER_ROUTES = ['/', '/queue', '/design-system', '/api/v1/me', '/api/v1/options/materials', '/api/v1/options/treatments', '/api/v1/options/customers', '/api/v1/tasks', '/estimates/[code]', '/api/v1/estimates/[id]/customer', '/about', '/account', '/api/v1/account/password'];
 
   it('matches exactly', () => {
     const reachable = ROUTE_MANIFEST.filter((row) => row.roles !== 'public' && allowsRole(row, 'ENGINEER')).map((row) => row.path);

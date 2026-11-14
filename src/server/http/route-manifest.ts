@@ -228,12 +228,16 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // The answer is cut to the caller's own tasks by the service, from the session, and parsed with a strict schema that names no cost.
   { path: '/api/v1/tasks', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
+  // for any other, a Lead and an Admin a short header until SCR-06 (STORY-06.02). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
+  // draft, an Engineer on their own while it is a draft (architecture section 6 "Set customer"), so it is in the Engineer's list and the cost scan calls it.
+  { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-05' },
+  { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
-  { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'planned', stage: 'R1', screen: 'SCR-05' },
   { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-07' },
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
 

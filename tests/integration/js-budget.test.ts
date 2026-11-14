@@ -12,6 +12,7 @@ import { runBudgetCheck } from '../../scripts/lib/js-budget-run';
 import {
   STUB_EMAIL,
   STUB_CUSTOMER_ID,
+  STUB_ESTIMATE_CODE,
   STUB_PASSWORD,
   createStubBuild,
   incompressible,
@@ -45,6 +46,7 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/queue': { signedIn: { status: 200, html: pageNaming('shell.js', 'queue.js') } },
   '/users': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/assign': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  [`/estimates/${STUB_ESTIMATE_CODE}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -196,6 +198,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
   let noRecords: CliRun;
   let noRecordsAdded = -1;
   let recordsAdded = -1;
+  let noTasksAssigned = -1;
+  let tasksAssigned = -1;
 
   beforeAll(async () => {
     scratch = mkdtempSync(join(tmpdir(), 'js-budget-cli-'));
@@ -210,6 +214,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     noRecords = await runScript(readOnly.baseUrl, build.directory, join(scratch, 'read-only.md'), true);
     noRecordsAdded = readOnly.customersAdded();
     recordsAdded = good.customersAdded();
+    noTasksAssigned = readOnly.tasksAssigned();
+    tasksAssigned = good.tasksAssigned();
   });
 
   afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -218,15 +224,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/account', '/assign', '/audit', '/design-system', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 13 rows are within their limit');
+    for (const route of ['/', '/account', '/assign', '/audit', '/design-system', '/estimates/[code]', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 14 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 13 rows failed');
+    expect(overrun.output).toContain('1 of 14 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -236,12 +242,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(`${noCredentials.output}${noCredentials.summary}${passing.output}${passing.summary}`).not.toContain(STUB_PASSWORD);
   });
 
-  it('writes nothing to a server it did not start unless --make-records is given (QLT-05): one customer with the flag, none without, and the dynamic route says why it failed', () => {
+  it('writes nothing to a server it did not start unless --make-records is given (QLT-05): one customer and one task with the flag, none without, and each dynamic route says why it failed', () => {
     expect(recordsAdded).toBe(1);
+    expect(tasksAssigned).toBe(1);
     expect(noRecordsAdded).toBe(0);
+    expect(noTasksAssigned).toBe(0);
     expect(noRecords.code).toBe(1);
     expect(noRecords.output).toContain('/masters/customers/[id]');
+    expect(noRecords.output).toContain('/estimates/[code]');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('1 of 13 rows failed');
+    expect(noRecords.output).toContain('2 of 14 rows failed');
   });
 });
