@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { ESTIMATE_STATUSES } from '@/lib/estimate/state-machine';
+import { taskDetailSchema } from '@/server/views/schemas/tasks';
+
 import { defined } from '../support/defined';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
@@ -63,6 +66,12 @@ describe('AC-1: the Engineer is told the status of their own task, in every stat
     expect(record.parse(await (await GET(request(), withId(owned()))).json())['status']).toBe('APPROVED');
     harness.taskWorld.setStatus(owned(), 'DRAFT');
     expect(record.parse(await (await GET(request(), withId(owned()))).json())['status']).toBe('DRAFT');
+  });
+});
+
+describe('SQR-03: the status of the answer is the state machine\'s own list', () => {
+  it('has exactly the statuses of ESTIMATE_STATUSES, so a new status cannot reach the route unnoticed', () => {
+    expect(taskDetailSchema.shape.status.options).toEqual([...ESTIMATE_STATUSES]);
   });
 });
 

@@ -38,7 +38,7 @@ export function WorkspaceHeader({ view }: { readonly view: WorkspaceHeaderView }
         {...(view.title === null ? {} : { description: view.title })}
         actions={
           <div className="flex flex-wrap items-center gap-s-3">
-            <StatusBadge status={view.status} />
+            <StatusBadge status={view.status} variant="header" />
             <span className="inline-flex items-center gap-s-1 text-body font-semibold text-ink">
               <Icon icon={CalendarClock} size="small" />
               {`Due ${view.deadlineLabel}`}

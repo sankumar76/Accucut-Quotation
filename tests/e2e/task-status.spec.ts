@@ -57,7 +57,7 @@ async function openQueueWithStates(page: Page, testInfo: TestInfo): Promise<{ re
 test.describe('an Engineer', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('AC-1, AC-7: the queue says Draft, Submitted, Approved and Closed in words with an icon, with no sideways scroll and axe 0 violations', async ({ page }, testInfo) => {
+  test('AC-1, AC-7: the queue says Draft, Submitted and Approved in words with an icon, one badge each, with no sideways scroll and axe 0 violations', async ({ page }, testInfo) => {
     const { states } = await openQueueWithStates(page, testInfo);
 
     await expect.poll(() => page.locator('[data-task-code]:visible').count()).toBe(2);
@@ -70,9 +70,8 @@ test.describe('an Engineer', () => {
     await tab(page, 'Closed').click();
     await expect.poll(() => page.locator('[data-task-code]:visible').count()).toBe(1);
     const approved = rowOf(page, states.approved.code).locator('[data-slot="status-badge"]');
-    await expect(approved).toContainText('Approved');
-    await expect(approved).toContainText('Closed');
-    await expect(approved.locator('svg')).toHaveCount(2);
+    await expect(approved).toHaveText('Approved');
+    await expect(approved.locator('svg')).toHaveCount(1);
     await expect(approved).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
@@ -89,7 +88,7 @@ test.describe('an Engineer', () => {
 
     for (const [code, words] of [
       [states.submitted.code, ['Submitted']],
-      [states.approved.code, ['Approved', 'Closed']],
+      [states.approved.code, ['Approved and locked']],
     ] as const) {
       await page.goto(`/estimates/${code}`);
       await expect(page.getByRole('heading', { level: 1, name: code })).toBeVisible();
@@ -150,8 +149,7 @@ test.describe('a Lead', () => {
     await waitUntilHydrated(page, '[role="tab"]', 'onMouseDown');
     await tab(page, 'Closed').click();
     const approved = page.locator('[data-slot="status-badge"][data-status="APPROVED"]:visible').first();
-    await expect(approved).toContainText('Approved');
-    await expect(approved).toContainText('Closed');
+    await expect(approved).toHaveText('Approved');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
@@ -160,8 +158,7 @@ test.describe('a Lead', () => {
     const states = await seedStates(engineer.id);
     await page.goto(`/estimates/${states.approved.code}`);
     await expect(page.getByRole('heading', { level: 1, name: states.approved.code })).toBeVisible();
-    await expect(page.locator('[data-slot="status-badge"]')).toContainText('Approved');
-    await expect(page.locator('[data-slot="status-badge"]')).toContainText('Closed');
+    await expect(page.locator('[data-slot="status-badge"]')).toHaveText('Approved and locked');
     expect(await page.locator('main').innerText()).not.toMatch(PRICE_WORDS);
   });
 });

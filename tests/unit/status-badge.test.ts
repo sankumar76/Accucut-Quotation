@@ -11,8 +11,8 @@ import type { QueueRowData } from '@/lib/tasks/queue-client';
 
 /**
  * STORY-04.04 T2, T3 (AC-1, AC-2, AC-5): the status badge, and the two places that draw it (the queue's rows and cards, and the task header), rendered to markup with no
- * browser. The words are the story's, written out here and not imported, so a changed word fails a test. A badge has its word and an icon (never colour alone), an
- * approved task also says "Closed", and nothing but a word is ever drawn: no amount, approver or reason. The widths and axe are `tests/e2e/task-status.spec.ts`.
+ * browser. The words are the story's and the screens', written out here and not imported, so a changed word fails a test. A badge has its word and an icon (never colour alone), an
+ * approved task is one badge too ("Approved" in a list, "Approved and locked" in the task header: the G3 screens, review SQR-01), and nothing but a word is ever drawn: no amount, approver or reason. The widths and axe are `tests/e2e/task-status.spec.ts`.
  * Every name, path and date is invented.
  */
 
@@ -40,7 +40,7 @@ const header = (status: EstimateStatus): WorkspaceHeaderView => ({
   assignedByName: 'Invented Boss',
 });
 
-const badge = (status: EstimateStatus): string => renderToStaticMarkup(createElement(StatusBadge, { status }));
+const badge = (status: EstimateStatus, variant: 'list' | 'header' = 'list'): string => renderToStaticMarkup(createElement(StatusBadge, { status, variant }));
 const list = (role: RoleName, status: EstimateStatus): string => renderToStaticMarkup(createElement(QueueList, { role, tasks: [row(status)], asOf: '2026-11-09T04:00:00.000Z' }));
 const textOf = (html: string): string => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
@@ -54,13 +54,22 @@ describe('AC-1: a badge with the word and an icon', () => {
     expect(textOf(html).trim()).toBe(word);
     expect(html).toContain('<svg');
     expect(html).toContain(`data-status="${status}"`);
+    expect(occurrences(html, '<svg')).toBe(1);
     expect(html).not.toContain('Closed');
   });
 
-  it('APPROVED is the word "Approved" and also "Closed", each with an icon of its own', () => {
+  it('APPROVED is one badge, "Approved", with a lock icon, and the word "Closed" is not drawn (it is the tab\'s name)', () => {
     const html = badge('APPROVED');
-    expect(textOf(html).trim()).toBe('Approved Closed');
-    expect(occurrences(html, '<svg')).toBe(2);
+    expect(textOf(html).trim()).toBe('Approved');
+    expect(occurrences(html, '<svg')).toBe(1);
+    expect(occurrences(html, 'data-slot="badge"')).toBe(1);
+    expect(html).not.toContain('Closed');
+  });
+
+  it('the task header says "Approved and locked" for an approved task and the same word as a list for the other two', () => {
+    expect(textOf(badge('APPROVED', 'header')).trim()).toBe('Approved and locked');
+    expect(textOf(badge('DRAFT', 'header')).trim()).toBe('Draft');
+    expect(textOf(badge('SUBMITTED', 'header')).trim()).toBe('Submitted');
   });
 
   it('the queue draws the badge in a table row and in a card, for every status', () => {
@@ -73,7 +82,9 @@ describe('AC-1: a badge with the word and an icon', () => {
 
   it('the task header draws it too', () => {
     expect(textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('SUBMITTED') })))).toContain('Submitted');
-    expect(textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('APPROVED') })))).toMatch(/Approved\s+Closed/);
+    const approved = textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('APPROVED') })));
+    expect(approved).toContain('Approved and locked');
+    expect(approved).not.toContain('Closed');
   });
 });
 
@@ -82,7 +93,7 @@ describe('AC-5: the same words for every role', () => {
     const words = (status: EstimateStatus): string => (/data-slot="status-badge"[^>]*>(.*?)<\/span><\/td>/.exec(list(role, status)) ?? [])[1] ?? '';
     expect(textOf(words('DRAFT')).trim()).toBe('Draft');
     expect(textOf(words('SUBMITTED')).trim()).toBe('Submitted');
-    expect(textOf(words('APPROVED')).trim()).toBe('Approved Closed');
+    expect(textOf(words('APPROVED')).trim()).toBe('Approved');
   });
 });
 

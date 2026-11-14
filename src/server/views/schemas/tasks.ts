@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ESTIMATE_STATUSES } from '../../../lib/estimate/state-machine';
 import { DEFAULT_QUEUE_TAB, QUEUE_DEFAULT_LIMIT, QUEUE_MAX_LIMIT, QUEUE_TABS } from '../../../lib/tasks/queue';
 import { decodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '../../services/task-queue-cursor';
 
@@ -21,8 +22,6 @@ const text = z.string().max(MAX_TEXT_LENGTH).default('');
 
 const MAX_ID_LENGTH = 100;
 
-/** The status of an estimate, from `estimates.status`: the one value a task row carries about its estimate. */
-const STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED'] as const;
 
 /** `POST /api/v1/tasks` (AC-1, AC-3): the Engineer, the path, the deadline as `YYYY-MM-DDTHH:mm` in IST, and the optional title and notes. */
 export const assignTaskBodySchema = z.strictObject({
@@ -105,7 +104,7 @@ const queueTaskSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///').nullable(),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  status: z.enum(STATUSES),
+  status: z.enum(ESTIMATE_STATUSES),
   assignedByName: z.string().min(1),
 });
 
@@ -131,8 +130,8 @@ export const taskDetailSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///').nullable(),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  /** The status of the estimate, from `estimates.status`. The words (and "Closed" for an approved one) come from `taskStatusOf`. */
-  status: z.enum(STATUSES),
+  /** The status of the estimate, from `estimates.status`. The words come from `taskStatusOf`; an approved estimate is the closed task (`isTaskClosed`). */
+  status: z.enum(ESTIMATE_STATUSES),
   assignedByName: z.string().min(1),
 });
 
