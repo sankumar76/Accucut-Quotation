@@ -19,7 +19,33 @@ export const ERROR_RETRY = 'Try again';
 
 export const TRY_AGAIN_BODY = 'Check your connection and try again. Nothing was changed.';
 export const FAILED_DIALOGS_TITLE = 'The form did not open.';
+export const FAILED_CONFIRMATION_TITLE = 'The confirmation did not open.';
 export const FAILED_DIALOGS_MESSAGE = 'Check your connection and try again.';
+
+// ---- The refusal to delete a customer or a material that an open estimate uses (STORY-02.07; ux-spec SCR-12 and SCR-13 "Delete blocked") ----------------
+
+/** The two masters whose delete an open estimate blocks (BR-053). */
+export type InUseKind = 'customer' | 'material';
+
+export const IN_USE_CLOSE = 'Close';
+export const inUseTitle = (name: string): string => `${name} cannot be deleted yet`;
+
+/** The sentence above the list: "An open estimate uses this customer:" for one, and the count for more (the mock-up draws one; the plural is the developer's proposal). */
+export const inUseLead = (kind: InUseKind, total: number): string =>
+  total === 1 ? `An open estimate uses this ${kind}:` : `${total} open estimates use this ${kind}:`;
+
+/** The note after the ten named estimates, when there are more ("and N more", AC-2). */
+export const inUseMore = (count: number): string => `and ${count} more`;
+
+/** What to do first, in the words of the mock-up (`SCR-12.html`, `SCR-13.html`); the plural follows its sentence. */
+export const inUseAdvice = (kind: InUseKind, total: number): string => {
+  const one = total === 1;
+  if (kind === 'customer') return `Approve ${one ? 'it' : 'them'}, or move ${one ? 'it' : 'them'} to another customer, and then delete this one.`;
+  return `Approve ${one ? 'it' : 'them'}, or change the material on ${one ? 'its' : 'their'} parts, and then delete this one.`;
+};
+
+/** The list's label for a screen reader. */
+export const IN_USE_LIST_LABEL = 'Open estimates';
 
 /** A notice under the page header (the slot of "Saved"): replaced by the next one, cleared by the next press of a button. */
 export interface PageNotice {

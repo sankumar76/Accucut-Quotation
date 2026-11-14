@@ -5,6 +5,7 @@ import { Plus, SearchX, Users } from 'lucide-react';
 import { Icon } from '@/components/shared/icon';
 import { EmptyState, SkeletonBlock } from '@/components/shared/states';
 import { Button } from '@/components/ui/button';
+import type { CustomerSummaryRow } from '@/lib/masters/customers-client';
 
 import { CustomerList } from './customer-list';
 import {
@@ -80,5 +81,7 @@ export function CustomerResults({ customers, changeSaved }: CustomerResultsProps
       </div>
     );
   }
-  return <CustomerList items={list.shown} onEdit={customers.onEdit} />;
+  const onDelete = (item: CustomerSummaryRow, button: HTMLButtonElement, byKeyboard: boolean): void =>
+    customers.remove.onDelete({ id: item.id, name: item.name }, button, byKeyboard);
+  return <CustomerList items={list.shown} onEdit={customers.onEdit} pendingOpener={customers.remove.loader.pending ? customers.remove.pressed : null} onDelete={onDelete} />;
 }

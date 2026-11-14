@@ -12,6 +12,8 @@ import {
   type NewCustomer,
   type ProcessItemRecord,
 } from '../../src/server/repositories/master-repository';
+import { ESTIMATE_USE_LIMIT, type EstimateUses } from '../../src/server/repositories/estimate-use';
+import type { EstimateUse } from '../../src/lib/errors';
 
 /**
  * The customer half of the in-memory master repository (`fake-masters.ts`), for unit tests of the rules (no database). It keeps the behaviour the
@@ -29,6 +31,8 @@ export interface FakeCustomer {
   address: string | null;
   /** Set by story 02.07's delete; the fake lists no deleted customer. */
   deleted: boolean;
+  /** The Draft and Submitted estimates that have this customer, in the order of their task code (STORY-02.07). A test pushes to it to make the customer "in use". */
+  readonly openEstimates: EstimateUse[];
   readonly values: Map<string, string>;
 }
 
@@ -45,7 +49,7 @@ export function fakeCustomer(
 ): FakeCustomer {
   const own = new Map(records.map((record) => [record.id, record.defaultValue]));
   for (const [itemId, value] of Object.entries(values)) own.set(itemId, value);
-  return { id: randomUUID(), name, phone: contact.phone ?? null, email: contact.email ?? null, address: contact.address ?? null, deleted: false, values: own };
+  return { id: randomUUID(), name, phone: contact.phone ?? null, email: contact.email ?? null, address: contact.address ?? null, deleted: false, openEstimates: [], values: own };
 }
 
 export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemRecord>, customers: FakeCustomer[]): CustomerMethods {
@@ -112,6 +116,19 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
     removeProcessItemFromCustomers(processItemId: string) {
       const removed = customers.filter((customer) => customer.values.delete(processItemId));
       return Promise.resolve(removed.length);
+    },
+
+    findOpenEstimatesOfCustomer(customerId: string): Promise<EstimateUses> {
+      const found = customers.find((customer) => sameId(customer.id, customerId));
+      const open = found?.openEstimates ?? [];
+      return Promise.resolve({ total: open.length, estimates: open.slice(0, ESTIMATE_USE_LIMIT).map((use) => ({ ...use })) });
+    },
+
+    softDeleteCustomer(id: string) {
+      const found = find(id);
+      if (found === undefined) return Promise.resolve(false);
+      found.deleted = true;
+      return Promise.resolve(true);
     },
   };
 }
