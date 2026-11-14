@@ -15,7 +15,7 @@ import { calculateRowOutputs } from '../../lib/estimate/row-calculator';
 import { storeRowOutputs, type RowOutputs } from '../../lib/estimate/row-outputs';
 import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import { buildTree } from '../../lib/estimate/tree';
-import { validateForCalculate, type CheckedPart } from '../../lib/estimate/validation';
+import { validateForCalculate, type CheckedPart } from '../../lib/estimate/calculate-check';
 import { findFieldById, findFieldByKey } from '../../lib/fields/registry';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../../lib/fields/types';

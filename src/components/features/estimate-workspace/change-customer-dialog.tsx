@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import type { CustomerView } from '@/lib/estimates/estimates-client';
 
-import { CHANGE_CONFIRM, CHANGE_TITLE, changeDescription, CUSTOMER_SAVING, FAILED_BODY, keepLabel, SAVE_FAILED_TITLE } from './estimate-texts';
+import { CUSTOMER_SAVING, FAILED_BODY, SAVE_FAILED_TITLE } from './estimate-texts';
 import type { SaveProblem } from './use-customer-choice';
 
 /**
@@ -24,6 +24,13 @@ import type { SaveProblem } from './use-customer-choice';
  * calculated. The request stays out until the server answers; the dialog closes then, and a refusal or a failure keeps it open with the reason and
  * everything as it was. The dialog is opened by the field, not by a button of its own, so it hands focus back to the field when it closes.
  */
+
+/** The dialog's own words, here and not in `estimate-texts.ts`, which the first load carries whole: this dialog is fetched after the page is up (NFR-009). */
+const CHANGE_TITLE = 'Change the customer?';
+const CHANGE_CONFIRM = 'Change customer';
+const changeDescription = (from: string, to: string): string =>
+  `You are changing the customer from ${from} to ${to}. Nothing you typed is lost. The new customer applies the next time the estimate is calculated.`;
+const keepLabel = (name: string): string => `Keep ${name}`;
 
 export interface ChangeCustomerDialogProps {
   readonly current: CustomerView;

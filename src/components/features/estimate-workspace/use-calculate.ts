@@ -2,11 +2,20 @@
 
 import { useRef, useState } from 'react';
 
-import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
-import { blockedPartsFrom, calculateEstimate, withoutFilled, type BlockedPartView } from '@/lib/estimates/calculate-client';
+import { type BlockedPartView, withoutFilled } from '@/lib/estimates/calculate-missing';
+
 
 /** Why the last press did not submit anything, in the server's words (a refusal with no list: a 409 such as "choose the customer"), or "it failed" (no usable answer came). */
 export type CalculateProblem = { readonly kind: 'refused'; readonly message: string } | { readonly kind: 'failed' };
+
+/**
+ * The code that sends Calculate and reads its answers is fetched when the button is first pressed, by a bare `import()` (NFR-009: `/estimates/[code]` has no room left in its 200 KB first load, and
+ * nobody needs this code before the first press). A fetch that fails is the same "it failed" as a network that fails, and the next press tries again.
+ */
+const loadClient = () => import('@/lib/estimates/calculate-client');
+
+/** The code of the 409 for an estimate that was already submitted (`TRANSITION_REFUSALS.ALREADY_SUBMITTED`, written here so the state machine's table is not carried for one string). */
+const ALREADY_SUBMITTED_CODE = 'ESTIMATE_ALREADY_SUBMITTED';
 
 /**
  * What Calculate does on SCR-05 (STORY-05.09 AC-1, AC-2, AC-7; UX spec SCR-05 "Calculate blocked", "Submitted"). One press is one request, and a press while one is in flight is ignored (a double
@@ -31,31 +40,28 @@ export function useCalculate({ estimateId, onSubmitted }: { readonly estimateId:
     inFlight.current = true;
     setBusy(true);
     setProblem(null);
-    const outcome = await calculateEstimate(estimateId);
+    const client = await loadClient().catch(() => null);
+    const outcome = client === null ? null : await client.calculateEstimate(estimateId);
     inFlight.current = false;
     setBusy(false);
-    if (outcome.status === 'ok') {
+    if (client === null || outcome === null || outcome.status === 'failed') {
+      setProblem({ kind: 'failed' });
+    } else if (outcome.status === 'ok') {
       setBlocked(null);
       setDone(outcome.value.message);
       onSubmitted();
-      return;
-    }
-    if (outcome.status === 'failed') {
-      setProblem({ kind: 'failed' });
-      return;
-    }
-    // Another tab (or an earlier press whose answer was lost) already submitted it: the estimate is submitted, so the screen shows it as that, in the server's words.
-    if (outcome.code === TRANSITION_REFUSALS.ALREADY_SUBMITTED.code) {
+    } else if (outcome.code === ALREADY_SUBMITTED_CODE) {
+      // Another tab (or an earlier press whose answer was lost) already submitted it: the estimate is submitted, so the screen shows it as that, in the server's words.
       setDone(outcome.title);
       onSubmitted();
-      return;
-    }
-    const parts = blockedPartsFrom(outcome);
-    if (parts !== null && parts.length > 0) {
-      setBlocked(parts);
-      setFocusRequest((count) => count + 1);
     } else {
-      setProblem({ kind: 'refused', message: outcome.title });
+      const parts = client.blockedPartsFrom(outcome);
+      if (parts !== null && parts.length > 0) {
+        setBlocked(parts);
+        setFocusRequest((count) => count + 1);
+      } else {
+        setProblem({ kind: 'refused', message: outcome.title });
+      }
     }
   }
 

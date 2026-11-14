@@ -1,20 +1,13 @@
 import { Button } from '@/components/ui/button';
 
-import { CALCULATE_BAR_LABEL, CALCULATE_HINT, CALCULATE_LABEL, CALCULATING_LABEL, SUBMITTED_LABEL } from './estimate-texts';
+import { CALCULATE_BUTTON_ID } from './calculate-button';
 
-/** The id of the Calculate button: Enter on the last field of the form puts focus on it (STORY-05.09 AC-9; UX spec SCR-05 "Interactions"). */
-export const CALCULATE_BUTTON_ID = 'calculate-button';
-
-/**
- * Puts focus on the Calculate button and answers whether it took it. It never presses it: Enter on the last field **moves** to Calculate and does not submit. False while the button is
- * not there (the estimate is no longer a draft) or is busy, and the caller then keeps its own fallback.
- */
-export function focusCalculate(): boolean {
-  const button = document.getElementById(CALCULATE_BUTTON_ID);
-  if (button === null || button.matches(':disabled')) return false;
-  button.focus();
-  return true;
-}
+/** The words of the bar: the one button's three states and the line beside it. None names a rate, a price or a formula (UX-24). They are here and not in `estimate-texts.ts`, which the first load carries whole. */
+const CALCULATE_BAR_LABEL = 'Calculate';
+const CALCULATE_LABEL = 'Calculate';
+const CALCULATING_LABEL = 'Calculating';
+const SUBMITTED_LABEL = 'Submitted';
+const CALCULATE_HINT = 'Every part is checked. Nothing is submitted until all of them are complete.';
 
 export interface CalculateBarProps {
   /** True once the estimate has been submitted (by this press or an earlier one): the button reads "Submitted" and is off. */
