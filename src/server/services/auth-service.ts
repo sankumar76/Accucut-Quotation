@@ -34,6 +34,16 @@ export const THROTTLE_POLICY = {
   blockMilliseconds: BLOCK_MINUTES * MILLISECONDS_PER_MINUTE,
 } as const;
 
+/**
+ * The step-up check's own limit (STORY-06.14 AC-3, ADR-009), PROPOSED like NFR-003 (owner: Santhosh): five consecutive wrong passwords
+ * block the person's `stepup` key for the same 15 minutes as sign-in. Written apart from `THROTTLE_POLICY` so the two can be changed
+ * separately; it is not part of that object.
+ */
+export const STEP_UP_POLICY = {
+  failureLimit: 5,
+  blockMilliseconds: THROTTLE_POLICY.blockMilliseconds,
+} as const;
+
 /** Shown to a person who types a wrong password; the same text for the three failures (AC-2). Held in the UI. */
 export type SignInFailure = 'invalid' | 'locked';
 
