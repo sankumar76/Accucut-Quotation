@@ -1,8 +1,9 @@
 import type { RoleName } from '../../lib/auth/roles';
-import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, TreeChangedError } from '../../lib/errors';
+import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, TreeChangedError, ValidationError } from '../../lib/errors';
 import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
 import type { Completeness, PartView } from '../../lib/estimate/part-view';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
+import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
 import { buildTree, canMove, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, siblingIndex, type PlacedNode } from '../../lib/estimate/tree';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
@@ -31,8 +32,8 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
  *
  * **The parts tree (STORY-05.02; FR-043, FR-044; architecture sections 4.8, 5.1 and 6).** Reading the tree is open to whoever may open the estimate. Every write
  * (add, move, delete) follows one order, so the answer depends on the estimate before it depends on what was sent: the estimate is locked (404 when it is not the
- * person's or does not exist), it must be a draft (409), the part named must be in it (404), the part's `revision` and, for a delete, the count of parts the
- * person was shown must still be right (409, with the fresh tree), and only then does the content of a move count (422). All of it is one transaction with the
+ * person's or does not exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a submitted estimate for a Lead or an Admin, never an approved one), the part named must be in it (404), the part's `revision` and, for a delete, the count and the
+ * fingerprint of the parts the person was shown must still be right (409, with the fresh tree), and only then does the content of a move count (422). All of it is one transaction with the
  * estimate's row lock, so two changes to one tree are serialised and `inputs_revision` rises by one with the change or not at all. A change that moves nothing
  * writes nothing. **The Sl. No is never stored**; it is read from the layout each time (`lib/estimate/tree.ts`). No answer carries a rate, a cost or a formula.
  */
@@ -84,12 +85,26 @@ export interface MovePartRequest {
   readonly index: number;
 }
 
-/** Delete a part and its sub-parts. `parts` is the number the person was told would go (the part and every sub-part): a different number is a 409. */
+/**
+ * Delete a part and its sub-parts. `parts` is the number the person was told would go (the part and every sub-part) and `subtree` the fingerprint of those parts with
+ * their revisions (`subtreeFingerprint`): a different number, or a different set, or a part of it typed into since, is a 409 and nothing is deleted (review SQR-01).
+ */
 export interface DeletePartRequest {
   readonly nodeId: string;
   readonly revision: number;
   readonly parts: number;
+  readonly subtree: string;
 }
+
+/**
+ * The most parts one estimate may hold. **Assumption, to be confirmed by the architect or the product manager**: NFR-008 sizes Calculate and the screens at 500 parts,
+ * and this is four times that. Depth stays unlimited (FR-043), but every change reads and answers the whole tree, and the Sl. No of a deep part grows with its depth, so
+ * an estimate with no bound could make each request cost seconds and megabytes (review SQR-02).
+ */
+export const MAX_PARTS_PER_ESTIMATE = 2000;
+/** The `code` of the 422 of an add to an estimate that already holds the most parts. */
+export const TREE_FULL_CODE = 'TREE_FULL';
+export const TREE_FULL_MESSAGE = `This estimate already has ${MAX_PARTS_PER_ESTIMATE.toLocaleString('en-US')} parts, the most it can hold. Delete a part before adding another.`;
 
 /** The part added and the tree as it is now. */
 export interface AddedPart {
@@ -141,7 +156,7 @@ export interface EstimateService {
   getTree(viewer: EstimateViewer, estimateId: string): Promise<PartsTree>;
   /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
   getNode(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartDetail>;
-  /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person. Answers with the new part's ID and the tree. */
+  /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
   addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest): Promise<AddedPart>;
   /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
   moveNode(viewer: EstimateViewer, estimateId: string, request: MovePartRequest): Promise<PartsTree>;
@@ -302,6 +317,8 @@ export function createEstimateService({ estimates, nodes, transactions }: Estima
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const before = await nodes.listNodes(id, tx);
+        // Under the lock, so two adds at once cannot both pass the limit.
+        if (before.length >= MAX_PARTS_PER_ESTIMATE) throw new ValidationError(TREE_FULL_MESSAGE, { code: TREE_FULL_CODE });
         const { parentId, index } = placeForAdd(before, request);
         const created = await nodes.insertNode(id, parentId, index, tx);
         const after = insertNode(placedOf(before), { id: created.id, parentId, index });
@@ -337,8 +354,10 @@ export function createEstimateService({ estimates, nodes, transactions }: Estima
         const before = await nodes.listNodes(id, tx);
         const part = partIn(before, request.nodeId);
         const doomed = [part.id, ...descendantIds(before, part.id)];
-        // The count the person confirmed must be what would go, and the part must be as they saw it: a part added below, or typed into, since then is not deleted unseen.
-        if (part.revision !== request.revision || doomed.length !== request.parts) throw new TreeChangedError(viewsOf(before));
+        // What the person confirmed must be what would go: the part as they saw it, the same number of parts, and the same parts in the same state. A part added below,
+        // moved in or out, replaced by another or typed into since then changes the fingerprint, so it is not deleted unseen (SQR-01).
+        const members = before.filter((record) => doomed.includes(record.id));
+        if (part.revision !== request.revision || doomed.length !== request.parts || subtreeFingerprint(members) !== request.subtree) throw new TreeChangedError(viewsOf(before));
         await nodes.deleteNodes(id, doomed, tx);
         const placed = placedOf(before);
         const remaining = placed.filter((place) => !doomed.includes(place.id));

@@ -1,7 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
+import { descendantIds } from '@/lib/estimate/tree';
 import { partsTreeSchema } from '@/server/views/schemas';
+
+import { MAX_PARTS_PER_ESTIMATE } from '@/server/services/estimate-service';
 
 import { defined } from '../support/defined';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
@@ -66,6 +70,12 @@ async function added(body: unknown): Promise<{ readonly nodeId: string; readonly
   return z.strictObject({ nodeId: z.string(), nodes: z.array(record) }).parse(await response.json());
 }
 
+/** The fingerprint the screen sends for this part: the part and every sub-part with their revisions, as stored now (what its dialog showed). */
+function seen(id: string): string {
+  const ids = new Set([id, ...descendantIds(harness.estimateWorld.nodes, id)]);
+  return subtreeFingerprint(harness.estimateWorld.nodes.filter((node) => ids.has(node.id)));
+}
+
 const slOf = (nodes: ReadonlyArray<Record<string, unknown>>, id: string): unknown => nodes.find((node) => node['id'] === id)?.['slNo'];
 
 beforeAll(holdSessionClock);
@@ -113,6 +123,19 @@ describe('AC-1: the Engineer adds a part to their own tree', () => {
     expect(estimate().inputsRevision).toBe(0);
   });
 
+  it('SQR-02: an estimate at the most parts it can hold answers 422 TREE_FULL with plain words, and the part is not added', async () => {
+    const held = harness.estimateWorld.nodes;
+    const start = held.length;
+    for (let place = start; place < MAX_PARTS_PER_ESTIMATE; place += 1) {
+      held.push({ id: `00000000-0000-4000-8000-${String(place).padStart(12, '0')}`, estimateId: owned(), parentId: null, sortIndex: place, revision: 1, inputs: {} });
+    }
+    const refused = await add({ kind: 'item' });
+    expect(refused.status).toBe(422);
+    expect(record.parse(await refused.json())).toMatchObject({ code: 'TREE_FULL', title: 'This estimate already has 2,000 parts, the most it can hold. Delete a part before adding another.' });
+    expect(held).toHaveLength(MAX_PARTS_PER_ESTIMATE);
+    expect(estimate().inputsRevision).toBe(0);
+  });
+
   it('a body that is not JSON is 400', async () => {
     const notJson = new Request(`${ORIGIN}${base()}/nodes`, { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: '{' });
     expect((await addNode(notJson, forEstimate(owned()))).status).toBe(400);
@@ -156,7 +179,7 @@ describe('AC-2 and AC-4: moves', () => {
 
 describe('AC-3: delete', () => {
   it('needs the revision and the count in the query: with neither, a text, or a count of 0, it is 422 and deletes nothing', async () => {
-    for (const query of ['', '?revision=1', '?parts=1', '?revision=x&parts=1', '?revision=1&parts=0', '?revision=1&parts=1&extra=1']) {
+    for (const query of ['', '?revision=1', '?parts=1', '?revision=1&parts=1', '?revision=x&parts=1&subtree=0000000000000000', '?revision=1&parts=0&subtree=0000000000000000', '?revision=1&parts=1&subtree=XYZ', `?revision=1&parts=1&subtree=${seen(canary())}&extra=1`]) {
       const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}${query}`), forNode(owned(), canary()));
       expect(answer.status, query).toBe(422);
     }
@@ -166,7 +189,7 @@ describe('AC-3: delete', () => {
   it('deletes the part with its sub-parts when the count is right, and answers with the tree that is left', async () => {
     const sub = await added({ kind: 'sub-part', nodeId: canary() });
     await added({ kind: 'sub-part', nodeId: sub.nodeId });
-    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=3`), forNode(owned(), canary()));
+    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=3&subtree=${seen(canary())}`), forNode(owned(), canary()));
     expect(answer.status).toBe(200);
     expect(treeBody.parse(await answer.json()).nodes).toEqual([]);
     expect(harness.estimateWorld.nodes).toHaveLength(0);
@@ -174,7 +197,7 @@ describe('AC-3: delete', () => {
 
   it('a count that is no longer right is 409 TREE_CHANGED with the tree in the body, in the same six facts per part, and deletes nothing (AC-6)', async () => {
     await added({ kind: 'sub-part', nodeId: canary() });
-    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1`), forNode(owned(), canary()));
+    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(owned(), canary()));
     expect(answer.status).toBe(409);
     const problem = record.parse(await answer.json());
     expect(problem).toMatchObject({ code: 'TREE_CHANGED', status: 409 });
@@ -185,7 +208,7 @@ describe('AC-3: delete', () => {
   });
 
   it('a part that is not in the estimate is 404', async () => {
-    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${UNKNOWN_ID}?revision=1&parts=1`), forNode(owned(), UNKNOWN_ID));
+    const answer = await deleteNode(request('DELETE', `${base()}/nodes/${UNKNOWN_ID}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(owned(), UNKNOWN_ID));
     expect(answer.status).toBe(404);
   });
 });
@@ -210,7 +233,7 @@ describe('AC-7: who may write, and when', () => {
     const answers = [
       await add({ kind: 'item' }),
       await putNode(request('PUT', `${base()}/nodes/${canary()}`, { revision: 1, parentId: null, index: 0 }), forNode(owned(), canary())),
-      await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1`), forNode(owned(), canary())),
+      await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(owned(), canary())),
     ];
     for (const answer of answers) {
       expect(answer.status).toBe(409);
@@ -233,7 +256,7 @@ describe('AC-7: who may write, and when', () => {
       (id: string) => add({ kind: 'item' }, id),
       (id: string) => moveTree(request('POST', `${base(id)}/tree/move`, { nodeId: canary(), revision: 1, parentId: null, index: 0 }), forEstimate(id)),
       (id: string) => putNode(request('PUT', `${base(id)}/nodes/${canary()}`, { revision: 1, parentId: null, index: 0 }), forNode(id, canary())),
-      (id: string) => deleteNode(request('DELETE', `${base(id)}/nodes/${canary()}?revision=1&parts=1`), forNode(id, canary())),
+      (id: string) => deleteNode(request('DELETE', `${base(id)}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(id, canary())),
     ]) {
       const answers = [await attempt(owned()), await attempt(UNKNOWN_ID), await attempt('not-an-id')];
       expect(answers.map((answer) => answer.status)).toEqual([404, 404, 404]);

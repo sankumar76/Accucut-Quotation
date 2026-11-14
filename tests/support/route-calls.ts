@@ -146,7 +146,7 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, body: stay, status: 200 };
     case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
-      return { id, query: '?revision=999&parts=1', status: 409 };
+      return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
     default:
       return undefined;
   }

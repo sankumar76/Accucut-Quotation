@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PartItem } from '@/lib/estimates/tree-client';
-import { partsRemoved, rowsOf, siblingsOf, stepOf } from '@/lib/estimates/tree-moves';
+import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
+import { deleteGuardOf, partsRemoved, rowsOf, siblingsOf, stepOf } from '@/lib/estimates/tree-moves';
 
 /** STORY-05.02 AC-2, AC-3: what the screen works out from its tree to ask for a move or a delete. Every ID is invented. */
 
@@ -25,11 +26,21 @@ describe('stepOf', () => {
   });
 });
 
-describe('partsRemoved', () => {
-  it('counts the part and every sub-part to any depth: 1 for a part with none, 3 for one with two', () => {
-    expect(partsRemoved(TREE, 'f')).toBe(1);
-    expect(partsRemoved(TREE, 'b')).toBe(3);
-    expect(partsRemoved(TREE, 'a')).toBe(5);
+describe('partsRemoved and deleteGuardOf', () => {
+  it('lists the part and every sub-part to any depth: 1 for a part with none, 3 for one with two', () => {
+    expect(partsRemoved(TREE, 'f').map((node) => node.id)).toEqual(['f']);
+    expect(partsRemoved(TREE, 'b').map((node) => node.id)).toEqual(['b', 'c', 'd']);
+    expect(partsRemoved(TREE, 'a')).toHaveLength(5);
+  });
+
+  it('gives the count the dialog names and the fingerprint the server checks: it changes when a member or a revision does', () => {
+    const guard = deleteGuardOf(TREE, 'b');
+    expect(guard.parts).toBe(3);
+    expect(guard.subtree).toBe(subtreeFingerprint(partsRemoved(TREE, 'b')));
+    const replaced = TREE.map((node) => (node.id === 'd' ? { ...node, id: 'x' } : node));
+    expect(deleteGuardOf(replaced, 'b').subtree).not.toBe(guard.subtree);
+    const typed = TREE.map((node) => (node.id === 'c' ? { ...node, revision: 2 } : node));
+    expect(deleteGuardOf(typed, 'b').subtree).not.toBe(guard.subtree);
   });
 });
 

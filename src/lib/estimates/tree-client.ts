@@ -90,10 +90,12 @@ export interface DeleteRequest {
   readonly revision: number;
   /** How many parts the person was told would go: the part and every sub-part. */
   readonly parts: number;
+  /** The fingerprint of those parts with their revisions, from the tree the dialog showed (`subtreeFingerprint`). */
+  readonly subtree: string;
 }
 
-/** `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=`: the answer is the tree that is left. */
+/** `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=&subtree=`: the answer is the tree that is left. */
 export function deletePart(estimateId: string, request: DeleteRequest, doFetch: Fetch = fetch): Promise<Outcome<TreeAnswer>> {
-  const query = `revision=${String(request.revision)}&parts=${String(request.parts)}`;
+  const query = `revision=${String(request.revision)}&parts=${String(request.parts)}&subtree=${request.subtree}`;
   return sendJson(doFetch, `${base(estimateId)}/nodes/${encodeURIComponent(request.nodeId)}?${query}`, { method: 'DELETE', headers: ACCEPT_JSON }, toAnswer);
 }

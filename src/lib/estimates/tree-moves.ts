@@ -1,3 +1,5 @@
+import { subtreeFingerprint } from '../estimate/subtree-fingerprint';
+
 import type { PartItem } from './tree-client';
 
 /**
@@ -17,12 +19,18 @@ export function stepOf(nodes: ReadonlyArray<PartItem>, part: PartItem, direction
   return target < 0 || target >= siblings.length ? null : target;
 }
 
-/** How many parts a delete of this part removes: the part and every sub-part at any depth. */
-export function partsRemoved(nodes: ReadonlyArray<PartItem>, id: string): number {
+/** The parts a delete of this part removes: the part and every sub-part at any depth. */
+export function partsRemoved(nodes: ReadonlyArray<PartItem>, id: string): PartItem[] {
   const gone = new Set([id]);
   // Reading order lists a parent before its children, so one pass finds the whole branch.
   for (const node of nodes) if (node.parentId !== null && gone.has(node.parentId)) gone.add(node.id);
-  return gone.size;
+  return nodes.filter((node) => gone.has(node.id));
+}
+
+/** The count and the fingerprint of the parts a delete of this part removes, as the dialog names them and the server checks them. */
+export function deleteGuardOf(nodes: ReadonlyArray<PartItem>, id: string): { readonly parts: number; readonly subtree: string } {
+  const removed = partsRemoved(nodes, id);
+  return { parts: removed.length, subtree: subtreeFingerprint(removed) };
 }
 
 /** A part with what a tree needs to say about where it is: its level (1 at the top), its place among its siblings (1 is first) and how many siblings it has. */

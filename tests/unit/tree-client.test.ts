@@ -64,10 +64,10 @@ describe('movePart and deletePart', () => {
     expect(JSON.parse(String(doFetch.mock.calls[0]?.[1]?.body))).toEqual({ nodeId: NODE, revision: 3, parentId: null, index: 1 });
   });
 
-  it('deletes with DELETE and the revision and the count in the query, and no body', async () => {
+  it('deletes with DELETE and the revision, the count and the fingerprint in the query, and no body', async () => {
     const doFetch = fetching(answer({ nodes: [] }));
-    expect(await deletePart(ESTIMATE, { nodeId: NODE, revision: 2, parts: 3 }, doFetch)).toEqual({ status: 'ok', value: { nodes: [], nodeId: null } });
-    expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/nodes/${NODE}?revision=2&parts=3`);
+    expect(await deletePart(ESTIMATE, { nodeId: NODE, revision: 2, parts: 3, subtree: '61f703ce75ac3118' }, doFetch)).toEqual({ status: 'ok', value: { nodes: [], nodeId: null } });
+    expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/nodes/${NODE}?revision=2&parts=3&subtree=61f703ce75ac3118`);
     expect(doFetch.mock.calls[0]?.[1]).toMatchObject({ method: 'DELETE' });
     expect(doFetch.mock.calls[0]?.[1]?.body).toBeUndefined();
   });

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
 import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type AddRequest, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
-import { partsRemoved, stepOf } from '@/lib/estimates/tree-moves';
+import { deleteGuardOf, stepOf } from '@/lib/estimates/tree-moves';
 
 import { addedMessage, deletedMessage, renumberedMessage } from './estimate-texts';
 
@@ -22,6 +22,8 @@ export interface DeleteTarget {
   readonly parentId: string | null;
   /** The part and every sub-part. */
   readonly parts: number;
+  /** The fingerprint of those parts with their revisions, as the dialog showed them. */
+  readonly subtree: string;
 }
 
 const slNoOf = (nodes: ReadonlyArray<PartItem>, id: string | null): string => nodes.find((node) => node.id === id)?.slNo ?? '';
@@ -113,16 +115,16 @@ export function usePartsTree(estimateId: string) {
   function askDelete(): void {
     if (selected === null || nodes === null || busy) return;
     setProblem(null);
-    setDeleting({ id: selected.id, slNo: selected.slNo, revision: selected.revision, parentId: selected.parentId, parts: partsRemoved(nodes, selected.id) });
+    setDeleting({ id: selected.id, slNo: selected.slNo, revision: selected.revision, parentId: selected.parentId, ...deleteGuardOf(nodes, selected.id) });
     setDeleteOpen(true);
   }
 
   async function confirmDelete(): Promise<void> {
     if (deleting === null) return;
-    const { id, revision, parts, parentId } = deleting;
+    const { id, revision, parts, subtree, parentId } = deleting;
     // The dialog closes whatever the server says: on a refusal the notice and the fresh tree are on the page, which is where the person has to look.
     await change(
-      () => deletePart(estimateId, { nodeId: id, revision, parts }),
+      () => deletePart(estimateId, { nodeId: id, revision, parts, subtree }),
       () => {
         setSelectedId(parentId);
         setAnnouncement(deletedMessage(parts));

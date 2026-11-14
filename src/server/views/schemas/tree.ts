@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
+import { FINGERPRINT_PATTERN } from '../../../lib/estimate/subtree-fingerprint';
+
 /**
  * The contract of the parts-tree routes (STORY-05.02, architecture section 6 "Tree", "Node", "Reorder"). Every body, query, path parameter and answer is a strict object:
  * a key that is not named is an error, so nothing is sent that is not meant to be and a client cannot set a field the route does not offer.
  *
- * The routes are open to every role, an Engineer included (their own estimate, while it is a draft), so there is **one response schema for every caller, with no
+ * The routes are open to every role, an Engineer included (their own estimate, while they may change it), so there is **one response schema for every caller, with no
  * rate, cost, formula or figure in it** (NFR-002, ADR-008): a part is its ID, its parent, its Sl. No, its label, how complete it is and its revision. The Sl. No is
  * derived from the tree and is never stored. A part's `inputs` is an empty object until the part form (STORY-05.03) names the fields a person may type; it is strict,
  * so a value that nothing declared cannot leave through this route.
@@ -41,10 +43,15 @@ export const moveTreeBodySchema = z.strictObject({ nodeId: z.string().max(MAX_ID
 const digits = (max: number) => z.string().regex(/^\d{1,10}$/, 'Send a whole number.').transform(Number).pipe(z.number().int().min(1).max(max));
 
 /**
- * `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=`: the part as it was when the person looked, and how many parts they were told would go (the part
- * and every sub-part). A DELETE carries no body, so both travel in the query.
+ * `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=&subtree=`: the part as it was when the person looked, how many parts they were told would go (the part
+ * and every sub-part), and the fingerprint of those parts with their revisions (`subtreeFingerprint`), so a part moved in, replaced or typed into since is not deleted
+ * unseen. A DELETE carries no body, so all three travel in the query.
  */
-export const deleteNodeQuerySchema = z.strictObject({ revision: digits(MAX_INTEGER), parts: digits(MAX_INTEGER) });
+export const deleteNodeQuerySchema = z.strictObject({
+  revision: digits(MAX_INTEGER),
+  parts: digits(MAX_INTEGER),
+  subtree: z.string().regex(FINGERPRINT_PATTERN, 'Send the fingerprint of the parts.'),
+});
 
 const completenessSchema = z.enum(['EMPTY', 'PARTIAL', 'COMPLETE']);
 

@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError, TREE_CHANGED_CODE, TreeChangedError } from '@/lib/errors';
 import type { PartView } from '@/lib/estimate/part-view';
-import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
+import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
+import { descendantIds } from '@/lib/estimate/tree';
+import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MAX_PARTS_PER_ESTIMATE, TREE_FULL_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
 import { buildTree500 } from '../support/builders/tree500';
 import { defined } from '../support/defined';
-import { createFakeEstimateWorld, type FakeEstimate, type FakeNode } from '../support/fake-estimates';
+import { createFakeEstimateWorld, type FakeEstimate, type FakeNode, type FakeEstimateWorld } from '../support/fake-estimates';
 
 /**
  * STORY-05.02 T2 to T4 (AC-1 to AC-8): the rules of the parts tree over in-memory storage. Who may call is `tests/security`; the real queries, the row lock and the
@@ -50,6 +52,12 @@ function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: Reado
 }
 
 type Setup = ReturnType<typeof setUp>;
+
+/** The fingerprint the screen would send for this part: of the part and every sub-part, with their revisions, as stored now (what the dialog showed). */
+function seen(world: FakeEstimateWorld, id: string): string {
+  const ids = new Set([id, ...descendantIds(world.nodes, id)]);
+  return subtreeFingerprint(world.nodes.filter((node) => ids.has(node.id)));
+}
 
 const numbers = (nodes: ReadonlyArray<PartView>): string[] => nodes.map((node) => node.slNo);
 const idOf = (nodes: ReadonlyArray<PartView>, slNo: string): string => {
@@ -151,7 +159,7 @@ describe('AC-2: Sl. No renumbers after every change', () => {
   it('after a delete the next sibling takes the number of the one that went', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1 });
+    const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '1.2')) });
     expect(numbers(left)).toEqual(['1', '1.1', '1.1.1', '1.1.2', '1.2', '1.3', '1.4', '2']);
     expect(left.find((node) => node.id === idOf(tree, '1.3'))?.slNo).toBe('1.2');
   });
@@ -160,7 +168,7 @@ describe('AC-2: Sl. No renumbers after every change', () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '2'), index: 0 });
-    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.4'), revision: 1, parts: 1 });
+    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.4'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '1.4')) });
     const groups = new Map<string | null, number[]>();
     for (const node of setUpped.world.nodes) groups.set(node.parentId, [...(groups.get(node.parentId) ?? []), node.sortIndex]);
     for (const places of groups.values()) expect(places.sort((a, b) => a - b)).toEqual(places.map((_, place) => place));
@@ -171,7 +179,7 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
   it('deletes a part with 2 sub-parts and all they hold in one transaction, when the count confirmed is 3', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3 });
+    const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3, subtree: seen(setUpped.world, idOf(tree, '1.1')) });
     expect(numbers(left)).toEqual(['1', '1.1', '1.2', '1.3', '1.4', '2']);
     expect(setUpped.world.nodes).toHaveLength(6);
   });
@@ -179,20 +187,61 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
   it('a part with no sub-parts deletes when the count confirmed is 1', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1 });
+    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) });
     expect(setUpped.world.nodes).toHaveLength(8);
   });
 
   it('refuses with 409 and the fresh tree, and deletes nothing, when sub-parts were added after the person looked (the count no longer matches)', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
+    const shown = seen(setUpped.world, idOf(tree, '1.2'));
     await setUpped.service.addPart(lead, ESTIMATE, { kind: 'sub-part', nodeId: idOf(tree, '1.2') });
-    const refused = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1 }).catch((error: unknown) => error);
+    const refused = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1, subtree: shown }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(TreeChangedError);
     expect(refused).toBeInstanceOf(ConflictError);
     expect(refused).toMatchObject({ code: TREE_CHANGED_CODE, httpStatus: 409 });
     expect((refused as TreeChangedError).tree).toHaveLength(10);
     expect(setUpped.world.nodes).toHaveLength(10);
+  });
+
+  it('SQR-01 (a): refuses with 409 and deletes nothing when the number of parts is the same but one is not the one the person saw (a sub-part moved out, another moved in)', async () => {
+    const setUpped = setUp();
+    const tree = await storyTree(setUpped);
+    // The person looks at 1.1: it holds 1.1.1 and 1.1.2, so "Delete 3 parts".
+    const target = idOf(tree, '1.1');
+    const shown = seen(setUpped.world, target);
+    // A Lead moves 1.1.2 away to the top and moves 1.5 under 1.1: still 3 parts, but not the same three.
+    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 0 });
+    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    expect(setUpped.world.nodes.find((node) => node.id === target)?.revision).toBe(1);
+    expect(descendantIds(setUpped.world.nodes, target)).toHaveLength(2);
+    const before = JSON.stringify(setUpped.world.nodes);
+    const refused = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parts: 3, subtree: shown }).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(TreeChangedError);
+    expect((refused as TreeChangedError).tree).toHaveLength(9);
+    expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
+  });
+
+  it('SQR-01 (b): refuses with 409 and deletes nothing when a sub-part was typed into after the person looked (only its own revision rose)', async () => {
+    const setUpped = setUp();
+    const tree = await storyTree(setUpped);
+    const target = idOf(tree, '1.1');
+    const shown = seen(setUpped.world, target);
+    const sub = defined(setUpped.world.nodes.find((node) => node.id === idOf(tree, '1.1.2')));
+    sub.revision = 2;
+    sub.inputs = { typed: 'typed after the dialog opened' };
+    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parts: 3, subtree: shown })).rejects.toBeInstanceOf(TreeChangedError);
+    expect(setUpped.world.nodes).toHaveLength(9);
+    expect(sub.inputs).toEqual({ typed: 'typed after the dialog opened' });
+  });
+
+  it('SQR-01: a delete whose fingerprint is the right one for what is stored goes through (the guard is not a block)', async () => {
+    const setUpped = setUp();
+    const tree = await storyTree(setUpped);
+    const target = idOf(tree, '1.1');
+    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parts: 4, subtree: seen(setUpped.world, target) });
+    expect(left).toHaveLength(5);
   });
 
   it('refuses with 409 when the part itself was changed after the person looked', async () => {
@@ -201,7 +250,7 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
     const node = setUpped.world.nodes.find((candidate) => candidate.id === idOf(tree, '2'));
     if (node === undefined) throw new Error('no node');
     node.revision = 5;
-    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1 })).rejects.toBeInstanceOf(TreeChangedError);
+    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) })).rejects.toBeInstanceOf(TreeChangedError);
     expect(setUpped.world.nodes).toHaveLength(9);
   });
 
@@ -210,7 +259,7 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
     const tree = await storyTree(setUpped);
     const before = setUpped.revision();
     vi.spyOn(setUpped.world.repository, 'bumpInputsRevision').mockRejectedValueOnce(new Error('the last write failed'));
-    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3 })).rejects.toThrow('the last write failed');
+    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3, subtree: seen(setUpped.world, idOf(tree, '1.1')) })).rejects.toThrow('the last write failed');
     expect(setUpped.world.nodes).toHaveLength(9);
     expect(setUpped.revision()).toBe(before);
   });
@@ -226,6 +275,17 @@ describe('AC-4: a move cannot cut a part off, and changes no input', () => {
       expect(refused, `under ${under}`).toBeInstanceOf(FieldValidationError);
       expect((refused as FieldValidationError).fields[0]?.field).toBe('parentId');
     }
+    expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
+  });
+
+  it('SQR-06: refuses 422 under parentId for a REAL part of another estimate, and changes nothing', async () => {
+    const setUpped = setUp([estimate(), estimate({ id: OTHER_ESTIMATE, code: 'Q-2026-0319' })]);
+    const tree = await storyTree(setUpped);
+    setUpped.world.nodes.push({ id: FOREIGN_NODE, estimateId: OTHER_ESTIMATE, parentId: null, sortIndex: 0, revision: 1, inputs: {} });
+    const before = JSON.stringify(setUpped.world.nodes);
+    const refused = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parentId: FOREIGN_NODE, index: 0 }).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(FieldValidationError);
+    expect((refused as FieldValidationError).fields[0]?.field).toBe('parentId');
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
   });
 
@@ -260,6 +320,32 @@ describe('AC-4: a move cannot cut a part off, and changes no input', () => {
   });
 });
 
+describe('SQR-02: an estimate holds at most MAX_PARTS_PER_ESTIMATE parts', () => {
+  const full = (count: number): FakeNode[] =>
+    Array.from({ length: count }, (_, place) => ({ id: `00000000-0000-4000-8000-${String(place).padStart(12, '0')}`, estimateId: ESTIMATE, parentId: null, sortIndex: place, revision: 1, inputs: {} }));
+
+  it('adds the last part that fits (limit - 1 parts before) and refuses the next with 422 TREE_FULL, in plain words, writing nothing', async () => {
+    const setUpped = setUp([estimate()], full(MAX_PARTS_PER_ESTIMATE - 1));
+    const added = await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' });
+    expect(added.nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
+    const revision = setUpped.revision();
+    const refused = await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' }).catch((error: unknown) => error);
+    expect(refused).toMatchObject({ code: TREE_FULL_CODE, httpStatus: 422 });
+    expect((refused as Error).message).toBe('This estimate already has 2,000 parts, the most it can hold. Delete a part before adding another.');
+    expect(setUpped.world.nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
+    expect(setUpped.revision()).toBe(revision);
+  });
+
+  it('refuses a sub-part and a part beside at the limit as well, and a delete then makes room for one more', async () => {
+    const setUpped = setUp([estimate()], full(MAX_PARTS_PER_ESTIMATE));
+    const first = defined(setUpped.world.nodes[0]).id;
+    await expect(setUpped.service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: first })).rejects.toMatchObject({ code: TREE_FULL_CODE });
+    await expect(setUpped.service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: first })).rejects.toMatchObject({ code: TREE_FULL_CODE });
+    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: first, revision: 1, parts: 1, subtree: seen(setUpped.world, first) });
+    expect((await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' })).nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
+  });
+});
+
 describe('AC-5: every change to the tree raises the inputs revision by one, in the same transaction', () => {
   it('an add, a move and a delete each raise it by exactly one', async () => {
     const setUpped = setUp();
@@ -270,7 +356,7 @@ describe('AC-5: every change to the tree raises the inputs revision by one, in t
     expect(revision()).toBe(2);
     await service.moveNode(arjun, ESTIMATE, { nodeId: second.nodeId, revision: 1, parentId: first.nodeId, index: 0 });
     expect(revision()).toBe(3);
-    await service.deleteNode(arjun, ESTIMATE, { nodeId: first.nodeId, revision: 1, parts: 2 });
+    await service.deleteNode(arjun, ESTIMATE, { nodeId: first.nodeId, revision: 1, parts: 2, subtree: seen(setUpped.world, first.nodeId) });
     expect(revision()).toBe(4);
   });
 
@@ -280,7 +366,7 @@ describe('AC-5: every change to the tree raises the inputs revision by one, in t
     const revision = setUpped.revision();
     await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 9, parentId: idOf(tree, '1'), index: 0 }).catch(() => undefined);
     await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1'), revision: 1, parentId: idOf(tree, '1.1'), index: 0 }).catch(() => undefined);
-    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1'), revision: 1, parts: 2 }).catch(() => undefined);
+    await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1'), revision: 1, parts: 2, subtree: seen(setUpped.world, idOf(tree, '1')) }).catch(() => undefined);
     await setUpped.service.getTree(arjun, ESTIMATE);
     expect(setUpped.revision()).toBe(revision);
   });
@@ -328,7 +414,7 @@ describe('AC-7: who may write, and when', () => {
       const requests = [
         () => setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' }),
         () => setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 }),
-        () => setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1 }),
+        () => setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) }),
       ];
       for (const request of requests) await expect(request()).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE, httpStatus: 409 });
       expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
@@ -347,7 +433,7 @@ describe('AC-7: who may write, and when', () => {
     const before = JSON.stringify(setUpped.world.nodes);
     for (const viewer of [lead, admin]) {
       await expect(setUpped.service.addPart(viewer, ESTIMATE, { kind: 'item' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
-      await expect(setUpped.service.deleteNode(viewer, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 9, parts: 1 })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
+      await expect(setUpped.service.deleteNode(viewer, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 9, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
     }
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
   });
@@ -357,7 +443,7 @@ describe('AC-7: who may write, and when', () => {
     const attempts = (viewer: EstimateViewer, estimateId: string) => [
       () => setUpped.service.addPart(viewer, estimateId, { kind: 'item' }),
       () => setUpped.service.moveNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parentId: null, index: 0 }),
-      () => setUpped.service.deleteNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parts: 1 }),
+      () => setUpped.service.deleteNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parts: 1, subtree: seen(setUpped.world, MISSING) }),
       () => setUpped.service.getTree(viewer, estimateId),
       () => setUpped.service.getNode(viewer, estimateId, MISSING),
     ];
@@ -375,7 +461,7 @@ describe('AC-7: who may write, and when', () => {
   it('a part that does not exist is 404 for a move and a delete, after the estimate checks (so a submitted estimate says 409 first)', async () => {
     const setUpped = setUp();
     await expect(setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: MISSING, revision: 1, parentId: null, index: 0 })).rejects.toBeInstanceOf(NotFoundError);
-    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: MISSING, revision: 1, parts: 1 })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: MISSING, revision: 1, parts: 1, subtree: seen(setUpped.world, MISSING) })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('reads of a submitted tree are allowed to its owner and to a Lead', async () => {

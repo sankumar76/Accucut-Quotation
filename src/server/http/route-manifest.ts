@@ -233,7 +233,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // draft, an Engineer on their own while it is a draft (architecture section 6 "Set customer"), so it is in the Engineer's list and the cost scan calls it.
   { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-05' },
   { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
-  // STORY-05.02 (SCR-05's parts tree; architecture section 6 "Tree", "Node", "Reorder"): A L, and an Engineer on their own estimate; a write only while it is a draft. One response
+  // STORY-05.02 (SCR-05's parts tree; architecture section 6 "Tree", "Node", "Reorder"): A L, and an Engineer on their own estimate; a write only while this person may change its inputs (`assertEditable`, STORY-06.01). One response
   // schema per route for every role, with no figure in it, so every one is in the Engineer's list and the cost scan calls it.
   { path: '/api/v1/estimates/[id]/tree', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/tree/move', kind: 'api', methods: ['POST'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },

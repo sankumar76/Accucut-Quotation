@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError, TreeChangedError } from '@/lib/errors';
 import type { PartView } from '@/lib/estimate/part-view';
+import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
+import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
@@ -81,6 +83,13 @@ const stored = async (): Promise<{ id: string; parent: string | null; place: num
   );
   return rows;
 };
+
+/** The fingerprint the screen would send for this part: the part and every sub-part with their revisions, as stored now (what its dialog showed). */
+async function seen(nodeId: string): Promise<string> {
+  const rows = await stored();
+  const ids = new Set([nodeId, ...descendantIds(rows.map((row) => ({ id: row.id, parentId: row.parent, sortIndex: row.place })), nodeId)]);
+  return subtreeFingerprint(rows.filter((row) => ids.has(row.id)));
+}
 
 const inputsRevision = async (): Promise<number> => {
   const { rows } = await db.owner.query<{ inputs_revision: number }>('SELECT inputs_revision FROM estimates WHERE id = $1::uuid', [estimateId]);
@@ -167,7 +176,7 @@ describe('AC-3: delete removes the part and its sub-parts in one statement', () 
     await setUpEstimates();
     const tree = await storyTree();
     const before = await inputsRevision();
-    const left = await service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3 });
+    const left = await service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '1.1'), revision: 1, parts: 3, subtree: await seen(idOf(tree, '1.1')) });
     expect(numbers(left)).toEqual(['1', '1.1', '1.2', '1.3', '1.4', '2']);
     expect(await stored()).toHaveLength(6);
     expect(await inputsRevision()).toBe(before + 1);
@@ -176,13 +185,54 @@ describe('AC-3: delete removes the part and its sub-parts in one statement', () 
   it('refuses a count that is no longer right with 409 and the tree, and deletes nothing', async () => {
     await setUpEstimates();
     const tree = await storyTree();
+    const shown = await seen(idOf(tree, '1.2'));
     await service.addPart(lead, estimateId, { kind: 'sub-part', nodeId: idOf(tree, '1.2') });
     const before = await inputsRevision();
-    const refused = await service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1 }).catch((error: unknown) => error);
+    const refused = await service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1, subtree: shown }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(TreeChangedError);
     expect((refused as TreeChangedError).tree).toHaveLength(10);
     expect(await stored()).toHaveLength(10);
     expect(await inputsRevision()).toBe(before);
+  });
+});
+
+describe('SQR-01: what the person confirmed is what is deleted', () => {
+  it('refuses with 409 and the tree, and deletes nothing, when the count is the same but a sub-part was moved out and another moved in', async () => {
+    await setUpEstimates();
+    const tree = await storyTree();
+    const target = idOf(tree, '1.1');
+    const shown = await seen(target);
+    await service.moveNode(lead, estimateId, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 0 });
+    await service.moveNode(lead, estimateId, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    const rows = JSON.stringify(await stored());
+    const refused = await service.deleteNode(arjun, estimateId, { nodeId: target, revision: 1, parts: 3, subtree: shown }).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(TreeChangedError);
+    expect(JSON.stringify(await stored())).toBe(rows);
+  });
+
+  it('refuses with 409 when a sub-part was typed into since (its own revision rose), and the typed value is still there', async () => {
+    await setUpEstimates();
+    const tree = await storyTree();
+    const target = idOf(tree, '1.1');
+    const shown = await seen(target);
+    await db.owner.query(`UPDATE estimate_nodes SET revision = revision + 1, inputs = '{"typed":"kept"}'::jsonb WHERE id = $1::uuid`, [idOf(tree, '1.1.2')]);
+    await expect(service.deleteNode(arjun, estimateId, { nodeId: target, revision: 1, parts: 3, subtree: shown })).rejects.toBeInstanceOf(TreeChangedError);
+    const kept = await db.owner.query<{ inputs: { typed?: string } }>('SELECT inputs FROM estimate_nodes WHERE id = $1::uuid', [idOf(tree, '1.1.2')]);
+    expect(defined(kept.rows[0]).inputs).toEqual({ typed: 'kept' });
+    expect(await stored()).toHaveLength(9);
+  });
+});
+
+describe('SQR-06: a move under a real part of another estimate is 422, not a database error', () => {
+  it('answers FieldValidationError under parentId and writes nothing', async () => {
+    await setUpEstimates();
+    const tree = await storyTree();
+    const foreign = (await service.addPart(arjun, otherEstimateId, { kind: 'item' })).nodeId;
+    const rows = JSON.stringify(await stored());
+    const refused = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.2'), revision: 1, parentId: foreign, index: 0 }).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(FieldValidationError);
+    expect((refused as FieldValidationError).fields[0]?.field).toBe('parentId');
+    expect(JSON.stringify(await stored())).toBe(rows);
   });
 });
 
@@ -258,7 +308,7 @@ describe('AC-7: who may write', () => {
     const rows = JSON.stringify(await stored());
     await expect(service.addPart(arjun, estimateId, { kind: 'item' })).rejects.toBeInstanceOf(ConflictError);
     await expect(service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
-    await expect(service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parts: 1 })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
+    await expect(service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: await seen(idOf(tree, '2')) })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     expect(JSON.stringify(await stored())).toBe(rows);
     expect(await service.getTree(lead, estimateId)).toHaveLength(9);
     // The shared rule (STORY-06.01): a Lead may still change a submitted estimate, nobody an approved one.

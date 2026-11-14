@@ -4,8 +4,8 @@ import { deleteNodeQuerySchema, moveNodeBodySchema, nodeDetailSchema, nodeParams
 
 /**
  * `GET`, `PUT` and `DELETE /api/v1/estimates/{id}/nodes/{nodeId}` (STORY-05.02 AC-1 to AC-8; architecture section 6 "Node"). An Admin and a Lead may use any
- * estimate (a draft, to change it), an Engineer only their own, and an estimate or a part that is not theirs answers exactly as one that does not exist (404, CR-33).
- * The order of the refusals of a change is: 404, 409 (not a draft, or the part changed since the person looked, with the tree), 422 under `parentId`.
+ * estimate, an Engineer only their own, and a change is allowed while this person may change its inputs (`assertEditable`: a draft for an Engineer, their own only; a draft or a submitted estimate for a Lead or an Admin; never an approved one); and an estimate or a part that is not theirs answers exactly as one that does not exist (404, CR-33).
+ * The order of the refusals of a change is: 404, 409 (not editable by this person, or the part changed since the person looked, with the tree), 422 under `parentId`.
  */
 
 /** One part with what was typed into it. */
@@ -30,8 +30,9 @@ export const PUT = withRoute({
 });
 
 /**
- * Delete the part and all its sub-parts in one transaction. `revision` is the part as the person saw it and `parts` the number they were told would go (the part
- * and every sub-part): when either is no longer right nothing is deleted (409 with the tree). Answers with the tree.
+ * Delete the part and all its sub-parts in one transaction. `revision` is the part as the person saw it, `parts` the number they were told would go (the part
+ * and every sub-part) and `subtree` the fingerprint of those parts with their revisions: when any is no longer right (a part added, moved in, replaced or typed into since)
+ * nothing is deleted (409 with the tree). Answers with the tree.
  */
 export const DELETE = withRoute({
   route: '/api/v1/estimates/[id]/nodes/[nodeId]',
