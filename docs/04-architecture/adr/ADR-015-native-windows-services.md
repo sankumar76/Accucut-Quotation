@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)** |
+| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)**. **Amended 2026-11-15: backups on Windows (Amendment 3, STORY-10.05, AQP-311)** |
 | Date | 2026-11-13 |
 | Deciders | solution-architect; the delivery lead's stated target (AQP-1 comment 11790, relayed); Accucut IT confirms at install |
 | Related | FR-091, FR-105; NFR-003, 012, 013, 024, 030; ADR-001, ADR-002, ADR-011; OQ-ARCH-02, OQ-ARCH-03, OQ-ARCH-14; STORY-10.04, 10.05, 10.11, 02.09; architecture section 9.9; test strategy section 10.8 |
@@ -184,7 +184,7 @@ What was checked (2026-11-13; sources in the hand-off):
   - **Why not the reviewer's (a) or (c).** Task Scheduler cannot use an `NT SERVICE\…` virtual account as a principal. A gMSA needs Active Directory, which is not assumed. A dedicated local user needs a password that Windows stores, or S4U plus the "Log on as a batch job" right. Option (c) still uses a shared principal. Model (b) adds no identity, no task and no script, and the account doing the deleting can delete only what it could already write.
   - **Removed:** `clean-logs.ps1`, `Register-AccucutLogCleanupTask`, `$script:AccucutLogCleanupSid` and its two `Grant-AccucutFolderAccess` lines, and `S-1-5-19` in `update.ps1`'s `-Writer` list and in `assert-install.ps1`. Nothing has been installed in production, so no update step has to unregister the task.
   - **The exact ACEs after an install** (SIDs: Administrators `S-1-5-32-544`, SYSTEM `S-1-5-18`, and `App` and `Worker` for the two service SIDs, `S-1-5-80-…` derived from the service names):
-    - `<Root>`: owner Administrators, DACL protected, exactly four allow ACEs, none inherited, all `(OI)(CI)`. They are Administrators `0x1F01FF`, SYSTEM `0x1F01FF`, App ReadAndExecute `0x1200A9` and Worker ReadAndExecute `0x1200A9`.
+    - `<Root>`: owner Administrators, DACL protected, exactly four allow ACEs (five from STORY-10.05: Amendment 3 adds `AccucutBackup` with ReadAndExecute), none inherited, all `(OI)(CI)`. They are Administrators `0x1F01FF`, SYSTEM `0x1F01FF`, App ReadAndExecute `0x1200A9` and Worker ReadAndExecute `0x1200A9`.
     - `<Root>\logs`: the four inherited ACEs plus exactly two explicit ones, App Modify `0x1301BF (OI)(CI)` and Worker Modify `0x1301BF (OI)(CI)`. U1's `-Writer` list for `logs` is exactly App and Worker.
     - There is no `clean-logs.ps1`, and no `<Root>\tools`. The junction question goes away, because the worker reads nothing through `current` that it cannot already read as a service.
   - **Tests to add:**
@@ -202,6 +202,64 @@ What was checked (2026-11-13; sources in the hand-off):
       - A subfolder is not entered.
       - An unset or relative `LOG_DIRECTORY`, or one that is a link, does nothing.
 - **The rule, confirmed and widened.** Every script in the release package that loads the module or runs another script carries the trust block, byte-identical, and joins test 1. Today those are `install.ps1` and `update.ps1`, with `backup.ps1` and `clear-copies.ps1` (10.05) and `restore.ps1` (10.11) to follow. Every other script must have no load site at all; today there is none, because `clean-logs.ps1` is removed. **Test 3 now parses every `.ps1` and `.psm1` in `deploy/windows/` except `ci/` and `tests/`.** A load site outside a trust block fails it, so a new script cannot escape the rule unnoticed.
+
+## Amendment 3, 2026-11-15: backups on Windows (STORY-10.05, AQP-311; forward note for 10.11)
+
+**Why.** The developer stopped before writing any code and listed four open questions (Jira AQP-311 comment 11943). Each one touches the exact-ACE rule or the trust rule. These are the rulings, one per question. Amendments 2 and 2.1 apply unchanged.
+
+1. **`job_runs` is created by STORY-02.09 (AQP-307), in the shape it is building:** `id uuid DEFAULT gen_random_uuid()`, `job text`, `started_at timestamptz`, `finished_at timestamptz`, `result jsonb` with `status`, `sizeBytes`, `freeBytes` and `totalBytes`, as architecture 5.1 states. The worker (`accucut_app`) reads and inserts. **02.09 grants nothing to a backup role.** STORY-10.05 creates `accucut_backup` and its grants (point 3), because that role may not exist when 02.09 merges. 10.05 rebases on 02.09. **`backup-watch` is a worker node-cron job, confirmed** (AQP-307 AC-4). It runs as `accucut_app`, under the worker's service account, and reads the free space with `fs.statfs` (point 5). Only `backup.ps1` and `clear-copies.ps1` are PowerShell scripts. Both carry the trust block and join tests 1 and 3.
+2. **The weekly task runs as a dedicated local user, `AccucutBackup`, with its password stored by Task Scheduler.** SYSTEM, LOCAL SERVICE and the worker account are ruled out. SYSTEM and LOCAL SERVICE fall by Amendment 2.1. The worker is excluded so that a compromised portal can neither read nor delete the backups.
+   - **Creation.** `install.ps1`'s second half does this through the module, after the import. It generates a 32-character random password in memory, with at least one upper-case letter, one lower-case letter, one digit and one symbol, so that Windows' complexity rule passes. It registers the password for redaction. It calls `New-LocalUser AccucutBackup -Password <SecureString> -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires`, with the description "Accucut weekly backup (no interactive use)". The account is added to no local group. Then `Register-ScheduledTask` is called with `-User AccucutBackup -Password <in-process string>`, logon type Password and RunLevel Limited, and the password variables are cleared.
+   - **Where the password is held.** Only by Task Scheduler (LSA). It is never on a process command line, because both are cmdlets in the same process, and never in a file or a log.
+   - **The task.** Weekly on Sunday at 02:00 IST. The action is `$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <Root>\current\backup.ps1 -Reason weekly`. The path goes through `current`, so an update needs no new registration and no password.
+   - **"Log on as a batch job".** Windows needs this right for a task with a stored password. **The install proves it works by running the task once at the end** (`Start-ScheduledTask`, wait up to 5 minutes for `LastTaskResult` 0 and a `job_runs` row with `job = 'backup'`). That run is also the first backup.
+     - If the right is missing (logon-type failure `0x80070569`), the install exits 1 with the portal running and says: "Give AccucutBackup the right 'Log on as a batch job' (a domain Group Policy may be removing it), then run `Start-ScheduledTask 'Accucut weekly backup'`."
+     - The README names this.
+   - **Reading the script, the module and the programs: a fifth ACE on `Root`, `AccucutBackup` ReadAndExecute `0x1200A9 (OI)(CI)`.** The trust block in `backup.ps1` must read the descriptor of every component from `Root` down, which needs READ_CONTROL there. Rule B already allows read and execute for an untrusted SID. The release code, `services` and `logs` are not secret.
+     - Every secret file has a protected ACL, so no `Root` ACE reaches it: `.env`, `migrate.env` and `backup.pgpass` (point 3).
+     - **Rejected:** a script outside the release tree. Its trust check would still have to read `Root`'s descriptor, so it saves no ACE and adds a second copy of the code.
+     - Amendment 2.1's "exactly four" becomes "exactly five".
+3. **Database role `accucut_backup`**, created by 10.05 in `deploy/db/create-roles.psql` (the one SQL source, read by the install, the development database and CI). It has `LOGIN` and `NOSUPERUSER NOCREATEDB NOCREATEROLE`, `CONNECT` on the database and `USAGE` on `public`. It gets `GRANT pg_read_all_data TO accucut_backup` (PostgreSQL 14 and later), which is what `pg_dump` needs, and nothing else. A 10.05 migration adds `GRANT INSERT ON job_runs TO accucut_backup` and nothing more: no UPDATE, no DELETE, and no other table. **The owner and app roles are never used by the backup.**
+   - Its password is generated by the install, like the other two roles, and passed to psql through the environment.
+   - It is written only to **`<Root>\config\backup.pgpass`** (`127.0.0.1:5432:accucut:accucut_backup:<password>`). That file has a protected ACL, owner Administrators, with exactly Administrators `0x1F01FF`, SYSTEM `0x1F01FF` and AccucutBackup Read `0x120089`, and no inheritance.
+   - Scripts pass it as `PGPASSFILE` in the environment of the `pg_dump` and `psql` children only.
+   - No traverse ACE is needed on `config`: the fifth `Root` ACE gives list and traverse there, and `.env` and `migrate.env` stay protected without AccucutBackup.
+   - An administrator (an update's release backup, `clear-copies.ps1`) uses the same file through the Administrators ACE.
+   - **No install exists before 10.05 ships, so there is no upgrade step.** In development, recreate the local database to get the new role.
+4. **`<Root>\backups`: a protected DACL, owner Administrators, exactly Administrators `0x1F01FF (OI)(CI)`, SYSTEM `0x1F01FF (OI)(CI)` and AccucutBackup Modify `0x1301BF (OI)(CI)`.** No ACE for App or Worker, and none inherited. It holds data, not code. Before any administrator script writes to or deletes from it (an update's release backup, `clear-copies.ps1`), the script checks it with `Assert-AccucutTrustedPath -Writer <AccucutBackup SID>`: owner trusted, not a link, protected, and AccucutBackup the only writer up to Modify.
+   - Every write and delete there follows the `logs` rule:
+     - files are created with `FileMode.CreateNew` under a temporary name and renamed after the manifest is written;
+     - only regular files directly in the folder are deleted, by `lstat`-style attribute checks, with links skipped and no recursion;
+     - only files named `^accucut-\d{8}-\d{6}-(weekly|release)\.age$` are deleted, together with their `.manifest.json`.
+   - **The JEA account belongs to 10.11** (forward note): 10.11 adds exactly one ACE here for its virtual account and decides that account's database credential. Its virtual account is limited with `RunAsVirtualAccountGroups`, never left as a local administrator by default. Accucut IT's off-server copy account (Amendment 1) may be given Read, which Rule B accepts.
+5. **The developer's small points, as ruled.**
+   - **The `age` recipient is not in `.env`,** which AccucutBackup cannot read, and it must not be able to. It goes in **`<Root>\config\backup-settings.json`**, which uses the same protected ACL as `backup.pgpass`. A recipient swapped by someone who could write the file would encrypt to their key, so the file is read-only to the task.
+     - The file holds `ageRecipient` (checked against `^age1[0-9a-z]{58}$`), `pgHost`, `pgPort`, `database` and `pgBinDirectory`. It holds no secret.
+     - `install.ps1` asks for `BACKUP_AGE_RECIPIENT`, or reads it from the values file; CI passes a per-run `age-keygen` public key.
+   - **Programs:** the release's `bin\age.exe`, then `pg_dump.exe` and `psql.exe` from `pgBinDirectory`, then `$env:SystemRoot\System32\cmd.exe` for the byte pipe. Each goes through `Resolve-AccucutTrustedExecutable` at every run. The recipient is public, so it may appear on the `age` command line.
+   - **`backup-watch` free space:** `.env` gains `PG_DATA_VOLUME` and `BACKUP_VOLUME`, the **drive roots** (`X:\`) of the data folder and of `backups`, worked out by the install. The worker cannot open either folder (both are protected), but `fs.statfs` on a drive root works. When both are the same volume, one reading is taken.
+
+**Tests that stage 13 must assert** (real, after the install), on top of Amendment 2's:
+- `AccucutBackup` exists, is enabled, its password never expires, and it is an explicit member of no local group.
+- The task's principal is AccucutBackup, logon type Password, RunLevel Limited, with a weekly trigger at Sunday 02:00 and the exact action above.
+- The install's own run left `LastTaskResult` 0, a new `.age` file with its manifest, and a `job_runs` `backup` row with `status` ok. That copy decrypts with the run's own key and restores into a scratch database.
+- **Exact ACEs:**
+  - `Root` has five, as above.
+  - `backups` is protected with exactly three.
+  - `backup.pgpass` and `backup-settings.json` are each protected with exactly three.
+  - Neither `.env` nor `migrate.env` names AccucutBackup.
+  - No App or Worker ACE on `backups`.
+  - No `S-1-5-19`, `S-1-5-20`, `S-1-5-11`, `S-1-5-32-545` or `S-1-1-0` anywhere under `Root`.
+- **The database role, checked with psql as `accucut_backup`:**
+  - member of `pg_read_all_data`;
+  - `INSERT` into `job_runs` succeeds, while `UPDATE` or `DELETE` on it and `INSERT` into any other table are refused;
+  - `CREATE TABLE` is refused.
+- **Pester (mocked):**
+  - The password reaches only `New-LocalUser` (as a `SecureString`) and `Register-ScheduledTask`, never `Invoke-AccucutNative` or a log.
+  - An install whose test run fails with `0x80070569` exits 1 with the batch-right message.
+  - Admin scripts refuse a `backups` folder with an extra writer, a link, or an owner who is not trusted.
+  - Pruning deletes only matching regular files older than 2 calendar years, never one of the newest 4, and skips links.
+  - Tests 1 and 3 include `backup.ps1` and `clear-copies.ps1`.
 
 ## Verification
 
