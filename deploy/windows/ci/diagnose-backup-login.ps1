@@ -20,12 +20,17 @@ $psql = Join-Path ([string]$state.pgBinDirectory) 'psql.exe'
 $superuserPassword = [string](Read-AccucutValuesFile -Path $ValuesFile)['PG_SUPERUSER_PASSWORD']
 
 function Invoke-Psql {
-    param([Parameter(Mandatory)][string]$User, [Parameter(Mandatory)][string]$Password, [string]$PassFile, [Parameter(Mandatory)][string]$Sql)
-    $env:PGPASSWORD = $Password
+    param([Parameter(Mandatory)][string]$User, [string]$Password = '', [string]$PassFile, [Parameter(Mandatory)][string]$Sql)
+    if ($Password) { $env:PGPASSWORD = $Password } else { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }
     if ($PassFile) { $env:PGPASSFILE = $PassFile } else { Remove-Item Env:\PGPASSFILE -ErrorAction SilentlyContinue }
     try { return (& $psql --no-psqlrc -w --tuples-only --no-align --quiet --host 127.0.0.1 --port ([string]$state.pgPort) --username $User --dbname accucut --command $Sql 2>&1 | Out-String).Trim() }
     finally { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue; Remove-Item Env:\PGPASSFILE -ErrorAction SilentlyContinue }
 }
+
+Write-Host '--- PostgreSQL client variables set in this process or on the machine (names only, never values)'
+$names = @(Get-ChildItem Env: | Where-Object { $_.Name -like 'PG*' } | ForEach-Object { 'process:' + $_.Name })
+foreach ($scope in 'Machine', 'User') { $names += @([System.Environment]::GetEnvironmentVariables($scope).Keys | Where-Object { $_ -like 'PG*' } | ForEach-Object { "$($scope.ToLower()):$_" }) }
+Write-Host ($(if ($names.Count) { $names -join ', ' } else { 'none' }))
 
 Write-Host '--- the role, as the administrator sees it'
 Write-Host (Invoke-Psql -User postgres -Password $superuserPassword -Sql "SELECT rolname, rolcanlogin, rolpassword IS NOT NULL AS has_password, left(rolpassword, 14) AS kind FROM pg_authid WHERE rolname = 'accucut_backup'")
@@ -42,5 +47,5 @@ if ($fields.Count -ge 5) {
     Write-Host '--- sign in as accucut_backup with the password from the file (PGPASSWORD, run by the administrator)'
     Write-Host (Invoke-Psql -User 'accucut_backup' -Password $fields[4] -Sql 'SELECT current_user')
     Write-Host '--- sign in as accucut_backup through the file (PGPASSFILE, run by the administrator)'
-    Write-Host (Invoke-Psql -User 'accucut_backup' -Password '' -PassFile $file -Sql 'SELECT current_user')
+    Write-Host (Invoke-Psql -User 'accucut_backup' -PassFile $file -Sql 'SELECT current_user')
 }

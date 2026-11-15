@@ -751,6 +751,17 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(CI).toMatch(/needs: \[verify, e2e\]/);
   });
 
+  it('every psql and pg_dump the backup runs sees only PGPASSFILE of the PostgreSQL settings: inherited PG* variables are cleared first (stage 13: PGPASSWORD of the runner image)', () => {
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    for (const name of ['Add-AccucutJobRun', 'Get-AccucutDatabaseInfo']) {
+      expect(functionBody(ops, name), name).toMatch(/PGPASSFILE = \$PassFile[^\n]*-ClearPgEnvironment/);
+    }
+    const pipe = functionBody(ops, 'Invoke-AccucutBackupPipe');
+    expect(pipe.indexOf('Clear-AccucutPgEnvironment')).toBeGreaterThan(0);
+    expect(pipe.indexOf('Clear-AccucutPgEnvironment')).toBeLessThan(pipe.indexOf("EnvironmentVariables['PGPASSFILE']"));
+    expect(code('deploy/windows/backup.ps1') + code('deploy/windows/clear-copies.ps1')).not.toMatch(/PGPASSWORD/);
+  });
+
   it('ADR-015 Amendment 3.2: the install gives "Log on as a batch job" to the new SID alone, with the LSA calls made in memory, never with a program, Add-Type or secedit', () => {
     const files = readdirSync(fileURLToPath(new URL('../../deploy/windows', import.meta.url))).filter((name) => /\.(ps1|psm1)$/.test(name));
     for (const name of files) expect(code('deploy/windows/' + name), name + ' uses Add-Type').not.toMatch(/Add-Type/i);

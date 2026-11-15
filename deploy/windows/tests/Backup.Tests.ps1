@@ -631,6 +631,17 @@ public static class P {
         [System.BitConverter]::ToString($actual) | Should -BeExactly ([System.BitConverter]::ToString($script:Expected))
     }
 
+    It 'gives pg_dump the password file and nothing else of PostgreSQL: an inherited PGPASSWORD or PGHOST never reaches it (stage 13: the runner image sets PGPASSWORD)' {
+        $env:PGPASSWORD = 'stale-machine-value'
+        $env:PGHOST = 'stale-host'
+        $env:FAKE_LOG = Join-Path $TestDrive 'pgenv.log'
+        try { [void](Invoke-FakePipe -Name 'pgenv.part') }
+        finally { Remove-Item Env:\PGPASSWORD, Env:\PGHOST -ErrorAction SilentlyContinue }
+        $lines = Get-Content -LiteralPath $env:FAKE_LOG
+        $lines | Should -Contain 'PGPASSFILE=C:\fake\config\backup.pgpass'
+        $lines | Should -Contain 'PGPASSWORD='
+    }
+
     It 'fails, naming pg_dump and its exit code, when pg_dump fails but age ends well (a pipe in cmd.exe would report only age)' {
         $env:FAKE_DUMP_EXIT = '3'
         { Invoke-FakePipe -Name 'dumpfail.part' } | Should -Throw 'pg_dump failed with exit code 3*pg_dump: error: fake failure*'

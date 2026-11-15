@@ -347,10 +347,25 @@ function ConvertTo-AccucutArgumentString {
     return ($parts -join ' ')
 }
 
+function Clear-AccucutPgEnvironment {
+    <#
+    Removes every PostgreSQL client setting (PGPASSWORD, PGHOST, PGUSER, PGSERVICE, PGOPTIONS and all the others that start with PG) from the environment a child will get.
+    A machine or user setting such as PGPASSWORD wins over the password file, so a backup that relied on the file would sign in with the wrong password
+    (stage 13: the runner image sets PGPASSWORD for its own PostgreSQL). The caller sets the few it needs afterwards. Takes the EnvironmentVariables of a ProcessStartInfo.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$EnvironmentVariables)
+
+    foreach ($name in @($EnvironmentVariables.Keys)) {
+        if ([string]$name -like 'PG*') { $EnvironmentVariables.Remove([string]$name) }
+    }
+}
+
 function Invoke-AccucutNative {
     <#
     Runs a program and returns its exit code and its output, with registered secrets blanked.
     A secret goes in -Environment (set for the child only) or -StdIn, never in -ArgumentList.
+    -ClearPgEnvironment drops every inherited PG* variable first, so that only what -Environment names reaches the child.
     Without -AllowFailure a non-zero exit code is an error that names the program and the code and shows the blanked output.
     #>
     [CmdletBinding()]
@@ -360,6 +375,7 @@ function Invoke-AccucutNative {
         [hashtable]$Environment = @{},
         [string]$StdIn,
         [string]$WorkingDirectory,
+        [switch]$ClearPgEnvironment,
         [switch]$AllowFailure
     )
 
@@ -372,6 +388,7 @@ function Invoke-AccucutNative {
     $info.RedirectStandardInput = ($PSBoundParameters.ContainsKey('StdIn'))
     $info.CreateNoWindow = $true
     if ($WorkingDirectory) { $info.WorkingDirectory = $WorkingDirectory }
+    if ($ClearPgEnvironment) { Clear-AccucutPgEnvironment -EnvironmentVariables $info.EnvironmentVariables }
     foreach ($name in $Environment.Keys) { $info.EnvironmentVariables[[string]$name] = [string]$Environment[$name] }
 
     $process = New-Object System.Diagnostics.Process
@@ -1862,6 +1879,8 @@ function Invoke-AccucutBackupPipe {
     $dumpInfo = New-Object System.Diagnostics.ProcessStartInfo
     $dumpInfo.FileName = $PgDumpPath
     $dumpInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--format=custom', '--no-password', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database)
+    # Only the password file reaches pg_dump: a PGPASSWORD (or PGHOST, PGUSER, PGSERVICE) set on the machine or for the account must not.
+    Clear-AccucutPgEnvironment -EnvironmentVariables $dumpInfo.EnvironmentVariables
     $dumpInfo.EnvironmentVariables['PGPASSFILE'] = $PassFile
     $dumpInfo.EnvironmentVariables['PGCONNECT_TIMEOUT'] = '15'
     $ageInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -1961,7 +1980,7 @@ function Add-AccucutJobRun {
         '-v', "job=$Job", '-v', "started=$($StartedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "finished=$($FinishedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "result=$json",
         '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database, '--file', '-'
     )
-    [void](Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -StdIn $sql)
+    [void](Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment -StdIn $sql)
 }
 
 function Get-AccucutDatabaseInfo {
@@ -1977,7 +1996,7 @@ function Get-AccucutDatabaseInfo {
 
     $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database,
         '--command', "SELECT concat(current_setting('server_version'), '|', pg_database_size(current_database()))")
-    $answer = (Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' }).Output.Trim()
+    $answer = (Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment).Output.Trim()
     if ($answer -notmatch '^([0-9][0-9A-Za-z .()_-]{0,40})\|(\d{1,18})$') { throw 'The database did not answer with its version and size.' }
     return [pscustomobject]@{ ServerVersion = $Matches[1]; SizeBytes = [int64]$Matches[2] }
 }

@@ -65,6 +65,19 @@ Describe 'secrets never reach a log (AC-5)' {
         $result.Output | Should -Be '***'
     }
 
+    It 'drops every inherited PG* variable for the child when asked, and keeps the ones it is given (a PGPASSWORD set on the machine must not beat the password file)' {
+        $cmd = Join-Path $env:SystemRoot 'System32\cmd.exe'
+        $env:PGPASSWORD = 'stale-machine-value'
+        $env:PGHOST = 'stale-host'
+        try {
+            $kept = Invoke-AccucutNative -FilePath $cmd -ArgumentList @('/c', 'echo', '[%PGPASSWORD%][%PGHOST%]')
+            $kept.Output | Should -Be '[stale-machine-value][stale-host]' -Because 'without the switch the child inherits them (the premise of this test)'
+            $cleared = Invoke-AccucutNative -FilePath $cmd -ArgumentList @('/c', 'echo', '[%PGPASSWORD%][%PGHOST%][%PGPASSFILE%]') -Environment @{ PGPASSFILE = 'C:\x\backup.pgpass' } -ClearPgEnvironment
+            $cleared.Output | Should -Be '[%PGPASSWORD%][%PGHOST%][C:\x\backup.pgpass]'
+        }
+        finally { Remove-Item Env:\PGPASSWORD, Env:\PGHOST -ErrorAction SilentlyContinue }
+    }
+
     It 'quotes arguments the way a command line needs, so no argument is split or merged' {
         ConvertTo-AccucutArgumentString -ArgumentList @('a b', 'c', '', 'd"e') | Should -Be '"a b" c "" "d\"e"'
     }
