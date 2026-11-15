@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 
+import type { AckRequestView } from '@/lib/estimates/calculate-client';
 import { type BlockedPartView, withoutFilled } from '@/lib/estimates/calculate-missing';
 
 
@@ -36,12 +37,15 @@ export function useCalculate({ estimateId, onSubmitted, settle }: { readonly est
   const [blocked, setBlocked] = useState<ReadonlyArray<BlockedPartView> | null>(null);
   const [problem, setProblem] = useState<CalculateProblem | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // The 409 of a 0 in QTY per Assy: the rows and the revision to send back, while the dialog is open. Client state only, never stored.
+  const [warning, setWarning] = useState<AckRequestView | null>(null);
   // Counts the blocked answers, so the summary takes focus once for each press and not again while the person fills the fields in.
   const [focusRequest, setFocusRequest] = useState(0);
   // A second press while the first is in flight must not send a second request, and state is read after the render, so the guard is a ref.
   const inFlight = useRef(false);
 
-  async function calculate(): Promise<void> {
+  /** `acknowledged` is the revision of the 409 the person chose to go ahead past ("Calculate anyway"); a first press sends none. */
+  async function calculate(acknowledged?: number): Promise<void> {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
@@ -53,9 +57,11 @@ export function useCalculate({ estimateId, onSubmitted, settle }: { readonly est
       return;
     }
     const client = await loadClient().catch(() => null);
-    const outcome = client === null ? null : await client.calculateEstimate(estimateId);
+    const outcome = client === null ? null : await client.press(estimateId, acknowledged);
     inFlight.current = false;
     setBusy(false);
+    // Whatever the answer, the dialog of the last 409 is closed, unless this answer is a new one (below).
+    setWarning(null);
     if (client === null || outcome === null || outcome.status === 'failed') {
       setProblem({ kind: 'failed' });
     } else if (outcome.status === 'ok') {
@@ -67,8 +73,12 @@ export function useCalculate({ estimateId, onSubmitted, settle }: { readonly est
       setDone(outcome.title);
       onSubmitted();
     } else {
+      const ask = client.warningFrom(outcome, acknowledged !== undefined);
       const parts = client.blockedPartsFrom(outcome);
-      if (parts !== null && parts.length > 0) {
+      if (ask !== null) {
+        // A 0 in QTY per Assy: nothing was calculated and the person is asked. After "Calculate anyway" this is a new list (something changed in between), and the dialog says so.
+        setWarning(ask);
+      } else if (parts !== null && parts.length > 0) {
         setBlocked(parts);
         setFocusRequest((count) => count + 1);
       } else {
@@ -82,7 +92,7 @@ export function useCalculate({ estimateId, onSubmitted, settle }: { readonly est
     setBlocked((current) => (current === null ? current : withoutFilled(current, partId, inputs)));
   }
 
-  return { busy, blocked, problem, done, focusRequest, calculate, filled };
+  return { busy, blocked, problem, done, focusRequest, calculate, filled, warning, setWarning };
 }
 
 export type CalculateState = ReturnType<typeof useCalculate>;

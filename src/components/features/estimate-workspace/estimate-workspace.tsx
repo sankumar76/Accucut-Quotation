@@ -140,7 +140,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
         </CardContent>
       </Card>
       {status === 'APPROVED' ? null : Bar !== null ? (
-        <Bar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />
+        <Bar submitted={status === 'SUBMITTED'} calculation={calculation} onChoosePart={tree.select} />
       ) : bar.failed ? (
         // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).
         <Notice tone="danger" title={CALCULATE_BAR_FAILED_TITLE} />
