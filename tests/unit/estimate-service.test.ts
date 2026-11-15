@@ -48,7 +48,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()]) {
   const world = createFakeEstimateWorld(() => customers, initial);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
   const stored = (): FakeEstimate => {
     const found = world.estimates[0];
     if (found === undefined) throw new Error('no estimate');

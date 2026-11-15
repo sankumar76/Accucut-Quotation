@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ImageMime } from '../../src/lib/images/signature';
 import type { EstimateNodeRepository, NodePlacement, NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CustomerChoice, EstimateLock, EstimateRepository, WorkspaceRecord } from '../../src/server/repositories/estimate-repository';
+import type { ImageRepository } from '../../src/server/repositories/image-repository';
 import type { EstimateStatus } from '../../src/server/repositories/task-repository';
 import { createTransactionHandle, type Transaction, type TransactionRunner } from '../../src/server/repositories/transaction';
 
@@ -37,6 +39,18 @@ export interface FakeNode {
   sortIndex: number;
   revision: number;
   inputs: Record<string, unknown>;
+  /** The part's picture (STORY-05.07); absent counts as none. */
+  imageId?: string | null;
+}
+
+/** A stored picture as the fake holds it: what the real table keeps, by estimate. */
+export interface FakeImage {
+  readonly id: string;
+  readonly estimateId: string;
+  readonly sha256: string;
+  readonly mime: ImageMime;
+  readonly fileName: string;
+  readonly bytes: Uint8Array;
 }
 
 export interface FakeCustomerEntry {
@@ -49,6 +63,12 @@ export interface FakeEstimateWorld {
   readonly repository: EstimateRepository;
   /** The part methods over the same world, so one transaction rolls back an estimate and its parts together. */
   readonly nodeRepository: EstimateNodeRepository;
+  /** The picture methods over the same world (STORY-05.07): added in a transaction that rolls back with the estimate, never changed or deleted. */
+  readonly imageRepository: ImageRepository;
+  /** The stored pictures of every estimate. */
+  readonly images: FakeImage[];
+  /** How many pictures were stored (a picture found again is not a write), so "stored nothing" is something a test can see. */
+  imageWrites(): number;
   /** The parts of every estimate, which a test may change in place. */
   readonly nodes: FakeNode[];
   /** How many times a part was added, placed or deleted, so "no write" is something a test can see. */
@@ -64,15 +84,25 @@ export interface FakeEstimateWorld {
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-const recordOf = (node: FakeNode): NodeRecord => ({ id: node.id, parentId: node.parentId, sortIndex: node.sortIndex, revision: node.revision, inputs: { ...node.inputs } });
+const recordOf = (node: FakeNode): NodeRecord => ({
+  id: node.id,
+  parentId: node.parentId,
+  sortIndex: node.sortIndex,
+  revision: node.revision,
+  inputs: { ...node.inputs },
+  imageId: node.imageId ?? null,
+});
 
 export function createFakeEstimateWorld(
   customers: () => ReadonlyArray<FakeCustomerEntry>,
   initial: ReadonlyArray<FakeEstimate> = [],
   initialNodes: ReadonlyArray<FakeNode> = [],
+  initialImages: ReadonlyArray<FakeImage> = [],
 ): FakeEstimateWorld {
   const estimates: FakeEstimate[] = initial.map((estimate) => ({ ...estimate }));
   const nodes: FakeNode[] = initialNodes.map((node) => ({ ...node, inputs: { ...node.inputs } }));
+  const images: FakeImage[] = [...initialImages];
+  let imageWrites = 0;
   let writes = 0;
   let nodeWrites = 0;
   let statusWrites = 0;
@@ -184,7 +214,44 @@ export function createFakeEstimateWorld(
       lastWritten = new Date();
       return Promise.resolve(recordOf(node));
     },
+    setImage: (estimateId, nodeId, expectedRevision, imageId) => {
+      const node = nodes.find((candidate) => same(candidate.id, nodeId) && same(candidate.estimateId, estimateId));
+      if (node === undefined) return Promise.reject(new Error('A part to change is not in this estimate.'));
+      // The database refuses a picture of another estimate (a trigger), and so does the fake.
+      if (imageId !== null && !images.some((image) => same(image.id, imageId) && same(image.estimateId, estimateId))) return Promise.reject(new Error('The picture of a part must belong to the same estimate.'));
+      if (node.revision !== expectedRevision) return Promise.resolve(null);
+      node.imageId = imageId;
+      node.revision += 1;
+      nodeWrites += 1;
+      lastWritten = new Date();
+      return Promise.resolve(recordOf(node));
+    },
     lastWrittenAt: (estimateId) => Promise.resolve(nodes.some((node) => same(node.estimateId, estimateId)) ? lastWritten : null),
+  };
+
+  const pictureOf = (image: FakeImage): { id: string; fileName: string; sizeBytes: number } => ({ id: image.id, fileName: image.fileName, sizeBytes: image.bytes.byteLength });
+  const imageRepository: ImageRepository = {
+    storeImage: (estimateId, image) => {
+      const found = images.find((candidate) => same(candidate.estimateId, estimateId) && candidate.sha256 === image.sha256);
+      if (found !== undefined) return Promise.resolve(pictureOf(found));
+      const stored: FakeImage = { id: randomUUID(), estimateId, sha256: image.sha256, mime: image.mime, fileName: image.fileName, bytes: new Uint8Array(image.bytes) };
+      images.push(stored);
+      imageWrites += 1;
+      return Promise.resolve(pictureOf(stored));
+    },
+    findPicture: (estimateId, imageId) => {
+      const found = images.find((candidate) => same(candidate.id, imageId) && same(candidate.estimateId, estimateId));
+      return Promise.resolve(found === undefined ? null : pictureOf(found));
+    },
+    findOwner: (imageId) => {
+      const image = images.find((candidate) => same(candidate.id, imageId));
+      const estimate = image === undefined ? undefined : estimates.find((candidate) => same(candidate.id, image.estimateId));
+      return Promise.resolve(image === undefined || estimate === undefined ? null : { estimateId: image.estimateId, engineerId: estimate.engineerId });
+    },
+    readImage: (imageId) => {
+      const found = images.find((candidate) => same(candidate.id, imageId));
+      return Promise.resolve(found === undefined ? null : { mime: found.mime, bytes: found.bytes });
+    },
   };
 
   // The row lock: one transaction at a time, in the order they were opened. A failed one releases it, as a rollback does.
@@ -194,11 +261,13 @@ export function createFakeEstimateWorld(
       const turn = lock.then(async () => {
         const before = estimates.map((estimate) => ({ ...estimate }));
         const nodesBefore = nodes.map((node) => ({ ...node, inputs: { ...node.inputs } }));
+        const imagesBefore = [...images];
         try {
           return await work(createTransactionHandle());
         } catch (error) {
           estimates.splice(0, estimates.length, ...before);
           nodes.splice(0, nodes.length, ...nodesBefore);
+          images.splice(0, images.length, ...imagesBefore);
           throw error;
         }
       });
@@ -207,5 +276,17 @@ export function createFakeEstimateWorld(
     },
   };
 
-  return { repository, nodeRepository, transactions, estimates, nodes, writes: () => writes, nodeWrites: () => nodeWrites, statusWrites: () => statusWrites };
+  return {
+    repository,
+    nodeRepository,
+    imageRepository,
+    images,
+    imageWrites: () => imageWrites,
+    transactions,
+    estimates,
+    nodes,
+    writes: () => writes,
+    nodeWrites: () => nodeWrites,
+    statusWrites: () => statusWrites,
+  };
 }

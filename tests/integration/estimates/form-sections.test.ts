@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError } from '@/lib/errors';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createMasterRepository } from '@/server/repositories/master-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
@@ -37,6 +38,7 @@ const buildService = (): EstimateService =>
   createEstimateService({
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
+    images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),

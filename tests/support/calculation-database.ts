@@ -4,6 +4,7 @@ import { createCalculationRepository, type CalculationRepository } from '../../s
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
 import { createEstimateNodeRepository, type EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createEstimateRepository, type EstimateRepository } from '../../src/server/repositories/estimate-repository';
+import { createImageRepository } from '../../src/server/repositories/image-repository';
 import { createCalculationService, type CalculationNodeRequest, type CalculationService, type CalculationServiceDependencies } from '../../src/server/services/calculation-service';
 import { createConfigVersionCache, getCurrentVersion } from '../../src/server/services/config-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
@@ -93,6 +94,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const estimateService = createEstimateService({
     estimates,
     nodes,
+    images: createImageRepository(db.prisma),
     transactions: db.transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),

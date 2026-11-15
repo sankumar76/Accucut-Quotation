@@ -110,3 +110,6 @@ export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does 
 export const MISSING_CHOICE_MESSAGE = 'Choose a material.';
 /** Spoken after a part in the tree, a card and a link of the section strip that Calculate found a blank in, beside the triangle. */
 export const TREE_MISSING_INPUTS = 'Missing inputs';
+
+/** The picture field's code (a separate file, fetched when the form opens) did not arrive: said where the field would be (STORY-05.07). */
+export const PICTURE_LOAD_FAILED_TITLE = 'We could not load the picture field';

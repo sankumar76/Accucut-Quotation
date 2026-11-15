@@ -111,6 +111,8 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         return (await materials.lockMaterialForUse(id, tx)) ? { ok: true, value: id } : { ok: false, message: CHOOSE_MATERIAL_MESSAGE };
       }
       case 'derived':
+      // A picture is changed by its own routes (STORY-05.07), never by a value in a save: the same refusal as a field that is shown and not typed.
+      case 'picture':
         return { ok: false, message: FIELD_NOT_SAVABLE_MESSAGE };
     }
   }

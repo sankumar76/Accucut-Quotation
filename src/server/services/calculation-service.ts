@@ -356,7 +356,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     return entries.map(({ node }, index): CalculationNodeRequest => {
       const part: CheckedPart | undefined = check.parts[index];
       if (part === undefined) throw new Error('The check of the parts returned fewer parts than it was given.');
-      return { nodeId: part.id, parentId: node.parentId, sortIndex: node.sortIndex, slNo: part.slNo, imageId: null, materialId: part.materialId, inputs: part.numbers, texts: part.texts };
+      return { nodeId: part.id, parentId: node.parentId, sortIndex: node.sortIndex, slNo: part.slNo, imageId: node.imageId, materialId: part.materialId, inputs: part.numbers, texts: part.texts };
     });
   }
 

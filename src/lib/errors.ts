@@ -71,6 +71,20 @@ export class ConflictError extends AppError {
   }
 }
 
+/** A body or a file over the size a route accepts (STORY-05.07: an upload over its ceiling, or a picture of 200 KB or more): 413. The message is safe to show. */
+export class PayloadTooLargeError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super(options.code ?? 'PAYLOAD_TOO_LARGE', 413, message, options.cause);
+  }
+}
+
+/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG, GIF or WebP by its content): 415. */
+export class UnsupportedMediaTypeError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super(options.code ?? 'UNSUPPORTED_MEDIA_TYPE', 415, message, options.cause);
+  }
+}
+
 /** The `code` of the 429 of a counted try that is blocked (STORY-01.05 AC-6). The browser compares with it too. */
 export const TOO_MANY_ATTEMPTS_CODE = 'TOO_MANY_ATTEMPTS';
 

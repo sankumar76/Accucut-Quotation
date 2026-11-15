@@ -1,5 +1,6 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
 
+import { toPictureView, type PictureView } from './picture-view';
 import type { Completeness } from './tree-client';
 
 /**
@@ -14,7 +15,9 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
-  | { readonly type: 'derived'; readonly from: string | null };
+  | { readonly type: 'derived'; readonly from: string | null }
+  /** A picture (Part Model, STORY-05.07): added, replaced and removed by its own routes, never typed or saved as a value. */
+  | { readonly type: 'picture' };
 
 export interface FormField {
   readonly id: string;
@@ -59,6 +62,8 @@ export interface PartInputs {
   readonly revision: number;
   readonly completeness: Completeness;
   readonly inputs: Readonly<Record<string, string>>;
+  /** The part's picture (STORY-05.07): only the read of a part says (`GET .../nodes/{nodeId}`); a save of values does not, so it is absent there. `null` is "none". */
+  readonly picture?: PictureView | null;
 }
 
 /** A material to choose from: the ID, the name (Material in Drawing) and Material Considered, null for an entry that has none. No number of any kind. */
@@ -88,6 +93,8 @@ function toRule(value: unknown): FormRule | null {
       const from = value['from'];
       return from === null || isNonEmptyText(from) ? { type: 'derived', from } : null;
     }
+    case 'picture':
+      return { type: 'picture' };
     default:
       return null;
   }
@@ -142,7 +149,9 @@ function toPartInputs(body: unknown): PartInputs | null {
   const { id, revision, completeness } = body;
   const inputs = toInputs(body['inputs']);
   if (!isNonEmptyText(id) || typeof revision !== 'number' || !isCompleteness(completeness) || inputs === null) return null;
-  return { id, revision, completeness, inputs };
+  const shown = body['picture'];
+  const picture = shown === undefined || shown === null ? shown : toPictureView(shown);
+  return picture === null && shown !== null ? null : { id, revision, completeness, inputs, ...(picture === undefined ? {} : { picture }) };
 }
 
 function toMaterial(value: unknown): MaterialChoice | null {

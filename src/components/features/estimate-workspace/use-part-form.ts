@@ -216,6 +216,27 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     gate.track(queueRef.current);
   }
 
+  /**
+   * Runs a change of the part that is not a typed value (its picture, STORY-05.07) in turn with the saves: after every save already asked for, and before the next, so none of them is sent
+   * with a revision the change has just moved. It is tracked by the gate like a save, so Calculate waits for it.
+   */
+  function inTurn<T>(job: () => Promise<T>): Promise<T> {
+    const turn = queueRef.current.then(job);
+    queueRef.current = turn.then(
+      () => undefined,
+      () => undefined,
+    );
+    gate.track(queueRef.current);
+    return turn;
+  }
+
+  /** A picture was added, replaced or removed: the part's revision moved, so the next save is sent with the new one, and the tree and Calculate's list are told with what the part holds. */
+  function pictureSaved(saved: { readonly revision: number; readonly completeness: Completeness }): void {
+    revisionRef.current = saved.revision;
+    onWrote(systemClock.now().toISOString());
+    onSaved({ id: partId, revision: saved.revision, completeness: saved.completeness, inputs: heldRef.current });
+  }
+
   return {
     stored,
     texts,
@@ -224,6 +245,8 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     announcement,
     setText,
     commit,
+    inTurn,
+    pictureSaved,
     readAgain: (): void => {
       setStored(LOADING);
       setAttempt((count) => count + 1);

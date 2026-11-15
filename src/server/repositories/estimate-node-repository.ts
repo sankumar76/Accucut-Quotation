@@ -23,6 +23,8 @@ export interface NodeRecord {
   readonly revision: number;
   /** What a person typed, by field ID. Empty until the part form (STORY-05.03) writes it. */
   readonly inputs: Readonly<Record<string, unknown>>;
+  /** The ID of the part's current picture (`part_images`, STORY-05.07), or null. Optional for Part Model (C): a part without one is whole (D-31). */
+  readonly imageId: string | null;
 }
 
 /** One part's new place. `bumpRevision` is true for the part a person asked to move, and false for a sibling that only shifted. */
@@ -51,16 +53,22 @@ export interface EstimateNodeRepository {
    * the caller builds it from the stored one and changes only the keys it means to. Throws when the part is not in the estimate.
    */
   saveInputs(estimateId: string, nodeId: string, expectedRevision: number, inputs: Readonly<Record<string, unknown>>, tx: Transaction): Promise<NodeRecord | null>;
+  /**
+   * Points the part at a picture (or at none: `null`) and raises its `revision` by one, and returns it as written (STORY-05.07: a picture added, replaced or removed is a change to the
+   * part, so a delete confirmed for the part as it was is refused). Like `saveInputs`, the estimate's ID **and the revision the caller read** are conditions of the statement, so a writer
+   * that did not hold the estimate's lock gets `null` and nothing is written. The database refuses a picture of another estimate (a trigger). Throws when the part is not in the estimate.
+   */
+  setImage(estimateId: string, nodeId: string, expectedRevision: number, imageId: string | null, tx: Transaction): Promise<NodeRecord | null>;
   /** The latest time any part of the estimate was written (an add, a move or an input), or null when it has no part. Takes no lock. */
   lastWrittenAt(estimateId: string): Promise<Date | null>;
 }
 
-const NODE_SELECT = { id: true, parentId: true, sortIndex: true, revision: true, inputs: true } as const;
+const NODE_SELECT = { id: true, parentId: true, sortIndex: true, revision: true, inputs: true, imageId: true } as const;
 
 /** `inputs` is a JSON object (a CHECK holds it); a value that is not one is a fault in the data and is refused rather than shown. */
 const INPUTS = z.record(z.string(), z.unknown());
 
-const NODE_ROW = z.strictObject({ id: z.string(), parentId: z.string().nullable(), sortIndex: z.number(), revision: z.number(), inputs: INPUTS });
+const NODE_ROW = z.strictObject({ id: z.string(), parentId: z.string().nullable(), sortIndex: z.number(), revision: z.number(), inputs: INPUTS, imageId: z.string().nullable() });
 
 const toRecord = (row: unknown): NodeRecord => NODE_ROW.parse(row);
 
@@ -117,6 +125,18 @@ export function createEstimateNodeRepository(db: PrismaClient): EstimateNodeRepo
         // Raw, like `placeNodes`, so `updated_at` is set here and the text is bound as a parameter and read by the database as JSON.
         const changed = await clientFor(db, tx).$executeRaw`
           UPDATE estimate_nodes SET inputs = ${JSON.stringify(inputs)}::jsonb, revision = revision + 1, updated_at = now()
+          WHERE id = ${nodeId}::uuid AND estimate_id = ${estimateId}::uuid AND revision = ${expectedRevision}::int`;
+        if (changed === 0) return null;
+        if (changed !== 1) throw new Error('A part to change is not in this estimate.');
+        const row = await clientFor(db, tx).estimateNode.findFirstOrThrow({ where: { id: nodeId, estimateId }, select: NODE_SELECT });
+        return toRecord(row);
+      }),
+
+    setImage: (estimateId, nodeId, expectedRevision, imageId, tx) =>
+      withDatabaseErrors(async () => {
+        // The same shape as `saveInputs`: the estimate and the revision that was read are part of the condition, and the picture is a bound parameter (null clears it).
+        const changed = await clientFor(db, tx).$executeRaw`
+          UPDATE estimate_nodes SET image_id = ${imageId}::uuid, revision = revision + 1, updated_at = now()
           WHERE id = ${nodeId}::uuid AND estimate_id = ${estimateId}::uuid AND revision = ${expectedRevision}::int`;
         if (changed === 0) return null;
         if (changed !== 1) throw new Error('A part to change is not in this estimate.');

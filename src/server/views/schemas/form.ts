@@ -46,6 +46,7 @@ const ruleSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('text'), maxLength: z.number().int().min(1), multiline: z.boolean() }),
   z.strictObject({ type: z.literal('select'), source: z.literal('materials') }),
   z.strictObject({ type: z.literal('derived'), from: z.uuid().nullable() }),
+  z.strictObject({ type: z.literal('picture') }),
 ]);
 
 const formFieldSchema = z.strictObject({

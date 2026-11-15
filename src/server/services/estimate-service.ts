@@ -8,10 +8,12 @@ import { buildTree, canMove, changedPlacements, childCount, descendantIds, inser
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
 import type { CustomerChoice, EstimateRepository } from '../repositories/estimate-repository';
+import type { ImageRepository, PictureRecord } from '../repositories/image-repository';
 import type { EstimateStatus } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import { createEstimateInputs, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
+import { createImageService, type ImageService } from './image-service';
 
 /**
  * The estimate workspace (STORY-05.01; FR-042; architecture sections 4.1, 4.8 and 6, "Set customer"): opening a task's estimate and choosing the customer
@@ -71,6 +73,8 @@ export interface EstimateCustomer {
 /** One part with what was typed into it. */
 export interface PartDetail extends PartView {
   readonly inputs: Readonly<Record<string, string>>;
+  /** The part's picture (STORY-05.07): its ID, sanitised name and size, never the bytes; null when it has none (Part Model is optional, D-31). */
+  readonly picture: PictureRecord | null;
 }
 
 /** The tree in reading order, depth first. */
@@ -168,6 +172,12 @@ export interface EstimateService {
   getForm: EstimateInputs['getForm'];
   /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`, STORY-05.03). 404, 409 (not editable by this person, or a stale revision), 422 under each field at fault. A real change raises the part's revision and `inputs_revision`; the same value again raises neither. */
   saveInputs: EstimateInputs['saveInputs'];
+  /** Adds or replaces a part's picture (`PUT .../nodes/{nodeId}/image`, STORY-05.07). 404, 409 (not editable by this person), 413 (200 x 1024 bytes or more), 415 (not a PNG, JPEG, GIF or WebP by its content). A real change raises the part's revision and `inputs_revision`. */
+  putPicture: ImageService['putPicture'];
+  /** Removes a part's picture (`DELETE .../nodes/{nodeId}/image`). 404, 409. A part with none changes nothing. */
+  removePicture: ImageService['removePicture'];
+  /** The stored type and bytes of a picture (`GET /api/v1/images/{id}`): only for a person who may open its estimate; 404 otherwise, the same as for one that does not exist. */
+  getPicture: ImageService['getPicture'];
 
   /**
    * Applies one event of the state machine to an estimate (STORY-06.01), under its row lock, and answers the status it had and the status it has. 404 for an
@@ -184,6 +194,8 @@ export interface EstimateService {
 export interface EstimateDependencies {
   readonly estimates: EstimateRepository;
   readonly nodes: EstimateNodeRepository;
+  /** The part pictures (STORY-05.07). */
+  readonly images: ImageRepository;
   readonly transactions: TransactionRunner;
   /** The Material Master lookup of a part's material and the field registry the form is built from (STORY-05.03; see `estimate-inputs.ts`). */
   readonly materials: EstimateInputsDependencies['materials'];
@@ -247,7 +259,7 @@ async function applyTransition(
 }
 
 // Over 40 lines on purpose (coding standards section 1): one object of the service's methods, each a few lines; the longer steps are the named helpers above and inside.
-export function createEstimateService({ estimates, nodes, transactions, materials, currentConfiguration }: EstimateDependencies): EstimateService {
+export function createEstimateService({ estimates, nodes, images, transactions, materials, currentConfiguration }: EstimateDependencies): EstimateService {
   /** Locks the estimate for a change: 404 when it is not this person's, 409 when this person may no longer change its inputs (`assertEditable`). Returns the estimate's ID. */
   async function lockForChange(viewer: EstimateViewer, estimateId: string, tx: Transaction): Promise<string> {
     const estimate = await estimates.lockEstimate(estimateId, tx);
@@ -277,9 +289,15 @@ export function createEstimateService({ estimates, nodes, transactions, material
   // The part form shares the estimate's lock and its rules for who may open or change it, so they are handed over and not written twice.
   const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx) });
 
+  // The part pictures share the same lock and the same rules, handed over in the same way (STORY-05.07).
+  const pictures = createImageService({ nodes, images, transactions, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx), mayOpen });
+
   return {
     getForm: inputs.getForm,
     saveInputs: inputs.saveInputs,
+    putPicture: pictures.putPicture,
+    removePicture: pictures.removePicture,
+    getPicture: pictures.getPicture,
 
     async getWorkspace(viewer, code) {
       const record = await estimates.findWorkspaceByCode(code);
@@ -324,7 +342,7 @@ export function createEstimateService({ estimates, nodes, transactions, material
       const view = viewsOf(records).find((candidate) => candidate.id === record.id);
       if (view === undefined) throw new NotFoundError();
       // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
-      return { ...view, inputs: await inputs.visibleInputs(record.inputs) };
+      return { ...view, inputs: await inputs.visibleInputs(record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
     },
 
     addPart(viewer, estimateId, request) {

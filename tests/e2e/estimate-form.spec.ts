@@ -33,7 +33,7 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
     // STORY-05.04: the tag of 01 also names the placeholder of Treatment / Color (G), which is in the card but is not typed into until story 05.06.
-    await expect(first).toContainText('A, B, D, G, H');
+    await expect(first).toContainText('A–D, G, H');
     await expect(second).toContainText('E, F, J–L, N');
 
     for (const [letter, name, role] of [
