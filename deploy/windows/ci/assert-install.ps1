@@ -235,12 +235,12 @@ function Get-RightMap {
 $rightsAfterFile = Join-Path $env:RUNNER_TEMP ('rights-after-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.inf')
 & "$env:SystemRoot\System32\secedit.exe" /export /areas USER_RIGHTS /cfg $rightsAfterFile | Out-Null
 Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $rightsAfterFile)) 'the user rights were exported again (secedit, read-only)'
-$rightsBefore = Get-RightMap -Path $RightsBefore
+$beforeRights = Get-RightMap -Path $RightsBefore
 $rightsAfter = Get-RightMap -Path $rightsAfterFile
-Assert-That ($rightsBefore.ContainsKey('SeBatchLogonRight') -and -not ($rightsBefore['SeBatchLogonRight'] -contains $backupSid)) 'before the install, AccucutBackup did not hold Log on as a batch job'
-$expectedBatch = @(@($rightsBefore['SeBatchLogonRight']) + @($backupSid) | Sort-Object -Unique)
-Assert-That ((@($rightsAfter['SeBatchLogonRight']) -join ';') -eq ($expectedBatch -join ';')) "Log on as a batch job is held by exactly the earlier holders and AccucutBackup (before: $(@($rightsBefore['SeBatchLogonRight']) -join ', '); now: $(@($rightsAfter['SeBatchLogonRight']) -join ', '))"
-$changedRights = @(($rightsBefore.Keys + $rightsAfter.Keys) | Sort-Object -Unique | Where-Object { $_ -ne 'SeBatchLogonRight' -and ((@($rightsBefore[$_]) -join ';') -ne (@($rightsAfter[$_]) -join ';')) })
+Assert-That ($beforeRights.ContainsKey('SeBatchLogonRight') -and -not ($beforeRights['SeBatchLogonRight'] -contains $backupSid)) 'before the install, AccucutBackup did not hold Log on as a batch job'
+$expectedBatch = @(@($beforeRights['SeBatchLogonRight']) + @($backupSid) | Sort-Object -Unique)
+Assert-That ((@($rightsAfter['SeBatchLogonRight']) -join ';') -eq ($expectedBatch -join ';')) "Log on as a batch job is held by exactly the earlier holders and AccucutBackup (before: $(@($beforeRights['SeBatchLogonRight']) -join ', '); now: $(@($rightsAfter['SeBatchLogonRight']) -join ', '))"
+$changedRights = @(($beforeRights.Keys + $rightsAfter.Keys) | Sort-Object -Unique | Where-Object { $_ -ne 'SeBatchLogonRight' -and ((@($beforeRights[$_]) -join ';') -ne (@($rightsAfter[$_]) -join ';')) })
 Assert-That ($changedRights.Count -eq 0) "every other user right is exactly as it was before the install (changed: $($changedRights -join ', '))"
 $elsewhere = @($rightsAfter.Keys | Where-Object { $_ -ne 'SeBatchLogonRight' -and (@($rightsAfter[$_]) -contains $backupSid) })
 Assert-That ($elsewhere.Count -eq 0) "AccucutBackup holds no other right (found: $($elsewhere -join ', '))"
