@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
 import { loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type PartInputs } from '@/lib/estimates/form-client';
-import { readTyped } from '@/lib/estimates/form-values';
+import { fieldVisibility, readTyped, watchersOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
@@ -35,6 +35,8 @@ export interface UsePartValuesProps {
   readonly part: PartTarget;
   /** False once the estimate may no longer be changed by this person: nothing is saved. */
   readonly editable: boolean;
+  /** Every field of the form, in order: the ones that watch another (Fasteners Qty and Cost watch Fasteners) are saved again when what they watch changes (STORY-05.05). */
+  readonly fields: ReadonlyArray<FormField>;
   /** A save went through: the tree takes the part's new revision and how complete it is. */
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
@@ -53,7 +55,7 @@ export interface UsePartValuesProps {
  * a value it does not accept is under its field in its words, a part that changed under the person is read again with a notice, and nothing the person typed is dropped by a failure. The
  * Save draft button, the 30-second save and the warning on leaving are the next story's (STORY-05.08).
  */
-export function usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote, gate }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
   const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
@@ -169,7 +171,32 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     if (standIn(heldRef.current[field.id] ?? null) === standIn(check.value)) return;
     const value = check.value ?? '';
     queueRef.current = queueRef.current.then(() => send(field.id, value));
+    if (watchersOf(fields, field.id).length > 0) queueRef.current = queueRef.current.then(() => syncWatchers(field.id));
     gate.track(queueRef.current);
+  }
+
+  /**
+   * A field that others watch was saved (Fasteners: Qty and Cost, STORY-05.05 AC-2, AC-3). Run in turn, after that save, so what the server holds is known: the server stores a hidden number
+   * as 0, so a Qty typed earlier is no longer what it holds. A watcher that shows now takes the text the person typed earlier back (it is kept while hidden) and saves it if it differs from what
+   * the server holds, so the screen never shows a number the server does not have. A watcher that is hidden now has no message and no unsaved mark under it that nobody can see.
+   */
+  async function syncWatchers(watchedId: string): Promise<void> {
+    const shown = fieldVisibility(fields, textsRef.current);
+    for (const watcher of watchersOf(fields, watchedId)) {
+      if (!shown(watcher)) {
+        clearError(watcher.id);
+        continue;
+      }
+      const typed = textsRef.current[watcher.id];
+      if (typed === undefined) continue;
+      const check = readTyped(watcher.rule, typed);
+      if (!check.ok) {
+        mark(watcher.id, true);
+        setErrors((current) => ({ ...current, [watcher.id]: check.message }));
+      } else if ((heldRef.current[watcher.id] ?? null) !== check.value) {
+        await send(watcher.id, check.value ?? '');
+      }
+    }
   }
 
   /**

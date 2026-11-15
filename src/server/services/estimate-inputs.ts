@@ -1,5 +1,6 @@
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import { buildFormSections, formFieldById, type FormFieldView, type FormSectionView } from '../../lib/estimate/form-fields';
+import { hiddenFieldIds, storedValueOf, zeroHiddenNumbers } from '../../lib/estimate/hidden-inputs';
 import { completenessOf, type Completeness } from '../../lib/estimate/part-view';
 import { validateNumberInput, validateTextInput, type InputCheck } from '../../lib/estimate/validation';
 import type { ConfigDocument } from '../../lib/fields/schema';
@@ -26,6 +27,11 @@ import type { EstimateViewer } from './estimate-service';
  * values are read (422, every problem at once, nothing stored). A save with no real change after normalisation writes nothing and raises neither revision; a real change
  * raises the **part's** revision (so a delete confirmed for the part as it was is refused, review SQR-01 (b)) and the estimate's `inputs_revision` (section 4.8), in the same
  * transaction. The material is read `FOR SHARE` in it, so a material being deleted waits for the part that names it.
+ *
+ * **A hidden field** (STORY-05.05; FR-048, SPEC section 14.4): a field the registry's `visibleWhen` hides for the part as the save leaves it (Fasteners Qty and Cost while Fasteners is "None" or
+ * blank) takes no value from a save, and a number of it that the part holds is stored as `0.00` in the same write (`hidden-inputs.ts`; the rule is `isFieldShown`, the one copy). Every answer
+ * reads a hidden number as `0.00` whatever is stored, so a value typed before the rule hid it is never sent back (A-03). A hidden number that holds nothing stays without a key: a part with nothing
+ * typed is `{}` and `EMPTY`, and every reader (Calculate, the answers) reads an absent number as 0.
  */
 
 /** The `code` of the 409 of a save for a part that changed since the person looked. */
@@ -84,10 +90,13 @@ export interface EstimateInputs {
   visibleInputs(inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
 }
 
-/** The stored values that are text and belong to a field a person types or chooses: anything else is not read. */
+/**
+ * The stored values that are text and belong to a field a person types or chooses: anything else is not read. **A hidden number is read as 0** (STORY-05.05 AC-5; `zeroHiddenNumbers`): a
+ * Fasteners Qty or Cost stored before Fasteners became "None" is never sent back as it was typed.
+ */
 function typedValues(document: ConfigDocument, inputs: Readonly<Record<string, unknown>>): Record<string, string> {
   const shown: Record<string, string> = {};
-  for (const [fieldId, value] of Object.entries(inputs)) {
+  for (const [fieldId, value] of Object.entries(zeroHiddenNumbers(document, inputs))) {
     if (typeof value === 'string' && formFieldById(document, fieldId)?.editable === true) shown[fieldId] = value;
   }
   return shown;
@@ -149,13 +158,23 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         if (problems.length > 0) throw new FieldValidationError(problems);
         // The save changes **only the keys it names** and writes the stored object back with every other key as it was: a value of a field that is not on the form now (another
         // story's, one the registry moved or hid, a non-text value) is never read, projected or dropped here (review SQR-01). A cleared value removes only its own key.
-        const next: Record<string, unknown> = { ...part.inputs };
+        const applied: Record<string, unknown> = { ...part.inputs };
         for (const [fieldId, value] of changes) {
-          if (value === null) delete next[fieldId];
-          else next[fieldId] = value;
+          if (value === null) delete applied[fieldId];
+          else applied[fieldId] = value;
         }
-        // Nothing really changed (the same value, spelled another way, or a blank where nothing was), judged on the submitted keys only: no write, no new revision, and no figure is cleared (section 4.8).
-        const changed = [...changes.keys()].some((fieldId) => (part.inputs[fieldId] ?? null) !== (next[fieldId] ?? null));
+        // **The rule of a hidden field is applied here, by the server** (STORY-05.05 AC-3, AC-4; SPEC section 14.4): a field the registry hides for the part as it now is (Fasteners Qty and Cost
+        // while Fasteners is "None" or blank) takes no value from this save, and a number of it that the part already holds is stored as 0, even if it was typed before the rule hid it.
+        const hidden = hiddenFieldIds(document, storedValueOf(document, applied));
+        for (const fieldId of changes.keys()) {
+          if (!hidden.has(fieldId)) continue;
+          if (fieldId in part.inputs) applied[fieldId] = part.inputs[fieldId];
+          else delete applied[fieldId];
+        }
+        const next = zeroHiddenNumbers(document, applied);
+        // Nothing really changed (the same value, spelled another way, or a blank where nothing was), judged on the submitted keys that show: no write, no new revision, and no figure is cleared (section 4.8).
+        // A hidden number set to 0 by the rule is part of a write that a change of a shown field makes (Fasteners becoming "None" is one), so it is a real change then and raises both revisions with it.
+        const changed = [...changes.keys()].some((fieldId) => !hidden.has(fieldId) && (part.inputs[fieldId] ?? null) !== (next[fieldId] ?? null));
         if (!changed) {
           const unchanged = typedValues(document, part.inputs);
           return { id: part.id, revision: part.revision, completeness: completenessOf(unchanged), inputs: unchanged };

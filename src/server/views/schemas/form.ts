@@ -60,6 +60,8 @@ const formFieldSchema = z.strictObject({
   defaultValue: z.string().nullable(),
   required: z.boolean(),
   editable: z.boolean(),
+  /** When the registry hides the field (Fasteners Qty and Cost): the field it watches and the values that hide it. Field IDs and the words "None" and blank: never a figure. */
+  visibleWhen: z.strictObject({ fieldId: z.uuid(), values: z.array(z.string()).readonly() }).nullable(),
   rule: ruleSchema,
 });
 

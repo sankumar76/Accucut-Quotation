@@ -1,14 +1,14 @@
 import { findFieldByKey } from '../fields/registry';
 import type { ConfigDocument } from '../fields/schema';
 import { MATERIAL_IN_DRAWING_KEY } from '../fields/types';
-import { isFieldShown } from '../fields/visibility';
 
 import { buildFormSections, type FormFieldView, type FormRule } from './form-fields';
+import { hiddenFieldIds, HIDDEN_NUMBER } from './hidden-inputs';
 import { validateNumberInput, validateTextInput } from './validation';
 
 /**
  * The check that every part is complete before Calculate (STORY-05.09 AC-1 to AC-3, AC-5; FR-055; SPEC section 14.4; architecture sections 4.2 and 4.5). Pure, so the unit tests cover every case
- * without a database, and so the one rule of "what is visible and needed" is the form's own (`buildFormSections`) and the registry's own (`isFieldShown`), not a second copy.
+ * without a database, and so the one rule of "what is visible and needed" is the form's own (`buildFormSections`) and the registry's own (`isFieldShown`, through `hiddenFieldIds`), not a second copy.
  *
  *   - **Needed** is a field of the form that a person types or chooses and that the registry marks mandatory. It follows the form, so the "n of m" of a card and this check agree, and
  *     a field the form does not offer yet (Treatment / Color and the treatment flags, until STORY-05.06; the picture, never needed) is not needed. When a story moves a field onto the form, this
@@ -59,9 +59,6 @@ export type CalculateCheck = { readonly ok: true; readonly parts: ReadonlyArray<
 
 /** The keys of the fields that name a part, in the order they are tried. */
 export const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
-
-/** What a number the registry hides for a part is read as: 0, in the form every stored number has (two decimals). */
-const HIDDEN_NUMBER = '0.00';
 
 /**
  * A field of the form that a person types or chooses: its rule is a number, a text or a choice, never "follows another field" and never the picture. Part Model (C, STORY-05.07) is
@@ -115,7 +112,7 @@ function nameOf(document: ConfigDocument, read: ReadonlyArray<FieldValue>): stri
 function readPart(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<TypedField>) {
   const read: FieldValue[] = fields.map((field) => ({ field, value: readField(field, part.inputs[field.id]) }));
   const watched = new Map(read.map(({ field, value }) => [field.id, value]));
-  const hidden = new Set(document.fields.filter((definition) => !isFieldShown(definition, (fieldId) => watched.get(fieldId) ?? undefined)).map((definition) => definition.id));
+  const hidden = hiddenFieldIds(document, (fieldId) => watched.get(fieldId) ?? undefined);
   return { read, hidden };
 }
 

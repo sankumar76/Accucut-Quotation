@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
-import { isSectionComplete, sectionProgress, textOf } from '@/lib/estimates/form-values';
+import { isSectionComplete, sectionProgress, shownSections, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import { formatIst } from '@/lib/time';
 
@@ -98,7 +98,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
 export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
-  const values = usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote, gate });
+  const allFields = form.sections.flatMap((section) => section.fields);
+  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
 
   if (values.stored.status === 'failed') {
@@ -123,8 +124,9 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
 
   const problem = values.problem;
   const picture = values.stored.value.picture;
-  // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check.
-  const progress = form.sections.map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
+  // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check. A field the registry hides for what is
+  // typed (Fasteners Qty and Cost while Fasteners is "None" or blank) is not drawn, not counted and not marked missing, and it comes back with what was typed when it shows (STORY-05.05 AC-1, AC-2).
+  const progress = shownSections(form.sections, values.texts).map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
   // A field Calculate found blank is still missing while it shows no value: typing into it takes its words away at once, and a card has none left when all its fields have one.
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);

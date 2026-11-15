@@ -24,19 +24,20 @@ const COST_HINT = 'Enter 0 if there is none.';
 const FASTENERS_HINT = 'Type "None" if the part has no fasteners.';
 const REMARKS_HINT = 'Write "None" if there is nothing to add.';
 const REMARKS_TOO_LONG = 'Use 1,000 characters or fewer.';
-const COST_LETTERS = ['U', 'AP', 'AU', 'BM'] as const;
+/** The cost inputs that show at first paint. Fasteners Cost (U) shows only once Fasteners is not "None": `estimate-fasteners.spec.ts` (STORY-05.05). */
+const COST_LETTERS = ['AP', 'AU', 'BM'] as const;
 /** The words with "cost" in them that the form may say: the four typed inputs (FR-008) and the name of section 08 (SPEC 7.1). */
 const ALLOWED_COST_WORDS = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'];
 /** Every field a person types into, in the order of the form (08 shows AP, AU, BM, then AJ). */
-const FORM_ORDER = ['B', 'D', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
+const FORM_ORDER = ['B', 'D', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
 
 const SECTIONS = [
   { number: '01', region: '01 Part Details', range: 'A–D, G, H', count: '0 of 3 complete', link: '01 Part details' },
   { number: '02', region: '02 Material and Dimensions', range: 'E, F, J–L, N', count: '0 of 5 complete', link: '02 Material' },
   { number: '03', region: '03 Cutting Process', range: 'P, Q', count: '0 of 2 complete', link: '03 Cutting' },
   { number: '04', region: '04 Bending', range: 'R', count: '0 of 1 complete', link: '04 Bending' },
-  // Fasteners starts with its default "None", which counts as filled in.
-  { number: '05', region: '05 Fasteners', range: 'S–U', count: '1 of 3 complete', link: '05 Fasteners' },
+  // Fasteners starts with its default "None", which counts as filled in; Qty and Cost are hidden by it, so they are not counted (STORY-05.05 AC-1).
+  { number: '05', region: '05 Fasteners', range: 'S–U', count: '1 of 1 complete', link: '05 Fasteners' },
   { number: '06', region: '06 Welding', range: 'V–Y', count: '0 of 4 complete', link: '06 Welding' },
   { number: '07', region: '07 Surface Treatment', range: 'Z–AG', count: null, link: '07 Surface' },
   { number: '08', region: '08 Other Costs and Remarks', range: 'AJ, AP, AU, BM', count: '0 of 4 complete', link: '08 Other' },
@@ -66,9 +67,8 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
       ['P', 'Cutting Time'],
       ['Q', 'Cutting Length'],
       ['R', 'No\\. of Bend'],
+      // Fasteners Qty (T) and Cost (U) are hidden while Fasteners is "None": `estimate-fasteners.spec.ts` covers them (STORY-05.05).
       ['S', 'Fasteners'],
-      ['T', 'Fasteners Qty'],
-      ['U', 'Fasteners Cost'],
       ['V', 'Weld'],
       ['W', 'Drilling'],
       ['X', 'Tapping'],
@@ -158,13 +158,19 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     await expect(region(page, '08 Other Costs and Remarks')).toContainText('1 of 4 complete');
   });
 
-  test('AC-3: Fasteners shows "None" on a new part with its hint, is stored only once changed, and T and U are plain number inputs', async ({ page }, testInfo) => {
+  test('AC-3: Fasteners shows "None" on a new part with its hint, is stored only once changed, and T and U are plain number inputs once they show', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await expect(control(page, 'S')).toHaveValue('None');
     await expect(control(page, 'S')).toHaveAccessibleDescription(FASTENERS_HINT);
+    // Qty and Cost are hidden while Fasteners is "None" (STORY-05.05 AC-1); typing another word shows them, as plain number inputs.
+    await expect(control(page, 'T')).toHaveCount(0);
+    await expect(control(page, 'U')).toHaveCount(0);
+    await control(page, 'S').fill('M6 bolt');
     await expect(control(page, 'T')).toBeVisible();
     await expect(control(page, 'U')).toBeVisible();
     await expect(control(page, 'T').locator('xpath=following-sibling::span')).toHaveCount(0);
+    await control(page, 'S').fill('None');
+    await control(page, 'S').blur();
 
     const requests: string[] = [];
     page.on('request', (request) => {
@@ -243,7 +249,8 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
 
   test('AC-5: every new number is refused when it is -1, 1.234 or abc, with the words of the rule and the typed text kept; 12.5 is saved as 12.50', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    for (const letter of ['P', 'Q', 'R', 'T', 'U', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM']) {
+    // Fasteners Qty and Cost (T, U) take the same rule once they show: `estimate-fasteners.spec.ts`.
+    for (const letter of ['P', 'Q', 'R', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM']) {
       const field = control(page, letter);
       await field.fill('-1');
       await field.blur();
@@ -285,6 +292,11 @@ test.describe('AC-7: what an Engineer is sent', () => {
     const savedMaterial = nextSave(page);
     await control(page, 'E').selectOption({ label: ALPHA_MATERIAL.materialInDrawing });
     expect(await savedMaterial).toBe(200);
+    // Fasteners Cost shows only once the part has fasteners (STORY-05.05).
+    const savedFasteners = nextSave(page);
+    await control(page, 'S').fill('M6 bolt');
+    await control(page, 'S').blur();
+    expect(await savedFasteners).toBe(200);
     for (const [letter, typed] of [
       ['AP', '1234.5'],
       ['AU', '678.25'],
