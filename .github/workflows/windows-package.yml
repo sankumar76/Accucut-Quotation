@@ -255,6 +255,30 @@ jobs:
           # The step's exit code is the last native exit code (here the expected 1 of install.ps1): reset it.
           $global:LASTEXITCODE = 0
 
+      # The backup keeps 20 % of the disk free (the product rule, ADR-015 Amendment 3: a copy is made only if 20 % of the volume is still free afterwards). The hosted runner's
+      # C: drive is about 150 GB with about 25 GB free, which is below that. The runner's large toolchains that this job never uses are removed, and the job states how much
+      # is free. The rule itself is not changed and has no override for CI.
+      - name: Free space on drive C (remove the unused Android SDK and toolchains) and check that the backup's 20 percent rule can pass
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $drive = [System.IO.DriveInfo]::new('C')
+          Write-Host ("C: before: {0:N1} GB free of {1:N1} GB" -f ($drive.AvailableFreeSpace / 1GB), ($drive.TotalSize / 1GB))
+          $candidates = @('C:\Android', 'C:\Program Files (x86)\Android', $env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, $env:ANDROID_NDK_HOME, $env:ANDROID_NDK_ROOT)
+          foreach ($tool in 'CodeQL', 'Go', 'Ruby', 'PyPy', 'Java_Temurin-Hotspot_jdk') { $candidates += "C:\hostedtoolcache\windows\$tool" }
+          foreach ($folder in ($candidates | Where-Object { $_ } | Sort-Object -Unique)) {
+            if (-not (Test-Path -LiteralPath $folder -PathType Container)) { continue }
+            $item = Get-Item -LiteralPath $folder -Force
+            if ($item.LinkType) { continue }
+            & "$env:SystemRoot\System32\cmd.exe" /c rd /s /q "$folder" 2>&1 | Out-Null
+            Write-Host ("removed {0}: {1}" -f $folder, $(if (Test-Path -LiteralPath $folder) { 'not all of it' } else { 'gone' }))
+          }
+          $drive = [System.IO.DriveInfo]::new('C')
+          $freeGb = $drive.AvailableFreeSpace / 1GB
+          $needGb = ($drive.TotalSize * 0.20 + 4GB) / 1GB
+          Write-Host ("C: after: {0:N1} GB free of {1:N1} GB; the 20 % rule plus a 4 GB margin needs {2:N1} GB" -f $freeGb, ($drive.TotalSize / 1GB), $needGb)
+          if ($freeGb -lt $needGb) { throw ("C: has {0:N1} GB free; the backup's 20 % rule plus a 4 GB margin needs {1:N1} GB. Remove more of the runner's unused toolchains." -f $freeGb, $needGb) }
+          $global:LASTEXITCODE = 0
+
       # The Task Scheduler operational log is off by default. It is switched on before the install so that a task that does not start leaves its reason (STORY-10.05).
       - name: Switch on the Task Scheduler operational log (for the weekly backup task)
         run: |
