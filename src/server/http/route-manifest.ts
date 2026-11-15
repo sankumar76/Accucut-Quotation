@@ -272,6 +272,20 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   { path: '/api/v1/estimates/[id]/calculate', kind: 'api', methods: ['POST'], roles: ['ENGINEER'], status: 'implemented', stage: 'R1' },
+  // STORY-02.09 (SCR-15, the Last backup line). The Admin only (BR-004, AC-6): the page and the read. Both are read-only: the page has no control that starts, restores or deletes a
+  // backup, and the API has GET and nothing else (the alert switch and the sender, `PUT /settings`, are story 09.02's). The rows it reads are `job_runs` (cost data is never in them), so the
+  // cost scan covers both as routes an Engineer is refused.
+  {
+    path: '/settings',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-15',
+    nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
+  },
+  { path: '/api/v1/settings', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
@@ -291,18 +305,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
     stage: 'R2',
     screen: 'SCR-21',
     nav: { group: 'Configuration', label: 'Checkpoints', order: 20, icon: 'flag' },
-  },
-
-  // ---- Planned: Administration (Admin) -------------------------------------------------------------------------------
-  {
-    path: '/settings',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-15',
-    nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
   },
 
   // ---- Planned: Help (every role) ------------------------------------------------------------------------------------
