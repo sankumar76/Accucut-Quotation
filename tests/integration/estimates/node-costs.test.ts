@@ -88,7 +88,7 @@ describe('AC-1, AC-2: a calculated estimate is read back, row by row, for a Lead
         expect(costs.state).toBe('current');
         expect(costs.row).toEqual({ nodeId, slNo: index === 0 ? '1' : '1.1', name: `Invented part ${index + 1}` });
         expect(costs.details?.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4, 5, 6]);
-        expect(costs.details).toMatchObject({ configurationNumber: 1, letters: { count: 'H', unitPrice: 'BG' }, count: index === 0 ? '2' : '6', notApplicable: false });
+        expect(costs.details).toMatchObject({ configurationNumber: 1, letters: { count: 'H', unitPrice: 'BG' }, count: index === 0 ? '2.00' : '6.00', notApplicable: false });
         const calculated = linesOf(costs).filter((line) => line.kind === 'calculated');
         expect(calculated.length).toBeGreaterThan(20);
         for (const line of calculated) {
@@ -108,7 +108,7 @@ describe('AC-1, AC-2: a calculated estimate is read back, row by row, for a Lead
     ]);
     const bySlNo = await details.getNodeCostsBySlNo(lead(), estimateId, '1.1');
     expect(bySlNo).toEqual(await details.getNodeCosts(lead(), estimateId, defined(partIds[1])));
-    expect(bySlNo.details?.count).toBe('6');
+    expect(bySlNo.details?.count).toBe('6.00');
   });
 
   it('the working is the record\'s own: a master changed after the calculation changes nothing in it', async () => {
@@ -125,7 +125,8 @@ describe('AC-1, AC-2: a calculated estimate is read back, row by row, for a Lead
     const line = (letter: string) => defined(linesOf(costs).find((candidate) => candidate.letter === letter));
     expect(line('BD').working).toMatch(/ × \d+(\.\d+)?%$/);
     expect(line('BH').working).toMatch(/^\d+(\.\d+)?$/);
-    expect(line('AK').working).toMatch(/^\(\d+\.\d{4} × \d+(\.\d+)?\) - \(\d+\.\d{4} × \d+(\.\d+)?\)$/);
+    // The Scrap Weight can be negative when the Part Weight is above the Blank Weight, so a sign may stand before a calculated operand.
+    expect(line('AK').working).toMatch(/^\(-?\d+\.\d{4} × \d+(\.\d+)?\) - \(-?\d+\.\d{4} × \d+(\.\d+)?\)$/);
   });
 });
 
