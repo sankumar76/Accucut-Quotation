@@ -94,3 +94,17 @@ The one Major is in the client. In the "list changed" case, focus falls out of t
 - Open questions: none
 - Risks raised: none new (JS headroom is #418)
 - Recommended next agent: developer — fix SQR-01 (two lines, lazy chunk), and optionally SQR-02 to SQR-04; then orchestrator merges once CI on the final head is green
+
+## Addendum — re-review of c25aa1b (2026-11-15)
+Scope: `git diff 14805c1 c25aa1b` only (`calculate-bar.tsx` +1, `quantity-warning-dialog.tsx` +30/−6, `tests/e2e/estimate-warning.spec.ts` +40). CI on c25aa1b: running at the time of this addendum.
+
+| Finding | Result | Evidence |
+|---------|--------|----------|
+| SQR-01 (Major) | **Fixed** | `key={warning.inputsRevision}` on the dialog (`calculate-bar.tsx:53`), so a new list mounts a fresh dialog and Radix focuses "Go back". `<Notice tone="warn" role="alert">`. E2E list-changed case asserts the alert text and that "Go back" has focus. Note: when the dialog is re-keyed, the old instance's deferred `onCloseAutoFocus` calls `focusCalculate()` while the new dialog is open, and the new dialog's focus trap returns focus to "Go back". The E2E assertion covers the end state. Not a finding. #419 can be closed on merge |
+| SQR-02 (Minor) | Not fixed | Out of the commit's scope; hardening window |
+| SQR-03 (Minor) | **Fixed** | `onCloseAutoFocus` → `focusCalculate()` unless a row link was followed (`toField` ref). On success the button is disabled and `focusCalculate` returns early for a disabled button, so the Submitted notice keeps focus. New E2E test: aborted acknowledgement leaves focus on Calculate |
+| SQR-04 (Minor) | **Fixed** | `goTo` returns early while `busy`, and links carry `aria-disabled`. New E2E test: a held acknowledgement, then a row click, and the dialog stays open, then Submitted |
+| SQR-05 (Minor) | Not fixed | Config-dependent, the seed is safe; hardening window |
+| SQR-06 to 11 (Info) | Unchanged | — |
+
+No new findings. **Updated counts: Blocker 0 · Critical 0 · Major 0 · Minor 2 (SQR-02, SQR-05) · Info 6. Verdict: APPROVE WITH COMMENTS**, subject to CI green on c25aa1b.
