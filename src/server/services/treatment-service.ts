@@ -51,7 +51,10 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set(['other', 'not applicable'])
 export interface TreatmentOperations {
   /** The listed treatments for SCR-13: "Other" first, locked. Hidden entries are never in it. Admin only (the route says so). */
   listTreatments(): Promise<ReadonlyArray<TreatmentRecord>>;
-  /** The treatments as a choice, for every role: ID and name, and no rate of any kind (AC-5). */
+  /**
+   * The treatments as a choice, for every role: ID and name, and no rate of any kind (AC-5). "Other" first, then the others in the order they were added, then the
+   * hidden "Not applicable" entry (STORY-02.06 AC-5): the one place it is offered.
+   */
   listTreatmentOptions(): Promise<ReadonlyArray<TreatmentOptionRecord>>;
   /** Refused with a 422 naming the field for a name that is blank, too long, taken or kept by the system; nothing is stored. */
   createTreatment(context: AuditContext, input: TreatmentValues): Promise<TreatmentRecord>;
@@ -167,7 +170,10 @@ export function createTreatmentOperations(dependencies: TreatmentDependencies): 
   const { masters, transactions } = dependencies;
   return {
     listTreatments: () => masters.listTreatments(),
-    listTreatmentOptions: () => masters.listTreatmentOptions(),
+    async listTreatmentOptions() {
+      const [listed, notApplicable] = await Promise.all([masters.listTreatmentOptions(), masters.findNotApplicableTreatmentOption()]);
+      return notApplicable === null ? listed : [...listed, notApplicable];
+    },
 
     async createTreatment(context, input) {
       const name = shapedName(input.name);

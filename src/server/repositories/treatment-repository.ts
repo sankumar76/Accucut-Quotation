@@ -1,17 +1,20 @@
 import { z } from 'zod';
 
+import { NOT_APPLICABLE_TREATMENT_ID } from '../../lib/masters/system-entries';
+
 import { isRecordNotFound, uniqueViolationOf, withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the Treatment / Color list (STORY-02.05; architecture sections 4.9, 5.1 and 6). The table `treatments` holds the surface
- * treatments and colours an Engineer chooses from, with the fixed "Other" row that the migration inserts (`is_system` true, locked) and, in
+ * treatments and colours an Engineer chooses from, with the fixed "Other" row that the migration inserts (`is_system` true, locked) and, from
  * story 02.06, the hidden "Not applicable" row (`is_hidden` true).
  *
  * **The default filter** (architecture section 4.9): every read and every lookup for a change applies `is_hidden = false`, so a hidden row is
- * never listed and never found by ID: a change to one is "not found", the same as an unknown ID. Story 02.06 adds the one separately named
- * method that reads the hidden row, for the estimate form's drop-down. "Other" is not hidden, so the Admin's list holds it, first.
+ * never listed and never found by ID: a change to one is "not found", the same as an unknown ID. The one separately named method that reads the
+ * hidden row, `findNotApplicableTreatmentOption`, serves the estimate form's drop-down (STORY-02.06). "Other" is not hidden, so the Admin's list
+ * holds it, first. This file and `material-repository.ts` are the only ones that name `is_hidden`.
  *
  * A name is unique ignoring letter case, and that rule belongs to the database (`uq_treatments_name_lower`): a write that repeats a name
  * fails with `TreatmentNameTakenError` whatever the caller checked first, so two requests that race for one name cannot both win.
@@ -44,8 +47,13 @@ export class TreatmentNameTakenError extends Error {
 export interface TreatmentMethods {
   /** Every listed treatment: "Other" first, then in the order they were added. Hidden rows are not listed. */
   listTreatments(): Promise<ReadonlyArray<TreatmentRecord>>;
-  /** Every listed treatment as a choice: ID and name. */
+  /** Every listed treatment as a choice: ID and name. The hidden "Not applicable" row is not in it (see below). */
   listTreatmentOptions(): Promise<ReadonlyArray<TreatmentOptionRecord>>;
+  /**
+   * The hidden "Not applicable" treatment as a choice (STORY-02.06 AC-5): its fixed ID and its name, or null if the row is missing. It is found by its ID **and**
+   * `is_hidden`, so no other hidden row can pass for it. Used only by the estimate form's options.
+   */
+  findNotApplicableTreatmentOption(): Promise<TreatmentOptionRecord | null>;
   /** Takes the lock that serialises changes to the treatments until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
   lockTreatments(tx: Transaction): Promise<void>;
   /** The listed treatment with this ID, or null (unknown or hidden alike), read **with its row locked** until the transaction ends. */
@@ -113,6 +121,12 @@ export function createTreatmentMethods(db: PrismaClient): TreatmentMethods {
       withDatabaseErrors(async () => {
         const rows = await db.treatment.findMany({ where: LISTED, select: { id: true, name: true }, orderBy: [...LIST_ORDER] });
         return rows.map((row) => ({ id: row.id, name: row.name }));
+      }),
+
+    findNotApplicableTreatmentOption: () =>
+      withDatabaseErrors(async () => {
+        const row = await db.treatment.findFirst({ where: { id: NOT_APPLICABLE_TREATMENT_ID, isHidden: true }, select: { id: true, name: true } });
+        return row === null ? null : { id: row.id, name: row.name };
       }),
 
     lockTreatments: (tx) =>

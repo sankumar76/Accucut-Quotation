@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { displayStoredValue, storeRowOutputs, type StoredRowOutputs } from '@/lib/estimate/row-outputs';
+import { NOT_APPLICABLE_MATERIAL_ID, NOT_APPLICABLE_NAME } from '@/lib/masters/system-entries';
 import { createCalculationService, type CalculationService } from '@/server/services/calculation-service';
 
 import { insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
 import { EXCHANGE, MATERIAL, ROW, TYPED_RATES, WORKED_2DP } from '../../support/row-oracle';
 import { SEED_PROCESS_ITEMS, seedConfig, seedFieldAt } from '../../support/seed-config';
+import { clearMaterials } from '../../support/system-rows';
 
 /**
  * STORY-03.03 (AC-1, AC-3, AC-5; architecture section 4.2) against real PostgreSQL in a throwaway database: the calculation service reads a
@@ -36,7 +38,7 @@ afterAll(async () => {
 afterEach(async () => {
   await db.owner.query('DELETE FROM customer_rates');
   await db.owner.query('DELETE FROM customers');
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
   await db.owner.query('DELETE FROM exchange_rates');
 });
 
@@ -86,12 +88,9 @@ describe('AC-1: the row is calculated from the stored customer rates, material a
 });
 
 describe('AC-5: the hidden "Not applicable" material is calculated, with O and AK at 0', () => {
-  it('finds the hidden row, which the other finders never do, and reads its three numbers as 0', async () => {
-    const { rows } = await db.owner.query<{ id: string }>(
-      "INSERT INTO materials (material_in_drawing, material_considered, is_hidden) VALUES ('Hidden-entry-for-test', NULL, true) RETURNING id::text",
-    );
-    const hiddenId = defined(rows[0]).id;
-    expect(await db.masterRepository.findMaterialForCalculation(hiddenId)).toEqual({ id: hiddenId, materialInDrawing: 'Hidden-entry-for-test', materialConsidered: null, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00' });
+  it('finds the hidden row (the migration\'s own), which the other finders never do, and reads its three numbers as 0', async () => {
+    const hiddenId = NOT_APPLICABLE_MATERIAL_ID;
+    expect(await db.masterRepository.findMaterialForCalculation(hiddenId)).toEqual({ id: hiddenId, materialInDrawing: NOT_APPLICABLE_NAME, materialConsidered: null, pricePerKg: '0.00', specificGravity: '0.00', scrapRate: '0.00' });
 
     const customerId = await addCustomer();
     await addExchangeRates(EXCHANGE.usd, EXCHANGE.eur);

@@ -7,6 +7,7 @@ import { insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../.
 import { defined } from '../../support/defined';
 import { MATERIAL } from '../../support/row-oracle';
 import { SEED_PROCESS_ITEMS, seedConfig, seedFieldAt } from '../../support/seed-config';
+import { clearMaterials } from '../../support/system-rows';
 import { CE_11_REORDERED, QUANTITY_CASES, type CaseRow } from '../../unit/quantity/quantity-cases';
 
 /**
@@ -55,7 +56,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await db.owner.query('DELETE FROM customer_rates');
   await db.owner.query('DELETE FROM customers');
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
 });
 
 /** The row as an Engineer would type it: the count for the whole order (H), the per-piece cost as Machining Cost (AP), and a Tool Cost if any. */
