@@ -426,7 +426,8 @@ jobs:
           } catch { Write-Host "Start-Process failed: $($_.Exception.Message)" }
           foreach ($file in $out, $err) { if (Test-Path -LiteralPath $file) { Write-Host "===== $file"; Get-Content -LiteralPath $file -Tail 40 } }
           Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
-          & icacls.exe 'C:\Accucut' 'C:\Accucut\config' 'C:\Accucut\backups' 'C:\Accucut\releases' 2>&1 | Out-Host
+          & .\deploy\windows\ci\diagnose-backup-login.ps1 -ValuesFile $env:ACCUCUT_VALUES
+          foreach ($folder in 'C:\Accucut', 'C:\Accucut\config', 'C:\Accucut\backups', 'C:\Accucut\releases') { & icacls.exe $folder 2>&1 | Out-Host }
           $global:LASTEXITCODE = 0
 
       - name: Delete the values file and the throwaway private key

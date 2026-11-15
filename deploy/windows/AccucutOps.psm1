@@ -1625,7 +1625,8 @@ function Write-AccucutBackupConfig {
     # PGPASSFILE format: host:port:database:user:password, with a backslash or a colon in the password escaped by a backslash.
     $escaped = $BackupPassword.Replace('\', '\\').Replace(':', '\:')
     $line = '{0}:{1}:{2}:{3}:{4}' -f $PgHost, $PgPort, $Database, $script:BackupDatabaseRole, $escaped
-    Write-AccucutBackupFile -Path $Paths.BackupPgpass -Content ($line + "`r`n") -BackupSid $BackupSid
+    # One line, ended by a single line feed, no byte order mark: libpq reads the file as bytes and a carriage return would become part of the password.
+    Write-AccucutBackupFile -Path $Paths.BackupPgpass -Content ($line + "`n") -BackupSid $BackupSid
     $settings = [ordered]@{ ageRecipient = $AgeRecipient; pgHost = $PgHost; pgPort = $PgPort; database = $Database; pgBinDirectory = $PgBinDirectory }
     Write-AccucutBackupFile -Path $Paths.BackupSettings -Content (($settings | ConvertTo-Json) + "`r`n") -BackupSid $BackupSid
 }

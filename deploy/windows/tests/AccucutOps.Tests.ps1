@@ -757,6 +757,12 @@ Describe 'the backups folder and the two files of the backup account: exact entr
         $recipient = 'age1' + ('q' * 58)
         Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid -BackupPassword 'ab:c\d' -AgeRecipient $recipient -PgHost 'localhost' -PgPort 5433 -Database 'accucut' -PgBinDirectory 'D:\pg\bin'
         (Get-Content -LiteralPath $paths.BackupPgpass -Raw).Trim() | Should -BeExactly 'localhost:5433:accucut:accucut_backup:ab\:c\\d'
+        # The bytes, as libpq reads them: ASCII, one line ended by a single line feed, no byte order mark and no carriage return.
+        $bytes = [System.IO.File]::ReadAllBytes($paths.BackupPgpass)
+        $bytes[0] | Should -Be ([byte][char]'l')
+        @($bytes | Where-Object { $_ -eq 13 }).Count | Should -Be 0
+        @($bytes | Where-Object { $_ -eq 10 }).Count | Should -Be 1
+        $bytes[$bytes.Length - 1] | Should -Be 10
         { Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid -BackupPassword 'x' -AgeRecipient $recipient -PgHost 'localhost' -PgPort 5433 -Database 'accucut' -PgBinDirectory 'D:\pg\bin' } | Should -Throw
     }
 
