@@ -50,6 +50,7 @@ export function CalculateBar({ submitted, calculation, onChoosePart }: Calculate
       </div>
       {warning === null ? null : (
         <QuantityWarningDialog
+          key={warning.inputsRevision}
           rows={warning.rows}
           changed={warning.changed}
           busy={busy}

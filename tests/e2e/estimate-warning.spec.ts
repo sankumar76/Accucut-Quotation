@@ -125,11 +125,51 @@ test.describe('AC-6: the dialog names the row and offers the two choices', () =>
     await expect(dialog(page)).toBeVisible();
     await expect(dialog(page)).toContainText(CHANGED);
     await expect(dialog(page).getByRole('link', { name: ROW_LINE })).toBeVisible();
+    // Review SQR-01 of AQP-318: the new list is announced (a live region) and focus is back on the safe choice, not lost with the button that was pressed.
+    await expect(dialog(page).getByRole('alert')).toContainText(CHANGED);
+    await expect(goBack(page)).toBeFocused();
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
 
     const answered = page.waitForResponse(isCalculate);
     await goAhead(page).click();
     expect((await answered).status()).toBe(200);
+    await expect(calculateButton(page)).toHaveText('Submitted');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  });
+});
+
+/** True for the press that carries the acknowledgement ("Calculate anyway"), false for the first press. */
+const isAcknowledged = (request: { postData(): string | null }): boolean => request.postData()?.includes('acknowledge') === true;
+
+test.describe('AC-6: what happens while "Calculate anyway" is on its way, and when it fails', () => {
+  test('AC-6 (review SQR-03 of AQP-318): when the acknowledged press fails, the dialog closes, the page says so and focus is on Calculate', async ({ page }, testInfo) => {
+    const owner = await openWarned(page, testInfo);
+    await pressAndExpectWarning(page);
+    await page.route('**/api/v1/estimates/*/calculate', (route) => (isAcknowledged(route.request()) ? route.abort() : route.continue()));
+    await goAhead(page).click();
+    await expect(dialog(page)).toHaveCount(0);
+    await expect(page.getByText('Calculate did not go through')).toBeVisible();
+    await expect(calculateButton(page)).toBeFocused();
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
+  });
+
+  test('AC-6 (review SQR-04 of AQP-318): while "Calculate anyway" is on its way a row link does nothing, so the person is not taken to a field while the estimate is submitted under them', async ({ page }, testInfo) => {
+    const owner = await openWarned(page, testInfo);
+    await pressAndExpectWarning(page);
+    // The acknowledged press is held at the server's door until the test lets it go.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/v1/estimates/*/calculate', async (route) => {
+      if (isAcknowledged(route.request())) await held;
+      await route.continue();
+    });
+    await goAhead(page).click();
+    await expect(dialog(page).getByRole('link', { name: ROW_LINE })).toHaveAttribute('aria-disabled', 'true');
+    await dialog(page).getByRole('link', { name: ROW_LINE }).click();
+    await expect(dialog(page)).toBeVisible();
+    release();
     await expect(calculateButton(page)).toHaveText('Submitted');
     expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   });
