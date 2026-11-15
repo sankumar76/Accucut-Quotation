@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { NOT_APPLICABLE_MATERIAL_ID } from '../../lib/masters/system-entries';
+
 import { isRecordNotFound, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
 import { ESTIMATE_USE_LIMIT, toEstimateUses, type EstimateUses } from './estimate-use';
@@ -13,8 +15,9 @@ import { clientFor, type Transaction } from './transaction';
  *
  * **Materials**: every read and every lookup for a change applies the default filter `is_hidden = false AND deleted_at IS NULL`, so the
  * "Not applicable" row of story 02.06 and a deleted material are never listed and never found by ID: a change to one is "not found", the same
- * as an unknown ID. Story 02.06 adds the one separately named method that reads the hidden row, for the estimate form's drop-down. The three
- * numbers of a material are Restricted: `listMaterialOptions` does not even read their columns.
+ * as an unknown ID. The hidden row has two readers, each named for it (STORY-02.06): `findNotApplicableMaterialOption`, for the estimate form's drop-down,
+ * and `findMaterialForCalculation`, for a calculation. This file is the only one that names `is_hidden`. The three numbers of a material are Restricted:
+ * `listMaterialOptions` and `findNotApplicableMaterialOption` do not even read their columns.
  *
  * A material's numbers are carried as **decimal text** ("7.37"), never as a JavaScript number (coding standards section 10, "Money and rates"):
  * the columns are `Decimal(18,4)`, and the text keeps at least two decimals and drops zeros beyond them.
@@ -65,8 +68,13 @@ export interface MaterialValuesRecord {
 export interface MaterialMethods {
   /** Every listed material, in the order they were added. Hidden and deleted materials are not listed. */
   listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
-  /** Every listed material as a choice: ID, name and Material Considered. Reads no number. */
+  /** Every listed material as a choice: ID, name and Material Considered. Reads no number. The hidden "Not applicable" row is not in it (see below). */
   listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
+  /**
+   * The hidden "Not applicable" material as a choice (STORY-02.06 AC-5): its fixed ID, its name and a null Material Considered, or null if the row is missing. It is
+   * found by its ID **and** `is_hidden`, so no other hidden row can pass for it. Reads no number. Used only by the estimate form's options.
+   */
+  findNotApplicableMaterialOption(): Promise<MaterialOptionRecord | null>;
   /**
    * The numbers of the material with this ID for a calculation, or null (unknown, deleted, or not an ID alike). Unlike `findMaterialForUpdate` and the lists, it
    * **finds the hidden row**: an estimate whose part has the "Not applicable" material must still be calculated (architecture section 4.9). A plain read.
@@ -169,6 +177,15 @@ async function readMaterialOptions(db: PrismaClient): Promise<ReadonlyArray<Mate
   return rows.map((row) => ({ id: row.id, name: row.materialInDrawing, materialConsidered: row.materialConsidered }));
 }
 
+/** The one reader of the hidden row for the options. It selects the three columns of a choice and no number (ARCH-R2), and the row is named by its fixed ID. */
+async function readNotApplicableOption(db: PrismaClient): Promise<MaterialOptionRecord | null> {
+  const row = await db.material.findFirst({
+    where: { id: NOT_APPLICABLE_MATERIAL_ID, isHidden: true, deletedAt: null },
+    select: { id: true, materialInDrawing: true, materialConsidered: true },
+  });
+  return row === null ? null : { id: row.id, name: row.materialInDrawing, materialConsidered: row.materialConsidered };
+}
+
 async function readMaterialValues(db: PrismaClient, id: string): Promise<MaterialValuesRecord | null> {
   // PostgreSQL would refuse a text that is not a UUID with an error; a material that is asked for by one is not found.
   if (!z.uuid().safeParse(id).success) return null;
@@ -256,6 +273,7 @@ export function createMaterialMethods(db: PrismaClient): MaterialMethods {
   return {
     listMaterials: () => withDatabaseErrors(() => readMaterials(db)),
     listMaterialOptions: () => withDatabaseErrors(() => readMaterialOptions(db)),
+    findNotApplicableMaterialOption: () => withDatabaseErrors(() => readNotApplicableOption(db)),
     findMaterialForCalculation: (id) => withDatabaseErrors(() => readMaterialValues(db, id)),
     lockMaterials: (tx) =>
       withDatabaseErrors(async () => {

@@ -2,6 +2,7 @@ import {
   FieldValidationError,
   MasterInUseError,
   MATERIAL_IN_USE_CODE,
+  NAME_RESERVED_CODE,
   NAME_TAKEN_CODE,
   NotFoundError,
   ProcessItemInUseError,
@@ -18,6 +19,7 @@ import {
   specificGravityProblem,
 } from '../../lib/masters/materials';
 import { changesFrom, NAME_TAKEN_MESSAGE } from '../../lib/masters/process-items';
+import { isNotApplicableName, RESERVED_NAME_MESSAGE } from '../../lib/masters/system-entries';
 import type { Clock } from '../../lib/time';
 import {
   MasterConstraintError,
@@ -111,7 +113,10 @@ export interface MastersService extends CustomerOperations, ExchangeRateOperatio
 
   /** The listed materials for SCR-13, with their numbers. Hidden and deleted materials are never in it. Admin only (the route says so). */
   listMaterials(): Promise<ReadonlyArray<MaterialRecord>>;
-  /** The materials as a choice, for every role: ID, name and Material Considered, and no number of any kind (AC-4). */
+  /**
+   * The materials as a choice, for every role: ID, name and Material Considered, and no number of any kind (AC-4). The listed materials in the order they were added,
+   * then the hidden "Not applicable" entry with a null Material Considered (STORY-02.06 AC-5): the one place it is offered.
+   */
   listMaterialOptions(): Promise<ReadonlyArray<MaterialOptionRecord>>;
   /** Refused with a 422 naming the field for a name that is taken or a specific gravity of 0 or below; nothing is stored. */
   createMaterial(context: AuditContext, input: NewMaterial): Promise<MaterialRecord>;
@@ -154,6 +159,13 @@ function materialAuditState(material: MaterialRecord) {
 
 function materialEntryFor(context: AuditContext, material: MaterialRecord) {
   return { ...context, objectType: MATERIAL_OBJECT_TYPE, object: { id: material.id, label: material.materialInDrawing } };
+}
+
+/** The name "Not applicable" is the system's, in any letter case or spacing (STORY-02.06 AC-6): 422 `NAME_RESERVED`, in a sentence that names no entry. */
+function assertMaterialNameNotReserved(name: string | undefined): void {
+  if (name !== undefined && isNotApplicableName(name)) {
+    throw new FieldValidationError([{ field: 'materialInDrawing', message: RESERVED_NAME_MESSAGE }], { code: NAME_RESERVED_CODE });
+  }
 }
 
 function materialNameTaken(): FieldValidationError {
@@ -208,6 +220,8 @@ async function changeMaterial(
   await masters.lockMaterials(tx);
   const before = await masters.findMaterialForUpdate(id, tx);
   if (before === null) throw new NotFoundError(MATERIAL_NOT_FOUND_MESSAGE);
+  // After the lookup, so an unknown or hidden ID is 404 whatever the new name is (architecture section 8, the order of refusals).
+  assertMaterialNameNotReserved(wanted.materialInDrawing);
   const next = materialChangesFrom(before, wanted);
   if (Object.keys(next).length === 0) return before;
   const after = await masters.updateMaterial(before.id, next, tx);
@@ -242,9 +256,13 @@ function createMaterialOperations(dependencies: MaterialDependencies): MaterialO
   const { masters, transactions } = dependencies;
   return {
     listMaterials: () => masters.listMaterials(),
-    listMaterialOptions: () => masters.listMaterialOptions(),
+    async listMaterialOptions() {
+      const [listed, notApplicable] = await Promise.all([masters.listMaterialOptions(), masters.findNotApplicableMaterialOption()]);
+      return notApplicable === null ? listed : [...listed, notApplicable];
+    },
 
     async createMaterial(context, input) {
+      assertMaterialNameNotReserved(input.materialInDrawing);
       assertSpecificGravity(input.specificGravity);
       const material = normalisedMaterial(input);
       return withMaterialNameRule(() => transactions.run((tx) => addMaterial(dependencies, tx, context, material)));

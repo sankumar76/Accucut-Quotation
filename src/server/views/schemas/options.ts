@@ -8,7 +8,7 @@ import { z } from 'zod';
  * Engineer-reachable route imports only a file that has no rate field in it. `tests/security/strict-schema.test.ts` and the cost scan hold
  * every such route to it.
  *
- * Customers (STORY-02.02) and treatments (STORY-02.05) have their lists here. The "Not applicable" entry joins the materials list in story 02.06, with
+ * Customers (STORY-02.02) and treatments (STORY-02.05) have their lists here. The hidden "Not applicable" entry is the last of the materials list and of the treatments list (STORY-02.06), with
  * `materialConsidered` null, which is why the field may be null.
  */
 

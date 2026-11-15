@@ -1,11 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NAME_RESERVED_CODE, NAME_TAKEN_CODE, NotFoundError, TREATMENT_LOCKED_CODE } from '@/lib/errors';
+import { NOT_APPLICABLE_NAME, NOT_APPLICABLE_TREATMENT_ID } from '@/lib/masters/system-entries';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
+import { clearTreatments } from '../../support/system-rows';
 import { OTHER_TREATMENT_ID } from '../../support/treatment-canary';
 import { refusal } from '../../support/user-service-fixture';
 
@@ -38,8 +40,11 @@ interface TreatmentDbRow {
   readonly is_hidden: boolean;
 }
 
+/** Every row but the hidden "Not applicable" one the migration of STORY-02.06 inserts: it is always there, and its own tests are `not-applicable-*.test.ts`. */
 async function rows(): Promise<TreatmentDbRow[]> {
-  const { rows: found } = await db.owner.query<TreatmentDbRow>('SELECT id::text, name, is_system, is_hidden FROM treatments ORDER BY created_at, id');
+  const { rows: found } = await db.owner.query<TreatmentDbRow>('SELECT id::text, name, is_system, is_hidden FROM treatments WHERE id <> $1::uuid ORDER BY created_at, id', [
+    NOT_APPLICABLE_TREATMENT_ID,
+  ]);
   return found;
 }
 
@@ -54,9 +59,9 @@ async function insertAsOwner(name: string): Promise<string> {
   return defined(made[0]).id;
 }
 
-/** Removes what a test added (a hidden row too), whether it passed or failed, so one failure is reported once and not again by every test after it. "Other" stays: the migration put it there. */
+/** Removes what a test added (a hidden row too), whether it passed or failed, so one failure is reported once and not again by every test after it. "Other" and the hidden "Not applicable" row stay: the migrations put them there and the guard keeps them. */
 const emptyTable = async (): Promise<void> => {
-  await db.owner.query('DELETE FROM treatments WHERE id <> $1::uuid', [OTHER_TREATMENT_ID]);
+  await clearTreatments(db.owner);
 };
 
 beforeAll(async () => {
@@ -72,7 +77,7 @@ afterAll(async () => {
 describe('AC-1 (T1): the migration puts "Other" in the table, and the repository lists only what the default filter allows', () => {
   afterEach(emptyTable);
 
-  it('holds exactly one row after the migration: "Other", with the fixed ID, is_system true and is_hidden false (A-1)', async () => {
+  it('holds "Other" after the migration, with the fixed ID, is_system true and is_hidden false (A-1), and nothing an Admin typed', async () => {
     expect(await rows()).toEqual([{ id: OTHER_TREATMENT_ID, name: 'Other', is_system: true, is_hidden: false }]);
   });
 
@@ -85,7 +90,8 @@ describe('AC-1 (T1): the migration puts "Other" in the table, and the repository
       { id: second, name: 'Invented anodised', locked: false },
     ]);
     const options = await db.mastersService.listTreatmentOptions();
-    expect(options.map((option) => option.name)).toEqual(['Other', 'Invented powder coat', 'Invented anodised']);
+    // The hidden "Not applicable" entry is the last choice (STORY-02.06 AC-5).
+    expect(options.map((option) => option.name)).toEqual(['Other', 'Invented powder coat', 'Invented anodised', NOT_APPLICABLE_NAME]);
     for (const option of options) expect(Object.keys(option).sort()).toEqual(['id', 'name']);
   });
 

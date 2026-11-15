@@ -10,6 +10,7 @@ import { contextOf, insertPersonAsOwner, openAuditDatabase, type AuditDatabase }
 import { defined } from '../../support/defined';
 import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../support/hold-before-commit';
 import { seedConfig, seedFieldAt } from '../../support/seed-config';
+import { clearMaterials } from '../../support/system-rows';
 
 /**
  * STORY-05.03 T9 (review SQR-11 of AQP-302, AQP-306 AC-5) against real PostgreSQL in a throwaway database: the **real** `saveInputs` of the estimate service and the
@@ -58,7 +59,7 @@ afterEach(async () => {
   await db.owner.query('DELETE FROM estimate_nodes');
   await db.owner.query('DELETE FROM estimates');
   await db.owner.query('DELETE FROM tasks');
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
 });
 
 /** A draft estimate with one empty part, for the engineer. */

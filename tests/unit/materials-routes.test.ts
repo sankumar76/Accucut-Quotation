@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { NOT_APPLICABLE_MATERIAL_ID, NOT_APPLICABLE_NAME } from '@/lib/masters/system-entries';
+
 import { MATERIAL_CANARIES, MATERIAL_RECIPE_ID } from '../support/material-master-canary';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
@@ -142,6 +144,18 @@ describe('POST /api/v1/materials (AC-2, AC-3, AC-5)', () => {
     expect(await fieldMessages(response, 'NAME_TAKEN')).toEqual({ materialInDrawing: 'A material with this name already exists. Names must be unique.' });
   });
 
+  it.each(['Not applicable', 'NOT APPLICABLE', 'not  applicable', ' Not applicable '])(
+    'refuses the name %j with 422 NAME_RESERVED and a message that names no entry, and stores nothing (STORY-02.06 AC-6)',
+    async (name) => {
+      const entries = harness.auditWorld.audit.committed.length;
+      const response = await POST(request('POST', { ...added, materialInDrawing: name }));
+      expect(response.status).toBe(422);
+      expect(await fieldMessages(response, 'NAME_RESERVED')).toEqual({ materialInDrawing: 'That name cannot be used.' });
+      expect(harness.auditWorld.audit.committed).toHaveLength(entries);
+      expect(harness.masters.materials).toHaveLength(MATERIAL_CANARIES.length);
+    },
+  );
+
   it('refuses a key it does not know (a strict body) and a body that is not JSON', async () => {
     expect((await POST(request('POST', { ...added, isHidden: true }))).status).toBe(422);
     const notJson = new Request(`${ORIGIN}/api/v1/materials`, { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: '{' });
@@ -190,6 +204,18 @@ describe('PATCH /api/v1/materials/{id} (AC-2, AC-3, AC-5)', () => {
     expect(recased.status).toBe(200);
   });
 
+  it.each(['Not applicable', 'NOT APPLICABLE', ' not  applicable '])(
+    'refuses the name %j with 422 NAME_RESERVED and a message that names no entry, and changes nothing (STORY-02.06 AC-6)',
+    async (name) => {
+      const entries = harness.auditWorld.audit.committed.length;
+      const response = await PATCH(request('PATCH', { materialInDrawing: name }), withId(ALPHA));
+      expect(response.status).toBe(422);
+      expect(await fieldMessages(response, 'NAME_RESERVED')).toEqual({ materialInDrawing: 'That name cannot be used.' });
+      expect(harness.auditWorld.audit.committed).toHaveLength(entries);
+      expect(harness.masters.materials.find((material) => material.id === ALPHA)?.materialInDrawing).toBe('Canary-Material-Alpha');
+    },
+  );
+
   it('answers 404 for an ID no material has and 422 for one that is not a UUID; an empty body and an unknown key are 422', async () => {
     expect((await PATCH(request('PATCH', { scrapRate: '1.37' }), withId(UNKNOWN_ID))).status).toBe(404);
     expect((await PATCH(request('PATCH', { scrapRate: '1.37' }), withId('not-an-id'))).status).toBe(422);
@@ -208,9 +234,11 @@ describe('GET /api/v1/options/materials (AC-4, AC-6)', () => {
     const body = record.parse(JSON.parse(text));
     expect(Object.keys(body)).toEqual(['options']);
     const options = z.array(record).parse(body['options']);
-    expect(options).toEqual(
-      MATERIAL_CANARIES.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered })),
-    );
+    // The listed materials in the order they were added, then the hidden "Not applicable" entry, with no Material Considered (STORY-02.06 AC-5).
+    expect(options).toEqual([
+      ...MATERIAL_CANARIES.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered })),
+      { id: NOT_APPLICABLE_MATERIAL_ID, name: NOT_APPLICABLE_NAME, materialConsidered: null },
+    ]);
     for (const option of options) expect(Object.keys(option).sort()).toEqual(['id', 'materialConsidered', 'name']);
     // No number of the canary materials in any form, and no field name of one.
     for (const material of MATERIAL_CANARIES) {
