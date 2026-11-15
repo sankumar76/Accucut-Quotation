@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { z } from 'zod';
 
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
-import { calculateAnswerSchema } from '@/server/views/schemas/estimates';
+import { calculateAckRequiredSchema, calculateAnswerSchema } from '@/server/views/schemas/estimates';
 
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
@@ -67,6 +67,7 @@ afterEach(() => {
   held.currentCalculationId = null;
   part().inputs = {};
   harness.calculationWorld.calculations.length = 0;
+  harness.calculationAudit.rows.length = 0;
   for (const customer of harness.masters.customers) customer.deleted = false;
 });
 
@@ -228,5 +229,191 @@ describe('the one schema of the answer holds the line (NFR-002)', () => {
     ['no status', { message: CALCULATE_MESSAGE }],
   ])('refuses %s, so it can never leave', (_name, answer) => {
     expect(calculateAnswerSchema.safeParse(answer).success).toBe(false);
+  });
+});
+
+/**
+ * STORY-05.12 (AC-2, AC-3, AC-5, AC-7; NFR-002; architecture sections 4.3 and 6), through the real `withRoute`, the real session and the real service: a 0 in QTY per Assy earns a first press the
+ * 409 `CALCULATE_ACK_REQUIRED` (one strict schema, no figure, the same under any masters, nothing written), the same press with the revision calculates and writes the record and one audit entry, an
+ * `acknowledge` with nothing to warn is ignored, and a body that is not the stated shape is 400. Every name and ID is invented.
+ */
+const QTY = fieldIdOf('qty-per-assy');
+const ACK_ID = 'req-0badc0de';
+
+const bodyRequest = (body: unknown): Request =>
+  new Request(`${ORIGIN}/api/v1/estimates/x/calculate`, { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+
+/** The complete estimate with a 0 in QTY per Assy on its one part, which is a top-level item: it warns (A-27). */
+function makeWarned(): void {
+  makeComplete();
+  part().inputs = { ...part().inputs, [QTY]: '0' };
+}
+
+describe('STORY-05.12 AC-2 and AC-7: the 409 CALCULATE_ACK_REQUIRED', () => {
+  it('is one strict body with the revision, the code, and each row with its part, field, Sl. No, name and sentence, `no-store` and a request ID', async () => {
+    makeWarned();
+    estimate().inputsRevision = 4;
+    const response = await POST(request(), withId(owned()));
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Content-Type')).toBe('application/problem+json');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    const body = await bodyOf(response);
+    expect(calculateAckRequiredSchema.safeParse(body).success).toBe(true);
+    expect(Object.keys(body).sort()).toEqual(['code', 'inputsRevision', 'requestId', 'status', 'title', 'type', 'warnings']);
+    expect(body).toMatchObject({
+      type: 'about:blank',
+      status: 409,
+      code: 'CALCULATE_ACK_REQUIRED',
+      inputsRevision: 4,
+      warnings: [{ code: 'QTY_ZERO', nodeId: part().id, fieldId: QTY, slNo: '1', label: 'Invented text', message: 'QTY per Assy is 0 on 1 Invented text. That row will cost 0 in this estimate.' }],
+    });
+  });
+
+  it('writes nothing: no calculation, no audit entry, the estimate still a draft and its revision as it was', async () => {
+    makeWarned();
+    estimate().inputsRevision = 4;
+    await POST(request(), withId(owned()));
+    expect(harness.calculationWorld.calculations).toHaveLength(0);
+    expect(harness.calculationAudit.rows).toEqual([]);
+    expect(estimate()).toMatchObject({ status: 'DRAFT', inputsRevision: 4, currentCalculationId: null });
+  });
+
+  it('is the same body under two different sets of masters, apart from the request ID (NFR-002)', async () => {
+    makeWarned();
+    const strip = async (response: Response) => {
+      const { requestId, ...rest } = await bodyOf(response);
+      expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
+      return JSON.stringify(rest);
+    };
+    const first = await strip(await POST(request(), withId(owned())));
+    for (const material of harness.masters.materials) material.pricePerKg = '1.23';
+    for (const customer of harness.masters.customers) for (const key of customer.values.keys()) customer.values.set(key, '9.87');
+    harness.masters.exchange.usd = '5.43';
+    expect(await strip(await POST(request(), withId(owned())))).toBe(first);
+  });
+
+  it('holds no figure of the calculation: none of the record that the same estimate gets once acknowledged is anywhere in it', async () => {
+    makeWarned();
+    const asked = await (await POST(request(), withId(owned()))).text();
+    await POST(bodyRequest({ acknowledge: { inputsRevision: 0 } }), withId(owned()));
+    const record = defined(harness.calculationWorld.calculations[0]);
+    const figures = [record.productValues.totalPrice, record.productValues.pricePerToolCost, record.productValues.toolCostTotal, ...record.rows.flatMap((row) => Object.values(row.outputs))].filter(
+      (value): value is string => typeof value === 'string' && value.length > 3,
+    );
+    expect(figures.length).toBeGreaterThan(0);
+    for (const figure of figures) expect(asked, figure).not.toContain(figure);
+  });
+
+  it('a Lead and an Admin are refused 403 with the fixed body, whatever the body says, and never see the list', async () => {
+    makeWarned();
+    for (const role of ['LEAD', 'ADMIN'] as const) {
+      harness.signInAs(role);
+      const response = await POST(bodyRequest({ acknowledge: { inputsRevision: 0 } }), withId(owned()));
+      expect(response.status).toBe(403);
+      expect(await bodyOf(response)).toMatchObject({ code: 'FORBIDDEN' });
+    }
+    expect(harness.calculationWorld.calculations).toHaveLength(0);
+  });
+});
+
+describe('STORY-05.12 AC-3: the acknowledged press', () => {
+  it('answers exactly {status, message}, stores the warnings on the calculation as the person who pressed, and writes one audit entry that names the row', async () => {
+    makeWarned();
+    const response = await POST(bodyRequest({ acknowledge: { inputsRevision: 0 } }), withId(owned()));
+    expect(response.status).toBe(200);
+    expect(await bodyOf(response)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    const record = defined(harness.calculationWorld.calculations[0]);
+    expect(record.warnings).toEqual([{ code: 'QTY_ZERO', nodeId: part().id, slNo: '1', label: 'Invented text' }]);
+    expect(record.createdById).toBe(harness.idOf.ENGINEER);
+    expect(harness.calculationAudit.rows).toHaveLength(1);
+    expect(harness.calculationAudit.rows[0]).toMatchObject({
+      actorId: harness.idOf.ENGINEER,
+      event: 'calculation.warning_acknowledged',
+      objectType: 'estimate',
+      objectId: estimate().id,
+      objectLabel: estimate().code,
+      before: null,
+      after: { warnings: [{ code: 'QTY_ZERO', nodeId: part().id, slNo: '1', label: 'Invented text' }] },
+    });
+    expect(defined(harness.calculationAudit.rows[0]).requestId).toBe(response.headers.get('X-Request-Id'));
+  });
+
+  it('a revision that is not the estimate\'s is the 409 again with the current one, and nothing is written', async () => {
+    makeWarned();
+    estimate().inputsRevision = 9;
+    const response = await POST(bodyRequest({ acknowledge: { inputsRevision: 8 } }), withId(owned()));
+    expect(response.status).toBe(409);
+    expect(await bodyOf(response)).toMatchObject({ code: 'CALCULATE_ACK_REQUIRED', inputsRevision: 9 });
+    expect(harness.calculationWorld.calculations).toHaveLength(0);
+    expect(harness.calculationAudit.rows).toEqual([]);
+  });
+});
+
+describe('STORY-05.12 AC-5: the body is none, empty or the stated shape, and nothing else', () => {
+  it('no body, an empty one and `{}` are the same press', async () => {
+    makeComplete();
+    expect((await POST(request(), withId(owned()))).status).toBe(200);
+    estimate().status = 'DRAFT';
+    expect((await POST(bodyRequest(''), withId(owned()))).status).toBe(200);
+    estimate().status = 'DRAFT';
+    expect((await POST(bodyRequest({}), withId(owned()))).status).toBe(200);
+  });
+
+  it('an acknowledgement with no warning due is ignored: the calculation goes through with `warnings` empty and no audit entry', async () => {
+    makeComplete();
+    expect((await POST(bodyRequest({ acknowledge: { inputsRevision: 0 } }), withId(owned()))).status).toBe(200);
+    expect(defined(harness.calculationWorld.calculations[0]).warnings).toEqual([]);
+    expect(harness.calculationAudit.rows).toEqual([]);
+  });
+
+  it.each([
+    ['a plain flag', { acknowledge: true }],
+    ['null', { acknowledge: null }],
+    ['no revision', { acknowledge: {} }],
+    ['a revision as text', { acknowledge: { inputsRevision: '0' } }],
+    ['a negative revision', { acknowledge: { inputsRevision: -1 } }],
+    ['a fractional revision', { acknowledge: { inputsRevision: 0.5 } }],
+    ['an unknown key beside the revision', { acknowledge: { inputsRevision: 0, force: true } }],
+    ['an unknown key beside acknowledge', { acknowledge: { inputsRevision: 0 }, skip: true }],
+    ['a list', []],
+    ['text that is not JSON', '{not json'],
+  ])('%s is 400 MALFORMED_REQUEST, with no field named, even with no warning due, and nothing is written', async (_name, body) => {
+    makeComplete();
+    const response = await POST(bodyRequest(body), withId(owned()));
+    expect(response.status).toBe(400);
+    expect(await bodyOf(response)).toMatchObject({ code: 'MALFORMED_REQUEST', status: 400 });
+    expect(harness.calculationWorld.calculations).toHaveLength(0);
+    expect(harness.calculationAudit.rows).toEqual([]);
+    expect(estimate().status).toBe('DRAFT');
+  });
+});
+
+describe('STORY-05.12 AC-7: the one schema of the 409 holds the line (NFR-002)', () => {
+  const good = {
+    type: 'about:blank',
+    title: 'Check the quantity before you calculate.',
+    status: 409,
+    code: 'CALCULATE_ACK_REQUIRED',
+    requestId: ACK_ID,
+    inputsRevision: 3,
+    warnings: [{ code: 'QTY_ZERO', nodeId: 'n-1', fieldId: 'f-1', slNo: '1.1', label: 'Invented lid', message: 'QTY per Assy is 0 on 1.1 Invented lid. That row will cost 0 in this estimate.' }],
+  };
+  const row = good.warnings[0];
+
+  it('accepts exactly the body', () => {
+    expect(calculateAckRequiredSchema.safeParse(good).success).toBe(true);
+  });
+
+  it.each([
+    ['an extra key', { ...good, total: '917373.37' }],
+    ['an extra key on a row', { ...good, warnings: [{ ...row, cost: '5.00' }] }],
+    ['another code', { ...good, code: 'CALCULATE_BLOCKED' }],
+    ['another status', { ...good, status: 422 }],
+    ['a warning code that is not QTY_ZERO', { ...good, warnings: [{ ...row, code: 'OTHER' }] }],
+    ['no rows', { ...good, warnings: [] }],
+    ['a revision as text', { ...good, inputsRevision: '3' }],
+    ['a fractional revision', { ...good, inputsRevision: 3.5 }],
+  ])('refuses %s, so it can never leave', (_name, body) => {
+    expect(calculateAckRequiredSchema.safeParse(body).success).toBe(false);
   });
 });

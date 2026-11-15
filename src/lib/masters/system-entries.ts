@@ -13,7 +13,10 @@ export const NOT_APPLICABLE_NAME = 'Not applicable';
 /** The hidden "Not applicable" row of `materials`. */
 export const NOT_APPLICABLE_MATERIAL_ID = '00000000-0000-4000-8000-000500000001';
 
-/** The hidden "Not applicable" row of `treatments`. (The locked "Other" is `...000700000001`.) */
+/** The locked "Other" row of `treatments` (inserted by the treatments migration; FR-017). A part that chooses it keeps the words typed beside it (STORY-05.06). */
+export const OTHER_TREATMENT_ID = '00000000-0000-4000-8000-000700000001';
+
+/** The hidden "Not applicable" row of `treatments`. */
 export const NOT_APPLICABLE_TREATMENT_ID = '00000000-0000-4000-8000-000700000002';
 
 /** The sentence for a name the system keeps, said under the name field. It names no entry (architecture section 4.9). */

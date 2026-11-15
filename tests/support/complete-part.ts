@@ -1,3 +1,4 @@
+import type { TreatmentChoice } from '../../src/lib/estimate/treatment-value';
 import type { ConfigDocument } from '../../src/lib/fields/schema';
 import { findFieldByKey } from '../../src/lib/fields/registry';
 
@@ -11,8 +12,8 @@ import { seedConfig } from './seed-config';
 
 export { INVENTED_MATERIAL_ID, INVENTED_NUMBER, INVENTED_TEXT } from './complete-part-inputs';
 
-/** The stored inputs of a complete part of the seed registry, by field ID. */
-export function completePartInputs(document: ConfigDocument = seedConfig, materialId: string = INVENTED_MATERIAL_ID): Record<string, string> {
+/** The stored inputs of a complete part of the seed registry, by field ID: texts, and `{ id, text }` for Treatment / Color. */
+export function completePartInputs(document: ConfigDocument = seedConfig, materialId: string = INVENTED_MATERIAL_ID): Record<string, string | TreatmentChoice> {
   return completePartInputsFor(document, materialId);
 }
 

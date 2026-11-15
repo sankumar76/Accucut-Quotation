@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
-import { isSectionComplete, sectionProgress, textOf } from '@/lib/estimates/form-values';
+import { isSectionComplete, sectionProgress, shownSections, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
+import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -29,14 +30,16 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
-import { FIELD_MARK, FieldRenderer } from './field-renderer';
+import { controlIdFor, NEXT_FIELD } from './field-ids';
+import { FieldRenderer } from './field-renderer';
 import { PictureSlot } from './picture-slot';
-import { PlaceholderFields } from './placeholder-fields';
+import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
-import { usePartValues, type Loaded, type PartTarget, type SavedPart } from './use-part-form';
-
-export const PART_FORM_ATTRIBUTE = 'data-part-form';
+import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
+import { SurfaceTreatments } from './surface-treatments';
+import type { Loaded } from './use-form-definition';
+import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 
 export interface PartFieldsProps {
   readonly estimateId: string;
@@ -56,20 +59,15 @@ export interface PartFieldsProps {
 }
 
 const TITLE_ID = 'part-form-title';
-const NEXT_FIELD = `[${FIELD_MARK}="true"]`;
 
 /**
  * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
  * but it never "needs nothing": "Use 0" is not said under it (a 0 there is what STORY-05.12 warns about), and the field is told by its hint.
  */
 function missingMessageOf(field: FormField): string {
+  if (field.rule.type === 'treatment') return TREATMENT_MISSING_MESSAGE;
   if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
   return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
-}
-
-/** Enter on a part in the tree opens its form: the first field that can be typed into takes the focus (STORY-05.03, review SQR-11). */
-export function focusFirstField(): void {
-  document.querySelector<HTMLElement>(`[${PART_FORM_ATTRIBUTE}] ${NEXT_FIELD}`)?.focus();
 }
 
 /** The text a field that follows something shows: the Sl. No. of the part, or the Material Considered of the chosen material (names only, no number). */
@@ -104,7 +102,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
 export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
-  const values = usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote, gate });
+  const allFields = form.sections.flatMap((section) => section.fields);
+  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
 
   if (values.stored.status === 'failed') {
@@ -128,9 +127,11 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
 
   const problem = values.problem;
+  const otherProblem = problem?.kind === 'conflict' ? (problem.also ?? null) : problem;
   const picture = values.stored.value.picture;
-  // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check.
-  const progress = form.sections.map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
+  // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check. A field the registry hides for what is
+  // typed (Fasteners Qty and Cost while Fasteners is "None" or blank) is not drawn, not counted and not marked missing, and it comes back with what was typed when it shows (STORY-05.05 AC-1, AC-2).
+  const progress = shownSections(form.sections, values.texts).map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
   // A field Calculate found blank is still missing while it shows no value: typing into it takes its words away at once, and a card has none left when all its fields have one.
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
@@ -144,9 +145,24 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
         <p className="text-label text-ink-3">{lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt)))}</p>
       </div>
       {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
-      {problem === null ? null : (
-        <Notice tone="danger" title={problem.kind === 'changed' ? PART_CHANGED_NOTICE : problem.kind === 'refused' ? problem.message : PART_SAVE_FAILED_TITLE}>
-          {problem.kind === 'failed' ? FAILED_BODY : null}
+      {problem?.kind !== 'conflict' ? null : (
+        // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
+        <Notice tone="danger" title={CONFLICT_TITLE}>
+          <p>{CONFLICT_BODY}</p>
+          <div className="mt-s-2 flex flex-wrap gap-s-2">
+            <Button variant="secondary" onClick={() => values.resolveConflict('mine')}>
+              {CONFLICT_KEEP_MINE}
+            </Button>
+            <Button variant="secondary" onClick={() => values.resolveConflict('newer')}>
+              {CONFLICT_USE_NEWER}
+            </Button>
+          </div>
+        </Notice>
+      )}
+      {otherProblem === null ? null : (
+        // A failure of another field's save while the conflict notice is up is shown beside it, not swallowed by it (review SQR-14).
+        <Notice tone="danger" title={otherProblem.kind === 'changed' ? PART_CHANGED_NOTICE : otherProblem.kind === 'refused' ? otherProblem.message : PART_SAVE_FAILED_TITLE}>
+          {otherProblem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
       {materials.status === 'failed' ? (
@@ -161,8 +177,22 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
       <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
         {progress.map(({ section, counts }) => (
           <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts} missing={hasMissing(section)}>
+            {/* The surface treatments of a section (07) are one multi-select, drawn first in the card: a chosen one is 1 and one that is not is 0, and each is saved on its own (STORY-05.06). */}
+            {section.fields.some((field) => field.rule.type === 'flag') ? (
+              <SurfaceTreatments
+                id={controlIdFor(section.id)}
+                fields={section.fields.filter((field) => field.rule.type === 'flag')}
+                texts={values.texts}
+                editable={editable}
+                onToggle={(flag, chosen) => {
+                  const text = chosen ? FLAG_ON : FLAG_OFF;
+                  values.setText(flag.id, text);
+                  values.commit(flag, text);
+                }}
+              />
+            ) : null}
             {section.fields.map((field) =>
-              field.rule.type === 'picture' ? (
+              field.rule.type === 'flag' ? null : field.rule.type === 'picture' ? (
                 // The picture (Part Model, STORY-05.07) is its own control, fetched when the form opens; it is changed by its own routes and is no typed value.
                 <PictureSlot
                   key={field.id}
@@ -189,7 +219,6 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
                 />
               ),
             )}
-            {section.reserved.length === 0 ? null : <PlaceholderFields sectionId={section.id} fields={section.reserved} />}
           </SectionCard>
         ))}
       </div>

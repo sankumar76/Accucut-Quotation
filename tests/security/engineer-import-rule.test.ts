@@ -64,6 +64,8 @@ const REPOSITORIES = {
     'exchange-rate-repository',
     // STORY-05.07: the part pictures, stored whole and read by their ID. No Engineer view needs the bytes or their owner lookup; the picture route is a handler, not a view.
     'image-repository',
+    // STORY-02.09: the backup and disk readings of `job_runs`, for the Admin's Settings page. Internal data, but nothing an Engineer's view has a use for, so it stays blocked.
+    'job-run-repository',
     'master-constraints',
     'master-repository',
     'material-repository',
@@ -92,6 +94,8 @@ const SERVICES = {
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
+    // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
+    'estimate-review-service',
     'estimate-service',
     // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
     'image-service',
@@ -99,6 +103,8 @@ const SERVICES = {
     'masters-service',
     'password-policy',
     'rate-name-rules',
+    // STORY-02.09: the Admin's Settings page (the last good backup and the server disk). It holds no cost data, but it is Admin only and no Engineer view imports it.
+    'settings-service',
     // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
@@ -135,6 +141,12 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
   './schemas/index',
 ];
 
+/**
+ * The contract of `GET /estimates/{id}/costs` (STORY-06.02 AC-4, AC-5): every figure of an estimate. The lint refuses it to an Engineer view by name (the other schema files are refused only through
+ * the barrel), as a static import and as `import()`, in the two spellings a view would use. `lib/estimate/figure-state` holds only counts and stays allowed.
+ */
+const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = ['@/server/views/schemas/costs', './schemas/costs', '../views/schemas/costs'];
+
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 /** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
@@ -169,6 +181,8 @@ const ALLOWED_IMPORTS: ReadonlyArray<string> = [
   // STORY-06.01: the status machine holds statuses, events and roles, no figure and no person's data, so an Engineer view may read it to show inputs read-only.
   '@/lib/estimate/state-machine',
   '@/lib/estimate/can-edit-inputs',
+  // STORY-06.02: the figure state holds two counts and no figure, so an Engineer's code may know it (the calculation repository and the review service, which hold the figures, stay blocked).
+  '@/lib/estimate/figure-state',
   '../auth/resolve-session-user',
 ];
 
@@ -177,6 +191,7 @@ const BLOCKED_IMPORTS: ReadonlyArray<string> = [
   ...SERVICES.blocked.map(servicePath),
   ...FUTURE_IMPORTS,
   ...CONTAINER_AND_BARREL_IMPORTS,
+  ...COSTS_SCHEMA_IMPORTS,
   ...FORMULA_IMPORTS,
   ...ROW_OUTPUT_IMPORTS,
   ...PRISMA_IMPORTS,

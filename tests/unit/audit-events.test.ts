@@ -20,22 +20,17 @@ import {
 const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
 /** STORY-02.01: the three events of the Process Master. */
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER];
-const RESERVED: ReadonlyArray<AuditEventName> = [
-  'approval.approved',
-  'approval.unlocked',
-  'approval.price_overridden',
-  'calculation.warning_acknowledged',
-  'approval.cancelled',
-  'approval.price_removed',
-];
+/** STORY-05.12: a Calculate that went ahead past a warning. */
+const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_CALCULATION];
+const RESERVED: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.unlocked', 'approval.price_overridden', 'approval.cancelled', 'approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen and the three events of the Process Master', () => {
+  it('wires exactly the six user events of the Users screen, the three events of the Process Master and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: approval, unlock, price override, quantity warning, cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: approval, unlock, price override, cancel, remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -124,6 +119,33 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
 
   it('gives a declared event no words yet, whatever it holds', () => {
     expect(describeOf('approval.cancelled', { price: 1 }, null)).toEqual(NO_DETAIL);
+  });
+});
+
+describe('STORY-05.12 AC-3: the quantity warning event names the rows and holds no figure', () => {
+  const event = AUDIT_EVENTS['calculation.warning_acknowledged'];
+  const rows = [
+    { code: 'QTY_ZERO', nodeId: 'node-1', slNo: '1.1', label: 'Invented top cover' },
+    { code: 'QTY_ZERO', nodeId: 'node-2', slNo: '1.1.1', label: '' },
+  ];
+
+  it('is wired, about the estimate, under the "Quantity warning" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'quantity_warning' });
+  });
+
+  it('says which rows the person went ahead with, by Sl. No and name, and the Sl. No alone for a part with no name', () => {
+    expect(event.describeStored(null, { warnings: rows })).toEqual({ before: 'No warning', after: 'Went ahead with QTY per Assy 0 on 1.1 Invented top cover, 1.1.1' });
+  });
+
+  it.each([
+    ['an extra key on the event', null, { warnings: rows, total: '917373.37' }],
+    ['an extra key on a row', null, { warnings: [{ ...(rows[0] ?? {}), cost: '5.00' }] }],
+    ['a code that is not QTY_ZERO', null, { warnings: [{ ...(rows[0] ?? {}), code: 'OTHER' }] }],
+    ['no rows', null, { warnings: [] }],
+    ['a before that is not null', { warnings: rows }, { warnings: rows }],
+    ['no warnings key', null, {}],
+  ])('refuses %s, so nothing but the rows can be kept', (_name, before, after) => {
+    expect(event.describeStored(before, after)).toBeNull();
   });
 });
 

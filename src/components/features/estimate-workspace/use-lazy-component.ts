@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 
 interface LazyState<Props> {
   readonly Component: ComponentType<Props> | null;
@@ -13,8 +13,13 @@ interface LazyState<Props> {
  * the page names. `Component` is `null` until it arrives, and `failed` says the fetch did not come (the caller shows a plain fallback). A fetch that fails is asked for again when `needed` turns true (the person is waiting for it), not in a loop. It is not `React.lazy` or
  * `next/dynamic`, for the same reason as the overlay loader (`use-first-open.ts`): a rejected lazy component cannot be tried again.
  */
-export function useLazyComponent<Props>(load: () => Promise<ComponentType<Props>>, needed: boolean): { readonly Component: ComponentType<Props> | null; readonly failed: boolean } {
+export function useLazyComponent<Props>(
+  load: () => Promise<ComponentType<Props>>,
+  needed: boolean,
+): { readonly Component: ComponentType<Props> | null; readonly failed: boolean; readonly retry: () => void } {
   const [state, setState] = useState<LazyState<Props>>({ Component: null, failed: false });
+  // The caller's "Try again" (STORY-05.13 AC-4): back to "not asked for yet", which asks for the code once more. The hook alone asks again only the once, when the first fetch fails.
+  const retry = useCallback((): void => setState((current) => (current.Component === null ? { Component: null, failed: false } : current)), []);
   useEffect(() => {
     if (state.Component !== null || (state.failed && !needed)) return;
     let live = true;
@@ -30,5 +35,5 @@ export function useLazyComponent<Props>(load: () => Promise<ComponentType<Props>
       live = false;
     };
   }, [state, needed, load]);
-  return { Component: state.Component, failed: state.failed };
+  return { Component: state.Component, failed: state.failed, retry };
 }

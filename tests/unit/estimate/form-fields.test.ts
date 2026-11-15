@@ -42,26 +42,34 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   });
 
   it('lists the fields of every section in the order of the form (section 08: AP, AU, BM, then AJ)', () => {
-    expect(lettersOf(0)).toEqual(['A', 'B', 'C', 'D', 'H']);
+    expect(lettersOf(0)).toEqual(['A', 'B', 'C', 'D', 'G', 'H']);
     expect(lettersOf(1)).toEqual(['E', 'F', 'J', 'K', 'L', 'N']);
     expect(lettersOf(2)).toEqual(['P', 'Q']);
     expect(lettersOf(3)).toEqual(['R']);
     expect(lettersOf(4)).toEqual(['S', 'T', 'U']);
     expect(lettersOf(5)).toEqual(['V', 'W', 'X', 'Y']);
-    expect(lettersOf(6)).toEqual([]);
+    expect(lettersOf(6)).toEqual(['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG']);
     expect(lettersOf(7)).toEqual(['AP', 'AU', 'BM', 'AJ']);
   });
 
-  it('AC-6: Treatment / Color (G) and the eight surface treatments (Z to AG) are placeholders that story 05.06 fills, not fields', () => {
-    expect(sections.map((section) => section.reserved.map((field) => field.letter))).toEqual([['G'], [], [], [], [], [], ['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'], []]);
-    expect(sections[0]?.reserved).toEqual([{ id: seedFieldAt('G').id, letter: 'G', label: 'Treatment / Color' }]);
-    const offered = sections.flatMap((section) => section.fields.map((field) => field.letter));
-    for (const letter of ['G', 'Z', 'AA', 'AG']) expect(offered).not.toContain(letter);
+  it('STORY-05.06 AC-3: Treatment / Color (G) is a field of the form with its own rule (a listed treatment, or "Other" with up to 100 characters), needed at Calculate, and one a save may name', () => {
+    expect(byLetter('G')).toMatchObject({ id: seedFieldAt('G').id, letter: 'G', label: 'Treatment / Color', kind: 'input', required: true, editable: true, rule: { type: 'treatment', maxLength: 100 } });
+    expect(formFieldById(seedConfig, seedFieldAt('G').id)?.editable).toBe(true);
+    expect(sections[0]?.fields.filter((field) => field.editable && field.required).map((field) => field.letter)).toEqual(['B', 'D', 'G', 'H']);
   });
 
-  it('AC-6: a placeholder is something no save may name, and the picture (C) is a field of its own kind, not a placeholder (STORY-05.07)', () => {
-    for (const letter of ['G', 'Z', 'AG']) expect(formFieldById(seedConfig, seedFieldAt(letter).id), letter).toBeUndefined();
-    expect(sections.flatMap((section) => section.reserved.map((field) => field.letter))).not.toContain('C');
+  it('STORY-05.06 AC-1: the eight surface treatments (Z to AG) are fields with the rule "flag", never needed, and ones a save may name', () => {
+    const flags = sections[6]?.fields ?? [];
+    expect(flags.map((field) => field.label)).toEqual(['Hot Dip Galvanizing', 'Primer', 'Shot Blasting', 'Polishing', 'Plating', 'Powder Coating', 'Foam', 'Soft Anodize']);
+    for (const field of flags) {
+      expect(field, field.letter).toMatchObject({ kind: 'input', required: false, editable: true, defaultValue: '0', rule: { type: 'flag' } });
+      expect(formFieldById(seedConfig, field.id)?.editable, field.letter).toBe(true);
+    }
+  });
+
+  it('there are no placeholders any more: a section has fields and nothing else, and the picture (C) is a field of its own kind (STORY-05.07)', () => {
+    for (const section of sections) expect(Object.keys(section), String(section.number)).not.toContain('reserved');
+    expect(byLetter('C')?.rule.type).toBe('picture');
   });
 
   it('STORY-05.07 AC-3: the picture (C) is on the form as a picture field, optional, with its hint, and never one that a save can name', () => {
@@ -72,16 +80,17 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
     expect(formFieldById(seedConfig, seedFieldAt('C').id)?.editable).toBe(false);
   });
 
-  it('STORY-05.07 AC-3: the picture is in no required count: the card of section 01 counts the same fields as before', () => {
-    expect(sections[0]?.fields.filter((field) => field.editable && field.required).map((field) => field.letter)).toEqual(['B', 'D', 'H']);
+  it('STORY-05.07 AC-3: the picture is in no required count: the card of section 01 counts its three typed fields and Treatment / Color (STORY-05.06)', () => {
+    expect(sections[0]?.fields.filter((field) => field.editable && field.required).map((field) => field.letter)).toEqual(['B', 'D', 'G', 'H']);
   });
 
-  it('keeps a placeholder for a field that is flagged hidden from the Engineer out of the answer altogether', () => {
+  it('keeps Treatment / Color out of the answer altogether when the registry flags it hidden from the Engineer', () => {
     const hidden = cloneSeedConfig();
     const treatment = hidden.fields.find((field) => field.key === 'treatment-color');
     if (treatment === undefined) throw new Error('The seed has no Treatment / Color.');
     (treatment as { engineerVisible: boolean }).engineerVisible = false;
-    expect(buildFormSections(hidden)[0]?.reserved).toEqual([]);
+    expect(buildFormSections(hidden)[0]?.fields.map((field) => field.letter)).not.toContain('G');
+    expect(formFieldById(hidden, treatment.id)).toBeUndefined();
   });
 
   it('derives every letter from the position in the document, so a field that moved is lettered where it is now', () => {
@@ -152,9 +161,9 @@ describe('AC-2, AC-3, AC-4 (STORY-05.04): the units, hints and the default that 
     expect(byLetter('AJ')?.hint).toBe('Write "None" if there is nothing to add.');
   });
 
-  it('every other field has no default: a blank stays a blank (only S has one in the registry)', () => {
+  it('every other field has no default: a blank stays a blank (only S, and the eight treatment flags at 0, have one in the registry)', () => {
     const withDefault = sections.flatMap((section) => section.fields).filter((field) => field.defaultValue !== null);
-    expect(withDefault.map((field) => field.letter)).toEqual(['S']);
+    expect(withDefault.map((field) => field.letter)).toEqual(['S', 'Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG']);
   });
 
   it('is found by the field\'s key and not its letter or its text, so a renamed label or a moved column keeps its hint and add-on', () => {
@@ -219,11 +228,10 @@ describe('AC-3, AC-8: nothing that carries a rate, a cost or a formula', () => {
 
   it('is built from keys, ids, letters, labels, units, hints and rules: no formula text, no rate name, no figure; the typed costs are named by their labels only', () => {
     const text = JSON.stringify(sections);
-    expect(Object.keys(sections[0] ?? {}).sort()).toEqual(['columnRange', 'fields', 'id', 'name', 'number', 'reserved', 'shortName']);
+    expect(Object.keys(sections[0] ?? {}).sort()).toEqual(['columnRange', 'fields', 'id', 'name', 'number', 'shortName']);
     for (const field of offered) {
-      expect(Object.keys(field).sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit']);
+      expect(Object.keys(field).sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit', 'visibleWhen']);
     }
-    for (const placeholder of sections.flatMap((section) => section.reserved)) expect(Object.keys(placeholder).sort()).toEqual(['id', 'label', 'letter']);
     // The word "cost" is in the four labels of inputs an Engineer types (FR-008), and nowhere else; no formula, no price, no rate.
     expect(withoutTypedCostLabels(text)).not.toMatch(/\{\{|formula|price|cost|rate/i);
     expect(offered.filter((field) => /cost/i.test(field.label)).map((field) => field.label)).toEqual(['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost']);
@@ -251,7 +259,7 @@ describe('AC-3, AC-8: nothing that carries a rate, a cost or a formula', () => {
 describe('formFieldById: what a save may name', () => {
   it('finds the typed and chosen fields of the form, and nothing else', () => {
     const savable = (letter: string): FieldDefinition => seedFieldAt(letter);
-    for (const letter of ['B', 'D', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'AJ', 'AP', 'AU', 'BM']) {
+    for (const letter of ['B', 'D', 'G', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AG', 'AJ', 'AP', 'AU', 'BM']) {
       expect(formFieldById(seedConfig, savable(letter).id)?.editable, letter).toBe(true);
     }
   });
@@ -264,8 +272,6 @@ describe('formFieldById: what a save may name', () => {
   it.each([
     ['Material Rate / Kg (I)', () => seedFieldAt('I').id],
     ['Blank Weight (M), a calculated field', () => seedFieldAt('M').id],
-    ['Treatment / Color (G), story 05.06', () => seedFieldAt('G').id],
-    ['Hot Dip Galvanizing (Z), a surface treatment of story 05.06', () => seedFieldAt('Z').id],
     ['Machining Cost\'s calculated twin, Total Process Cost (AY)', () => seedFieldAt('AY').id],
     ['Approved Quote Price (BO)', () => seedFieldAt('BO').id],
     ['an ID the registry does not have', () => '00000000-0000-4000-8000-0000deadbeef'],

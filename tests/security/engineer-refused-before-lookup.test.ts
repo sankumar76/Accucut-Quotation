@@ -46,7 +46,9 @@ vi.mock('@/server/composition', async () => {
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
     getConfigReadService: () => shared.configReadService,
+    getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
+    getEstimateReviewService: () => shared.estimateReviewService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -111,6 +113,10 @@ function watchLookups(): () => string[] {
   watch('audit', harness.auditWorld.audit);
   // STORY-08.01: the configuration versions, where the formulas are. A refused role must not cause a read of any of them.
   watch('config', harness.configRepository);
+  // STORY-06.02: the calculation record and the parts, which the estimate review reads. A refused role must not cause a read of either.
+  watch('review', harness.reviewReads);
+  // STORY-02.09: the backup and disk readings of `job_runs`. A refused role must not cause a read of either.
+  watch('jobRuns', harness.jobRuns);
   watch('users', harness.users, ['findAccountById']);
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }
@@ -182,6 +188,14 @@ describe('AC-5: a refused role gets the fixed 403 and nothing is looked up first
     const lookups = watchLookups();
     expect((await callApi(rowFor('/api/v1/process-items'), 'GET', INVENTED_ID, undefined)).status).toBe(200);
     expect(lookups()).toContain('masters.listProcessItems');
+  });
+
+  it('the counting can fail for the review too (STORY-06.02): an allowed role makes the review\'s reads, and they are seen', async () => {
+    harness.signInAs('LEAD');
+    const lookups = watchLookups();
+    const row = rowFor('/api/v1/estimates/[id]/costs');
+    expect((await callApi(row, 'GET', harness.targetId, undefined)).status).toBe(200);
+    expect(lookups()).toEqual(expect.arrayContaining(['review.findFigureBasis', 'review.listNodes']));
   });
 
   it('a signed-out caller is sent 401 and no rate, on every route', async () => {

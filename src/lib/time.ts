@@ -87,6 +87,27 @@ export function formatIst(date: Date): string {
   return `${day} ${month} ${year}, ${hour}:${minute} ${IST_LABEL}`;
 }
 
+/**
+ * The time of day alone, as a notice writes it: "10:42 IST" (STORY-05.08 AC-1, "Draft saved at 10:42 IST."). Built from the same parts as `formatIst`, so the two cannot disagree. An invalid
+ * date is a mistake in the code and throws.
+ */
+export function formatIstTime(date: Date): string {
+  if (Number.isNaN(date.getTime())) throw new RangeError('formatIstTime needs a valid date.');
+  const parts = IST_PARTS.formatToParts(date);
+  return `${partOf(parts, 'hour')}:${partOf(parts, 'minute')} ${IST_LABEL}`;
+}
+
+const IST_WEEKDAY = new Intl.DateTimeFormat('en-US', { timeZone: IST_TIME_ZONE, weekday: 'long' });
+
+/**
+ * A time with its weekday, as the Settings page writes the last good backup: "Sunday 01 Nov 2026, 02:00 IST" (STORY-02.09 AC-1; UX spec SCR-15). The weekday is the one in IST,
+ * so 23:00 UTC on a Saturday reads Sunday. An invalid date throws, as in `formatIst`.
+ */
+export function formatIstWithWeekday(date: Date): string {
+  const text = formatIst(date);
+  return `${IST_WEEKDAY.format(date)} ${text}`;
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const FIRST_YEAR = 2000;
 const LAST_YEAR = 2999;

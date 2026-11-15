@@ -39,10 +39,23 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>) {
       const id = nextId();
       const createdAt = new Date('2026-11-14T05:00:00.000Z');
-      calculations.push({ ...calculation, id, warnings: [], createdAt, rows: rows.map((row) => ({ ...row, id: nextId() })) });
+      calculations.push({ ...calculation, id, warnings: (calculation.warnings ?? []).map((warning) => ({ ...warning })), createdAt, rows: rows.map((row) => ({ ...row, id: nextId() })) });
       return Promise.resolve({ id, createdAt });
     },
     findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
+    findFigureBasis: (estimateId: string) => {
+      const estimate = estimateWorld.estimates.find((candidate) => candidate.id === estimateId);
+      if (estimate === undefined) return Promise.resolve(null);
+      const linked = calculations.find((calculation) => calculation.id === estimate.currentCalculationId);
+      return Promise.resolve({
+        inputsRevision: estimate.inputsRevision,
+        calculation: linked === undefined ? null : { id: linked.id, inputsRevision: linked.inputsRevision, configVersionId: linked.configVersionId, createdAt: linked.createdAt },
+      });
+    },
+    findReviewFigures: (calculationId: string) => {
+      const found = calculations.find((calculation) => calculation.id === calculationId);
+      return Promise.resolve(found === undefined ? null : { productValues: found.productValues, rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: row.outputs })) });
+    },
   };
 
   const estimates: EstimateRepository = {

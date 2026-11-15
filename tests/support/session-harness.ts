@@ -5,12 +5,16 @@ import type { RoleName } from '../../src/lib/auth/roles';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from '../../src/server/auth/session-cookie';
 import { type AccountService, createAccountService } from '../../src/server/services/account-service';
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
-import { systemClock } from '../../src/lib/time';
+import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
+import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import type { CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
+import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
+import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -20,10 +24,12 @@ import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { createAuditSink, type AuditSink } from './fake-audit-sink';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeConfigRepository } from './fake-config';
+import { createFakeJobRunRepository, type FakeJobRunRepository } from './fake-job-runs';
 import { createFakeCalculationWorld, type FakeCalculationWorld } from './fake-calculations';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
@@ -56,6 +62,10 @@ const THROTTLE_KEY_MATERIAL = 'invented-throttle-key-material';
  * hours from sign-in, so a fixed instant for both makes the result the same on every run and at any time of day (STD-06).
  */
 export const SESSION_NOW = new Date('2026-11-05T09:00:00.000Z');
+
+/** A file path and a volume name an invented `job_runs` row holds in its `result`: no answer of the Settings routes or page may carry either (STORY-02.09 AC-5). */
+export const JOB_RUN_CANARY_PATH = 'D:\\InventedBackupFolder\\copy-0001.age';
+export const JOB_RUN_CANARY_VOLUME = 'InventedVolumeLabel';
 
 /** Holds `Date` at `SESSION_NOW` until `releaseSessionClock`. Timers stay real, so nothing waits on a fake clock. */
 export function holdSessionClock(): void {
@@ -92,6 +102,10 @@ export interface SessionHarness {
   readonly configReadService: ConfigReadService;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
+  /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
+  readonly settingsService: SettingsService;
+  /** The in-memory `job_runs` behind `settingsService`: its members are plain functions, so a test can spy on each one (the refusal-before-lookup scan does). */
+  readonly jobRuns: FakeJobRunRepository;
   /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
@@ -100,8 +114,14 @@ export interface SessionHarness {
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
   readonly calculationService: CalculationService;
+  /** The audit entries written by `calculationService` (an acknowledged quantity warning, STORY-05.12): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly calculationAudit: AuditSink;
   /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
   readonly calculationWorld: FakeCalculationWorld;
+  /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
+  readonly estimateReviewService: EstimateReviewService;
+  /** The pieces `estimateReviewService` reads through, for a test that spies on what a refused caller causes to be read. */
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -156,6 +176,11 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const configRepository = createFakeConfigRepository();
+  // The `job_runs` of STORY-02.09: one good backup two days before the held clock and a daily reading of 62 % free, whose `result` also holds a path and a volume name that no answer may carry.
+  const jobRuns = createFakeJobRunRepository([
+    { job: 'backup', finishedAt: new Date(SESSION_NOW.getTime() - 2 * MILLISECONDS_PER_DAY), result: { status: 'ok', sizeBytes: 1_000, freeBytes: 620, totalBytes: 1_000, path: JOB_RUN_CANARY_PATH } },
+    { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
+  ]);
   const taskWorld = createFakeTaskWorld(() => users.records);
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
@@ -202,14 +227,31 @@ export function createSessionHarness(): SessionHarness {
   // The Engineer's Calculate over the same world (STORY-05.09). Its one part is empty, so the valid call of the recipe is the 422 that lists what is missing, which writes nothing: it answers the
   // same at any state, for every caller, however often the matrix and the scan repeat it.
   const calculationWorld = createFakeCalculationWorld(estimateWorld);
+  // The audit entries of an acknowledged quantity warning (STORY-05.12), kept apart from `auditWorld`, whose transactions are its own.
+  const calculationAudit = createAuditSink();
   const calculationService = createCalculationService({
     masters,
     currentConfiguration: () => Promise.resolve({ id: '00000000-0000-4000-8000-0aaa00000001', document: seedConfig }),
     storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
-    workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition },
+    workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition, audit: calculationAudit.service },
+  });
+  // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
+  const reviewReads = {
+    findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
+    findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
+  };
+  const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
+  const estimateReviewService = createEstimateReviewService({
+    calculations: reviewReads,
+    nodes: reviewReads,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
   return {
+    estimateReviewService,
+    reviewReads,
+    calculationAudit,
     users,
     throttles,
     auditService,
@@ -222,6 +264,8 @@ export function createSessionHarness(): SessionHarness {
     calculationWorld,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    jobRuns,
+    settingsService: createSettingsService({ jobRuns, clock: systemClock }),
     configRepository,
     configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
     mastersService: createMastersService({

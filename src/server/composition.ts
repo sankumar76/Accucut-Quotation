@@ -12,6 +12,7 @@ import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createImageRepository } from './repositories/image-repository';
+import { createJobRunRepository } from './repositories/job-run-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -23,9 +24,11 @@ import { type AuditService, createAuditService } from './services/audit-service'
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
-import { getCurrentVersion } from './services/config-service';
+import { getCurrentVersion, getVersionById } from './services/config-service';
+import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
 import { createUserService, type UserService } from './services/user-service';
@@ -50,6 +53,8 @@ let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
+let estimateReviewService: EstimateReviewService | undefined;
+let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -213,10 +218,40 @@ export function getCalculationService(): CalculationService {
         return { id: version.id, document: version.document };
       },
       storage: { calculations: createCalculationRepository(runtimeClient()), estimates, transactions: createTransactionRunner(runtimeClient()) },
-      workflow: { nodes: createEstimateNodeRepository(runtimeClient()), transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx) },
+      workflow: {
+        nodes: createEstimateNodeRepository(runtimeClient()),
+        transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx),
+        audit: getAuditService(),
+      },
     });
   }
   return calculationService;
+}
+
+/**
+ * The estimate review (STORY-06.02): the figures of SCR-06 for the Lead and the Admin, read from the stored calculation only while its state is `current`. The configuration version a
+ * calculation was made with is read by its ID (parsed and cached per version, like the current one). Restricted (NFR-002): only the `/costs` route and the review page ask for it here,
+ * both for the Lead and the Admin alone.
+ */
+export function getEstimateReviewService(): EstimateReviewService {
+  if (estimateReviewService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    estimateReviewService = createEstimateReviewService({
+      calculations: createCalculationRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+    });
+  }
+  return estimateReviewService;
+}
+
+/**
+ * The Settings page's reading of the backups and the server disk (STORY-02.09): the last good backup and the newest free-space reading, from `job_runs`, against the system clock. The
+ * routes and the page that call it are in the manifest for the Admin alone.
+ */
+export function getSettingsService(): SettingsService {
+  settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
+  return settingsService;
 }
 
 /**

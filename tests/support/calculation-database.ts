@@ -32,7 +32,7 @@ export interface CalculationDatabase extends AuditDatabase {
   readonly estimates: EstimateRepository;
   readonly service: CalculationService;
   /** The same service over the real repositories with some of its storage replaced, for a test of a failure part-way. */
-  buildService(storage?: Partial<NonNullable<CalculationServiceDependencies['storage']>>): CalculationService;
+  buildService(storage?: Partial<NonNullable<CalculationServiceDependencies['storage']>>, workflow?: Partial<NonNullable<CalculationServiceDependencies['workflow']>>): CalculationService;
   /** The estimate service over the same database (STORY-05.09): `calculate` asks its `transition` for role, ownership and status in the caller's transaction. */
   readonly estimateService: EstimateService;
   /** The part repository over the same database, for the parts `calculate` reads. */
@@ -47,7 +47,7 @@ export interface CalculationDatabase extends AuditDatabase {
   readonly materialOneId: string;
   readonly materialTwoId: string;
   /** A new task and estimate for the customer, in this state. */
-  addEstimate(options?: { status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean }): Promise<string>;
+  addEstimate(options?: { status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
   /** Adds a part to an estimate, as the part form stores it (`inputs` by field ID), and returns its ID. The estimate's own lock is not taken: a test builds an estimate before anyone calculates it. */
   addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
   /** A DRAFT of the Engineer's with the customer chosen and one part holding every needed input and the first material. */
@@ -99,7 +99,10 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
   });
-  const buildService = (storage: Partial<NonNullable<CalculationServiceDependencies['storage']>> = {}): CalculationService =>
+  const buildService = (
+    storage: Partial<NonNullable<CalculationServiceDependencies['storage']>> = {},
+    workflow: Partial<NonNullable<CalculationServiceDependencies['workflow']>> = {},
+  ): CalculationService =>
     createCalculationService({
       masters: db.masterRepository,
       // The configuration is read as `composition.ts` reads it, inside the caller's transaction, with a cache of its own for each read, so both of its queries (the latest version's ref, then the
@@ -109,7 +112,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
         return { id: current.id, document: current.document };
       },
       storage: { calculations, estimates, transactions: db.transactions, ...storage },
-      workflow: { nodes, transition: estimateService.transition },
+      workflow: { nodes, transition: estimateService.transition, audit: db.audit, ...workflow },
     });
 
   const addEstimate: CalculationDatabase['addEstimate'] = async (options = {}) => {
@@ -120,7 +123,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     );
     const { rows } = await db.owner.query<{ id: string }>(
       `INSERT INTO estimates (task_id, customer_id, status, inputs_revision) VALUES ($1::uuid, $2::uuid, $3::estimate_status, $4) RETURNING id::text`,
-      [defined(task.rows[0]).id, options.withCustomer === false ? null : customerId, options.status ?? 'DRAFT', options.revision ?? 3],
+      [defined(task.rows[0]).id, options.withCustomer === false ? null : (options.customerId ?? customerId), options.status ?? 'DRAFT', options.revision ?? 3],
     );
     return defined(rows[0]).id;
   };

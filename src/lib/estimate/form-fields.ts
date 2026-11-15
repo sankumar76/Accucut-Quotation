@@ -2,11 +2,12 @@ import type { FieldDefinition, SectionDefinition } from '../fields/field-schema'
 import { fieldLetter, fieldsInFormOrder, findFieldById, findFieldByKey, sectionColumnRange } from '../fields/registry';
 import type { ConfigDocument } from '../fields/schema';
 import { isEngineerVisibleAllowed } from '../fields/visibility';
+import type { ShownRule } from '../fields/visible-when';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { RUPEE } from '../masters/master-rules';
 
 import { QTY_PER_ASSY_HINT } from './quantity-hint';
-import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
+import { MAX_LONG_TEXT_LENGTH, MAX_OTHER_TREATMENT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 
 /**
  * What the part form offers, worked out from the field registry and nothing else (STORY-05.03 AC-1, AC-3, AC-8; architecture sections 4.5 and 6 "Estimate form";
@@ -19,17 +20,14 @@ import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
  * (`formFieldById`), so a value for Material Rate or any calculated field has no place to go.
  */
 
-/** The sections of the form: 01 Part Details to 08 Other Costs and Remarks (STORY-05.03 built 01 and 02, STORY-05.04 the rest). Section 07 is a placeholder until STORY-05.06. */
+/** The sections of the form: 01 Part Details to 08 Other Costs and Remarks (STORY-05.03 built 01 and 02, STORY-05.04 the rest, STORY-05.06 the treatments of 07 and Treatment / Color of 01). */
 export const FORM_SECTION_NUMBERS: ReadonlyArray<number> = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /**
- * The input types the form can draw and save so far. Treatment / Color (`select_other`) and the flags (`flag`) are placeholders until STORY-05.06. The picture (`image`, Part Model,
- * STORY-05.07) is on the form too, with its own rule (`picture`): it is added, replaced and removed by its own routes and is never a typed value.
+ * The input types the form can draw and save: numbers and texts, Treatment / Color (`select_other`: a listed treatment, or "Other" with words) and the eight surface treatments (`flag`: chosen or
+ * not; STORY-05.06). The picture (`image`, Part Model, STORY-05.07) is on the form too, with its own rule (`picture`): it is added, replaced and removed by its own routes and is never a typed value.
  */
-const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text', 'image'];
-
-/** The input types the form shows as a labelled placeholder, because STORY-05.06 builds their control (AC-6). The picture is not one: it is drawn by STORY-05.07. */
-const PLACEHOLDER_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['select_other', 'flag'];
+const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text', 'image', 'select_other', 'flag'];
 
 /** The decimals a typed number may have (SPEC section 7.3). */
 export const NUMBER_DECIMALS = 2;
@@ -64,6 +62,10 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
+  /** Treatment / Color (G): one of the listed treatments, or "Other" with words of up to `maxLength` characters. Saved as `{ id, text }` (`treatment-value.ts`). */
+  | { readonly type: 'treatment'; readonly maxLength: number }
+  /** One of the surface treatments (Z to AG): chosen (`1`) or not (`0`). The form draws the flags of a section as one multi-select (SCR-05 section 07). */
+  | { readonly type: 'flag' }
   /** `from` is the field this one follows (Material Considered follows Material in Drawing); null for the Sl. No., which follows the tree. */
   | { readonly type: 'derived'; readonly from: string | null }
   /** A picture (Part Model, STORY-05.07): drawn as the picture control, changed by its own routes, optional (D-31) and never saved as a value. */
@@ -84,14 +86,12 @@ export interface FormFieldView {
   readonly required: boolean;
   /** False for a field that is shown and never typed into. */
   readonly editable: boolean;
+  /**
+   * When the registry hides this field (STORY-05.05; Fasteners Qty and Cost): the field it watches and the values that hide it, or null for a field that always shows. It is the registry's own
+   * `visibleWhen` (the operator is always "not in"), read by `isShownByRule` in the browser and by `isFieldShown` on the server: the rule is written once, in the registry.
+   */
+  readonly visibleWhen: ShownRule | null;
   readonly rule: FormRule;
-}
-
-/** A field whose control a later story builds (STORY-05.06): the form shows its letter and label in a labelled placeholder and offers nothing to type or save. */
-export interface PlaceholderFieldView {
-  readonly id: string;
-  readonly letter: string;
-  readonly label: string;
 }
 
 export interface FormSectionView {
@@ -99,11 +99,9 @@ export interface FormSectionView {
   readonly number: number;
   readonly name: string;
   readonly shortName: string;
-  /** The column tag of the section, from the letters of the fields shown here and of its placeholders, so it names what the card holds (`E, F, J–L, N`). */
+  /** The column tag of the section, from the letters of the fields shown here, so it names what the card holds (`E, F, J–L, N`). */
   readonly columnRange: string;
   readonly fields: ReadonlyArray<FormFieldView>;
-  /** The fields of the section that are not built yet (Treatment / Color in 01, the eight surface treatments in 07). The counts of "n of m" leave them out (AC-6). */
-  readonly reserved: ReadonlyArray<PlaceholderFieldView>;
 }
 
 const sectionNumberOf = (document: ConfigDocument, field: FieldDefinition): number => document.sections.find((section) => section.id === field.sectionId)?.number ?? 0;
@@ -116,15 +114,6 @@ function isOnForm(document: ConfigDocument, field: FieldDefinition): boolean {
   return field.key === MATERIAL_CONSIDERED_KEY;
 }
 
-/**
- * An input the form shows as a labelled placeholder (AC-6): the same allow-list as `isOnForm` (an Engineer-visible input, in a section of the form), but of a type whose control a later
- * story builds. Only its ID, letter and label leave the server, and a save cannot name it (`formFieldById` does not find it).
- */
-function isPlaceholder(document: ConfigDocument, field: FieldDefinition): boolean {
-  if (field.kind !== 'input' || field.sectionId === null || !FORM_SECTION_NUMBERS.includes(sectionNumberOf(document, field))) return false;
-  return field.engineerVisible && isEngineerVisibleAllowed(field) && PLACEHOLDER_DATA_TYPES.includes(field.dataType);
-}
-
 /** A text is as long as its field allows: 200 characters, or 1,000 for a multi-line one (Remarks; assumption A-1). */
 function textRuleOf(multiline: boolean): FormRule {
   return { type: 'text', maxLength: multiline ? MAX_LONG_TEXT_LENGTH : MAX_PART_TEXT_LENGTH, multiline };
@@ -134,6 +123,8 @@ function ruleOf(document: ConfigDocument, field: FieldDefinition): FormRule {
   if (field.kind !== 'input') return { type: 'derived', from: field.key === MATERIAL_CONSIDERED_KEY ? (findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id ?? null) : null };
   if (field.key === MATERIAL_IN_DRAWING_KEY) return { type: 'select', source: 'materials' };
   if (field.dataType === 'image') return { type: 'picture' };
+  if (field.dataType === 'select_other') return { type: 'treatment', maxLength: MAX_OTHER_TREATMENT_LENGTH };
+  if (field.dataType === 'flag') return { type: 'flag' };
   if (field.dataType === 'number') return { type: 'number', decimals: NUMBER_DECIMALS };
   return textRuleOf(field.multiline === true);
 }
@@ -152,6 +143,7 @@ function viewOf(document: ConfigDocument, field: FieldDefinition): FormFieldView
     required: field.mandatory,
     // A derived field is shown and never typed; a picture is changed by its own routes, so no save of values may name it either.
     editable: rule.type !== 'derived' && rule.type !== 'picture',
+    visibleWhen: field.kind === 'input' && field.visibleWhen !== null ? { fieldId: field.visibleWhen.fieldId, values: [...field.visibleWhen.values] } : null,
     rule,
   };
 }
@@ -163,19 +155,18 @@ function sectionOf(document: ConfigDocument, section: SectionDefinition): FormSe
     number: section.number,
     name: section.name,
     shortName: section.shortName,
-    columnRange: sectionColumnRange(document, section, (field) => isOnForm(document, field) || isPlaceholder(document, field)),
+    columnRange: sectionColumnRange(document, section, (field) => isOnForm(document, field)),
     fields: inOrder.filter((field) => isOnForm(document, field)).map((field) => viewOf(document, field)),
-    reserved: inOrder.filter((field) => isPlaceholder(document, field)).map((field) => ({ id: field.id, letter: fieldLetter(field), label: field.label })),
   };
 }
 
-/** The sections of the form, in order, each with the fields it shows and its placeholders. A section with neither is left out. */
+/** The sections of the form, in order, each with the fields it shows. A section with none is left out. */
 export function buildFormSections(document: ConfigDocument): ReadonlyArray<FormSectionView> {
   return document.sections
     .filter((section) => FORM_SECTION_NUMBERS.includes(section.number))
     .sort((a, b) => a.number - b.number)
     .map((section) => sectionOf(document, section))
-    .filter((section) => section.fields.length > 0 || section.reserved.length > 0);
+    .filter((section) => section.fields.length > 0);
 }
 
 /** The form field with this ID, or `undefined` when the registry has none or it is not on the form. A save accepts only a field found here with `editable` true. */

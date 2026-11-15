@@ -69,6 +69,16 @@ export interface RouteOptions<Output extends z.ZodType, Query extends z.ZodType,
   readonly query?: Query;
   /** JSON body. Parsed only when the schema is given. */
   readonly body?: Body;
+  /**
+   * The body is a choice the caller may leave out (STORY-05.12: Calculate's `{acknowledge}`): an empty body is read as `undefined` and the schema decides whether that is allowed. Without it an empty body
+   * is 400, as before. Only with `body`.
+   */
+  readonly optionalBody?: true;
+  /**
+   * A body that does not fit its schema is 400 `MALFORMED_REQUEST` and not the 422 of a form (STORY-05.12 AC-5): the body is a stated choice, not a value a person can correct field by field, and
+   * the answer names no field and echoes nothing. Only with `body`.
+   */
+  readonly badBodyIs400?: true;
   /** Path parameters of a dynamic route. */
   readonly params?: Params;
   /** One uploaded file in a multipart body (STORY-05.07), read within `maxBodyBytes` in all, framing included. Not with `body`. */
@@ -144,8 +154,13 @@ function queryOf(request: Request): Record<string, string> {
   return Object.fromEntries(new URL(request.url).searchParams);
 }
 
-async function bodyOf(request: Request, requestId: string): Promise<unknown> {
+async function bodyOf(request: Request, requestId: string, optional: boolean): Promise<unknown> {
   try {
+    // A body that is a choice (`optionalBody`) may be absent: an empty body is read as nothing, and the schema says whether nothing is allowed.
+    if (optional) {
+      const text = await request.text();
+      return text.trim() === '' ? undefined : JSON.parse(text);
+    }
     return await request.json();
   } catch {
     throw new InputRefused(problemResponse(malformedProblem(requestId)));
@@ -162,9 +177,9 @@ async function uploadOf(request: Request, maxBodyBytes: number, requestId: strin
   }
 }
 
-function parseInput(schema: z.ZodType, value: unknown, requestId: string): unknown {
+function parseInput(schema: z.ZodType, value: unknown, requestId: string, refusal: 'validation' | 'malformed' = 'validation'): unknown {
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new InputRefused(problemResponse(validationProblem(parsed.error, requestId)));
+  if (!parsed.success) throw new InputRefused(problemResponse(refusal === 'malformed' ? malformedProblem(requestId) : validationProblem(parsed.error, requestId)));
   return parsed.data;
 }
 
@@ -193,7 +208,12 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
 
     const query = parseInput(options.query ?? NO_INPUT, options.query === undefined ? undefined : queryOf(request), requestId);
     const params = parseInput(options.params ?? NO_INPUT, options.params === undefined ? undefined : await context?.params, requestId);
-    const body = parseInput(options.body ?? NO_INPUT, options.body === undefined ? undefined : await bodyOf(request, requestId), requestId);
+    const body = parseInput(
+      options.body ?? NO_INPUT,
+      options.body === undefined ? undefined : await bodyOf(request, requestId, options.optionalBody === true),
+      requestId,
+      options.badBodyIs400 === true ? 'malformed' : 'validation',
+    );
 
     const upload = options.upload === undefined ? undefined : await uploadOf(request, options.upload.maxBodyBytes, requestId);
 

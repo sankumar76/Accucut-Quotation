@@ -67,6 +67,19 @@ export interface NewCalculation {
   readonly productValues: ProductValues;
   /** The user who pressed Calculate. With the time, it is also the acknowledgement of any warning (ADR-007). */
   readonly createdById: string;
+  /**
+   * The warnings the person acknowledged for this calculation (STORY-05.12; architecture section 4.3): code, part, Sl. No and name, as text at that moment. Absent is none: the column takes its
+   * default `[]`. A calculation with warnings cannot exist unless they were acknowledged, so `createdById` and the time are the acknowledgement.
+   */
+  readonly warnings?: ReadonlyArray<StoredWarning>;
+}
+
+/** One acknowledged warning as the record keeps it: text only, no figure (the shape of `QuantityWarning`). */
+export interface StoredWarning {
+  readonly code: string;
+  readonly nodeId: string;
+  readonly slNo: string;
+  readonly label: string;
 }
 
 export interface NewCalculationRow {
@@ -83,20 +96,47 @@ export interface CalculationRowRecord extends NewCalculationRow {
   readonly id: string;
 }
 
-export interface CalculationRecord extends NewCalculation {
+export interface CalculationRecord extends Omit<NewCalculation, 'warnings'> {
   readonly id: string;
-  /** `[]` until STORY-05.12 writes any. */
+  /** The acknowledged warnings (STORY-05.12), `[]` for a calculation that had none. */
   readonly warnings: ReadonlyArray<unknown>;
   readonly createdAt: Date;
   /** Every node as calculated. The tree is rebuilt from `parentId` and `sortIndex`; the order of this list is only deterministic. */
   readonly rows: ReadonlyArray<CalculationRowRecord>;
 }
 
+/**
+ * What decides whether an estimate's figures may be shown, and nothing that is a figure (STORY-06.02): the estimate's count of input changes, and which calculation it is linked to with
+ * the count that calculation was made at, the version it used and when. `lib/estimate/figure-state.ts` turns the two counts into a state.
+ */
+export interface FigureBasis {
+  readonly inputsRevision: number;
+  readonly calculation: {
+    readonly id: string;
+    readonly inputsRevision: number;
+    readonly configVersionId: string;
+    readonly createdAt: Date;
+  } | null;
+}
+
+/** What the estimate review shows of a calculation (STORY-06.02): the product's figures and each row's outputs by node. Not the master snapshot and not the typed inputs. */
+export interface ReviewFigures {
+  readonly productValues: ProductValues;
+  readonly rows: ReadonlyArray<{ readonly nodeId: string; readonly outputs: StoredValues }>;
+}
+
 export interface CalculationRepository {
-  /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` takes its default, `[]`. */
+  /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` is the acknowledged list, or the default `[]` when there is none. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
+  /** The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. */
+  findFigureBasis(estimateId: string): Promise<FigureBasis | null>;
+  /**
+   * The figures the estimate review shows, of the calculation with this ID: the product's values and every row's outputs, selected column by column (neither the master snapshot nor a row's
+   * inputs are read). Null for an unknown ID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   */
+  findReviewFigures(calculationId: string): Promise<ReviewFigures | null>;
 }
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -119,6 +159,8 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             inputsRevision: calculation.inputsRevision,
             masterSnapshot: calculation.masterSnapshot,
             productValues: calculation.productValues,
+            // Built key by key, so a record can only ever hold the four texts of a warning, whatever the caller hands over.
+            warnings: (calculation.warnings ?? []).map(({ code, nodeId, slNo, label }) => ({ code, nodeId, slNo, label })),
             createdById: calculation.createdById,
           },
           select: { id: true, createdAt: true },
@@ -168,6 +210,30 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             imageId: row.imageId,
             outputs: storedValuesSchema.parse(row.outputs),
           })),
+        };
+      }),
+
+    findFigureBasis: (estimateId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(estimateId)) return null;
+        const found = await db.estimate.findUnique({
+          where: { id: estimateId },
+          select: { inputsRevision: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
+        });
+        return found === null ? null : { inputsRevision: found.inputsRevision, calculation: found.currentCalculation };
+      }),
+
+    findReviewFigures: (calculationId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await db.calculation.findUnique({
+          where: { id: calculationId },
+          select: { productValues: true, rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] } },
+        });
+        if (found === null) return null;
+        return {
+          productValues: productValuesSchema.parse(found.productValues),
+          rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
         };
       }),
   };

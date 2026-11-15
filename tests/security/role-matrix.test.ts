@@ -46,7 +46,9 @@ vi.mock('@/server/composition', async () => {
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
     getConfigReadService: () => shared.configReadService,
+    getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
+    getEstimateReviewService: () => shared.estimateReviewService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -88,6 +90,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
+  '/settings': 'redirect:/sign-in?callbackUrl=%2Fsettings',
   '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',

@@ -28,6 +28,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/users/[id]/password-reset': ['ADMIN'],
   // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
   '/api/v1/audit': ['ADMIN'],
+  // The API behind Settings (SPEC section 9: Settings is the Admin's; architecture section 6 row "Settings", STORY-02.09 AC-6, CR-33).
+  '/api/v1/settings': ['ADMIN'],
   // The API behind Fields and formulas (STORY-08.01; architecture section 6 row "Configuration": A L): the Admin and the Lead read the formulas, an Engineer never does (NFR-002, CR-33).
   '/api/v1/config/fields': ['ADMIN', 'LEAD'],
   '/api/v1/config/current': ['ADMIN', 'LEAD'],
@@ -51,6 +53,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD', 'ENGINEER'],
   // STORY-05.09: the Engineer's Calculate. Only the Engineer (SPEC section 9: a Lead's and an Admin's is Recalculate, STORY-06.04).
   'POST /api/v1/estimates/[id]/calculate': ['ENGINEER'],
+  // STORY-06.02 (SCR-06; architecture section 6 row "Cost": A L): the figures of the estimate review. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
+  '/api/v1/estimates/[id]/costs': ['ADMIN', 'LEAD'],
   // STORY-05.02 (architecture section 6 "Tree", "Node", "Reorder": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/tree': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],

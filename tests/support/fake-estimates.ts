@@ -137,7 +137,7 @@ export function createFakeEstimateWorld(
     },
     lockEstimate: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
-      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, inputsRevision: estimate.inputsRevision };
+      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, inputsRevision: estimate.inputsRevision, taskCode: estimate.code };
       return Promise.resolve(lock);
     },
     findActiveCustomer: (id) => {

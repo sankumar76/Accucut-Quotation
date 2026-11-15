@@ -8,6 +8,7 @@ import type { AccountPanelProps } from '@/components/shared/account-menu';
 import { Icon } from '@/components/shared/icon';
 import { signOutOfPortal } from '@/lib/auth/auth-client';
 import { ACCOUNT_PATH, SIGN_IN_PATH } from '@/lib/auth/return-path';
+import { mayLeave } from '@/lib/estimates/leave-registry';
 
 /**
  * The account menu panel of every signed-in page, with sign-out wired (STORY-01.01 AC-4, SCR-25). It is the code that
@@ -24,6 +25,9 @@ export function PortalAccountPanel({ user, keyboard }: AccountPanelProps) {
   const [failed, setFailed] = useState(false);
 
   async function endSession(): Promise<void> {
+    // The estimate page has an answer to "may I leave?" when something typed is not saved (STORY-05.08 AC-4): the session must not end under it, so the person is asked first. On every other page there is no
+    // guard and this is yes at once.
+    if (!(await mayLeave())) return;
     if (!(await signOutOfPortal())) {
       setFailed(true);
       return;

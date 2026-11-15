@@ -54,18 +54,12 @@ export const sectionRegionLabel = (number: number, name: string): string => `${S
 export const columnRangeLabel = (range: string): string => `Excel columns ${range}`;
 
 /**
- * The other sections of the form (STORY-05.04; UX spec SCR-05 "Layout rules": the section strip, "n of m" on every card). The sentences under "not available yet" are about the form and
- * name no rate, price or formula (UX-24).
+ * The other sections of the form (STORY-05.04; UX spec SCR-05 "Layout rules": the section strip, "n of m" on every card). The sentences are about the form and name no rate, price or formula (UX-24).
  */
 export const SECTION_STRIP_LABEL = 'Sections of the form';
 export const sectionLinkText = (number: number, shortName: string): string => `${String(number).padStart(2, '0')} ${shortName}`;
 export const SECTION_COMPLETE_TEXT = 'All filled in';
 export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
-export const PLACEHOLDER_TITLE = 'Not available yet';
-export const PLACEHOLDER_BODY = 'These are added to the form in a later update. There is nothing to fill in here yet.';
-
-export const REVIEW_CUSTOMER_LABEL = 'Customer';
-export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
 
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
@@ -104,6 +98,8 @@ export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
 /** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */
 export const CALCULATE_UNSAVED_TITLE = 'Nothing was submitted. A field has a value that is not saved. Fix the field that shows a message, then press Calculate again.';
 export const CALCULATE_BAR_FAILED_TITLE = 'The Calculate button could not be loaded. Reload the page to try again.';
+/** The warning before leaving with unsaved changes (STORY-05.08) could not be loaded: until the page is reloaded, leaving does not ask. */
+export const LEAVE_GUARD_FAILED_TITLE = 'The warning before leaving could not be loaded, so leaving this page will not ask first. Save your work, or reload the page to try again.';
 /** The words under a field that Calculate found blank (UX spec SCR-05 "Fields"): a number says what to do when a part needs nothing. */
 export const MISSING_TEXT_MESSAGE = 'Enter this value.';
 export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does not need it.';

@@ -3,12 +3,15 @@
 import { ListTree } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import { FirstOpenFailure } from '@/components/shared/first-open-failure';
 import { Icon } from '@/components/shared/icon';
+import { useFirstOpen } from '@/components/shared/use-first-open';
 import { useViewport } from '@/components/shared/use-viewport';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
-import { TREE_CLOSE, TREE_HIDE, TREE_TITLE, treeButtonLabel } from './estimate-texts';
+import { TREE_HIDE, treeButtonLabel } from './estimate-texts';
+import type { PartsTreeDrawerProps } from './parts-tree-drawer';
 import { TreePanel } from './tree-panel';
 import type { PartsTreeState } from './use-parts-tree';
 
@@ -22,18 +25,29 @@ export interface PartsTreeAreaProps {
   readonly missingIds?: ReadonlySet<string>;
 }
 
+const DRAWER_FAILURE_ID = 'parts-tree-first-open-failure';
+const DRAWER_FAILURE_MESSAGE = 'The parts tree did not open. Check your connection and try again.';
+
+/** The drawer's code: a bare `import()` behind a type-only import above, so a failed request can be tried again and none of it is in the first load (AQP-188, NFR-009, ADR-016 E1). */
+const loadDrawer = () => import('./parts-tree-drawer').then((module) => module.PartsTreeDrawer);
+
 /**
  * The parts tree where it belongs at each width (STORY-05.02 AC-9; UX spec SCR-05 "Responsive"): from 1024 px a persistent panel beside the form; from 768 px a collapsible
- * panel that the "Parts tree" button shows and hides; below 768 px that button opens the tree as a left drawer (`Sheet`) with a scrim and a focus trap. The button names the
+ * panel that the "Parts tree" button shows and hides; below 768 px that button opens the tree as a left drawer (`PartsTreeDrawer`) with a scrim and a focus trap. The button names the
  * current part ("Parts tree, part 1.1"). The tree is one component in one place at a time, so its ids and roles are never in the page twice. What the tree holds survives the
  * panel closing, because it lives here and not in the drawer.
+ *
+ * The drawer is not in the first load (AQP-188, ADR-016 E1): its code is fetched on the first press of the button, through the loader every overlay uses (`useFirstOpen`), and stays mounted
+ * afterwards. The button is plain and owns `open`; a press before the page was interactive is kept (`data-early-intent`). Nothing of the drawer is requested at 768 px or wider.
  */
 export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsTreeAreaProps) {
   const viewport = useViewport();
   const [panelOpen, setPanelOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerButton = useRef<HTMLButtonElement>(null);
   // Enter on a part in the drawer closes it, and the focus then goes to the form, not back to the "Parts tree" button.
   const focusFormOnClose = useRef(false);
+  const first = useFirstOpen<PartsTreeDrawerProps>({ id: 'parts-tree', load: loadDrawer, onOpen: () => setDrawerOpen(true) });
   const open = (id: string): void => {
     tree.select(id);
     if (viewport === 'phone') {
@@ -47,28 +61,45 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
   const label = treeButtonLabel(tree.selected?.slNo ?? null);
 
   if (viewport === 'phone') {
+    const Drawer = first.Overlay;
     return (
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetTrigger asChild>
-          <Button variant="secondary" className="w-full justify-start">
+      <>
+        <div className="relative">
+          <Button
+            ref={drawerButton}
+            variant="secondary"
+            className="w-full justify-start"
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
+            aria-busy={first.pending || undefined}
+            aria-describedby={first.failed ? DRAWER_FAILURE_ID : undefined}
+            {...{ [EARLY_INTENT_ATTRIBUTE]: 'parts-tree' }}
+            onClick={(event) => first.activate(event.detail === 0)}
+          >
             <Icon icon={ListTree} />
             {label}
           </Button>
-        </SheetTrigger>
-        <SheetContent
-          title={TREE_TITLE}
-          closeLabel={TREE_CLOSE}
-          className="overflow-y-auto bg-surface p-s-4 pt-s-7 text-ink"
-          onCloseAutoFocus={(event) => {
-            if (!focusFormOnClose.current) return;
-            focusFormOnClose.current = false;
-            event.preventDefault();
-            onOpenPart();
-          }}
-        >
-          {panel}
-        </SheetContent>
-      </Sheet>
+          {first.failed ? <FirstOpenFailure id={DRAWER_FAILURE_ID} message={DRAWER_FAILURE_MESSAGE} align="left" /> : null}
+        </div>
+        {Drawer === null ? null : (
+          <Drawer
+            open={drawerOpen}
+            onOpenChange={setDrawerOpen}
+            onCloseAutoFocus={(event) => {
+              // Radix has no trigger to return focus to, so the button gets it back here, unless a part was chosen: then the form takes it.
+              event.preventDefault();
+              if (focusFormOnClose.current) {
+                focusFormOnClose.current = false;
+                onOpenPart();
+              } else {
+                drawerButton.current?.focus();
+              }
+            }}
+          >
+            {panel}
+          </Drawer>
+        )}
+      </>
     );
   }
 

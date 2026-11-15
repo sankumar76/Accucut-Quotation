@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createUserService } from '@/server/services/user-service';
@@ -195,8 +198,18 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     },
   };
 
+  /**
+   * Events whose one test needs more than a user or a master: an estimate with parts and a calculation over it. Each names the file that holds that test, and the test below fails if the file is gone
+   * or no longer names the event, so the registry still cannot wire an event that no test writes (STORY-05.12: `calculation.warning_acknowledged`).
+   */
+  const TESTED_ELSEWHERE: Readonly<Record<string, string>> = { 'calculation.warning_acknowledged': 'tests/integration/calc/warn.test.ts' };
+
   it('has a scenario for every event the registry wires, and for no other', () => {
-    expect(Object.keys(SCENARIOS).sort()).toEqual([...wiredEvents()].sort());
+    expect([...Object.keys(SCENARIOS), ...Object.keys(TESTED_ELSEWHERE)].sort()).toEqual([...wiredEvents()].sort());
+  });
+
+  it.each(Object.entries(TESTED_ELSEWHERE))('%s is written and read back by %s', (event, file) => {
+    expect(readFileSync(join(process.cwd(), file), 'utf8')).toContain(`'${event}'`);
   });
 
   it.each(Object.keys(SCENARIOS))('%s creates exactly one entry of its kind, with every part, committed with the change', async (event) => {

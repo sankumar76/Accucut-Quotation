@@ -235,7 +235,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
-  // for any other, a Lead and an Admin a short header until SCR-06 (STORY-06.02). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
+  // for any other, a Lead and an Admin the estimate review SCR-06 (STORY-06.02, loaded only for them). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
   // draft, an Engineer on their own while it is a draft (architecture section 6 "Set customer"), so it is in the Engineer's list and the cost scan calls it.
   { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-05' },
   { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
@@ -271,7 +271,25 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/config/current', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
   // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
+  // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).
   { path: '/api/v1/estimates/[id]/calculate', kind: 'api', methods: ['POST'], roles: ['ENGINEER'], status: 'implemented', stage: 'R1' },
+  // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
+  // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-02.09 (SCR-15, the Last backup line). The Admin only (BR-004, AC-6): the page and the read. Both are read-only: the page has no control that starts, restores or deletes a
+  // backup, and the API has GET and nothing else (the alert switch and the sender, `PUT /settings`, are story 09.02's). The rows it reads are `job_runs` (cost data is never in them), so the
+  // cost scan covers both as routes an Engineer is refused.
+  {
+    path: '/settings',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_ONLY,
+    status: 'implemented',
+    stage: 'R1',
+    screen: 'SCR-15',
+    nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
+  },
+  { path: '/api/v1/settings', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
@@ -291,18 +309,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
     stage: 'R2',
     screen: 'SCR-21',
     nav: { group: 'Configuration', label: 'Checkpoints', order: 20, icon: 'flag' },
-  },
-
-  // ---- Planned: Administration (Admin) -------------------------------------------------------------------------------
-  {
-    path: '/settings',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_ONLY,
-    status: 'planned',
-    stage: 'R1',
-    screen: 'SCR-15',
-    nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
   },
 
   // ---- Planned: Help (every role) ------------------------------------------------------------------------------------
