@@ -58,14 +58,17 @@ export interface CheckedPart {
 export type CalculateCheck = { readonly ok: true; readonly parts: ReadonlyArray<CheckedPart> } | { readonly ok: false; readonly parts: ReadonlyArray<BlockedPart> };
 
 /** The keys of the fields that name a part, in the order they are tried. */
-const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
+export const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
 
 /** What a number the registry hides for a part is read as: 0, in the form every stored number has (two decimals). */
 const HIDDEN_NUMBER = '0.00';
 
-/** A field of the form that a person types or chooses: its rule is a number, a text or a choice, never "follows another field". */
-type TypedField = FormFieldView & { readonly rule: Exclude<FormRule, { readonly type: 'derived' }> };
-const isTyped = (field: FormFieldView): field is TypedField => field.rule.type !== 'derived';
+/**
+ * A field of the form that a person types or chooses: its rule is a number, a text or a choice, never "follows another field" and never the picture. Part Model (C, STORY-05.07) is
+ * optional (D-31): Calculate does not read it, never lists it as missing and never refuses for it; the picture is recorded with the part by its own ID (`imageId`).
+ */
+type TypedField = FormFieldView & { readonly rule: Exclude<FormRule, { readonly type: 'derived' } | { readonly type: 'picture' }> };
+const isTyped = (field: FormFieldView): field is TypedField => field.rule.type !== 'derived' && field.rule.type !== 'picture';
 
 /** One field of the form as one part holds it: its value read by its rule (`null`: none, or refused). */
 interface FieldValue {

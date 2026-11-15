@@ -8,13 +8,45 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-14 by orchestrator (daily update, §9 item 6) |
+| Last updated       | 2026-11-15 by orchestrator (daily update, §9 item 6) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-15, orchestrator)
+
+> One ledger update a day (§9 item 6). It updates the 2026-11-14 section below; where they differ, this section wins.
+
+**`master` = b0b1cdb** (#408 AQP-315). Merged since the 2026-11-14 entry (squash, fully green CI; every `critical-review` story had its one combined security-and-quality review with no open Blocker/Critical/Major at merge):
+
+| PR | Story | Merge | Notes |
+|---|---|---|---|
+| #397 | AQP-304 (05.04 form sections) [c] | 6d1a293 | Review APPROVE; Minors to hardening |
+| #399 | AQP-337 (08.01 fields and formulas list) [c] | 7ac923f | Review APPROVE WITH COMMENTS |
+| #404 | AQP-305 (02.06 "Not applicable" entries) [c] | 1e586e4 | Trigger refuses owner changes to system rows; tests use `clearMaterials`/`clearTreatments`. Follow-up #405 (TRUNCATE guard) |
+| #396 | AQP-310 (10.04 Windows install and update) [c] | fa8470c | Seven rounds of automated security-review findings; closed by ADR-015 Amendments 2 and 2.1 (solution-architect) and one implementation pass; Stage 13 green. Code signing is #398 |
+| #406 | AQP-317 (05.09 Calculate) [c] | 292c850 | Re-cut of #402/#403 (DL-215). Review fix round 1 (SaveGate; canary covers calculated figures). #382 SQR-01/02/08 done, issue open |
+| #408 | AQP-315 (05.07 part picture) | b0b1cdb | Re-cut of #407. Focused upload security check; Major #410 (proxy buffers bodies up to 10 MB on every /api route, pre-existing) |
+
+Jira **Done** since the last entry: AQP-304, 337, 305, 310, 317, 315.
+
+**In flight:**
+| Lane | Story | State |
+|---|---|---|
+| A | AQP-319 06.02 estimate review [c] | #409 reviewed (APPROVE WITH COMMENTS); re-cutting after #408 (DL-215) with SQR-01 (exhaustive role switch) and SQR-03 (canary thresholds) folded in |
+| B | AQP-307 02.09 Settings page, creates `job_runs` | Building |
+| B (paused) | AQP-311 10.05 backups on Windows [c] | Waits for AQP-307; design settled by ADR-015 Amendment 3 (AccucutBackup account, `accucut_backup` role, exact ACEs) |
+
+**Merge-denial pattern (RISK-030):** every PR that overlapped a merged one needed a DL-215 re-cut today (#402→#403→#406, #407→#408, #409). The standing rule works; the delivery lead deletes the old branches in batches.
+
+**JS budget:** `/estimates/[code]` is at 199,540 of 200,000 bytes gzip. New workspace features must load lazily; the Lead/Admin review (#409) adds 0 bytes.
+
+**New follow-ups:** #401 closed by #408. #405 (TRUNCATE guard, architect), #410 (request body size, Major, architect), #398 (code signing). Open product questions: SQR-09 (Fasteners "None" case), AQP-319 SQR-05/SQR-10 (UX wording, phone drawer, currency grouping), AQP-315 SQR-07 (`capture`).
+
+**Clean-up for the delivery lead (agents cannot delete):** old re-cut branches `feat/AQP-317-calculate`, `feat/AQP-317-calculate-2`, `feat/AQP-315-part-picture`, `feat/AQP-315-part-picture-2`, and `feat/AQP-319-estimate-review` once its re-cut merges; merged branches `feat/AQP-304-part-form-2`, `feat/AQP-337-fields-formulas`, `feat/AQP-305-not-applicable`, `feat/AQP-310-windows-install`, `feat/AQP-317-calculate-3`, `feat/AQP-315-part-picture-3`; finished worktrees `agent-a21bf19c74da91dfc`, `agent-ad93e490559305c26`, `agent-ae4c4621b99a4029e`, `agent-a188f19b23200d394`, `agent-a950feb2b7cb6fa3c`, `agent-a566dd4e9b85f35a0`, plus the 2026-11-14 list; scratchpad review folders `AQP-302\patches`, `AQP-302\r2`, `AQP-319\patches`; untracked temp tsconfig files in several worktrees.
 
 ## Daily update (2026-11-14, orchestrator)
 

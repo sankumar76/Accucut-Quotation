@@ -11,6 +11,7 @@ import { createCalculationRepository } from './repositories/calculation-reposito
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
+import { createImageRepository } from './repositories/image-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -22,7 +23,8 @@ import { type AuditService, createAuditService } from './services/audit-service'
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
-import { getCurrentVersion } from './services/config-service';
+import { getCurrentVersion, getVersionById } from './services/config-service';
+import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
@@ -49,6 +51,7 @@ let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
+let estimateReviewService: EstimateReviewService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -176,6 +179,8 @@ export function getEstimateService(): EstimateService {
     estimateService = createEstimateService({
       estimates: createEstimateRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
+      // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
+      images: createImageRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
       // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
       materials: createMasterRepository(runtimeClient()),
@@ -214,6 +219,23 @@ export function getCalculationService(): CalculationService {
     });
   }
   return calculationService;
+}
+
+/**
+ * The estimate review (STORY-06.02): the figures of SCR-06 for the Lead and the Admin, read from the stored calculation only while its state is `current`. The configuration version a
+ * calculation was made with is read by its ID (parsed and cached per version, like the current one). Restricted (NFR-002): only the `/costs` route and the review page ask for it here,
+ * both for the Lead and the Admin alone.
+ */
+export function getEstimateReviewService(): EstimateReviewService {
+  if (estimateReviewService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    estimateReviewService = createEstimateReviewService({
+      calculations: createCalculationRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+    });
+  }
+  return estimateReviewService;
 }
 
 /**

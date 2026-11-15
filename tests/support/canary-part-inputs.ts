@@ -34,7 +34,7 @@ export function canaryRateFieldId(document: ConfigDocument): string {
 
 function checkedByRule(document: ConfigDocument, fieldId: string, text: string): InputCheck {
   const rule = formFieldById(document, fieldId)?.rule;
-  if (rule === undefined || rule.type === 'derived' || rule.type === 'select') return { ok: true, value: null };
+  if (rule === undefined || rule.type === 'derived' || rule.type === 'select' || rule.type === 'picture') return { ok: true, value: null };
   return rule.type === 'number' ? validateNumberInput(text) : validateTextInput(text, { multiline: rule.multiline, maxLength: rule.maxLength });
 }
 

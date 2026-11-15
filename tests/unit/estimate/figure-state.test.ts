@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { figureState, figuresWhenCurrent } from '@/lib/estimate/figure-state';
+import { figureState, figuresWhenCurrent, readFiguresWhenCurrent } from '@/lib/estimate/figure-state';
 
 /**
  * STORY-03.05 (FR-031, FR-100, FR-101; ADR-007; architecture section 4.8): the state of an estimate's figures is read from two counts and never
@@ -37,5 +37,24 @@ describe('figuresWhenCurrent: no calculated value is read unless the state is cu
 
   it.each(['none', 'out-of-date'] as const)('withholds them while %s', (state) => {
     expect(figuresWhenCurrent(state, figures)).toBeNull();
+  });
+});
+
+describe('readFiguresWhenCurrent: a figure is not even read unless the state is current (STORY-06.02 AC-7)', () => {
+  it('reads and returns the figures while current', async () => {
+    const read = vi.fn(() => Promise.resolve({ totalPrice: '100' }));
+    expect(await readFiguresWhenCurrent('current', read)).toEqual({ totalPrice: '100' });
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['none', 'out-of-date'] as const)('does not call the read at all while %s, and gives nothing', async (state) => {
+    const read = vi.fn(() => Promise.resolve({ totalPrice: '100' }));
+    expect(await readFiguresWhenCurrent(state, read)).toBeNull();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('lets a failing read fail the call while current, and never runs it otherwise', async () => {
+    await expect(readFiguresWhenCurrent('current', () => Promise.reject(new Error('Invented failure.')))).rejects.toThrow('Invented failure.');
+    await expect(readFiguresWhenCurrent('out-of-date', () => Promise.reject(new Error('Invented failure.')))).resolves.toBeNull();
   });
 });

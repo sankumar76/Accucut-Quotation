@@ -51,6 +51,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD', 'ENGINEER'],
   // STORY-05.09: the Engineer's Calculate. Only the Engineer (SPEC section 9: a Lead's and an Admin's is Recalculate, STORY-06.04).
   'POST /api/v1/estimates/[id]/calculate': ['ENGINEER'],
+  // STORY-06.02 (SCR-06; architecture section 6 row "Cost": A L): the figures of the estimate review. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
+  '/api/v1/estimates/[id]/costs': ['ADMIN', 'LEAD'],
   // STORY-05.02 (architecture section 6 "Tree", "Node", "Reorder": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/tree': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],
@@ -61,4 +63,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.07 (architecture section 6 "Image": A L; E own, while editable): the picture of a part is added, replaced or removed, and read, by every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/nodes/[nodeId]/image': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/images/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
 };

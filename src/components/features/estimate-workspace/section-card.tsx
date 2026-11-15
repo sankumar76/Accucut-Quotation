@@ -23,7 +23,7 @@ export const sectionTitleId = (sectionId: string): string => `part-section-${sec
 
 /**
  * One section of the part form (STORY-05.03 AC-1, STORY-05.04 AC-1; UX spec SCR-05 "Layout rules", "Accessibility"): a labelled region whose header shows the section number, its name,
- * the tag of its column range, taken from the registry ("01 Part Details", "A, B, D, G, H"), and "n of m complete". A screen reader reads the tag as "Excel columns ..." and not as a
+ * the tag of its column range, taken from the registry ("01 Part Details", "A–D, G, H"), and "n of m complete". A screen reader reads the tag as "Excel columns ..." and not as a
  * string of letters. The heading can take focus (the section strip's links jump to it). The fields stack inside; the cards sit in the form's grid, one column on a phone and more as
  * the width allows.
  */

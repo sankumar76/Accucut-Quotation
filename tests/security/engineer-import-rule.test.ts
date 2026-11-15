@@ -62,6 +62,8 @@ const REPOSITORIES = {
     // STORY-02.07: the open estimates that use a customer or a material, read for the delete guard of the Admin's masters. No Engineer view needs it.
     'estimate-use',
     'exchange-rate-repository',
+    // STORY-05.07: the part pictures, stored whole and read by their ID. No Engineer view needs the bytes or their owner lookup; the picture route is a handler, not a view.
+    'image-repository',
     'master-constraints',
     'master-repository',
     'material-repository',
@@ -90,7 +92,11 @@ const SERVICES = {
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
+    // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
+    'estimate-review-service',
     'estimate-service',
+    // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
+    'image-service',
     'exchange-rate-service',
     'masters-service',
     'password-policy',
@@ -131,6 +137,12 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
   './schemas/index',
 ];
 
+/**
+ * The contract of `GET /estimates/{id}/costs` (STORY-06.02 AC-4, AC-5): every figure of an estimate. The lint refuses it to an Engineer view by name (the other schema files are refused only through
+ * the barrel), as a static import and as `import()`, in the two spellings a view would use. `lib/estimate/figure-state` holds only counts and stays allowed.
+ */
+const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = ['@/server/views/schemas/costs', './schemas/costs', '../views/schemas/costs'];
+
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 /** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
@@ -165,6 +177,8 @@ const ALLOWED_IMPORTS: ReadonlyArray<string> = [
   // STORY-06.01: the status machine holds statuses, events and roles, no figure and no person's data, so an Engineer view may read it to show inputs read-only.
   '@/lib/estimate/state-machine',
   '@/lib/estimate/can-edit-inputs',
+  // STORY-06.02: the figure state holds two counts and no figure, so an Engineer's code may know it (the calculation repository and the review service, which hold the figures, stay blocked).
+  '@/lib/estimate/figure-state',
   '../auth/resolve-session-user',
 ];
 
@@ -173,6 +187,7 @@ const BLOCKED_IMPORTS: ReadonlyArray<string> = [
   ...SERVICES.blocked.map(servicePath),
   ...FUTURE_IMPORTS,
   ...CONTAINER_AND_BARREL_IMPORTS,
+  ...COSTS_SCHEMA_IMPORTS,
   ...FORMULA_IMPORTS,
   ...ROW_OUTPUT_IMPORTS,
   ...PRISMA_IMPORTS,

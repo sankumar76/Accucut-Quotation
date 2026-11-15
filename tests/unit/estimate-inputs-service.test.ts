@@ -66,7 +66,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = [node(PART), node(CHILD, { parentId: PART })]) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
   const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions, ...inputsDependencies(masters) });
+  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies(masters) });
   const stored = (id = PART): FakeNode => defined(world.nodes.find((candidate) => candidate.id === id));
   const inputsRevision = (): number => defined(world.estimates.find((candidate) => candidate.id === ESTIMATE)).inputsRevision;
   return { world, masters, service, stored, inputsRevision };
@@ -333,7 +333,7 @@ describe('AC-3, AC-7: a field that is unknown or Restricted is a 422', () => {
     ['Material Cost (AK), a calculated field', () => field('AK')],
     ['Sl. No. (A), which is the tree', () => field('A')],
     ['Material Considered (F), which follows the material', () => field('F')],
-    ['Part Model (C), the picture of story 05.07', () => field('C')],
+    ['Part Model (C), the picture, which is changed by its own routes (STORY-05.07)', () => field('C')],
     ['Treatment / Color (G), story 05.06', () => field('G')],
     ['Hot Dip Galvanizing (Z), a surface treatment that story 05.06 builds', () => field('Z')],
     ['Total Process Cost (AY), the calculated twin of Machining Cost', () => field('AY')],

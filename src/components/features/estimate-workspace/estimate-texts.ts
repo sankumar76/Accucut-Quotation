@@ -64,9 +64,6 @@ export const progressText = (complete: number, total: number): string => `${comp
 export const PLACEHOLDER_TITLE = 'Not available yet';
 export const PLACEHOLDER_BODY = 'These are added to the form in a later update. There is nothing to fill in here yet.';
 
-export const REVIEW_CUSTOMER_LABEL = 'Customer';
-export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
-
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
 export const TREE_CLOSE = 'Close parts tree';
@@ -110,3 +107,6 @@ export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does 
 export const MISSING_CHOICE_MESSAGE = 'Choose a material.';
 /** Spoken after a part in the tree, a card and a link of the section strip that Calculate found a blank in, beside the triangle. */
 export const TREE_MISSING_INPUTS = 'Missing inputs';
+
+/** The picture field's code (a separate file, fetched when the form opens) did not arrive: said where the field would be (STORY-05.07). */
+export const PICTURE_LOAD_FAILED_TITLE = 'We could not load the picture field';

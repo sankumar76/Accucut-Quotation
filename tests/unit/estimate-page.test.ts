@@ -23,7 +23,7 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService };
 });
 
 const { default: EstimatePage } = await import('@/app/(portal)/estimates/[code]/page');
@@ -45,6 +45,9 @@ afterEach(() => {
   held.customerId = null;
   held.engineerId = harness.idOf.ENGINEER;
   held.notes = 'Invented notes.';
+  held.inputsRevision = 0;
+  held.currentCalculationId = null;
+  harness.calculationWorld.calculations.length = 0;
 });
 
 describe('AC-1: the Engineer opens their task with no customer', () => {
@@ -109,12 +112,13 @@ describe('AC-5: who may open it', () => {
     await expect(open('Q-2026-9999')).rejects.toThrow(NOT_FOUND_SIGNAL);
   });
 
-  it('a Lead and an Admin may open any task, and see the short header with the customer as text and no form', async () => {
+  it('a Lead and an Admin may open any task, and see the review (STORY-06.02): the header, the customer as text and the tiles, with no customer form', async () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       harness.signInAs(role);
       const html = await open(CODE);
       expect(html).toContain(CODE);
       expect(html).toContain('Not chosen yet');
+      expect(html).toContain('Total Unit Production Price');
       expect(html).not.toContain('Choose the customer to start.');
       expect(html).not.toContain('<select');
       expect(html).not.toContain('Parts and inputs');
@@ -138,10 +142,68 @@ describe('AC-5: who may open it', () => {
   });
 });
 
-describe('AC-6 (NFR-002): no rate, cost or formula on the page', () => {
-  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('as %s the page names none of a rate, a price, a cost or a formula', async (role) => {
-    harness.signInAs(role);
+describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () => {
+  it('as ENGINEER the page names none of a rate, a price, a cost or a formula, and none of the words of the review', async () => {
+    harness.signInAs('ENGINEER');
     estimate().customerId = CUSTOMER_RECIPE_ID;
-    expect(await open(CODE)).not.toMatch(/\b(rates?|prices?|costs?|formulas?)\b/i);
+    const html = await open(CODE);
+    expect(html).not.toMatch(/\b(rates?|prices?|costs?|formulas?)\b/i);
+    for (const review of ['Total Unit Production Price', 'File cell', 'How the total is built', 'Approve and lock', 'Not calculated']) expect(html).not.toContain(review);
+  });
+
+  it('the Engineer\'s page is the same whether or not a calculation exists (STORY-06.02 AC-5)', async () => {
+    harness.signInAs('ENGINEER');
+    const before = await open(CODE);
+    harness.calculationWorld.calculations.push({
+      id: '00000000-0000-4000-8000-0000000ca1c8',
+      estimateId: estimate().id,
+      configVersionId: '00000000-0000-4000-8000-0aaa00000001',
+      inputsRevision: 0,
+      masterSnapshot: { customer: { id: 'c', name: 'Invented customer' }, rates: [], materials: [], exchangeRates: { usd: null, eur: null } },
+      productValues: { totalPrice: '1234567.891', pricePerToolCost: null, toolCostTotal: '0' },
+      createdById: harness.idOf.ENGINEER,
+      warnings: [],
+      createdAt: new Date('2026-11-05T05:12:00.000Z'),
+      rows: [],
+    });
+    estimate().currentCalculationId = '00000000-0000-4000-8000-0000000ca1c8';
+    const after = await open(CODE);
+    expect(after).toBe(before);
+    expect(after).not.toContain('1234567');
+  });
+});
+
+describe('STORY-06.02: the Lead\'s and the Admin\'s review of the estimate', () => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s with no calculation: "Not calculated", the notice, dashes, Calculate off, and no figure', async (role) => {
+    harness.signInAs(role);
+    const html = await open(CODE);
+    expect(html).toContain('The Engineer has not calculated this estimate yet.');
+    expect(html).toContain('Not calculated');
+    expect(html).toContain('id="review-calculate"');
+    expect(html).not.toContain('How the total is built');
+  });
+
+  it('with a current calculation the Lead sees BL in rupees and the row\'s own figure, and with a changed input the figures are gone and the page says cleared', async () => {
+    harness.signInAs('LEAD');
+    harness.calculationWorld.calculations.push({
+      id: '00000000-0000-4000-8000-0000000ca1c7',
+      estimateId: estimate().id,
+      configVersionId: '00000000-0000-4000-8000-0aaa00000001',
+      inputsRevision: 0,
+      masterSnapshot: { customer: { id: 'c', name: 'Invented customer' }, rates: [], materials: [], exchangeRates: { usd: null, eur: null } },
+      productValues: { totalPrice: '1234567.891', pricePerToolCost: null, toolCostTotal: '0' },
+      createdById: harness.idOf.ENGINEER,
+      warnings: [],
+      createdAt: new Date('2026-11-05T05:12:00.000Z'),
+      rows: [],
+    });
+    estimate().currentCalculationId = '00000000-0000-4000-8000-0000000ca1c7';
+    const current = await open(CODE);
+    expect(current).toContain('₹ 12,34,567.89');
+    expect(current).toContain('Calculated 05 Nov 2026, 10:42 IST · configuration version 1');
+    estimate().inputsRevision = 1;
+    const cleared = await open(CODE);
+    expect(cleared).toContain('The total is cleared because an input changed.');
+    expect(cleared).not.toContain('12,34,567');
   });
 });

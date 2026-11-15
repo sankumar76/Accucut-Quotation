@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { FieldValidationError, MasterInUseError, NAME_TAKEN_CODE, NotFoundError, CUSTOMER_IN_USE_CODE } from '@/lib/errors';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService } from '@/server/services/estimate-service';
@@ -39,7 +40,7 @@ const by = () => contextOf(adminId);
 
 /** The estimate service over the real repositories and the transaction runner given (the real one, or one that holds before commit). */
 const estimateServiceOver = (transactions: TransactionRunner) =>
-  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), transactions, ...inputsDependencies() });
+  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions, ...inputsDependencies() });
 
 beforeAll(async () => {
   db = await openAuditDatabase();
