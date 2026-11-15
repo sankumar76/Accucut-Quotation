@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)**. **Amended 2026-11-15: backups on Windows (Amendment 3, STORY-10.05, AQP-311)** |
+| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)**. **Amended 2026-11-15: backups on Windows (Amendment 3, STORY-10.05, AQP-311), with Amendment 3.1 (the developer's six points from the build)** |
 | Date | 2026-11-13 |
 | Deciders | solution-architect; the delivery lead's stated target (AQP-1 comment 11790, relayed); Accucut IT confirms at install |
 | Related | FR-091, FR-105; NFR-003, 012, 013, 024, 030; ADR-001, ADR-002, ADR-011; OQ-ARCH-02, OQ-ARCH-03, OQ-ARCH-14; STORY-10.04, 10.05, 10.11, 02.09; architecture section 9.9; test strategy section 10.8 |
@@ -236,7 +236,7 @@ What was checked (2026-11-13; sources in the hand-off):
    - **The `age` recipient is not in `.env`,** which AccucutBackup cannot read, and it must not be able to. It goes in **`<Root>\config\backup-settings.json`**, which uses the same protected ACL as `backup.pgpass`. A recipient swapped by someone who could write the file would encrypt to their key, so the file is read-only to the task.
      - The file holds `ageRecipient` (checked against `^age1[0-9a-z]{58}$`), `pgHost`, `pgPort`, `database` and `pgBinDirectory`. It holds no secret.
      - `install.ps1` asks for `BACKUP_AGE_RECIPIENT`, or reads it from the values file; CI passes a per-run `age-keygen` public key.
-   - **Programs:** the release's `bin\age.exe`, then `pg_dump.exe` and `psql.exe` from `pgBinDirectory`, then `$env:SystemRoot\System32\cmd.exe` for the byte pipe. Each goes through `Resolve-AccucutTrustedExecutable` at every run. The recipient is public, so it may appear on the `age` command line.
+   - **Programs:** the release's `bin\age.exe`, then `pg_dump.exe` and `psql.exe` from `pgBinDirectory`. *Changed by Amendment 3.1: no `cmd.exe`, see 3.1 (1).* Each goes through `Resolve-AccucutTrustedExecutable` at every run. The recipient is public, so it may appear on the `age` command line.
    - **`backup-watch` free space:** `.env` gains `PG_DATA_VOLUME` and `BACKUP_VOLUME`, the **drive roots** (`X:\`) of the data folder and of `backups`, worked out by the install. The worker cannot open either folder (both are protected), but `fs.statfs` on a drive root works. When both are the same volume, one reading is taken.
 
 **Tests that stage 13 must assert** (real, after the install), on top of Amendment 2's:
@@ -260,6 +260,31 @@ What was checked (2026-11-13; sources in the hand-off):
   - Admin scripts refuse a `backups` folder with an extra writer, a link, or an owner who is not trusted.
   - Pruning deletes only matching regular files older than 2 calendar years, never one of the newest 4, and skips links.
   - Tests 1 and 3 include `backup.ps1` and `clear-copies.ps1`.
+
+### Amendment 3.1, 2026-11-15: the developer's six points from the build (STORY-10.05)
+
+1. **The byte pipe does not use `cmd.exe` (ratified, and the stricter option).** A `cmd` pipe reports only the exit code of its last program, so a failed `pg_dump` could leave a truncated copy recorded as `ok`.
+   - **How the pipe runs.** `backup.ps1` starts `pg_dump.exe` and `age.exe` itself (`System.Diagnostics.Process`, `UseShellExecute = $false`). `pg_dump`'s `StandardOutput.BaseStream` is copied into `age`'s `StandardInput.BaseStream` with `Stream.CopyTo`, and `age`'s input is closed at the end. Both standard-error streams are read asynchronously, so neither process can block.
+   - **When the copy is good.** Only when all of these hold:
+     - both exit codes are 0;
+     - the temporary file is larger than zero and starts with `age-encryption.org/v1`;
+     - its SHA-256 is computed from the file as written and put into the manifest.
+   - Otherwise the temporary file is deleted and the run is recorded as failed.
+   - `cmd.exe` comes off the programs list. The base rule ("byte streams run inside `cmd.exe /c`") no longer applies to the backup, and 10.11's restore follows the same pattern for `age -d | pg_restore`.
+   - Pester: if `pg_dump` exits 1 halfway, no `.age` file is kept and the run is recorded as failed.
+2. **The guarded `GRANT INSERT` migration is ratified.** `20261115100000_job_runs_backup_grant` grants only when `pg_roles` has `accucut_backup` and otherwise raises a `NOTICE`; roles are cluster-wide, and an old development cluster lacks it. On a server the install creates the roles before the migrations, so the grant is always made there. Stage 13 asserts the real grant, and the install's first backup run would fail without it.
+3. **`accucut_backup` is NOLOGIN when `DB_BACKUP_PASSWORD` is unset: ratified for development and CI only.** `install.ps1` always generates the password and passes it, so a missing value at install is an error, never a NOLOGIN role. Stage 13 asserts `rolcanlogin`. `ci.yml` stays as it is.
+4. **The task fires on Sunday at 02:00 on the server's clock (ratified, not converted).** IST has no daylight saving, but a server zone that does would move a converted trigger by an hour twice a year. The semantics of a UTC-anchored weekly trigger ("synchronize across time zones") are not proven on PowerShell 5.1. If the zone is not `India Standard Time`, the install warns: "The backup runs at 02:00 server time; this server is not set to India Standard Time." The README names it.
+5. **No log file for `backup.ps1`; the Windows Application event log takes its place (changed).** A `job_runs` row cannot record a failure that happens before the database is reached, such as an unreadable `backup.pgpass`, a database that is down, or a program that fails its trust check. `backup-watch` would then only see a late backup after 8 days.
+   - **The event log.** The install registers the event source `Accucut` in the Application log (`[Diagnostics.EventLog]::CreateEventSource`, as an administrator; it is the source §9.9 names for the restore). `backup.ps1` writes one event per run: Information on success with the size and file name, or Error with an error code and a redacted message. Standard users may write to the Application log for an existing source.
+   - **The other records.** `backup.ps1` also writes the `job_runs` row whenever the database is reachable, and exits non-zero on failure, so Task Scheduler's history shows it too.
+   - AccucutBackup gets **no** right on `logs`, so the writers of `logs` stay App and Worker.
+   - **Names.** The manifest names `accucut-<UTC yyyyMMdd-HHmmss>-<weekly|release>.manifest.json` are ratified, next to `accucut-<same>.age`. They match point 4's prune pattern, and the 2-calendar-year cut-off is computed in UTC.
+   - Stage 13: after the install's run, there is one `Accucut` Information event from that run.
+6. **"No good backup ever" counts as late, in both places (aligned to `backup-watch`).** The install takes the first backup, so "never" means that first run failed, which must not stay silent.
+   - **Settings (AQP-307 AC-3).** The Settings line shows the late state with "No good backup yet" when no `backup` row with `status` ok exists. The product-owner rewords AC-3 to match.
+   - Development and CI databases show this state, which is correct there.
+   - One rule in one place: a pure function in `src/lib` used by both the worker and `GET /settings`, so they cannot drift.
 
 ## Verification
 
