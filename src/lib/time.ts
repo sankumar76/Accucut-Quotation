@@ -87,6 +87,17 @@ export function formatIst(date: Date): string {
   return `${day} ${month} ${year}, ${hour}:${minute} ${IST_LABEL}`;
 }
 
+const IST_WEEKDAY = new Intl.DateTimeFormat('en-US', { timeZone: IST_TIME_ZONE, weekday: 'long' });
+
+/**
+ * A time with its weekday, as the Settings page writes the last good backup: "Sunday 01 Nov 2026, 02:00 IST" (STORY-02.09 AC-1; UX spec SCR-15). The weekday is the one in IST,
+ * so 23:00 UTC on a Saturday reads Sunday. An invalid date throws, as in `formatIst`.
+ */
+export function formatIstWithWeekday(date: Date): string {
+  const text = formatIst(date);
+  return `${IST_WEEKDAY.format(date)} ${text}`;
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const FIRST_YEAR = 2000;
 const LAST_YEAR = 2999;
