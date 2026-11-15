@@ -1,0 +1,22 @@
+# Answers for an install with no one present: install.ps1 -ZipPath <zip> -ValuesFile <this file, filled in> -NonInteractive
+#
+# Copy this file, replace every CHANGE_ME value, run the install, then DELETE your copy: it holds the first Admin's password.
+# One NAME=value per line. Lines that start with # are ignored. Never commit a filled-in copy.
+#
+# What is not here is invented by the install: the session secret (AUTH_SECRET) and the two database passwords.
+# Add AUTH_SECRET=, DB_OWNER_PASSWORD= or DB_APP_PASSWORD= only if you must choose them yourself.
+
+# The address people will type (a scheme and a host, no path).
+APP_ORIGIN=http://CHANGE_ME_SERVER_NAME:3000
+
+# The first Admin. The password: 10 to 128 characters, with a digit and a symbol. They choose a new one at first sign-in.
+ADMIN_EMAIL=CHANGE_ME@example.test
+ADMIN_INITIAL_PASSWORD=CHANGE_ME_FIRST_PASSWORD
+
+# The password of the PostgreSQL administrator (the one you typed when you installed PostgreSQL). Used by the install only, never stored.
+PG_SUPERUSER_PASSWORD=CHANGE_ME_POSTGRES_ADMIN_PASSWORD
+
+# Mail. none = no mail yet. Other modes: password, oauth2-client-credentials (then also SMTP_USER and the fields for the mode).
+SMTP_AUTH_MODE=none
+SMTP_HOST=localhost
+SMTP_PORT=1025
