@@ -177,8 +177,10 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // canary part is never complete (its material is not stored; the registry's treatment is not on the form), so Calculate is refused 422 `CALCULATE_BLOCKED` with the parts and fields
     // missing, and writes nothing, at any state of the customer, for the one role that may call it. The 422 body is read by the confidentiality scan; the success body is held by
     // `calculate-route.test.ts` and the strict-schema planted-key check of the route's own schema.
+    // STORY-05.12: the call carries the acknowledgement a first press would have earned (`{acknowledge: {inputsRevision}}`), as the browser's "Calculate anyway" does, so every loop sends the body the route
+    // now takes. It changes nothing: the blank input is refused 422 before any warning is looked at (an acknowledgement cannot pass a blank), and a refused role never has its body read.
     case 'POST /api/v1/estimates/[id]/calculate':
-      return { id, status: 422 };
+      return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part

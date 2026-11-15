@@ -213,7 +213,11 @@ export function getCalculationService(): CalculationService {
         return { id: version.id, document: version.document };
       },
       storage: { calculations: createCalculationRepository(runtimeClient()), estimates, transactions: createTransactionRunner(runtimeClient()) },
-      workflow: { nodes: createEstimateNodeRepository(runtimeClient()), transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx) },
+      workflow: {
+        nodes: createEstimateNodeRepository(runtimeClient()),
+        transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx),
+        audit: getAuditService(),
+      },
     });
   }
   return calculationService;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
-import { blockedPartsFrom, calculateEstimate } from '@/lib/estimates/calculate-client';
+import { blockedPartsFrom, calculateAnyway, calculateEstimate, warningFrom } from '@/lib/estimates/calculate-client';
 
 /**
  * STORY-05.09 (AC-1, AC-2, AC-7): the browser's call to Calculate and the reading of its two answers: the good one (a status and a sentence) and the 422 that lists parts and fields. `fetch` is
@@ -102,5 +102,81 @@ describe('blockedPartsFrom (AC-1)', () => {
       { nodeId: '00000000-0000-4000-8000-0000000000b2', slNo: '2', name: null, fields: [{ fieldId: FIELD, label: 'Width' }] },
     ];
     expect(blockedPartsFrom(await refusal(blocked(parts)))?.map((part) => part.slNo)).toEqual(['2']);
+  });
+});
+
+/**
+ * STORY-05.12 (AC-3, AC-6): "Calculate anyway" sends the same POST with `{acknowledge: {inputsRevision}}` (the number from the 409), and the 409 is read into the rows of the dialog. A body of the wrong
+ * shape is no list: the screen then shows the server's sentence, never rows that might be wrong. Every name and ID is invented.
+ */
+const row = (overrides: Record<string, unknown> = {}) => ({
+  code: 'QTY_ZERO',
+  nodeId: PART,
+  fieldId: FIELD,
+  slNo: '1.4',
+  label: 'Top cover',
+  message: 'QTY per Assy is 0 on 1.4 Top cover. That row will cost 0 in this estimate.',
+  ...overrides,
+});
+const asked = (overrides: Record<string, unknown> = {}): Response =>
+  answer({ type: 'about:blank', title: 'Check the quantity before you calculate.', status: 409, code: 'CALCULATE_ACK_REQUIRED', requestId: 'req-00000000', inputsRevision: 7, warnings: [row()], ...overrides }, 409);
+
+describe('calculateAnyway (STORY-05.12 AC-3)', () => {
+  it('sends the same POST with a JSON body holding the revision from the 409, and reads the good answer as before', async () => {
+    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+    expect(await calculateAnyway(ESTIMATE, 7, doFetch)).toEqual({ status: 'ok', value: { status: 'SUBMITTED', message: CALCULATE_MESSAGE } });
+    expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/calculate`);
+    const init = doFetch.mock.calls[0]?.[1];
+    expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
+    expect(JSON.parse(String(init?.body))).toEqual({ acknowledge: { inputsRevision: 7 } });
+  });
+
+  it('a first press sends no body at all', async () => {
+    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+    await calculateEstimate(ESTIMATE, doFetch);
+    expect(doFetch.mock.calls[0]?.[1]?.body).toBeUndefined();
+  });
+});
+
+describe('warningFrom (STORY-05.12 AC-6)', () => {
+  async function refusal(response: Response) {
+    const outcome = await calculateEstimate(ESTIMATE, fetching(response));
+    if (outcome.status !== 'refused') throw new Error('The test expected a refusal.');
+    return outcome;
+  }
+
+  it('reads the revision and each row with its part, field, Sl. No, name and sentence', async () => {
+    expect(warningFrom(await refusal(asked()))).toEqual({ inputsRevision: 7, rows: [{ nodeId: PART, fieldId: FIELD, slNo: '1.4', label: 'Top cover', message: row().message }] });
+  });
+
+  it('keeps every row, in the order sent, and a row with no name', async () => {
+    const second = row({ nodeId: '00000000-0000-4000-8000-0000000000b2', slNo: '1.4.1', label: '', message: 'QTY per Assy is 0 on 1.4.1. That row will cost 0 in this estimate.' });
+    expect(warningFrom(await refusal(asked({ warnings: [row(), second] })))?.rows.map((entry) => [entry.slNo, entry.label])).toEqual([
+      ['1.4', 'Top cover'],
+      ['1.4.1', ''],
+    ]);
+  });
+
+  it('is null for any other refusal, so the screen shows the server\'s sentence', async () => {
+    expect(warningFrom(await refusal(blocked([])))).toBeNull();
+    expect(warningFrom(await refusal(answer({ code: 'NO_PARTS', title: 'Add at least one part before calculating.', status: 409 }, 409)))).toBeNull();
+  });
+
+  it.each([
+    ['no revision', { inputsRevision: undefined }],
+    ['a revision as text', { inputsRevision: '7' }],
+    ['a fractional revision', { inputsRevision: 7.5 }],
+    ['a negative revision', { inputsRevision: -1 }],
+    ['no warnings', { warnings: undefined }],
+    ['warnings that are not a list', { warnings: 'x' }],
+    ['an empty list', { warnings: [] }],
+    ['an entry that is not an object', { warnings: ['1.4'] }],
+    ['a row without a node', { warnings: [row({ nodeId: undefined })] }],
+    ['a row without a field', { warnings: [row({ fieldId: '' })] }],
+    ['a row without a Sl. No', { warnings: [row({ slNo: '' })] }],
+    ['a row whose name is a number', { warnings: [row({ label: 5 })] }],
+    ['a row without its sentence', { warnings: [row({ message: '' })] }],
+  ])('is null for %s: rows that might be wrong are never shown', async (_name, overrides) => {
+    expect(warningFrom(await refusal(asked(overrides)))).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_PASSWORD } from './harness-password';
 import { createCountingHasher, createFakeThrottleRepository, createFakeUserRepository, type FakeThrottleRepository, type FakeUserRepository } from './fake-auth-repositories';
 import { createFakeAuditWorld, type FakeAuditWorld } from './fake-audit';
+import { createAuditSink, type AuditSink } from './fake-audit-sink';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
@@ -100,6 +101,8 @@ export interface SessionHarness {
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
   readonly calculationService: CalculationService;
+  /** The audit entries written by `calculationService` (an acknowledged quantity warning, STORY-05.12): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly calculationAudit: AuditSink;
   /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
   readonly calculationWorld: FakeCalculationWorld;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
@@ -202,14 +205,17 @@ export function createSessionHarness(): SessionHarness {
   // The Engineer's Calculate over the same world (STORY-05.09). Its one part is empty, so the valid call of the recipe is the 422 that lists what is missing, which writes nothing: it answers the
   // same at any state, for every caller, however often the matrix and the scan repeat it.
   const calculationWorld = createFakeCalculationWorld(estimateWorld);
+  // The audit entries of an acknowledged quantity warning (STORY-05.12), kept apart from `auditWorld`, whose transactions are its own.
+  const calculationAudit = createAuditSink();
   const calculationService = createCalculationService({
     masters,
     currentConfiguration: () => Promise.resolve({ id: '00000000-0000-4000-8000-0aaa00000001', document: seedConfig }),
     storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
-    workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition },
+    workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition, audit: calculationAudit.service },
   });
 
   return {
+    calculationAudit,
     users,
     throttles,
     auditService,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { RUPEE } from '../../lib/masters/master-rules';
@@ -97,6 +98,13 @@ const userRole = z.enum(USER_ROLE_VALUES);
 const roleState = z.strictObject({ role: userRole });
 /** A person's name, which is not a secret and is already the entry's label; the rename event keeps the old and the new one. */
 const nameState = z.strictObject({ name: z.string().min(1) });
+
+// ---- Shape of the quantity-warning event (SCR-16 "Quantity warning"; STORY-05.12) ---------------------------------------------------
+/** A row that was warned: the code, the part, its Sl. No and its name as typed. Text only: no number from a calculation has a place here. */
+const warnedRow = z.strictObject({ code: z.literal(QTY_ZERO_CODE), nodeId: z.string().min(1), slNo: z.string().min(1), label: z.string() });
+
+/** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
+const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
 
 // ---- Shape of the Process Master events (SCR-16 "Master data edit") ------------------------------------------------------------
 /** A rate as the log keeps it: its name, unit and default value as decimal text ("0.37"). The ID and the name label the entry. */
@@ -358,7 +366,17 @@ export const AUDIT_EVENTS = {
   'approval.approved': reserved('estimate', 'approval'),
   'approval.unlocked': reserved('estimate', 'unlock'),
   'approval.price_overridden': reserved('estimate', 'price_override'),
-  'calculation.warning_acknowledged': reserved('estimate', 'quantity_warning'),
+  // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
+  // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and
+  // the part's name as typed) and holding no figure: nothing here depends on a master or on a calculated value (NFR-002, architecture sections 4.3 and 8). The actor is the person who pressed.
+  'calculation.warning_acknowledged': defineEvent({
+    objectType: 'estimate',
+    category: 'quantity_warning',
+    status: 'wired',
+    before: z.null(),
+    after: z.strictObject({ warnings: z.array(warnedRow).min(1) }),
+    describe: (_before, after) => ({ before: 'No warning', after: `Went ahead with QTY per Assy 0 on ${after.warnings.map(describeWarnedRow).join(', ')}` }),
+  }),
   'approval.cancelled': reserved('estimate', 'approval_cancelled'),
   'approval.price_removed': reserved('estimate', 'price_removed'),
 } as const;

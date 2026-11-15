@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
+import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
 /**
  * The contract of the estimate routes (STORY-05.01, architecture section 6 "Set customer"). Every body, path parameter and answer is a strict object: a key
@@ -38,4 +39,42 @@ export const estimateCustomerSchema = z.strictObject({
 export const calculateAnswerSchema = z.strictObject({
   status: z.literal(CALCULATE_SUBMITTED_STATUS),
   message: z.literal(CALCULATE_MESSAGE),
+});
+
+/** The largest `inputs_revision` (a PostgreSQL `integer`): an acknowledgement names a count that can exist. */
+const MAX_REVISION = 2_147_483_647;
+
+/**
+ * The body of `POST /api/v1/estimates/{id}/calculate` (STORY-05.12 AC-3, AC-5; architecture sections 4.3 and 6 "Calculate"): none, or `{}`, or `{acknowledge: {inputsRevision}}` with the number from the
+ * 409 `CALCULATE_ACK_REQUIRED`. Strict at both levels, and `acknowledge: true`, a string, a missing number, a negative or a fractional one is **not** this shape: the route answers 400 for it (`badBodyIs400`),
+ * and a plain flag is refused on purpose, because a retry or a stale tab could pass a warning nobody saw. Whether the number is the current revision is the service's to say, under the lock.
+ */
+export const calculateBodySchema = z
+  .strictObject({ acknowledge: z.strictObject({ inputsRevision: z.number().int().min(0).max(MAX_REVISION) }).optional() })
+  .optional();
+
+/**
+ * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`
+ * (a count of changes) and the Sl. No. Text and one revision: nothing that comes from a master, a rate or a calculation has a key to sit in. The wrapper builds this body in `problem.ts`, key by key;
+ * this schema is what the tests and the canary scan hold it to.
+ */
+export const calculateAckRequiredSchema = z.strictObject({
+  type: z.literal('about:blank'),
+  title: z.string().min(1),
+  status: z.literal(409),
+  code: z.literal(CALCULATE_ACK_REQUIRED_CODE),
+  requestId: z.string().min(1),
+  inputsRevision: z.number().int().min(0).max(MAX_REVISION),
+  warnings: z
+    .array(
+      z.strictObject({
+        code: z.literal(QTY_ZERO_CODE),
+        nodeId: z.string().min(1),
+        fieldId: z.string().min(1),
+        slNo: z.string().min(1),
+        label: z.string(),
+        message: z.string().min(1),
+      }),
+    )
+    .min(1),
 });

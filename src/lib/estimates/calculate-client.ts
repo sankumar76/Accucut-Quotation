@@ -1,5 +1,6 @@
 import { CALCULATE_BLOCKED_CODE, CALCULATE_SUBMITTED_STATUS } from '../estimate/calculate-words';
-import { ACCEPT_JSON, isRecord, sendJson, type Fetch, type Outcome, type Refusal } from '../api-client';
+import { CALCULATE_ACK_REQUIRED_CODE } from '../estimate/warning-copy';
+import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome, type Refusal } from '../api-client';
 
 import type { BlockedPartView, MissingFieldView } from './calculate-missing';
 
@@ -18,9 +19,54 @@ export interface CalculateDone {
 const toDone = (body: unknown): CalculateDone | null =>
   isRecord(body) && body['status'] === CALCULATE_SUBMITTED_STATUS && typeof body['message'] === 'string' && body['message'] !== '' ? { status: CALCULATE_SUBMITTED_STATUS, message: body['message'] } : null;
 
-/** `POST /api/v1/estimates/{id}/calculate`. No body: the route takes none. */
+const calculatePath = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}/calculate`;
+
+/** `POST /api/v1/estimates/{id}/calculate`, the first press: no body. A 0 in QTY per Assy earns the 409 that `warningFrom` reads. */
 export function calculateEstimate(estimateId: string, doFetch: Fetch = fetch): Promise<Outcome<CalculateDone>> {
-  return sendJson(doFetch, `/api/v1/estimates/${encodeURIComponent(estimateId)}/calculate`, { method: 'POST', headers: ACCEPT_JSON }, toDone);
+  return sendJson(doFetch, calculatePath(estimateId), { method: 'POST', headers: ACCEPT_JSON }, toDone);
+}
+
+/**
+ * "Calculate anyway" (STORY-05.12 AC-3): the same `POST` with `{acknowledge: {inputsRevision}}`, the revision from the 409 the person saw. The server compares it with the estimate's own under its lock, so
+ * an acknowledgement is only ever good for the state it was given for; this sends what it was told to and decides nothing.
+ */
+export function calculateAnyway(estimateId: string, inputsRevision: number, doFetch: Fetch = fetch): Promise<Outcome<CalculateDone>> {
+  return sendJson(doFetch, calculatePath(estimateId), { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ acknowledge: { inputsRevision } }) }, toDone);
+}
+
+/** A row with a 0 in QTY per Assy as the dialog shows it: the part and the field to take the person to, the Sl. No and name, and the server's sentence. */
+export interface WarnedRowView {
+  readonly nodeId: string;
+  readonly fieldId: string;
+  readonly slNo: string;
+  readonly label: string;
+  readonly message: string;
+}
+
+/** What the 409 `CALCULATE_ACK_REQUIRED` asks the person to confirm: the revision to send back with "Calculate anyway", and the rows. */
+export interface AckRequestView {
+  readonly inputsRevision: number;
+  readonly rows: ReadonlyArray<WarnedRowView>;
+}
+
+const isText = (value: unknown): value is string => typeof value === 'string' && value !== '';
+
+function toWarnedRow(value: unknown): WarnedRowView | null {
+  if (!isRecord(value)) return null;
+  const { nodeId, fieldId, slNo, label, message } = value;
+  return isText(nodeId) && isText(fieldId) && isText(slNo) && typeof label === 'string' && isText(message) ? { nodeId, fieldId, slNo, label, message } : null;
+}
+
+/**
+ * The rows and the revision of a 409 `CALCULATE_ACK_REQUIRED`, or `null` for any other refusal or a body that is not the expected shape (then the screen shows the server's own sentence and no rows).
+ * No number is read from the body but the revision: there is no other in it (NFR-002).
+ */
+export function warningFrom(refusal: Refusal): AckRequestView | null {
+  const { inputsRevision, warnings } = refusal.body;
+  if (refusal.code !== CALCULATE_ACK_REQUIRED_CODE || typeof inputsRevision !== 'number' || !Number.isInteger(inputsRevision) || inputsRevision < 0) return null;
+  if (!Array.isArray(warnings) || warnings.length === 0) return null;
+  const rows = warnings.map(toWarnedRow);
+  return rows.every((row) => row !== null) ? { inputsRevision, rows } : null;
 }
 
 function toField(value: unknown): MissingFieldView | null {

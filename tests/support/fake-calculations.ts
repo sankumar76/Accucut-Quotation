@@ -39,7 +39,7 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>) {
       const id = nextId();
       const createdAt = new Date('2026-11-14T05:00:00.000Z');
-      calculations.push({ ...calculation, id, warnings: [], createdAt, rows: rows.map((row) => ({ ...row, id: nextId() })) });
+      calculations.push({ ...calculation, id, warnings: (calculation.warnings ?? []).map((warning) => ({ ...warning })), createdAt, rows: rows.map((row) => ({ ...row, id: nextId() })) });
       return Promise.resolve({ id, createdAt });
     },
     findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
