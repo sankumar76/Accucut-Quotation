@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
-import { PLAIN_TEXT, pngOfSize, smallPng, SVG_TEXT } from '../support/pictures';
+import { PLAIN_TEXT, pngOfSize, SVG_TEXT } from '../support/pictures';
 
 import { useFreshAddress } from './support/auth';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
@@ -22,7 +22,24 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
+// The picture field is its own file, fetched when the form opens, and the development server compiles it the first time it is asked for: the first test of a run can wait several seconds for it.
+test.beforeEach(() => {
+  test.setTimeout(60_000);
+});
+
+/** Opens the form as `openForm` does, and waits for the picture field, which arrives after the form (a separate chunk). Answers the person. */
+async function open(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+  const owner = await openForm(page, testInfo);
+  await expect(zone(page)).toBeVisible({ timeout: 45_000 });
+  return owner;
+}
+
 const KB = 1024;
+/**
+ * A picture that no part holds. The canary picture of the scan's estimate is `smallPng()` (`insertCanaryEstimate`), so the same bytes would be found and not stored again, and would show the
+ * name the canary was stored with (that is the one row per picture of an estimate, ADR-013); every test here adds this one, or one of another size, instead.
+ */
+const fresh = (): Buffer => pngOfSize(120);
 const HINT = 'PNG, JPG, GIF or WebP, under 200 KB.';
 const WRONG_TYPE = 'Only PNG, JPG, GIF or WebP pictures are accepted.';
 const tooLarge = (name: string, kilobytes: number): string => `"${name}" is ${String(kilobytes)} KB. Pictures must be under 200 KB. Choose a smaller picture.`;
@@ -73,10 +90,11 @@ const ownerRoute = (owner: { readonly id: string }): string => `/api/v1/estimate
 
 test.describe('AC-1, AC-3: the field and the three ways to add a picture', () => {
   test('AC-3: Part Model is labelled "Optional", says how to add a picture, shows no message and no "missing picture", and is not counted as a required input', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await open(page, testInfo);
     await expect(zone(page)).toBeVisible();
-    await expect(zone(page)).toContainText('Optional');
-    await expect(zone(page)).toContainText('Part Model');
+    // The label sits above the box and names it: "Excel column C Part Model Optional".
+    await expect(zone(page)).toHaveAccessibleName(/^Excel column C\s+Part Model\s+Optional$/);
+    await expect(section(page)).toContainText('Optional');
     await expect(zone(page)).toContainText('Paste, drop a picture here, or choose a file.');
     await expect(zone(page).getByRole('button', { name: 'Choose a file' })).toBeVisible();
     await expect(section(page)).toContainText(HINT);
@@ -88,8 +106,8 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
   });
 
   test('AC-1: choosing a file stores it and shows a preview with its name; it is still there after a reload', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    expect(await choose(page, 'invented-front.png', smallPng())).toBe(200);
+    await open(page, testInfo);
+    expect(await choose(page, 'invented-front.png', fresh())).toBe(200);
     await expect(zone(page)).toContainText('invented-front.png');
     await expect(preview(page, 'invented-front.png')).toBeVisible();
     // The preview is a picture the server sent: a 1 x 1 image has a natural width of 1.
@@ -104,8 +122,8 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
   });
 
   test('AC-1: Replace shows the new picture, and Remove takes it away and offers the field again; the same keys and buttons work each time', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    await choose(page, 'first.png', smallPng());
+    await open(page, testInfo);
+    await choose(page, 'first.png', fresh());
     await expect(zone(page).getByRole('button', { name: 'Replace' })).toBeVisible();
     await expect(zone(page).getByRole('button', { name: 'Remove' })).toBeVisible();
     expect(await choose(page, 'second.png', pngOfSize(300))).toBe(200);
@@ -123,9 +141,9 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
   });
 
   test('AC-1: a copied picture is added by pasting (Ctrl+V), and a picture is added by dropping it on the field; a paste of text is left alone', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await open(page, testInfo);
     const pasted = writeOfPicture(page, 'PUT');
-    await paste(page, 'image.png', smallPng());
+    await paste(page, 'image.png', fresh());
     expect((await pasted).status()).toBe(200);
     await expect(zone(page)).toContainText('image.png');
 
@@ -149,13 +167,13 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
   });
 
   test('AC-1, AC-8: it can be done without a mouse: Enter on "Choose a file" opens the file picker, and Remove is a button too', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await open(page, testInfo);
     const choose = zone(page).getByRole('button', { name: 'Choose a file' });
     await choose.focus();
     await expect(choose).toBeFocused();
     const [picker] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Enter')]);
     const written = writeOfPicture(page, 'PUT');
-    await picker.setFiles(file('keyboard.png', smallPng()));
+    await picker.setFiles(file('keyboard.png', fresh()));
     expect((await written).status()).toBe(200);
     await expect(zone(page)).toContainText('keyboard.png');
 
@@ -168,8 +186,8 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
   });
 
   test('a part that has a picture still saves what is typed: the part\'s revision moved with the picture and the form kept in step', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    await choose(page, 'step.png', smallPng());
+    await open(page, testInfo);
+    await choose(page, 'step.png', fresh());
     const saved = page.waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method()));
     await control(page, 'B').fill('FR-7');
     await control(page, 'B').blur();
@@ -182,7 +200,7 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
 
 test.describe('AC-2: what is refused, in the words of SCR-05, inline in section 01', () => {
   test('a text file renamed .png and an SVG are refused as the wrong type, and a file of 0 bytes too; nothing is sent and the form is untouched', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await open(page, testInfo);
     let sent = 0;
     page.on('request', (request) => {
       if (isPictureWrite(request.url(), request.method())) sent += 1;
@@ -200,8 +218,8 @@ test.describe('AC-2: what is refused, in the words of SCR-05, inline in section 
   });
 
   test('a picture of 201 KB is refused with its name and size and the limit; 199 KB is accepted; the picture that was there stays after a refusal', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    await choose(page, 'first.png', smallPng());
+    await open(page, testInfo);
+    await choose(page, 'first.png', fresh());
     await chooser(page).setInputFiles(file('cabinet-photo.png', pngOfSize(201 * KB)));
     await expect(section(page).getByRole('alert')).toContainText(tooLarge('cabinet-photo.png', 201));
     await expect(zone(page)).toContainText('first.png');
@@ -213,15 +231,15 @@ test.describe('AC-2: what is refused, in the words of SCR-05, inline in section 
   });
 
   test('204,800 bytes exactly is refused and 204,799 is accepted: the limit is strictly under 200 x 1024 bytes', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await open(page, testInfo);
     await chooser(page).setInputFiles(file('exact.png', pngOfSize(204_800)));
     await expect(section(page).getByRole('alert')).toContainText(tooLarge('exact.png', 200));
     expect(await choose(page, 'edge.png', pngOfSize(204_799))).toBe(200);
   });
 
   test('AC-7: a file name with markup and path characters is shown as text, sanitised', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    expect(await choose(page, '..\\<b>front</b>.png', smallPng())).toBe(200);
+    await open(page, testInfo);
+    expect(await choose(page, '..\\<b>front</b>.png', fresh())).toBe(200);
     // The slash of the closing tag is a path separator, so only what follows it is kept; nothing of it is markup.
     await expect(zone(page)).toContainText('b.png');
     expect(await zone(page).innerHTML()).not.toMatch(/<b>front/);
@@ -231,14 +249,14 @@ test.describe('AC-2: what is refused, in the words of SCR-05, inline in section 
 
 test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture to its owner only', () => {
   test('the server refuses a wrong type with 415 and a large picture with 413, by content and by size, and a body over 256 KB with 413; nothing is stored', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
+    const owner = await open(page, testInfo);
     const put = (name: string, mimeType: string, bytes: Uint8Array) =>
       page.request.put(ownerRoute(owner), { headers: { origin: DEVELOPMENT_URL }, multipart: { file: { name, mimeType, buffer: Buffer.from(bytes) } } });
     for (const [name, type, bytes] of [
       ['notes.png', 'image/png', PLAIN_TEXT],
       ['logo.svg', 'image/svg+xml', SVG_TEXT],
       ['empty.png', 'image/png', Buffer.alloc(0)],
-      ['declared-as-png.png', 'image/png', Buffer.concat([smallPng(), Buffer.from('<script>alert(1)</script>')])],
+      ['declared-as-png.png', 'image/png', Buffer.concat([fresh(), Buffer.from('<script>alert(1)</script>')])],
     ] as const) {
       const answer = await put(name, type, bytes);
       expect(answer.status(), name).toBe(415);
@@ -250,12 +268,12 @@ test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture 
     const over = await put('huge.png', 'image/png', pngOfSize(400 * KB));
     expect(over.status()).toBe(413);
     // A type is read from the content and not from the declared type: a PNG declared as text is accepted.
-    expect((await put('plain-declared.png', 'text/plain', smallPng())).status()).toBe(200);
+    expect((await put('plain-declared.png', 'text/plain', fresh())).status()).toBe(200);
   });
 
   test('the picture is served with its stored type, nosniff and no-store to its owner; signed out is 401, and an ID that is not a picture is 404', async ({ page, playwright }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await choose(page, 'served.png', smallPng());
+    const owner = await open(page, testInfo);
+    await choose(page, 'served.png', fresh());
     const part = await page.request.get(`/api/v1/estimates/${owner.id}/nodes/${owner.id}`);
     const body: unknown = await part.json();
     const pictureId = typeof body === 'object' && body !== null && 'picture' in body && typeof body.picture === 'object' && body.picture !== null && 'id' in body.picture ? String(body.picture.id) : '';
@@ -267,7 +285,7 @@ test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture 
     expect(served.headers()['x-content-type-options']).toBe('nosniff');
     expect(served.headers()['cache-control']).toContain('no-store');
     expect(served.headers()['content-disposition']).toBe('inline');
-    expect((await served.body()).equals(Buffer.from(smallPng()))).toBe(true);
+    expect((await served.body()).equals(Buffer.from(fresh()))).toBe(true);
 
     expect((await page.request.get('/api/v1/images/00000000-0000-4000-8000-0000000000ff')).status()).toBe(404);
     expect((await page.request.get('/api/v1/images/not-an-id')).status()).toBe(404);
@@ -283,8 +301,8 @@ test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture 
 
 test.describe('AC-8: small screens and accessibility', () => {
   test('the messages are inline in section 01 with role="alert", the buttons are touch targets, nothing scrolls sideways, and axe finds nothing, with a picture and with a message', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    await choose(page, 'accessible.png', smallPng());
+    await open(page, testInfo);
+    await choose(page, 'accessible.png', fresh());
     await expectFormAccessible(page);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 

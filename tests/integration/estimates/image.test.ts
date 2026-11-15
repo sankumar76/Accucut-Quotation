@@ -288,15 +288,16 @@ describe('AC-6: who may change a picture, and when (FR-064)', () => {
     const mine = await setUpEstimate();
     const other = await setUpEstimate();
     const missing = '00000000-0000-4000-8000-0000000000ff';
+    // Each is started when its turn comes: a promise made earlier and awaited later would be reported as unhandled while the ones before it ran.
     const attempts = [
-      put(mine.estimateId, mine.first, smallPng(), 'a.png', priya()),
-      put(missing, mine.first, smallPng()),
-      put(mine.estimateId, missing, smallPng()),
-      put('not-an-id', mine.first, smallPng()),
-      put(mine.estimateId, 'not-an-id', smallPng()),
-      put(mine.estimateId, other.first, smallPng()),
+      () => put(mine.estimateId, mine.first, smallPng(), 'a.png', priya()),
+      () => put(missing, mine.first, smallPng()),
+      () => put(mine.estimateId, missing, smallPng()),
+      () => put('not-an-id', mine.first, smallPng()),
+      () => put(mine.estimateId, 'not-an-id', smallPng()),
+      () => put(mine.estimateId, other.first, smallPng()),
     ];
-    for (const attempt of attempts) expect(await refusal(attempt)).toBeInstanceOf(NotFoundError);
+    for (const attempt of attempts) expect(await refusal(attempt())).toBeInstanceOf(NotFoundError);
     expect(await imageCount(mine.estimateId)).toBe(0);
     expect(await imageCount(other.estimateId)).toBe(0);
   });
@@ -360,9 +361,8 @@ describe('AC-5: a picture is read only by the people who may open its estimate',
   it('answers another Engineer, an unknown ID and an ID that is not one with the same 404', async () => {
     const { estimateId, first } = await setUpEstimate();
     const picture = defined((await put(estimateId, first, smallPng())).picture);
-    for (const attempt of [service.getPicture(priya(), picture.id), service.getPicture(arjun(), '00000000-0000-4000-8000-0000000000ff'), service.getPicture(arjun(), 'not-an-id')]) {
-      expect(await refusal(attempt)).toBeInstanceOf(NotFoundError);
-    }
+    const attempts = [() => service.getPicture(priya(), picture.id), () => service.getPicture(arjun(), '00000000-0000-4000-8000-0000000000ff'), () => service.getPicture(arjun(), 'not-an-id')];
+    for (const attempt of attempts) expect(await refusal(attempt())).toBeInstanceOf(NotFoundError);
   });
 
   it('still serves a submitted estimate\'s picture and one that was replaced (a read is not a change)', async () => {
