@@ -179,3 +179,29 @@ The workflow is separate (`.github/workflows/windows-package.yml`), has `permiss
 - Verdict: REQUEST CHANGES (Blocker 0, Critical 0, Major 4, Minor 2, Info 3)
 - Artefacts: this file; PR review on #396 (COMMENT, 9 inline comments); label `review:quality-changes-requested`
 - Recommended next agent: developer, to fix SQR-01 to SQR-04 (and SQR-05 and SQR-06 if cheap). Then a re-review of the new diff only.
+
+---
+## Re-review, 2026-11-14 (commits 7a85008, 308dbf2, 0a0a641; ADR-015 Amendment 2.1)
+
+Verdict: APPROVE WITH COMMENTS. Merge: GO (no open Blocker, Critical or Major). New counts: Blocker 0, Critical 0, Major 0, Minor 0, Info 3.
+Method: GitHub MCP only; master merge commit not reviewed; no tests run locally. CI 43655701365 6/6 green; Stage 13 43655701436 green, 253 Pester tests passing.
+
+| ID | Status | Evidence |
+|---|---|---|
+| SQR-01 | Verified | clean-logs.ps1, the scheduled task and every S-1-5-19 reference removed (308dbf2). The worker's log-prune job (src/server/jobs/log-prune.ts) runs as NT SERVICE\AccucutWorker. Test 3 parses every packaged .ps1/.psm1; Stage 13 asserts there is no task and that log-prune was scheduled. |
+| SQR-02 | Verified | One try from the switch to health; Invoke-AccucutRollback gives each step its own try, always starts the previous release, and always says "Call your IT person". Pester covers a failure in each step. |
+| SQR-03 | Verified | New-AccucutLogFileName (time plus 8 hex); CreateNew with FileShare.Read, held open; an existing name is refused; no Add-Content; Close-AccucutLog runs before the failed-install cleanup. |
+| SQR-04 | Verified | Both READMEs use an admin-only folder and -Sha256 on every install and update command, with a Vitest guard. |
+| SQR-05 | Verified | Second half checks the root shape, then Test-AccucutInstallPresent, before any load, create or remove. |
+| SQR-06 | Verified | Shared check:/run: trace in install (node, psql); the update and restore traces cover node and WinSW. |
+| SQR-07 | Verified | Get-Item called once per script, only in Get-AccucutTrustedCurrent, module-qualified; the ADR now lists it as an exception. |
+| SQR-08 | Verified | Attributes, then descriptor, then attributes again, refused if they differ; residual race is R-T5. Block byte-identical (27,993 characters, 19 functions). |
+| SQR-09 | Verified | WinSW byte snapshot before stop; written back and trust-checked before refresh; Pester cases. |
+
+Amendment 2.1: Get-Item only in Get-AccucutTrustedCurrent — yes. Attribute double read — yes. WinSW byte rollback — yes. Test 3 over every packaged script — yes. LOCAL SERVICE model removed — yes. Worker log-prune job — yes (LOG_DIRECTORY must be absolute and not a link; top-level regular files only; links skipped; no recursion; older than 30 days; counts only in its log). Exact ACEs on the root (4 entries, OI CI, protected) and on logs (4 inherited plus 2 Modify), banned-SID sweep and no-task check — yes, asserted by assert-install.ps1 and a Pester case with real ACLs.
+
+Deviations: (1) widened log-name pattern — accepted; (2) job classed by a test instead of lint — accepted.
+
+Info (do not block): (1) test 3 does not recurse; add -Recurse excluding ci/ and tests/ to match the amendment's wording. (2) Narrow the WinSW half of the prune pattern once the names are confirmed. (3) Add import( and require( to the forbidden patterns in the job-classing test.
+
+Regressions: none. S-1 to S-6 stay closed. AC-1 to AC-10 all met; AC-4 now fully met.
