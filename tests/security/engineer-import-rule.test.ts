@@ -269,23 +269,35 @@ describe('every repository and service file is classed, and the lint agrees with
  * classed here instead. A job that reads the database is a service in all but name, so a job is allowed to exist only if it takes no repository, service, the
  * container, the formula engine or the database driver: `log-prune` reads and deletes log files and holds no cost data, and its log lines hold counts only.
  * A new job file fails this test until someone classes it, and a job that needs the data layer has to be classed (and reviewed) as the service it is.
+ *
+ * `backup-watch` (STORY-10.05) reads and writes `job_runs`, which holds the record of the backups and the free space of the disk: Internal data, no cost or rate. It reaches the
+ * database only through a store that the worker gives it as a parameter (`takesItsStoreByInjection`), so the job file itself imports no repository, service or driver, and a test
+ * can fix the clock and stub both the store and `statfs`. What the store may do is decided where it is built (`src/server/repositories/job-run-repository.ts`).
  */
-const JOBS = { holdsNoData: ['log-prune'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch'] } as const;
+const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
 
 describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
   it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
-    expect(filesIn('src/server/jobs').sort()).toEqual([...JOBS.holdsNoData].sort());
+    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS].sort());
   });
 
-  it.each(JOBS.holdsNoData)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
+  it.each(ALL_JOBS)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
     const source = readFileSync(`${ROOT}src/server/jobs/${job}.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
     expect(specifiers.length).toBeGreaterThan(0);
     for (const specifier of specifiers) {
       expect(specifier, `${job} imports ${specifier}`).not.toMatch(/repositories|services|composition|@\/lib\/formula|lib\/formula|@prisma\/client|generated\/prisma|\/views\//);
     }
-    // It never opens a file to read it: only lstat, readdir and unlink.
+    // It never opens a file to read it: only lstat, readdir, unlink and statfs.
     expect(source).not.toMatch(/readFile|createReadStream|open\(/);
+  });
+
+  it('backup-watch takes only Node, node-cron and two plain lib modules, and its row holds figures of the disk and nothing about an estimate', () => {
+    const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
+    const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
+    expect(specifiers).toEqual(['../../lib/settings/backup-status', '../../lib/time', 'node-cron', 'node:fs/promises']);
+    expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });
 

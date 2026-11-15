@@ -585,7 +585,9 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Set-AccucutCurrentRelease { }
         Mock Write-AccucutSecureFile { }
         Mock Invoke-AccucutNative {
-            $script:NativeArguments.Add((($ArgumentList -join ' ') + ' ' + (($Environment.Values | ForEach-Object { [string]$_ }) -join ' ')))
+            $environmentText = ''
+            if ($null -ne $Environment) { $environmentText = (($Environment.Values | ForEach-Object { [string]$_ }) -join ' ') }
+            $script:NativeArguments.Add((($ArgumentList -join ' ') + ' ' + $environmentText))
             if ($ArgumentList -contains 'install') { $script:ServicesRegistered = $true }
             if ($FilePath -like '*node.exe' -and $ArgumentList -contains '--version') { return [pscustomobject]@{ ExitCode = 0; Output = 'v22.12.0' } }
             if ($FilePath -like '*psql.exe') { return [pscustomobject]@{ ExitCode = 0; Output = 'psql (PostgreSQL) 17.2' } }
@@ -648,7 +650,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $script:SeenRecipient | Should -Be $script:FakeAgeRecipient
         Should -Invoke Grant-AccucutBackupRootAccess -Times 1 -Exactly -ParameterFilter { $BackupSid -eq $script:BackupSid }
         Should -Invoke New-AccucutBackupFolder -Times 1 -Exactly -ParameterFilter { $BackupSid -eq $script:BackupSid -and $Path -like '*\backups' }
-        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $ExtraEnvironment.ContainsKey('DB_BACKUP_PASSWORD') -and $ExtraEnvironment['DB_BACKUP_PASSWORD'] -eq $script:SeenBackupPassword -and $ExtraEnvironment['DB_BACKUP_PASSWORD'].Length -eq 32 }
+        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $null -ne $ExtraEnvironment -and $ExtraEnvironment.ContainsKey('DB_BACKUP_PASSWORD') -and $ExtraEnvironment['DB_BACKUP_PASSWORD'] -eq $script:SeenBackupPassword -and $ExtraEnvironment['DB_BACKUP_PASSWORD'].Length -eq 32 }
         ($script:Logged -join "`n") | Should -Not -BeLike "*$($script:SeenBackupPassword)*"
         ($script:NativeArguments -join "`n") | Should -Not -BeLike "*$($script:SeenBackupPassword)*"
         # The password goes into no .env file, and the two volumes are written there (forward slashes, drive roots).
