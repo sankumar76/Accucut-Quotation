@@ -972,6 +972,12 @@ $script:BackupCopyPattern = '^accucut-(\d{8})-(\d{6})-(weekly|release)\.age$'
 $script:BackupPartPattern = '^accucut-\d{8}-\d{6}-(weekly|release)\.age\.part$'
 $script:BackupStampFormat = 'yyyyMMdd-HHmmss'
 
+# What every age file starts with (the v1 format).
+$script:AgeHeader = 'age-encryption.org/v1'
+
+# The Windows Application event log source of the backup scripts (ADR-015 Amendment 3.1 point 5): the install registers it, backup.ps1 writes one event per run.
+$script:EventSource = 'Accucut'
+
 # An age public key (X25519), which is all that the server ever holds.
 $script:AgeRecipientPattern = '^age1[0-9a-z]{58}$'
 
@@ -990,6 +996,32 @@ function Get-AccucutBackupAccountSid {
     catch {
         throw "The local account '$($script:BackupAccountName)' does not exist on this server, so the backup cannot be checked or run. Call your IT person."
     }
+}
+
+function Test-AccucutEventSource {
+    <# True when the event source of the backup scripts is registered. A function of its own so that Pester can mock it. #>
+    [CmdletBinding()]
+    param()
+
+    return [System.Diagnostics.EventLog]::SourceExists($script:EventSource)
+}
+
+function New-AccucutEventSource {
+    <# Registers the event source in the Application log. Needs an administrator. A function of its own so that Pester can mock it. #>
+    [CmdletBinding()]
+    param()
+
+    [System.Diagnostics.EventLog]::CreateEventSource($script:EventSource, 'Application')
+}
+
+function Register-AccucutEventSource {
+    <# The install registers the source 'Accucut' once, as an administrator, so that AccucutBackup (a standard user, which may write to a source that exists) can write its event. Returns $true when it made it. #>
+    [CmdletBinding()]
+    param()
+
+    if (Test-AccucutEventSource) { return $false }
+    New-AccucutEventSource
+    return $true
 }
 
 function Get-AccucutRandomNumber {
@@ -1525,9 +1557,8 @@ function Invoke-AccucutBackupPipe {
         $outputTask = $age.StandardOutput.BaseStream.CopyToAsync($output)
         $source = $dump.StandardOutput.BaseStream
         $sink = $age.StandardInput.BaseStream
-        $buffer = New-Object byte[] 81920
         try {
-            while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) { $sink.Write($buffer, 0, $read) }
+            $source.CopyTo($sink)
             $sink.Flush()
         }
         catch {
@@ -1558,6 +1589,12 @@ function Invoke-AccucutBackupPipe {
     if ($null -ne $copyError) { throw "The dump could not be passed to age: $copyError" }
     $size = ([System.IO.FileInfo]::new($OutputPath)).Length
     if ($size -le 0) { throw 'The encrypted copy is empty.' }
+    # A good copy starts with the age header (ADR-015 Amendment 3.1 point 1); anything else is not an age file and is never kept.
+    $expectedHeader = [System.Text.Encoding]::ASCII.GetBytes($script:AgeHeader)
+    $found = New-Object byte[] $expectedHeader.Length
+    $reader = [System.IO.File]::OpenRead($OutputPath)
+    try { $count = $reader.Read($found, 0, $found.Length) } finally { $reader.Dispose() }
+    if ($count -ne $expectedHeader.Length -or [System.Text.Encoding]::ASCII.GetString($found) -ne $script:AgeHeader) { throw 'The encrypted copy does not start with the age header, so it is not used.' }
     return [int64]$size
 }
 
@@ -1840,7 +1877,7 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
-    'Get-AccucutBackupAccountSid', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
+    'Get-AccucutBackupAccountSid', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
     'Grant-AccucutBackupRootAccess', 'New-AccucutBackupFolder', 'Set-AccucutBackupFileAcl', 'Write-AccucutBackupFile', 'Test-AccucutBackupSetting', 'Read-AccucutBackupSettings', 'Write-AccucutBackupConfig',
     'Get-AccucutVolumeRoot', 'Get-AccucutVolumeSpace', 'Format-AccucutSize', 'Test-AccucutBackupRoom', 'ConvertFrom-AccucutBackupStamp', 'Get-AccucutBackupCopy', 'Get-AccucutBackupKeepSet', 'Get-AccucutBackupPruneCandidate',
     'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',

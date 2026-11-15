@@ -171,7 +171,7 @@ After a Windows Update reboot both services start by themselves, a minute or so 
 
 ## Backups (STORY-10.05)
 
-**What happens.** Every Sunday at 02:00 (the server's clock: keep the server on India Standard Time, the install warns when it is not), the scheduled task
+**What happens.** Every Sunday at 02:00 **server time** (keep the server on India Standard Time: the install warns "The backup runs at 02:00 server time; this server is not set to India Standard Time." when it is not), the scheduled task
 **Accucut weekly backup** runs `C:\Accucut\current\backup.ps1 -Reason weekly` as the local user **AccucutBackup**. That user is in no group, is not
 for signing in, and its password is known only to Task Scheduler. The script:
 
@@ -180,11 +180,16 @@ for signing in, and its password is known only to Task Scheduler. The script:
 2. checks the **free space first**: a copy is made only if at least **20 %** of the disk is still free afterwards (the planned size is the last copy plus 10 %).
    If not, **no copy is made and nothing is deleted** (a newer copy is never removed to make room), a failed run is recorded and the exit code is 1;
 3. runs `pg_dump -Fc` and encrypts it with `age` to your public key, as bytes (no PowerShell pipeline, no `cmd.exe`), into
-   `C:\Accucut\backups\accucut-<UTC time>-weekly.age`, under a temporary name first;
+   `C:\Accucut\backups\accucut-<UTC time>-weekly.age`, under a temporary name first. It keeps the copy only if **both programs exit 0**, the file is not empty and
+   starts with the age header (`age-encryption.org/v1`); otherwise the temporary file is deleted and the run is a failure;
 4. writes the manifest beside it, `accucut-<UTC time>-weekly.manifest.json` (SHA-256, size, PostgreSQL version, time, reason, release), and only then gives the copy
    its final name;
-5. prunes: **only copies older than 2 calendar years, never one of the newest 4, never a newer copy**; and writes one `job_runs` row (`job = 'backup'`: status,
-   size, free space and total size of the disk) as the database role `accucut_backup`.
+5. prunes: **only copies older than 2 calendar years (counted in UTC), never one of the newest 4, never a newer copy**; and writes one `job_runs` row (`job = 'backup'`:
+   status, size, free space and total size of the disk) as the database role `accucut_backup`, whenever the database can be reached;
+6. writes **one event in the Windows Application log**, source `Accucut` (the install registers it): Information 1000 with the file name and size, or Error 1010
+   (a check failed and nothing was done), 1011 (the backup failed) or 1012 (not enough free space), with a short message that holds no path and no secret. The
+   exit code is 1 on any failure, so Task Scheduler's history shows it too. There is no log file: `AccucutBackup` has no right on `C:\Accucut\logs`. Look at it with
+   `Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' }`.
 
 Before every update the update script runs the same script with `-Reason release`: that copy is named `...-release.age` and is not pruned within its first 2 years.
 Once a day the worker's `backup-watch` job reads the free space of the data volume and the backup volume (`PG_DATA_VOLUME` and `BACKUP_VOLUME` in `.env`)

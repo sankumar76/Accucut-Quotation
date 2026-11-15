@@ -238,6 +238,12 @@ finally {
     try { [void](Invoke-SuperPsql -Database 'postgres' -Sql "DROP DATABASE IF EXISTS $scratchDb WITH (FORCE)") } catch { Write-Host "note: the scratch database could not be dropped: $($_.Exception.Message)" }
 }
 
+# The event log (ADR-015 Amendment 3.1 point 5): the install registered the source Accucut, and its own run of the weekly task wrote exactly one Information event (1000).
+Assert-That ([System.Diagnostics.EventLog]::SourceExists('Accucut')) 'the event source Accucut is registered'
+$weeklyEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut'; Id = 1000 } -ErrorAction SilentlyContinue | Where-Object { $_.Properties.Count -gt 0 -and [string]$_.Properties[0].Value -like 'The weekly backup was made: accucut-*-weekly.age, * bytes.' })
+Assert-That ($weeklyEvents.Count -eq 1) "the install's run of the weekly task wrote exactly one Accucut Information event, with the file name and the size (found $($weeklyEvents.Count))"
+Assert-That ([string]$weeklyEvents[0].Properties[0].Value -notmatch '[A-Za-z]:\\') 'the event holds no path'
+
 # The database role, checked as accucut_backup through its own password file: a member of pg_read_all_data; INSERT on job_runs works; UPDATE and DELETE on it,
 # INSERT into any other table and CREATE TABLE are refused.
 function Invoke-BackupRolePsql {
@@ -247,6 +253,8 @@ function Invoke-BackupRolePsql {
     try { $output = & $psqlExe --no-psqlrc --no-password --tuples-only --no-align --quiet --host 127.0.0.1 --port ([string]$installedState.pgPort) --username accucut_backup --dbname accucut --command $Sql 2>&1 | Out-String } finally { Remove-Item Env:\PGPASSFILE -ErrorAction SilentlyContinue }
     return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output.Trim() }
 }
+$canLogin = Invoke-BackupRolePsql -Sql "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'accucut_backup'"
+Assert-That ($canLogin.Code -eq 0 -and $canLogin.Output -eq 't') 'accucut_backup can log in on a real install (it is NOLOGIN only in development and CI)'
 $member = Invoke-BackupRolePsql -Sql "SELECT pg_has_role('accucut_backup', 'pg_read_all_data', 'member')"
 Assert-That ($member.Code -eq 0 -and $member.Output -eq 't') 'accucut_backup is a member of pg_read_all_data'
 $insert = Invoke-BackupRolePsql -Sql "INSERT INTO job_runs (job, started_at, finished_at, result) VALUES ('ci-role-check', now(), now(), '{}'::jsonb)"

@@ -610,6 +610,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Start-AccucutServices { $script:Trace.Add('start-services') }
         Mock Wait-AccucutHealth { $true }
         Mock Get-AccucutHttpStatus { 200 }
+        Mock Register-AccucutEventSource { $script:Trace.Add('event-source'); return $true }
         Mock Register-AccucutBackupTask { $script:Trace.Add('task'); return $script:BackupSid }
         Mock Grant-AccucutBackupRootAccess { $script:Trace.Add('grant:backup') }
         Mock New-AccucutBackupFolder { $script:Trace.Add('folder') }
@@ -626,7 +627,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $values = Write-FakeValuesFile -Name 'backup-order-values.txt'
         { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Not -Throw
         $trace = @($script:Trace)
-        $order = @('task', 'grant:backup', 'folder', 'config', 'grant:services', 'start-services', 'first-backup')
+        $order = @('event-source', 'task', 'grant:backup', 'folder', 'config', 'grant:services', 'start-services', 'first-backup')
         for ($i = 1; $i -lt $order.Count; $i++) {
             [array]::IndexOf($trace, $order[$i]) | Should -BeGreaterThan ([array]::IndexOf($trace, $order[$i - 1])) -Because "$($order[$i]) comes after $($order[$i - 1])"
         }

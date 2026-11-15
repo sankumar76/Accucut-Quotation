@@ -1013,6 +1013,8 @@ function Invoke-AccucutInstall {
 
         # The weekly backup (ADR-015 Amendment 3): its local user and task, read and execute for that user on the root, the backups folder and the two protected files.
         # The account comes first, because every entry below names it by SID.
+        if ([string]::IsNullOrEmpty($settings.BackupPassword)) { throw 'The password of the backup role was not made. Nothing was changed.' }
+        [void](Register-AccucutEventSource)
         $backupSid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $powershellExe
         $created.BackupAccount = $true
         Grant-AccucutBackupRootAccess -Paths $paths -BackupSid $backupSid
@@ -1020,7 +1022,7 @@ function Invoke-AccucutInstall {
         Write-AccucutBackupConfig -Paths $paths -BackupSid $backupSid -BackupPassword $settings.BackupPassword -AgeRecipient $settings.AgeRecipient -PgHost $PgHost -PgPort $PgPort -Database $script:DatabaseName -PgBinDirectory $postgres.BinDirectory
         Write-AccucutLog -Message "Weekly backup: the local user AccucutBackup and the task 'Accucut weekly backup' (Sunday 02:00) are set up; the copies go to '$($paths.Backups)', encrypted to the public key you gave. The private key is never on this server." -LogFile $logFile
         if ([System.TimeZoneInfo]::Local.Id -ne 'India Standard Time') {
-            Write-AccucutLog -Message "The server's time zone is '$([System.TimeZoneInfo]::Local.Id)', not India Standard Time: the weekly backup runs on Sunday at 02:00 on the server's clock." -Level Warning -LogFile $logFile
+            Write-AccucutLog -Message 'The backup runs at 02:00 server time; this server is not set to India Standard Time.' -Level Warning -LogFile $logFile
         }
 
         # The services (WinSW), each as its own virtual account. Each program is checked before it is run, and never started before the account is set.

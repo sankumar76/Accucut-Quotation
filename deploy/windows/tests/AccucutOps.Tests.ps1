@@ -812,3 +812,22 @@ Describe 'volumes and sizes' {
         Format-AccucutSize -Bytes (12GB + 345MB) | Should -Be '12.34 GB'
     }
 }
+
+Describe 'the event source of the backup scripts (ADR-015 Amendment 3.1 point 5)' {
+    It 'registers the source Accucut in the Application log once, and does nothing when it is there' {
+        $script:Created = [System.Collections.Generic.List[string]]::new()
+        Mock Test-AccucutEventSource -ModuleName AccucutOps { $false }
+        Mock New-AccucutEventSource -ModuleName AccucutOps { $script:Created.Add('made') }
+        Register-AccucutEventSource | Should -BeTrue
+        $script:Created.Count | Should -Be 1
+        Mock Test-AccucutEventSource -ModuleName AccucutOps { $true }
+        Register-AccucutEventSource | Should -BeFalse
+        $script:Created.Count | Should -Be 1
+    }
+
+    It 'names the source Accucut and the Application log, and nothing else (static check)' {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
+        $text | Should -Match "\`$script:EventSource = 'Accucut'"
+        $text | Should -Match "CreateEventSource\(\`$script:EventSource, 'Application'\)"
+    }
+}

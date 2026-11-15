@@ -624,6 +624,7 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     const body = functionBody(install, 'Invoke-AccucutInstall');
     const order = [
       '$powershellExe = Resolve-AccucutTrustedExecutable',
+      '[void](Register-AccucutEventSource)',
       '$backupSid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $powershellExe',
       '$created.BackupAccount = $true',
       'Grant-AccucutBackupRootAccess -Paths $paths -BackupSid $backupSid',
@@ -682,6 +683,10 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     const backup = functionBody(code('deploy/windows/backup.ps1'), 'Invoke-AccucutBackupScript');
     expect((backup.match(/Resolve-AccucutTrustedExecutable/g) ?? []).length).toBe(3);
     expect(backup).toContain("[System.IO.Path]::Combine($release, 'bin\\age.exe')");
+    // One Application event per run (ADR-015 Amendment 3.1 point 5), never a log file: AccucutBackup has no right on logs.
+    expect(backup).toContain("Write-AccucutBackupEvent -EntryType Information -EventId 1000");
+    expect(backup).toContain('Write-AccucutBackupEvent -EntryType Error -EventId $eventId');
+    expect(code('deploy/windows/backup.ps1')).toContain("[System.Diagnostics.EventLog]::WriteEntry('Accucut', $text,");
     expect(backup).toContain("[System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe')");
     expect(backup).toContain("[System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe')");
     const folder = functionBody(code('deploy/windows/backup.ps1'), 'Assert-AccucutBackupFolderTrusted');
@@ -707,6 +712,9 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(pipe).toContain('$ageCode = $age.ExitCode');
     expect(pipe).toContain('[System.IO.FileMode]::CreateNew');
     expect(pipe).toContain('BaseStream');
+    expect(pipe).toContain('$source.CopyTo($sink)');
+    expect(pipe).toContain('$script:AgeHeader');
+    expect(pipe).not.toMatch(/FileName\s*=.*cmd/i);
     expect(pipe).not.toMatch(/\|\s*Out-|Get-Content|ConvertTo-Json|Write-Output/);
     // job_runs: INSERT only, as accucut_backup, values quoted by psql.
     const row = functionBody(region, 'Add-AccucutJobRun');
@@ -759,6 +767,8 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
       '"$backupSid|0x1301BF|False|3|Allow"',
       '"$backupSid|0x120089|False|0|Allow"',
       '[uint32]$taskInfo.LastTaskResult -eq 0',
+      "ProviderName = 'Accucut'; Id = 1000",
+      'rolcanlogin',
       "result->>'status' = 'ok'",
       'pg_restore.exe',
       "pg_has_role('accucut_backup', 'pg_read_all_data', 'member')",

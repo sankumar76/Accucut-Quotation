@@ -524,39 +524,75 @@ function Assert-AccucutBackupFolderTrusted {
     if (-not $security.Protected) { throw "'$Directory' inherits its permissions from the folder above it. Refusing to use it." }
 }
 
+function Write-AccucutBackupEvent {
+    # One event per run in the Application log, source 'Accucut' (ADR-015 Amendment 3.1 point 5): AccucutBackup has no right on the logs folder, and a failure before the
+    # database is reached (an unreadable settings file, a database that is down, a program that fails its trust check) leaves no job_runs row. Information 1000 on success;
+    # Error 1010 (a check failed, nothing was done), 1011 (the backup failed) or 1012 (not enough free space). The text holds a file name and a size, never a path or a secret.
+    # It never throws: a missing source must not turn a good backup into a failed one.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('Information', 'Error')][string]$EntryType,
+        [Parameter(Mandatory)][int]$EventId,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $text = $Message
+    if (Get-Command -Name Hide-AccucutSecrets -ErrorAction SilentlyContinue) { $text = Hide-AccucutSecrets -Text $text }
+    $text = ($text -replace '[\x00-\x08\x0B-\x1F]', ' ')
+    if ($text.Length -gt 1000) { $text = $text.Substring(0, 1000) }
+    try { [System.Diagnostics.EventLog]::WriteEntry('Accucut', $text, [System.Diagnostics.EventLogEntryType]$EntryType, $EventId) }
+    catch { Write-Host "The event could not be written to the Application log: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
 function Invoke-AccucutBackupScript {
     # Steps 1 to 6 of the description. Everything before Import-AccucutTrustedModule is the trust block and the two functions above, and nothing is loaded
-    # or run until its path has been checked.
+    # or run until its path has been checked. One Application event is written at the end, good or bad.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$ScriptPath,
         [Parameter(Mandatory)][string]$Reason
     )
 
-    $root = Get-AccucutScriptInstallRoot -ScriptPath $ScriptPath -Name 'backup.ps1'
-    Assert-AccucutTrustedRootShape -Root $root
-    $release = Get-AccucutTrustedCurrent -Root $root
-    $here = [System.IO.Path]::GetFullPath($ScriptPath)
-    $fromCurrent = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($root, 'current\backup.ps1'))
-    $fromRelease = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($release, 'backup.ps1'))
-    if (-not ($here.Equals($fromCurrent, [System.StringComparison]::OrdinalIgnoreCase) -or $here.Equals($fromRelease, [System.StringComparison]::OrdinalIgnoreCase))) {
-        throw "This script is '$here', not the backup.ps1 of the running release. Run it from '$([System.IO.Path]::Combine($root, 'current'))'. Nothing was done."
-    }
-    Assert-AccucutTrustedPath -Path $release -Root $root -ProtectedRoot
-    Assert-AccucutTrustedPath -Path $fromRelease -Root $root -ProtectedRoot
-    Import-AccucutTrustedModule -Root $root -Release $release
+    $stage = 'checks'
+    try {
+        $root = Get-AccucutScriptInstallRoot -ScriptPath $ScriptPath -Name 'backup.ps1'
+        Assert-AccucutTrustedRootShape -Root $root
+        $release = Get-AccucutTrustedCurrent -Root $root
+        $here = [System.IO.Path]::GetFullPath($ScriptPath)
+        $fromCurrent = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($root, 'current\backup.ps1'))
+        $fromRelease = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($release, 'backup.ps1'))
+        if (-not ($here.Equals($fromCurrent, [System.StringComparison]::OrdinalIgnoreCase) -or $here.Equals($fromRelease, [System.StringComparison]::OrdinalIgnoreCase))) {
+            throw "This script is '$here', not the backup.ps1 of the running release. Run it from '$([System.IO.Path]::Combine($root, 'current'))'. Nothing was done."
+        }
+        Assert-AccucutTrustedPath -Path $release -Root $root -ProtectedRoot
+        Assert-AccucutTrustedPath -Path $fromRelease -Root $root -ProtectedRoot
+        Import-AccucutTrustedModule -Root $root -Release $release
 
-    $paths = Get-AccucutPaths -Root $root
-    $backupSid = Get-AccucutBackupAccountSid
-    foreach ($file in $paths.BackupSettings, $paths.BackupPgpass) { Assert-AccucutTrustedPath -Path $file -Root $root -ProtectedRoot }
-    $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
-    Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid
-    $program = @{
-        Age    = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($release, 'bin\age.exe'))
-        PgDump = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe'))
-        Psql   = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe'))
+        $paths = Get-AccucutPaths -Root $root
+        $backupSid = Get-AccucutBackupAccountSid
+        foreach ($file in $paths.BackupSettings, $paths.BackupPgpass) { Assert-AccucutTrustedPath -Path $file -Root $root -ProtectedRoot }
+        $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
+        Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid
+        $program = @{
+            Age    = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($release, 'bin\age.exe'))
+            PgDump = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe'))
+            Psql   = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe'))
+        }
+        $stage = 'backup'
+        $made = Invoke-AccucutBackup -Paths $paths -Settings $settings -Program $program -Reason $Reason -ReleaseTag ([System.IO.Path]::GetFileName($release))
     }
-    [void](Invoke-AccucutBackup -Paths $paths -Settings $settings -Program $program -Reason $Reason -ReleaseTag ([System.IO.Path]::GetFileName($release)))
+    catch {
+        $eventId = 1010
+        $code = 'checks-failed'
+        if ($stage -eq 'backup') {
+            $eventId = 1011
+            $code = 'backup-failed'
+            if ($_.Exception.Message -like 'Not enough free disk space*') { $eventId = 1012; $code = 'low-space' }
+        }
+        Write-AccucutBackupEvent -EntryType Error -EventId $eventId -Message "The $Reason backup failed (code $code): $($_.Exception.Message)"
+        throw
+    }
+    Write-AccucutBackupEvent -EntryType Information -EventId 1000 -Message "The $Reason backup was made: $($made.Name), $($made.SizeBytes) bytes."
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

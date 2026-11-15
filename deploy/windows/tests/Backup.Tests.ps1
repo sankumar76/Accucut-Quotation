@@ -118,7 +118,49 @@ Describe 'the order of the checks in backup.ps1: every check before the module i
         Mock Read-AccucutBackupSettings { $script:Trace.Add("settings:$Path"); return $script:Settings }
         Mock Assert-AccucutBackupFolderTrusted { $script:Trace.Add("folder:$Directory|$BackupSid") }
         Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("program:$Path"); return $Path }
-        Mock Invoke-AccucutBackup { $script:Trace.Add("backup:$Reason|$ReleaseTag"); return [pscustomobject]@{ Name = 'x' } }
+        Mock Invoke-AccucutBackup { $script:Trace.Add("backup:$Reason|$ReleaseTag"); return [pscustomobject]@{ Name = 'accucut-20261115-020000-weekly.age'; SizeBytes = [int64]12345 } }
+        $script:Events = [System.Collections.Generic.List[object]]::new()
+        Mock Write-AccucutBackupEvent { $script:Events.Add([pscustomobject]@{ Type = $EntryType; Id = $EventId; Message = $Message }) }
+    }
+
+    It 'writes one Information event, 1000, with the file name and the size, when the backup is made, and no path' {
+        Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'weekly'
+        $script:Events.Count | Should -Be 1
+        $script:Events[0].Type | Should -Be 'Information'
+        $script:Events[0].Id | Should -Be 1000
+        $script:Events[0].Message | Should -Be 'The weekly backup was made: accucut-20261115-020000-weekly.age, 12345 bytes.'
+    }
+
+    It 'writes one Error event with a code when a check fails before any work (1010), when the backup fails (1011), and when there is no room (1012)' {
+        Mock Assert-AccucutBackupFolderTrusted { throw "'C:\Accucut\backups' can be changed by S-1-5-32-545" }
+        { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'weekly' } | Should -Throw
+        Mock Assert-AccucutBackupFolderTrusted { }
+        Mock Invoke-AccucutBackup { throw 'pg_dump failed with exit code 1. connection refused' }
+        { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'release' } | Should -Throw
+        Mock Invoke-AccucutBackup { throw 'Not enough free disk space for another copy: 1 KB is free.' }
+        { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'weekly' } | Should -Throw
+        $script:Events.Count | Should -Be 3
+        ($script:Events | ForEach-Object { $_.Type }) | Should -Be @('Error', 'Error', 'Error')
+        ($script:Events | ForEach-Object { $_.Id }) | Should -Be @(1010, 1011, 1012)
+        $script:Events[0].Message | Should -BeLike 'The weekly backup failed (code checks-failed): *can be changed by S-1-5-32-545*'
+        $script:Events[1].Message | Should -BeLike 'The release backup failed (code backup-failed): pg_dump failed with exit code 1*'
+        $script:Events[2].Message | Should -BeLike 'The weekly backup failed (code low-space): *'
+    }
+
+    It 'writes an Error event even when the failure comes before the module is loaded (a script that is not the running release)' {
+        { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\releases\other\backup.ps1' -Reason 'weekly' } | Should -Throw
+        $script:Events.Count | Should -Be 1
+        $script:Events[0].Id | Should -Be 1010
+    }
+
+    It 'the event writer never throws, blanks registered secrets, cuts the text, and writes only to the source Accucut (static check)' {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'backup.ps1') -Raw
+        $start = $text.IndexOf('function Write-AccucutBackupEvent {')
+        $body = $text.Substring($start, $text.IndexOf('function Invoke-AccucutBackupScript {', $start) - $start)
+        $body | Should -Match 'try \{ \[System\.Diagnostics\.EventLog\]::WriteEntry\(''Accucut'', \$text, '
+        $body | Should -Match 'catch \{ Write-Host'
+        $body | Should -Match 'Hide-AccucutSecrets'
+        $body | Should -Match 'Substring\(0, 1000\)'
     }
 
     It 'checks the root, the release, the script, loads the module, then checks the settings files, the backups folder and the three programs, and only then makes the backup' {
@@ -189,6 +231,7 @@ Describe 'a replaced module is never loaded by backup.ps1 (ADR-015 Amendment 2, 
             return (New-FakeSecurity -Path $Path -Ace (New-FullControl))
         }
         Mock Invoke-AccucutBackup { }
+        Mock Write-AccucutBackupEvent { }
         $script:AccucutTrustLog.Clear()
     }
 
@@ -545,6 +588,7 @@ public static class P {
     var log = Environment.GetEnvironmentVariable("FAKE_AGE_LOG");
     if (!string.IsNullOrEmpty(log)) File.WriteAllText(log, string.Join("|", args));
     var i = Console.OpenStandardInput(); var o = Console.OpenStandardOutput();
+    if (Environment.GetEnvironmentVariable("FAKE_AGE_NOHEADER") == null) { var h = System.Text.Encoding.ASCII.GetBytes("age-encryption.org/v1\n"); o.Write(h, 0, h.Length); }
     var b = new byte[65536]; int n;
     while ((n = i.Read(b, 0, b.Length)) > 0) o.Write(b, 0, n);
     o.Flush();
@@ -564,8 +608,11 @@ public static class P {
             if ($LASTEXITCODE -ne 0) { throw 'The fake programs could not be compiled.' }
         }
         $script:Recipient = 'age1' + ('q' * 58)
-        $script:Expected = New-Object byte[] 1024000
-        for ($i = 0; $i -lt 1024000; $i++) { $script:Expected[$i] = [byte]($i % 256) }
+        # What the fake age writes: the age header and a line end, then everything it was given.
+        $script:Header = [System.Text.Encoding]::ASCII.GetBytes("age-encryption.org/v1`n")
+        $script:Expected = New-Object byte[] (1024000 + $script:Header.Length)
+        [System.Array]::Copy($script:Header, $script:Expected, $script:Header.Length)
+        for ($i = 0; $i -lt 1024000; $i++) { $script:Expected[$script:Header.Length + $i] = [byte]($i % 256) }
         function Invoke-FakePipe {
             param([string]$Name)
             return (Invoke-AccucutBackupPipe -PgDumpPath (Join-Path $script:ToolFolder 'dump.exe') -AgePath (Join-Path $script:ToolFolder 'age.exe') -Recipient $script:Recipient -DbHost '127.0.0.1' -Port 5432 -Database 'accucut' -PassFile 'C:\fake\config\backup.pgpass' -OutputPath (Join-Path $TestDrive $Name))
@@ -573,20 +620,42 @@ public static class P {
     }
 
     AfterEach {
-        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
+        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG', 'FAKE_AGE_NOHEADER') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
     }
 
     It 'carries every byte from the dump through age to the file unchanged (including 0x1A, CR LF and NUL), and returns the size' {
         $size = Invoke-FakePipe -Name 'bytes.part'
-        $size | Should -Be 1024000
+        $size | Should -Be (1024000 + $script:Header.Length)
         $actual = [System.IO.File]::ReadAllBytes((Join-Path $TestDrive 'bytes.part'))
-        $actual.Length | Should -Be 1024000
+        $actual.Length | Should -Be (1024000 + $script:Header.Length)
         [System.BitConverter]::ToString($actual) | Should -BeExactly ([System.BitConverter]::ToString($script:Expected))
     }
 
     It 'fails, naming pg_dump and its exit code, when pg_dump fails but age ends well (a pipe in cmd.exe would report only age)' {
         $env:FAKE_DUMP_EXIT = '3'
         { Invoke-FakePipe -Name 'dumpfail.part' } | Should -Throw 'pg_dump failed with exit code 3*pg_dump: error: fake failure*'
+    }
+
+    It 'refuses a file that does not start with the age header, and an empty one, even when both programs exit 0 (Amendment 3.1 point 1)' {
+        $env:FAKE_AGE_NOHEADER = '1'
+        { Invoke-FakePipe -Name 'noheader.part' } | Should -Throw '*does not start with the age header*'
+    }
+
+    It 'a pg_dump that exits 1 after its output leaves no .age file, no manifest and no temporary file, and the run is recorded as failed (Amendment 3.1 point 1)' {
+        $script:HalfRows = [System.Collections.Generic.List[object]]::new()
+        Mock Get-AccucutDatabaseInfo -ModuleName AccucutOps { [pscustomobject]@{ ServerVersion = '17.2'; SizeBytes = [int64]1MB } }
+        Mock Get-AccucutVolumeSpace -ModuleName AccucutOps { [pscustomobject]@{ TotalBytes = [int64]100GB; FreeBytes = [int64]60GB } }
+        Mock Add-AccucutJobRun -ModuleName AccucutOps { $script:HalfRows.Add($Result) }
+        Mock Write-AccucutLog -ModuleName AccucutOps { }
+        $paths = Get-AccucutPaths -Root (Join-Path $TestDrive ('half-' + [guid]::NewGuid().ToString('N').Substring(0, 6)))
+        New-Item -ItemType Directory -Path $paths.Backups -Force | Out-Null
+        $settings = [pscustomobject]@{ AgeRecipient = $script:Recipient; PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut'; PgBinDirectory = $script:ToolFolder }
+        $program = @{ PgDump = (Join-Path $script:ToolFolder 'dump.exe'); Age = (Join-Path $script:ToolFolder 'age.exe'); Psql = 'C:\pg\bin\psql.exe' }
+        $env:FAKE_DUMP_EXIT = '1'
+        { Invoke-AccucutBackup -Paths $paths -Settings $settings -Program $program -Reason 'weekly' -ReleaseTag 't1' } | Should -Throw '*pg_dump failed with exit code 1*'
+        @(Get-ChildItem -LiteralPath $paths.Backups -Force).Count | Should -Be 0
+        $script:HalfRows.Count | Should -Be 1
+        $script:HalfRows[0].status | Should -Be 'failed'
     }
 
     It 'fails, naming age and its exit code, when age fails' {
