@@ -70,7 +70,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
 
-    await expect(page.getByText('calculated values to 4 decimals, so repeating the arithmetic gives the figure printed.')).toBeVisible();
+    await expect(page.getByText('repeating the arithmetic by hand gives the figure printed or, now and then, a figure a hundredth or two away from it.')).toBeVisible();
     await expect(page.getByText('The portal keeps every digit, adds the unrounded values and rounds once')).toBeVisible();
     await expect(page.getByText(/^Calculated .+ · configuration version \d+$/)).toBeVisible();
   });
@@ -120,7 +120,7 @@ test.describe('AC-7: the states with nothing current', () => {
     await expect(notice.getByRole('link', { name: 'Go to the estimate' })).toHaveAttribute('href', `/estimates/${code}`);
   });
 
-  test('cleared: an input changed, so the stages are replaced by "Cleared. Press Recalculate", with a link, and the answer of the route holds the state and no value', async ({ page }, testInfo) => {
+  test('cleared: an input changed, so the stages are replaced by "Cleared" (no button named until STORY-06.04), with a link, and the answer of the route holds the state and no value', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await calculateAsEngineer(page, owner, code);
     // The same change a save from another tab makes: the count of the part changes and the estimate's input revision goes up (architecture section 4.8).
@@ -128,10 +128,11 @@ test.describe('AC-7: the states with nothing current', () => {
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
 
-    const notice = page.getByRole('status').filter({ hasText: 'Cleared. Press Recalculate' });
+    const notice = page.getByRole('status').filter({ hasText: 'An input changed, so every calculated figure is cleared' });
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText('An input changed, so every calculated figure is cleared, on every row. Press Recalculate on the estimate to see the stages again.');
-    await expect(notice.getByRole('link', { name: 'Go to the estimate to Recalculate' })).toHaveAttribute('href', `/estimates/${code}`);
+    await expect(notice).toContainText('An input changed, so every calculated figure is cleared, on every row. The stages show again once the estimate is calculated again.');
+    await expect(notice).not.toContainText('Recalculate');
+    await expect(notice.getByRole('link', { name: 'Go to the estimate' })).toHaveAttribute('href', `/estimates/${code}`);
     await expect(page.locator('details[data-stage]')).toHaveCount(0);
     await expect(page.getByText('Stage total')).toHaveCount(0);
     await expect(page.getByText('Excel column')).toHaveCount(0);

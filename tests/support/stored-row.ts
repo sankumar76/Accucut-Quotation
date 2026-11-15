@@ -2,6 +2,7 @@ import { Decimal } from '../../src/lib/decimal';
 import { calculateRowOutputs } from '../../src/lib/estimate/row-calculator';
 import { storeRowOutputs } from '../../src/lib/estimate/row-outputs';
 import { findFieldByKey } from '../../src/lib/fields/registry';
+import type { ConfigDocument } from '../../src/lib/fields/schema';
 import { MATERIAL_IN_DRAWING_KEY } from '../../src/lib/fields/types';
 import { compilePlan, type CompiledPlan } from '../../src/lib/formula';
 import { NOT_APPLICABLE_NAME } from '../../src/lib/masters/system-entries';
@@ -34,6 +35,8 @@ export interface StoredRowOptions {
   readonly exchange?: { readonly usd: string | null; readonly eur: string | null };
   /** Rates typed by name over the oracle's. */
   readonly rates?: Readonly<Record<string, string>>;
+  /** A probe registry (a copy of the seed with a formula changed) the row is calculated with; the seed when absent. Its plan is compiled here. */
+  readonly document?: ConfigDocument;
 }
 
 export interface StoredRow {
@@ -46,6 +49,8 @@ const materialFieldId = (): string => defined(findFieldByKey(seedConfig, MATERIA
 const decimalOrNull = (text: string | null): Decimal | null => (text === null ? null : new Decimal(text));
 
 export function storedRowOf(options: StoredRowOptions = {}): StoredRow {
+  const document = options.document ?? seedConfig;
+  const plan = options.document === undefined ? SEED_PLAN : compilePlan(options.document.fields);
   const row = options.row ?? ROW;
   const notApplicable = options.material === 'not-applicable';
   const numbers = notApplicable ? NOT_APPLICABLE : (options.material ?? MATERIAL);
@@ -55,8 +60,8 @@ export function storedRowOf(options: StoredRowOptions = {}): StoredRow {
   const typed = Object.entries(row).map(([letter, text]) => [seedFieldAt(letter).id, text] as const);
   const outputs = storeRowOutputs(
     calculateRowOutputs({
-      document: seedConfig,
-      plan: SEED_PLAN,
+      document,
+      plan,
       inputs: new Map(typed.map(([id, text]) => [id, new Decimal(text)])),
       rates: SEED_PROCESS_ITEMS.map((item) => ({ id: item.id, name: item.name, value: new Decimal(defined(rates[item.name], item.name)) })),
       material: { pricePerKg: new Decimal(numbers.pricePerKg), specificGravity: new Decimal(numbers.specificGravity), scrapRate: new Decimal(numbers.scrapRate) },

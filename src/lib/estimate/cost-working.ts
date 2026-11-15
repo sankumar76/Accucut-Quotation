@@ -70,7 +70,7 @@ export interface WorkingLine {
   readonly unit: string | null;
   /** The formula in letters and rate names, as the registry holds it. `null` for a typed or looked-up value. */
   readonly formula: string | null;
-  /** The same formula with the operands' values. `null` where there is none to print (typed values, and the three lines of a "Not applicable" row that read the material). */
+  /** The same formula with the operands' values. `null` where there is none to print (typed values, and the lines of a "Not applicable" row that name the material). */
   readonly working: string | null;
   /** The stored value: decimal text, or `null` for no figure (a division by zero) or for a value left blank. */
   readonly value: string | null;
@@ -218,11 +218,12 @@ function operandTextOf(document: ConfigDocument, input: CostWorkingInput, materi
   };
 }
 
-/** True when the formula, on the path it took, read a `Material-*` operand or the material rate (I): the lines a "Not applicable" row prints no worked line for. */
-const readsMaterial = (operands: ReadonlyArray<{ readonly kind: string; readonly reference?: FormulaReference }>, lookup: FieldDefinition | undefined): boolean =>
-  operands.some(
-    (operand) => operand.reference !== undefined && (operand.reference.kind === 'material' || (operand.reference.kind === 'field' && lookup !== undefined && operand.reference.id === lookup.id)),
-  );
+/**
+ * True when the formula **names** a `Material-*` operand or the material rate (I), on any branch: the lines a "Not applicable" row prints no worked line for. It is decided by the formula's own
+ * references and not by the path the evaluation took, because the working prints the value of every operand, the branch of an `IF` that did not run included (review SQR-01 of AQP-320).
+ */
+const namesMaterial = (formula: string, lookup: FieldDefinition | undefined): boolean =>
+  extractReferences(formula).some((reference) => reference.kind === 'material' || (reference.kind === 'field' && lookup !== undefined && reference.id === lookup.id));
 
 /** A flag that is not selected: 0, or not typed at all (SPEC section 7.4, "hide zero treatment lines"). */
 const flagIsOff = (input: CostWorkingInput, flagFieldId: string): boolean => (decimalOf(input.inputs[flagFieldId]) ?? new Decimal(0)).isZero();
@@ -253,7 +254,7 @@ function lineOf(
   const expected = decimalOf(stored);
   // The working must give the stored figure, or there is nothing honest to print beside it.
   if (evaluation.value === null ? stored !== null : expected === null || !evaluation.value.equals(expected)) throw new WorkingMismatchError();
-  const skipWorking = notApplicable && readsMaterial(evaluation.operands, lookup);
+  const skipWorking = notApplicable && namesMaterial(field.formula, lookup);
   return {
     ...base,
     kind: 'calculated',

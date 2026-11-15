@@ -7,7 +7,7 @@ import { z } from 'zod';
  *
  * **One route, one schema, everything strict**: a key that is not named is an error and never reaches a client. **The state alone while nothing is current** (FR-100): in `none` and `out-of-date` the
  * answer holds the row's place and name and `details: null`, so no stage, formula, operand or figure can be in it. While `current`, `details` holds the six stages of the row and nothing of any other row.
- * A "Not applicable" row (D-17) carries no `Material-*` operand and no material rate: its three lines that read the material have a formula and a value and no worked line, and its material rate is blank.
+ * A "Not applicable" row (D-17) carries no `Material-*` operand and no material rate: its lines that name the material have a formula and a value and no worked line, and its material rate is blank.
  *
  * A value is full-precision decimal text, never a JavaScript number (ADR-005); a worked line is text with its operands already printed (calculated values to 4 decimals, inputs and rates as typed).
  */

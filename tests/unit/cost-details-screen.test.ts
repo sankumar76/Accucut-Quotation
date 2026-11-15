@@ -80,7 +80,7 @@ describe('AC-1: six panels, and in each line the tag, the name, the formula, the
 describe('AC-2: the working and the sentence about rounding', () => {
   it('says what the working prints, and states the rounding rule, once each', async () => {
     const text = textOf(render(await viewOf()));
-    expect(text).toContain('Inputs and rates are shown as typed, a percent rate as a percentage, and calculated values to 4 decimals, so repeating the arithmetic gives the figure printed.');
+    expect(text).toContain('Inputs and rates are shown as typed, a percent rate as a percentage, and calculated values to 4 decimals. The portal works with every digit, not only the 4 shown, so repeating the arithmetic by hand gives the figure printed or, now and then, a figure a hundredth or two away from it.');
     expect(text).toContain('The portal keeps every digit, adds the unrounded values and rounds once, so adding the shown figures by hand can differ by a few hundredths.');
     expect(countOf(text, 'adds the unrounded values and rounds once')).toBe(1);
   });
@@ -135,7 +135,7 @@ describe('AC-4: no figure is a dash', () => {
 describe('AC-5: a row with the "Not applicable" material', () => {
   it('says so once, shows the material rate blank and 0.00 for M, O and AK with no worked line, and prints no Material- operand', async () => {
     const html = render(await viewOf({ first: { material: 'not-applicable' } }));
-    expect(textOf(html)).toContain('The material of this part is "Not applicable", so its material rate is blank and the three lines that read the material show 0.00 with no worked line.');
+    expect(textOf(html)).toContain('The material of this part is "Not applicable", so its material rate is blank and the lines that read the material show 0.00 with no worked line.');
     expect(countOf(html, 'is &quot;Not applicable&quot;')).toBe(1);
     expect(html).toContain('M = (L * K * J * Material-Specific-Gravity) / 1000000');
     expect(html).not.toContain('M = (2 ');
@@ -158,11 +158,12 @@ describe('AC-6: read-only', () => {
 });
 
 describe('AC-7: the states with nothing current show the row header and no stage', () => {
-  it('OUT OF DATE: "Cleared. Press Recalculate", the sentence, and a link to the estimate; no stage, no formula, no figure', async () => {
+  it('OUT OF DATE: "Cleared", the sentence (no button named until STORY-06.04), and a link to the estimate; no stage, no formula, no figure', async () => {
     const html = render(await viewOf({ inputsRevision: COST_CALCULATION_REVISION + 1 }));
     const text = textOf(html);
-    expect(text).toContain('Cleared. Press Recalculate');
-    expect(text).toContain('An input changed, so every calculated figure is cleared, on every row. Press Recalculate on the estimate to see the stages again.');
+    expect(text).toContain('Cleared An input changed');
+    expect(text).not.toContain('Recalculate');
+    expect(text).toContain('An input changed, so every calculated figure is cleared, on every row. The stages show again once the estimate is calculated again.');
     expect(html).toContain(`href="/estimates/${CODE}"`);
     expect(text).toContain('Part 1 Invented Bracket');
     expect(html).toContain('role="status"');

@@ -20,7 +20,6 @@ import {
   COUNT_HINT,
   COUNT_UNIT,
   GO_TO_ESTIMATE,
-  GO_TO_ESTIMATE_TO_RECALCULATE,
   NOT_APPLICABLE_NOTE,
   NOT_CALCULATED_BODY,
   NOT_CALCULATED_TITLE,
@@ -142,7 +141,7 @@ export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
         <Notice tone="info" role="status" title={CLEARED_TITLE}>
           <span className="flex flex-col items-start gap-s-2">
             {CLEARED_BODY}
-            <EstimateLink code={code} label={GO_TO_ESTIMATE_TO_RECALCULATE} variant="ghost" />
+            <EstimateLink code={code} label={GO_TO_ESTIMATE} variant="ghost" />
           </span>
         </Notice>
       ) : null}

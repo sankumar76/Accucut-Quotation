@@ -22,15 +22,17 @@ export const NOT_CALCULATED_TITLE = 'Not calculated';
 export const NOT_CALCULATED_BODY = 'The Engineer has not calculated this estimate yet, so there are no stages to show for this part.';
 export const GO_TO_ESTIMATE = 'Go to the estimate';
 
-/** The state `out-of-date` (UX-57, AC-7): the row header stays and the stages are replaced by these words. */
-export const CLEARED_TITLE = 'Cleared. Press Recalculate';
-export const CLEARED_BODY = 'An input changed, so every calculated figure is cleared, on every row. Press Recalculate on the estimate to see the stages again.';
-export const GO_TO_ESTIMATE_TO_RECALCULATE = 'Go to the estimate to Recalculate';
+/**
+ * The state `out-of-date` (UX-57, AC-7): the row header stays and the stages are replaced by these words. Until STORY-06.04 ships a Recalculate button, the words name no button (ux-spec v0.29, "SCR-07 final words";
+ * AQP-320, ux-expert); that story restores "Cleared. Press Recalculate" and its sentence.
+ */
+export const CLEARED_TITLE = 'Cleared';
+export const CLEARED_BODY = 'An input changed, so every calculated figure is cleared, on every row. The stages show again once the estimate is calculated again.';
 
 /** The sentence under the stages (AC-2, UX-01): what the working prints and the rounding rule. */
 export const RULES_TITLE = 'How to read the working';
 export const RULES_WORKING =
-  'Each line shows its formula in column letters, then the same formula with the values it was worked out from. Inputs and rates are shown as typed, a percent rate as a percentage, and calculated values to 4 decimals, so repeating the arithmetic gives the figure printed.';
+  'Each line shows its formula in column letters, then the same formula with the values it was worked out from. Inputs and rates are shown as typed, a percent rate as a percentage, and calculated values to 4 decimals. The portal works with every digit, not only the 4 shown, so repeating the arithmetic by hand gives the figure printed or, now and then, a figure a hundredth or two away from it.';
 export const RULES_ROUNDING =
   'Money and weights are shown to 2 decimals. The portal keeps every digit, adds the unrounded values and rounds once, so adding the shown figures by hand can differ by a few hundredths. A dash means there is no figure, for example after a division by zero.';
 export const RULES_READ_ONLY = 'This page only shows the formulas. They cannot be changed here.';
@@ -50,7 +52,7 @@ export const roundingNote = (lineCount: number, shownSum: string, total: string)
   `The ${lineCount} lines above add to ${shownSum} as shown, and the stage total is ${total}. The portal adds the unrounded values, then rounds once.`;
 
 /** The Not applicable row's note (UX-34): said once, above the stages. */
-export const NOT_APPLICABLE_NOTE = 'The material of this part is "Not applicable", so its material rate is blank and the three lines that read the material show 0.00 with no worked line. The other stages work as usual.';
+export const NOT_APPLICABLE_NOTE = 'The material of this part is "Not applicable", so its material rate is blank and the lines that read the material show 0.00 with no worked line. The other stages work as usual.';
 
 /** What a value looks like on a line: two decimals with Indian grouping and its unit, a dash for no figure, nothing for a blank. */
 export function valueText(line: NodeCostsLine): string {

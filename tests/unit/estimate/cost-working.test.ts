@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { compilePlan } from '@/lib/formula';
 import { buildCostWorking, WorkingMismatchError, type CostWorking, type WorkingLine } from '@/lib/estimate/cost-working';
 import { findFieldByKey } from '@/lib/fields/registry';
 import { Decimal } from '@/lib/decimal';
@@ -8,7 +9,7 @@ import { MATERIAL_IN_DRAWING_KEY } from '@/lib/fields/types';
 
 import { defined } from '../../support/defined';
 import { ROW, WORKED_2DP } from '../../support/row-oracle';
-import { seedConfig, seedFieldAt } from '../../support/seed-config';
+import { cloneSeedConfig, seedConfig, seedFieldAt } from '../../support/seed-config';
 import { SEED_PLAN, storedRowOf, type StoredRow, type StoredRowOptions } from '../../support/stored-row';
 
 /**
@@ -21,7 +22,9 @@ const idOf = (letter: string): string => seedFieldAt(letter).id;
 function working(options: StoredRowOptions = {}, change?: (row: StoredRow) => void): CostWorking {
   const row = storedRowOf(options);
   change?.(row);
-  return buildCostWorking({ document: seedConfig, plan: SEED_PLAN, inputs: row.inputs, outputs: row.outputs, snapshot: row.snapshot });
+  const document = options.document ?? seedConfig;
+  const plan = options.document === undefined ? SEED_PLAN : compilePlan(options.document.fields);
+  return buildCostWorking({ document, plan, inputs: row.inputs, outputs: row.outputs, snapshot: row.snapshot });
 }
 
 const linesOf = (result: CostWorking): WorkingLine[] => result.stages.flatMap((stage) => [...stage.lines]);
@@ -220,9 +223,36 @@ describe('AC-5 (D-17, D-27, UX-34): a row with the "Not applicable" material', (
     expect(line(result, 'O').formula).toBe('IF(Material-Specific-Gravity > 0, M - N, 0)');
   });
 
+  /**
+   * A probe registry: Area in Sq. in (AH) is given a formula that **names** the material in a branch that is not taken, `IF(0 > 1, Material-Price-per-kg, (J * K * 2) / 645)`. The evaluation never
+   * reads the material, but the working prints the value of every operand of the formula, the branch not taken included, so a line decided by the path taken would print the material's number
+   * (review SQR-01 of AQP-320). Decided by the formula's references, the line has no worked line on a "Not applicable" row.
+   */
+  describe('a formula that names the material only in a branch that is not taken (review SQR-01 of AQP-320)', () => {
+    const probe = cloneSeedConfig();
+    const probeFields = probe.fields.map((field) =>
+      field.id === idOf('AH') && field.kind === 'output'
+        ? { ...field, formula: `IF(0 > 1, {{mat:pricePerKg}}, ({{f:${idOf('J')}}} * {{f:${idOf('K')}}} * 2) / 645)` }
+        : field,
+    );
+    const document = { ...probe, fields: probeFields };
+
+    it('has no worked line on a "Not applicable" row, and still has its formula and its value', () => {
+      const notApplicable = working({ material: 'not-applicable', document });
+      expect(line(notApplicable, 'AH')).toMatchObject({ working: null, formula: 'IF(0 > 1, Material-Price-per-kg, (J * K * 2) / 645)', value: line(working({ document }), 'AH').value });
+    });
+
+    it('control: on an ordinary row the same line has its worked line, with the material\'s price in it', () => {
+      expect(line(working({ document }), 'AH').working).toBe('IF(0 > 1, 60, (200 × 100 × 2) / 645)');
+    });
+  });
+
   it('prints no Material- operand value and no price of a material anywhere in the working, and the other stages work as usual', () => {
-    const workings = linesOf(result).flatMap((candidate) => (candidate.working === null ? [] : [candidate.working]));
-    expect(workings.join(' ')).not.toMatch(/Material-/);
+    // Every line whose formula names the material (a Material- operand, or the material rate I) has no worked line, whatever path the evaluation took.
+    const naming = linesOf(result).filter((candidate) => candidate.formula !== null && /Material-|I/.test(candidate.formula));
+    expect(naming.map((candidate) => candidate.letter)).toEqual(['M', 'O', 'AK']);
+    for (const candidate of naming) expect(candidate.working, candidate.letter).toBeNull();
+    expect(linesOf(result).flatMap((candidate) => (candidate.working === null ? [] : [candidate.working])).join(' ')).not.toMatch(/Material-/);
     expect(line(result, 'AL').working).toBe('10 × 0.5');
     expect(line(result, 'BA').working).toBe('0.0000 + 99.9230 + 10.0000');
     expect(line(result, 'AY').value).toBe(line(working(), 'AY').value);
