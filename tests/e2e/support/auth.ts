@@ -270,6 +270,61 @@ export async function makeCanaryEstimateCalculable(ownerId: string, materialId: 
 }
 
 /**
+ * Types a count into QTY per Assy of the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` (STORY-05.12: a 0 there earns the first press the warning). The field
+ * is found by its key in the newest registry version, as `fillCanaryPart` finds the registry; nothing else of the part changes. Repeatable. Throwaway database only (guarded above).
+ */
+export async function setCanaryQuantity(ownerId: string, quantity: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const field = registryShape.parse(rows[0]?.snapshot).fields.find((candidate) => candidate.key === 'qty-per-assy');
+    if (field === undefined) throw new Error('The registry has no QTY per Assy field.');
+    await client.query('UPDATE estimate_nodes SET inputs = jsonb_set(inputs, ARRAY[$2::text], to_jsonb($3::text)) WHERE id = $1::uuid', [ownerId, field.id, quantity]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Types a count into QTY per Assy the way a save from another tab would (STORY-05.12: "the list changed"): the same write as `setCanaryQuantity`, and the estimate's input revision goes up by one, as
+ * every input change does (architecture section 4.8), so an acknowledgement given for the revision before it is stale. Throwaway database only (guarded above).
+ */
+export async function saveCanaryQuantity(ownerId: string, quantity: string): Promise<void> {
+  await setCanaryQuantity(ownerId, quantity);
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE estimates SET inputs_revision = inputs_revision + 1 WHERE id = $1::uuid', [ownerId]);
+  } finally {
+    await client.end();
+  }
+}
+
+/** Changes the numbers of a material made by `insertPrivateMaterial` (STORY-05.12: the same estimate asked twice under two sets of masters). Throwaway database only (guarded above). */
+export async function changePrivateMaterial(materialId: string, numbers: { readonly pricePerKg: string; readonly specificGravity: string; readonly scrapRate: string }): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE materials SET price_per_kg = $2, specific_gravity = $3, scrap_rate = $4 WHERE id = $1::uuid', [materialId, numbers.pricePerKg, numbers.specificGravity, numbers.scrapRate]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * What an acknowledged Calculate left for this estimate (STORY-05.12): the warnings on each calculation, the entries of the audit log that name the estimate (event and who) and the estimate's revision.
+ * Throwaway database only (guarded above).
+ */
+export async function readWarningRecord(estimateId: string): Promise<{ readonly warnings: ReadonlyArray<unknown>; readonly audit: ReadonlyArray<{ readonly event: string; readonly actorId: string }> }> {
+  const client = await connectToTestDatabase();
+  try {
+    const calculations = await client.query<{ warnings: unknown }>('SELECT warnings FROM calculations WHERE estimate_id = $1::uuid ORDER BY created_at', [estimateId]);
+    const audit = await client.query<{ event: string; actor_id: string }>('SELECT event, actor_id::text AS actor_id FROM audit_log WHERE object_id::text = $1::text ORDER BY created_at, id', [estimateId]);
+    return { warnings: calculations.rows.flatMap((row) => (Array.isArray(row.warnings) ? row.warnings : [])), audit: audit.rows.map((row) => ({ event: row.event, actorId: row.actor_id })) };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * A material of the test's own, with these numbers (STORY-05.09: the same estimate calculated under two sets of masters). The name is unique to the call, so three screen sizes at once never
  * meet on the name index, and the canary materials the other specs read are not touched. Answers its ID. Throwaway database only (guarded above); every value is invented.
  */

@@ -208,6 +208,36 @@ describe('the input is parsed after the role check', () => {
     expect(JSON.stringify(problem)).not.toContain('sneaky');
   });
 
+  it('a body that is a choice (STORY-05.12): `optionalBody` reads an empty body as nothing, and `badBodyIs400` answers 400 where a form would answer 422', async () => {
+    const choice = z.strictObject({ acknowledge: z.strictObject({ inputsRevision: z.number().int().min(0) }).optional() }).optional();
+    const handler = ({ body: input }: { body: z.output<typeof choice> }) => ({ greeting: input === undefined ? 'none' : input.acknowledge === undefined ? 'empty' : `ack ${input.acknowledge.inputsRevision}` });
+    const lenient = withRoute({ route: '/api/v1/test-all', method: 'POST', body: choice, optionalBody: true, badBodyIs400: true, output, handler });
+    const ask = async (text: string | undefined) => lenient(post(text));
+    expect(await (await ask(undefined)).json()).toEqual({ greeting: 'none' });
+    expect(await (await ask('   ')).json()).toEqual({ greeting: 'none' });
+    expect(await (await ask('{}')).json()).toEqual({ greeting: 'empty' });
+    expect(await (await ask(JSON.stringify({ acknowledge: { inputsRevision: 4 } }))).json()).toEqual({ greeting: 'ack 4' });
+    for (const bad of [{ acknowledge: true }, { acknowledge: null }, { acknowledge: {} }, { acknowledge: { inputsRevision: '4' } }, { acknowledge: { inputsRevision: -1 } }, { acknowledge: { inputsRevision: 1.5 } }, { acknowledge: { inputsRevision: 1, extra: 1 } }, { other: 1 }, [], 'text', 5]) {
+      const response = await ask(JSON.stringify(bad));
+      expect(response.status, JSON.stringify(bad)).toBe(400);
+      expect(await problemOf(response), JSON.stringify(bad)).toMatchObject({ code: 'MALFORMED_REQUEST', status: 400 });
+    }
+    expect((await ask('{not json')).status).toBe(400);
+  });
+
+  it('without `optionalBody` an empty body is still 400, and without `badBodyIs400` a body that does not fit is still 422 (nothing else changes)', async () => {
+    const strict = withRoute({ route: '/api/v1/test-all', method: 'POST', body: z.strictObject({ name: z.string() }), output, handler: ({ body: input }) => ({ greeting: input.name }) });
+    expect((await strict(post(undefined))).status).toBe(400);
+    expect((await strict(post('{}'))).status).toBe(422);
+  });
+
+  it('a request refused for its role never has its body read, even with `optionalBody`', async () => {
+    mocks.requireUser.mockResolvedValue(ENGINEER);
+    const leadOnly = withRoute({ route: '/api/v1/test-lead/[id]', method: 'POST', body: z.undefined(), optionalBody: true, output, handler: () => ({ greeting: 'no' }) });
+    const response = await leadOnly(post('{not json'), { params: Promise.resolve({ id: '1' }) });
+    expect(response.status).toBe(403);
+  });
+
   it('parses the query string and the path parameters', async () => {
     const withInputs = withRoute({
       route: '/api/v1/test-lead/[id]',

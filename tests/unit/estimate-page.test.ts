@@ -16,7 +16,8 @@ vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/
 vi.mock('next/headers', async () => ({ headers: (await import('../support/session-harness')).harness.headers }));
 vi.mock('next/navigation', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound };
+  // `usePathname`: the parts tree's drawer button is a first-open control (`useFirstOpen`, AQP-339), which reads the path to clear its failure line when the page changes.
+  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound, usePathname: () => '/estimates/invented' };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

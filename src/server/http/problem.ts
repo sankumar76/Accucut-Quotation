@@ -23,6 +23,8 @@ import {
 } from '../../lib/errors';
 import type { PartView } from '../../lib/estimate/part-view';
 import type { BlockedPart } from '../../lib/estimate/calculate-check';
+import { CalculateAckRequiredError } from '../../lib/estimate/calculate-ack-required-error';
+import { warningLine } from '../../lib/estimate/warning-copy';
 
 /**
  * The error answer of every API route (architecture section 6, "Error model"): `application/problem+json`
@@ -46,6 +48,16 @@ export interface ProblemDetail {
   readonly message: string;
 }
 
+/** One row of the 409 `CALCULATE_ACK_REQUIRED`: the code, the part, the field to take the person to, the Sl. No, the name as typed and the sentence. */
+export interface AckWarning {
+  readonly code: string;
+  readonly nodeId: string;
+  readonly fieldId: string;
+  readonly slNo: string;
+  readonly label: string;
+  readonly message: string;
+}
+
 export interface Problem {
   readonly type: 'about:blank';
   readonly title: string;
@@ -61,6 +73,9 @@ export interface Problem {
   readonly tree?: ReadonlyArray<PartView>;
   /** Extension member of the 422 of a Calculate that found missing inputs (STORY-05.09 AC-1): each part with its Sl. No, name and missing fields. No value and no figure. */
   readonly parts?: ReadonlyArray<BlockedPart>;
+  /** Extension members of the 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2): the estimate's input revision, which the acknowledgement sends back, and each row with a 0 in QTY per Assy. No figure. */
+  readonly inputsRevision?: number;
+  readonly warnings?: ReadonlyArray<AckWarning>;
   /** Extension members of the refusal to delete a customer or a material an open estimate uses (STORY-02.07): the first estimates, and how many there are in all. */
   readonly estimates?: ReadonlyArray<EstimateUse>;
   readonly estimateTotal?: number;
@@ -143,6 +158,11 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
     // Named field by field, so a part can never carry more than its Sl. No, name and missing fields even if the service one day hands over a richer record (NFR-002).
     const parts = error.parts.map(({ nodeId, slNo, name, fields }) => ({ nodeId, slNo, name, fields: fields.map(({ fieldId, label }) => ({ fieldId, label })) }));
     return { ...problem(error.httpStatus, error.code, error.message, requestId), parts };
+  }
+  if (error instanceof CalculateAckRequiredError) {
+    // Built key by key, so a warning can never carry more than its code, part, Sl. No, name and sentence even if the service one day hands over a richer record (NFR-002). The same body for every role.
+    const warnings = error.warnings.map(({ code, nodeId, slNo, label }) => ({ code, nodeId, fieldId: error.quantityFieldId, slNo, label, message: warningLine(slNo, label) }));
+    return { ...problem(error.httpStatus, error.code, error.message, requestId), inputsRevision: error.inputsRevision, warnings };
   }
   if (error instanceof TreeChangedError) {
     // Named field by field, so a part can never carry more than the six facts of the tree even if the service one day hands over a richer record.

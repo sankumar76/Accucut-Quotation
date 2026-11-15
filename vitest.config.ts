@@ -54,6 +54,8 @@ export default defineConfig({
         'src/lib/estimate/validation.ts': target(PURE_CODE_TARGET),
         // STORY-05.09: the check that every part is complete before Calculate, which the story put in validation.ts (see its header for why it is a file of its own).
         'src/lib/estimate/calculate-check.ts': target(PURE_CODE_TARGET),
+        // STORY-05.12: the quantity warning, which the story put in validation.ts for the same reason (see its header): it needs the registry and the part's name, which the browser does not carry.
+        'src/lib/estimate/quantity-warnings.ts': target(PURE_CODE_TARGET),
         'src/lib/estimate/figure-state.ts': { branches: FULL_BRANCH_TARGET },
         'src/lib/auth/password-rule.ts': { branches: FULL_BRANCH_TARGET },
       },
