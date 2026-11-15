@@ -112,3 +112,19 @@ No Blocker, Critical or Major findings, so the critical-review condition of CLAU
 - **Needs a PO/UX ruling:** SQR-05.
 
 Merge after the re-cut is green and its conflict hunks are re-checked.
+
+---
+## Addendum: re-cut #411 (DL-215), head b0276906, 2026-11-15
+
+**Verdict: APPROVE WITH COMMENTS (unchanged).** Blocker 0 · Critical 0 · Major 0. SQR-01 and SQR-03 are **fixed**. The other Minors (SQR-02, SQR-04, SQR-06, SQR-07, SQR-08) stay in the hardening window. SQR-05 still needs a PO/UX ruling. Info items SQR-09 to SQR-12 are unchanged.
+
+**Method.** Per-file patches of #409 (bb45a02) and #411 (b027690) compared through the GitHub MCP with the @@ headers removed. Both PRs have the same 49 files; 40 are identical hunk for hunk; 9 differ and every difference is accounted for. No tests run by the reviewer.
+
+| Item | Result | Evidence |
+|---|---|---|
+| Conflict resolutions vs #408 and master | Verified | route-calls.ts keeps both sides; engineer-import-rule.test.ts only context moved; review-world.ts and estimate-review-service.test.ts add imageId: null for #408's NodeRecord; /costs unchanged. |
+| page.tsx imports no review code | Verified | import('./review-page') is reached only from case 'LEAD': case 'ADMIN':. |
+| SQR-01 | Fixed | Exhaustive switch with assertNever in the service (before any read) and the page; tests: exactly ADMIN and LEAD allowed, a fourth role refused with no read; architecture test pins the switch shape. |
+| SQR-03 | Fixed | Grouped forms from 10,000; plain from 7 digits; ₹-prefixed 4 to 6 digits; typed values skipped; unit tests; both planted-leak controls green. |
+| CI | Verified | Run 43673603876, 6 of 6. |
+| JS budget /estimates/[code] | 199,540 B (developer's PR comment 6888823162; same as master after #408, +0 B) | |

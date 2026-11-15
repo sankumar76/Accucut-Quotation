@@ -8,13 +8,54 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
 | Last updated       | 2026-11-15 by orchestrator (daily update, §9 item 6) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-15, later, orchestrator)
+
+> This section updates the earlier 2026-11-15 entry below. Where the two differ, this one wins.
+
+**`master` = 3e13b12** (#424 AQP-316). Merged since the earlier entry. Each merge was a squash on fully green CI, and every `critical-review` story had its one combined review with no open Blocker or Critical at merge:
+
+| PR | Story | Merge | Notes |
+|---|---|---|---|
+| #411 | AQP-319 (06.02 estimate review) [c] | b11ee39 | Re-cut of #409 |
+| #413 | AQP-307 (02.09 Settings and Last backup line) | 5c89585 | Re-cut of #412. AC-3 is superseded by AQP-311 AC-10 (ADR-015 Amendment 3.1 point 6) |
+| #416 | AQP-318 (05.12 QTY warning) [c] | b5f6979 | Re-cut of #414. Review Major SQR-01 (#419) fixed in the PR |
+| #421 | AQP-339 (05.13 first-load headroom, ADR-016 E1) | dc935b8 | `/estimates/[code]` went from 199,582 to **179,084** B |
+| #422 | AQP-313 (05.05 Fasteners fields) | 0b7bd71 | AC-3 reworded by the product-owner. SQR-11 is open for the delivery lead and needed before 05.09 |
+| #423 | AQP-314 (05.06 surface treatments) | 9de393a | |
+| #424 | AQP-316 (05.08 save draft and leave warning) [c] | 3e13b12 | Three review rounds. Critical SQR-01 and SQR-13 (a queued save overwriting a newer value) fixed in the PR. #425 and #426 closed |
+
+Jira **Done** since the earlier entry: AQP-319, 307, 318, 339, 313, 314, 316.
+
+**In flight:**
+| Lane | Story | State |
+|---|---|---|
+| A | AQP-311 10.05 backups on Windows [c], #417 | CI green. Stage 13 has been fixed for these causes, in order: the batch-logon right (ADR-015 Amendment 3.2, LSA grant), an inherited `PGPASSWORD`, runner disk space, and the task-principal assertion. Now on the rights, Pester and removal steps |
+| B | AQP-320 06.03 cost details [c], #427 | Review APPROVE WITH COMMENTS (0 Blocker, Critical or Major). The SQR-01 one-line fix and the SCR-07 wording are going into the PR before merge |
+
+**Delivery-lead decisions 2026-11-15:** DL-217 to DL-225 (part limit 2,000; deleted names freed; `\p{Cf}` named in the message; Admin cancel on DRAFT/SUBMITTED; Fasteners "None"; interim review wording; USD/EUR grouping; step-up as built; snapshot keeps referenced rates). The product-owner reworded nine stories. Architecture v0.49, ux-spec v0.29. Follow-ups #428 to #436. #432 (snapshot) must land before 06.11. #428 and #432 need the combined review.
+
+**Architecture and UX this day:** ADR-015 Amendments 3.1 and 3.2, ADR-016 (first-load plan, GitHub #418), architecture v0.46 to v0.49, test strategy v0.41, ux-spec v0.28 and v0.29.
+
+**Memory:** the PC dropped to 0.6 GB free. The delivery lead stopped WSL, Docker Desktop and the other projects' containers, which freed about 1.7 GB. Integration and E2E tests now run in CI only. At most 2 lanes, and drop to 1 below about 1 GB.
+
+**Clean-up for the delivery lead (agents cannot delete):**
+- **Re-cut and merged branches:**
+  - `feat/AQP-318-qty-warning`, `-2`, `-3`
+  - `feat/AQP-339-first-load-headroom`, `-2`
+  - `feat/AQP-307-settings-backup-line`, `-2`, `-3`
+  - `feat/AQP-319-estimate-review`, `-2`
+  - `feat/AQP-313-fasteners-fields`, `feat/AQP-314-surface-treatments`, `feat/AQP-316-save-draft`
+- **Finished worktrees under `.claude/worktrees`:** `agent-aed4d5ffbe0f6c603`, `agent-af7953c02cf194dc9`, `agent-af03117903bccf489`, `agent-a29d40af7c3259451`, `agent-af07e10eb965ccf59`. The last one holds the reviewer's untracked scratch test `tests/unit/zz-review-rr-repro.test.ts`; delete it with the worktree.
+- **Scratchpad review worktree `scratchpad\pr427`:** remove the `node_modules` junction first with `rmdir`, then `git worktree remove --force`.
+- **One decision for you:** append the AQP-316 round 2 and 3 addenda (scratchpad `AQP-316-combined-addenda-rounds-2-3.md`) to `docs/06-reviews/AQP-316/combined.md`. Its reviewer was refused that write.
 
 ## Daily update (2026-11-15, orchestrator)
 

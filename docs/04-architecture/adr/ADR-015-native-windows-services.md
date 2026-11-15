@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)**. **Amended 2026-11-15: backups on Windows (Amendment 3, STORY-10.05, AQP-311)** |
+| Status | **Accepted (solution-architect ruling, 2026-11-13, fast track, CLAUDE.md section 9), for `master` to log.** It **supersedes ADR-002 for the runtime and the install model** (Docker Compose, the `migrate` container, the Caddy profile, `restore.sh` and `clear-copies.sh`). ADR-002's other decisions stand: one host, backups on the same server, the Admin holds the key and runs the restore, 2 years "as the disk allows". **Rests on assumptions A-01 (restated), A-35 (restated for Windows), A-39 and A-40.** **Amended 2026-11-13: OQ-ARCH-14 answered, one disk of about 100 GB (see Amendment)**. **Amended 2026-11-14: the install and update trust flow (Amendment 2, STORY-10.04, AQP-310, PR #396), with Amendment 2.1 (rulings on the combined review: SQR-01, 07, 08, 09)**. **Amended 2026-11-15: backups on Windows (Amendment 3, STORY-10.05, AQP-311), with Amendment 3.1 (the developer's six points from the build)** |
 | Date | 2026-11-13 |
 | Deciders | solution-architect; the delivery lead's stated target (AQP-1 comment 11790, relayed); Accucut IT confirms at install |
 | Related | FR-091, FR-105; NFR-003, 012, 013, 024, 030; ADR-001, ADR-002, ADR-011; OQ-ARCH-02, OQ-ARCH-03, OQ-ARCH-14; STORY-10.04, 10.05, 10.11, 02.09; architecture section 9.9; test strategy section 10.8 |
@@ -212,7 +212,7 @@ What was checked (2026-11-13; sources in the hand-off):
    - **Creation.** `install.ps1`'s second half does this through the module, after the import. It generates a 32-character random password in memory, with at least one upper-case letter, one lower-case letter, one digit and one symbol, so that Windows' complexity rule passes. It registers the password for redaction. It calls `New-LocalUser AccucutBackup -Password <SecureString> -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires`, with the description "Accucut weekly backup (no interactive use)". The account is added to no local group. Then `Register-ScheduledTask` is called with `-User AccucutBackup -Password <in-process string>`, logon type Password and RunLevel Limited, and the password variables are cleared.
    - **Where the password is held.** Only by Task Scheduler (LSA). It is never on a process command line, because both are cmdlets in the same process, and never in a file or a log.
    - **The task.** Weekly on Sunday at 02:00 IST. The action is `$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <Root>\current\backup.ps1 -Reason weekly`. The path goes through `current`, so an update needs no new registration and no password.
-   - **"Log on as a batch job".** Windows needs this right for a task with a stored password. **The install proves it works by running the task once at the end** (`Start-ScheduledTask`, wait up to 5 minutes for `LastTaskResult` 0 and a `job_runs` row with `job = 'backup'`). That run is also the first backup.
+   - **"Log on as a batch job".** *Changed by Amendment 3.2: the install now grants the right to AccucutBackup's SID alone, with a domain Group Policy preflight; the first run below stays as the proof.* Windows needs this right for a task with a stored password. **The install proves it works by running the task once at the end** (`Start-ScheduledTask`, wait up to 5 minutes for `LastTaskResult` 0 and a `job_runs` row with `job = 'backup'`). That run is also the first backup.
      - If the right is missing (logon-type failure `0x80070569`), the install exits 1 with the portal running and says: "Give AccucutBackup the right 'Log on as a batch job' (a domain Group Policy may be removing it), then run `Start-ScheduledTask 'Accucut weekly backup'`."
      - The README names this.
    - **Reading the script, the module and the programs: a fifth ACE on `Root`, `AccucutBackup` ReadAndExecute `0x1200A9 (OI)(CI)`.** The trust block in `backup.ps1` must read the descriptor of every component from `Root` down, which needs READ_CONTROL there. Rule B already allows read and execute for an untrusted SID. The release code, `services` and `logs` are not secret.
@@ -236,7 +236,7 @@ What was checked (2026-11-13; sources in the hand-off):
    - **The `age` recipient is not in `.env`,** which AccucutBackup cannot read, and it must not be able to. It goes in **`<Root>\config\backup-settings.json`**, which uses the same protected ACL as `backup.pgpass`. A recipient swapped by someone who could write the file would encrypt to their key, so the file is read-only to the task.
      - The file holds `ageRecipient` (checked against `^age1[0-9a-z]{58}$`), `pgHost`, `pgPort`, `database` and `pgBinDirectory`. It holds no secret.
      - `install.ps1` asks for `BACKUP_AGE_RECIPIENT`, or reads it from the values file; CI passes a per-run `age-keygen` public key.
-   - **Programs:** the release's `bin\age.exe`, then `pg_dump.exe` and `psql.exe` from `pgBinDirectory`, then `$env:SystemRoot\System32\cmd.exe` for the byte pipe. Each goes through `Resolve-AccucutTrustedExecutable` at every run. The recipient is public, so it may appear on the `age` command line.
+   - **Programs:** the release's `bin\age.exe`, then `pg_dump.exe` and `psql.exe` from `pgBinDirectory`. *Changed by Amendment 3.1: no `cmd.exe`, see 3.1 (1).* Each goes through `Resolve-AccucutTrustedExecutable` at every run. The recipient is public, so it may appear on the `age` command line.
    - **`backup-watch` free space:** `.env` gains `PG_DATA_VOLUME` and `BACKUP_VOLUME`, the **drive roots** (`X:\`) of the data folder and of `backups`, worked out by the install. The worker cannot open either folder (both are protected), but `fs.statfs` on a drive root works. When both are the same volume, one reading is taken.
 
 **Tests that stage 13 must assert** (real, after the install), on top of Amendment 2's:
@@ -260,6 +260,151 @@ What was checked (2026-11-13; sources in the hand-off):
   - Admin scripts refuse a `backups` folder with an extra writer, a link, or an owner who is not trusted.
   - Pruning deletes only matching regular files older than 2 calendar years, never one of the newest 4, and skips links.
   - Tests 1 and 3 include `backup.ps1` and `clear-copies.ps1`.
+
+### Amendment 3.1, 2026-11-15: the developer's six points from the build (STORY-10.05)
+
+1. **The byte pipe does not use `cmd.exe` (ratified, and the stricter option).** A `cmd` pipe reports only the exit code of its last program, so a failed `pg_dump` could leave a truncated copy recorded as `ok`.
+   - **How the pipe runs.** `backup.ps1` starts `pg_dump.exe` and `age.exe` itself (`System.Diagnostics.Process`, `UseShellExecute = $false`). `pg_dump`'s `StandardOutput.BaseStream` is copied into `age`'s `StandardInput.BaseStream` with `Stream.CopyTo`, and `age`'s input is closed at the end. Both standard-error streams are read asynchronously, so neither process can block.
+   - **When the copy is good.** Only when all of these hold:
+     - both exit codes are 0;
+     - the temporary file is larger than zero and starts with `age-encryption.org/v1`;
+     - its SHA-256 is computed from the file as written and put into the manifest.
+   - Otherwise the temporary file is deleted and the run is recorded as failed.
+   - `cmd.exe` comes off the programs list. The base rule ("byte streams run inside `cmd.exe /c`") no longer applies to the backup, and 10.11's restore follows the same pattern for `age -d | pg_restore`.
+   - Pester: if `pg_dump` exits 1 halfway, no `.age` file is kept and the run is recorded as failed.
+2. **The guarded `GRANT INSERT` migration is ratified.** `20261115100000_job_runs_backup_grant` grants only when `pg_roles` has `accucut_backup` and otherwise raises a `NOTICE`; roles are cluster-wide, and an old development cluster lacks it. On a server the install creates the roles before the migrations, so the grant is always made there. Stage 13 asserts the real grant, and the install's first backup run would fail without it.
+3. **`accucut_backup` is NOLOGIN when `DB_BACKUP_PASSWORD` is unset: ratified for development and CI only.** `install.ps1` always generates the password and passes it, so a missing value at install is an error, never a NOLOGIN role. Stage 13 asserts `rolcanlogin`. `ci.yml` stays as it is.
+4. **The task fires on Sunday at 02:00 on the server's clock (ratified, not converted).** IST has no daylight saving, but a server zone that does would move a converted trigger by an hour twice a year. The semantics of a UTC-anchored weekly trigger ("synchronize across time zones") are not proven on PowerShell 5.1. If the zone is not `India Standard Time`, the install warns: "The backup runs at 02:00 server time; this server is not set to India Standard Time." The README names it.
+5. **No log file for `backup.ps1`; the Windows Application event log takes its place (changed).** A `job_runs` row cannot record a failure that happens before the database is reached, such as an unreadable `backup.pgpass`, a database that is down, or a program that fails its trust check. `backup-watch` would then only see a late backup after 8 days.
+   - **The event log.** The install registers the event source `Accucut` in the Application log (`[Diagnostics.EventLog]::CreateEventSource`, as an administrator; it is the source §9.9 names for the restore). `backup.ps1` writes one event per run: Information on success with the size and file name, or Error with an error code and a redacted message. Standard users may write to the Application log for an existing source.
+   - **The other records.** `backup.ps1` also writes the `job_runs` row whenever the database is reachable, and exits non-zero on failure, so Task Scheduler's history shows it too.
+   - AccucutBackup gets **no** right on `logs`, so the writers of `logs` stay App and Worker.
+   - **Names.** The manifest names `accucut-<UTC yyyyMMdd-HHmmss>-<weekly|release>.manifest.json` are ratified, next to `accucut-<same>.age`. They match point 4's prune pattern, and the 2-calendar-year cut-off is computed in UTC.
+   - Stage 13: after the install's run, there is one `Accucut` Information event from that run.
+6. **"No good backup ever" counts as late, in both places (aligned to `backup-watch`).** The install takes the first backup, so "never" means that first run failed, which must not stay silent.
+   - **Settings (AQP-307 AC-3).** The Settings line shows the late state with "No good backup yet" when no `backup` row with `status` ok exists. The product-owner rewords AC-3 to match.
+   - Development and CI databases show this state, which is correct there.
+   - One rule in one place: a pure function in `src/lib` used by both the worker and `GET /settings`, so they cannot drift.
+
+### Amendment 3.2, 2026-11-15: the install grants "Log on as a batch job" to AccucutBackup's SID alone (STORY-10.05, AQP-311, PR #417)
+
+**Why.** Stage 13 (run 43679965661, head 4a51e9c) shows the case Amendment 3 flagged. The task never starts (LastRunTime 1999, LastTaskResult `0x41303` = 267011, "has not run"). The Security log has 4625, logon type 4, status `0xC000015B`, and `SeBatchLogonRight` holds only `S-1-5-32-544`, `-551`, `-559` and `-568`. Task Scheduler does not grant the right when it stores the password, and a new local user does not have it. Amendment 3's "the first run proves the right" is kept as the proof, but the install must now give the right itself.
+
+**Decision: option 1, with the LSA API and not `secedit`.** The install grants `SeBatchLogonRight` to the SID of `AccucutBackup` and to nothing else, with `LsaAddAccountRights`. AccucutBackup stays a member of no local group. The task stays Password logon, RunLevel Limited.
+
+- **Rejected, option 2 (Performance Log Users, `S-1-5-32-559`).** It breaks Amendment 3's "member of no group", and the group carries more than the batch right: it can create and run data collector sets and read performance logs.
+- **Rejected, option 3 (no stored password).** "Do not store password" is an S4U logon, and S4U is also a batch logon, so it needs the same right. "Only when the user is logged on" needs an interactive session, which a server does not keep. Every unattended model for an account that is not a service needs this right.
+- **Rejected, option 1 through `secedit` (export, merge, `/configure`).** It writes the whole `SeBatchLogonRight` line back. A parse slip, such as an empty or name-only token list, would strip Administrators, Backup Operators and the others from batch logon and break other scheduled tasks on Accucut's server. It also has a lost-update window between export and configure. It leaves an INF, an `.sdb` and a log that would have to sit in a trusted folder, and it runs one more native program.
+- **Rejected, LSA through `Add-Type`.** In PowerShell 5.1, `Add-Type` compiles with `csc.exe` and loads a DLL from `%TEMP%`. That loads code from a path the trust block never checked (Amendment 2's rule).
+
+**Mechanism (module, `AccucutOps.psm1`, region Backups).**
+
+1. **`Get-AccucutLsaNative` (internal, lazy).** It builds the P/Invoke type in memory the first time it is called, and caches it in `$script:AccucutLsaNative`. Nothing runs at import (Amendment 2 (d)).
+   - Calls: `[AppDomain]::CurrentDomain.DefineDynamicAssembly('AccucutLsa', Run)`, `DefineDynamicModule`, `DefineType('AccucutLsa.Native', 'Public, Sealed, Abstract')`, `DefinePInvokeMethod(…, 'advapi32.dll', 'Public, Static, PinvokeImpl', Standard, [uint32], …, Winapi, Unicode)`, `SetImplementationFlags(PreserveSig)`, `CreateType()`. There is no compiler, no file and no `Add-Type`.
+   - It throws unless `[Environment]::Is64BitProcess`, because the structure offsets below assume x64.
+   - It defines exactly seven methods. Each returns an NTSTATUS as `uint32`, and every parameter is `IntPtr`, `byte[]`, `byte` or `uint32`, so no structure type is defined:
+
+     | Method | Parameters |
+     |--------|------------|
+     | `LsaOpenPolicy` | `IntPtr systemName` (Zero); `byte[] objectAttributes` (48 zero bytes); `uint32 access`; `out IntPtr handle` |
+     | `LsaAddAccountRights` | `IntPtr handle`; `byte[] sid`; `IntPtr rights`; `uint32 count` |
+     | `LsaRemoveAccountRights` | `IntPtr handle`; `byte[] sid`; `byte allRights` (**always 0**); `IntPtr rights`; `uint32 count` |
+     | `LsaEnumerateAccountsWithUserRight` | `IntPtr handle`; `IntPtr right`; `out IntPtr buffer`; `out uint32 count` |
+     | `LsaFreeMemory` | `IntPtr` |
+     | `LsaClose` | `IntPtr` |
+     | `LsaNtStatusToWinError` | `uint32` |
+
+   - The `out` parameters use `MakeByRefType()` with `DefineParameter(n, Out, name)`.
+2. **The right's name** is an `LSA_UNICODE_STRING` built by hand in unmanaged memory and freed in `finally`:
+   - the string: `Marshal.StringToHGlobalUni(<right>)`;
+   - the structure: `Marshal.AllocHGlobal(16)`, with `Length` = 2 × chars at offset 0, `MaximumLength` = `Length` + 2 at offset 2, zero at offset 4, and the buffer pointer at offset 8.
+3. **Opening the policy.** `LsaOpenPolicy` is called with access `0x811` (VIEW_LOCAL_INFORMATION, CREATE_ACCOUNT and LOOKUP_NAMES; not POLICY_ALL_ACCESS), and `LsaClose` runs in `finally`. Any status other than 0 throws `Win32Exception(LsaNtStatusToWinError(status))` with the operation named. Two statuses are expected and are not errors:
+   - `0x8000001A` (no more entries) from enumerate means "no holders";
+   - `0xC0000034` (object not found) from remove means "already absent".
+4. **`Get-AccucutRightHolder -Right`** (`ValidateSet('SeBatchLogonRight','SeDenyBatchLogonRight')`). It calls enumerate and reads `count` pointers with `Marshal.ReadIntPtr(buffer, i * 8)`, each turned into a SID with `[Security.Principal.SecurityIdentifier]::new(ptr)`. It frees the buffer with `LsaFreeMemory` and returns the SID strings sorted. It is read-only.
+5. **`Grant-AccucutBatchLogonRight -Sid`**. It has **no `-Right` parameter**: the module can grant this one right and no other.
+   - It reads `$before = Get-AccucutRightHolder SeBatchLogonRight` and refuses if `$before` already holds the SID (a new user cannot).
+   - It calls `LsaAddAccountRights` with that SID's `GetBinaryForm` bytes, the right and a count of 1, then reads `$after`.
+   - It requires `$after` to equal `$before` plus the SID, exactly, as sets. Otherwise it throws "Log on as a batch job did not take the expected holders (before: …, after: …)".
+   - It logs "Gave AccucutBackup (<SID>) the right 'Log on as a batch job'; no other account or right was changed."
+6. **`Revoke-AccucutBatchLogonRight -Sid`**. It reads `$before` and calls `LsaRemoveAccountRights` with `allRights = 0` and that one right. It then requires `$after` to equal `$before` minus the SID, exactly. It never removes another holder and never removes all of an account's rights.
+7. **`Test-AccucutBatchRightPolicy [-PolicyConfirmed]`** is the preflight. It is read-only, runs at **step 12**, after the version checks and before the database, the roles or the user are made, and throws if any condition below fails. A failure there goes through the normal failure path, which removes the `Root` this run made, so nothing else is left behind.
+   - **Deny wins over grant.** `Get-AccucutRightHolder SeDenyBatchLogonRight` must not contain any SID that a batch-logon token of a new local user carries: Everyone `S-1-1-0`, Authenticated Users `S-1-5-11`, Local account `S-1-5-113` or Users `S-1-5-32-545`.
+   - **The domain GPO check.** It runs only when `(Get-CimInstance Win32_ComputerSystem).PartOfDomain`:
+     - It calls `Get-CimInstance -Namespace root\rsop\computer -ClassName RSOP_UserPrivilegeRight -Filter "UserRight='SeBatchLogonRight' AND precedence=1"`.
+     - No instance means no domain GPO defines the right, so the local grant holds. Go on.
+     - If there is an instance, its `AccountList` must hold, case-insensitively, `AccucutBackup` or `<COMPUTERNAME>\AccucutBackup`. Such an entry means IT has already added the account to the GPO per the README, and the GPO resolves the name on the server once the user exists. Otherwise stop: the policy would remove the local grant at its next refresh. Name the winning GPO, from `RSOP_GPO` where `id = GPOID`, in the message below.
+     - If the RSoP query fails on a domain-joined server (namespace missing, or RSoP logging turned off by policy), stop and say so. The only way past is the install switch **`-BatchRightPolicyConfirmed`**: IT has confirmed by hand that no GPO sets the right, or that the GPO lists the account. Its use is logged as a warning. It skips only the RSoP read, never the deny check or the checks after the grant.
+   - The stop message names the GPO when it is known. It says: "This server is in a domain and the Group Policy '<GPO>' sets 'Log on as a batch job'. A right given here would be removed at the next policy refresh, and the weekly backup would stop. Ask the domain administrator to add `<COMPUTERNAME>\AccucutBackup` to that setting in that policy, keeping the accounts already there, or to take this server out of that setting. Then run `gpupdate /target:computer /force` on this server and run the install again. Nothing was changed."
+
+**Install order (step 13, inside `Register-AccucutBackupTask`).** `New-LocalUser`, then **`Grant-AccucutBatchLogonRight -Sid <new SID>`**, then `Register-ScheduledTask`. All three are inside the existing `try`, so the account never has a task without the right. The `catch` calls `Remove-AccucutBackupAccount`.
+
+**The first run (`Wait-AccucutBackupTask`, changed).** The stage 13 run showed `0x41303` with an unchanged LastRunTime, not `0x80070569`.
+- If LastRunTime has not passed `$before` within 60 s and the task is `Ready`, the wait returns the "did not start" outcome.
+- That outcome, and `0x80070569`, both throw the batch-right message. Grant-time failures are already caught above, so this now means the right was removed after the grant, by a policy refresh or by hand. The message reads: "The first backup could not start: Windows refused the logon of AccucutBackup ('Log on as a batch job'; Security log event 4625, status 0xC000015B). If this server is in a domain, a Group Policy may have removed the right: see the README, 'Backups', 'Log on as a batch job'. The portal itself is running."
+- The install exits 1 with the portal running, as in Amendment 3.
+
+**Update.** `update.ps1` neither grants nor revokes. The account, the task and the right are untouched by an update, because the task runs through `current` (Amendment 3). At U3 it reads `Get-AccucutRightHolder SeBatchLogonRight`. If `Get-AccucutBackupAccountSid` is not in it, the update logs a **warning**, "The weekly backup cannot log on: AccucutBackup no longer has 'Log on as a batch job' (see the README)", and goes on. The update's own release backup runs as the administrator, not as the task.
+
+**Removal (no uninstall script exists; Amendment 3 has none).** `Remove-AccucutBackupAccount` gains one step, in this order:
+1. `Unregister-ScheduledTask`;
+2. if the user exists, `Revoke-AccucutBatchLogonRight -Sid (Get-AccucutBackupAccountSid)`;
+3. `Remove-LocalUser`.
+
+The right is revoked **before** the user is deleted. Deleting the user first would leave an orphan SID in the policy. A revoke failure is logged as an error and the user is still removed, and the message tells IT to remove the bare SID in Local Security Policy.
+
+**Trust-flow rules (Amendments 2 and 2.1), confirmed.**
+- No program is run for the grant: no `secedit.exe`, no `ntrights`, no `cmd.exe` and no `gpupdate` from the install (IT runs `gpupdate` by hand).
+- `advapi32.dll` is loaded by the CLR from System32 as a KnownDLL, never from the release tree.
+- **Test 3 widens:** `Add-Type` is a load site in every script and module under `deploy/windows/` except `ci/` and `tests/`.
+- **Test 4 widens (AST):**
+  - `DefineDynamicAssembly` and `DefinePInvokeMethod` appear only in `Get-AccucutLsaNative`;
+  - the only DLL string there is `advapi32.dll`;
+  - the defined method names are exactly the seven above;
+  - `Grant-AccucutBatchLogonRight` has no `-Right` parameter;
+  - `LsaRemoveAccountRights` is only ever called with `allRights` 0.
+
+**Stage 13 assertions** (the runner is not in a domain).
+1. **New step before the install.** It runs `$env:SystemRoot\System32\secedit.exe /export /areas USER_RIGHTS /cfg $env:RUNNER_TEMP\rights-before.inf`. This is an oracle independent of the code under test, and it is read-only.
+   - Parse `[Privilege Rights]` (UTF-16). A `*S-…` token is a SID. Any other token is resolved with `NTAccount.Translate`.
+2. **`assert-install.ps1` exports again and compares:**
+   - `SeBatchLogonRight` equals before ∪ {AccucutBackup's SID} exactly, and before did not hold it. On today's image that is `S-1-5-32-544`, `-551`, `-559`, `-568` and the SID, but the assertion compares with the snapshot and does not hard-code it.
+   - **Every other right's SID set is identical** to before.
+   - AccucutBackup's SID appears under no other right.
+   - It is still an explicit member of no local group (Amendment 3).
+   - `SeDenyBatchLogonRight` holds none of the four SIDs listed in mechanism step 7.
+3. **The install's own run.** LastRunTime is later than the install's start, LastTaskResult is 0 (as today), and there is no Security 4625 for `AccucutBackup` since the install began.
+4. **New last step, after the update and the rollback.** It imports the installed module from `C:\Accucut\current` and calls `Remove-AccucutBackupAccount`. It then asserts that `SeBatchLogonRight` equals the before snapshot exactly (no orphan SID), every other right is unchanged, and the user and the task are gone.
+
+**Pester (mocked native type and CIM).**
+- The grant calls `LsaAddAccountRights` once, with the SID's bytes and `SeBatchLogonRight`.
+- An after-set that lacks the SID throws, and so does one that differs from before ∪ SID in any other way.
+- The revoke uses `allRights` 0, and its after-set must be before minus the SID.
+- Order:
+  - `Register-AccucutBackupTask` calls `New-LocalUser`, then the grant, then `Register-ScheduledTask`;
+  - a failed grant removes the user and registers no task;
+  - `Remove-AccucutBackupAccount` revokes before `Remove-LocalUser`, and treats `0xC0000034` as done.
+- Preflight:
+  - not in a domain: no RSoP call;
+  - in a domain with no instance: pass;
+  - an instance whose `AccountList` lacks the account: stop before `New-LocalUser`, with the message naming the GPO and `<COMPUTERNAME>\AccucutBackup`;
+  - an instance listing `<COMPUTERNAME>\AccucutBackup`: pass;
+  - the RSoP query throws: stop, unless `-BatchRightPolicyConfirmed`, which logs a warning;
+  - a deny holder `S-1-5-113`: stop.
+- The wait: an unchanged LastRunTime with `0x41303` for 60 s, and `0x80070569`, each give the batch-right message.
+- The update logs the warning when the SID is missing and still completes.
+
+**README wording for IT** (section "Backups", replacing the "Log on as a batch job" paragraph; plus one line under "Start over"):
+
+> **Log on as a batch job.** Windows runs a task with a stored password only for an account that has the right "Log on as a batch job". The install gives this right to the local user `AccucutBackup` alone, adds it to no group, and changes no other account or right. Removing the portal (or the install's own clean-up after a failure) takes the right away again before the user is deleted.
+>
+> **If the server is in a domain** and a Group Policy sets "Log on as a batch job", that policy replaces the local list at every refresh, so the install checks first and stops, naming the policy, before it changes anything. The domain administrator then adds `<SERVER>\AccucutBackup` (the server's name, a backslash, `AccucutBackup`) to Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment > **Log on as a batch job** in that policy, **keeping every account already listed**, or takes this server out of that setting. Type the name; do not use Browse, because the domain controller cannot see this server's local users. Then run `gpupdate /target:computer /force` on the server and run the install again. If the install cannot read the server's policy results (RSoP logging off), confirm the above by hand and run it with `-BatchRightPolicyConfirmed`.
+>
+> **If the weekly backup stops starting later** (Task Scheduler shows "has not run" or `0x80070569`, the Security log shows event 4625 with status `0xC000015B`, and Settings shows the backup as late), a policy or a person has removed the right. Restore it as above (domain) or in Local Security Policy (`secpol.msc`), then run `Start-ScheduledTask 'Accucut weekly backup'` and check that a new `.age` file appears.
+
+"Start over" row, first step: "In Local Security Policy, User Rights Assignment, Log on as a batch job, remove `AccucutBackup` **before** `Remove-LocalUser AccucutBackup`. If the user is already gone and a bare SID is listed, remove that SID."
+
+**Residual R-T6 (accepted).** A later GPO change or an administrator can remove the right at any time. The task then fails to start. `backup.ps1` never runs, so there is no `Accucut` event and no `job_runs` row. Detection is Task Scheduler's history, Security 4625 and `backup-watch`'s late notice after 8 days (Amendment 3.1 point 6), and the update warning above. A GPO that defines the right and lists the account by name keeps it on every refresh.
 
 ## Verification
 
