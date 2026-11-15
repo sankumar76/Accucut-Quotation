@@ -32,7 +32,7 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     const second = page.getByRole('region', { name: '02 Material and Dimensions' });
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
-    // STORY-05.04: the tag of 01 also names the placeholder of Treatment / Color (G), which is in the card but is not typed into until story 05.06.
+    // The tag of 01 names Treatment / Color (G), a drop-down of the card since STORY-05.06.
     await expect(first).toContainText('A–D, G, H');
     await expect(second).toContainText('E, F, J–L, N');
 
@@ -41,6 +41,7 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
       ['B', 'Part No.', 'textbox'],
       ['D', 'Description', 'textbox'],
       ['H', 'QTY per Assy', 'textbox'],
+      ['G', 'Treatment / Color', 'combobox'],
       ['E', 'Material in Drawing', 'combobox'],
       ['F', 'Material Considered', 'textbox'],
       ['J', 'Length', 'textbox'],
@@ -52,8 +53,8 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
       await expect(page.getByRole(role, { name: new RegExp(`^Excel column ${letter}\\s+${name.replaceAll('.', '\\.')}`) })).toHaveCount(1);
       await expect(control(page, letter)).toBeVisible();
     }
-    // Letters that are not typed into on the form are not controls: the picture, the placeholder of Treatment / Color, and Material Rate / Kg.
-    for (const letter of ['C', 'G', 'I']) await expect(page.getByRole('textbox', { name: new RegExp(`^Excel column ${letter}\\s`) })).toHaveCount(0);
+    // Letters that are not typed into on the form are not controls: the picture, and Material Rate / Kg.
+    for (const letter of ['C', 'I']) await expect(page.getByRole('textbox', { name: new RegExp(`^Excel column ${letter}\\s`) })).toHaveCount(0);
   });
 
   test('AC-2, AC-3, AC-8: the label stays "QTY per Assy" with the hint; Sl. No. and Material Considered are read-only; no rate, price, cost or formula is on the form', async ({ page }, testInfo) => {

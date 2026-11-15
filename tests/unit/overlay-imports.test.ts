@@ -55,6 +55,8 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
       'src/components/features/estimate-workspace/quantity-warning-dialog.tsx',
       'src/components/features/estimate-workspace/parts-tree-drawer.tsx',
+      // The multi-select of the surface treatments (STORY-05.06) holds a Popover; it is reached only through part-fields.tsx, which is lazy.
+      'src/components/features/estimate-workspace/surface-treatments.tsx',
     ]) {
       expect(holders, name).toContain(name);
     }
@@ -82,7 +84,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
     expect(firstLoad, 'the focus helper is in the first load').toContain(`${folder}/focus-field.ts`);
     expect(firstLoad, 'and so are the ids it uses').toContain(`${folder}/field-ids.ts`);
     expect(firstLoad, 'PartForm reads the definition through a module of its own').toContain(`${folder}/use-form-definition.ts`);
-    for (const name of ['part-fields', 'field-renderer', 'section-card', 'section-strip', 'placeholder-fields', 'picture-slot', 'parts-tree-drawer']) {
+    for (const name of ['part-fields', 'field-renderer', 'section-card', 'section-strip', 'surface-treatments', 'treatment-select', 'picture-slot', 'parts-tree-drawer']) {
       expect(firstLoad, name).not.toContain(`${folder}/${name}.tsx`);
     }
     // What reads and saves a part's values goes with the fields: `use-part-form.ts` may not come back into the first load through the definition hook.
