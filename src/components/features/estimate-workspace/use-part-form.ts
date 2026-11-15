@@ -3,16 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
-import { loadForm, loadMaterialOptions, loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type FormView, type MaterialChoice, type PartInputs } from '@/lib/estimates/form-client';
+import { loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type PartInputs } from '@/lib/estimates/form-client';
 import { readTyped } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
 
 import { PART_SAVED } from './estimate-texts';
-
-/** Something read from the server: on its way, here, or not got. */
-export type Loaded<T> = { readonly status: 'loading' } | { readonly status: 'ready'; readonly value: T } | { readonly status: 'failed' };
+import { LOADING, loadedFrom, type Loaded } from './use-form-definition';
 
 /** Why the last save did not go through, other than a value the server refused (that is under its field): the part changed under the person, a refusal in the server's words, or "it failed". */
 export type PartProblem = { readonly kind: 'changed' } | { readonly kind: 'refused'; readonly message: string } | { readonly kind: 'failed' };
@@ -30,48 +28,6 @@ export interface SavedPart {
   readonly completeness: Completeness;
   /** What the part holds now, by field ID: Calculate's list of missing fields takes the ones that now have a value off it (STORY-05.09). */
   readonly inputs: Readonly<Record<string, string>>;
-}
-
-const loadedFrom = <T>(outcome: Outcome<T>): Loaded<T> => (outcome.status === 'ok' ? { status: 'ready', value: outcome.value } : { status: 'failed' });
-const LOADING = { status: 'loading' } as const;
-
-/**
- * The form's definition and the materials (STORY-05.03 AC-1, AC-5): read once for the estimate, whatever part is shown, with "read again" for each. The sections, letters,
- * labels, hints and rules are the server's, from the registry; this holds them and draws nothing. `lastSavedAt` is the time of the last write to any part: the form's
- * start, and the moment of each save after it.
- */
-export function useFormDefinition(estimateId: string) {
-  const [form, setForm] = useState<Loaded<FormView>>(LOADING);
-  const [materials, setMaterials] = useState<Loaded<ReadonlyArray<MaterialChoice>>>(LOADING);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    void loadForm(estimateId).then((outcome) => {
-      if (cancelled) return;
-      setForm(loadedFrom(outcome));
-      if (outcome.status === 'ok') setLastSavedAt(outcome.value.lastSavedAt);
-    });
-    void loadMaterialOptions().then((outcome) => {
-      if (!cancelled) setMaterials(loadedFrom(outcome));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [estimateId, attempt]);
-
-  return {
-    form,
-    materials,
-    lastSavedAt,
-    wrote: (at: string): void => setLastSavedAt(at),
-    readAgain: (): void => {
-      setForm(LOADING);
-      setMaterials(LOADING);
-      setAttempt((count) => count + 1);
-    },
-  };
 }
 
 export interface UsePartValuesProps {

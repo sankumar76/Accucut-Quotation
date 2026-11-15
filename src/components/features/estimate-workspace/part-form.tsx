@@ -7,8 +7,9 @@ import type { SaveGate } from '@/lib/estimates/save-gate';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
+import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
-import { useFormDefinition, type PartTarget, type SavedPart } from './use-part-form';
+import type { PartTarget, SavedPart } from './use-part-form';
 
 /** The fields' code: a bare `import()` behind a type-only import above, so none of it is in the first load (NFR-009, ADR-016 E1). Asked for as soon as the form is on the page, in step with the two reads that gate it. */
 const loadFields = () => import('./part-fields').then((module) => module.PartFields);

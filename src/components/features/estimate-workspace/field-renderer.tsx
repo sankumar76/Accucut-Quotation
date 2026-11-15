@@ -11,7 +11,7 @@ import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
 import { controlIdFor, FIELD_MARK } from './field-ids';
-import type { Loaded } from './use-part-form';
+import type { Loaded } from './use-form-definition';
 
 export interface FieldRendererProps {
   readonly field: FormFieldView;
