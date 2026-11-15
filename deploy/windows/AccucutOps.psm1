@@ -984,6 +984,12 @@ $script:AgeRecipientPattern = '^age1[0-9a-z]{58}$'
 # The Task Scheduler result of a logon that the account may not make (0x80070569): the account lacks "Log on as a batch job".
 $script:LogonTypeFailure = [uint32]2147943785
 
+# What Task Scheduler reports for a task that has never run (0x41303, 267011). On Stage 13 this was how a missing "Log on as a batch job" showed (ADR-015 Amendment 3.2).
+$script:TaskNotStarted = [uint32]267011
+
+# The P/Invoke type of the seven advapi32 calls, made in memory on first use by Get-AccucutLsaNative (nothing is made when the module is loaded).
+$script:AccucutLsaNative = $null
+
 function Get-AccucutBackupAccountSid {
     <# The SID of the local user AccucutBackup, looked up by name. Throws a plain message when the account does not exist. #>
     [CmdletBinding()]
@@ -1062,6 +1068,317 @@ function New-AccucutComplexPassword {
     return (-join $chars)
 }
 
+function Get-AccucutLsaNative {
+    <#
+    The seven advapi32 calls that the batch-logon right needs (ADR-015 Amendment 3.2), defined in memory with Reflection.Emit the first time they are asked for and kept in
+    $script:AccucutLsaNative. There is no compiler and no file here: the usual compiler cmdlet would write and load a DLL from a temporary folder that the trust block never
+    checked. Nothing runs when the module is loaded. 64-bit only, because the structure offsets used by the callers assume it. Every method returns an NTSTATUS as uint32.
+    #>
+    [CmdletBinding()]
+    param()
+
+    if ($null -ne $script:AccucutLsaNative) { return $script:AccucutLsaNative }
+    if (-not [System.Environment]::Is64BitProcess) { throw 'The batch-logon right can only be set from a 64-bit PowerShell.' }
+    $assemblyName = New-Object System.Reflection.AssemblyName('AccucutLsa')
+    $assembly = [System.AppDomain]::CurrentDomain.DefineDynamicAssembly($assemblyName, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
+    $module = $assembly.DefineDynamicModule('AccucutLsa')
+    $type = $module.DefineType('AccucutLsa.Native', [System.Reflection.TypeAttributes]'Public, Sealed, Abstract')
+    $pointer = [System.IntPtr]
+    $bytes = [byte[]]
+    $number = [uint32]
+    $methods = @(
+        @{ Name = 'LsaOpenPolicy'; Types = @($pointer, $bytes, $number, $pointer.MakeByRefType()); OutIndex = @(3) },
+        @{ Name = 'LsaAddAccountRights'; Types = @($pointer, $bytes, $pointer, $number); OutIndex = @() },
+        @{ Name = 'LsaRemoveAccountRights'; Types = @($pointer, $bytes, [byte], $pointer, $number); OutIndex = @() },
+        @{ Name = 'LsaEnumerateAccountsWithUserRight'; Types = @($pointer, $pointer, $pointer.MakeByRefType(), $number.MakeByRefType()); OutIndex = @(2, 3) },
+        @{ Name = 'LsaFreeMemory'; Types = @($pointer); OutIndex = @() },
+        @{ Name = 'LsaClose'; Types = @($pointer); OutIndex = @() },
+        @{ Name = 'LsaNtStatusToWinError'; Types = @($number); OutIndex = @() }
+    )
+    foreach ($method in $methods) {
+        $builder = $type.DefinePInvokeMethod($method.Name, 'advapi32.dll', [System.Reflection.MethodAttributes]'Public, Static, PinvokeImpl', [System.Reflection.CallingConventions]::Standard, $number, [System.Type[]]$method.Types, [System.Runtime.InteropServices.CallingConvention]::Winapi, [System.Runtime.InteropServices.CharSet]::Unicode)
+        $builder.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+        for ($index = 0; $index -lt $method.Types.Count; $index++) {
+            $attribute = [System.Reflection.ParameterAttributes]::None
+            if ($method.OutIndex -contains $index) { $attribute = [System.Reflection.ParameterAttributes]::Out }
+            [void]$builder.DefineParameter($index + 1, $attribute, "p$index")
+        }
+    }
+    $script:AccucutLsaNative = $type.CreateType()
+    return $script:AccucutLsaNative
+}
+
+function New-AccucutLsaString {
+    <# An LSA_UNICODE_STRING (16 bytes on x64) in unmanaged memory: Length at 0, MaximumLength at 2, the buffer pointer at 8. Free it with Remove-AccucutLsaString. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Value)
+
+    $buffer = [System.Runtime.InteropServices.Marshal]::StringToHGlobalUni($Value)
+    $structure = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(16)
+    $length = [int16](2 * $Value.Length)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($structure, 0, $length)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($structure, 2, [int16]($length + 2))
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($structure, 4, 0)
+    [System.Runtime.InteropServices.Marshal]::WriteIntPtr($structure, 8, $buffer)
+    return [pscustomobject]@{ Structure = $structure; Buffer = $buffer }
+}
+
+function Remove-AccucutLsaString {
+    <# Frees what New-AccucutLsaString allocated. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$LsaString)
+
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($LsaString.Buffer)
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($LsaString.Structure)
+}
+
+function Assert-AccucutLsaStatus {
+    <# Throws a plain error naming the operation when an LSA call did not return 0. -Allowed lists the NTSTATUS values that are not errors for that call. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][uint32]$Status,
+        [Parameter(Mandatory)][string]$Operation,
+        [uint32[]]$Allowed = @()
+    )
+
+    if ($Status -eq 0 -or $Allowed -contains $Status) { return }
+    $native = Get-AccucutLsaNative
+    $winError = [int]$native::LsaNtStatusToWinError($Status)
+    $reason = (New-Object System.ComponentModel.Win32Exception($winError)).Message
+    throw "The local security policy refused $Operation (status 0x$('{0:X8}' -f $Status): $reason)."
+}
+
+function Open-AccucutLsaPolicy {
+    <# Opens the local policy with the three rights that are needed (view local information, create account, look up names: 0x811), never all access. Close it with Close-AccucutLsaPolicy. #>
+    [CmdletBinding()]
+    param()
+
+    $native = Get-AccucutLsaNative
+    $attributes = New-Object byte[] 48
+    $attributes[0] = 48
+    $handle = [System.IntPtr]::Zero
+    $status = $native::LsaOpenPolicy([System.IntPtr]::Zero, $attributes, [uint32]0x811, [ref]$handle)
+    Assert-AccucutLsaStatus -Status $status -Operation 'opening the policy'
+    return $handle
+}
+
+function Close-AccucutLsaPolicy {
+    <# Closes the handle that Open-AccucutLsaPolicy returned. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.IntPtr]$Handle)
+
+    $native = Get-AccucutLsaNative
+    [void]$native::LsaClose($Handle)
+}
+
+function Get-AccucutSidBytes {
+    <# The binary form of a SID given as text. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Sid)
+
+    $object = [System.Security.Principal.SecurityIdentifier]::new($Sid)
+    $bytes = New-Object byte[] $object.BinaryLength
+    $object.GetBinaryForm($bytes, 0)
+    return , $bytes
+}
+
+function Get-AccucutLsaHolder {
+    <# The SIDs that hold one right, as text, sorted (LsaEnumerateAccountsWithUserRight). Read-only. No holder (STATUS_NO_MORE_ENTRIES, 0x8000001A) is an empty list. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Right)
+
+    $native = Get-AccucutLsaNative
+    $handle = Open-AccucutLsaPolicy
+    $name = New-AccucutLsaString -Value $Right
+    $buffer = [System.IntPtr]::Zero
+    [uint32]$count = 0
+    try {
+        $status = $native::LsaEnumerateAccountsWithUserRight($handle, $name.Structure, [ref]$buffer, [ref]$count)
+        Assert-AccucutLsaStatus -Status $status -Operation "listing the holders of $Right" -Allowed @([uint32]2147483674)
+        $holders = New-Object System.Collections.Generic.List[string]
+        if ($status -eq 0) {
+            for ($index = 0; $index -lt $count; $index++) {
+                $sidPointer = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($buffer, $index * 8)
+                $holders.Add(([System.Security.Principal.SecurityIdentifier]::new($sidPointer)).Value)
+            }
+        }
+        return @($holders | Sort-Object)
+    }
+    finally {
+        if ($buffer -ne [System.IntPtr]::Zero) { [void]$native::LsaFreeMemory($buffer) }
+        Remove-AccucutLsaString -LsaString $name
+        Close-AccucutLsaPolicy -Handle $handle
+    }
+}
+
+function Add-AccucutLsaHolder {
+    <# LsaAddAccountRights for one SID and one right. Only Grant-AccucutBatchLogonRight calls it. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Sid,
+        [Parameter(Mandatory)][string]$Right
+    )
+
+    $native = Get-AccucutLsaNative
+    $handle = Open-AccucutLsaPolicy
+    $name = New-AccucutLsaString -Value $Right
+    try {
+        $status = $native::LsaAddAccountRights($handle, (Get-AccucutSidBytes -Sid $Sid), $name.Structure, [uint32]1)
+        Assert-AccucutLsaStatus -Status $status -Operation "giving $Right"
+    }
+    finally {
+        Remove-AccucutLsaString -LsaString $name
+        Close-AccucutLsaPolicy -Handle $handle
+    }
+}
+
+function Remove-AccucutLsaHolder {
+    <# LsaRemoveAccountRights for one SID and one right, with allRights ALWAYS 0 (never every right of the account). STATUS_OBJECT_NAME_NOT_FOUND (0xC0000034) means it was already gone. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Sid,
+        [Parameter(Mandatory)][string]$Right
+    )
+
+    $native = Get-AccucutLsaNative
+    $handle = Open-AccucutLsaPolicy
+    $name = New-AccucutLsaString -Value $Right
+    try {
+        $status = $native::LsaRemoveAccountRights($handle, (Get-AccucutSidBytes -Sid $Sid), [byte]0, $name.Structure, [uint32]1)
+        Assert-AccucutLsaStatus -Status $status -Operation "taking away $Right" -Allowed @([uint32]3221225524)
+    }
+    finally {
+        Remove-AccucutLsaString -LsaString $name
+        Close-AccucutLsaPolicy -Handle $handle
+    }
+}
+
+function Get-AccucutRightHolder {
+    <# The SIDs that hold "Log on as a batch job" or "Deny log on as a batch job", sorted. Read-only (ADR-015 Amendment 3.2). #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidateSet('SeBatchLogonRight', 'SeDenyBatchLogonRight')][string]$Right)
+
+    return @(Get-AccucutLsaHolder -Right $Right)
+}
+
+function Test-AccucutSameSidSet {
+    <# True when two lists of SIDs hold the same SIDs (as sets, upper case). #>
+    [CmdletBinding()]
+    param(
+        [AllowEmptyCollection()][string[]]$Left = @(),
+        [AllowEmptyCollection()][string[]]$Right = @()
+    )
+
+    $a = @($Left | ForEach-Object { $_.ToUpperInvariant() } | Sort-Object -Unique)
+    $b = @($Right | ForEach-Object { $_.ToUpperInvariant() } | Sort-Object -Unique)
+    return (($a -join ';') -eq ($b -join ';'))
+}
+
+function Grant-AccucutBatchLogonRight {
+    <#
+    Gives "Log on as a batch job" to one SID and to nothing else (ADR-015 Amendment 3.2). There is no -Right parameter: this module can grant this one right and no other.
+    It reads the holders first and refuses if the SID is among them already; it adds the SID with LsaAddAccountRights; it reads the holders again and requires them to be
+    exactly the holders before plus the SID. Anything else throws.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Sid,
+        [string]$LogFile
+    )
+
+    $right = 'SeBatchLogonRight'
+    $before = @(Get-AccucutRightHolder -Right $right)
+    if ($before -contains $Sid) { throw "$Sid already holds 'Log on as a batch job'. A new account cannot, so this is not the account that was just made. Nothing was changed." }
+    Add-AccucutLsaHolder -Sid $Sid -Right $right
+    $after = @(Get-AccucutRightHolder -Right $right)
+    if (-not (Test-AccucutSameSidSet -Left $after -Right (@($before) + @($Sid)))) {
+        throw "Log on as a batch job did not take the expected holders (before: $($before -join ', '); after: $($after -join ', '))."
+    }
+    Write-AccucutLog -Message "Gave $($script:BackupAccountName) ($Sid) the right 'Log on as a batch job'; no other account or right was changed." -LogFile $LogFile
+}
+
+function Revoke-AccucutBatchLogonRight {
+    <# Takes "Log on as a batch job" away from one SID, and from no one else, never all rights of the account. The holders afterwards must be the holders before minus the SID. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Sid,
+        [string]$LogFile
+    )
+
+    $right = 'SeBatchLogonRight'
+    $before = @(Get-AccucutRightHolder -Right $right)
+    if ($before -notcontains $Sid) { return }
+    Remove-AccucutLsaHolder -Sid $Sid -Right $right
+    $after = @(Get-AccucutRightHolder -Right $right)
+    if (-not (Test-AccucutSameSidSet -Left $after -Right @($before | Where-Object { $_ -ne $Sid }))) {
+        throw "Taking away 'Log on as a batch job' did not leave the expected holders (before: $($before -join ', '); after: $($after -join ', '))."
+    }
+    Write-AccucutLog -Message "Took the right 'Log on as a batch job' away from $Sid; no other holder was changed." -LogFile $LogFile
+}
+
+function Get-AccucutComputerSystem {
+    <# Whether the server is in a domain, and its name. A function of its own so that Pester can mock it. #>
+    [CmdletBinding()]
+    param()
+
+    return (Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop)
+}
+
+function Get-AccucutRsopBatchRight {
+    <# The Group Policy result for "Log on as a batch job" with precedence 1, if any domain policy sets it. A function of its own so that Pester can mock it. Throws when the result cannot be read. #>
+    [CmdletBinding()]
+    param()
+
+    return @(Get-CimInstance -Namespace 'root\rsop\computer' -ClassName RSOP_UserPrivilegeRight -Filter "UserRight='SeBatchLogonRight' AND precedence=1" -ErrorAction Stop)
+}
+
+function Get-AccucutRsopPolicyName {
+    <# The display name of the Group Policy object with this id (RSOP_GPO), or the id itself. A function of its own so that Pester can mock it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$PolicyId)
+
+    try {
+        $escaped = $PolicyId.Replace("'", "''")
+        $policy = @(Get-CimInstance -Namespace 'root\rsop\computer' -ClassName RSOP_GPO -Filter "id='$escaped'" -ErrorAction Stop)
+        if ($policy.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace([string]$policy[0].name)) { return [string]$policy[0].name }
+    }
+    catch { Write-Verbose "The policy name could not be read: $($_.Exception.Message)" }
+    return $PolicyId
+}
+
+function Test-AccucutBatchRightPolicy {
+    <#
+    The read-only check that comes before anything is changed (ADR-015 Amendment 3.2, mechanism step 7). Throws, with nothing changed, when:
+      - "Deny log on as a batch job" holds Everyone, Authenticated Users, Local account or Users (the groups in the token of a new local user), because deny wins over grant;
+      - the server is in a domain and a Group Policy sets "Log on as a batch job" without AccucutBackup, because the policy would remove a local grant at its next refresh;
+      - the server is in a domain and the policy result cannot be read, unless -PolicyConfirmed says that IT has checked by hand (that skips only this read).
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$PolicyConfirmed,
+        [string]$LogFile
+    )
+
+    $groups = @('S-1-1-0', 'S-1-5-11', 'S-1-5-113', 'S-1-5-32-545')
+    $denied = @(@(Get-AccucutRightHolder -Right 'SeDenyBatchLogonRight') | Where-Object { $groups -contains $_ })
+    if ($denied.Count -gt 0) {
+        throw "'Deny log on as a batch job' lists $($denied -join ', '), which every new local account belongs to, and a deny wins over a grant. The weekly backup could never log on. Ask your IT person or the domain administrator to take those entries out of 'Deny log on as a batch job', then run the install again. Nothing was changed."
+    }
+    $computer = Get-AccucutComputerSystem
+    if (-not [bool]$computer.PartOfDomain) { return }
+    if ($PolicyConfirmed) {
+        Write-AccucutLog -Message "-BatchRightPolicyConfirmed was given: the Group Policy result for 'Log on as a batch job' was NOT read; you have confirmed that no policy sets the right, or that it lists $($env:COMPUTERNAME)\$($script:BackupAccountName)." -Level Warning -LogFile $LogFile
+        return
+    }
+    try { $rights = @(Get-AccucutRsopBatchRight) }
+    catch { throw "This server is in a domain and its Group Policy results cannot be read ($($_.Exception.Message)), so it is not known whether a policy sets 'Log on as a batch job'. Check by hand that no policy sets it, or that it lists $($env:COMPUTERNAME)\$($script:BackupAccountName), and run the install again with -BatchRightPolicyConfirmed. Nothing was changed." }
+    if ($rights.Count -eq 0) { return }
+    $listed = @($rights | ForEach-Object { @($_.AccountList) } | ForEach-Object { [string]$_ })
+    if ($listed -contains $script:BackupAccountName -or $listed -contains "$($env:COMPUTERNAME)\$($script:BackupAccountName)") { return }
+    $policyName = Get-AccucutRsopPolicyName -PolicyId ([string]$rights[0].GPOID)
+    throw "This server is in a domain and the Group Policy '$policyName' sets 'Log on as a batch job'. A right given here would be removed at the next policy refresh, and the weekly backup would stop. Ask the domain administrator to add $($env:COMPUTERNAME)\$($script:BackupAccountName) to that setting in that policy, keeping the accounts already there, or to take this server out of that setting. Then run 'gpupdate /target:computer /force' on this server and run the install again. Nothing was changed."
+}
+
 function Register-AccucutBackupTask {
     <#
     Makes the local user AccucutBackup and the weekly task that runs backup.ps1 as that user (ADR-015 Amendment 3 point 2).
@@ -1073,7 +1390,8 @@ function Register-AccucutBackupTask {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$Paths,
-        [Parameter(Mandatory)][string]$PowerShellPath
+        [Parameter(Mandatory)][string]$PowerShellPath,
+        [string]$LogFile
     )
 
     # The program of the task action is given by the caller, which has checked it (Resolve-AccucutTrustedExecutable): it is never looked up here.
@@ -1087,6 +1405,9 @@ function Register-AccucutBackupTask {
     try {
         $user = New-LocalUser -Name $script:BackupAccountName -Password $secure -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires -Description 'Accucut weekly backup (no interactive use)' -ErrorAction Stop
         $created = $true
+        # A new local user has no right to log on as a batch job, and Task Scheduler does not give it one when it stores the password: the right is given here to this SID alone,
+        # and checked, before the task is made (ADR-015 Amendment 3.2). If it fails, the catch below removes the user again and no task exists.
+        Grant-AccucutBatchLogonRight -Sid $user.SID.Value -LogFile $LogFile
         $scriptPath = [System.IO.Path]::Combine($Paths.Current, 'backup.ps1')
         $action = New-ScheduledTaskAction -Execute $PowerShellPath -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $scriptPath + '" -Reason weekly')
         # Sunday 02:00 on the server's clock: the server is expected to keep India Standard Time (the caller warns when it does not).
@@ -1106,43 +1427,57 @@ function Register-AccucutBackupTask {
 }
 
 function Remove-AccucutBackupAccount {
-    <# Removes the weekly task and the local user AccucutBackup, when they exist. Used when an install that made them fails before it is finished. #>
+    <#
+    Removes the weekly task, the right "Log on as a batch job" that was given to the account, and the local user AccucutBackup, in that order, when they exist (ADR-015
+    Amendment 3.2). The right goes BEFORE the user: deleting the user first would leave a bare SID in the policy. A failure to take the right away is logged as an error and
+    the user is still removed; the message tells IT to remove the bare SID in Local Security Policy.
+    #>
     [CmdletBinding()]
-    param()
+    param([string]$LogFile)
 
     try { Unregister-ScheduledTask -TaskName $script:BackupTaskName -Confirm:$false -ErrorAction Stop } catch { Write-Verbose "No weekly backup task to remove: $($_.Exception.Message)" }
+    $sid = $null
+    try { $sid = Get-AccucutBackupAccountSid } catch { Write-Verbose "No backup account, so no right to take away: $($_.Exception.Message)" }
+    if ($null -ne $sid) {
+        try { Revoke-AccucutBatchLogonRight -Sid $sid -LogFile $LogFile }
+        catch { Write-AccucutLog -Message "The right 'Log on as a batch job' could not be taken away from $($script:BackupAccountName) ($sid): $($_.Exception.Message) The user is removed anyway; remove the bare SID $sid in Local Security Policy, User Rights Assignment, Log on as a batch job." -Level Error -LogFile $LogFile }
+    }
     try { Remove-LocalUser -Name $script:BackupAccountName -ErrorAction Stop } catch { Write-Verbose "No backup account to remove: $($_.Exception.Message)" }
 }
 
 function Wait-AccucutBackupTask {
     <#
     Starts the weekly task once and waits for it to finish (the install's proof that the account can log on and that the first backup works).
-    Returns the task's LastTaskResult as an unsigned number (0 is success), or throws when it has not finished in -TimeoutSeconds.
+    Returns the task's LastTaskResult as an unsigned number (0 is success), or throws when it has not finished in -TimeoutSeconds. A task that is still Ready with an unchanged
+    LastRunTime after -NotStartedAfterSeconds has not started: that returns 0x41303 (267011), which the caller treats as a refused logon (ADR-015 Amendment 3.2).
     #>
     [CmdletBinding()]
     param(
         [ValidateRange(5, 1800)][int]$TimeoutSeconds = 300,
-        [ValidateRange(1, 30)][int]$IntervalSeconds = 3
+        [ValidateRange(1, 30)][int]$IntervalSeconds = 3,
+        [ValidateRange(5, 600)][int]$NotStartedAfterSeconds = 60
     )
 
     $before = (Get-Date).AddSeconds(-2)
+    $startedAt = Get-Date
     Start-ScheduledTask -TaskName $script:BackupTaskName -ErrorAction Stop
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $deadline = $startedAt.AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds $IntervalSeconds
         $info = Get-ScheduledTaskInfo -TaskName $script:BackupTaskName -ErrorAction Stop
         $task = Get-ScheduledTask -TaskName $script:BackupTaskName -ErrorAction Stop
         if ($info.LastRunTime -ge $before -and [string]$task.State -ne 'Running') { return [uint32]$info.LastTaskResult }
+        if ($info.LastRunTime -lt $before -and [string]$task.State -eq 'Ready' -and ((Get-Date) - $startedAt).TotalSeconds -ge $NotStartedAfterSeconds) { return $script:TaskNotStarted }
     }
     throw "The weekly backup task did not finish within $TimeoutSeconds seconds."
 }
 
 function Test-AccucutLogonTypeFailure {
-    <# True when a task result is 0x80070569: the account is not allowed this kind of logon ("Log on as a batch job"). #>
+    <# True when a task result says the account could not log on: 0x80070569 (refused logon type), or 0x41303 (the task never started, which is how the same refusal showed on the runner). #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][uint32]$TaskResult)
 
-    return ($TaskResult -eq $script:LogonTypeFailure)
+    return ($TaskResult -eq $script:LogonTypeFailure -or $TaskResult -eq $script:TaskNotStarted)
 }
 
 function Grant-AccucutBackupRootAccess {
@@ -1877,7 +2212,7 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
-    'Get-AccucutBackupAccountSid', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
+    'Get-AccucutBackupAccountSid', 'Get-AccucutRightHolder', 'Grant-AccucutBatchLogonRight', 'Revoke-AccucutBatchLogonRight', 'Test-AccucutBatchRightPolicy', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
     'Grant-AccucutBackupRootAccess', 'New-AccucutBackupFolder', 'Set-AccucutBackupFileAcl', 'Write-AccucutBackupFile', 'Test-AccucutBackupSetting', 'Read-AccucutBackupSettings', 'Write-AccucutBackupConfig',
     'Get-AccucutVolumeRoot', 'Get-AccucutVolumeSpace', 'Format-AccucutSize', 'Test-AccucutBackupRoom', 'ConvertFrom-AccucutBackupStamp', 'Get-AccucutBackupCopy', 'Get-AccucutBackupKeepSet', 'Get-AccucutBackupPruneCandidate',
     'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',

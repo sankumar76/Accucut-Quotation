@@ -650,8 +650,9 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     // The first backup waits for the task for at most 5 minutes, and says what to do when the batch-logon right is missing.
     const first = functionBody(install, 'Invoke-AccucutFirstBackup');
     expect(first).toContain('Wait-AccucutBackupTask -TimeoutSeconds 300');
-    expect(first).toContain("Give AccucutBackup the right 'Log on as a batch job'");
+    expect(first).toContain("Windows refused the logon of AccucutBackup ('Log on as a batch job'; Security log event 4625, status 0xC000015B)");
     expect(first).toContain("Start-ScheduledTask 'Accucut weekly backup'");
+    expect(first).toContain('Test-AccucutLogonTypeFailure -TaskResult $result');
     expect(first).toContain("result->>'status' = 'ok'");
     // A failure that happens before the services are registered removes the account and the task too, and only when this run made them.
     expect(body).toContain('if ($created.BackupAccount) {');
@@ -748,6 +749,46 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(WORKFLOW).not.toMatch(/AGE-SECRET-KEY-1[A-Z0-9]{20,}/);
     // The change is limited to this workflow: the required check is untouched.
     expect(CI).toMatch(/needs: \[verify, e2e\]/);
+  });
+
+  it('ADR-015 Amendment 3.2: the install gives "Log on as a batch job" to the new SID alone, with the LSA calls made in memory, never with a program, Add-Type or secedit', () => {
+    const files = readdirSync(fileURLToPath(new URL('../../deploy/windows', import.meta.url))).filter((name) => /\.(ps1|psm1)$/.test(name));
+    for (const name of files) expect(code('deploy/windows/' + name), name + ' uses Add-Type').not.toMatch(/Add-Type/i);
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    expect(ops).not.toMatch(/secedit|\bntrights\b|gpupdate\.exe|csc\.exe|OutputAssembly|CodeDom/i);
+    expect((ops.match(/DefineDynamicAssembly/g) ?? []).length).toBe(1);
+    expect((ops.match(/DefinePInvokeMethod/g) ?? []).length).toBe(1);
+    expect([...ops.matchAll(/[\w-]+\.dll/gi)].map((match) => match[0].toLowerCase())).toEqual(['advapi32.dll']);
+    const native = functionBody(ops, 'Get-AccucutLsaNative');
+    expect(native).toContain('DefineDynamicAssembly');
+    expect(native).toContain('[System.Environment]::Is64BitProcess');
+    expect([...native.matchAll(/Name = '(Lsa\w+)'/g)].map((match) => match[1])).toEqual([
+      'LsaOpenPolicy', 'LsaAddAccountRights', 'LsaRemoveAccountRights', 'LsaEnumerateAccountsWithUserRight', 'LsaFreeMemory', 'LsaClose', 'LsaNtStatusToWinError',
+    ]);
+    // The policy is opened with 0x811 and never with all access; the revoke never removes every right of the account.
+    expect(functionBody(ops, 'Open-AccucutLsaPolicy')).toContain('[uint32]0x811');
+    expect(ops).not.toMatch(/0xF0FFF|POLICY_ALL_ACCESS|983551/);
+    expect(functionBody(ops, 'Remove-AccucutLsaHolder')).toContain('(Get-AccucutSidBytes -Sid $Sid), [byte]0, $name.Structure');
+    // No -Right parameter on the grant: this module can give this one right and no other.
+    const grant = functionBody(ops, 'Grant-AccucutBatchLogonRight');
+    expect(grant).not.toMatch(/\[string\]\$Right|\$Right\b(?!s)/);
+    expect(grant).toContain("$right = 'SeBatchLogonRight'");
+    // The install order: user, then the right, then the task; the right goes before the user on removal.
+    const register = functionBody(ops, 'Register-AccucutBackupTask');
+    expect(register.indexOf('New-LocalUser')).toBeLessThan(register.indexOf('Grant-AccucutBatchLogonRight -Sid $user.SID.Value'));
+    expect(register.indexOf('Grant-AccucutBatchLogonRight -Sid $user.SID.Value')).toBeLessThan(register.indexOf('Register-ScheduledTask'));
+    const remove = functionBody(ops, 'Remove-AccucutBackupAccount');
+    expect(remove.indexOf('Unregister-ScheduledTask')).toBeLessThan(remove.indexOf('Revoke-AccucutBatchLogonRight'));
+    expect(remove.indexOf('Revoke-AccucutBatchLogonRight')).toBeLessThan(remove.indexOf('Remove-LocalUser'));
+    // The policy check is the first thing the install does with the backup account's right, and before anything is created; update.ps1 only looks.
+    const installBody = functionBody(code('deploy/windows/install.ps1'), 'Invoke-AccucutInstall');
+    expect(installBody.indexOf('Test-AccucutBatchRightPolicy -PolicyConfirmed:$BatchRightPolicyConfirmed')).toBeGreaterThan(0);
+    expect(installBody.indexOf('Test-AccucutBatchRightPolicy')).toBeLessThan(installBody.indexOf('Write-AccucutSecureFile'));
+    expect(installBody.indexOf('Test-AccucutBatchRightPolicy')).toBeLessThan(installBody.indexOf('CREATE DATABASE'));
+    expect(code('deploy/windows/install.ps1')).toContain('[switch]$BatchRightPolicyConfirmed');
+    const update = code('deploy/windows/update.ps1');
+    expect(update).not.toMatch(/Grant-AccucutBatchLogonRight|Revoke-AccucutBatchLogonRight/);
+    expect(functionBody(update, 'Write-AccucutBatchRightWarning')).toContain("Get-AccucutRightHolder -Right 'SeBatchLogonRight'");
   });
 
   it('assert-install checks, on the real install, the account, the task, the exact entries, the first backup, a restore and what the backup role can and cannot do', () => {

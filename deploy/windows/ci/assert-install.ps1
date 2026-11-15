@@ -11,6 +11,10 @@
   The values file the install was run with.
 .PARAMETER ExpectedRelease
   The tag the `current` junction must point at.
+.PARAMETER RightsBefore
+  The secedit /export of the user rights that stage 13 took BEFORE the install (read-only; an oracle that does not use the code under test).
+.PARAMETER InstallStartedAt
+  The time just before the install started, so that the checks of the task's run and of the Security log look at the install's own run only.
 .PARAMETER AgeKeyFile
   The file with the PRIVATE age key that stage 13 made for this run (its public half was given to the install as BACKUP_AGE_RECIPIENT). Used to decrypt the
   install's own backup and restore it into a scratch database. It is a throwaway key made in the job, never a real one.
@@ -21,7 +25,9 @@ param(
     [int]$Port = 3000,
     [Parameter(Mandatory)][string]$ValuesFile,
     [Parameter(Mandatory)][string]$ExpectedRelease,
-    [Parameter(Mandatory)][string]$AgeKeyFile
+    [Parameter(Mandatory)][string]$AgeKeyFile,
+    [Parameter(Mandatory)][string]$RightsBefore,
+    [Parameter(Mandatory)][datetime]$InstallStartedAt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -196,9 +202,54 @@ $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powe
 $expectedArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $paths.Current 'backup.ps1') + '" -Reason weekly'
 Assert-That (@($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -ieq $powershellExe -and $task.Actions[0].Arguments -ceq $expectedArguments) "the task has one action: $powershellExe $expectedArguments"
 
+# ADR-015 Amendment 3.2: the install gave "Log on as a batch job" to AccucutBackup's SID and to nothing else. An independent export (secedit, read-only) is compared with the one
+# taken before the install: the batch holders are the old ones plus the SID, and every other right is exactly as it was.
+function Get-RightMap {
+    param([Parameter(Mandatory)][string]$Path)
+    $map = @{}
+    $inSection = $false
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match '^\[(.+)\]\s*$') { $inSection = ($Matches[1] -eq 'Privilege Rights'); continue }
+        if (-not $inSection) { continue }
+        if ($line -match '^\s*(Se\w+)\s*=\s*(.*)$') {
+            $name = $Matches[1]
+            $list = $Matches[2]
+            $sids = @()
+            foreach ($token in ($list -split ',')) {
+                $text = $token.Trim()
+                if ($text.Length -eq 0) { continue }
+                if ($text.StartsWith('*')) { $sids += $text.Substring(1) }
+                else {
+                    try { $sids += ([System.Security.Principal.NTAccount]$text).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $sids += "unresolved:$text" }
+                }
+            }
+            $map[$name] = @($sids | Sort-Object -Unique)
+        }
+    }
+    return $map
+}
+$rightsAfterFile = Join-Path $env:RUNNER_TEMP ('rights-after-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.inf')
+& "$env:SystemRoot\System32\secedit.exe" /export /areas USER_RIGHTS /cfg $rightsAfterFile | Out-Null
+Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $rightsAfterFile)) 'the user rights were exported again (secedit, read-only)'
+$rightsBefore = Get-RightMap -Path $RightsBefore
+$rightsAfter = Get-RightMap -Path $rightsAfterFile
+Assert-That ($rightsBefore.ContainsKey('SeBatchLogonRight') -and -not ($rightsBefore['SeBatchLogonRight'] -contains $backupSid)) 'before the install, AccucutBackup did not hold Log on as a batch job'
+$expectedBatch = @(@($rightsBefore['SeBatchLogonRight']) + @($backupSid) | Sort-Object -Unique)
+Assert-That ((@($rightsAfter['SeBatchLogonRight']) -join ';') -eq ($expectedBatch -join ';')) "Log on as a batch job is held by exactly the earlier holders and AccucutBackup (before: $(@($rightsBefore['SeBatchLogonRight']) -join ', '); now: $(@($rightsAfter['SeBatchLogonRight']) -join ', '))"
+$changedRights = @(($rightsBefore.Keys + $rightsAfter.Keys) | Sort-Object -Unique | Where-Object { $_ -ne 'SeBatchLogonRight' -and ((@($rightsBefore[$_]) -join ';') -ne (@($rightsAfter[$_]) -join ';')) })
+Assert-That ($changedRights.Count -eq 0) "every other user right is exactly as it was before the install (changed: $($changedRights -join ', '))"
+$elsewhere = @($rightsAfter.Keys | Where-Object { $_ -ne 'SeBatchLogonRight' -and (@($rightsAfter[$_]) -contains $backupSid) })
+Assert-That ($elsewhere.Count -eq 0) "AccucutBackup holds no other right (found: $($elsewhere -join ', '))"
+$deniedGroups = @('S-1-1-0', 'S-1-5-11', 'S-1-5-113', 'S-1-5-32-545')
+$denyBatch = @($rightsAfter['SeDenyBatchLogonRight'] | Where-Object { $deniedGroups -contains $_ })
+Assert-That ($denyBatch.Count -eq 0) 'Deny log on as a batch job holds none of Everyone, Authenticated Users, Local account or Users'
+$failedLogons = @(Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625; StartTime = $InstallStartedAt } -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'Account Name:\s+AccucutBackup' })
+Assert-That ($failedLogons.Count -eq 0) "no failed logon of AccucutBackup was recorded since the install began (found $($failedLogons.Count))"
+
 # The install's own run of the task: result 0, a copy with its manifest, a job_runs row, and the copy decrypts with this run's key and restores.
 $taskInfo = Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup'
 Assert-That ([uint32]$taskInfo.LastTaskResult -eq 0) "the install's run of the weekly task ended with result 0 (found 0x$('{0:X8}' -f [uint32]$taskInfo.LastTaskResult))"
+Assert-That ($taskInfo.LastRunTime -gt $InstallStartedAt) "the task ran after the install began (last run $($taskInfo.LastRunTime))"
 $copies = @(Get-AccucutBackupCopy -Directory $paths.Backups)
 Assert-That ($copies.Count -ge 1 -and @($copies | Where-Object { -not $_.Verified }).Count -eq 0) "the backups folder holds at least one copy, and each has a manifest that agrees with it (found $($copies.Count))"
 $first = @($copies | Where-Object { $_.Reason -eq 'weekly' })[0]

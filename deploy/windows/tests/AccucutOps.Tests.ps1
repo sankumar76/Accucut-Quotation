@@ -507,17 +507,23 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
         $script:ActionCall = $null
         $script:TriggerCall = $null
         $script:RegisterCall = $null
+        $script:Order = [System.Collections.Generic.List[string]]::new()
         $script:Logged = [System.Collections.Generic.List[string]]::new()
         Mock New-LocalUser -ModuleName AccucutOps {
+            $script:Order.Add('user')
             $script:UserCall = @{ Name = $Name; Password = $Password; PasswordNeverExpires = $PasswordNeverExpires.IsPresent; UserMayNotChangePassword = $UserMayNotChangePassword.IsPresent; AccountNeverExpires = $AccountNeverExpires.IsPresent; Description = $Description }
             return [pscustomobject]@{ SID = [pscustomobject]@{ Value = $script:FakeBackupSid } }
         }
         Mock New-ScheduledTaskAction -ModuleName AccucutOps { $script:ActionCall = @{ Execute = $Execute; Argument = $Argument }; return 'action' }
         Mock New-ScheduledTaskTrigger -ModuleName AccucutOps { $script:TriggerCall = @{ Weekly = $Weekly.IsPresent; DaysOfWeek = [string]$DaysOfWeek; At = $At }; return 'trigger' }
         Mock New-ScheduledTaskSettingsSet -ModuleName AccucutOps { return 'settings' }
-        Mock Register-ScheduledTask -ModuleName AccucutOps { $script:RegisterCall = @{ TaskName = $TaskName; User = $User; Password = $Password; RunLevel = [string]$RunLevel } }
+        Mock Register-ScheduledTask -ModuleName AccucutOps { $script:Order.Add('task'); $script:RegisterCall = @{ TaskName = $TaskName; User = $User; Password = $Password; RunLevel = [string]$RunLevel } }
         Mock Remove-LocalUser -ModuleName AccucutOps { }
         Mock Unregister-ScheduledTask -ModuleName AccucutOps { }
+        # The real policy of this machine is never touched by these tests: the grant, the revoke and the account look-up are mocks.
+        Mock Grant-AccucutBatchLogonRight -ModuleName AccucutOps { $script:Order.Add("grant:$Sid") }
+        Mock Revoke-AccucutBatchLogonRight -ModuleName AccucutOps { $script:Order.Add("revoke:$Sid") }
+        Mock Get-AccucutBackupAccountSid -ModuleName AccucutOps { $script:FakeBackupSid }
         Mock Invoke-AccucutNative -ModuleName AccucutOps { throw 'a password must never reach a native program' }
         Mock Write-AccucutLog -ModuleName AccucutOps { $script:Logged.Add($Message) }
     }
@@ -599,6 +605,7 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
 
     It 'knows the logon failure of a task without the batch-logon right (0x80070569), and no other result' {
         Test-AccucutLogonTypeFailure -TaskResult ([uint32]2147943785) | Should -BeTrue
+        Test-AccucutLogonTypeFailure -TaskResult ([uint32]267011) | Should -BeTrue -Because 'a task that never started is how the same refusal showed on the runner'
         Test-AccucutLogonTypeFailure -TaskResult ([uint32]0) | Should -BeFalse
         Test-AccucutLogonTypeFailure -TaskResult ([uint32]1) | Should -BeFalse
         Test-AccucutLogonTypeFailure -TaskResult ([uint32]267009) | Should -BeFalse
@@ -607,7 +614,42 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
     It 'removes the task and the account when asked, and is quiet when they are not there' {
         Mock Unregister-ScheduledTask -ModuleName AccucutOps { throw 'no such task' }
         Mock Remove-LocalUser -ModuleName AccucutOps { throw 'no such user' }
+        Mock Get-AccucutBackupAccountSid -ModuleName AccucutOps { throw 'no such account' }
         { Remove-AccucutBackupAccount } | Should -Not -Throw
+        Should -Invoke Revoke-AccucutBatchLogonRight -ModuleName AccucutOps -Times 0 -Exactly
+    }
+
+    It 'gives the right to the new SID after the user is made and before the task is registered, and the account never has a task without it (Amendment 3.2)' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        [void](Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell)
+        ($script:Order -join '|') | Should -Be "user|grant:$($script:FakeBackupSid)|task"
+        Should -Invoke Grant-AccucutBatchLogonRight -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Sid -eq $script:FakeBackupSid }
+    }
+
+    It 'a failed grant removes the user that was made, registers no task, and takes the right away before the user is deleted' {
+        Mock Grant-AccucutBatchLogonRight -ModuleName AccucutOps { $script:Order.Add('grant-failed'); throw 'Log on as a batch job did not take the expected holders' }
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        { Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell } | Should -Throw '*did not take the expected holders*'
+        Should -Invoke Register-ScheduledTask -ModuleName AccucutOps -Times 0 -Exactly
+        Should -Invoke Remove-LocalUser -ModuleName AccucutOps -Times 1 -Exactly
+        $script:Order[$script:Order.Count - 1] | Should -Be "revoke:$($script:FakeBackupSid)"
+    }
+
+    It 'removal: the task goes first, then the right, then the user (never the user before the right: that would leave a bare SID in the policy)' {
+        $script:Order.Clear()
+        Mock Unregister-ScheduledTask -ModuleName AccucutOps { $script:Order.Add('unregister') }
+        Mock Remove-LocalUser -ModuleName AccucutOps { $script:Order.Add('remove-user') }
+        Remove-AccucutBackupAccount
+        ($script:Order -join '|') | Should -Be "unregister|revoke:$($script:FakeBackupSid)|remove-user"
+    }
+
+    It 'removal: a revoke that fails is logged as an error with the bare SID to remove by hand, and the user is still removed' {
+        $script:Order.Clear()
+        Mock Revoke-AccucutBatchLogonRight -ModuleName AccucutOps { throw 'the policy is locked' }
+        Mock Remove-LocalUser -ModuleName AccucutOps { $script:Order.Add('remove-user') }
+        Remove-AccucutBackupAccount
+        $script:Order | Should -Contain 'remove-user'
+        ($script:Logged | Where-Object { $_ -like "*could not be taken away*$($script:FakeBackupSid)*Local Security Policy*" }).Count | Should -Be 1
     }
 }
 
@@ -627,6 +669,16 @@ Describe 'the weekly task is waited for, and its result read (the first backup o
         $result | Should -Be 2147943785
         $script:Calls | Should -Be 3
         Should -Invoke Start-ScheduledTask -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $TaskName -eq 'Accucut weekly backup' }
+    }
+
+    It 'returns 0x41303 (the task never started) when it is still Ready with an unchanged LastRunTime after the not-started time (ADR-015 Amendment 3.2)' {
+        Mock Start-ScheduledTask -ModuleName AccucutOps { }
+        Mock Start-Sleep -ModuleName AccucutOps { }
+        Mock Get-ScheduledTaskInfo -ModuleName AccucutOps { [pscustomobject]@{ LastRunTime = [datetime]'1999-11-30'; LastTaskResult = [uint32]267011 } }
+        Mock Get-ScheduledTask -ModuleName AccucutOps { [pscustomobject]@{ State = 'Ready' } }
+        $result = Wait-AccucutBackupTask -TimeoutSeconds 60 -IntervalSeconds 1 -NotStartedAfterSeconds 5
+        $result | Should -Be 267011
+        Test-AccucutLogonTypeFailure -TaskResult $result | Should -BeTrue
     }
 
     It 'gives up with a plain message when the task has not finished in time' {
@@ -829,5 +881,225 @@ Describe 'the event source of the backup scripts (ADR-015 Amendment 3.1 point 5)
         $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
         $text | Should -Match "\`$script:EventSource = 'Accucut'"
         $text | Should -Match "CreateEventSource\(\`$script:EventSource, 'Application'\)"
+    }
+}
+
+Describe 'the batch-logon right: given to one SID, checked, and taken away again (ADR-015 Amendment 3.2)' {
+    BeforeAll {
+        $script:NewSid = 'S-1-5-21-1111111111-2222222222-3333333333-1005'
+        $script:Admins = 'S-1-5-32-544'
+        $script:BackupOps = 'S-1-5-32-551'
+    }
+
+    BeforeEach {
+        $script:Calls = [System.Collections.Generic.List[string]]::new()
+        $script:Reads = 0
+        $script:Holders = @(@($script:Admins, $script:BackupOps), @($script:Admins, $script:BackupOps, $script:NewSid))
+        Mock Get-AccucutLsaHolder -ModuleName AccucutOps {
+            $index = [math]::Min($script:Reads, $script:Holders.Count - 1)
+            $script:Reads++
+            return , @($script:Holders[$index])
+        }
+        Mock Add-AccucutLsaHolder -ModuleName AccucutOps { $script:Calls.Add("add:$Sid|$Right") }
+        Mock Remove-AccucutLsaHolder -ModuleName AccucutOps { $script:Calls.Add("remove:$Sid|$Right") }
+        Mock Write-AccucutLog -ModuleName AccucutOps { $script:Calls.Add("log:$Message") }
+    }
+
+    It 'calls LsaAddAccountRights once, for this SID and SeBatchLogonRight only, and logs that no other account or right was changed' {
+        Grant-AccucutBatchLogonRight -Sid $script:NewSid
+        @($script:Calls | Where-Object { $_ -like 'add:*' }) | Should -Be @("add:$($script:NewSid)|SeBatchLogonRight")
+        Should -Invoke Add-AccucutLsaHolder -ModuleName AccucutOps -Times 1 -Exactly
+        Should -Invoke Remove-AccucutLsaHolder -ModuleName AccucutOps -Times 0 -Exactly
+        ($script:Calls | Where-Object { $_ -like 'log:*' }) | Should -Be @("log:Gave AccucutBackup ($($script:NewSid)) the right 'Log on as a batch job'; no other account or right was changed.")
+    }
+
+    It 'reads the holders before and after, and only those two reads' {
+        Grant-AccucutBatchLogonRight -Sid $script:NewSid
+        Should -Invoke Get-AccucutLsaHolder -ModuleName AccucutOps -Times 2 -Exactly -ParameterFilter { $Right -eq 'SeBatchLogonRight' }
+    }
+
+    It 'throws when the holders afterwards lack the SID' {
+        $script:Holders = @(@($script:Admins, $script:BackupOps), @($script:Admins, $script:BackupOps))
+        { Grant-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*did not take the expected holders*'
+    }
+
+    It 'throws when the holders afterwards differ in any other way: another account gained the right, or one lost it' {
+        $script:Holders = @(@($script:Admins, $script:BackupOps), @($script:Admins, $script:BackupOps, $script:NewSid, 'S-1-5-32-545'))
+        { Grant-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*did not take the expected holders*'
+        $script:Reads = 0
+        $script:Holders = @(@($script:Admins, $script:BackupOps), @($script:Admins, $script:NewSid))
+        { Grant-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*did not take the expected holders*'
+    }
+
+    It 'refuses, and changes nothing, when the SID already holds the right (a new account cannot, so it is not the account just made)' {
+        $script:Holders = @(@($script:Admins, $script:NewSid))
+        { Grant-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*already holds*Nothing was changed*'
+        Should -Invoke Add-AccucutLsaHolder -ModuleName AccucutOps -Times 0 -Exactly
+    }
+
+    It 'revoke: removes this SID and no other, and requires the holders afterwards to be the holders before minus the SID' {
+        $script:Holders = @(@($script:Admins, $script:BackupOps, $script:NewSid), @($script:Admins, $script:BackupOps))
+        Revoke-AccucutBatchLogonRight -Sid $script:NewSid
+        @($script:Calls | Where-Object { $_ -like 'remove:*' }) | Should -Be @("remove:$($script:NewSid)|SeBatchLogonRight")
+        $script:Reads = 0
+        $script:Holders = @(@($script:Admins, $script:BackupOps, $script:NewSid), @($script:BackupOps))
+        { Revoke-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*did not leave the expected holders*'
+    }
+
+    It 'revoke: does nothing when the SID does not hold the right' {
+        $script:Holders = @(@($script:Admins, $script:BackupOps))
+        Revoke-AccucutBatchLogonRight -Sid $script:NewSid
+        Should -Invoke Remove-AccucutLsaHolder -ModuleName AccucutOps -Times 0 -Exactly
+    }
+
+    It 'compares holders as sets of SIDs, in any order and any letter case' {
+        Test-AccucutSameSidSet -Left @('S-1-5-32-544', 'S-1-5-32-551') -Right @('s-1-5-32-551', 'S-1-5-32-544') | Should -BeTrue
+        Test-AccucutSameSidSet -Left @() -Right @() | Should -BeTrue
+        Test-AccucutSameSidSet -Left @('S-1-5-32-544') -Right @('S-1-5-32-544', 'S-1-5-32-551') | Should -BeFalse
+    }
+
+    It 'only the two rights are ever read' {
+        { Get-AccucutRightHolder -Right 'SeInteractiveLogonRight' } | Should -Throw
+        { Get-AccucutRightHolder -Right 'SeDebugPrivilege' } | Should -Throw
+    }
+}
+
+Describe 'the check before anything is changed: a deny entry, and a domain Group Policy (ADR-015 Amendment 3.2, mechanism step 7)' {
+    BeforeEach {
+        $script:Denied = @()
+        $script:InDomain = $false
+        $script:Rsop = @()
+        $script:RsopThrows = $false
+        $script:RsopCalls = 0
+        $script:Warnings = [System.Collections.Generic.List[string]]::new()
+        $script:RealComputerName = $env:COMPUTERNAME
+        $env:COMPUTERNAME = 'SERVER01'
+        Mock Get-AccucutRightHolder -ModuleName AccucutOps { if ($Right -eq 'SeDenyBatchLogonRight') { return , @($script:Denied) } return , @() }
+        Mock Get-AccucutComputerSystem -ModuleName AccucutOps { [pscustomobject]@{ PartOfDomain = $script:InDomain } }
+        Mock Get-AccucutRsopBatchRight -ModuleName AccucutOps { $script:RsopCalls++; if ($script:RsopThrows) { throw 'Invalid namespace' } return , @($script:Rsop) }
+        Mock Get-AccucutRsopPolicyName -ModuleName AccucutOps { 'Servers baseline' }
+        Mock Write-AccucutLog -ModuleName AccucutOps { if ($Level -eq 'Warning') { $script:Warnings.Add($Message) } }
+    }
+
+    AfterEach { $env:COMPUTERNAME = $script:RealComputerName }
+
+    It 'passes on a server that is not in a domain, and never asks for a Group Policy result' {
+        { Test-AccucutBatchRightPolicy } | Should -Not -Throw
+        $script:RsopCalls | Should -Be 0
+    }
+
+    It 'stops when "Deny log on as a batch job" holds a group that every new local account belongs to (<Sid>)' -ForEach @(
+        @{ Sid = 'S-1-1-0' }, @{ Sid = 'S-1-5-11' }, @{ Sid = 'S-1-5-113' }, @{ Sid = 'S-1-5-32-545' }
+    ) {
+        $script:Denied = @('S-1-5-32-546', $Sid)
+        { Test-AccucutBatchRightPolicy } | Should -Throw "*'Deny log on as a batch job' lists $Sid*Nothing was changed*"
+    }
+
+    It 'a deny entry for an account that is not in a new user''s token does not matter' {
+        $script:Denied = @('S-1-5-32-546', 'S-1-5-21-1-2-3-500')
+        { Test-AccucutBatchRightPolicy } | Should -Not -Throw
+    }
+
+    It 'in a domain, with no policy that sets the right, passes' {
+        $script:InDomain = $true
+        $script:Rsop = @()
+        { Test-AccucutBatchRightPolicy } | Should -Not -Throw
+        $script:RsopCalls | Should -Be 1
+    }
+
+    It 'in a domain, with a policy that lists the account (by name or with the server name), passes' {
+        $script:InDomain = $true
+        foreach ($entry in 'AccucutBackup', 'SERVER01\AccucutBackup', 'server01\ACCUCUTBACKUP') {
+            $script:Rsop = @([pscustomobject]@{ GPOID = '{AAA}'; AccountList = @('BUILTIN\Administrators', $entry) })
+            { Test-AccucutBatchRightPolicy } | Should -Not -Throw
+        }
+    }
+
+    It 'in a domain, with a policy that does not list the account, stops BEFORE the user is made, names the policy and the account to add, and says nothing was changed' {
+        $script:InDomain = $true
+        $script:Rsop = @([pscustomobject]@{ GPOID = '{AAA}'; AccountList = @('BUILTIN\Administrators', 'NT SERVICE\ALL SERVICES') })
+        { Test-AccucutBatchRightPolicy } | Should -Throw "*the Group Policy 'Servers baseline' sets 'Log on as a batch job'*add SERVER01\AccucutBackup to that setting*keeping the accounts already there*gpupdate /target:computer /force*Nothing was changed*"
+    }
+
+    It 'in a domain, an unreadable policy result stops the install, and says how to go on' {
+        $script:InDomain = $true
+        $script:RsopThrows = $true
+        { Test-AccucutBatchRightPolicy } | Should -Throw '*cannot be read (Invalid namespace)*-BatchRightPolicyConfirmed*Nothing was changed*'
+    }
+
+    It '-PolicyConfirmed skips only the policy read, logs a warning, and never the deny check' {
+        $script:InDomain = $true
+        $script:RsopThrows = $true
+        { Test-AccucutBatchRightPolicy -PolicyConfirmed } | Should -Not -Throw
+        $script:RsopCalls | Should -Be 0
+        $script:Warnings.Count | Should -Be 1
+        $script:Warnings[0] | Should -BeLike '*-BatchRightPolicyConfirmed was given*NOT read*'
+        $script:Denied = @('S-1-5-32-545')
+        { Test-AccucutBatchRightPolicy -PolicyConfirmed } | Should -Throw "*'Deny log on as a batch job'*"
+    }
+}
+
+Describe 'the LSA calls are made in memory, from advapi32 only, and never with more than was asked (ADR-015 Amendment 3.2, test 4)' {
+    BeforeAll {
+        $script:ModulePath = Join-Path $script:WindowsDirectory 'AccucutOps.psm1'
+        $script:ModuleAst2 = [System.Management.Automation.Language.Parser]::ParseFile($script:ModulePath, [ref]$null, [ref]$null)
+        $script:ModuleText2 = [System.IO.File]::ReadAllText($script:ModulePath)
+        function Get-ModuleFunction {
+            param([string]$Name)
+            return $script:ModuleAst2.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $Name }, $true)
+        }
+    }
+
+    It 'DefineDynamicAssembly and DefinePInvokeMethod appear in Get-AccucutLsaNative only' {
+        foreach ($name in 'DefineDynamicAssembly', 'DefinePInvokeMethod') {
+            $calls = @($script:ModuleAst2.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and [string]$n.Member.Value -eq $name }, $true))
+            $calls.Count | Should -Be 1
+            $function = Get-ModuleFunction -Name 'Get-AccucutLsaNative'
+            $calls[0].Extent.StartOffset | Should -BeGreaterThan $function.Extent.StartOffset
+            $calls[0].Extent.EndOffset | Should -BeLessThan $function.Extent.EndOffset
+        }
+    }
+
+    It 'the only DLL named anywhere in the module is advapi32.dll, and no file is written or compiled' {
+        @([regex]::Matches($script:ModuleText2, "(?i)[A-Za-z0-9_-]+\.dll") | ForEach-Object { $_.Value.ToLowerInvariant() } | Sort-Object -Unique) | Should -Be @('advapi32.dll')
+        $script:ModuleText2 | Should -Not -Match 'Add-Type|OutputAssembly|csc\.exe|CodeDom|Assembly\]::Load'
+    }
+
+    It 'defines exactly the seven methods' {
+        $function = Get-ModuleFunction -Name 'Get-AccucutLsaNative'
+        $names = @([regex]::Matches($function.Extent.Text, "Name = '(Lsa\w+)'") | ForEach-Object { $_.Groups[1].Value })
+        $names | Should -Be @('LsaOpenPolicy', 'LsaAddAccountRights', 'LsaRemoveAccountRights', 'LsaEnumerateAccountsWithUserRight', 'LsaFreeMemory', 'LsaClose', 'LsaNtStatusToWinError')
+    }
+
+    It 'Grant-AccucutBatchLogonRight has no -Right parameter and names only SeBatchLogonRight; the module can grant this one right and no other' {
+        $function = Get-ModuleFunction -Name 'Grant-AccucutBatchLogonRight'
+        @($function.Body.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath }) | Should -Be @('Sid', 'LogFile')
+        $function.Extent.Text | Should -Match "\`$right = 'SeBatchLogonRight'"
+        $calls = @($script:ModuleAst2.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and [string]$n.GetCommandName() -eq 'Add-AccucutLsaHolder' }, $true))
+        $calls.Count | Should -Be 1
+    }
+
+    It 'LsaRemoveAccountRights is called in one place, with allRights 0 (never every right of the account)' {
+        $text = (Get-ModuleFunction -Name 'Remove-AccucutLsaHolder').Extent.Text
+        $text | Should -Match 'LsaRemoveAccountRights\(\$handle, \(Get-AccucutSidBytes -Sid \$Sid\), \[byte\]0, '
+        ([regex]::Matches($script:ModuleText2, 'LsaRemoveAccountRights\(')).Count | Should -Be 1
+    }
+
+    It 'the module runs no program for the grant: no secedit, no ntrights, no cmd, no gpupdate' {
+        $script:ModuleText2 | Should -Not -Match '(?i)secedit|\bntrights\b|gpupdate\.exe|Start-Process'
+    }
+
+    It 'nothing is made when the module is loaded: the type is a null constant until Get-AccucutLsaNative is called' {
+        $script:ModuleText2 | Should -Match '\$script:AccucutLsaNative = \$null'
+        $topLevel = @($script:ModuleAst2.EndBlock.Statements | Where-Object { $_ -isnot [System.Management.Automation.Language.FunctionDefinitionAst] -and $_.Extent.Text -match 'DefineDynamicAssembly|LsaOpenPolicy' })
+        $topLevel.Count | Should -Be 0
+    }
+
+    It 'reads the real holders of Log on as a batch job and finds Administrators (read-only; needs an elevated process)' -Skip:(-not $script:IsAdmin) {
+        $holders = @(Get-AccucutRightHolder -Right 'SeBatchLogonRight')
+        $holders | Should -Contain 'S-1-5-32-544'
+        $holders | ForEach-Object { $_ | Should -Match '^S-1-\d+(-\d+)+$' }
+        $deny = @(Get-AccucutRightHolder -Right 'SeDenyBatchLogonRight')
+        $deny.Count | Should -BeGreaterOrEqual 0
     }
 }

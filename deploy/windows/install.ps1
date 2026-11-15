@@ -71,6 +71,10 @@
   Ask (default), Yes or No: whether to exclude the PostgreSQL data folder from Windows Defender real-time scanning. With -NonInteractive, Ask means No.
 .PARAMETER HealthTimeoutSeconds
   How long to wait for /api/health. Default 180.
+.PARAMETER BatchRightPolicyConfirmed
+  Only for a server in a domain whose Group Policy results cannot be read (RSoP logging is off). The install gives the local user AccucutBackup the right "Log on as a batch
+  job"; a Group Policy that sets that right would remove it at its next refresh, so the install reads the policy first and stops if one does. With this switch you say that you
+  have checked by hand that no policy sets the right, or that the policy lists <SERVER>\AccucutBackup. It skips only that read, and it is logged as a warning.
 .PARAMETER VerifiedRelease
   Used by the script itself, never by you: the release folder under C:\Accucut\releases that the second half runs from.
 #>
@@ -92,6 +96,7 @@ param(
     [string]$PgDataDirectory,
     [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
     [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
+    [switch]$BatchRightPolicyConfirmed,
     [string]$VerifiedRelease
 )
 
@@ -895,7 +900,7 @@ function Invoke-AccucutFirstBackup {
     Write-AccucutLog -Message "Running the weekly backup task once ('Accucut weekly backup'): this is the first backup. It can take a few minutes." -LogFile $LogFile
     $result = Wait-AccucutBackupTask -TimeoutSeconds 300
     if (Test-AccucutLogonTypeFailure -TaskResult $result) {
-        throw "The first backup could not start: Windows refused the logon of AccucutBackup (0x80070569). Give AccucutBackup the right 'Log on as a batch job' (a domain Group Policy may be removing it), then run: Start-ScheduledTask 'Accucut weekly backup'. The portal itself is running."
+        throw "The first backup could not start: Windows refused the logon of AccucutBackup ('Log on as a batch job'; Security log event 4625, status 0xC000015B). If this server is in a domain, a Group Policy may have removed the right: see the README, 'Backups', 'Log on as a batch job'. When it is restored, run: Start-ScheduledTask 'Accucut weekly backup'. The portal itself is running."
     }
     if ($result -ne 0) {
         throw "The first backup failed (task result 0x$('{0:X8}' -f $result)). The portal itself is running. Run it again with: Start-ScheduledTask 'Accucut weekly backup', and look at the newest job_runs row (job 'backup') for the reason."
@@ -923,6 +928,7 @@ function Invoke-AccucutInstall {
         [string]$PgDataDirectory,
         [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
         [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
+        [switch]$BatchRightPolicyConfirmed,
         [Parameter(Mandatory)][string]$Release
     )
 
@@ -949,6 +955,9 @@ function Invoke-AccucutInstall {
         if ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
             throw 'The services of an Accucut install already exist on this server. To install a new release, run update.ps1. Nothing was changed.'
         }
+        # Read-only, and before anything is created: the right "Log on as a batch job" will be given to the backup account (ADR-015 Amendment 3.2), and a deny entry or a domain
+        # Group Policy that sets the right would make that useless, so the install stops here, with nothing changed, and says what to ask for.
+        Test-AccucutBatchRightPolicy -PolicyConfirmed:$BatchRightPolicyConfirmed
 
         # The values. Asked for before anything is created, so a typing slip costs nothing.
         $template = Read-AccucutEnvTemplate -Path ([System.IO.Path]::Combine($Release, '.env.example'))
@@ -1015,7 +1024,7 @@ function Invoke-AccucutInstall {
         # The account comes first, because every entry below names it by SID.
         if ([string]::IsNullOrEmpty($settings.BackupPassword)) { throw 'The password of the backup role was not made. Nothing was changed.' }
         [void](Register-AccucutEventSource)
-        $backupSid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $powershellExe
+        $backupSid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $powershellExe -LogFile $logFile
         $created.BackupAccount = $true
         Grant-AccucutBackupRootAccess -Paths $paths -BackupSid $backupSid
         New-AccucutBackupFolder -Path $paths.Backups -BackupSid $backupSid
@@ -1145,14 +1154,14 @@ function Get-AccucutInstallChildArgument {
     foreach ($name in 'Root', 'Port', 'ListenAddress', 'NodeExe', 'PgHost', 'PgPort', 'PgSuperuser', 'PgBinDirectory', 'PgDataDirectory', 'DefenderExclusion', 'HealthTimeoutSeconds', 'ValuesFile') {
         if ($Bound.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace([string]$Bound[$name])) { $arguments.Add("-$name"); $arguments.Add([string]$Bound[$name]) }
     }
-    foreach ($name in 'NonInteractive', 'WithProxy') { if ($Bound.ContainsKey($name) -and [bool]$Bound[$name]) { $arguments.Add("-$name") } }
+    foreach ($name in 'NonInteractive', 'WithProxy', 'BatchRightPolicyConfirmed') { if ($Bound.ContainsKey($name) -and [bool]$Bound[$name]) { $arguments.Add("-$name") } }
     return $arguments.ToArray()
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
     try {
         if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
-            $installParameter = @{ NonInteractive = $NonInteractive; WithProxy = $WithProxy; Port = $Port; PgHost = $PgHost; PgPort = $PgPort; PgSuperuser = $PgSuperuser; DefenderExclusion = $DefenderExclusion; HealthTimeoutSeconds = $HealthTimeoutSeconds }
+            $installParameter = @{ NonInteractive = $NonInteractive; WithProxy = $WithProxy; BatchRightPolicyConfirmed = $BatchRightPolicyConfirmed; Port = $Port; PgHost = $PgHost; PgPort = $PgPort; PgSuperuser = $PgSuperuser; DefenderExclusion = $DefenderExclusion; HealthTimeoutSeconds = $HealthTimeoutSeconds }
             foreach ($pair in @{ ValuesFile = $ValuesFile; ListenAddress = $ListenAddress; NodeExe = $NodeExe; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory }.GetEnumerator()) {
                 if (-not [string]::IsNullOrWhiteSpace([string]$pair.Value)) { $installParameter[$pair.Key] = $pair.Value }
             }

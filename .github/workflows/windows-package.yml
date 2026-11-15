@@ -262,6 +262,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host 'The operational log could not be switched on (diagnostics only).' }
           $global:LASTEXITCODE = 0
 
+      # ADR-015 Amendment 3.2: a read-only export of the user rights BEFORE the install (secedit changes nothing), and the time the install begins. The install must add
+      # AccucutBackup's SID to "Log on as a batch job" and change nothing else; the removal at the end must give the policy back exactly as it was.
+      - name: Export the user rights before the install (secedit, read-only)
+        run: |
+          $before = Join-Path $env:RUNNER_TEMP 'rights-before.inf'
+          & "$env:SystemRoot\System32\secedit.exe" /export /areas USER_RIGHTS /cfg $before | Out-Null
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $before)) { throw 'secedit could not export the user rights.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "ACCUCUT_RIGHTS_BEFORE=$before"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value ('ACCUCUT_INSTALL_STARTED=' + (Get-Date).ToString('o'))
+          $global:LASTEXITCODE = 0
+
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
         run: |
@@ -277,7 +288,7 @@ jobs:
 
       - name: Assert the install (services, health, sign-in, permissions, the backup account, task, files and role, no secret in a log)
         run: |
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
       # ---- Backup, clear and a replaced module (STORY-10.05; ADR-015 Amendments 2 and 3) ----------------------------------------------
       # backup.ps1 -Reason release as an administrator (the call update.ps1 makes), more copies, clear-copies.ps1 with its answers on standard input (a wrong date
@@ -289,7 +300,7 @@ jobs:
           $marker = Join-Path $env:RUNNER_TEMP 'accucut-tampered-backup-marker.txt'
           & .\deploy\windows\ci\exercise-backup.ps1 -ValuesFile $env:ACCUCUT_VALUES -MarkerFile $marker
           if (Test-Path -LiteralPath $marker) { throw 'A tampered module was loaded by a backup script.' }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
       # ---- Update and rollback (AC-3, AC-4) ----------------------------------------------------------------------------------
       # The update takes a release backup first (backup.ps1 -Reason release, through the checked wrapper); a failed or missing backup stops the update before any
@@ -301,7 +312,7 @@ jobs:
           & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip
           if ($LASTEXITCODE -ne 0) { throw "update.ps1 failed (exit code $LASTEXITCODE)." }
           $ErrorActionPreference = 'Stop'
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
           $releases = @(Get-ChildItem -LiteralPath 'C:\Accucut\releases' -Directory | Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host "Releases kept: $($releases -join ', ')"
           if ($releases.Count -ne 2) { throw "Only the current and the previous release should be kept, found: $($releases -join ', ')" }
@@ -332,7 +343,7 @@ jobs:
           foreach ($name in 'AccucutApp', 'AccucutWorker') {
             if ((Get-Service -Name $name).Status -ne 'Running') { throw "$name is not running." }
           }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
       - name: Update to a broken release, and see it rolled back (update.ps1)
         run: |
@@ -344,7 +355,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ($code -eq 0) { throw 'The update to the broken release should have failed, and it did not.' }
           if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
+
+      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
+      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. This is last among the steps that need the install.
+      - name: Remove the backup account, and see the policy as it was before the install
+        run: |
+          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
 
       # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
       # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.

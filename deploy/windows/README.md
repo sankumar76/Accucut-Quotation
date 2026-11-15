@@ -42,7 +42,7 @@ Standard, one disk of about 100 GB.
    password, **the age public key for the backups**, the PostgreSQL administrator password and, if you use it, mail settings. It invents every other secret itself.
 6. It installs, starts the portal and waits until `/api/health` answers, then **runs the weekly backup once** (the first backup, see "Backups" below). When it
    ends with **Done**, open the address you gave and sign in as the first Admin. You will be asked to choose a new password.
-   If it stops at the backup with "Give AccucutBackup the right 'Log on as a batch job'", the portal is running and only the backup needs a setting: see
+   If it stops at the backup with "Windows refused the logon of AccucutBackup", the portal is running and only the backup needs a setting: see
    "Backups" below.
 
 For an install with no one at the keyboard, copy `values.example.txt`, fill it in, and run
@@ -164,7 +164,7 @@ the previous release are kept.
 | Restart the portal | `Restart-Service AccucutWorker, AccucutApp` |
 | Check it is alive | Open `http://127.0.0.1:3000/api/health` on the server: `{"status":"ok"}` |
 | Read the logs | `C:\Accucut\logs\` (`AccucutApp.*.err.log` first) |
-| Start over after a failed install | Drop what is left (`DROP DATABASE accucut; DROP ROLE accucut_app, accucut_owner, accucut_backup;` in `psql` as `postgres`), run `C:\Accucut\services\AccucutApp.exe uninstall` and the same for `AccucutWorker`, run `Unregister-ScheduledTask 'Accucut weekly backup' -Confirm:$false` and `Remove-LocalUser AccucutBackup`, delete `C:\Accucut`, run the install again. |
+| Start over after a failed install | Drop what is left (`DROP DATABASE accucut; DROP ROLE accucut_app, accucut_owner, accucut_backup;` in `psql` as `postgres`), run `C:\Accucut\services\AccucutApp.exe uninstall` and the same for `AccucutWorker`, run `Unregister-ScheduledTask 'Accucut weekly backup' -Confirm:$false`, take `AccucutBackup` out of "Log on as a batch job" (Local Security Policy, Local Policies, User Rights Assignment; do this **before** the next command, or a bare SID stays in the list) and run `Remove-LocalUser AccucutBackup`, delete `C:\Accucut`, run the install again. |
 | See the last backups | `Get-ChildItem C:\Accucut\backups` as an administrator, or the "Last backup" line on the portal's Settings page (Admin). |
 
 After a Windows Update reboot both services start by themselves, a minute or so after PostgreSQL (NFR-012).
@@ -198,10 +198,26 @@ and writes its own row, and flags a week with no good backup (8 days). The Setti
 **The key.** The server holds only the public key (`config\backup-settings.json`, which `AccucutBackup` can read and cannot change). The private key is yours
 (Install, item 6). **The key must not be kept with the backups.** A restore (`restore.ps1`, STORY-10.11) asks for it and holds it in memory only.
 
-**If the first backup at the end of the install says "Log on as a batch job".** Windows lets a user run a task with a stored password only if the user has the
-right "Log on as a batch job". If a domain Group Policy removes it, give `AccucutBackup` the right again (Local Security Policy, Local Policies, User Rights
-Assignment, Log on as a batch job; or ask the domain administrator), then run `Start-ScheduledTask 'Accucut weekly backup'` and check that a new `.age` file
-appears in `C:\Accucut\backups`.
+**The right "Log on as a batch job".** Windows lets a user run a task with a stored password only if the user has the right "Log on as a batch job". The install
+gives that right to `AccucutBackup` and to no one else, and it gives it to the account's own SID, never to a group. It changes nothing else in the server's
+policy: no other right, no other account, and not "Deny log on as a batch job". Removing the account (see "Start over") takes the right away first. The install
+reads the policy before it creates anything and stops, with nothing changed, if "Deny log on as a batch job" already holds Everyone, Authenticated Users,
+Local account or Users (a deny wins over a grant, so the backup could never log on).
+
+**On a server that belongs to a domain.** A Group Policy that sets "Log on as a batch job" for the whole server would remove a right given here at its next
+refresh. The install reads the policy result (read-only). If a policy sets the right and does not list `AccucutBackup`, or the result cannot be read, it stops
+before it creates anything and says which policy. Ask the domain administrator to add the local account of this server (`<server name>\AccucutBackup`) to that
+setting, keeping the accounts already there, then run the install again. If you have checked by hand that no policy sets the right, run the install again with
+`-BatchRightPolicyConfirmed`; it then skips only the reading of the policy result and writes a warning to the install log.
+
+**If the first backup at the end of the install says "Windows refused the logon of AccucutBackup".** The Security log holds event 4625 with status 0xC000015B for
+that account: the right was missing or removed. Give `AccucutBackup` the right again (Local Security Policy, Local Policies, User Rights Assignment, Log on as a
+batch job; or ask the domain administrator), then run `Start-ScheduledTask 'Accucut weekly backup'` and check that a new `.age` file appears in
+`C:\Accucut\backups`. The portal itself is running.
+
+**If the weekly backup stops starting later.** An update checks the right and writes a warning ("The weekly backup cannot log on: AccucutBackup no longer has 'Log on
+as a batch job'") when it is gone, and carries on: it never gives the right back and never takes it away. The usual cause is a Group Policy that was added after the
+install. Give the right again as above.
 
 **Off-server copy (recommended, yours to set up).** The copies are on the same disk as the data: a failed disk or a lost server loses both. Copy each weekly
 `.age` file and its manifest to another place (a share, a NAS, a rotated disk kept elsewhere) with a task of your own, for example on Sunday at 04:00. The
@@ -259,7 +275,7 @@ tests the trust block (every rule, on invented security descriptors, plus real l
 the rollback with a release that is broken on purpose, and runs those tests. On the real install it also proves three things of ADR-015 Amendment 2:
 a tampered module planted beside the true zip is never loaded; an update is refused (exit code 1, services still running) when the Users group can write
 the running module; and `install.ps1 -Root C:\AccucutPre` over an existing empty folder is refused and leaves the folder untouched. For STORY-10.05 it also proves, on the real install: the
-account `AccucutBackup`, the task, the five entries of the root, the exact entries of `backups` and of the two backup files, the install's own first backup (it
+account `AccucutBackup`, the task, the right "Log on as a batch job" (an export of the user rights before and after the install shows the new SID added and nothing else changed, and an export after the removal shows the policy as it was), the five entries of the root, the exact entries of `backups` and of the two backup files, the install's own first backup (it
 decrypts with the run's own throwaway key and restores into a scratch database), what the `accucut_backup` role can and cannot do, a release backup, a clear
 (a wrong date removes nothing; the right one keeps the newest 4 and leaves everything that is not the backup's own), and that a replaced module is never loaded by
 `backup.ps1` or `clear-copies.ps1`. It is not a required check; every pull request that touches

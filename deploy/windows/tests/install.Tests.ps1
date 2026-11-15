@@ -434,6 +434,7 @@ Describe 'the install itself reads only from the verified release folder, uses p
             return ''
         }
         Mock Invoke-AccucutMigration { throw 'migration failed on purpose' }
+        Mock Test-AccucutBatchRightPolicy { }
         Mock Write-AccucutLog { $script:LoggedMessages.Add($Message) }
         $script:LoggedMessages.Clear()
     }
@@ -610,6 +611,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Start-AccucutServices { $script:Trace.Add('start-services') }
         Mock Wait-AccucutHealth { $true }
         Mock Get-AccucutHttpStatus { 200 }
+        Mock Test-AccucutBatchRightPolicy { $script:Trace.Add("policy:$($PolicyConfirmed.IsPresent)") }
         Mock Register-AccucutEventSource { $script:Trace.Add('event-source'); return $true }
         Mock Register-AccucutBackupTask { $script:Trace.Add('task'); return $script:BackupSid }
         Mock Grant-AccucutBackupRootAccess { $script:Trace.Add('grant:backup') }
@@ -627,7 +629,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $values = Write-FakeValuesFile -Name 'backup-order-values.txt'
         { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Not -Throw
         $trace = @($script:Trace)
-        $order = @('event-source', 'task', 'grant:backup', 'folder', 'config', 'grant:services', 'start-services', 'first-backup')
+        $order = @('policy:False', 'event-source', 'task', 'grant:backup', 'folder', 'config', 'grant:services', 'start-services', 'first-backup')
         for ($i = 1; $i -lt $order.Count; $i++) {
             [array]::IndexOf($trace, $order[$i]) | Should -BeGreaterThan ([array]::IndexOf($trace, $order[$i - 1])) -Because "$($order[$i]) comes after $($order[$i - 1])"
         }
@@ -666,11 +668,43 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Wait-AccucutBackupTask { $script:Trace.Add('first-backup'); return $script:LogonFailure }
         $values = Write-FakeValuesFile -Name 'backup-logon-values.txt'
         { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } |
-            Should -Throw "*Give AccucutBackup the right 'Log on as a batch job'*Start-ScheduledTask 'Accucut weekly backup'*"
+            Should -Throw "*Windows refused the logon of AccucutBackup ('Log on as a batch job'; Security log event 4625, status 0xC000015B)*Group Policy may have removed the right*Start-ScheduledTask 'Accucut weekly backup'*"
         Should -Invoke Remove-AccucutBackupAccount -Times 0 -Exactly
         Should -Invoke Remove-AccucutTrustedTree -Times 0 -Exactly
         Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { $Command -like 'DROP*' }
         Test-Path -LiteralPath (Join-Path $folders.Root 'config\install-state.json') | Should -BeTrue
+    }
+
+    It 'treats a task that never started (0x41303) like the refused logon, and leaves the install alone' {
+        $folders = New-BackupInstallFolder -Name 'backup-notstarted' -Tag 't-nostart'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-nostart' } }
+        Mock Wait-AccucutBackupTask { return [uint32]267011 }
+        $values = Write-FakeValuesFile -Name 'backup-notstarted-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Throw '*Windows refused the logon of AccucutBackup*'
+        Should -Invoke Remove-AccucutBackupAccount -Times 0 -Exactly
+        Should -Invoke Remove-AccucutTrustedTree -Times 0 -Exactly
+    }
+
+    It 'reads the policy BEFORE anything is created, and stops with nothing changed when it refuses (a deny entry, or a domain policy)' {
+        $folders = New-BackupInstallFolder -Name 'backup-policy' -Tag 't-policy'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-policy' } }
+        Mock Test-AccucutBatchRightPolicy { throw "This server is in a domain and the Group Policy 'Servers' sets 'Log on as a batch job'. Nothing was changed." }
+        $values = Write-FakeValuesFile -Name 'backup-policy-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Throw "*Group Policy 'Servers'*Nothing was changed*"
+        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { $Command -like 'CREATE*' }
+        Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
+        Should -Invoke Register-AccucutBackupTask -Times 0 -Exactly
+        Should -Invoke Remove-AccucutBackupAccount -Times 0 -Exactly
+    }
+
+    It 'passes -BatchRightPolicyConfirmed on to the policy check, and only to it' {
+        $folders = New-BackupInstallFolder -Name 'backup-confirmed' -Tag 't-confirmed'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-confirmed' } }
+        $values = Write-FakeValuesFile -Name 'backup-confirmed-values.txt'
+        Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' -BatchRightPolicyConfirmed
+        $script:Trace | Should -Contain 'policy:True'
+        (Get-AccucutInstallChildArgument -Bound @{ BatchRightPolicyConfirmed = [switch]$true; Root = 'C:\Accucut' }) | Should -Contain '-BatchRightPolicyConfirmed'
+        (Get-AccucutInstallChildArgument -Bound @{ Root = 'C:\Accucut' }) | Should -Not -Contain '-BatchRightPolicyConfirmed'
     }
 
     It 'says so, with the code, when the task ends with another result or writes no job_runs row, and leaves the install alone' {
