@@ -108,7 +108,7 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
   it('has the eight sections with their numbers, names and column ranges, and the letter of every field (STORY-05.04 AC-1)', async () => {
     const body = formResponseSchema.parse(await (await form()).json());
     expect(body.sections.map((section) => [section.number, section.name, section.columnRange])).toEqual([
-      [1, 'Part Details', 'A, B, D, G, H'],
+      [1, 'Part Details', 'A–D, G, H'],
       [2, 'Material and Dimensions', 'E, F, J–L, N'],
       [3, 'Cutting Process', 'P, Q'],
       [4, 'Bending', 'R'],
@@ -118,7 +118,7 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
       [8, 'Other Costs and Remarks', 'AJ, AP, AU, BM'],
     ]);
     expect(body.sections.flatMap((section) => section.fields.map((field) => field.letter))).toEqual([
-      ...['A', 'B', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'],
+      ...['A', 'B', 'C', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'],
       ...['AP', 'AU', 'BM', 'AJ'],
     ]);
   });
@@ -373,7 +373,7 @@ describe('SQR-09: the part is read back by field ID', () => {
   });
 
   it('the schemas refuse a key that is not a field ID, a value that is not text, and a planted key', () => {
-    const part = { id: 'a', parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1 };
+    const part = { id: 'a', parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, picture: null };
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [entry(LENGTH, '1.00')] }).success).toBe(true);
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [entry('length', '1.00')] }).success).toBe(false);
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [{ fieldId: LENGTH, value: '1.00', planted: 1 }] }).success).toBe(false);

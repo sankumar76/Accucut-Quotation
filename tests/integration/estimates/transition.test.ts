@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import type { EstimateEvent, EstimateStatus } from '@/lib/estimate/state-machine';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository, type EstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner, type Transaction, type TransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService } from '@/server/services/estimate-service';
@@ -38,7 +39,7 @@ beforeAll(async () => {
   db = await openAuthDatabase();
   estimates = createEstimateRepository(db.prisma);
   runner = createTransactionRunner(db.prisma);
-  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: runner, ...inputsDependencies() });
+  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
   const version = await db.owner.query<{ id: string }>("INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'Invented transition test') RETURNING id::text AS id");
   configVersionId = defined(version.rows[0]).id;
   leadId = await insertPersonAsOwner(db, 'Transition Lead', 'LEAD');
@@ -274,7 +275,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   it('without tx it opens one transaction of its own; with tx it opens none and writes in the caller\'s', async () => {
     await setUpEstimate('SUBMITTED');
     const own = countingRunner();
-    const counted = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), transactions: own.counted, ...inputsDependencies() });
+    const counted = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: own.counted, ...inputsDependencies() });
     await counted.transition(lead(), estimateId, 'RECALCULATE');
     expect(own.opened()).toBe(1);
     await own.counted.run((tx) => counted.transition(lead(), estimateId, 'APPROVE', tx));

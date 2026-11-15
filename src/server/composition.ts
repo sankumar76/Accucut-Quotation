@@ -11,6 +11,7 @@ import { createCalculationRepository } from './repositories/calculation-reposito
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
+import { createImageRepository } from './repositories/image-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -176,6 +177,8 @@ export function getEstimateService(): EstimateService {
     estimateService = createEstimateService({
       estimates: createEstimateRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
+      // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
+      images: createImageRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
       // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
       materials: createMasterRepository(runtimeClient()),

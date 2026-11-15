@@ -310,7 +310,7 @@ describe('AC-8 (NFR-002): one strict shape for every role, with no figure', () =
     }
     expect(answers[1]).toEqual(answers[0]);
     expect(answers[2]).toEqual(answers[0]);
-    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, inputs: [] });
+    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, inputs: [], picture: null });
   });
 
   it('only the values of fields of the form leave, by field ID: a stored value that is not one (an unknown key, Material Rate / Kg) is dropped (review SQR-09, STORY-05.03)', async () => {

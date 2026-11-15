@@ -5,7 +5,8 @@ import type { RoleName } from '@/lib/auth/roles';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
 import { forbiddenStrings, PROCESS_CANARY_RATES, SEED_RATE_SENTINELS } from '../support/canary-masters';
-import { recipeProblem, validCallFor } from '../support/route-calls';
+import { bodyOfRecipe } from '../support/request-body';
+import { recipeProblem, validCallFor, type UploadRecipe } from '../support/route-calls';
 import { seedFormulaTexts } from '../support/seed-formula-texts';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { fixedForbiddenProblem, headersText, maskRequestId, scanResponse, type RecordedResponse } from '../support/scanner';
@@ -114,18 +115,18 @@ function watchLookups(): () => string[] {
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }
 
-async function callApi(row: RouteRow, method: HttpMethod, id: string, body: unknown, query = ''): Promise<RecordedResponse> {
+async function callApi(row: RouteRow, method: HttpMethod, id: string, body: unknown, query = '', upload?: UploadRecipe): Promise<RecordedResponse> {
   const loader = API_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const handler = moduleShape.parse(await loader())[method];
   if (typeof handler !== 'function') throw new Error(`${row.path} exports no ${method}`);
   const path = row.path.replace(/\[(?:\.\.\.)?[^\]]+\]/g, id);
   const params = Object.fromEntries([...row.path.matchAll(/\[(?:\.\.\.)?([^\]]+)\]/g)].map((match) => [match[1] ?? '', id]));
-  const hasBody = body !== undefined && method !== 'GET';
+  const sent = bodyOfRecipe(method, { body, ...(upload === undefined ? {} : { upload }) });
   const request = new Request(`${ORIGIN}${path}${query}`, {
     method,
-    headers: { origin: ORIGIN, ...(hasBody ? { 'content-type': 'application/json' } : {}) },
-    ...(hasBody ? { body: JSON.stringify(body) } : {}),
+    headers: { origin: ORIGIN, ...sent.headers },
+    ...(sent.body === undefined ? {} : { body: sent.body }),
   });
   const answer: unknown = await handler(request, { params: Promise.resolve(params) });
   if (!(answer instanceof Response)) throw new Error(`${row.path} ${method} did not answer with a Response`);
@@ -153,7 +154,7 @@ describe('AC-5: a refused role gets the fixed 403 and nothing is looked up first
     expect(recipeProblem(row.path, real.id), row.path).toBeNull();
     const ids = row.path.includes('[') ? [real.id, INVENTED_ID] : [real.id];
     const answers = [];
-    for (const id of ids) answers.push(await callApi(row, method, id, real.body));
+    for (const id of ids) answers.push(await callApi(row, method, id, real.body, '', real.upload));
     for (const answer of answers) {
       expect(fixedForbiddenProblem(answer), answer.label).toBeNull();
       expect(answer.headers['cache-control']).toBe('private, no-store');
@@ -187,7 +188,8 @@ describe('AC-5: a refused role gets the fixed 403 and nothing is looked up first
     harness.signInAs(null);
     const lookups = watchLookups();
     for (const { row, method } of refusedApiCalls()) {
-      const answer = await callApi(row, method, INVENTED_ID, validCallFor(method, row.path, { targetId: harness.targetId }).body);
+      const call = validCallFor(method, row.path, { targetId: harness.targetId });
+      const answer = await callApi(row, method, INVENTED_ID, call.body, '', call.upload);
       expect(answer.status, answer.label).toBe(401);
       expect(scanResponse(answer, FORBIDDEN), answer.label).toEqual([]);
     }
@@ -205,7 +207,7 @@ describe('AC-3: what an Engineer may call sends no Restricted value', () => {
     for (const row of rows) {
       for (const method of row.methods.filter((candidate) => candidate !== 'HEAD')) {
         const call = validCallFor(method, row.path, { targetId: harness.targetId });
-        const answer = await callApi(row, method, call.id, call.body, call.query);
+        const answer = await callApi(row, method, call.id, call.body, call.query, call.upload);
         expect(answer.status, answer.label).toBeLessThan(500);
         expect(scanResponse(answer, FORBIDDEN), answer.label).toEqual([]);
         expect(headersText(answer.headers)).not.toContain('771.37');

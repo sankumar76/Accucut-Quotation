@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { FINGERPRINT_PATTERN } from '../../../lib/estimate/subtree-fingerprint';
 
+import { pictureSchema } from './images';
+
 /**
  * The contract of the parts-tree routes (STORY-05.02, architecture section 6 "Tree", "Node", "Reorder"). Every body, query, path parameter and answer is a strict object:
  * a key that is not named is an error, so nothing is sent that is not meant to be and a client cannot set a field the route does not offer.
@@ -84,5 +86,5 @@ export const MAX_INPUT_VALUE_LENGTH = 1_000;
 export const MAX_INPUT_ENTRIES = 200;
 export const partInputsSchema = z.array(z.strictObject({ fieldId: z.uuid(), value: z.string().max(MAX_INPUT_VALUE_LENGTH) })).max(MAX_INPUT_ENTRIES);
 
-/** `GET /nodes/{nodeId}`: one part with what was typed into it, by field ID. */
-export const nodeDetailSchema = z.strictObject({ ...partShape, inputs: partInputsSchema });
+/** `GET /nodes/{nodeId}`: one part with what was typed into it, by field ID, and its picture (STORY-05.07: ID, sanitised name and size; null when it has none). */
+export const nodeDetailSchema = z.strictObject({ ...partShape, inputs: partInputsSchema, picture: pictureSchema.nullable() });

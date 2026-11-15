@@ -62,6 +62,8 @@ const REPOSITORIES = {
     // STORY-02.07: the open estimates that use a customer or a material, read for the delete guard of the Admin's masters. No Engineer view needs it.
     'estimate-use',
     'exchange-rate-repository',
+    // STORY-05.07: the part pictures, stored whole and read by their ID. No Engineer view needs the bytes or their owner lookup; the picture route is a handler, not a view.
+    'image-repository',
     'master-constraints',
     'master-repository',
     'material-repository',
@@ -91,6 +93,8 @@ const SERVICES = {
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     'estimate-service',
+    // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
+    'image-service',
     'exchange-rate-service',
     'masters-service',
     'password-policy',

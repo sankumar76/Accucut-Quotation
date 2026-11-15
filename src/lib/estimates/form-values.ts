@@ -8,7 +8,7 @@ import type { FormField, FormRule } from './form-client';
  * this is the same rule from one place (`lib/estimate/validation.ts`), so the screen and the server cannot say different things. Pure, no zod, so the page carries it.
  */
 
-/** A choice is its ID: a blank clears it, anything else is sent and the server checks it against the Material Master. A derived field is never typed and never sent. */
+/** A choice is its ID: a blank clears it, anything else is sent and the server checks it against the Material Master. A derived field and a picture are never typed and never sent as a value. */
 export function readTyped(rule: FormRule, typed: string): InputCheck {
   switch (rule.type) {
     case 'number':
@@ -18,6 +18,7 @@ export function readTyped(rule: FormRule, typed: string): InputCheck {
     case 'select':
       return { ok: true, value: typed.trim() === '' ? null : typed.trim().toLowerCase() };
     case 'derived':
+    case 'picture':
       return { ok: true, value: null };
   }
 }

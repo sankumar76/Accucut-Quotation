@@ -35,7 +35,7 @@ export interface FieldRendererProps {
 
 /** The id of the control of the field with this ID: the registry's field ID, which is unique on the page. Calculate's list of missing fields links to it. */
 export const controlIdFor = (fieldId: string): string => `part-field-${fieldId}`;
-export const controlIdOf = (field: FormFieldView): string => controlIdFor(field.id);
+export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => controlIdFor(field.id);
 
 /**
  * One field of the part form (STORY-05.03 AC-1, AC-2, AC-3, AC-5): the label with its Excel column letter first ("Excel column J" is read before the name, UX spec SCR-05

@@ -20,7 +20,9 @@ import {
   validationProblem,
 } from './problem';
 import { allowsRole, findRoute, isStateChanging, type HttpMethod } from './route-manifest';
+import { fileResponse, STORED_FILE_SHAPE } from './file-response';
 import { serializeSessionCookie, type ResponseCookie } from './set-cookie';
+import { MalformedUploadError, readUpload, type UploadedFile } from './upload';
 
 /**
  * The only way to declare an API handler (STORY-01.02 AC-1; architecture sections 4.1, 6 and 8). Every handler in
@@ -33,9 +35,11 @@ import { serializeSessionCookie, type ResponseCookie } from './set-cookie';
  *      `mustChangeAllowed` (STORY-01.05 AC-5);
  *   3. the role, taken from the route's row in the manifest, before anything is looked up or parsed (CR-33): a role the
  *      row does not list gets 403 with a fixed body, whatever ID was asked for;
- *   4. the input: query, path parameters and body are parsed with the zod schemas given (400 malformed, 422 invalid);
+ *   4. the input: query, path parameters and body are parsed with the zod schemas given (400 malformed, 422 invalid). A route that takes one uploaded file (`upload`,
+ *      STORY-05.07) reads it here, within a hard cap on the bytes read (413), after the role and before the handler;
  *   5. the handler;
- *   6. the answer is parsed with its own strict schema, so a field the schema does not name never leaves (NFR-002).
+ *   6. the answer is parsed with its own strict schema, so a field the schema does not name never leaves (NFR-002). A route that serves a stored file (`download`) answers with
+ *      the file and the fixed headers of `file-response.ts` instead of JSON; its schema holds the file's type and bytes.
  *
  * Every answer, success or problem, carries `Cache-Control: private, no-store` and a request ID; every failure is the
  * `application/problem+json` of `problem.ts`, with nothing technical in it. Server Actions are not used (ADR-010).
@@ -53,6 +57,8 @@ export interface HandlerContext<Query, Body, Params> {
   readonly request: Request;
   /** Puts a session cookie on the answer (STORY-01.05 AC-3: the fresh session after a password change). Sent with the success answer only. */
   readonly setSessionCookie: (cookie: ResponseCookie) => void;
+  /** The one file of a route declared with `upload`, read within its cap; undefined for every other route. */
+  readonly upload: UploadedFile | undefined;
 }
 
 export interface RouteOptions<Output extends z.ZodType, Query extends z.ZodType, Body extends z.ZodType, Params extends z.ZodType> {
@@ -65,6 +71,10 @@ export interface RouteOptions<Output extends z.ZodType, Query extends z.ZodType,
   readonly body?: Body;
   /** Path parameters of a dynamic route. */
   readonly params?: Params;
+  /** One uploaded file in a multipart body (STORY-05.07), read within `maxBodyBytes` in all, framing included. Not with `body`. */
+  readonly upload?: { readonly maxBodyBytes: number };
+  /** The answer is a stored file, not JSON: the handler returns `{ mime, bytes }`, `output` holds its schema, and the answer carries the fixed headers of `file-response.ts`. */
+  readonly download?: true;
   /** The answer. Use `z.strictObject` so an unknown key is an error. */
   readonly output: Output;
   /** Default 200. With 204 the answer has no body: the output schema is `z.undefined()` and the handler returns nothing. */
@@ -142,6 +152,16 @@ async function bodyOf(request: Request, requestId: string): Promise<unknown> {
   }
 }
 
+/** The one file of an upload, or the 400 of a body that is not one (a body over the cap is the 413 of `readUpload`). */
+async function uploadOf(request: Request, maxBodyBytes: number, requestId: string): Promise<UploadedFile> {
+  try {
+    return await readUpload(request, maxBodyBytes);
+  } catch (error) {
+    if (error instanceof MalformedUploadError) throw new InputRefused(problemResponse(malformedProblem(requestId)));
+    throw error;
+  }
+}
+
 function parseInput(schema: z.ZodType, value: unknown, requestId: string): unknown {
   const parsed = schema.safeParse(value);
   if (!parsed.success) throw new InputRefused(problemResponse(validationProblem(parsed.error, requestId)));
@@ -175,11 +195,18 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
     const params = parseInput(options.params ?? NO_INPUT, options.params === undefined ? undefined : await context?.params, requestId);
     const body = parseInput(options.body ?? NO_INPUT, options.body === undefined ? undefined : await bodyOf(request, requestId), requestId);
 
+    const upload = options.upload === undefined ? undefined : await uploadOf(request, options.upload.maxBodyBytes, requestId);
+
     const cookies: string[] = [];
     const setSessionCookie = (cookie: ResponseCookie): void => void cookies.push(serializeSessionCookie(cookie));
-    const result = await options.handler({ user, query, body, params, requestId, request, setSessionCookie });
+    const result = await options.handler({ user, query, body, params, requestId, request, setSessionCookie, upload });
     const answer = options.output.safeParse(result);
     if (!answer.success) throw new ResponseSchemaError(options.route, answer.error.issues.map((issue) => issue.path.join('.')));
+    if (options.download === true) {
+      const file = STORED_FILE_SHAPE.safeParse(answer.data);
+      if (!file.success) throw new ResponseSchemaError(options.route, []);
+      return fileResponse(file.data, requestId);
+    }
     const status = options.status ?? DEFAULT_STATUS;
     if (status === NO_CONTENT_STATUS) {
       // A 204 has no body: whatever the handler returned would be dropped, so returning anything is a mistake in the code.

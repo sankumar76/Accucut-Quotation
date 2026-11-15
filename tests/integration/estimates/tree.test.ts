@@ -5,6 +5,7 @@ import type { PartView } from '@/lib/estimate/part-view';
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
@@ -39,7 +40,13 @@ const nodeRepository = (): ReturnType<typeof createEstimateNodeRepository> => cr
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({ estimates: estimateRepository(), nodes: nodeRepository(), transactions: createTransactionRunner(db.prisma), ...inputsDependencies() });
+  service = createEstimateService({
+    estimates: estimateRepository(),
+    nodes: nodeRepository(),
+    images: createImageRepository(db.prisma),
+    transactions: createTransactionRunner(db.prisma),
+    ...inputsDependencies(),
+  });
   leadId = await insertPersonAsOwner(db, 'Tree Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Tree Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Tree Priya', 'ENGINEER');
@@ -263,6 +270,7 @@ describe('AC-4, AC-5: refused moves change nothing, and a change that fails leav
     const failing = createEstimateService({
       estimates: { ...estimateRepository(), bumpInputsRevision: () => Promise.reject(new Error('the revision write failed')) },
       nodes: nodeRepository(),
+      images: createImageRepository(db.prisma),
       transactions: createTransactionRunner(db.prisma),
       ...inputsDependencies(),
     });

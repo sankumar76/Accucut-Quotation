@@ -63,6 +63,15 @@ describe('AC-2: a complete part passes', () => {
     expect(Object.keys(checked?.texts ?? {})).not.toContain(fieldIdOf('material-in-drawing'));
   });
 
+  it('Part Model (C, the picture of STORY-05.07) is on the form and is never needed: a part with none passes, and a value stored under it is neither a number nor a word of the part', () => {
+    const picture = fieldIdOf('part-model');
+    expect(buildFormSections(document).flatMap((section) => section.fields).find((field) => field.id === picture)?.rule).toEqual({ type: 'picture' });
+    const [checked] = passed(validateForCalculate([part({ inputs: { ...completePartInputs(), [picture]: 'invented-stray-text' } })], document));
+    expect(Object.keys(checked?.numbers ?? {})).not.toContain(picture);
+    expect(Object.keys(checked?.texts ?? {})).not.toContain(picture);
+    expect(passed(validateForCalculate([part()], document))).toHaveLength(1);
+  });
+
   it('the stored material ID is read as the form reads it: trimmed and in lower case', () => {
     const inputs = { ...completePartInputs(), [fieldIdOf('material-in-drawing')]: `  ${INVENTED_MATERIAL_ID.toUpperCase()} ` };
     expect(passed(validateForCalculate([part({ inputs })], document))[0]?.materialId).toBe(INVENTED_MATERIAL_ID);

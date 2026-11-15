@@ -22,10 +22,13 @@ import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 /** The sections of the form: 01 Part Details to 08 Other Costs and Remarks (STORY-05.03 built 01 and 02, STORY-05.04 the rest). Section 07 is a placeholder until STORY-05.06. */
 export const FORM_SECTION_NUMBERS: ReadonlyArray<number> = [1, 2, 3, 4, 5, 6, 7, 8];
 
-/** The input types the form can draw and save so far. Treatment / Color (`select_other`) and the flags (`flag`) are placeholders until STORY-05.06; the picture (`image`, 05.07) follows. */
-const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text'];
+/**
+ * The input types the form can draw and save so far. Treatment / Color (`select_other`) and the flags (`flag`) are placeholders until STORY-05.06. The picture (`image`, Part Model,
+ * STORY-05.07) is on the form too, with its own rule (`picture`): it is added, replaced and removed by its own routes and is never a typed value.
+ */
+const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text', 'image'];
 
-/** The input types the form shows as a labelled placeholder, because STORY-05.06 builds their control (AC-6). The picture is not one: it is shown by STORY-05.07 alone. */
+/** The input types the form shows as a labelled placeholder, because STORY-05.06 builds their control (AC-6). The picture is not one: it is drawn by STORY-05.07. */
 const PLACEHOLDER_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['select_other', 'flag'];
 
 /** The decimals a typed number may have (SPEC section 7.3). */
@@ -35,6 +38,8 @@ export const NUMBER_DECIMALS = 2;
 export const COST_INPUT_HINT = 'Enter 0 if there is none.';
 export const FASTENERS_HINT = 'Type "None" if the part has no fasteners.';
 export const REMARKS_HINT = 'Write "None" if there is nothing to add.';
+/** The hint under the picture field (UX spec SCR-05): what is accepted. The limit is the one of `lib/images` (200 KB). */
+export const PICTURE_HINT = 'PNG, JPG, GIF or WebP, under 200 KB.';
 
 /**
  * What the form adds to a field the registry does not describe (STORY-05.04 AC-2 to AC-4), by the field's **key**, which is stable (a label or a column can be changed, a key is the
@@ -42,6 +47,7 @@ export const REMARKS_HINT = 'Write "None" if there is nothing to add.';
  * immutable (NFR-026) and holds no hint for these fields, shows the same words as a new one.
  */
 const FORM_PRESENTATION: ReadonlyMap<string, { readonly unit?: string; readonly hint?: string }> = new Map([
+  ['part-model', { hint: PICTURE_HINT }],
   ['fasteners', { hint: FASTENERS_HINT }],
   ['fasteners-cost', { unit: RUPEE, hint: COST_INPUT_HINT }],
   ['machining-cost', { unit: RUPEE, hint: COST_INPUT_HINT }],
@@ -59,7 +65,9 @@ export type FormRule =
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
   /** `from` is the field this one follows (Material Considered follows Material in Drawing); null for the Sl. No., which follows the tree. */
-  | { readonly type: 'derived'; readonly from: string | null };
+  | { readonly type: 'derived'; readonly from: string | null }
+  /** A picture (Part Model, STORY-05.07): drawn as the picture control, changed by its own routes, optional (D-31) and never saved as a value. */
+  | { readonly type: 'picture' };
 
 /** One field of the form as the browser and the server read it. Letters are derived from the registry; none is typed. */
 export interface FormFieldView {
@@ -125,6 +133,7 @@ function textRuleOf(multiline: boolean): FormRule {
 function ruleOf(document: ConfigDocument, field: FieldDefinition): FormRule {
   if (field.kind !== 'input') return { type: 'derived', from: field.key === MATERIAL_CONSIDERED_KEY ? (findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id ?? null) : null };
   if (field.key === MATERIAL_IN_DRAWING_KEY) return { type: 'select', source: 'materials' };
+  if (field.dataType === 'image') return { type: 'picture' };
   if (field.dataType === 'number') return { type: 'number', decimals: NUMBER_DECIMALS };
   return textRuleOf(field.multiline === true);
 }
@@ -141,7 +150,8 @@ function viewOf(document: ConfigDocument, field: FieldDefinition): FormFieldView
     hint: field.systemRole === 'quantity' ? QTY_PER_ASSY_HINT : (field.hint ?? presentation?.hint ?? null),
     defaultValue: field.kind === 'input' ? field.defaultValue : null,
     required: field.mandatory,
-    editable: rule.type !== 'derived',
+    // A derived field is shown and never typed; a picture is changed by its own routes, so no save of values may name it either.
+    editable: rule.type !== 'derived' && rule.type !== 'picture',
     rule,
   };
 }

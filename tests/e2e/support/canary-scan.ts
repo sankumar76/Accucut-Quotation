@@ -43,6 +43,8 @@ function bodyIsReadable(status: number, contentType: string): boolean {
 export interface BrowserRequest {
   readonly method: string;
   readonly body?: unknown;
+  /** One file sent as a multipart form under the name `file` (STORY-05.07): its bytes as base64, so it can cross into the page. */
+  readonly upload?: { readonly fileName: string; readonly type: string; readonly base64: string };
   readonly headers?: Readonly<Record<string, string>>;
 }
 
@@ -169,11 +171,18 @@ async function fetchInBrowser(page: Page, requests: ReadonlyArray<{ readonly url
     (items) =>
       Promise.all(
         items.map(async ({ url, init }) => {
+          // A file is sent as a multipart form, as the part form does (the browser adds the content type and its boundary); anything else as JSON.
+          const form = new FormData();
+          if (init.upload !== undefined) {
+            const raw = atob(init.upload.base64);
+            const bytes = Uint8Array.from(raw, (character) => character.charCodeAt(0));
+            form.append('file', new File([bytes], init.upload.fileName, { type: init.upload.type }));
+          }
           const answer = await fetch(url, {
             method: init.method,
             credentials: 'same-origin',
-            headers: { ...(init.body === undefined ? {} : { 'content-type': 'application/json' }), ...init.headers },
-            ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+            headers: { ...(init.body === undefined || init.upload !== undefined ? {} : { 'content-type': 'application/json' }), ...init.headers },
+            ...(init.upload !== undefined ? { body: form } : init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
           });
           const headers: Record<string, string> = {};
           answer.headers.forEach((value, name) => {
@@ -291,11 +300,20 @@ export function refusedPages(): ReadonlyArray<RouteRow> {
  * story that adds a route with a body adds it once. `targetId` is a person who is not the caller, or the owner of the record to open.
  * Throws for a dynamic route that has no real-value recipe (AC-6, QLT-02, QLT-08).
  */
-export function validCall(call: ApiCall, targetId: string): { readonly id: string; readonly body: unknown; readonly query: string; readonly status: number } {
-  const { id, body, query = '', status } = validCallFor(call.method, call.row.path, { targetId });
+export function validCall(
+  call: ApiCall,
+  targetId: string,
+): { readonly id: string; readonly body: unknown; readonly query: string; readonly status: number; readonly upload?: BrowserRequest['upload'] } {
+  const { id, body, query = '', status, upload } = validCallFor(call.method, call.row.path, { targetId });
   const problem = recipeProblem(call.row.path, id);
   if (problem !== null) throw new Error(`${call.name}: ${problem}`);
-  return { id, body, query, status };
+  return {
+    id,
+    body,
+    query,
+    status,
+    ...(upload === undefined ? {} : { upload: { fileName: upload.fileName, type: upload.type, base64: Buffer.from(upload.bytes).toString('base64') } }),
+  };
 }
 
 export interface EngineerScan {
@@ -335,6 +353,7 @@ async function callEngineerRoutes(page: Page, recorder: ScanRecorder, owner: { r
     const answer = await callInBrowser(recorder, page, `${call.method} ${path} (API)`, path, {
       method: call.method,
       ...(call.method === 'GET' ? {} : { body: recipe.body }),
+      ...(recipe.upload === undefined ? {} : { upload: recipe.upload }),
     });
     expect(answer.status, `${call.name} answers its recipe's status`).toBe(recipe.status);
   }
@@ -368,7 +387,9 @@ export function expectScanSawEnough(recorder: ScanRecorder, scan: EngineerScan):
     recorder.responses.filter((response) => response.body !== null && type.test(response.headers['content-type'] ?? ''));
   expect(readOfType(/text\/html/).length, 'HTML pages read').toBeGreaterThanOrEqual(scan.pages);
   expect(readOfType(/text\/x-component/).length, 'RSC payloads read').toBeGreaterThanOrEqual(scan.pages);
-  expect(readOfType(/application\/json/).length, 'JSON answers read').toBeGreaterThanOrEqual(scan.calls);
+  // `json` and not `application/json`: a refusal is `application/problem+json`, and a route that serves a picture answers with the file and no JSON (STORY-05.07), so the count is of
+  // everything JSON that was read, which the calls of the scan and the page's own fetches give in plenty.
+  expect(readOfType(/json/).length, 'JSON answers read').toBeGreaterThanOrEqual(scan.calls);
   for (const address of scan.addresses) {
     for (const kind of ['page', 'RSC']) {
       const records = recorder.withLabelContaining(`GET ${address} (${kind})`);

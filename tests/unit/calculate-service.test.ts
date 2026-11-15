@@ -97,6 +97,7 @@ function fixture(options: { status?: FakeEstimate['status']; customer?: boolean;
   const estimateService = createEstimateService({
     estimates: world.estimates,
     nodes: estimates.nodeRepository,
+    images: estimates.imageRepository,
     transactions: runner,
     materials: masters,
     currentConfiguration: () => Promise.resolve(seedConfig),
@@ -152,6 +153,16 @@ describe('AC-2: a complete estimate is calculated, stored and submitted in one t
       [PART_TWO, PART_ONE, 0, '1.1'],
     ]);
     expect(f.estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: record.id, inputsRevision: 6 });
+  });
+
+  it('records each part with the picture it has (STORY-05.07, #401): its ID on the row, and null for a part with none, which calculates all the same (D-31)', async () => {
+    const PICTURE_ID = '00000000-0000-4000-8000-0f0f00000001';
+    const f = fixture({ nodes: [{ ...partNode(PART_ONE, null, 0), imageId: PICTURE_ID }, partNode(PART_TWO, PART_ONE, 0)] });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(defined(f.world.calculations[0]).rows.map((row) => [row.nodeId, row.imageId])).toEqual([
+      [PART_ONE, PICTURE_ID],
+      [PART_TWO, null],
+    ]);
   });
 
   it('records the person who pressed Calculate, from the session, as the creator (SQR-08 of AQP-293)', async () => {
