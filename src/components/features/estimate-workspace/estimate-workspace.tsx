@@ -15,7 +15,7 @@ import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
 import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
-import { focusFirstField } from './part-fields';
+import { focusFirstField } from './focus-field';
 import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
 import { useCalculate } from './use-calculate';

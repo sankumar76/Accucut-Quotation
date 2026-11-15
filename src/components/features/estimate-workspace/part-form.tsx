@@ -6,8 +6,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
-import { PartFields } from './part-fields';
-import { useFormDefinition, type PartTarget, type SavedPart } from './use-part-form';
+import type { PartFieldsProps } from './part-fields';
+import { useFormDefinition } from './use-form-definition';
+import { useLazyComponent } from './use-lazy-component';
+import type { PartTarget, SavedPart } from './use-part-form';
+
+/** The fields' code: a bare `import()` behind a type-only import above, so none of it is in the first load (NFR-009, ADR-016 E1). Asked for as soon as the form is on the page, in step with the two reads that gate it. */
+const loadFields = () => import('./part-fields').then((module) => module.PartFields);
 
 export interface PartFormProps {
   readonly estimateId: string;
@@ -33,6 +38,8 @@ export interface PartFormProps {
  */
 export function PartForm({ estimateId, part, editable, onSaved, onChanged, missing, gate }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
+  const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
+  const Fields = fields.Component;
 
   if (part === null) return <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
   if (definition.form.status === 'failed') {
@@ -45,7 +52,18 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, missi
       </Notice>
     );
   }
-  if (definition.form.status === 'loading') {
+  if (fields.failed) {
+    // The fields' code did not come: the same notice, and "Try again" asks for the code again.
+    return (
+      <Notice tone="danger" title={FORM_LOAD_FAILED_TITLE}>
+        <p>{FAILED_BODY}</p>
+        <Button variant="secondary" className="mt-s-2" onClick={fields.retry}>
+          {TRY_AGAIN}
+        </Button>
+      </Notice>
+    );
+  }
+  if (definition.form.status === 'loading' || Fields === null) {
     return (
       <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
         <Skeleton className="h-(--control-h)" />
@@ -56,7 +74,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, missi
   }
 
   return (
-    <PartFields
+    <Fields
       key={part.id}
       estimateId={estimateId}
       part={part}
