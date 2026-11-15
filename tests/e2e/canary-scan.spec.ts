@@ -1,6 +1,6 @@
 import { readdirSync } from 'node:fs';
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
 import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
@@ -573,6 +573,10 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   const again = await callInBrowser(recorder, page, 'POST calculate (API, second press)', `/api/v1/estimates/${engineer.id}/calculate`, { method: 'POST' });
   expect(again.status).toBe(409);
   expect(JSON.parse(again.body ?? '{}')).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+  // STORY-06.02 AC-5: now that a current calculation exists, the route that carries its figures is still the fixed 403 for the Engineer, and the same address of the page is still their own workspace.
+  const costs = await callInBrowser(recorder, page, 'GET costs (API, after Calculate)', `/api/v1/estimates/${engineer.id}/costs`);
+  expect(costs.status).toBe(403);
+  expect(fixedForbiddenProblem(costs)).toBeNull();
   await page.waitForLoadState('networkidle');
   await recorder.settled();
 
@@ -637,6 +641,79 @@ test('AC-6 (STORY-05.09): the same estimate calculated under two sets of masters
   expect(bodies[1]).toBe(bodies[0]);
   expect(await readEstimateState(first.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   expect(await readEstimateState(second.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+});
+
+/**
+ * STORY-06.02 AC-5, AC-6 (NFR-002; test strategy section 6): the estimate review. The Lead and the Admin are meant to see the calculation's figures, so the scan turns round: on the page of the review
+ * (`/estimates/<code>` as a Lead) and on `GET /estimates/{id}/costs` the figures of the record **are** found (the page shows what the record holds), and **no master value, rate name or formula**
+ * is (the review has no cost details yet: STORY-06.03). The figures are looked for in the forms a screen prints, whole-rupee roundings included (review SQR-12 of AQP-317). The Engineer's side of the same
+ * address is the journey above (the page after Calculate, and `/costs` refused with the fixed 403) and the refusals of AC-5, which iterate the manifest and so call `/costs` as an Engineer.
+ */
+async function calculatedEstimateOf(
+  page: Page,
+  context: BrowserContext,
+  testInfo: TestInfo,
+): Promise<{ readonly id: string; readonly code: string; readonly forbidden: Awaited<ReturnType<typeof prepare>>['forbidden'] }> {
+  const { forbidden, engineer } = await prepare(testInfo);
+  await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
+  const code = canaryTaskCodeFor(engineer.id);
+  await page.goto('/sign-in');
+  await signInThroughThePage(page, engineer.email, E2E_PASSWORD);
+  await expect(page).toHaveURL(/\/queue$/);
+  await page.goto(`/estimates/${code}`);
+  const status = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, engineer.id);
+  expect(status).toBe(200);
+  await context.clearCookies();
+  return { id: engineer.id, code, forbidden };
+}
+
+test('AC-6 (STORY-06.02): the Lead\'s review page and `/costs` show the figures of the record, and no master value, rate name or formula', async ({ page, context }, testInfo) => {
+  await useFreshAddress(context);
+  const { id, code, forbidden } = await calculatedEstimateOf(page, context, testInfo);
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  const review = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead review)`, await page.goto(`/estimates/${code}`));
+  expect(review.status).toBe(200);
+  expect(review.body ?? '').toContain('Total Unit Production Price');
+  const costs = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, Lead)`, `/api/v1/estimates/${id}/costs`);
+  expect(costs.status).toBe(200);
+  expect(JSON.parse(costs.body ?? '{}')).toMatchObject({ state: 'current' });
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  // No master value, rate name or formula, in the page or in the answer.
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  // The control that the scan looks at something real: the figures of the record are on the page and in the answer, as the Lead is meant to see them.
+  const found = scanResponses(recorder.responses, await figuresOfTheRecord(id));
+  expect(found.some((finding) => finding.label.includes('(page, Lead review)')), 'a figure of the record is on the Lead\'s review page').toBe(true);
+  expect(found.some((finding) => finding.label.includes('(API, Lead)')), 'a figure of the record is in the Lead\'s `/costs` answer').toBe(true);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
+});
+
+test('AC-6 (negative control, STORY-06.02): a master value planted in the Lead\'s `/costs` answer is found by the same scan', async ({ page, context }, testInfo) => {
+  const customer = defined(canaryMasters.find((sentinel) => sentinel.kind === 'customer-rate')).value;
+  const plant: Plant = ({ url }, body) => (new URL(url).pathname.endsWith('/costs') ? `${body} ${customer}` : body);
+  await useFreshAddress(context);
+  const { id, forbidden } = await calculatedEstimateOf(page, context, testInfo);
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder(plant);
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  await page.goto('/queue');
+  await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, planted)`, `/api/v1/estimates/${id}/costs`);
+  await recorder.settled();
+
+  const findings = scanResponses(recorder.responses, forbidden);
+  expect(
+    findings.some((finding) => finding.label.includes('/costs (API, planted)') && finding.found === customer),
+    'the master value planted in the `/costs` answer',
+  ).toBe(true);
 });
 
 test('AC-4: the test-only route that leaks one sentinel is absent from the production build, even when the sentinel is supplied', async ({ request }) => {

@@ -92,11 +92,38 @@ export interface CalculationRecord extends NewCalculation {
   readonly rows: ReadonlyArray<CalculationRowRecord>;
 }
 
+/**
+ * What decides whether an estimate's figures may be shown, and nothing that is a figure (STORY-06.02): the estimate's count of input changes, and which calculation it is linked to with
+ * the count that calculation was made at, the version it used and when. `lib/estimate/figure-state.ts` turns the two counts into a state.
+ */
+export interface FigureBasis {
+  readonly inputsRevision: number;
+  readonly calculation: {
+    readonly id: string;
+    readonly inputsRevision: number;
+    readonly configVersionId: string;
+    readonly createdAt: Date;
+  } | null;
+}
+
+/** What the estimate review shows of a calculation (STORY-06.02): the product's figures and each row's outputs by node. Not the master snapshot and not the typed inputs. */
+export interface ReviewFigures {
+  readonly productValues: ProductValues;
+  readonly rows: ReadonlyArray<{ readonly nodeId: string; readonly outputs: StoredValues }>;
+}
+
 export interface CalculationRepository {
   /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` takes its default, `[]`. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
+  /** The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. */
+  findFigureBasis(estimateId: string): Promise<FigureBasis | null>;
+  /**
+   * The figures the estimate review shows, of the calculation with this ID: the product's values and every row's outputs, selected column by column (neither the master snapshot nor a row's
+   * inputs are read). Null for an unknown ID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   */
+  findReviewFigures(calculationId: string): Promise<ReviewFigures | null>;
 }
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -168,6 +195,30 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             imageId: row.imageId,
             outputs: storedValuesSchema.parse(row.outputs),
           })),
+        };
+      }),
+
+    findFigureBasis: (estimateId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(estimateId)) return null;
+        const found = await db.estimate.findUnique({
+          where: { id: estimateId },
+          select: { inputsRevision: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
+        });
+        return found === null ? null : { inputsRevision: found.inputsRevision, calculation: found.currentCalculation };
+      }),
+
+    findReviewFigures: (calculationId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await db.calculation.findUnique({
+          where: { id: calculationId },
+          select: { productValues: true, rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] } },
+        });
+        if (found === null) return null;
+        return {
+          productValues: productValuesSchema.parse(found.productValues),
+          rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
         };
       }),
   };

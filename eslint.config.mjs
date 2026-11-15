@@ -122,6 +122,12 @@ const ENGINEER_VIEW_IMPORTS = [
     regex: `(^|${SLASH})schemas(${SLASH}index)?$`,
     message: 'Engineer views import the one schema file they need (schemas/me), not the barrel that re-exports the Admin schemas.',
   },
+  {
+    // STORY-06.02: the contract of `GET /estimates/{id}/costs`. Every figure in it is a calculated cost, for the Lead and the Admin only (NFR-002).
+    group: ['**/schemas/costs'],
+    regex: `(^|${SLASH})schemas${SLASH}costs${END}`,
+    message: 'The costs schema holds every calculated figure of an estimate: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
+  },
   ROW_OUTPUTS_IMPORT,
   FORMULA_IMPORT,
   PRISMA_IMPORT,

@@ -64,9 +64,6 @@ export const progressText = (complete: number, total: number): string => `${comp
 export const PLACEHOLDER_TITLE = 'Not available yet';
 export const PLACEHOLDER_BODY = 'These are added to the form in a later update. There is nothing to fill in here yet.';
 
-export const REVIEW_CUSTOMER_LABEL = 'Customer';
-export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
-
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
 export const TREE_CLOSE = 'Close parts tree';

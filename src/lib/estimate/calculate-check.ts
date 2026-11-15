@@ -58,7 +58,7 @@ export interface CheckedPart {
 export type CalculateCheck = { readonly ok: true; readonly parts: ReadonlyArray<CheckedPart> } | { readonly ok: false; readonly parts: ReadonlyArray<BlockedPart> };
 
 /** The keys of the fields that name a part, in the order they are tried. */
-const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
+export const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
 
 /** What a number the registry hides for a part is read as: 0, in the form every stored number has (two decimals). */
 const HIDDEN_NUMBER = '0.00';
