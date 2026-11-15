@@ -76,7 +76,7 @@ const UPSERT_USER = `
         is_active = true, must_change_password = false, session_version = 0`;
 
 /** Opens a connection to the database the servers use, after the same guard as every test run (never a live database). */
-async function connectToTestDatabase(): Promise<Client> {
+export async function connectToTestDatabase(): Promise<Client> {
   const url = process.env['DATABASE_URL'];
   if (url === undefined || url === '') {
     throw new Error('DATABASE_URL is not set. Start the test database and set it as the README says (docker compose -f compose.dev.yml up -d db).');

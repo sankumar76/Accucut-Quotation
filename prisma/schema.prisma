@@ -420,3 +420,19 @@ model CalculationRow {
   @@index([calculationId, sortIndex], map: "idx_calculation_rows_calculation_id")
   @@map("calculation_rows")
 }
+
+/// One run of a background job or of the backup (STORY-02.09, FR-105; architecture sections 5.1 and 9.9). The weekly backup writes `job = 'backup'`, the worker's daily free-space
+/// check writes `job = 'backup-watch'` (STORY-10.05). `result` is a JSON object: `status` ('ok' or 'failed'), `sizeBytes`, `freeBytes`, `totalBytes`; the Settings page reads only
+/// the status and the two free-space figures. A row is written once, at the end of a run, with both times, and never changed: there is no `created_at` or `updated_at` (the
+/// append-only exception to coding standards section 10), and the runtime role has SELECT and INSERT only. The CHECK constraints (the job is not blank, the result is an object) are
+/// hand-written in the migration: Prisma cannot express them. Class Internal.
+model JobRun {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job        String
+  startedAt  DateTime @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime @map("finished_at") @db.Timestamptz(6)
+  result     Json
+
+  @@index([job, finishedAt(sort: Desc)], map: "idx_job_runs_job_finished_at")
+  @@map("job_runs")
+}

@@ -5,7 +5,8 @@ import type { RoleName } from '../../src/lib/auth/roles';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from '../../src/server/auth/session-cookie';
 import { type AccountService, createAccountService } from '../../src/server/services/account-service';
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
-import { systemClock } from '../../src/lib/time';
+import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
+import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
@@ -27,6 +28,7 @@ import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from './estimate-recipe';
 import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeConfigRepository } from './fake-config';
+import { createFakeJobRunRepository, type FakeJobRunRepository } from './fake-job-runs';
 import { createFakeCalculationWorld, type FakeCalculationWorld } from './fake-calculations';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
@@ -59,6 +61,10 @@ const THROTTLE_KEY_MATERIAL = 'invented-throttle-key-material';
  * hours from sign-in, so a fixed instant for both makes the result the same on every run and at any time of day (STD-06).
  */
 export const SESSION_NOW = new Date('2026-11-05T09:00:00.000Z');
+
+/** A file path and a volume name an invented `job_runs` row holds in its `result`: no answer of the Settings routes or page may carry either (STORY-02.09 AC-5). */
+export const JOB_RUN_CANARY_PATH = 'D:\\InventedBackupFolder\\copy-0001.age';
+export const JOB_RUN_CANARY_VOLUME = 'InventedVolumeLabel';
 
 /** Holds `Date` at `SESSION_NOW` until `releaseSessionClock`. Timers stay real, so nothing waits on a fake clock. */
 export function holdSessionClock(): void {
@@ -95,6 +101,10 @@ export interface SessionHarness {
   readonly configReadService: ConfigReadService;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
+  /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
+  readonly settingsService: SettingsService;
+  /** The in-memory `job_runs` behind `settingsService`: its members are plain functions, so a test can spy on each one (the refusal-before-lookup scan does). */
+  readonly jobRuns: FakeJobRunRepository;
   /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
@@ -163,6 +173,11 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const configRepository = createFakeConfigRepository();
+  // The `job_runs` of STORY-02.09: one good backup two days before the held clock and a daily reading of 62 % free, whose `result` also holds a path and a volume name that no answer may carry.
+  const jobRuns = createFakeJobRunRepository([
+    { job: 'backup', finishedAt: new Date(SESSION_NOW.getTime() - 2 * MILLISECONDS_PER_DAY), result: { status: 'ok', sizeBytes: 1_000, freeBytes: 620, totalBytes: 1_000, path: JOB_RUN_CANARY_PATH } },
+    { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
+  ]);
   const taskWorld = createFakeTaskWorld(() => users.records);
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
@@ -243,6 +258,8 @@ export function createSessionHarness(): SessionHarness {
     calculationWorld,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    jobRuns,
+    settingsService: createSettingsService({ jobRuns, clock: systemClock }),
     configRepository,
     configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
     mastersService: createMastersService({

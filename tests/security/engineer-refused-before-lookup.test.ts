@@ -46,6 +46,7 @@ vi.mock('@/server/composition', async () => {
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
     getConfigReadService: () => shared.configReadService,
+    getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
     getAccountService: () => shared.accountService,
@@ -114,6 +115,8 @@ function watchLookups(): () => string[] {
   watch('config', harness.configRepository);
   // STORY-06.02: the calculation record and the parts, which the estimate review reads. A refused role must not cause a read of either.
   watch('review', harness.reviewReads);
+  // STORY-02.09: the backup and disk readings of `job_runs`. A refused role must not cause a read of either.
+  watch('jobRuns', harness.jobRuns);
   watch('users', harness.users, ['findAccountById']);
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }
