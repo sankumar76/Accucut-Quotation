@@ -7,6 +7,7 @@ import { MATERIAL_CANARIES } from '../support/material-master-canary';
 
 import {
   createDisposableUser,
+  E2E_ADMIN,
   E2E_PASSWORD,
   ensureCanaryCustomers,
   ensureCanaryMaterials,
@@ -66,7 +67,8 @@ async function calculateAsEngineer(page: Page, owner: E2eUser & { readonly id: s
 }
 
 async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'LEAD' | 'ADMIN' = 'LEAD'): Promise<void> {
-  const person = await createDisposableUser('axe', testInfo, role);
+  // There is one active Admin in the database (the E2E Admin of the setup project), so an Admin is not made for the test.
+  const person = role === 'ADMIN' ? E2E_ADMIN : await createDisposableUser('axe', testInfo, role);
   await signInAs(page, person);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
