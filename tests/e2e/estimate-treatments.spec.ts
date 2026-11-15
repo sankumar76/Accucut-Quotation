@@ -52,6 +52,11 @@ async function optionNamesOfG(page: Page): Promise<string[]> {
   return control(page, 'G').locator('option').allTextContents();
 }
 
+/** The list is read after the form is on the page: until it arrives it holds the empty choice only, then also "Not applicable" and "Other" at least. */
+async function treatmentsLoaded(page: Page): Promise<void> {
+  await expect.poll(async () => (await optionNamesOfG(page)).length).toBeGreaterThan(2);
+}
+
 test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', () => {
   test('AC-1: the list has the eight, each with its letter; a chosen one is stored as 1 and one that is left as 0; none chosen is valid; the trigger says which, and a reload keeps it', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
@@ -114,7 +119,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     const name = newTreatmentName(testInfo, 'list');
     await insertTreatment(name);
     await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     const names = await optionNamesOfG(page);
     expect(names[0]).toBe('Choose a treatment or colour');
     expect(names).toContain(name);
@@ -128,21 +133,21 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     const name = newTreatmentName(testInfo, 'pick');
     const id = await insertTreatment(name);
     const owner = await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     const saved = nextSave(page);
     await control(page, 'G').selectOption({ label: name });
     expect(await saved).toBe(200);
     expect((await readPartInputs(owner.id))[G]).toEqual({ id, text: name });
     await expect(partForm(page).getByText('Choose a treatment or colour.')).toHaveCount(0);
     await page.reload();
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     await expect(control(page, 'G').locator('option:checked')).toHaveText(name);
     await expect(region(page, '01 Part Details')).toContainText('1 of 4 complete');
   });
 
   test('AC-3, AC-4: "Other" shows a box that takes the focus; left empty it says so and stores nothing; with words (trimmed, up to 100 characters) it is stored as { id, text }', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     await control(page, 'G').selectOption({ label: 'Other' });
     await expect(otherBox(page)).toBeFocused();
     await expect(otherBox(page)).toHaveAttribute('maxlength', '100');
@@ -167,7 +172,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
 
   test('AC-4, AC-5 (FR-018): "Not applicable" is stored with its own words and shown on the part for an Engineer, a Lead and an Admin alike, with no rate and no list entry', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     const saved = nextSave(page);
     await control(page, 'G').selectOption({ label: 'Not applicable' });
     expect(await saved).toBe(200);
@@ -185,7 +190,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     const keptId = await insertTreatment(kept);
     const goneId = await insertTreatment(gone);
     const owner = await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     const saved = nextSave(page);
     await control(page, 'G').selectOption({ label: kept });
     expect(await saved).toBe(200);
@@ -196,7 +201,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     await storeTreatmentInPart(owner.id, G, { id: goneId, text: gone });
     await deleteTreatment(goneId);
     await page.reload();
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     await expect(control(page, 'G').locator('option:checked')).toHaveText(`${gone} (no longer listed)`);
     expect((await readPartInputs(owner.id))[G]).toEqual({ id: goneId, text: gone });
 
@@ -232,16 +237,11 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
 test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
   test('AC-8: no sideways scroll, axe finds nothing (closed, open, with "Other" showing), and every control is 44 px high', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    await expect(control(page, 'G')).toBeEnabled();
+    await treatmentsLoaded(page);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
     expect((await trigger(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await control(page, 'G').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-
-    await control(page, 'G').selectOption({ label: 'Other' });
-    expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectFormAccessible(page);
 
     await openList(page);
     for (const box of await list(page).getByRole('checkbox').all()) {
@@ -251,6 +251,14 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+    await page.keyboard.press('Escape');
+    await expect(list(page)).toHaveCount(0);
+
+    // "Other" last: leaving its empty box shows a message and moves the cards below, so nothing is pressed after it.
+    await control(page, 'G').selectOption({ label: 'Other' });
+    expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectFormAccessible(page);
   });
 
   test('AC-2: with every treatment chosen the trigger shows every name as text and the page still does not scroll sideways', async ({ page }, testInfo) => {

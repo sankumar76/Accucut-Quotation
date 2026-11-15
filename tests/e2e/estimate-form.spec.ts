@@ -190,13 +190,13 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 });
 
 test.describe('AC-6: Enter moves to the next field', () => {
-  test('AC-6: Enter goes through Part No., Description, QTY per Assy, Material in Drawing, Length, Width, Thickness, Part Weight and on into section 03, skips the read-only fields, and never submits', async ({ page }, testInfo) => {
+  test('AC-6: Enter goes through Part No., Description, Treatment / Color, QTY per Assy, Material in Drawing, Length, Width, Thickness, Part Weight and on into section 03, skips the read-only fields, and never submits', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     const address = page.url();
     await control(page, 'B').focus();
     await control(page, 'B').fill('FR-1');
     // The chain goes on through every section after 02 (STORY-05.04): the whole chain, to Remarks and the heading, is in `estimate-form-sections.spec.ts`.
-    for (const next of ['D', 'H', 'E', 'J', 'K', 'L', 'N', 'P']) {
+    for (const next of ['D', 'G', 'H', 'E', 'J', 'K', 'L', 'N', 'P']) {
       await page.keyboard.press('Enter');
       await expect(control(page, next), `Enter should reach ${next}`).toBeFocused();
     }

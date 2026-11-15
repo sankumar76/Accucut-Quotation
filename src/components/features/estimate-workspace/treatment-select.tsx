@@ -76,7 +76,7 @@ export function TreatmentSelect({ control, name, maxLength, text, readOnly, mark
         {...control}
         {...mark}
         name={name}
-        disabled={readOnly || options.status !== 'ready'}
+        disabled={readOnly || options.status === 'failed'}
         aria-busy={options.status === 'loading' || undefined}
         value={chosen?.id ?? ''}
         onChange={choose}
