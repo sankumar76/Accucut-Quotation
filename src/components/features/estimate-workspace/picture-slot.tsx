@@ -55,6 +55,5 @@ export function PictureSlot(props: PartPictureProps) {
     );
   }
   const { Control } = loaded;
-  // Keyed by the picture the server holds, so a part read again after a conflict shows what the server has.
-  return <Control key={props.picture?.id ?? 'none'} {...props} />;
+  return <Control {...props} />;
 }

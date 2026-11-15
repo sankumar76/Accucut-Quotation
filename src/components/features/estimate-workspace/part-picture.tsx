@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { type FormField, PART_CHANGED_CODE } from '@/lib/estimates/form-client';
 import { dropPicture, pictureUrl, sendPicture, type PartPictureAnswer } from '@/lib/estimates/picture-client';
-import type { PictureView } from '@/lib/estimates/picture-view';
+import { toPictureView, type PictureView } from '@/lib/estimates/picture-view';
 import { MAX_PICTURE_BYTES, PICTURE_TYPE_MESSAGE, PICTURE_UPLOAD_FAILED_MESSAGE, pictureTooLargeMessage, sanitiseFileName } from '@/lib/images/picture-rules';
 import { detectImageType, IMAGE_MIMES } from '@/lib/images/signature';
 
@@ -42,8 +42,8 @@ export interface PartPictureProps {
   readonly field: Pick<FormField, 'id' | 'letter' | 'label' | 'kind' | 'hint'>;
   readonly estimateId: string;
   readonly partId: string;
-  /** The picture the part has when the form read it, or null. The control keeps its own copy after a change of its own. */
-  readonly picture: PictureView | null;
+  /** The picture the part has when the form read it, **as the server sent it** (not yet read: this code is fetched when the form opens, the form's is in the first load). */
+  readonly picture: unknown;
   /** False once the estimate may no longer be changed by this person: the picture is shown and nothing offers a change (UX-07). The server refuses a change regardless. */
   readonly editable: boolean;
   /** Runs a change in turn with the part's saves of values, so no save is sent with a revision this change has just moved (`usePartValues.inTurn`). */
@@ -77,7 +77,18 @@ const carriesFiles = (event: DragEvent): boolean => Array.from(event.dataTransfe
  * server judges again and is the only judge. A message is inline in the field, `role="alert"`, and the picture that was there stays. Everything that changes a picture is the one button
  * or key a person can reach without a mouse. This is fetched when the form opens (`PictureSlot`), not in the first load of the page.
  */
-export function PartPicture({ field, estimateId, partId, picture: initial, editable, inTurn, onChanged, onConflict }: PartPictureProps) {
+export function PartPicture(props: PartPictureProps) {
+  const held = toPictureView(props.picture);
+  // Keyed by the picture the server holds, so a part read again after a conflict shows what the server has, and the control keeps its own copy after a change of its own.
+  return <PictureControl key={held?.id ?? 'none'} {...props} held={held} />;
+}
+
+interface PictureControlProps extends PartPictureProps {
+  /** The picture read from the server's answer (null: none, or an answer that is not a picture). */
+  readonly held: PictureView | null;
+}
+
+function PictureControl({ field, estimateId, partId, held: initial, editable, inTurn, onChanged, onConflict }: PictureControlProps) {
   const [picture, setPicture] = useState<PictureView | null>(initial);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy>(null);

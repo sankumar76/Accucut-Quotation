@@ -111,11 +111,13 @@ describe('the part form reads a picture and the picture rule', () => {
     expect(none.status === 'ok' && none.value.picture).toBeNull();
   });
 
-  it('leaves the picture out when the answer does not say (a save of values), and fails on a picture of the wrong shape', async () => {
+  it('hands the picture over as the server sent it, unread (the picture control reads it, so that code is not in the first load), and has none when the answer does not say (a save of values)', async () => {
     const part = { id: PART, revision: 2, completeness: 'PARTIAL', inputs: [] };
     const saved = await loadPartInputs(ESTIMATE, PART, () => Promise.resolve(json(200, part)));
-    expect(saved.status).toBe('ok');
-    expect(saved.status === 'ok' && 'picture' in saved.value).toBe(false);
-    expect(await loadPartInputs(ESTIMATE, PART, () => Promise.resolve(json(200, { ...part, picture: { id: 1 } })))).toEqual({ status: 'failed' });
+    expect(saved.status === 'ok' && saved.value.picture).toBeUndefined();
+    const odd = await loadPartInputs(ESTIMATE, PART, () => Promise.resolve(json(200, { ...part, picture: { id: 1 } })));
+    expect(odd.status === 'ok' && odd.value.picture).toEqual({ id: 1 });
+    // The control reads it, and a value that is not a picture is no picture.
+    expect(toPictureView({ id: 1 })).toBeNull();
   });
 });

@@ -1,6 +1,5 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
 
-import { toPictureView, type PictureView } from './picture-view';
 import type { Completeness } from './tree-client';
 
 /**
@@ -62,8 +61,11 @@ export interface PartInputs {
   readonly revision: number;
   readonly completeness: Completeness;
   readonly inputs: Readonly<Record<string, string>>;
-  /** The part's picture (STORY-05.07): only the read of a part says (`GET .../nodes/{nodeId}`); a save of values does not, so it is absent there. `null` is "none". */
-  readonly picture?: PictureView | null;
+  /**
+   * The part's picture as the server sent it (STORY-05.07): only the read of a part says (`GET .../nodes/{nodeId}`); a save of values does not, so it is `undefined` there. It is handed
+   * to the picture control **unread**, and the control (fetched when the form opens) reads it with `toPictureView`, so none of that code is in the first load of the page (NFR-009).
+   */
+  readonly picture: unknown;
 }
 
 /** A material to choose from: the ID, the name (Material in Drawing) and Material Considered, null for an entry that has none. No number of any kind. */
@@ -149,9 +151,7 @@ function toPartInputs(body: unknown): PartInputs | null {
   const { id, revision, completeness } = body;
   const inputs = toInputs(body['inputs']);
   if (!isNonEmptyText(id) || typeof revision !== 'number' || !isCompleteness(completeness) || inputs === null) return null;
-  const shown = body['picture'];
-  const picture = shown === undefined || shown === null ? shown : toPictureView(shown);
-  return picture === null && shown !== null ? null : { id, revision, completeness, inputs, ...(picture === undefined ? {} : { picture }) };
+  return { id, revision, completeness, inputs, picture: body['picture'] };
 }
 
 function toMaterial(value: unknown): MaterialChoice | null {

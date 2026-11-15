@@ -128,7 +128,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
 
   const problem = values.problem;
-  const picture = values.stored.value.picture ?? null;
+  const picture = values.stored.value.picture;
   // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check.
   const progress = form.sections.map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
   // A field Calculate found blank is still missing while it shows no value: typing into it takes its words away at once, and a card has none left when all its fields have one.
