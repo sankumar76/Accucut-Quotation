@@ -34,6 +34,15 @@ async function openCostDetails(page: Page, code: string, slNo = '1'): Promise<vo
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cost details');
 }
 
+/** Opens every stage. On a phone the script closes stages 2 to 6 after load, so this waits for that first and then opens what is closed: a line in a closed panel is not visible. */
+async function openAllStages(page: Page): Promise<void> {
+  if (isPhone(page)) await expect(stage(page, 6)).not.toHaveAttribute('open', '');
+  for (const number of [1, 2, 3, 4, 5, 6]) {
+    if ((await stage(page, number).getAttribute('open')) === null) await stage(page, number).locator('summary').click();
+    await expect(stage(page, number)).toHaveAttribute('open', '');
+  }
+}
+
 test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
   test('AC-1: six panels with the number and name of each stage, the total in the summary, and each line with its tag, name, formula and working', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
@@ -44,6 +53,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
     for (const [index, title] of STAGE_TITLES.entries()) await expect(stage(page, index + 1).locator('summary')).toContainText(title);
     await expect(stage(page, 3).locator('summary')).toContainText(/Stage total: [\d,]+\.\d{2}/);
+    await openAllStages(page);
 
     const material = stage(page, 2);
     await expect(material).toContainText('Excel column AK');
