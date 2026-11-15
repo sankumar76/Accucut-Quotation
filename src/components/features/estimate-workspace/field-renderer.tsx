@@ -10,10 +10,8 @@ import type { FormField as FormFieldView, MaterialChoice } from '@/lib/estimates
 import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
+import { controlIdFor, FIELD_MARK } from './field-ids';
 import type { Loaded } from './use-part-form';
-
-/** Marks a control that Enter moves on from: the form's key handler finds the next one by this, and skips a read-only or disabled one (STORY-05.03 AC-6). */
-export const FIELD_MARK = 'data-part-field';
 
 export interface FieldRendererProps {
   readonly field: FormFieldView;
@@ -33,8 +31,6 @@ export interface FieldRendererProps {
   readonly onCommit: (override?: string) => void;
 }
 
-/** The id of the control of the field with this ID: the registry's field ID, which is unique on the page. Calculate's list of missing fields links to it. */
-export const controlIdFor = (fieldId: string): string => `part-field-${fieldId}`;
 export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => controlIdFor(field.id);
 
 /**
@@ -47,7 +43,7 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
   const readOnly = !editable || !field.editable;
   const mark = field.editable && editable ? 'true' : undefined;
   const tag = <ColumnTag letter={field.letter} kind={field.kind} />;
-  const common = { name: field.id, 'data-part-field': mark };
+  const common = { name: field.id, [FIELD_MARK]: mark };
   // A long text is told so while it is typed (Remarks, STORY-05.04 AC-4): the box lets it run over, so the message is seen and the text is kept; the same words come back on leaving.
   const shownError = error ?? lengthProblem(field.rule, text) ?? (missing !== undefined && text.trim() === '' ? missing : undefined);
 

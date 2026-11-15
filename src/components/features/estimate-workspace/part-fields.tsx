@@ -29,14 +29,13 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
-import { FIELD_MARK, FieldRenderer } from './field-renderer';
+import { NEXT_FIELD } from './field-ids';
+import { FieldRenderer } from './field-renderer';
 import { PictureSlot } from './picture-slot';
 import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
 import { usePartValues, type Loaded, type PartTarget, type SavedPart } from './use-part-form';
-
-export const PART_FORM_ATTRIBUTE = 'data-part-form';
 
 export interface PartFieldsProps {
   readonly estimateId: string;
@@ -56,7 +55,6 @@ export interface PartFieldsProps {
 }
 
 const TITLE_ID = 'part-form-title';
-const NEXT_FIELD = `[${FIELD_MARK}="true"]`;
 
 /**
  * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
@@ -65,11 +63,6 @@ const NEXT_FIELD = `[${FIELD_MARK}="true"]`;
 function missingMessageOf(field: FormField): string {
   if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
   return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
-}
-
-/** Enter on a part in the tree opens its form: the first field that can be typed into takes the focus (STORY-05.03, review SQR-11). */
-export function focusFirstField(): void {
-  document.querySelector<HTMLElement>(`[${PART_FORM_ATTRIBUTE}] ${NEXT_FIELD}`)?.focus();
 }
 
 /** The text a field that follows something shows: the Sl. No. of the part, or the Material Considered of the chosen material (names only, no number). */
