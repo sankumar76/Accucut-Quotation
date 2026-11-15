@@ -64,6 +64,8 @@ const REPOSITORIES = {
     'exchange-rate-repository',
     // STORY-05.07: the part pictures, stored whole and read by their ID. No Engineer view needs the bytes or their owner lookup; the picture route is a handler, not a view.
     'image-repository',
+    // STORY-02.09: the backup and disk readings of `job_runs`, for the Admin's Settings page. Internal data, but nothing an Engineer's view has a use for, so it stays blocked.
+    'job-run-repository',
     'master-constraints',
     'master-repository',
     'material-repository',
@@ -101,6 +103,8 @@ const SERVICES = {
     'masters-service',
     'password-policy',
     'rate-name-rules',
+    // STORY-02.09: the Admin's Settings page (the last good backup and the server disk). It holds no cost data, but it is Admin only and no Engineer view imports it.
+    'settings-service',
     // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.

@@ -12,6 +12,7 @@ import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createImageRepository } from './repositories/image-repository';
+import { createJobRunRepository } from './repositories/job-run-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -27,6 +28,7 @@ import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
 import { createUserService, type UserService } from './services/user-service';
@@ -52,6 +54,7 @@ let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
+let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -236,6 +239,15 @@ export function getEstimateReviewService(): EstimateReviewService {
     });
   }
   return estimateReviewService;
+}
+
+/**
+ * The Settings page's reading of the backups and the server disk (STORY-02.09): the last good backup and the newest free-space reading, from `job_runs`, against the system clock. The
+ * routes and the page that call it are in the manifest for the Admin alone.
+ */
+export function getSettingsService(): SettingsService {
+  settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
+  return settingsService;
 }
 
 /**

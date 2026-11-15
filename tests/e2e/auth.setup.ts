@@ -180,6 +180,10 @@ setup('make the E2E Admin the one active Admin and save a signed-in Admin (the U
     await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
     const warmedApi = await page.request.get(`${DEVELOPMENT_URL}/api/v1/audit?limit=1`);
     expect(warmedApi.status()).toBe(200);
+    // And the Settings page and its API (STORY-02.09): read-only, so the warm-up changes nothing.
+    await page.goto(`${DEVELOPMENT_URL}/settings`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
+    expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/settings`)).status()).toBe(200);
     // The audit spec makes its entries through the Users API (add a person, change a role), so those two routes are compiled
     // here too: a change to nobody (an ID no one has) is answered 404 and writes nothing.
     const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
