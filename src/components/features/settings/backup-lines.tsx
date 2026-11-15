@@ -5,6 +5,7 @@ import type { BackupStatusView } from '@/server/services/settings-service';
 import {
   BACKUP_LATE_BODY,
   BACKUP_LATE_TITLE,
+  BACKUP_NEVER_BODY,
   BACKUPS_HEADING,
   diskText,
   DISK_FULL_BODY,
@@ -43,7 +44,7 @@ export function BackupLines({ status }: BackupLinesProps) {
         <CardTitle>{BACKUPS_HEADING}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-s-4">
-        {backupLate ? <Notice tone="warn" title={BACKUP_LATE_TITLE}>{BACKUP_LATE_BODY}</Notice> : null}
+        {backupLate ? <Notice tone="warn" title={BACKUP_LATE_TITLE}>{lastGoodBackupAt === null ? BACKUP_NEVER_BODY : BACKUP_LATE_BODY}</Notice> : null}
         {diskNearlyFull ? <Notice tone="warn" title={DISK_FULL_TITLE}>{DISK_FULL_BODY}</Notice> : null}
         <dl className="flex flex-col gap-s-3">
           <Line label={LAST_GOOD_LABEL} value={lastGoodBackupAt === null ? NO_BACKUP_YET : lastGoodText(new Date(lastGoodBackupAt))} />

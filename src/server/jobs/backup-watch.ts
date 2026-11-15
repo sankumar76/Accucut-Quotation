@@ -2,8 +2,7 @@ import { statfs } from 'node:fs/promises';
 
 import { schedule, type ScheduledTask } from 'node-cron';
 
-import { BACKUP_LATE_AFTER_DAYS, BACKUP_WATCH_JOB, RUN_STATUS_OK } from '../../lib/settings/backup-status';
-import { MILLISECONDS_PER_DAY } from '../../lib/time';
+import { BACKUP_WATCH_JOB, isBackupLate, RUN_STATUS_OK } from '../../lib/settings/backup-status';
 
 /**
  * The daily `backup-watch` job of the worker (STORY-10.05 AC-5, AC-9; ADR-011; ADR-015 Amendment 3 point 5; architecture sections 4.7, 9.5 and 9.9).
@@ -14,7 +13,8 @@ import { MILLISECONDS_PER_DAY } from '../../lib/time';
  *      either folder (both are protected), but a drive root can always be measured. `PG_DATA_VOLUME` and `BACKUP_VOLUME` come from `.env`, where the install wrote them
  *      (`X:/`); when both name the same volume, one reading is taken. The row holds the figures of the volume that is nearest to full, and, per volume, only a role
  *      (`data`, `backup` or `data and backup`) and its two figures: never a path, a drive letter or any other volume's name.
- *   2. It flags a missed week: no good backup (`job = 'backup'`, `result.status = 'ok'`) in the last 8 days. That is logged at `error` (e-mail follows with the alerts
+ *   2. It flags a missed week: no good backup (`job = 'backup'`, `result.status = 'ok'`) in the last 8 days, or none at all (STORY-10.05 AC-10: one rule, `isBackupLate` in
+ *      `src/lib/settings/backup-status.ts`, which the Settings service uses too). That is logged at `error` (e-mail follows with the alerts
  *      story) and stored as `result.backupLate`.
  *
  * The row is the contract with STORY-02.09 (`src/lib/settings/backup-status.ts`): `job`, `started_at`, `finished_at`, and `result` with `status`, `freeBytes`, `totalBytes`.
@@ -114,12 +114,6 @@ function figuresOf(raw: StatfsFigures): { readonly freeBytes: number; readonly t
   const totalBytes = raw.bsize * raw.blocks;
   if (!Number.isFinite(freeBytes) || !Number.isFinite(totalBytes) || totalBytes <= 0 || freeBytes < 0 || freeBytes > totalBytes) return undefined;
   return { freeBytes, totalBytes };
-}
-
-/** True when there is no good backup, or the newest one finished more than {@link BACKUP_LATE_AFTER_DAYS} days before `now`. */
-export function isBackupLate(latestGoodBackupAt: Date | null, now: Date): boolean {
-  if (latestGoodBackupAt === null) return true;
-  return now.getTime() - latestGoodBackupAt.getTime() > BACKUP_LATE_AFTER_DAYS * MILLISECONDS_PER_DAY;
 }
 
 export interface BackupWatchOutcome {

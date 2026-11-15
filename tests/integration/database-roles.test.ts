@@ -93,6 +93,22 @@ describe('database roles (AC-9)', () => {
     ]);
   });
 
+  it('STORY-10.05 (migration 20261115100000_job_runs_backup_grant): the backup role can INSERT into job_runs and nothing else there; the runtime role keeps SELECT and INSERT only', async () => {
+    const { rows } = await owner.query(
+      `SELECT has_table_privilege($1, 'job_runs', 'INSERT') AS backup_insert,
+              has_table_privilege($1, 'job_runs', 'UPDATE') AS backup_update,
+              has_table_privilege($1, 'job_runs', 'DELETE') AS backup_delete,
+              has_table_privilege($1, 'job_runs', 'TRUNCATE') AS backup_truncate,
+              has_table_privilege($2, 'job_runs', 'INSERT') AS app_insert,
+              has_table_privilege($2, 'job_runs', 'UPDATE') AS app_update,
+              has_table_privilege($2, 'job_runs', 'DELETE') AS app_delete`,
+      [BACKUP_ROLE, RUNTIME_ROLE],
+    );
+    expect(rows).toEqual([
+      { backup_insert: true, backup_update: false, backup_delete: false, backup_truncate: false, app_insert: true, app_update: false, app_delete: false },
+    ]);
+  });
+
   it('AC-9: the owner can run DDL', async () => {
     await owner.query(`ALTER TABLE ${PROBE_TABLE} ADD COLUMN extra text`);
     const { rows } = await owner.query(

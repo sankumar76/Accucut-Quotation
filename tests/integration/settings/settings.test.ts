@@ -240,8 +240,14 @@ describe('the service over the real repository, with a controlled clock (AC-1 to
     expect((await service.getBackupStatus()).diskNearlyFull).toBe(nearlyFull);
   });
 
-  it('no rows: no date, no late notice, no reading, no disk notice (AC-3)', async () => {
-    expect(await service.getBackupStatus()).toEqual({ lastGoodBackupAt: null, backupLate: false, diskReading: null, diskNearlyFull: false });
+  it('no rows: no date, late, no reading, no disk notice (STORY-10.05 AC-10, which replaces AC-3)', async () => {
+    expect(await service.getBackupStatus()).toEqual({ lastGoodBackupAt: null, backupLate: true, diskReading: null, diskNearlyFull: false });
+  });
+
+  it('only failed backup rows: still no good backup, so no date and late (STORY-10.05 AC-10)', async () => {
+    await insert({ job: 'backup', finishedAt: daysAgo(1), result: { status: 'failed' } });
+    await insert({ job: 'backup', finishedAt: daysAgo(2), result: { status: 'failed' } });
+    expect(await service.getBackupStatus()).toMatchObject({ lastGoodBackupAt: null, backupLate: true });
   });
 
   it('AC-8: a failed latest run after a good one shows the last good backup, and the clock keeps running from it', async () => {

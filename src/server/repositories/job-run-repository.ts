@@ -5,7 +5,7 @@ import type { PrismaClient } from './prisma-client';
 
 /**
  * Reads of `job_runs` for the Settings page (STORY-02.09, architecture section 5.1). The runtime role has SELECT and INSERT on the table and nothing else; this repository only
- * reads, because the rows are written by the weekly backup and by the worker's `backup-watch` job (STORY-10.05), which only write.
+ * reads, because the rows are written by the weekly backup and by the worker's `backup-watch` job (STORY-10.05), which only write: see `createJobRunWriter` below.
  *
  * Both questions are answered in SQL and return one row at most, so the table can grow for years without the page reading more than it needs (the index
  * `idx_job_runs_job_finished_at` serves the first; the second reads the rows of two jobs, a handful a week, newest first). The repository returns the figures the page needs and
@@ -27,6 +27,31 @@ interface DiskReadingSqlRow {
   readonly finished_at: Date;
   readonly free_bytes: number;
   readonly total_bytes: number;
+}
+
+/** One row of `job_runs`. A run is recorded once, at its end, with both times, and is never changed afterwards (the runtime role cannot UPDATE it). */
+export interface JobRunRecord {
+  readonly job: string;
+  readonly startedAt: Date;
+  readonly finishedAt: Date;
+  /** A JSON object with `status`, and for a disk reading `freeBytes` and `totalBytes` (src/lib/settings/backup-status.ts). Figures and a reason, never a path. */
+  readonly result: Readonly<Record<string, unknown>>;
+}
+
+/** The one write the worker makes to `job_runs` (STORY-10.05): its daily `backup-watch` row. */
+export interface JobRunWriter {
+  recordRun(run: JobRunRecord): Promise<void>;
+}
+
+export function createJobRunWriter(db: PrismaClient): JobRunWriter {
+  return {
+    recordRun: (run) =>
+      withDatabaseErrors(async () => {
+        await db.$executeRaw`
+          INSERT INTO job_runs (job, started_at, finished_at, result)
+          VALUES (${run.job}, ${run.startedAt}, ${run.finishedAt}, ${JSON.stringify(run.result)}::jsonb)`;
+      }),
+  };
 }
 
 export function createJobRunRepository(db: PrismaClient): JobRunRepository {

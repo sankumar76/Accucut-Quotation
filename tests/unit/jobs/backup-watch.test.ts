@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deriveBackupStatus } from '@/lib/settings/backup-status';
+import { deriveBackupStatus, isBackupLate } from '@/lib/settings/backup-status';
 import {
   BACKUP_WATCH_CRON,
   BACKUP_WATCH_TIMEZONE,
   checkVolumes,
   describeBackupWatch,
-  isBackupLate,
   nodeStatfs,
   performBackupWatch,
   runBackupWatch,
@@ -107,7 +106,7 @@ describe('checkVolumes: which volumes are measured (AC-5)', () => {
   });
 });
 
-describe('isBackupLate: a missed week is more than 8 days without a good backup (AC-5)', () => {
+describe('isBackupLate (shared with the Settings service): a missed week is more than 8 days without a good backup, or none at all (AC-5, AC-10)', () => {
   it('is false at exactly 8 days and true one millisecond later; true when there is no good backup at all', () => {
     expect(isBackupLate(new Date(NOW.getTime() - 8 * DAY), NOW)).toBe(false);
     expect(isBackupLate(new Date(NOW.getTime() - 8 * DAY - 1), NOW)).toBe(true);
