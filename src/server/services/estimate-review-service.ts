@@ -1,3 +1,4 @@
+import { assertNever } from '../../lib/assert-never';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { PART_NAME_KEYS } from '../../lib/estimate/calculate-check';
 import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
@@ -131,8 +132,17 @@ function nodesOf(records: ReadonlyArray<NodeRecord>, document: ConfigDocument, c
 export function createEstimateReviewService({ calculations, nodes, configuration }: EstimateReviewDependencies): EstimateReviewService {
   return {
     async getCosts(viewer, estimateId) {
-      // Before any read: an Engineer is refused whatever the ID is (CR-33, NFR-002). The route and the page refuse them first; this is the second guard.
-      if (viewer.role === 'ENGINEER') throw new ForbiddenError();
+      // Before any read, and by name: only the Lead and the Admin are let through, an Engineer is refused whatever the ID is (CR-33, NFR-002), and a role added one day fails to compile here
+      // (`assertNever`) and is refused at run time until someone decides. The route and the page refuse first; this is the second guard.
+      switch (viewer.role) {
+        case 'ADMIN':
+        case 'LEAD':
+          break;
+        case 'ENGINEER':
+          throw new ForbiddenError();
+        default:
+          return assertNever(viewer.role, 'role');
+      }
       const basis = await calculations.findFigureBasis(estimateId);
       if (basis === null) throw new NotFoundError();
 

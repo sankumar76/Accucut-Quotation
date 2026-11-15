@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { ESTIMATE_META_DESCRIPTION, ESTIMATE_META_TITLE } from '@/components/features/estimate-workspace/estimate-texts';
 import { EstimateWorkspace } from '@/components/features/estimate-workspace/estimate-workspace';
+import { assertNever } from '@/lib/assert-never';
 import { formatIst } from '@/lib/time';
 import { getEstimateService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
@@ -38,8 +39,17 @@ export default async function EstimatePage({ params }: PageProps) {
     notes: workspace.notes,
     assignedByName: workspace.assignedByName,
   };
-  if (user.role === 'ENGINEER') return <EstimateWorkspace header={header} estimateId={workspace.estimateId} customer={workspace.customer} />;
-  // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).
-  const { renderReview } = await import('./review-page');
-  return renderReview({ viewer: { id: user.id, role: user.role }, estimateId: workspace.estimateId, header, customer: workspace.customer });
+  // An allow-list by name, closed by `assertNever`: a fourth role added one day gets no branch here until someone decides (it fails to compile) and never the review's figures (NFR-002).
+  switch (user.role) {
+    case 'ENGINEER':
+      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} customer={workspace.customer} />;
+    case 'LEAD':
+    case 'ADMIN': {
+      // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).
+      const { renderReview } = await import('./review-page');
+      return renderReview({ viewer: { id: user.id, role: user.role }, estimateId: workspace.estimateId, header, customer: workspace.customer });
+    }
+    default:
+      return assertNever(user.role, 'role');
+  }
 }

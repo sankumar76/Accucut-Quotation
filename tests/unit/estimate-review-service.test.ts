@@ -197,6 +197,30 @@ describe('AC-5: an Engineer is refused before anything is read', () => {
     expect(world.reads.figures.calls).toEqual([]);
   });
 
+  it('review SQR-01: the roles let through are exactly the Lead and the Admin, by name', async () => {
+    const quantityCase = caseOf('CE-1');
+    const allowed: string[] = [];
+    for (const role of ['ADMIN', 'LEAD', 'ENGINEER'] as const) {
+      const world = createReviewWorld({ rows: quantityCase.rows, bl: quantityCase.bl });
+      const outcome = await world.service.getCosts({ id: ENGINEER.id, role }, REVIEW_ESTIMATE_ID).then(
+        () => 'allowed',
+        () => 'refused',
+      );
+      if (outcome === 'allowed') allowed.push(role);
+    }
+    expect(allowed).toEqual(['ADMIN', 'LEAD']);
+  });
+
+  it('review SQR-01: a role that is none of the three (a fourth, added later) is refused before anything is read', async () => {
+    const quantityCase = caseOf('CE-1');
+    const world = createReviewWorld({ rows: quantityCase.rows, bl: quantityCase.bl });
+    const fourth = { id: ENGINEER.id, role: 'INVENTED_VIEWER' } as unknown as Parameters<typeof world.service.getCosts>[0];
+    await expect(world.service.getCosts(fourth, REVIEW_ESTIMATE_ID)).rejects.toThrow('Unhandled role.');
+    expect(world.reads.basis.calls).toEqual([]);
+    expect(world.reads.nodes.calls).toEqual([]);
+    expect(world.reads.figures.calls).toEqual([]);
+  });
+
   it('an estimate that does not exist is a 404 for a Lead and reads nothing more', async () => {
     const quantityCase = caseOf('CE-1');
     const world = createReviewWorld({ rows: quantityCase.rows, bl: quantityCase.bl });

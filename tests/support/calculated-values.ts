@@ -11,7 +11,7 @@ import { indianGrouping, variantsOf, westernGrouping, type ForbiddenString } fro
  * **Which figures are skipped, and why.** A figure under 100 (so 0, 0.00 and 1 too) is not looked for: its two-decimal text (`18.75`, `0.52`, `1.00`) appears in scripts, styles and ordinary
  * screens for no reason, and a scan that cried wolf on it would be quarantined. A whole number (`300`, `1000.0000`) is skipped too, for the same reason: it is the likeliest to be on a page for
  * another reason, and a cost worked out from rates and weights is a whole number only by accident. A figure that equals something the Engineer typed into the part (any value of the row's inputs,
- * compared as a number) is not looked for either: the Engineer's own `200.00` is on their screen by right. Of a watched figure, the forms of the figure itself are the ones with a decimal point; the whole-rupee rounding is looked for only in a form a page would not show for another reason (`wholeRupeeForms`: grouped, or six digits and more). The gap that is left is real and is the
+ * compared as a number) is not looked for either: the Engineer's own `200.00` is on their screen by right. Of a watched figure, the forms of the figure itself are the ones with a decimal point; the whole-rupee rounding is looked for only in a form a page would not show for another reason (`wholeRupeeForms`: grouped from 10,000, plain from seven digits, rupee-prefixed for four to six). The gap that is left is real and is the
  * price of a scan that stays honest: only figures of three or more integer digits with a fraction are watched, the same shape as the master sentinels (`SENTINEL_PATTERN`). The journey asserts the
  * list is not empty, so it can never pass by watching nothing.
  */
@@ -30,21 +30,29 @@ const SMALLEST_WATCHED = new Decimal(100);
 
 /**
  * The whole-rupee forms of a watched figure (STORY-06.02, review SQR-12 of AQP-317): a quotation or a summary rounds a price to the whole rupee, so `1234567.891` can reach a page as `12,34,568`
- * or `1,234,568`. Only a form that a page does not show for another reason is looked for: a grouped form (it holds a comma, so the figure is 1,000 or more) and a plain form of six digits or more.
+ * or `1,234,568`. The scanner matches by substring over scripts, styles and payloads too, so only a form a page does not show for another reason is looked for (review SQR-03 of AQP-319):
+ * a grouped form from 10,000 up (`10,000` and longer: `1,235` can sit inside a minified list of numbers), a plain form from seven digits, and, for four to six digits, the plain form with the
+ * rupee sign in front (`₹ 12346`, `₹12346`), which no script holds by chance. A rounding that is the whole number of something the Engineer typed is not looked for at all: it is on their page by right.
  * `345.67` rounds to `346`, which is on a page for any reason, so it adds nothing.
  */
-const MIN_PLAIN_ROUNDED_DIGITS = 6;
+const MIN_GROUPED_ROUNDED_DIGITS = 5;
+const MIN_PLAIN_ROUNDED_DIGITS = 7;
+const MIN_PREFIXED_ROUNDED_DIGITS = 4;
+const RUPEE_SIGNS = ['₹ ', '₹'] as const;
 
-function wholeRupeeForms(magnitude: Decimal): ForbiddenString[] {
+function wholeRupeeForms(magnitude: Decimal, typedWholes: ReadonlySet<string>): ForbiddenString[] {
   const whole = magnitude.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toString();
-  const forms = [
-    { text: indianGrouping(whole), form: 'Indian grouping' },
-    { text: westernGrouping(whole), form: 'grouping of three' },
-    { text: whole, form: 'plain digits' },
-  ];
-  return forms
-    .filter(({ text, form }) => (form === 'plain digits' ? text.length >= MIN_PLAIN_ROUNDED_DIGITS : text.includes(',')))
-    .map(({ text, form }) => ({ text, reason: `a figure of this estimate's own calculation (rounded to the whole rupee, ${form})` }));
+  if (typedWholes.has(whole)) return [];
+  const reason = (form: string): string => `a figure of this estimate's own calculation (rounded to the whole rupee, ${form})`;
+  const forms: ForbiddenString[] = [];
+  if (whole.length >= MIN_GROUPED_ROUNDED_DIGITS) {
+    forms.push({ text: indianGrouping(whole), reason: reason('Indian grouping') }, { text: westernGrouping(whole), reason: reason('grouping of three') });
+  }
+  if (whole.length >= MIN_PLAIN_ROUNDED_DIGITS) forms.push({ text: whole, reason: reason('plain digits') });
+  if (whole.length >= MIN_PREFIXED_ROUNDED_DIGITS && whole.length < MIN_PLAIN_ROUNDED_DIGITS) {
+    for (const sign of RUPEE_SIGNS) forms.push({ text: `${sign}${whole}`, reason: reason('plain digits after the rupee sign') });
+  }
+  return forms;
 }
 
 /**
@@ -53,6 +61,7 @@ function wholeRupeeForms(magnitude: Decimal): ForbiddenString[] {
  */
 export function forbiddenCalculated(calculated: ReadonlyArray<unknown>, typed: ReadonlyArray<unknown> = []): ReadonlyArray<ForbiddenString> {
   const typedFigures = new Set(typed.flatMap(numericScalars).map((text) => new Decimal(text).abs().toString()));
+  const typedWholes = new Set(typed.flatMap(numericScalars).map((text) => new Decimal(text).abs().toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toString()));
   const seen = new Set<string>();
   const list: ForbiddenString[] = [];
   for (const figure of calculated.flatMap(numericScalars)) {
@@ -63,7 +72,7 @@ export function forbiddenCalculated(calculated: ReadonlyArray<unknown>, typed: R
       seen.add(text);
       list.push({ text, reason: `a figure of this estimate's own calculation (${form})` });
     }
-    for (const entry of wholeRupeeForms(magnitude)) {
+    for (const entry of wholeRupeeForms(magnitude, typedWholes)) {
       if (seen.has(entry.text)) continue;
       seen.add(entry.text);
       list.push(entry);

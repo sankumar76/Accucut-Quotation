@@ -93,8 +93,10 @@ describe('AC-5: no review code reaches the Engineer', () => {
     const staticImports = [...page.matchAll(/^import .* from '([^']+)'/gm)].map((match) => match[1]);
     expect(staticImports.filter((specifier) => /review/i.test(specifier ?? ''))).toEqual([]);
     expect(page).toMatch(/await import\('\.\/review-page'\)/);
-    // The dynamic import is after the Engineer's branch has returned.
-    expect(page.indexOf("await import('./review-page')")).toBeGreaterThan(page.indexOf("user.role === 'ENGINEER'"));
+    // The dynamic import is after the Engineer's case has returned, and the roles are an allow-list closed by assertNever (review SQR-01): no role but the Lead and the Admin reaches it.
+    expect(page.indexOf("await import('./review-page')")).toBeGreaterThan(page.indexOf("case 'ENGINEER':"));
+    expect(page).toMatch(/case 'LEAD':\s*case 'ADMIN': \{[\s\S]*await import\('\.\/review-page'\)[\s\S]*\}\s*default:\s*return assertNever\(user\.role, 'role'\)/);
+    expect(page).not.toMatch(/role !== 'ENGINEER'|role === 'ENGINEER'\)/);
   });
 
   it('control: a static import of the review in a page is found by the same scan', () => {
