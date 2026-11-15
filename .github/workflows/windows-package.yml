@@ -405,6 +405,30 @@ jobs:
           Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
           $global:LASTEXITCODE = 0
 
+      # Why a task that ran failed: run the same script as the same account in front of the log, so that its message is seen (the task discards it). The runner is thrown away
+      # after the job; the account gets a new random password here, held in memory only and never printed. Diagnostics only: this step runs on failure and changes nothing else.
+      - name: Why did the weekly backup fail? Run it as AccucutBackup and show what it says (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (-not (Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue)) { Write-Host 'No AccucutBackup account.'; $global:LASTEXITCODE = 0; return }
+          $plain = 'Zz9!' + [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+          $secure = ConvertTo-SecureString -String $plain -AsPlainText -Force
+          $set = @{ Name = 'AccucutBackup'; Password = $secure }
+          Set-LocalUser @set
+          $credential = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\AccucutBackup", $secure)
+          $out = Join-Path $env:RUNNER_TEMP 'backup-as-user.out.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'backup-as-user.err.txt'
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          try {
+            $p = Start-Process -FilePath $ps -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\Accucut\current\backup.ps1', '-Reason', 'weekly') -Credential $credential -WorkingDirectory $env:SystemRoot -RedirectStandardOutput $out -RedirectStandardError $err -Wait -PassThru -WindowStyle Hidden
+            Write-Host "backup.ps1 as AccucutBackup: exit code $($p.ExitCode)"
+          } catch { Write-Host "Start-Process failed: $($_.Exception.Message)" }
+          foreach ($file in $out, $err) { if (Test-Path -LiteralPath $file) { Write-Host "===== $file"; Get-Content -LiteralPath $file -Tail 40 } }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          & icacls.exe 'C:\Accucut' 'C:\Accucut\config' 'C:\Accucut\backups' 'C:\Accucut\releases' 2>&1 | Out-Host
+          $global:LASTEXITCODE = 0
+
       - name: Delete the values file and the throwaway private key
         if: ${{ always() }}
         run: |
