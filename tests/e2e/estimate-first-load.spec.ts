@@ -90,10 +90,11 @@ test.describe('AC-2, AC-3: the phone drawer fetches its code on the first press'
     await expect(drawerButton(page)).toHaveAttribute('aria-busy', 'true');
     await expect(drawerButton(page)).toBeEnabled();
     await expect(drawer(page)).toBeVisible({ timeout: SLOW_OPEN_WAIT_MILLISECONDS });
-    await expect(drawerButton(page)).not.toHaveAttribute('aria-busy', 'true');
 
+    // While the drawer is open the page behind it is hidden from the accessibility tree (aria-hidden), so the button is looked at again once it is closed.
     await page.keyboard.press('Escape');
     await expect(drawer(page)).toHaveCount(0);
+    await expect(drawerButton(page)).not.toHaveAttribute('aria-busy', 'true');
     await expect(drawerButton(page)).toBeFocused();
   });
 
