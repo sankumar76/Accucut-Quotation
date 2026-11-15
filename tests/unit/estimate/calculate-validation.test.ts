@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildFormSections } from '@/lib/estimate/form-fields';
+import { encodeTreatment } from '@/lib/estimate/treatment-value';
+import { NOT_APPLICABLE_NAME, NOT_APPLICABLE_TREATMENT_ID } from '@/lib/masters/system-entries';
 import { validateForCalculate, type BlockedPart, type CalculateCheck, type PartToCheck } from '@/lib/estimate/calculate-check';
 import type { ConfigDocument } from '@/lib/fields/schema';
 
@@ -96,14 +98,15 @@ describe('AC-1: a blank in any needed input blocks, and names the part and the f
     ]);
   });
 
-  it('a part with nothing typed lists every needed field, in the order of the form, and not Fasteners Qty and Cost (hidden), Part Model, the treatment or the flags', () => {
+  it('a part with nothing typed lists every needed field, in the order of the form, Treatment / Color among them, and not Fasteners Qty and Cost (hidden), Part Model or the flags', () => {
     const [only] = blocked(validateForCalculate([part({ inputs: {} })], document));
     const labels = only?.fields.map((field) => field.label) ?? [];
     expect(labels).toEqual(ALWAYS_NEEDED.map((field) => field.label));
+    expect(labels).toContain('Treatment / Color');
     expect(labels).not.toContain('Fasteners Qty');
     expect(labels).not.toContain('Fasteners Cost');
     expect(labels).not.toContain('Part Model');
-    expect(labels).not.toContain('Treatment / Color');
+    expect(labels).not.toContain('Primer');
   });
 
   it.each([[''], ['   '], ['abc'], ['-1'], ['1.234'], ['1e3']])('a number stored as %j is not trusted and counts as blank', (stored) => {
@@ -189,11 +192,26 @@ describe('AC-1: the fields the registry hides, and the ones never needed', () =>
     expect(passed(validateForCalculate([part()], document))).toHaveLength(1);
   });
 
-  it('Treatment / Color (G) is a placeholder until its story builds the control, so it is not needed; a word stored for it is carried', () => {
+  it('STORY-05.06: Treatment / Color (G) is needed, and its words as the part holds them are carried: "Other" with typed words, a listed entry, and "Not applicable"', () => {
     const treatment = fieldIdOf('treatment-color');
-    expect(passed(validateForCalculate([part()], document))[0]?.texts[treatment]).toBeUndefined();
-    const inputs = { ...completePartInputs(), [treatment]: 'Invented powder coat' };
-    expect(passed(validateForCalculate([part({ inputs })], document))[0]?.texts[treatment]).toBe('Invented powder coat');
+    const without = Object.fromEntries(Object.entries(completePartInputs()).filter(([fieldId]) => fieldId !== treatment));
+    expect(blocked(validateForCalculate([part({ inputs: without })], document))[0]?.fields).toEqual([{ fieldId: treatment, label: 'Treatment / Color' }]);
+    expect(passed(validateForCalculate([part()], document))[0]?.texts[treatment]).toBe(INVENTED_TEXT);
+    for (const choice of [{ id: '00000000-0000-4000-8000-000700000c01', text: 'Invented powder coat' }, { id: NOT_APPLICABLE_TREATMENT_ID, text: NOT_APPLICABLE_NAME }]) {
+      expect(passed(validateForCalculate([part({ inputs: { ...completePartInputs(), [treatment]: choice } })], document))[0]?.texts[treatment]).toBe(choice.text);
+    }
+  });
+
+  it.each([
+    ['a plain text', 'Invented powder coat'],
+    ['the JSON text of a choice (the wire form is never what is stored)', encodeTreatment({ id: NOT_APPLICABLE_TREATMENT_ID, text: NOT_APPLICABLE_NAME })],
+    ['an object with no words', { id: '00000000-0000-4000-8000-000700000c01' }],
+    ['an object with blank words', { id: '00000000-0000-4000-8000-000700000c01', text: '   ' }],
+    ['a list', ['x']],
+    ['null', null],
+  ])('Treatment / Color stored as %s is not a value: it is blank, so the part is blocked', (_name, stored) => {
+    const treatment = fieldIdOf('treatment-color');
+    expect(blocked(validateForCalculate([part({ inputs: { ...completePartInputs(), [treatment]: stored } })], document))[0]?.fields.map((field) => field.label)).toEqual(['Treatment / Color']);
   });
 
   it('a treatment flag is never needed: an absent one is 0 (its default), a stored one is carried as the number it is', () => {

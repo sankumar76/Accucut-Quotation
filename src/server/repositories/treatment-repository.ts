@@ -12,9 +12,9 @@ import { clientFor, type Transaction } from './transaction';
  * story 02.06, the hidden "Not applicable" row (`is_hidden` true).
  *
  * **The default filter** (architecture section 4.9): every read and every lookup for a change applies `is_hidden = false`, so a hidden row is
- * never listed and never found by ID: a change to one is "not found", the same as an unknown ID. The one separately named method that reads the
- * hidden row, `findNotApplicableTreatmentOption`, serves the estimate form's drop-down (STORY-02.06). "Other" is not hidden, so the Admin's list
- * holds it, first. This file and `material-repository.ts` are the only ones that name `is_hidden`.
+ * never listed and never found by ID: a change to one is "not found", the same as an unknown ID. The two separately named methods that read the
+ * hidden row, `findNotApplicableTreatmentOption` and `findTreatmentOptionById` (which finds it by its fixed ID and no other hidden row), serve the
+ * estimate form's drop-down and its save (STORY-02.06, STORY-05.06). "Other" is not hidden, so the Admin's list holds it, first. This file and `material-repository.ts` are the only ones that name `is_hidden`.
  *
  * A name is unique ignoring letter case, and that rule belongs to the database (`uq_treatments_name_lower`): a write that repeats a name
  * fails with `TreatmentNameTakenError` whatever the caller checked first, so two requests that race for one name cannot both win.
@@ -54,6 +54,12 @@ export interface TreatmentMethods {
    * `is_hidden`, so no other hidden row can pass for it. Used only by the estimate form's options.
    */
   findNotApplicableTreatmentOption(): Promise<TreatmentOptionRecord | null>;
+  /**
+   * The treatment the estimate form offers with this ID, as a choice (STORY-05.06 AC-4): a listed one (hidden rows excluded, section 4.9) or the hidden "Not applicable" row, which the form offers
+   * and the Admin's list does not. Null for an unknown ID, a text that is not a UUID, and a treatment that was deleted. Read with no lock: no table refers to a treatment by key, so a delete that
+   * comes after this read changes nothing a part holds (it keeps its words).
+   */
+  findTreatmentOptionById(id: string): Promise<TreatmentOptionRecord | null>;
   /** Takes the lock that serialises changes to the treatments until the transaction ends (`SHARE ROW EXCLUSIVE`). Plain reads are not held up. */
   lockTreatments(tx: Transaction): Promise<void>;
   /** The listed treatment with this ID, or null (unknown or hidden alike), read **with its row locked** until the transaction ends. */
@@ -126,6 +132,17 @@ export function createTreatmentMethods(db: PrismaClient): TreatmentMethods {
     findNotApplicableTreatmentOption: () =>
       withDatabaseErrors(async () => {
         const row = await db.treatment.findFirst({ where: { id: NOT_APPLICABLE_TREATMENT_ID, isHidden: true }, select: { id: true, name: true } });
+        return row === null ? null : { id: row.id, name: row.name };
+      }),
+
+    findTreatmentOptionById: (id) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a treatment that is asked for by one is not found.
+        if (!z.uuid().safeParse(id).success) return null;
+        const row = await db.treatment.findFirst({
+          where: { id, OR: [{ ...LISTED }, { id: NOT_APPLICABLE_TREATMENT_ID, isHidden: true }] },
+          select: { id: true, name: true },
+        });
         return row === null ? null : { id: row.id, name: row.name };
       }),
 

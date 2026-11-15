@@ -28,14 +28,13 @@ const field = (overrides: Record<string, unknown> = {}) => ({
   rule: { type: 'number', decimals: 2 },
   ...overrides,
 });
-const section = (fields: unknown[] = [field()], reserved: unknown[] = []) => ({
+const section = (fields: unknown[] = [field()]) => ({
   id: '00000000-0000-4000-8000-000200000002',
   number: 2,
   name: 'Material and Dimensions',
   shortName: 'Material',
   columnRange: 'E, F, J–L, N',
   fields,
-  reserved,
 });
 
 describe('loadForm', () => {
@@ -54,23 +53,29 @@ describe('loadForm', () => {
   });
 
   it('reads every kind of rule', async () => {
-    const rules = [{ type: 'number', decimals: 2 }, { type: 'text', maxLength: 200, multiline: true }, { type: 'select', source: 'materials' }, { type: 'derived', from: FIELD }, { type: 'derived', from: null }];
+    const rules = [
+      { type: 'number', decimals: 2 },
+      { type: 'text', maxLength: 200, multiline: true },
+      { type: 'select', source: 'materials' },
+      { type: 'treatment', maxLength: 100 },
+      { type: 'flag' },
+      { type: 'derived', from: FIELD },
+      { type: 'derived', from: null },
+    ];
     const answer = { sections: [section(rules.map((rule) => field({ rule })))], lastSavedAt: null };
     const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, answer)));
     expect(outcome.status === 'ok' && outcome.value.sections[0]?.fields.map((entry) => entry.rule)).toEqual(rules);
   });
 
-  it('STORY-05.04: reads a field\'s default, its rupee unit and hint, a text of 1,000 characters, and the placeholders of a section', async () => {
+  it('STORY-05.04: reads a field\'s default, its rupee unit and hint, a text of 1,000 characters', async () => {
     const fasteners = field({ id: OTHER_FIELD, letter: 'S', label: 'Fasteners', defaultValue: 'None', hint: 'Type "None" if the part has no fasteners.', rule: { type: 'text', maxLength: 200, multiline: false } });
     const remarks = field({ letter: 'AJ', label: 'Remarks', unit: '₹', rule: { type: 'text', maxLength: 1000, multiline: true } });
-    const placeholder = { id: '00000000-0000-4000-8000-000100000007', letter: 'G', label: 'Treatment / Color' };
-    const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section([fasteners, remarks], [placeholder])], lastSavedAt: null })));
+    const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section([fasteners, remarks])], lastSavedAt: null })));
     expect(outcome.status === 'ok' && outcome.value.sections[0]?.fields.map((entry) => [entry.letter, entry.defaultValue, entry.unit])).toEqual([
       ['S', 'None', null],
       ['AJ', null, '₹'],
     ]);
     expect(outcome.status === 'ok' && outcome.value.sections[0]?.fields[1]?.rule).toEqual({ type: 'text', maxLength: 1000, multiline: true });
-    expect(outcome.status === 'ok' && outcome.value.sections[0]?.reserved).toEqual([placeholder]);
   });
 
   it('STORY-05.05: reads the rule that hides a field (the field it watches and the values that hide it), and null for a field that always shows', async () => {
@@ -92,9 +97,7 @@ describe('loadForm', () => {
   it.each([
     ['a field with a default that is not text',{ sections: [section([field({ defaultValue: 5 })])], lastSavedAt: null }],
     ['a field with no default key', { sections: [section([{ ...field(), defaultValue: undefined }])], lastSavedAt: null }],
-    ['a section whose placeholders are not a list', { sections: [{ ...section(), reserved: 'x' }], lastSavedAt: null }],
-    ['a section with no placeholders list', { sections: [{ ...section(), reserved: undefined }], lastSavedAt: null }],
-    ['a placeholder with no letter', { sections: [section([field()], [{ id: FIELD, letter: '', label: 'Treatment / Color' }])], lastSavedAt: null }],
+    ['a treatment rule with no length', { sections: [section([field({ rule: { type: 'treatment' } })])], lastSavedAt: null }],
   ])('an answer with %s is a failure, not a crash', async (_name, answer) => {
     expect((await loadForm(ESTIMATE, () => Promise.resolve(json(200, answer)))).status).toBe('failed');
   });

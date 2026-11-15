@@ -15,6 +15,10 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
+  /** Treatment / Color (STORY-05.06): a listed treatment, or "Other" with words of up to `maxLength` characters. */
+  | { readonly type: 'treatment'; readonly maxLength: number }
+  /** A surface treatment (STORY-05.06): chosen or not. The form draws the flags of a section as one multi-select. */
+  | { readonly type: 'flag' }
   | { readonly type: 'derived'; readonly from: string | null }
   /** A picture (Part Model, STORY-05.07): added, replaced and removed by its own routes, never typed or saved as a value. */
   | { readonly type: 'picture' };
@@ -35,13 +39,6 @@ export interface FormField {
   readonly rule: FormRule;
 }
 
-/** A field a later story builds: shown as a labelled placeholder, never typed into or saved. */
-export interface PlaceholderField {
-  readonly id: string;
-  readonly letter: string;
-  readonly label: string;
-}
-
 export interface FormSection {
   readonly id: string;
   readonly number: number;
@@ -49,7 +46,6 @@ export interface FormSection {
   readonly shortName: string;
   readonly columnRange: string;
   readonly fields: ReadonlyArray<FormField>;
-  readonly reserved: ReadonlyArray<PlaceholderField>;
 }
 
 export interface FormView {
@@ -94,6 +90,10 @@ function toRule(value: unknown): FormRule | null {
       return typeof value['maxLength'] === 'number' && typeof value['multiline'] === 'boolean' ? { type: 'text', maxLength: value['maxLength'], multiline: value['multiline'] } : null;
     case 'select':
       return value['source'] === 'materials' ? { type: 'select', source: 'materials' } : null;
+    case 'treatment':
+      return typeof value['maxLength'] === 'number' ? { type: 'treatment', maxLength: value['maxLength'] } : null;
+    case 'flag':
+      return { type: 'flag' };
     case 'derived': {
       const from = value['from'];
       return from === null || isNonEmptyText(from) ? { type: 'derived', from } : null;
@@ -123,19 +123,12 @@ function toField(value: unknown): FormField | null {
   return { id, letter, label, kind, unit, hint, defaultValue, required, editable, visibleWhen, rule };
 }
 
-function toPlaceholder(value: unknown): PlaceholderField | null {
-  if (!isRecord(value)) return null;
-  const { id, letter, label } = value;
-  return isNonEmptyText(id) && isNonEmptyText(letter) && isNonEmptyText(label) ? { id, letter, label } : null;
-}
-
 function toSection(value: unknown): FormSection | null {
-  if (!isRecord(value) || !Array.isArray(value['fields']) || !Array.isArray(value['reserved'])) return null;
+  if (!isRecord(value) || !Array.isArray(value['fields'])) return null;
   const { id, number, name, shortName, columnRange } = value;
   const fields = value['fields'].map(toField);
-  const reserved = value['reserved'].map(toPlaceholder);
   if (!isNonEmptyText(id) || typeof number !== 'number' || !isNonEmptyText(name) || !isNonEmptyText(shortName) || !isNonEmptyText(columnRange)) return null;
-  return fields.every((field) => field !== null) && reserved.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields, reserved } : null;
+  return fields.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields } : null;
 }
 
 function toForm(body: unknown): FormView | null {

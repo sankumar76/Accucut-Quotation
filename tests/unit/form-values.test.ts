@@ -122,7 +122,7 @@ describe('STORY-05.05 AC-1, AC-2: which fields show for what is typed', () => {
   const cost = { ...base, id: 'cost', letter: 'U', defaultValue: null, visibleWhen: HIDING };
   const length = { ...base, id: 'length', letter: 'J', defaultValue: null, visibleWhen: null };
   const fields = [length, fasteners, quantity, cost];
-  const section = { id: 's5', number: 5, name: 'Fasteners', shortName: 'Fasteners', columnRange: 'S–U', fields, reserved: [] };
+  const section = { id: 's5', number: 5, name: 'Fasteners', shortName: 'Fasteners', columnRange: 'S–U', fields };
 
   it('Qty and Cost are hidden while Fasteners shows its default "None", and while a person has typed "none", " NONE " or nothing', () => {
     for (const texts of [{}, { [FASTENERS_ID]: 'None' }, { [FASTENERS_ID]: 'none' }, { [FASTENERS_ID]: ' NONE ' }, { [FASTENERS_ID]: '' }, { [FASTENERS_ID]: '   ' }]) {

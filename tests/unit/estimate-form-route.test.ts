@@ -118,15 +118,19 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
       [8, 'Other Costs and Remarks', 'AJ, AP, AU, BM'],
     ]);
     expect(body.sections.flatMap((section) => section.fields.map((field) => field.letter))).toEqual([
-      ...['A', 'B', 'C', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'],
+      ...['A', 'B', 'C', 'D', 'G', 'H', 'E', 'F', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'],
+      ...['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'],
       ...['AP', 'AU', 'BM', 'AJ'],
     ]);
   });
 
-  it('AC-6: sends Treatment / Color (G) and the eight surface treatments as placeholders, with a letter and a label and nothing else', async () => {
+  it('STORY-05.06 AC-1, AC-3, AC-7: sends Treatment / Color (G) with the rule "treatment" and the eight surface treatments with the rule "flag": names, letters and rules, and no list, rate or cost', async () => {
     const body = formResponseSchema.parse(await (await form()).json());
-    expect(body.sections.map((section) => section.reserved.map((field) => field.letter))).toEqual([['G'], [], [], [], [], [], ['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'], []]);
-    expect(defined(body.sections[0]).reserved).toEqual([{ id: seedFieldAt('G').id, letter: 'G', label: 'Treatment / Color' }]);
+    const fields = body.sections.flatMap((section) => section.fields);
+    expect(fields.find((field) => field.letter === 'G')).toMatchObject({ id: seedFieldAt('G').id, label: 'Treatment / Color', required: true, editable: true, rule: { type: 'treatment', maxLength: 100 } });
+    const flags = defined(body.sections[6]).fields;
+    expect(flags.map((field) => [field.letter, field.rule.type, field.required])).toEqual(['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'].map((letter) => [letter, 'flag', false]));
+    expect(body.sections.map((section) => Object.keys(section).sort())).toEqual(body.sections.map(() => ['columnRange', 'fields', 'id', 'name', 'number', 'shortName']));
   });
 
   it('AC-2, AC-3, AC-4: carries the rupee add-on and the hint of the cost-typed inputs, the default and hint of Fasteners, and the hint of Remarks', async () => {
@@ -160,7 +164,7 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
 
   it('AC-7: no calculated field of any section is on the form: not one of the cost columns after Remarks, and not Total Process Cost', async () => {
     const body = formResponseSchema.parse(await (await form()).json());
-    const ids = new Set([...body.sections.flatMap((section) => section.fields.map((field) => field.id)), ...body.sections.flatMap((section) => section.reserved.map((field) => field.id))]);
+    const ids = new Set(body.sections.flatMap((section) => section.fields.map((field) => field.id)));
     for (const letter of ['M', 'O', 'AH', 'AI', 'AK', 'AL', 'AM', 'AN', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AV', 'AW', 'AX', 'AY', 'AZ', 'BA', 'BB', 'BG', 'BL', 'BN', 'BO']) {
       expect(ids.has(seedFieldAt(letter).id), letter).toBe(false);
     }
@@ -350,9 +354,6 @@ describe('STORY-05.04 AC-1, AC-4, AC-5: saving the fields of the other sections'
   });
 
   it.each([
-    ['Treatment / Color (G)', 'G'],
-    ['Hot Dip Galvanizing (Z)', 'Z'],
-    ['Soft Anodize (AG)', 'AG'],
     ['Part Model (C)', 'C'],
     ['Total Process Cost (AY), the calculated twin of Machining Cost', 'AY'],
     ['Approved Quote Price (BO)', 'BO'],

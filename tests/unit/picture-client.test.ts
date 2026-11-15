@@ -96,7 +96,7 @@ describe('dropPicture', () => {
 
 describe('the part form reads a picture and the picture rule', () => {
   const field = { id: FIELD, letter: 'C', label: 'Part Model', kind: 'input', unit: null, hint: 'PNG, JPG, GIF or WebP, under 200 KB.', defaultValue: null, required: false, editable: false, visibleWhen: null, rule: { type: 'picture' } };
-  const section = { id: '00000000-0000-4000-8000-000200000001', number: 1, name: 'Part Details', shortName: 'Part details', columnRange: 'A–D, G, H', fields: [field], reserved: [] };
+  const section = { id: '00000000-0000-4000-8000-000200000001', number: 1, name: 'Part Details', shortName: 'Part details', columnRange: 'A–D, G, H', fields: [field] };
 
   it('reads the picture rule of the form', async () => {
     const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section], lastSavedAt: null })));

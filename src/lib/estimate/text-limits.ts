@@ -13,3 +13,5 @@ export const MAX_PART_TEXT_LENGTH = 200;
  * still bounds the row; the product owner may change it. The field's own limit is in its rule (`FormRule.maxLength`), so the screen and the server read one number.
  */
 export const MAX_LONG_TEXT_LENGTH = 1000;
+/** The longest words typed beside "Other" in Treatment / Color (FR-050; STORY-05.06 AC-3). In the field's rule, so the screen and the server read one number. */
+export const MAX_OTHER_TREATMENT_LENGTH = 100;

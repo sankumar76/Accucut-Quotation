@@ -215,7 +215,7 @@ describe('AC-2: a complete estimate is calculated, stored and submitted in one t
 
 describe('AC-3: a 0 in a number field is accepted', () => {
   it('every number is 0, QTY per Assy included, and the estimate is submitted once the warning for the 0 of QTY per Assy is acknowledged (STORY-05.12)', async () => {
-    const zeros = Object.fromEntries(Object.entries(completePartInputs()).map(([id, value]) => [id, /^\d+\.\d+$/.test(value) ? '0' : value]));
+    const zeros = Object.fromEntries(Object.entries(completePartInputs()).map(([id, value]) => [id, typeof value === 'string' && /^\d+\.\d+$/.test(value) ? '0' : value]));
     const f = fixture({ nodes: [partNode(PART_ONE, null, 0, zeros)] });
     expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(CalculateAckRequiredError);
     expectNothingWritten(f);
