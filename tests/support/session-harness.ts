@@ -29,6 +29,7 @@ import { createFakeMasterRepository, type FakeMasterRepository } from './fake-ma
 import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { CANARY_PICTURE_HASH, smallPng } from './pictures';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
 /**
@@ -181,6 +182,9 @@ export function createSessionHarness(): SessionHarness {
     ],
     // The one part the node routes of STORY-05.02 open: its ID is the estimate's, so the one value that fills every dynamic segment of a path names a real part of a real estimate.
     [{ id: targetId, estimateId: targetId, parentId: null, sortIndex: 0, revision: 1, inputs: {} }],
+    // The one picture `GET /api/v1/images/{id}` opens (STORY-05.07): its ID is the estimate's too, and it is the harness Engineer's. It is not the part's picture, so every recipe of the
+    // node keeps answering as before; the picture routes' own recipes (`route-calls.ts`) never change a revision.
+    [{ id: targetId, estimateId: targetId, sha256: CANARY_PICTURE_HASH, mime: 'image/png', fileName: 'canary-part.png', bytes: smallPng() }],
   );
 
   return {
@@ -191,7 +195,13 @@ export function createSessionHarness(): SessionHarness {
     masters,
     taskWorld,
     estimateWorld,
-    estimateService: createEstimateService({ estimates: estimateWorld.repository, nodes: estimateWorld.nodeRepository, transactions: estimateWorld.transactions, ...inputsDependencies(masters) }),
+    estimateService: createEstimateService({
+      estimates: estimateWorld.repository,
+      nodes: estimateWorld.nodeRepository,
+      images: estimateWorld.imageRepository,
+      transactions: estimateWorld.transactions,
+      ...inputsDependencies(masters),
+    }),
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     configRepository,

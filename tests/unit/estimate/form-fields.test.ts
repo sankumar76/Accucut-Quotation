@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { fieldLetter } from '@/lib/fields/registry';
 import type { FieldDefinition } from '@/lib/fields/field-schema';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY, MATERIAL_RATE_KEY } from '@/lib/fields/types';
-import { buildFormSections, FORM_SECTION_NUMBERS, formFieldById, QTY_PER_ASSY_HINT } from '@/lib/estimate/form-fields';
+import { buildFormSections, FORM_SECTION_NUMBERS, formFieldById, PICTURE_HINT, QTY_PER_ASSY_HINT } from '@/lib/estimate/form-fields';
 import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from '@/lib/estimate/validation';
 
 import { cloneSeedConfig, seedConfig, seedFieldAt } from '../../support/seed-config';
@@ -30,7 +30,7 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   it('has the eight sections of SPEC 7.1, in order, with their number, name and the column range of the fields shown', () => {
     expect(FORM_SECTION_NUMBERS).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(sections.map(({ number, name, shortName, columnRange }) => ({ number, name, shortName, columnRange }))).toEqual([
-      { number: 1, name: 'Part Details', shortName: 'Part details', columnRange: 'A, B, D, G, H' },
+      { number: 1, name: 'Part Details', shortName: 'Part details', columnRange: 'A–D, G, H' },
       { number: 2, name: 'Material and Dimensions', shortName: 'Material', columnRange: 'E, F, J–L, N' },
       { number: 3, name: 'Cutting Process', shortName: 'Cutting', columnRange: 'P, Q' },
       { number: 4, name: 'Bending', shortName: 'Bending', columnRange: 'R' },
@@ -42,7 +42,7 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   });
 
   it('lists the fields of every section in the order of the form (section 08: AP, AU, BM, then AJ)', () => {
-    expect(lettersOf(0)).toEqual(['A', 'B', 'D', 'H']);
+    expect(lettersOf(0)).toEqual(['A', 'B', 'C', 'D', 'H']);
     expect(lettersOf(1)).toEqual(['E', 'F', 'J', 'K', 'L', 'N']);
     expect(lettersOf(2)).toEqual(['P', 'Q']);
     expect(lettersOf(3)).toEqual(['R']);
@@ -59,9 +59,21 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
     for (const letter of ['G', 'Z', 'AA', 'AG']) expect(offered).not.toContain(letter);
   });
 
-  it('AC-6: a placeholder is something no save may name, and the picture (C) is neither a field nor a placeholder', () => {
-    for (const letter of ['G', 'Z', 'AG', 'C']) expect(formFieldById(seedConfig, seedFieldAt(letter).id), letter).toBeUndefined();
+  it('AC-6: a placeholder is something no save may name, and the picture (C) is a field of its own kind, not a placeholder (STORY-05.07)', () => {
+    for (const letter of ['G', 'Z', 'AG']) expect(formFieldById(seedConfig, seedFieldAt(letter).id), letter).toBeUndefined();
     expect(sections.flatMap((section) => section.reserved.map((field) => field.letter))).not.toContain('C');
+  });
+
+  it('STORY-05.07 AC-3: the picture (C) is on the form as a picture field, optional, with its hint, and never one that a save can name', () => {
+    const picture = byLetter('C');
+    expect(picture).toMatchObject({ id: seedFieldAt('C').id, letter: 'C', label: 'Part Model', kind: 'input', required: false, editable: false, rule: { type: 'picture' }, hint: PICTURE_HINT });
+    expect(PICTURE_HINT).toBe('PNG, JPG, GIF or WebP, under 200 KB.');
+    // Found by the form's own lookup, but not editable, which is what a save checks: a value cannot be saved under it.
+    expect(formFieldById(seedConfig, seedFieldAt('C').id)?.editable).toBe(false);
+  });
+
+  it('STORY-05.07 AC-3: the picture is in no required count: the card of section 01 counts the same fields as before', () => {
+    expect(sections[0]?.fields.filter((field) => field.editable && field.required).map((field) => field.letter)).toEqual(['B', 'D', 'H']);
   });
 
   it('keeps a placeholder for a field that is flagged hidden from the Engineer out of the answer altogether', () => {
@@ -87,7 +99,8 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
 
   it('marks Sl. No. and Material Considered as derived and read-only, and every other field as one a person types or chooses', () => {
     const fields = sections.flatMap((section) => section.fields);
-    expect(fields.filter((field) => !field.editable).map((field) => field.letter)).toEqual(['A', 'F']);
+    // The picture (C, STORY-05.07) is not typed either: it is changed by its own routes.
+    expect(fields.filter((field) => !field.editable).map((field) => field.letter)).toEqual(['A', 'C', 'F']);
     expect(fields.find((field) => field.letter === 'A')?.rule).toEqual({ type: 'derived', from: null });
     expect(fields.find((field) => field.letter === 'F')?.rule).toEqual({ type: 'derived', from: seedFieldAt('E').id });
   });
@@ -251,7 +264,6 @@ describe('formFieldById: what a save may name', () => {
   it.each([
     ['Material Rate / Kg (I)', () => seedFieldAt('I').id],
     ['Blank Weight (M), a calculated field', () => seedFieldAt('M').id],
-    ['Part Model (C), the picture of story 05.07', () => seedFieldAt('C').id],
     ['Treatment / Color (G), story 05.06', () => seedFieldAt('G').id],
     ['Hot Dip Galvanizing (Z), a surface treatment of story 05.06', () => seedFieldAt('Z').id],
     ['Machining Cost\'s calculated twin, Total Process Cost (AY)', () => seedFieldAt('AY').id],

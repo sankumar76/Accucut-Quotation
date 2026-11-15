@@ -59,4 +59,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.07 (architecture section 6 "Image": A L; E own, while editable): the picture of a part is added, replaced or removed, and read, by every role, an Engineer on their own estimate only.
+  '/api/v1/estimates/[id]/nodes/[nodeId]/image': ['ADMIN', 'LEAD', 'ENGINEER'],
+  '/api/v1/images/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
 };

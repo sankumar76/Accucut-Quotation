@@ -29,7 +29,7 @@ export interface FieldRendererProps {
 }
 
 /** The id of a field's control: the registry's field ID, which is unique on the page. */
-export const controlIdOf = (field: FormFieldView): string => `part-field-${field.id}`;
+export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => `part-field-${field.id}`;
 
 /**
  * One field of the part form (STORY-05.03 AC-1, AC-2, AC-3, AC-5): the label with its Excel column letter first ("Excel column J" is read before the name, UX spec SCR-05

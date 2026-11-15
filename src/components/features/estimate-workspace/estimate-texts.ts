@@ -107,3 +107,6 @@ export const deleteDescription = (slNo: string, parts: number): string =>
     : `This also deletes its ${subPartCount(parts - 1)}, and everything typed into them. This cannot be undone.`;
 export const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete part' : `Delete ${parts} parts`);
 export const DELETE_CANCEL = 'Cancel';
+
+/** The picture field's code (a separate file, fetched when the form opens) did not arrive: said where the field would be (STORY-05.07). */
+export const PICTURE_LOAD_FAILED_TITLE = 'We could not load the picture field';

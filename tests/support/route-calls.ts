@@ -5,6 +5,7 @@ import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
 import { MATERIAL_DELETE_RECIPE, MATERIAL_RECIPE_ID } from './material-master-canary';
+import { PLAIN_TEXT } from './pictures';
 import { TREATMENT_RECIPE_ID } from './treatment-canary';
 
 /**
@@ -23,8 +24,19 @@ export interface ValidCall {
   readonly body?: unknown;
   /** The query string, with its `?`, of a route that takes its input there (a DELETE carries no body: `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=`). */
   readonly query?: string;
+  /** One file sent as a multipart form under the name `file` (STORY-05.07), for a route that takes an upload instead of a JSON body. */
+  readonly upload?: UploadRecipe;
+  /** True when the allowed role's answer is a stored file and not JSON (`GET /api/v1/images/{id}`): there is no JSON body to read or to plant a key in. */
+  readonly file?: true;
   /** The status the allowed role gets. */
   readonly status: number;
+}
+
+/** A file to upload: its name, the type the browser would declare, and its bytes. */
+export interface UploadRecipe {
+  readonly fileName: string;
+  readonly type: string;
+  readonly bytes: Uint8Array;
 }
 
 export interface CallContext {
@@ -161,6 +173,16 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, body: stay, status: 200 };
     case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
+    // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
+    // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
+    // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
+    // does not have changes nothing and answers 200. The picture the route serves is the canary's own (its ID is the estimate's too), a file and not JSON.
+    case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]/image':
+      return { id, upload: { fileName: 'invented-notes.png', type: 'image/png', bytes: PLAIN_TEXT }, status: 415 };
+    case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]/image':
+      return { id, status: 200 };
+    case 'GET /api/v1/images/[id]':
+      return { id, file: true, status: 200 };
     default:
       return undefined;
   }

@@ -249,6 +249,11 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // from the registry through one strict schema with no rate, cost or formula in it, and a save answers with the part's revision and what is stored, so both are in the Engineer's list and the cost scan calls them.
   { path: '/api/v1/estimates/[id]/form', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/nodes/[nodeId]/inputs', kind: 'api', methods: ['PATCH'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-05.07 (SCR-05's part picture; architecture section 6 "Image", ADR-013): A L, and an Engineer on their own estimate. `PUT` and `DELETE` change the part's picture, only while this person may change the estimate's inputs; the
+  // upload is one multipart file read within a hard cap. `GET /api/v1/images/{id}` serves the stored file for a plain `<img>` to the same three roles, only for the estimate's owner: a picture of a part is no cost data, and the
+  // answers carry an ID, a sanitised name and a size, never a rate or a figure, so the cost scan reads them.
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/image', kind: 'api', methods: ['PUT', 'DELETE'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/images/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-08.01 (SCR-17). The Admin and the Lead (architecture section 6, "Configuration": A L): the list of every field with its letter, kind and formula. A Lead reads it and has no action
   // (the page is told the role and offers none), and the side menu marks it "View only". The two API routes are for the same two roles and are in no Engineer's list, so a formula and a rate
   // name never reach an Engineer (NFR-002); the cost scan covers them as routes an Engineer is refused. The edit routes (`PUT /config/fields/{id}/formula` and the rest) are stories 08.02 onward.

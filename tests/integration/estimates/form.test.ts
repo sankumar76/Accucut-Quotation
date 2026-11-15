@@ -4,6 +4,7 @@ import { ConflictError, FieldValidationError, TreeChangedError } from '@/lib/err
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createMasterRepository } from '@/server/repositories/master-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
@@ -44,6 +45,7 @@ const buildService = (estimates = estimateRepository()): EstimateService =>
   createEstimateService({
     estimates,
     nodes: nodeRepository(),
+    images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),

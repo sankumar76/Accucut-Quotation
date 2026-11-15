@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, MasterInUseError } from '@/lib/errors';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { CHOOSE_MATERIAL_MESSAGE } from '@/server/services/estimate-inputs';
 import { createEstimateService, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
@@ -38,6 +39,7 @@ const serviceOver = (transactions: ReturnType<typeof createHoldingRunner>): Esti
   createEstimateService({
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
+    images: createImageRepository(db.prisma),
     transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),

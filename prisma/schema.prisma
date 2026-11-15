@@ -303,11 +303,12 @@ model Estimate {
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  task               Task          @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
-  customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
-  currentCalculation Calculation?  @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
-  calculations       Calculation[] @relation("EstimateCalculations")
+  task               Task           @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
+  customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
+  currentCalculation Calculation?   @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
+  calculations       Calculation[]  @relation("EstimateCalculations")
   nodes              EstimateNode[]
+  partImages         PartImage[]
 
   @@unique([taskId], map: "uq_estimates_task_id")
   @@index([status], map: "idx_estimates_status")
@@ -318,7 +319,7 @@ model Estimate {
 /// A part of an estimate's parts tree (STORY-05.02; architecture sections 4.8 and 5.1): one row per node, to any depth. `parentId` is null for a top-level item;
 /// `sortIndex` is the place among the siblings, kept 0, 1, 2, ... by the service. **The Sl. No is derived from the tree and never stored.** `inputs` holds only
 /// what a person typed, by field ID (empty until STORY-05.03); no rate, cost or formula is ever written here. `revision` is the node's own optimistic-lock count.
-/// `imageId` has no foreign key until the pictures exist (STORY-05.07). Class Confidential. A part can be deleted, with its sub-parts, so the runtime role has
+/// `imageId` points at the part's current picture (`part_images`, STORY-05.07); a trigger holds that the picture belongs to the same estimate. Class Confidential. A part can be deleted, with its sub-parts, so the runtime role has
 /// DELETE here; the foreign key to the parent has no cascade, so the service names every row it removes. Tree rules the schema cannot express (a parent in the
 /// same estimate, no node as its own parent) are in the migration or the service.
 model EstimateNode {
@@ -335,10 +336,36 @@ model EstimateNode {
   estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_estimate_id")
   parent   EstimateNode?  @relation("EstimateNodeChildren", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_parent_id")
   children EstimateNode[] @relation("EstimateNodeChildren")
+  image    PartImage?     @relation(fields: [imageId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_image_id")
 
   @@index([estimateId], map: "idx_estimate_nodes_estimate_id")
   @@index([parentId], map: "idx_estimate_nodes_parent_id")
   @@map("estimate_nodes")
+}
+
+/// A part picture, stored whole in the database (STORY-05.07; ADR-013; architecture sections 5.1 and 8): `bytes` is the file as it was received, `mime` is one of the four types the
+/// content check accepted (PNG, JPEG, GIF, WebP), `size_bytes` is its length (under 200 x 1024), `sha256` is the hash of the bytes as lower-case hex, and `file_name` is the name as
+/// **sanitised** display text (never a path, never markup). One row per distinct picture of an estimate (`estimate_id`, `sha256` are unique): the same bytes added again for another
+/// part of the estimate are found, not stored twice, and so keep the name they were first stored with. A replacement is a new row, so a record that points at the old one still shows it.
+/// Immutable: the runtime role holds only SELECT and INSERT, and a trigger refuses UPDATE, DELETE and TRUNCATE for every role, so a picture cannot change under a stored estimate (FR-065).
+/// There is no `updated_at`: a row never changes after it is inserted (the immutable-table exception to coding standards section 10 "SQL"). The CHECK constraints (the hash is 64 hex
+/// digits, the type is one of the four, the size is positive, under the limit and equal to the bytes' length, the name is 1 to 100 characters) are hand-written in the migration: Prisma
+/// cannot express them. Class Confidential. Unreferenced rows are not pruned (TD-03).
+model PartImage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId String   @map("estimate_id") @db.Uuid
+  sha256     String
+  mime       String
+  bytes      Bytes
+  sizeBytes  Int      @map("size_bytes")
+  fileName   String   @map("file_name")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_part_images_estimate_id")
+  nodes    EstimateNode[]
+
+  @@unique([estimateId, sha256], map: "uq_part_images_estimate_id_sha256")
+  @@map("part_images")
 }
 
 /// One stored Calculate or Recalculate of an estimate (STORY-03.05, FR-031, NFR-026; ADR-007; architecture sections 4.2, 4.8 and 5.1): the configuration version it was

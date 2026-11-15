@@ -73,7 +73,7 @@ describe('what the canary part must never send', () => {
     const world = createFakeEstimateWorld(() => [], [
       { id: ESTIMATE, code: 'Q-9999-0001', engineerId: OWNER, assignedByName: 'Invented Lead', folderPath: '\\\\invented\\share', deadlineAt: new Date('2099-01-01T00:00:00.000Z'), title: null, notes: null, status: 'DRAFT', customerId: null, inputsRevision: 0 },
     ], [{ id: ESTIMATE, estimateId: ESTIMATE, parentId: null, sortIndex: 0, revision: 1, inputs: canaryPartInputs(seedConfig) }]);
-    const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions, ...inputsDependencies() });
+    const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
     const typed = Object.fromEntries(canaryTypedValues(seedConfig).values.map((value) => [value.fieldId, value.stored]));
     for (const viewer of viewers) {
       const part = await service.getNode(viewer, ESTIMATE, ESTIMATE);

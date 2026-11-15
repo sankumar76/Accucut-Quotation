@@ -31,7 +31,7 @@ const ALLOWED_COST_WORDS = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 
 const FORM_ORDER = ['B', 'D', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
 
 const SECTIONS = [
-  { number: '01', region: '01 Part Details', range: 'A, B, D, G, H', count: '0 of 3 complete', link: '01 Part details' },
+  { number: '01', region: '01 Part Details', range: 'A–D, G, H', count: '0 of 3 complete', link: '01 Part details' },
   { number: '02', region: '02 Material and Dimensions', range: 'E, F, J–L, N', count: '0 of 5 complete', link: '02 Material' },
   { number: '03', region: '03 Cutting Process', range: 'P, Q', count: '0 of 2 complete', link: '03 Cutting' },
   { number: '04', region: '04 Bending', range: 'R', count: '0 of 1 complete', link: '04 Bending' },

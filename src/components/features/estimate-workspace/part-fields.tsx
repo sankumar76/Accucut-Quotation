@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import { isSectionComplete, sectionProgress, textOf } from '@/lib/estimates/form-values';
-import { formatIst } from '@/lib/time';
+import type { PartPictureAnswer } from '@/lib/estimates/picture-client';
+import { formatIst, systemClock } from '@/lib/time';
 
 import {
   FAILED_BODY,
@@ -24,6 +25,7 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { FIELD_MARK, FieldRenderer } from './field-renderer';
+import { PictureSlot } from './picture-slot';
 import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
@@ -106,6 +108,12 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
 
   const problem = values.problem;
+  const picture = values.stored.value.picture ?? null;
+  // A picture added, replaced or removed raised the part's revision on the server: the tree takes the new one (and so the next save of a value is sent with it), and the time of the write is shown.
+  const pictureChanged = (answer: PartPictureAnswer): void => {
+    onSaved(answer);
+    onWrote(systemClock.now().toISOString());
+  };
   // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check.
   const progress = form.sections.map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
   return (
@@ -135,18 +143,32 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
       <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
         {progress.map(({ section, counts }) => (
           <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts}>
-            {section.fields.map((field) => (
-              <FieldRenderer
-                key={field.id}
-                field={field}
-                text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
-                error={values.errors[field.id]}
-                editable={editable}
-                materials={materials}
-                onChange={(text) => values.setText(field.id, text)}
-                onCommit={(override) => values.commit(field, override)}
-              />
-            ))}
+            {section.fields.map((field) =>
+              field.rule.type === 'picture' ? (
+                // The picture (Part Model, STORY-05.07) is its own control, fetched when the form opens; it is changed by its own routes and is no typed value.
+                <PictureSlot
+                  key={field.id}
+                  field={field}
+                  estimateId={estimateId}
+                  partId={part.id}
+                  picture={picture}
+                  editable={editable}
+                  onChanged={pictureChanged}
+                  onConflict={onChanged}
+                />
+              ) : (
+                <FieldRenderer
+                  key={field.id}
+                  field={field}
+                  text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
+                  error={values.errors[field.id]}
+                  editable={editable}
+                  materials={materials}
+                  onChange={(text) => values.setText(field.id, text)}
+                  onCommit={(override) => values.commit(field, override)}
+                />
+              ),
+            )}
             {section.reserved.length === 0 ? null : <PlaceholderFields sectionId={section.id} fields={section.reserved} />}
           </SectionCard>
         ))}
