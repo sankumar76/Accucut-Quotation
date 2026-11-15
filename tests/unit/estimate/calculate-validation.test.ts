@@ -257,6 +257,17 @@ describe('a registry that differs from the seed: the check follows the registry 
     expect(checked?.numbers[fieldIdOf('length')]).toBeUndefined();
   });
 
+  it('SQR-04 of AQP-317: a blank Material in Drawing blocks and is named even when the registry does not mark it mandatory (the person has a field to go to)', () => {
+    const optional = changed('material-in-drawing', { mandatory: false });
+    const result = blocked(validateForCalculate([part({ inputs: Object.fromEntries(Object.entries(completePartInputs()).filter(([id]) => id !== fieldIdOf('material-in-drawing'))) })], optional));
+    expect(result[0]?.fields).toEqual([{ fieldId: fieldIdOf('material-in-drawing'), label: 'Material in Drawing' }]);
+  });
+
+  it('SQR-04 of AQP-317: a blank Material in Drawing that the registry marks mandatory is named once, not twice', () => {
+    const result = blocked(validateForCalculate([part({ inputs: Object.fromEntries(Object.entries(completePartInputs()).filter(([id]) => id !== fieldIdOf('material-in-drawing'))) })], document));
+    expect(result[0]?.fields.filter((field) => field.fieldId === fieldIdOf('material-in-drawing'))).toHaveLength(1);
+  });
+
   it('a registry with no Material in Drawing cannot be calculated: every part is blocked, naming nothing', () => {
     const noMaterial = without('material-in-drawing');
     expect(blocked(validateForCalculate([part()], noMaterial))).toEqual([{ nodeId: '00000000-0000-4000-8000-0000000000b1', slNo: '1', name: INVENTED_TEXT, fields: [] }]);

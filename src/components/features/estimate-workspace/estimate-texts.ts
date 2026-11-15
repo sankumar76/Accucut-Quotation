@@ -101,6 +101,9 @@ export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part de
  */
 export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
 export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
+/** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */
+export const CALCULATE_UNSAVED_TITLE = 'Nothing was submitted. A field has a value that is not saved. Fix the field that shows a message, then press Calculate again.';
+export const CALCULATE_BAR_FAILED_TITLE = 'The Calculate button could not be loaded. Reload the page to try again.';
 /** The words under a field that Calculate found blank (UX spec SCR-05 "Fields"): a number says what to do when a part needs nothing. */
 export const MISSING_TEXT_MESSAGE = 'Enter this value.';
 export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does not need it.';

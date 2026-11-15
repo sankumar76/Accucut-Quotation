@@ -3,9 +3,9 @@ import { expect, test, type Page, type Response } from '@playwright/test';
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
 
-import { makeCanaryEstimateCalculable, readEstimateState, useFreshAddress } from './support/auth';
+import { makeCanaryEstimateCalculable, readCalculatedValues, readEstimateState, useFreshAddress } from './support/auth';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPhone, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
 
 /**
  * STORY-05.09 T6 (AC-1, AC-2, AC-6, AC-7, AC-9): Calculate on SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in as a person of its own with an
@@ -97,6 +97,9 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     await expect(partForm(page)).toContainText(NUMBER_MISSING);
     await expect(partForm(page)).toContainText(CHOICE_MISSING);
     await expect(partForm(page)).toContainText(TEXT_MISSING);
+    // Review SQR-05 of AQP-317: QTY per Assy is a number, but a part never "needs nothing" of it, so the words under it do not say "Use 0".
+    const quantityId = await control(page, 'H').getAttribute('id');
+    await expect(page.locator(`#${quantityId ?? 'missing-control'}-error`)).toHaveText(TEXT_MISSING);
 
     // Nothing was submitted or stored, and the button is there to press again.
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
@@ -182,6 +185,76 @@ test.describe('AC-2, AC-6: a complete estimate is submitted, and the page shows 
     }, owner.id);
     expect(again.status).toBe(409);
     expect(again.body.code).toBe('ESTIMATE_ALREADY_SUBMITTED');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  });
+});
+
+test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP-317)', () => {
+  const countPosts = (page: Page, estimateId: string): { readonly count: () => number } => {
+    let posts = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith(`/api/v1/estimates/${estimateId}/calculate`)) posts += 1;
+    });
+    return { count: () => posts };
+  };
+
+  test('AC-2: a value typed just before the press is saved first: the press waits ("Calculating"), sends nothing until the save has been answered, and the record holds the typed value', async ({ page }, testInfo) => {
+    const owner = await openForm(page, testInfo);
+    await makeComplete(page, owner.id);
+    const posts = countPosts(page, owner.id);
+    // The save of the field is held at the server's door until the test lets it go, so the press certainly arrives while the save is in flight.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(
+      (url) => isPatchOfInputs(url.toString(), 'PATCH'),
+      async (route) => {
+        if (route.request().method() === 'PATCH') await held;
+        await route.continue();
+      },
+    );
+
+    await control(page, 'J').fill('4321.5');
+    // The click leaves the field (its save is queued) and presses at once.
+    await waitUntilHydrated(page, '#calculate-button', 'onClick');
+    await calculateButton(page).click();
+    await expect(calculateButton(page)).toContainText('Calculating');
+    // A beat for a press that went out too early to show itself: nothing is sent while the save is held.
+    await page.waitForTimeout(400);
+    expect(posts.count()).toBe(0);
+
+    const answered = page.waitForResponse(isCalculate);
+    release();
+    expect((await answered).status()).toBe(200);
+    await expect(calculateButton(page)).toHaveText('Submitted');
+    expect(posts.count()).toBe(1);
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    // What the immutable record holds is what the Engineer typed, not the value the part held before.
+    expect(JSON.stringify((await readCalculatedValues(owner.id)).typed)).toMatch(/4321\.5/);
+  });
+
+  test('AC-2: nothing is sent while a field shows a value that is not saved: the page says so, the field says why, and fixing the field lets the next press go', async ({ page }, testInfo) => {
+    const owner = await openForm(page, testInfo);
+    await makeComplete(page, owner.id);
+    const posts = countPosts(page, owner.id);
+
+    await control(page, 'J').fill('abc');
+    await waitUntilHydrated(page, '#calculate-button', 'onClick');
+    await calculateButton(page).click();
+    await expect(page.getByText('Nothing was submitted. A field has a value that is not saved.')).toBeVisible();
+    await expect(partForm(page)).toContainText(NUMBER_RULE);
+    await expect(calculateButton(page)).toBeEnabled();
+    expect(posts.count()).toBe(0);
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
+
+    const saved = nextSave(page);
+    await control(page, 'J').fill('200');
+    await control(page, 'J').blur();
+    expect(await saved).toBe(200);
+    const response = await press(page);
+    expect(response.status()).toBe(200);
+    await expect(page.getByText('Nothing was submitted. A field has a value that is not saved.')).toHaveCount(0);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   });
 });

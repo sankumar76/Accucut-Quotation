@@ -5,6 +5,7 @@ import { isEngineerVisibleAllowed } from '../fields/visibility';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { RUPEE } from '../masters/master-rules';
 
+import { QTY_PER_ASSY_HINT } from './quantity-hint';
 import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 
 /**
@@ -49,11 +50,8 @@ const FORM_PRESENTATION: ReadonlyMap<string, { readonly unit?: string; readonly 
   ['remarks', { hint: REMARKS_HINT }],
 ]);
 
-/**
- * The hint under QTY per Assy (FR-029, D-34; UX spec UX-52). It is here and not in the registry because a stored registry version is immutable (NFR-026) and an
- * install that was seeded earlier holds the older hint. The field is found by its system role (`quantity`), never by its letter or its text.
- */
-export const QTY_PER_ASSY_HINT = 'Enter the count for the whole order, not per assembly. For example, 24 lids in all, even if each pipe has 4.';
+/** The hint under QTY per Assy (FR-029, D-34): given to the field by its system role (`quantity`), never by its letter or its text. It lives in its own small file (`quantity-hint.ts`) so the browser can read it. */
+export { QTY_PER_ASSY_HINT };
 
 /** How a field is filled: typed as a number or a text, chosen from the Material Master, or shown from somewhere else and never saved. */
 export type FormRule =
