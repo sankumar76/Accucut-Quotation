@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, makeRecordPaths } from '../../scripts/lib/js-budget-records';
+import { COSTS_PAGE_ROUTE, CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, makeRecordPaths } from '../../scripts/lib/js-budget-records';
 
 /**
  * The records the JS budget check opens its dynamic routes at (STORY-02.02 and STORY-05.01, STORY-10.10 AC-2): made through the portal's API as the invented Admin
@@ -27,7 +27,8 @@ interface Answer {
 const OK: Readonly<Record<string, Answer>> = {
   '/api/v1/customers': { status: 201, body: { id: 'a b/1' } },
   '/api/v1/users': { status: 201, body: { id: 'invented-engineer-id' } },
-  '/api/v1/tasks': { status: 201, body: { code: 'Q-2026-0007' } },
+  '/api/v1/tasks': { status: 201, body: { code: 'Q-2026-0007', estimate: { id: 'invented-estimate-id' } } },
+  '/api/v1/estimates/invented-estimate-id/nodes': { status: 201, body: { nodeId: 'invented-part-id' } },
 };
 
 /** A portal that signs the Admin in and answers each POST as told (`OK` unless overridden by path). */
@@ -75,6 +76,34 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     }
   });
 
+  it('adds one part to that estimate as the Admin and returns the path of the first part\'s cost details under the route pattern, from the one estimate, made once (STORY-06.03)', async () => {
+    const seen: Seen[] = [];
+    const recordPaths = await makeRecordPaths({ baseUrl: BASE, credentialsFor: () => CREDENTIALS, fetchImpl: portal({}, seen) });
+    expect(recordPaths[COSTS_PAGE_ROUTE]).toBe('/estimates/Q-2026-0007/costs/1');
+    const part = post(seen, '/api/v1/estimates/invented-estimate-id/nodes');
+    expect(part?.method).toBe('POST');
+    expect(JSON.parse(part?.body ?? '{}')).toEqual({ kind: 'item' });
+    expect(part?.headers['cookie']).toContain('next-auth.session-token=invented-session');
+    expect(part?.headers['origin']).toBe(BASE);
+    expect(seen.filter((request) => request.url === `${BASE}/api/v1/tasks`)).toHaveLength(1);
+    expect(seen.filter((request) => request.url === `${BASE}/api/v1/users`)).toHaveLength(1);
+  });
+
+  it('keeps the workspace\'s path when the part cannot be added, and says only that the cost details have no record', async () => {
+    const lines: string[] = [];
+    const recordPaths = await makeRecordPaths({
+      baseUrl: BASE,
+      credentialsFor: () => CREDENTIALS,
+      fetchImpl: portal({ '/api/v1/estimates/invented-estimate-id/nodes': { status: 422, body: {} } }),
+      warn: (line) => lines.push(line),
+    });
+    expect(recordPaths[ESTIMATE_PAGE_ROUTE]).toBe('/estimates/Q-2026-0007');
+    expect(recordPaths[COSTS_PAGE_ROUTE]).toBeUndefined();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(COSTS_PAGE_ROUTE);
+    expect(lines[0]).toMatch(/answered HTTP 422, not 201/);
+  });
+
   it('signs in once for all the records', async () => {
     const seen: Seen[] = [];
     await makeRecordPaths({ baseUrl: BASE, credentialsFor: () => CREDENTIALS, fetchImpl: portal({}, seen) });
@@ -98,8 +127,13 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     const lines: string[] = [];
     const recordPaths = await makeRecordPaths({ baseUrl: BASE, credentialsFor: () => CREDENTIALS, fetchImpl: portal({ [path]: answer }), warn: (line) => lines.push(line) });
     expect(recordPaths[route]).toBeUndefined();
-    expect(Object.keys(recordPaths)).toHaveLength(1);
-    expect(lines).toHaveLength(1);
+    expect(Object.keys(recordPaths)).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 2 : 1);
+    // The estimate serves two pages (STORY-06.03): when it cannot be made, both say so, each with the same reason.
+    expect(lines).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 1 : 2);
+    expect(lines.every((line) => message.test(line))).toBe(true);
+    expect(lines.some((line) => line.includes(route))).toBe(true);
+    if (route === ESTIMATE_PAGE_ROUTE) expect(lines.some((line) => line.includes(COSTS_PAGE_ROUTE))).toBe(true);
+    if (route !== CUSTOMER_PAGE_ROUTE) expect(recordPaths[COSTS_PAGE_ROUTE]).toBeUndefined();
     expect(lines[0]).toMatch(message);
     expect(lines[0]).toContain(route);
     expect(lines[0]).not.toContain(CREDENTIALS.password);
@@ -111,10 +145,11 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     const refused = (async (input: string | URL | Request): Promise<Response> =>
       String(input).endsWith('/api/auth/csrf') ? new Response(JSON.stringify({ csrfToken: 'invented-csrf' }), { status: 200 }) : new Response('{}', { status: 401 })) as typeof fetch;
     expect(await makeRecordPaths({ baseUrl: BASE, credentialsFor: () => CREDENTIALS, fetchImpl: refused, warn: (line) => lines.push(line) })).toEqual({});
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0]).toMatch(/sign-in was refused/);
     expect(lines[0]).toContain(CUSTOMER_PAGE_ROUTE);
     expect(lines[1]).toContain(ESTIMATE_PAGE_ROUTE);
+    expect(lines[2]).toContain(COSTS_PAGE_ROUTE);
     for (const line of lines) expect(line).not.toContain(CREDENTIALS.password);
   });
 });

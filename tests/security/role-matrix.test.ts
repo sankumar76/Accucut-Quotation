@@ -49,6 +49,7 @@ vi.mock('@/server/composition', async () => {
     getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
+    getCostDetailsService: () => shared.costDetailsService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -71,12 +72,16 @@ const implemented = ROUTE_MANIFEST.filter((row) => row.status === 'implemented' 
 const apiRows = implemented.filter((row) => row.kind === 'api');
 const pageRows = implemented.filter((row) => row.kind === 'page');
 
+/** What fills the segments of a path: one text for every segment, or a text for each by name (a segment with none is `invented-id`). */
+type SegmentValues = string | Readonly<Record<string, string>>;
+
 /** `/estimates/[code]/costs/[slNo]` with a value for each segment. */
-function fill(path: string, value: string): { readonly url: string; readonly params: Record<string, string> } {
+function fill(path: string, value: SegmentValues): { readonly url: string; readonly params: Record<string, string> } {
   const params: Record<string, string> = {};
   const url = path.replace(/\[(?:\.\.\.)?([^\]]+)\]/g, (_match, name: string) => {
-    params[name] = value;
-    return value;
+    const text = typeof value === 'string' ? value : (value[name] ?? 'invented-id');
+    params[name] = text;
+    return text;
   });
   return { url, params };
 }
@@ -89,6 +94,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/users': 'redirect:/sign-in?callbackUrl=%2Fusers',
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
+  '/estimates/[code]/costs/[slNo]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D%2Fcosts%2F%5BslNo%5D',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/settings': 'redirect:/sign-in?callbackUrl=%2Fsettings',
   '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
@@ -100,8 +106,13 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
 };
 
 /** The ID an allowed role opens a page with: a page with a dynamic segment needs a record that exists (an invented ID is SCR-26 "not found"); the others take any text. */
-const REAL_PAGE_ID: Readonly<Record<string, string>> = { '/masters/customers/[id]': CUSTOMER_RECIPE_ID, '/estimates/[code]': canaryTaskCodeFor(harness.targetId) };
-const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented-id';
+const REAL_PAGE_ID: Readonly<Record<string, SegmentValues>> = {
+  '/masters/customers/[id]': CUSTOMER_RECIPE_ID,
+  '/estimates/[code]': canaryTaskCodeFor(harness.targetId),
+  // SCR-07 (STORY-06.03): the canary estimate's code, and the Sl. No of its one part (the part is first at the top).
+  '/estimates/[code]/costs/[slNo]': { code: canaryTaskCodeFor(harness.targetId), slNo: '1' },
+};
+const pageIdFor = (row: RouteRow): SegmentValues => REAL_PAGE_ID[row.path] ?? 'invented-id';
 
 const moduleShape = z.record(z.string(), z.unknown());
 
@@ -137,7 +148,7 @@ function callValid(row: RouteRow, method: HttpMethod): Promise<Response> {
 
 type PageOutcome = 'renders' | 'forbidden' | 'not-found' | `redirect:${string}`;
 
-async function callPage(row: RouteRow, id: string): Promise<PageOutcome> {
+async function callPage(row: RouteRow, id: SegmentValues): Promise<PageOutcome> {
   const loader = PAGE_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const page = moduleShape.parse(await loader())['default'];

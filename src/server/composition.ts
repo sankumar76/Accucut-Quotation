@@ -25,6 +25,7 @@ import { type AuthService, createAuthService } from './services/auth-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
+import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
@@ -54,6 +55,7 @@ let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
+let costDetailsService: CostDetailsService | undefined;
 let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
@@ -252,6 +254,23 @@ export function getEstimateReviewService(): EstimateReviewService {
 export function getSettingsService(): SettingsService {
   settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
   return settingsService;
+}
+
+/**
+ * The cost details of one row (STORY-06.03): the six stages of SCR-07 for the Lead and the Admin, worked from the stored calculation record only while its state is `current`. Built like the review
+ * (the configuration version a calculation was made with is read by its ID). Restricted (NFR-002): only the `/nodes/{nodeId}/costs` route and the cost details page ask for it here, both for the
+ * Lead and the Admin alone.
+ */
+export function getCostDetailsService(): CostDetailsService {
+  if (costDetailsService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    costDetailsService = createCostDetailsService({
+      calculations: createCalculationRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+    });
+  }
+  return costDetailsService;
 }
 
 /**

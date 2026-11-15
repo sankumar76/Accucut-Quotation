@@ -14,6 +14,7 @@ import type { CalculationRepository } from '../../src/server/repositories/calcul
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
+import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
@@ -120,8 +121,10 @@ export interface SessionHarness {
   readonly calculationWorld: FakeCalculationWorld;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
-  /** The pieces `estimateReviewService` reads through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
+  readonly costDetailsService: CostDetailsService;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -239,6 +242,7 @@ export function createSessionHarness(): SessionHarness {
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
     findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
@@ -248,8 +252,16 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
+  // The cost details of a row (STORY-06.03) over the same pieces.
+  const costDetailsService = createCostDetailsService({
+    calculations: reviewReads,
+    nodes: reviewReads,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+  });
+
   return {
     estimateReviewService,
+    costDetailsService,
     reviewReads,
     calculationAudit,
     users,

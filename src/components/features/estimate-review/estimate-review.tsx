@@ -53,7 +53,7 @@ export function EstimateReview({ header, customer, costs, calculatedAt }: Estima
         </Notice>
       ) : null}
       <FigureTiles state={state} letters={letters} totals={totals} />
-      <ReviewTree state={state} letters={letters} nodes={nodes} />
+      <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} /> : null}
       <ReviewActions
         state={state}
