@@ -3,6 +3,7 @@
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { SaveGate } from '@/lib/estimates/save-gate';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import { PartFields } from './part-fields';
@@ -20,6 +21,8 @@ export interface PartFormProps {
   readonly onChanged: () => void;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). */
   readonly missing: ReadonlySet<string>;
+  /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
+  readonly gate: SaveGate;
 }
 
 /**
@@ -28,7 +31,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged, missing }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, onSaved, onChanged, missing, gate }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
 
   if (part === null) return <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
@@ -66,6 +69,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, missi
       onWrote={definition.wrote}
       onReadMaterialsAgain={definition.readAgain}
       missing={missing}
+      gate={gate}
     />
   );
 }

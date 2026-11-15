@@ -157,7 +157,12 @@ export function validateForCalculate(parts: ReadonlyArray<PartToCheck>, document
   for (const part of parts) {
     const { read, hidden } = readPart(part, document, fields);
     const missing = read.filter(({ field, value }) => field.required && !hidden.has(field.id) && value === null).map(({ field }) => ({ fieldId: field.id, label: field.label }));
-    const material = read.find(({ field }) => field.id === materialId)?.value ?? null;
+    const materialField = read.find(({ field }) => field.id === materialId);
+    const material = materialField?.value ?? null;
+    // A calculation needs a material whether or not the registry marks the field mandatory: a blank one is named, so the person has a field to go to (review SQR-04 of AQP-317).
+    if (materialField !== undefined && material === null && !missing.some(({ fieldId }) => fieldId === materialField.field.id)) {
+      missing.unshift({ fieldId: materialField.field.id, label: materialField.field.label });
+    }
     if (missing.length > 0 || material === null) {
       blocked.push({ nodeId: part.id, slNo: part.slNo, name: nameOf(document, read), fields: missing });
     } else {

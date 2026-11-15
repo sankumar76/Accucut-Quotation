@@ -4,6 +4,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
+import { forbiddenCalculated } from '../support/calculated-values';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
 import { CUSTOMER_CANARIES, CUSTOMER_CANARY_PHONE, CUSTOMER_CANARY_VALUES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
@@ -24,6 +25,7 @@ import {
   fillCanaryPart,
   insertPrivateMaterial,
   makeCanaryEstimateCalculable,
+  readCalculatedValues,
   readEstimateState,
   readExchangeRatesFromDatabase,
   readFormulaTexts,
@@ -519,6 +521,37 @@ test('AC-6 (negative control, STORY-04.04): a sentinel planted in the task route
  */
 const CALCULATE_ANSWER = { status: 'SUBMITTED', message: 'Cost will be calculated based on the input fields and sent for review/approval.' };
 
+/**
+ * Opens the estimate page as the signed-in Engineer, presses Calculate in the browser and waits until the page is quiet, checking the answer is exactly `{status, message}`. `mark` is how many
+ * responses were recorded when the press was made, so what was sent from the press on is `recorder.responses.slice(mark)`.
+ */
+async function pressCalculate(page: Page, recorder: ScanRecorder, estimateId: string, code: string): Promise<{ readonly mark: number }> {
+  const before = await recorder.recordNavigation(`GET /estimates/${code} (page, before Calculate)`, await page.goto(`/estimates/${code}`));
+  expect(before.status).toBe(200);
+  await waitUntilHydrated(page, '#calculate-button', 'onClick');
+  const mark = recorder.responses.length;
+  const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${estimateId}/calculate`));
+  await page.locator('#calculate-button').click();
+  const response = await answered;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual(CALCULATE_ANSWER);
+  await expect(page.locator('#calculate-button')).toHaveText('Submitted');
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+  return { mark };
+}
+
+/**
+ * The figures of the record this estimate's Calculate wrote, as strings to look for (`tests/support/calculated-values.ts` says which are watched and which are skipped). The list is never empty: a
+ * journey that watched nothing would pass for the wrong reason, so it fails here with the reason.
+ */
+async function figuresOfTheRecord(estimateId: string): Promise<ReturnType<typeof forbiddenCalculated>> {
+  const { calculated, typed } = await readCalculatedValues(estimateId);
+  const watched = forbiddenCalculated(calculated, typed);
+  expect(watched.length, 'the record holds figures of three digits or more with a fraction, which the scan can look for').toBeGreaterThan(0);
+  return watched;
+}
+
 test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted value, and the answer is exactly {status, message}', async ({ page, context }, testInfo) => {
   const { forbidden, engineer } = await prepare(testInfo);
   await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
@@ -528,17 +561,7 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   await useFreshAddress(context);
   await signIn(page, recorder, engineer);
 
-  const before = await recorder.recordNavigation(`GET /estimates/${code} (page, before Calculate)`, await page.goto(`/estimates/${code}`));
-  expect(before.status).toBe(200);
-  await waitUntilHydrated(page, '#calculate-button', 'onClick');
-  const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${engineer.id}/calculate`));
-  await page.locator('#calculate-button').click();
-  const response = await answered;
-  expect(response.status()).toBe(200);
-  expect(await response.json()).toEqual(CALCULATE_ANSWER);
-  await expect(page.locator('#calculate-button')).toHaveText('Submitted');
-  await page.waitForLoadState('networkidle');
-  await recorder.settled();
+  const pressed = await pressCalculate(page, recorder, engineer.id, code);
 
   // After the press: the page, the routes that read the estimate, and a second press.
   const after = await recorder.recordNavigation(`GET /estimates/${code} (page, after Calculate)`, await page.goto(`/estimates/${code}`));
@@ -557,8 +580,36 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   expect(await readEstimateState(engineer.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
   expect(sentences(recorder, forbidden)).toEqual([]);
+  // Review SQR-02 of AQP-317: the figures the calculation itself produced (the record this press wrote) are looked for in everything the Engineer was sent from the press on.
+  const watched = await figuresOfTheRecord(engineer.id);
+  expect(scanResponses(recorder.responses.slice(pressed.mark), watched).map(describeFinding)).toEqual([]);
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
   await expectCanaryRatesStillStored();
+});
+
+test('AC-6 (negative control, STORY-05.09): a figure of the calculation planted in the tree\'s answer after the press is found by the same scan', async ({ page, context }, testInfo) => {
+  // The figure is known only once the press has been answered, so the plant is armed after it: the tree's answer then carries one figure of the record.
+  let planted: string | null = null;
+  const plant: Plant = ({ url }, body) => (planted !== null && new URL(url).pathname.endsWith('/tree') ? `${body} ${planted}` : body);
+  const { engineer } = await prepare(testInfo);
+  await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
+  const recorder = new ScanRecorder(plant);
+  await recorder.attach(context);
+  await useFreshAddress(context);
+  await signIn(page, recorder, engineer);
+
+  const pressed = await pressCalculate(page, recorder, engineer.id, canaryTaskCodeFor(engineer.id));
+  const watched = await figuresOfTheRecord(engineer.id);
+  planted = defined(watched[0]).text;
+  await callInBrowser(recorder, page, `GET /api/v1/estimates/${engineer.id}/tree (API, planted)`, `/api/v1/estimates/${engineer.id}/tree`);
+
+  const findings = scanResponses(recorder.responses.slice(pressed.mark), watched);
+  expect(
+    findings.some((finding) => finding.label.includes('/tree (API, planted)') && finding.found === planted),
+    'the figure planted in the tree\'s answer',
+  ).toBe(true);
+  // And the scan before the plant was armed was clean, so the finding is the plant's and not another figure's.
+  expect(findings.filter((finding) => !finding.label.includes('(API, planted)')).map(describeFinding)).toEqual([]);
 });
 
 test('AC-6 (STORY-05.09): the same estimate calculated under two sets of masters gives identical answers', async ({ page, context }, testInfo) => {

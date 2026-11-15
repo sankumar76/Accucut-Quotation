@@ -5,8 +5,11 @@ import { useRef, useState } from 'react';
 import { type BlockedPartView, withoutFilled } from '@/lib/estimates/calculate-missing';
 
 
-/** Why the last press did not submit anything, in the server's words (a refusal with no list: a 409 such as "choose the customer"), or "it failed" (no usable answer came). */
-export type CalculateProblem = { readonly kind: 'refused'; readonly message: string } | { readonly kind: 'failed' };
+/**
+ * Why the last press did not submit anything: in the server's words (a refusal with no list: a 409 such as "choose the customer"), "it failed" (no usable answer came), or "unsaved" (a field
+ * shows a value that is not saved, so nothing was sent: the form says which, under the field).
+ */
+export type CalculateProblem = { readonly kind: 'refused'; readonly message: string } | { readonly kind: 'failed' } | { readonly kind: 'unsaved' };
 
 /**
  * The code that sends Calculate and reads its answers is fetched when the button is first pressed, by a bare `import()` (NFR-009: `/estimates/[code]` has no room left in its 200 KB first load, and
@@ -23,9 +26,12 @@ const ALREADY_SUBMITTED_CODE = 'ESTIMATE_ALREADY_SUBMITTED';
  * shows the sentence and no number (there is none to show). A blocked one is the list of parts and fields the server named: it is kept as client state only (architecture A-16; after a reload
  * the part simply shows "Some inputs entered"). **Nothing is submitted on the screen's own judgement**: the missing list is the server's.
  *
+ * **The saves come first** (review SQR-01 of AQP-317): a press follows the leaving of a field at once, and the part form's save of it is queued behind others. The press waits for `settle()` (the
+ * saves in flight, `save-gate.ts`) while the button shows "Calculating", so the record holds what the screen shows; and nothing is sent while a field shows a value that is not saved.
+ *
  * `filled(partId, inputs)` is told what a saved part now holds, so a part leaves the list as its last missing field is filled and the triangle in the tree goes with it.
  */
-export function useCalculate({ estimateId, onSubmitted }: { readonly estimateId: string; readonly onSubmitted: () => void }) {
+export function useCalculate({ estimateId, onSubmitted, settle }: { readonly estimateId: string; readonly onSubmitted: () => void; readonly settle: () => Promise<boolean> }) {
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState<ReadonlyArray<BlockedPartView> | null>(null);
   const [problem, setProblem] = useState<CalculateProblem | null>(null);
@@ -40,6 +46,12 @@ export function useCalculate({ estimateId, onSubmitted }: { readonly estimateId:
     inFlight.current = true;
     setBusy(true);
     setProblem(null);
+    if (!(await settle())) {
+      inFlight.current = false;
+      setBusy(false);
+      setProblem({ kind: 'unsaved' });
+      return;
+    }
     const client = await loadClient().catch(() => null);
     const outcome = client === null ? null : await client.calculateEstimate(estimateId);
     inFlight.current = false;

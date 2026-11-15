@@ -124,7 +124,7 @@ export interface CalculationService {
   storeCalculation(request: StoreCalculationRequest, tx?: Transaction): Promise<StoredCalculation>;
   /**
    * The Engineer's Calculate (`POST /api/v1/estimates/{id}/calculate`, STORY-05.09; architecture section 4.2), in **one transaction** under the estimate's row lock: the state machine decides
-   * (`transition(viewer, id, 'CALCULATE', tx)`: 404 for an estimate that is not this person's and for any other role, 409 for a status that is not DRAFT), every part is checked for missing inputs
+   * (`transition(viewer, id, 'CALCULATE', tx)`: 404 for another Engineer's estimate, 403 for a Lead or an Admin (the route's role list refuses them first), 409 for a status that is not DRAFT), every part is checked for missing inputs
    * (422 `CALCULATE_BLOCKED`, which lists parts and fields and writes nothing), the customer must be chosen (409), the masters are read, the record is stored (`storeCalculation`'s work, with the
    * configuration read once for the check and the calculation) and the status is SUBMITTED, all or nothing. It answers `{status, message}`: **no number from the calculation leaves it** (NFR-002).
    */

@@ -8,12 +8,13 @@ import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-word
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CustomerView } from '@/lib/estimates/estimates-client';
+import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
-import { CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
+import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
 import { focusFirstField } from './part-fields';
 import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
@@ -55,7 +56,9 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
   const tree = usePartsTree(estimateId);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
-  const calculation = useCalculate({ estimateId, onSubmitted: () => setStatus('SUBMITTED') });
+  // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
+  const [saves] = useState(createSaveGate);
+  const calculation = useCalculate({ estimateId, onSubmitted: () => setStatus('SUBMITTED'), settle: saves.settle });
   const bar = useLazyComponent<CalculateBarProps>(loadBar, true);
   const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, calculation.blocked !== null);
   const changeDialog = useLazyComponent<ChangeCustomerDialogProps>(loadChangeDialog, choice.pending !== null);
@@ -93,7 +96,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
         <Summary parts={calculation.blocked} onChoosePart={tree.select} focusRequest={calculation.focusRequest} />
       )}
       {calculation.problem === null ? null : (
-        <Notice tone="danger" title={calculation.problem.kind === 'refused' ? calculation.problem.message : CALCULATE_FAILED_TITLE}>
+        <Notice tone="danger" title={calculation.problem.kind === 'refused' ? calculation.problem.message : calculation.problem.kind === 'unsaved' ? CALCULATE_UNSAVED_TITLE : CALCULATE_FAILED_TITLE}>
           {calculation.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
@@ -130,13 +133,18 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
         <CardContent className="flex flex-col gap-s-4 lg:flex-row">
           <PartsTreeArea tree={tree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
           {hasCustomer ? (
-            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
           ) : (
             <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_AREA_LOCKED}</p>
           )}
         </CardContent>
       </Card>
-      {status === 'APPROVED' || Bar === null ? null : <Bar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />}
+      {status === 'APPROVED' ? null : Bar !== null ? (
+        <Bar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />
+      ) : bar.failed ? (
+        // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).
+        <Notice tone="danger" title={CALCULATE_BAR_FAILED_TITLE} />
+      ) : null}
     </>
   );
 }

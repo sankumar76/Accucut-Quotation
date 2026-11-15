@@ -6,7 +6,9 @@ import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
+import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, textOf } from '@/lib/estimates/form-values';
+import type { SaveGate } from '@/lib/estimates/save-gate';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -48,14 +50,20 @@ export interface PartFieldsProps {
   readonly onReadMaterialsAgain: () => void;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). Each shows the words of its blank under the field until it has a value. */
   readonly missing: ReadonlySet<string>;
+  /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
+  readonly gate: SaveGate;
 }
 
 const TITLE_ID = 'part-form-title';
 const NEXT_FIELD = `[${FIELD_MARK}="true"]`;
 
-/** The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. */
+/**
+ * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
+ * but it never "needs nothing": "Use 0" is not said under it (a 0 there is what STORY-05.12 warns about), and the field is told by its hint.
+ */
 function missingMessageOf(field: FormField): string {
-  return field.rule.type === 'select' ? MISSING_CHOICE_MESSAGE : field.rule.type === 'number' ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
+  if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
+  return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
 }
 
 /** Enter on a part in the tree opens its form: the first field that can be typed into takes the focus (STORY-05.03, review SQR-11). */
@@ -94,8 +102,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * never narrower than 232 px, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onWrote, onReadMaterialsAgain, missing }: PartFieldsProps) {
-  const values = usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote });
+export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
+  const values = usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
 
   if (values.stored.status === 'failed') {

@@ -297,6 +297,24 @@ export async function readEstimateState(estimateId: string): Promise<{ readonly 
 }
 
 /**
+ * What this estimate's Calculate left in the database (review SQR-02 of AQP-317): `calculated` is the product values of each record and the outputs of each of its rows, and `typed` is the inputs of
+ * those rows (what the Engineer typed, with the resolved text), so the scan can look for the figures the calculation produced and leave out the ones the Engineer typed. Both are JSON values as
+ * stored; `tests/support/calculated-values.ts` turns them into strings to look for. Throwaway database only (guarded above).
+ */
+export async function readCalculatedValues(estimateId: string): Promise<{ readonly calculated: ReadonlyArray<unknown>; readonly typed: ReadonlyArray<unknown> }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ product_values: unknown; outputs: unknown; inputs: unknown }>(
+      `SELECT c.product_values, r.outputs, r.inputs FROM calculations c LEFT JOIN calculation_rows r ON r.calculation_id = c.id WHERE c.estimate_id = $1::uuid`,
+      [estimateId],
+    );
+    return { calculated: rows.flatMap((row) => [row.product_values, row.outputs]), typed: rows.map((row) => row.inputs) };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Puts the Process Master canary rates (STORY-02.01's name and values, `tests/support/process-master-canary.ts`) into the database
  * the servers use, so the confidentiality scan has Restricted values to look for. They are three new rates, never the 15 seed rows
  * that other specs read, and the statement is repeatable and safe when three screen sizes run it at once (`ON CONFLICT DO NOTHING`,

@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { createCalculationRepository, type CalculationRepository } from '../../src/server/repositories/calculation-repository';
+import { createConfigRepository } from '../../src/server/repositories/config-repository';
 import { createEstimateNodeRepository, type EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createEstimateRepository, type EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import { createCalculationService, type CalculationNodeRequest, type CalculationService, type CalculationServiceDependencies } from '../../src/server/services/calculation-service';
+import { createConfigVersionCache, getCurrentVersion } from '../../src/server/services/config-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 
 import { insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from './audit-database';
@@ -85,6 +87,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const otherEngineerId = await insertPersonAsOwner(db, 'Calculation Other Engineer', 'ENGINEER');
 
   const calculations = createCalculationRepository(db.prisma);
+  const configurations = createConfigRepository(db.prisma);
   const estimates = createEstimateRepository(db.prisma);
   const nodes = createEstimateNodeRepository(db.prisma);
   const estimateService = createEstimateService({
@@ -97,7 +100,12 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const buildService = (storage: Partial<NonNullable<CalculationServiceDependencies['storage']>> = {}): CalculationService =>
     createCalculationService({
       masters: db.masterRepository,
-      currentConfiguration: () => Promise.resolve({ id: configVersionId, document: seedConfig }),
+      // The configuration is read as `composition.ts` reads it, inside the caller's transaction, with a cache of its own for each read, so both of its queries (the latest version's ref, then the
+      // version) run on PostgreSQL under the estimate's lock: a dropped `tx` would take a second pooled connection and the 12-at-once test would stall (review SQR-03 of AQP-317).
+      currentConfiguration: async (tx) => {
+        const current = await getCurrentVersion(configurations, createConfigVersionCache(), tx);
+        return { id: current.id, document: current.document };
+      },
       storage: { calculations, estimates, transactions: db.transactions, ...storage },
       workflow: { nodes, transition: estimateService.transition },
     });
