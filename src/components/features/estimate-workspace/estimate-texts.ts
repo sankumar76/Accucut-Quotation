@@ -27,11 +27,6 @@ export const SAVE_FAILED_TITLE = 'The customer was not saved';
 export const FAILED_BODY = 'Check your connection and try again. What you typed is kept.';
 export const TRY_AGAIN = 'Try again';
 
-export const CHANGE_TITLE = 'Change the customer?';
-export const CHANGE_CONFIRM = 'Change customer';
-export const changeDescription = (from: string, to: string): string =>
-  `You are changing the customer from ${from} to ${to}. Nothing you typed is lost. The new customer applies the next time the estimate is calculated.`;
-export const keepLabel = (name: string): string => `Keep ${name}`;
 
 export const FORM_AREA_TITLE = 'Parts and inputs';
 export const FORM_AREA_LOCKED = 'The parts tree and the form open here once the customer is chosen.';
@@ -98,12 +93,20 @@ export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
 export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
 
-export const deleteTitle = (slNo: string): string => `Delete part ${slNo}?`;
-export const subPartCount = (count: number): string => `${count} sub-part${count === 1 ? '' : 's'}`;
-/** "This also deletes its 2 sub-parts and everything typed into them. This cannot be undone." for a part with sub-parts; a shorter one for a part with none. */
-export const deleteDescription = (slNo: string, parts: number): string =>
-  parts === 1
-    ? `Part ${slNo} and everything typed into it will be deleted. This cannot be undone.`
-    : `This also deletes its ${subPartCount(parts - 1)}, and everything typed into them. This cannot be undone.`;
-export const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete part' : `Delete ${parts} parts`);
-export const DELETE_CANCEL = 'Cancel';
+
+/**
+ * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Submitted"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
+ * summary of a blocked one is built from the same function the server uses (`blockedSummary`), so the page and the 422 say one thing. None of these words names a rate, a price or a formula
+ * (UX-24), and none holds a figure.
+ */
+export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
+export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
+/** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */
+export const CALCULATE_UNSAVED_TITLE = 'Nothing was submitted. A field has a value that is not saved. Fix the field that shows a message, then press Calculate again.';
+export const CALCULATE_BAR_FAILED_TITLE = 'The Calculate button could not be loaded. Reload the page to try again.';
+/** The words under a field that Calculate found blank (UX spec SCR-05 "Fields"): a number says what to do when a part needs nothing. */
+export const MISSING_TEXT_MESSAGE = 'Enter this value.';
+export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does not need it.';
+export const MISSING_CHOICE_MESSAGE = 'Choose a material.';
+/** Spoken after a part in the tree, a card and a link of the section strip that Calculate found a blank in, beside the triangle. */
+export const TREE_MISSING_INPUTS = 'Missing inputs';

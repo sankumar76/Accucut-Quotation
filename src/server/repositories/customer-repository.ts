@@ -52,6 +52,9 @@ export interface CustomerDetailRecord extends CustomerRecord {
   readonly rates: ReadonlyArray<CustomerRateRecord>;
 }
 
+/** A customer as a calculation reads it: the customer with its rates, or a customer the Admin has deleted since the estimate chose it (no rates are read for it). */
+export type CustomerCalculationRecord = { readonly deleted: false; readonly customer: CustomerDetailRecord } | { readonly deleted: true; readonly id: string; readonly name: string };
+
 /** A row of SCR-12's list: the details and how many rates differ from the default. */
 export interface CustomerSummaryRecord extends CustomerRecord {
   readonly differ: number;
@@ -93,6 +96,12 @@ export interface CustomerMethods {
   findCustomer(id: string): Promise<CustomerDetailRecord | null>;
   /** The same, **with the customer's row locked** until the transaction ends, so `before` is the state replaced. */
   findCustomerForUpdate(id: string, tx: Transaction): Promise<CustomerDetailRecord | null>;
+  /**
+   * The customer with this ID and its rates for a calculation (STORY-05.09), or null (unknown, or not an ID alike). Unlike `findCustomer` it **finds a deleted customer** and says so
+   * (`deleted`, with no rates read), so Calculate answers the specific 409 and not "not found" (A-13: the row stays under the soft delete). Pass `tx` to read inside the caller's
+   * transaction, so the read takes no second connection while the caller holds the estimate's lock (review SQR-01 of AQP-293). A plain read: it takes no lock.
+   */
+  findCustomerForCalculation(id: string, tx?: Transaction): Promise<CustomerCalculationRecord | null>;
   /**
    * Adds a customer and one rate per Process Master item at the item's current default (SPEC section 4.2 rule 1), in the caller's transaction, and
    * returns it with its rates. Throws `MasterConstraintError('customer-name')` for a name that is taken.
@@ -164,6 +173,15 @@ async function selectCustomer(db: PrismaClient, id: string, lock: boolean, tx?: 
   return CUSTOMER_ROWS.parse(rows)[0] ?? null;
 }
 
+async function readCustomerForCalculation(db: PrismaClient, id: string, tx?: Transaction): Promise<CustomerCalculationRecord | null> {
+  if (!isUuid(id)) return null;
+  const found = await clientFor(db, tx).customer.findUnique({ where: { id }, select: { id: true, name: true, phone: true, email: true, address: true, deletedAt: true } });
+  if (found === null) return null;
+  if (found.deletedAt !== null) return { deleted: true, id: found.id, name: found.name };
+  const customer: CustomerRecord = { id: found.id, name: found.name, phone: found.phone, email: found.email, address: found.address };
+  return { deleted: false, customer: await detailOf(db, customer, tx) };
+}
+
 async function insertCustomer(db: PrismaClient, customer: NewCustomer, tx: Transaction): Promise<CustomerDetailRecord> {
   const client = clientFor(db, tx);
   const created = await client.customer.create({ data: customer, select: { id: true, name: true, phone: true, email: true, address: true } });
@@ -221,6 +239,8 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
         const customer = await selectCustomer(db, id, true, tx);
         return customer === null ? null : detailOf(db, customer, tx);
       }),
+
+    findCustomerForCalculation: (id, tx) => withDatabaseErrors(() => readCustomerForCalculation(db, id, tx)),
 
     createCustomer: (customer, tx) => withDatabaseErrors(() => enforcingConstraints(() => insertCustomer(db, customer, tx))),
 

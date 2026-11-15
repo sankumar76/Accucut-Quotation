@@ -76,14 +76,20 @@ describe('AC-5: the options offer "Not applicable" last, with no number, and no 
   });
 
   it('the calculation finds the hidden material (A-17): all three numbers 0, no Material Considered; the finders for a change never do', async () => {
-    expect(await db.masterRepository.findMaterialForCalculation(NOT_APPLICABLE_MATERIAL_ID)).toEqual({
+    // The batched reader of STORY-05.09 (`findMaterialsForCalculation`) finds the fixed hidden row, in a batch with an unknown ID (which has no entry), and inside a transaction.
+    const unknownId = '00000000-0000-4000-8000-0000000000fd';
+    const expected = {
       id: NOT_APPLICABLE_MATERIAL_ID,
       materialInDrawing: NOT_APPLICABLE_NAME,
       materialConsidered: null,
       pricePerKg: '0.00',
       specificGravity: '0.00',
       scrapRate: '0.00',
-    });
+      deleted: false,
+    };
+    expect(await db.masterRepository.findMaterialsForCalculation([NOT_APPLICABLE_MATERIAL_ID])).toEqual([expected]);
+    expect(await db.masterRepository.findMaterialsForCalculation([unknownId, NOT_APPLICABLE_MATERIAL_ID])).toEqual([expected]);
+    expect(await db.transactions.run((tx) => db.masterRepository.findMaterialsForCalculation([NOT_APPLICABLE_MATERIAL_ID], tx))).toEqual([expected]);
     expect(await db.transactions.run((tx) => db.masterRepository.findMaterialForUpdate(NOT_APPLICABLE_MATERIAL_ID, tx))).toBeNull();
     expect(await db.transactions.run((tx) => db.masterRepository.findTreatmentForUpdate(NOT_APPLICABLE_TREATMENT_ID, tx))).toBeNull();
   });

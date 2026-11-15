@@ -1,5 +1,7 @@
 import { DECIMAL_TEXT_PATTERN, normaliseDecimalText } from '../masters/master-rules';
 
+import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
+
 /**
  * The rule of one value typed into the part form (STORY-05.03 AC-4; SPEC section 7.3; architecture sections 4.8 and 8), read by the browser (to show the message
  * under the field and keep the typed text) and by the server (the only place that decides). Pure, with no zod, so the page does not carry it (NFR-009).
@@ -21,16 +23,9 @@ export const MAX_NUMBER_DIGITS = 12;
 export const NUMBER_TOO_LARGE_MESSAGE = `Use ${MAX_NUMBER_DIGITS} digits or fewer before the point.`;
 const TOO_MANY_DIGITS = new RegExp(`^\\d{${MAX_NUMBER_DIGITS + 1},}(?:\\.\\d{1,2})?$`);
 
-/**
- * The longest typed text of a part (Part No., Description, and the texts of the sections after them). An assumption, as the registry's own limit for a label is
- * 200 and no source gives a longer one: it bounds the row of `estimate_nodes.inputs` and what a tree and an export carry.
- */
-export const MAX_PART_TEXT_LENGTH = 200;
-/**
- * The longest typed text of a multi-line field (Remarks, AJ; STORY-05.04 AC-4). Assumption A-1: no source gives a maximum, so 1,000 characters, which is about a paragraph and
- * still bounds the row; the product owner may change it. The field's own limit is in its rule (`FormRule.maxLength`), so the screen and the server read one number.
- */
-export const MAX_LONG_TEXT_LENGTH = 1000;
+/** The longest typed texts are in `text-limits.ts` (so `form-fields.ts` need not import this file, which imports it); they are re-exported here for the callers that read them with the rule. */
+export { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH };
+
 /** The words under a text that is too long, with the limit of its field: "Use 1,000 characters or fewer." */
 export const textTooLongMessage = (maxLength: number): string => `Use ${maxLength.toLocaleString('en-US')} characters or fewer.`;
 export const TEXT_TOO_LONG_MESSAGE = textTooLongMessage(MAX_PART_TEXT_LENGTH);

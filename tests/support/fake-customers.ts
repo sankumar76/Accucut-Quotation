@@ -80,6 +80,12 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
     listCustomerOptions: () => Promise.resolve([...listed()].sort(byName).map(({ id, name }) => ({ id, name }))),
     findCustomer: (id) => Promise.resolve(((found) => (found === undefined ? null : detail(found)))(find(id))),
     findCustomerForUpdate: (id) => Promise.resolve(((found) => (found === undefined ? null : detail(found)))(find(id))),
+    // A calculation finds a deleted customer too, and says so (STORY-05.09): the row stays under the soft delete.
+    findCustomerForCalculation(id: string) {
+      const found = customers.find((customer) => sameId(customer.id, id));
+      if (found === undefined) return Promise.resolve(null);
+      return Promise.resolve(found.deleted ? { deleted: true as const, id: found.id, name: found.name } : { deleted: false as const, customer: detail(found) });
+    },
 
     createCustomer(input: NewCustomer) {
       if (taken(input.name)) return Promise.reject(duplicate());

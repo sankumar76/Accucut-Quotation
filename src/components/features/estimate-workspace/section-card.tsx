@@ -1,15 +1,20 @@
+import { TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { Icon } from '@/components/shared/icon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/cn';
 import type { FormSection } from '@/lib/estimates/form-client';
 import type { SectionProgress } from '@/lib/estimates/form-values';
 
-import { columnRangeLabel, progressText, sectionRegionLabel } from './estimate-texts';
+import { columnRangeLabel, progressText, TREE_MISSING_INPUTS, sectionRegionLabel } from './estimate-texts';
 
 export interface SectionCardProps {
   readonly section: Pick<FormSection, 'id' | 'number' | 'name' | 'columnRange'>;
   /** How many of its fields are filled ("2 of 5 complete"); null for a card with nothing to fill, which shows no count (STORY-05.04 AC-6). */
   readonly progress: SectionProgress | null;
+  /** Calculate found a field of this card blank (STORY-05.09): the card says so, in words and an icon, as its fields do. */
+  readonly missing?: boolean;
   readonly children: ReactNode;
 }
 
@@ -22,10 +27,10 @@ export const sectionTitleId = (sectionId: string): string => `part-section-${sec
  * string of letters. The heading can take focus (the section strip's links jump to it). The fields stack inside; the cards sit in the form's grid, one column on a phone and more as
  * the width allows.
  */
-export function SectionCard({ section, progress, children }: SectionCardProps) {
+export function SectionCard({ section, progress, missing = false, children }: SectionCardProps) {
   const titleId = sectionTitleId(section.id);
   return (
-    <Card role="region" aria-labelledby={titleId} className="self-start">
+    <Card role="region" aria-labelledby={titleId} className={cn('self-start', missing && 'border-danger-line')}>
       <CardHeader className="justify-between">
         <CardTitle id={titleId} as="h3" tabIndex={-1}>
           {sectionRegionLabel(section.number, section.name)}
@@ -35,6 +40,12 @@ export function SectionCard({ section, progress, children }: SectionCardProps) {
           <span aria-hidden="true">{section.columnRange}</span>
         </span>
         {progress === null ? null : <p className="w-full text-label text-ink-2">{progressText(progress.complete, progress.total)}</p>}
+        {missing ? (
+          <p className="flex w-full items-center gap-s-1 text-label font-semibold text-danger">
+            <Icon icon={TriangleAlert} size="hint" className="shrink-0" />
+            {TREE_MISSING_INPUTS}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-s-4">{children}</CardContent>
     </Card>

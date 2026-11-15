@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Outcome } from '@/lib/api-client';
 import { loadForm, loadMaterialOptions, loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type FormView, type MaterialChoice, type PartInputs } from '@/lib/estimates/form-client';
 import { readTyped } from '@/lib/estimates/form-values';
+import type { SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
 
@@ -27,6 +28,8 @@ export interface SavedPart {
   readonly id: string;
   readonly revision: number;
   readonly completeness: Completeness;
+  /** What the part holds now, by field ID: Calculate's list of missing fields takes the ones that now have a value off it (STORY-05.09). */
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
 const loadedFrom = <T>(outcome: Outcome<T>): Loaded<T> => (outcome.status === 'ok' ? { status: 'ready', value: outcome.value } : { status: 'failed' });
@@ -82,6 +85,8 @@ export interface UsePartValuesProps {
   readonly onChanged: () => void;
   /** A save changed the part, at this time. */
   readonly onWrote: (at: string) => void;
+  /** Told about every save in flight and every field that shows a value that is not saved, so Calculate waits for the saves and does not go over such a field (STORY-05.09, review SQR-01). */
+  readonly gate: SaveGate;
 }
 
 /**
@@ -92,7 +97,7 @@ export interface UsePartValuesProps {
  * a value it does not accept is under its field in its words, a part that changed under the person is read again with a notice, and nothing the person typed is dropped by a failure. The
  * Save draft button, the 30-second save and the warning on leaving are the next story's (STORY-05.08).
  */
-export function usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, onSaved, onChanged, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
   const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
@@ -111,12 +116,16 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     revisionRef.current = part.revision;
   }, [part.revision]);
 
+  // What is typed here is gone with the form (it is read from the server when the part is chosen again), so nothing of it is unsaved once it is off the screen or read again.
+  const live = useRef(true);
   useEffect(() => {
+    live.current = true;
     let cancelled = false;
     void loadPartInputs(estimateId, partId).then((outcome) => {
       if (cancelled) return;
       setStored(loadedFrom(outcome));
       if (outcome.status === 'ok') {
+        gate.forget(partId);
         heldRef.current = outcome.value.inputs;
         textsRef.current = outcome.value.inputs;
         setTexts(outcome.value.inputs);
@@ -124,15 +133,25 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     });
     return () => {
       cancelled = true;
+      live.current = false;
+      gate.forget(partId);
     };
-  }, [estimateId, partId, attempt]);
+  }, [estimateId, partId, attempt, gate]);
+
+  /** A field shows a value the server does not hold (or no longer does). A form that is no longer on the screen has nothing to show, so it is not marked. */
+  const mark = (fieldId: string, unsaved: boolean): void => {
+    if (live.current) gate.mark(partId, fieldId, unsaved);
+  };
 
   function showText(fieldId: string, text: string): void {
     textsRef.current = { ...textsRef.current, [fieldId]: text };
     setTexts(textsRef.current);
   }
 
-  const clearError = (fieldId: string): void => setErrors((current) => (fieldId in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== fieldId)) : current));
+  const clearError = (fieldId: string): void => {
+    mark(fieldId, false);
+    setErrors((current) => (fieldId in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== fieldId)) : current));
+  };
 
   /** The person is typing: the text is theirs, and a message about the earlier text goes. */
   function setText(fieldId: string, text: string): void {
@@ -142,6 +161,7 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
 
   /** The server did not accept the save: say why, in its words, where the person will look. */
   function explain(outcome: Exclude<Outcome<PartInputs>, { readonly status: 'ok' }>, fieldId: string): void {
+    mark(fieldId, true);
     if (outcome.status === 'refused' && outcome.httpStatus === 422) {
       setErrors((current) => ({ ...current, [fieldId]: outcome.fields[fieldId] ?? Object.values(outcome.fields)[0] ?? outcome.title }));
     } else if (outcome.status === 'refused' && (outcome.code === PART_CHANGED_CODE || outcome.httpStatus === 404)) {
@@ -170,7 +190,7 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     revisionRef.current = outcome.value.revision;
     heldRef.current = outcome.value.inputs;
     setProblem(null);
-    onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness });
+    onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
   }
 
   /**
@@ -181,6 +201,7 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     if (!editable || !field.editable) return;
     const check = readTyped(field.rule, override ?? textsRef.current[field.id] ?? '');
     if (!check.ok) {
+      mark(field.id, true);
       setErrors((current) => ({ ...current, [field.id]: check.message }));
       return;
     }
@@ -192,6 +213,7 @@ export function usePartValues({ estimateId, part, editable, onSaved, onChanged, 
     if (standIn(heldRef.current[field.id] ?? null) === standIn(check.value)) return;
     const value = check.value ?? '';
     queueRef.current = queueRef.current.then(() => send(field.id, value));
+    gate.track(queueRef.current);
   }
 
   return {

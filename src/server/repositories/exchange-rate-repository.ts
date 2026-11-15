@@ -41,8 +41,8 @@ export interface NewExchangeRateStamp {
 }
 
 export interface ExchangeRateMethods {
-  /** The two rates and the stamp of the pair. Plain read: it is not held up by a save. */
-  readExchangeRates(): Promise<ExchangeRatesRecord>;
+  /** The two rates and the stamp of the pair. Plain read: it is not held up by a save. Pass `tx` to read inside the caller's transaction (STORY-05.09: Calculate holds a connection and must not take a second). */
+  readExchangeRates(tx?: Transaction): Promise<ExchangeRatesRecord>;
   /** Takes the lock that serialises saves until the transaction ends (`SHARE ROW EXCLUSIVE`): two saves cannot overlap, even while there is no row yet to lock. Plain reads are not held up. */
   lockExchangeRates(tx: Transaction): Promise<void>;
   /** The two rates and the stamp, read **with the rows locked** until the transaction ends, so `before` is the state replaced. */
@@ -126,7 +126,7 @@ async function writeRows(db: PrismaClient, values: ExchangeRateValues, stamp: Ne
 /** The exchange-rate methods of the master repository; each turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createExchangeRateMethods(db: PrismaClient): ExchangeRateMethods {
   return {
-    readExchangeRates: () => withDatabaseErrors(() => readRows(db)),
+    readExchangeRates: (tx) => withDatabaseErrors(() => readRows(db, tx)),
     lockExchangeRates: (tx) =>
       withDatabaseErrors(async () => {
         await clientFor(db, tx).$executeRaw`LOCK TABLE exchange_rates IN SHARE ROW EXCLUSIVE MODE`;

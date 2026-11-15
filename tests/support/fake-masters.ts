@@ -54,6 +54,8 @@ export interface FakeMasterRepository extends MasterRepository {
   treatmentLockCount(): number;
   /** The listed materials, mutable in the same way. The hidden "Not applicable" row is not in this array: the database always has it, so the fake always offers it (`findNotApplicableMaterialOption`). */
   readonly materials: MutableMaterial[];
+  /** The materials the Admin deleted (STORY-02.07): the row stays under the soft delete, and a calculation still finds it and says it is deleted (STORY-05.09). */
+  readonly deletedMaterials: MutableMaterial[];
   /** The Draft and Submitted estimates that have each material in a part, by material ID, in the order of their task code (STORY-02.07). A test sets an entry to make a material "in use". */
   readonly materialOpenEstimates: Map<string, EstimateUse[]>;
   /** The Exchange Rate Master, mutable in the same way (STORY-02.04). Starts with no rate set. */
@@ -76,6 +78,7 @@ const duplicateMaterial = (): MasterConstraintError => new MasterConstraintError
 /** The material half of the fake: the same behaviour the service relies on (order, a name unique ignoring letter case, a lock that is a record). */
 function createFakeMaterialMethods(
   materials: MutableMaterial[],
+  deletedMaterials: MutableMaterial[],
   openEstimates: Map<string, EstimateUse[]>,
   onLock: () => void,
 ): Pick<MasterRepository, MaterialMethod> {
@@ -87,9 +90,14 @@ function createFakeMaterialMethods(
     listMaterials: () => Promise.resolve(materials.map((material) => ({ ...material }))),
     listMaterialOptions: () => Promise.resolve(materials.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered }))),
     findNotApplicableMaterialOption: () => Promise.resolve({ id: NOT_APPLICABLE_MATERIAL_ID, name: NOT_APPLICABLE_NAME, materialConsidered: null }),
-    findMaterialForCalculation(id: string) {
-      const found = materials[indexOf(id)];
-      return Promise.resolve(found === undefined ? null : { id: found.id, materialInDrawing: found.materialInDrawing, materialConsidered: found.materialConsidered, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
+    // One call for every ID; a deleted material is found and says so, an unknown ID has no entry (STORY-05.09).
+    findMaterialsForCalculation(ids: ReadonlyArray<string>) {
+      const wanted = new Set(ids.map((id) => id.toLowerCase()));
+      const entry = (material: MutableMaterial, deleted: boolean) => ({ ...material, deleted });
+      return Promise.resolve([
+        ...materials.filter((material) => wanted.has(material.id.toLowerCase())).map((material) => entry(material, false)),
+        ...deletedMaterials.filter((material) => wanted.has(material.id.toLowerCase())).map((material) => entry(material, true)),
+      ]);
     },
     lockMaterials() {
       onLock();
@@ -128,7 +136,8 @@ function createFakeMaterialMethods(
     softDeleteMaterial(id: string) {
       const index = indexOf(id);
       if (index === -1) return Promise.resolve(false);
-      materials.splice(index, 1);
+      const [removed] = materials.splice(index, 1);
+      if (removed !== undefined) deletedMaterials.push(removed);
       return Promise.resolve(true);
     },
     lockMaterialForUse: (id: string) => Promise.resolve(indexOf(id) !== -1),
@@ -164,7 +173,7 @@ type MaterialMethod =
   | 'listMaterials'
   | 'listMaterialOptions'
   | 'findNotApplicableMaterialOption'
-  | 'findMaterialForCalculation'
+  | 'findMaterialsForCalculation'
   | 'lockMaterials'
   | 'findMaterialForUpdate'
   | 'createMaterial'
@@ -238,6 +247,7 @@ export function createFakeMasterRepository(
   const records: MutableProcessItem[] = initial.map((record) => ({ ...record }));
   const customers: FakeCustomer[] = [];
   const materials: MutableMaterial[] = initialMaterials.map((material) => ({ ...material }));
+  const deletedMaterials: MutableMaterial[] = [];
   const materialOpenEstimates = new Map<string, EstimateUse[]>();
   const treatments: MutableTreatment[] = initialTreatments.map((treatment) => ({ ...treatment }));
   let locks = 0;
@@ -251,6 +261,7 @@ export function createFakeMasterRepository(
   return {
     records,
     materials,
+    deletedMaterials,
     materialOpenEstimates,
     treatments,
     customers,
@@ -266,7 +277,7 @@ export function createFakeMasterRepository(
     ...createFakeExchangeMethods(exchange, () => {
       exchangeLocks += 1;
     }),
-    ...createFakeMaterialMethods(materials, materialOpenEstimates, () => {
+    ...createFakeMaterialMethods(materials, deletedMaterials, materialOpenEstimates, () => {
       materialLocks += 1;
     }),
 

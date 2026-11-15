@@ -1,4 +1,6 @@
+import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
+import type { BlockedPart } from './estimate/calculate-check';
 
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
@@ -173,6 +175,17 @@ export const TREE_CHANGED_CODE = 'TREE_CHANGED';
 export class TreeChangedError extends ConflictError {
   constructor(readonly tree: ReadonlyArray<PartView>) {
     super('The parts were changed by someone else. The tree has been refreshed. Check it and try again.', { code: TREE_CHANGED_CODE });
+  }
+}
+
+/**
+ * Calculate found a part with a missing input (STORY-05.09 AC-1; FR-055): 422, nothing was written. The body names each part with its Sl. No and name and each missing
+ * field by ID and label, so the screen can list them and link to them (`parts`), and nothing else: no value, rate or figure is carried (NFR-002). It is raised only after the
+ * estimate was found to be the person's and a draft, so it tells a stranger nothing.
+ */
+export class CalculateBlockedError extends ValidationError {
+  constructor(readonly parts: ReadonlyArray<BlockedPart>) {
+    super(blockedSummary(parts.length), { code: CALCULATE_BLOCKED_CODE });
   }
 }
 
