@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { CalculateAckRequiredError, CalculateBlockedError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
+import { CalculateBlockedError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
+import { CalculateAckRequiredError } from '@/lib/estimate/calculate-ack-required-error';
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { createTransactionHandle, type Transaction } from '@/server/repositories/transaction';
 import { AuditEntryRefusedError } from '@/server/services/audit-secrets';

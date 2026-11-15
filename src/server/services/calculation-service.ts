@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { Decimal } from '../../lib/decimal';
-import { CalculateAckRequiredError, CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import {
   CALCULATE_MESSAGE,
   CALCULATE_SUBMITTED_STATUS,
@@ -10,6 +10,7 @@ import {
   NO_PARTS_CODE,
   NO_PARTS_MESSAGE,
 } from '../../lib/estimate/calculate-words';
+import { CalculateAckRequiredError } from '../../lib/estimate/calculate-ack-required-error';
 import { calculateProductTotals, type ProductTotals } from '../../lib/estimate/product-totals';
 import { quantityFieldIdOf, quantityWarnings, type QuantityWarning } from '../../lib/estimate/quantity-warnings';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';

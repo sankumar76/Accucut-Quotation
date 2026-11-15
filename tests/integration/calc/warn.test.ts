@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 
-import { CalculateAckRequiredError, CalculateBlockedError, ConflictError } from '@/lib/errors';
+import { CalculateBlockedError, ConflictError } from '@/lib/errors';
+import { CalculateAckRequiredError } from '@/lib/estimate/calculate-ack-required-error';
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { findFieldById } from '@/lib/fields/registry';
 import { AuditEntryRefusedError } from '@/server/services/audit-secrets';

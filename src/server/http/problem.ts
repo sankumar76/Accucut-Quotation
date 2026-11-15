@@ -7,7 +7,6 @@ import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '../../lib/auth/s
 
 import {
   ActiveAdminExistsError,
-  CalculateAckRequiredError,
   CalculateBlockedError,
   AppError,
   DatabaseBusyError,
@@ -24,6 +23,7 @@ import {
 } from '../../lib/errors';
 import type { PartView } from '../../lib/estimate/part-view';
 import type { BlockedPart } from '../../lib/estimate/calculate-check';
+import { CalculateAckRequiredError } from '../../lib/estimate/calculate-ack-required-error';
 import { warningLine } from '../../lib/estimate/warning-copy';
 
 /**
