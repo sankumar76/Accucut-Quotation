@@ -9,6 +9,7 @@ import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-c
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, shownSections, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
+import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -29,12 +30,13 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
-import { NEXT_FIELD } from './field-ids';
+import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PictureSlot } from './picture-slot';
-import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
+import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
+import { SurfaceTreatments } from './surface-treatments';
 import type { Loaded } from './use-form-definition';
 import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 
@@ -62,6 +64,7 @@ const TITLE_ID = 'part-form-title';
  * but it never "needs nothing": "Use 0" is not said under it (a 0 there is what STORY-05.12 warns about), and the field is told by its hint.
  */
 function missingMessageOf(field: FormField): string {
+  if (field.rule.type === 'treatment') return TREATMENT_MISSING_MESSAGE;
   if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
   return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
 }
@@ -157,8 +160,22 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
       <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
         {progress.map(({ section, counts }) => (
           <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts} missing={hasMissing(section)}>
+            {/* The surface treatments of a section (07) are one multi-select, drawn first in the card: a chosen one is 1 and one that is not is 0, and each is saved on its own (STORY-05.06). */}
+            {section.fields.some((field) => field.rule.type === 'flag') ? (
+              <SurfaceTreatments
+                id={controlIdFor(section.id)}
+                fields={section.fields.filter((field) => field.rule.type === 'flag')}
+                texts={values.texts}
+                editable={editable}
+                onToggle={(flag, chosen) => {
+                  const text = chosen ? FLAG_ON : FLAG_OFF;
+                  values.setText(flag.id, text);
+                  values.commit(flag, text);
+                }}
+              />
+            ) : null}
             {section.fields.map((field) =>
-              field.rule.type === 'picture' ? (
+              field.rule.type === 'flag' ? null : field.rule.type === 'picture' ? (
                 // The picture (Part Model, STORY-05.07) is its own control, fetched when the form opens; it is changed by its own routes and is no typed value.
                 <PictureSlot
                   key={field.id}
@@ -185,7 +202,6 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
                 />
               ),
             )}
-            {section.reserved.length === 0 ? null : <PlaceholderFields sectionId={section.id} fields={section.reserved} />}
           </SectionCard>
         ))}
       </div>

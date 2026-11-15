@@ -29,10 +29,10 @@ const COST_LETTERS = ['AP', 'AU', 'BM'] as const;
 /** The words with "cost" in them that the form may say: the four typed inputs (FR-008) and the name of section 08 (SPEC 7.1). */
 const ALLOWED_COST_WORDS = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'];
 /** Every field a person types into, in the order of the form (08 shows AP, AU, BM, then AJ). */
-const FORM_ORDER = ['B', 'D', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
+const FORM_ORDER = ['B', 'D', 'G', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
 
 const SECTIONS = [
-  { number: '01', region: '01 Part Details', range: 'A–D, G, H', count: '0 of 3 complete', link: '01 Part details' },
+  { number: '01', region: '01 Part Details', range: 'A–D, G, H', count: '0 of 4 complete', link: '01 Part details' },
   { number: '02', region: '02 Material and Dimensions', range: 'E, F, J–L, N', count: '0 of 5 complete', link: '02 Material' },
   { number: '03', region: '03 Cutting Process', range: 'P, Q', count: '0 of 2 complete', link: '03 Cutting' },
   { number: '04', region: '04 Bending', range: 'R', count: '0 of 1 complete', link: '04 Bending' },
@@ -124,20 +124,14 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
     await expect(page.getByRole('heading', { name: '01 Part Details' })).toBeFocused();
   });
 
-  test('AC-6: Treatment / Color (G) in 01 and the eight treatments in 07 are labelled placeholders with nothing to type, and are not counted', async ({ page }, testInfo) => {
+  test('AC-6 (STORY-05.06): Treatment / Color (G) in 01 is a drop-down that is counted, and the eight treatments of 07 are one multi-select that is not; there is no placeholder any more', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    const first = region(page, '01 Part Details').getByRole('group', { name: 'Not available yet' });
-    await expect(first).toBeVisible();
-    await expect(first).toContainText('Treatment / Color');
-    await expect(first.getByRole('textbox')).toHaveCount(0);
-    await expect(first.getByRole('combobox')).toHaveCount(0);
-
-    const surface = region(page, '07 Surface Treatment').getByRole('group', { name: 'Not available yet' });
-    await expect(surface).toBeVisible();
-    for (const label of ['Hot Dip Galvanizing', 'Primer', 'Shot Blasting', 'Polishing', 'Plating', 'Powder Coating', 'Foam', 'Soft Anodize']) await expect(surface).toContainText(label);
-    await expect(region(page, '07 Surface Treatment').locator('input, select, textarea, button')).toHaveCount(0);
-    // 01 counts its three typed fields only, so the placeholder is not a missing one.
-    await expect(region(page, '01 Part Details')).toContainText('0 of 3 complete');
+    await expect(region(page, '01 Part Details').getByRole('combobox', { name: /^Excel column G\s+Treatment \/ Color/ })).toBeVisible();
+    await expect(region(page, '01 Part Details')).toContainText('0 of 4 complete');
+    await expect(region(page, '07 Surface Treatment').getByRole('button', { name: /^Surface treatments/ })).toBeVisible();
+    await expect(region(page, '07 Surface Treatment').getByRole('button')).toHaveCount(1);
+    await expect(region(page, '07 Surface Treatment')).not.toContainText('of 0 complete');
+    await expect(page.getByText('Not available yet')).toHaveCount(0);
   });
 });
 

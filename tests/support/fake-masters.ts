@@ -186,6 +186,7 @@ type TreatmentMethod =
   | 'listTreatments'
   | 'listTreatmentOptions'
   | 'findNotApplicableTreatmentOption'
+  | 'findTreatmentOptionById'
   | 'lockTreatments'
   | 'findTreatmentForUpdate'
   | 'createTreatment'
@@ -206,6 +207,11 @@ function createFakeTreatmentMethods(treatments: MutableTreatment[], onLock: () =
     listTreatments: () => Promise.resolve(ordered()),
     listTreatmentOptions: () => Promise.resolve(ordered().map(({ id, name }) => ({ id, name }))),
     findNotApplicableTreatmentOption: () => Promise.resolve({ id: NOT_APPLICABLE_TREATMENT_ID, name: NOT_APPLICABLE_NAME }),
+    findTreatmentOptionById(id: string) {
+      if (id.toLowerCase() === NOT_APPLICABLE_TREATMENT_ID) return Promise.resolve({ id: NOT_APPLICABLE_TREATMENT_ID, name: NOT_APPLICABLE_NAME });
+      const found = treatments[indexOf(id)];
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+    },
     lockTreatments() {
       onLock();
       return Promise.resolve();

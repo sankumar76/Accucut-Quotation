@@ -100,8 +100,8 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
     await expect(section(page)).toContainText(HINT);
     await expect(zone(page)).toHaveAccessibleDescription(HINT);
     await expect(section(page).getByRole('alert')).toHaveCount(0);
-    // Not counted: the card's count is the three fields it needs (Part No., Description, QTY per Assy), whatever the picture.
-    await expect(section(page)).toContainText('0 of 3 complete');
+    // Not counted: the card's count is the four fields it needs (Part No., Description, Treatment / Color, QTY per Assy), whatever the picture.
+    await expect(section(page)).toContainText('0 of 4 complete');
     expect(await page.locator('body').innerText()).not.toMatch(/missing picture|picture (is )?(required|missing)/i);
   });
 
@@ -113,7 +113,7 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
     // The preview is a picture the server sent: a 1 x 1 image has a natural width of 1.
     await expect(preview(page, 'invented-front.png')).toHaveJSProperty('naturalWidth', 1);
     await expect(section(page).getByRole('alert')).toHaveCount(0);
-    await expect(section(page)).toContainText('0 of 3 complete');
+    await expect(section(page)).toContainText('0 of 4 complete');
 
     await page.reload();
     await expect(control(page, 'J')).toBeEnabled();

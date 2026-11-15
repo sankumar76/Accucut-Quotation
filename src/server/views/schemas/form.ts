@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { MAX_LONG_TEXT_LENGTH } from '../../../lib/estimate/validation';
-
 import { partInputsSchema, revisionSchema } from './tree';
 
 /**
@@ -45,6 +44,8 @@ const ruleSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('number'), decimals: z.number().int().min(0) }),
   z.strictObject({ type: z.literal('text'), maxLength: z.number().int().min(1), multiline: z.boolean() }),
   z.strictObject({ type: z.literal('select'), source: z.literal('materials') }),
+  z.strictObject({ type: z.literal('treatment'), maxLength: z.number().int().min(1) }),
+  z.strictObject({ type: z.literal('flag') }),
   z.strictObject({ type: z.literal('derived'), from: z.uuid().nullable() }),
   z.strictObject({ type: z.literal('picture') }),
 ]);
@@ -65,9 +66,6 @@ const formFieldSchema = z.strictObject({
   rule: ruleSchema,
 });
 
-/** A field of a later story (Treatment / Color, the surface treatments): its ID, letter and label, so the form can say what is to come. A person cannot type into it and no save names it. */
-const placeholderFieldSchema = z.strictObject({ id: z.uuid(), letter: z.string().min(1), label: z.string().min(1) });
-
 const formSectionSchema = z.strictObject({
   id: z.uuid(),
   number: z.number().int().min(1),
@@ -75,7 +73,6 @@ const formSectionSchema = z.strictObject({
   shortName: z.string().min(1),
   columnRange: z.string().min(1),
   fields: z.array(formFieldSchema).readonly(),
-  reserved: z.array(placeholderFieldSchema).readonly(),
 });
 
 /** `GET /estimates/{id}/form`: the sections, and when a part was last written (ISO 8601, null while there is no part). */

@@ -164,23 +164,23 @@ describe('AC-2, AC-7: what is read back', () => {
     for (const viewer of [arjun, lead]) expect((await service.getNode(viewer, estimateId, nodeId)).inputs).toEqual(typed);
   });
 
-  it('a part that holds a canary price under Material Rate / Kg, a value of a later story\'s field and an unknown key is read back with the typed values only, and a save keeps all three where they were (reviews SQR-01, SQR-05)', async () => {
+  it('a part that holds a canary price under Material Rate / Kg, a value of a calculated field (on no form) and an unknown key is read back with the typed values only, and a save keeps all three where they were (reviews SQR-01, SQR-05)', async () => {
     const nodeId = await setUpPart();
     const planted = canaryPartInputs(seedConfig);
-    await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify({ ...planted, [field('Z')]: '1' })]);
+    await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify({ ...planted, [field('M')]: '1' })]);
     for (const viewer of [arjun, lead]) {
       const part = await service.getNode(viewer, estimateId, nodeId);
       expect(JSON.stringify(part)).not.toContain(CANARY_PLANTED_RATE);
       expect(Object.keys(part.inputs)).not.toContain(canaryRateFieldId(seedConfig));
       expect(Object.keys(part.inputs)).not.toContain(CANARY_UNKNOWN_KEY);
-      expect(Object.keys(part.inputs)).not.toContain(field('Z'));
+      expect(Object.keys(part.inputs)).not.toContain(field('M'));
     }
     const saved = await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [field('Y')]: '9' } });
     expect(JSON.stringify(saved)).not.toContain(CANARY_PLANTED_RATE);
     const held = (await row(nodeId)).inputs;
     expect(held[canaryRateFieldId(seedConfig)]).toBe(CANARY_PLANTED_RATE);
     expect(held[CANARY_UNKNOWN_KEY]).toBe('x');
-    expect(held[field('Z')]).toBe('1');
+    expect(held[field('M')]).toBe('1');
     expect(held[field('Y')]).toBe('9.00');
   });
 });

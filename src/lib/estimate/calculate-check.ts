@@ -4,6 +4,7 @@ import { MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 
 import { buildFormSections, type FormFieldView, type FormRule } from './form-fields';
 import { hiddenFieldIds, HIDDEN_NUMBER } from './hidden-inputs';
+import { treatmentWordsOf } from './treatment-value';
 import { validateNumberInput, validateTextInput } from './validation';
 
 /**
@@ -11,8 +12,8 @@ import { validateNumberInput, validateTextInput } from './validation';
  * without a database, and so the one rule of "what is visible and needed" is the form's own (`buildFormSections`) and the registry's own (`isFieldShown`, through `hiddenFieldIds`), not a second copy.
  *
  *   - **Needed** is a field of the form that a person types or chooses and that the registry marks mandatory. It follows the form, so the "n of m" of a card and this check agree, and
- *     a field the form does not offer yet (Treatment / Color and the treatment flags, until STORY-05.06; the picture, never needed) is not needed. When a story moves a field onto the form, this
- *     check needs it with no edit here. Assumption A-1 of the story.
+ *     a field the form does not offer (the picture, never needed) is not needed. When a story moves a field onto the form, this check needs it with no edit here. Assumption A-1 of the story.
+ *     Treatment / Color (G) is on the form since STORY-05.06, so a part is blocked until a treatment, "Not applicable" or "Other" with words is chosen; the eight surface treatments are never needed (none chosen is 0).
  *   - **Hidden** is a field the registry's `visibleWhen` hides for this part (Fasteners Qty and Cost while Fasteners is "None" or blank). It is not needed, and the calculation reads it as 0
  *     whatever is stored under it (a value typed before the rule hid it is not used). The rule is `isFieldShown`, the one copy.
  *   - **A value is read through its field's rule, and so is a default.** A stored value that is not text, or that the rule refuses (a blank, a negative number, a text too long), is blank; a field
@@ -75,10 +76,13 @@ interface FieldValue {
 
 /** The value of a field as the part holds it: the stored text if there is one, otherwise the field's default, read by the field's rule; `null` when there is none or the rule refuses it. */
 function readField(field: TypedField, stored: unknown): string | null {
+  // Treatment / Color is stored as `{ id, text }` and is read as its words: a listed entry, "Not applicable" and "Other" alike (STORY-05.06 AC-4, AC-5).
+  if (field.rule.type === 'treatment') return treatmentWordsOf(stored) || null;
   const typed = typeof stored === 'string' ? stored : '';
   const raw = typed.trim() === '' ? (field.defaultValue ?? '') : typed;
   switch (field.rule.type) {
-    case 'number': {
+    case 'number':
+    case 'flag': {
       const check = validateNumberInput(raw);
       return check.ok ? check.value : null;
     }
@@ -94,9 +98,9 @@ function readField(field: TypedField, stored: unknown): string | null {
 /** Every field of the form that a person types or chooses, in the order of the form. */
 const typedFieldsOf = (document: ConfigDocument): ReadonlyArray<TypedField> => buildFormSections(document).flatMap((section) => section.fields.filter(isTyped));
 
-/** The registry's inputs that are not on the form but that the calculation or the record reads: the flags (numbers) and the words of Treatment / Color. */
-function reservedInputs(document: ConfigDocument, dataType: 'flag' | 'select_other') {
-  return document.fields.flatMap((field) => (field.kind === 'input' && field.dataType === dataType ? [field] : []));
+/** The registry's treatment flags (Z to AG): numbers that the calculation reads, 1 when the treatment is chosen and 0 when it is not. */
+function flagInputs(document: ConfigDocument) {
+  return document.fields.flatMap((field) => (field.kind === 'input' && field.dataType === 'flag' ? [field] : []));
 }
 
 /** The words of a part's name: the first of `PART_NAME_KEYS` that holds a value. */
@@ -116,14 +120,14 @@ function readPart(part: PartToCheck, document: ConfigDocument, fields: ReadonlyA
   return { read, hidden };
 }
 
-/** The typed numbers: a shown one as read, a hidden one as 0, and the flags, which are not on the form yet and are read as numbers (an absent one is its default, 0). */
+/** The typed numbers: a shown one as read, a hidden one as 0, and the flags, which are read as numbers (an absent one is its default, 0). */
 function numbersOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyArray<FieldValue>, hidden: ReadonlySet<string>): Record<string, string> {
   const numbers: Record<string, string> = {};
   for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'number')) {
     const used = hidden.has(field.id) ? HIDDEN_NUMBER : value;
     if (used !== null) numbers[field.id] = used;
   }
-  for (const flag of reservedInputs(document, 'flag')) {
+  for (const flag of flagInputs(document)) {
     const stored = part.inputs[flag.id];
     const check = validateNumberInput(typeof stored === 'string' && stored.trim() !== '' ? stored : (flag.defaultValue ?? ''));
     if (check.ok && check.value !== null) numbers[flag.id] = check.value;
@@ -131,15 +135,11 @@ function numbersOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyAr
   return numbers;
 }
 
-/** The typed words, and the word kept for Treatment / Color once its story builds the control (until then nothing is stored for it, and nothing is made up). */
-function textsOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyArray<FieldValue>): Record<string, string> {
+/** The typed words, and the words of Treatment / Color (G) as the part holds them (the row's name for a listed entry and for "Not applicable", the typed words for "Other"). */
+function textsOf(read: ReadonlyArray<FieldValue>): Record<string, string> {
   const texts: Record<string, string> = {};
-  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'text')) {
+  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'text' || candidate.rule.type === 'treatment')) {
     if (value !== null) texts[field.id] = value;
-  }
-  for (const treatment of reservedInputs(document, 'select_other')) {
-    const stored = part.inputs[treatment.id];
-    if (typeof stored === 'string' && stored.trim() !== '') texts[treatment.id] = stored.trim();
   }
   return texts;
 }
@@ -166,7 +166,7 @@ export function validateForCalculate(parts: ReadonlyArray<PartToCheck>, document
     if (missing.length > 0 || material === null) {
       blocked.push({ nodeId: part.id, slNo: part.slNo, name: nameOf(document, read), fields: missing });
     } else {
-      checked.push({ id: part.id, slNo: part.slNo, materialId: material, numbers: numbersOf(part, document, read, hidden), texts: textsOf(part, document, read) });
+      checked.push({ id: part.id, slNo: part.slNo, materialId: material, numbers: numbersOf(part, document, read, hidden), texts: textsOf(read) });
     }
   }
   return blocked.length > 0 ? { ok: false, parts: blocked } : { ok: true, parts: checked };

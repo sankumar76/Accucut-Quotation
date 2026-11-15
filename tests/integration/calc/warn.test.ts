@@ -304,7 +304,7 @@ describe('AC-8 (CE-9): the seven trees, calculated with the acknowledgement, giv
   });
 
   /** A part of a case as the form stores it: every number 0, then the count (H) and the per-piece cost (Machining Cost, AP) of the row. */
-  const partInputs = (h: string, cost: string): Record<string, string> => {
+  const partInputs = (h: string, cost: string): Record<string, unknown> => {
     const zeroed = Object.fromEntries(Object.entries(completePartInputs()).map(([id, value]) => [id, findFieldById(seedConfig, id)?.dataType === 'number' ? '0.00' : value]));
     return { ...zeroed, [idOf('E')]: db.materialOneId, [QTY()]: h, [idOf('AP')]: cost };
   };

@@ -193,7 +193,8 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
 });
 
 describe('review SQR-01, SQR-02: a save changes only the keys it names, and the write is conditional on the revision read', () => {
-  const NOT_BUILT = seedFieldAt('Z').id;
+  // Blank Weight (M) is a calculated field: on no form, so what is stored under it is neither read, changed nor sent back.
+  const NOT_BUILT = seedFieldAt('M').id;
 
   async function plant(nodeId: string, inputs: Record<string, unknown>): Promise<void> {
     await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify(inputs)]);
