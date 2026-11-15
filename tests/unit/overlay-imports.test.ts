@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { describeBreach, firstLoadModules, lazyModules, overlayBreaches, overlayHolders, readSources } from '../support/overlay-imports';
 
@@ -11,7 +11,19 @@ import { describeBreach, firstLoadModules, lazyModules, overlayBreaches, overlay
  * planted sources below show it able to fail.
  */
 
-const sources = readSources(join(__dirname, '..', '..'));
+/** What the real tree gives. The whole of `src` is parsed once, in `beforeAll` under the hook limit (vitest.config.ts, DL-057), not in a test with the 5 s default: a loaded CI worker takes longer than that. */
+interface RealTree {
+  readonly breaches: ReadonlyArray<string>;
+  readonly holders: ReadonlyArray<string>;
+  readonly lazy: ReadonlyArray<string>;
+  readonly firstLoad: ReadonlySet<string>;
+}
+let real: RealTree;
+
+beforeAll(() => {
+  const sources = readSources(join(__dirname, '..', '..'));
+  real = { breaches: overlayBreaches(sources).map(describeBreach), holders: overlayHolders(sources), lazy: lazyModules(sources), firstLoad: firstLoadModules(sources) };
+});
 
 /** The paths of a small planted tree: a route page, a first-load component and what it imports. */
 const PAGE = 'src/app/(portal)/demo/page.tsx';
@@ -31,11 +43,11 @@ const planted = (screen: string, extra: Readonly<Record<string, string>> = {}): 
 
 describe('overlay imports (AQP-339 AC-6)', () => {
   it('finds no overlay holder and no lazy module in the first load of any route', () => {
-    expect(overlayBreaches(sources).map(describeBreach)).toEqual([]);
+    expect(real.breaches).toEqual([]);
   });
 
   it('is not passing for want of anything to check: the overlays and lazy modules of architecture section 10 are all seen', () => {
-    const holders = overlayHolders(sources);
+    const holders = real.holders;
     for (const name of [
       'src/components/shared/menu-drawer.tsx',
       'src/components/shared/account-menu-panel.tsx',
@@ -45,7 +57,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
     ]) {
       expect(holders, name).toContain(name);
     }
-    const lazy = lazyModules(sources);
+    const lazy = real.lazy;
     for (const name of [
       'src/components/shared/menu-drawer.tsx',
       'src/components/features/masters/exchange-rates-panel.tsx',
@@ -61,7 +73,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
   });
 
   it('keeps the part form fields out of the first load of the estimate page (AQP-339 AC-4, AC-5: focus-field.ts reaches them through field-ids.ts only)', () => {
-    const firstLoad = firstLoadModules(sources);
+    const firstLoad = real.firstLoad;
     const folder = 'src/components/features/estimate-workspace';
     expect(firstLoad, 'the page itself is in the first load').toContain(`${folder}/estimate-workspace.tsx`);
     expect(firstLoad, 'the focus helper is in the first load').toContain(`${folder}/focus-field.ts`);
