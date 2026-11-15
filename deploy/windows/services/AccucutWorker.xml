@@ -1,0 +1,31 @@
+<!--
+  WinSW 2.12.0 service file for the worker (STORY-10.04; ADR-011; ADR-015; architecture section 9.9).
+  Filled and written by install.ps1 and update.ps1 as C:\Accucut\services\AccucutWorker.xml. Paths only, no secret: see AccucutApp.xml.
+  Runs as NT SERVICE\AccucutWorker, never as LocalSystem.
+-->
+<service>
+  <id>AccucutWorker</id>
+  <name>Accucut Quotation Portal (worker)</name>
+  <description>Runs the portal's background jobs (Node.js).</description>
+
+  <executable>{{NODE_EXE}}</executable>
+  <arguments>--env-file="{{ENV_FILE}}" main.mjs</arguments>
+  <workingdirectory>{{CURRENT_DIR}}\worker</workingdirectory>
+
+  <env name="NODE_ENV" value="production"/>
+
+  <depend>postgresql-x64-17</depend>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 day</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+
+  <logpath>{{LOG_DIR}}</logpath>
+  <log mode="roll-by-time">
+    <pattern>yyyyMMdd</pattern>
+  </log>
+</service>

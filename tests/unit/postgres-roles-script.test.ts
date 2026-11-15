@@ -9,12 +9,30 @@ import { describe, expect, it } from 'vitest';
  * proves what it does to a real database.
  */
 
+// The statements live in deploy/db/create-roles.psql, the one source that the Windows install reads too (STORY-10.04),
+// and the shell script finds and runs it. The rules below hold for the two files together.
 const SCRIPT = readFileSync(fileURLToPath(new URL('../../docker/postgres-init/01-create-roles.sh', import.meta.url)), 'utf8');
-const CODE = SCRIPT.split(/\r?\n/)
+const SQL = readFileSync(fileURLToPath(new URL('../../deploy/db/create-roles.psql', import.meta.url)), 'utf8');
+const CODE = `${SCRIPT}\n${SQL}`
+  .split(/\r?\n/)
   .filter((line) => !line.trimStart().startsWith('#') && !line.trimStart().startsWith('--'))
   .join('\n');
 
-describe('docker/postgres-init/01-create-roles.sh', () => {
+describe('docker/postgres-init/01-create-roles.sh and deploy/db/create-roles.psql', () => {
+  it('STORY-10.04: the shell script runs the one SQL file and creates no role itself', () => {
+    expect(SCRIPT).toMatch(/--file "\$roles_sql"/);
+    expect(SCRIPT).not.toMatch(/CREATE ROLE/);
+    expect(SQL).toMatch(/CREATE ROLE accucut_owner LOGIN PASSWORD/);
+    expect(SQL).toMatch(/CREATE ROLE accucut_app LOGIN PASSWORD/);
+  });
+
+  it('STORY-10.04: the owner has CREATEDB only when the caller asks (development), never by default', () => {
+    expect(SQL).toContain('\\set owner_createdb off');
+    expect(SQL).toMatch(/\\if :owner_createdb\s+ALTER ROLE accucut_owner CREATEDB;\s+\\endif/);
+    expect(SCRIPT).toMatch(/DB_OWNER_CREATEDB=on/);
+    expect(SQL).not.toMatch(/CREATE ROLE accucut_owner[^;]*CREATEDB/);
+  });
+
   it('STD-02: passes no password on the psql command line (it would show in the process list)', () => {
     expect(CODE).not.toMatch(/-v\s+\w*password/i);
     expect(CODE).not.toMatch(/--set[= ]\w*password/i);
