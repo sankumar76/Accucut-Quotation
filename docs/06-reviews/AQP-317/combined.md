@@ -107,3 +107,25 @@ The two Majors:
 - Status: COMPLETE
 - Verdict: REQUEST CHANGES (Blocker 0, Critical 0, Major 2, Minor 5, Info 4)
 - Recommended next agent: developer (fix SQR-01, SQR-02), then reviewer-quality to re-review only the new diff
+
+## Round 2: re-review of PR #406 (dba5372, DL-215 re-cut of #403; review fix a3b27b4 = bf2abd7), 2026-11-15
+| Field | Value |
+|---|---|
+| Verdict | APPROVE WITH COMMENTS (no Blocker, Critical or Major open) |
+| PR review | https://github.com/sankumar76/Accucut-Quotation/pull/406#pullrequestreview-5908501620 |
+| CI | run 43663902865, 6 of 6 green; 9,175 tests with coverage; changed-code coverage 95.7 %; JS 198,987 of 200,000 B |
+| Method | GitHub MCP only: commit a3b27b4, the re-cut hunks (material-repository, fake-masters, row-outputs, not-applicable-options), and #406 compared file by file against #403 |
+
+| Round-1 ID | Status | Evidence |
+|---|---|---|
+| SQR-01 Major | Verified | save-gate.ts (track, mark, forget, settle); use-part-form tracks queueRef and marks refused, unreadable and failed values; useCalculate waits for settle(); 8 unit tests; E2E held save and refused value |
+| SQR-02 Major | Verified | readCalculatedValues + forbiddenCalculated; scan from the press on; list must not be empty; planted-leak control; 10 unit tests |
+| SQR-03 Minor | Verified | harness reads the configuration in tx |
+| SQR-04 Minor | Verified | blank E named once; 2 unit tests |
+| SQR-05 Minor | Verified | quantity-hint.ts; E2E |
+| SQR-06 Minor | Verified | useLazyComponent returns `failed`; notice shown |
+| SQR-07 Minor | Verified | docblock 404/403; decision 6 corrected |
+| SQR-09 Info | Open | product-owner question (Fasteners "None" case) |
+
+New in round 2: SQR-12 Minor (canary has no rounded whole-rupee forms; add comma-grouped rounded forms for figures of 10,000 or more; hardening), SQR-13 Minor (settle() has no time limit; failed-save notice wording; hardening), SQR-14 Info (fake reader does not return the hidden "Not applicable" row; hardening).
+Counts for round 2: Blocker 0, Critical 0, Major 0, Minor 2, Info 1. Merged as 292c850 (orchestrator, 2026-11-15). #382 stays open.
