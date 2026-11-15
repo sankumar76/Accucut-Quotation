@@ -312,7 +312,7 @@ jobs:
 
       - name: Assert the install (services, health, sign-in, permissions, the backup account, task, files and role, no secret in a log)
         run: |
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED -AfterInstall
 
       # ---- Backup, clear and a replaced module (STORY-10.05; ADR-015 Amendments 2 and 3) ----------------------------------------------
       # backup.ps1 -Reason release as an administrator (the call update.ps1 makes), more copies, clear-copies.ps1 with its answers on standard input (a wrong date

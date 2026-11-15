@@ -219,6 +219,11 @@ batch job; or ask the domain administrator), then run `Start-ScheduledTask 'Accu
 as a batch job'") when it is gone, and carries on: it never gives the right back and never takes it away. The usual cause is a Group Policy that was added after the
 install. Give the right again as above.
 
+**PowerShell logging.** If a Group Policy switches on PowerShell **module logging** (`HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging\EnableModuleLogging = 1`), Windows
+records the values given to commands in the event log `Microsoft-Windows-PowerShell/Operational` (event 4103), and that would include the passwords the install gives to the backup
+account and to the database role `accucut_backup`. The install checks for it and says so in a warning, and carries on. Switch module logging off for the install, or clear that log
+afterwards (`wevtutil cl Microsoft-Windows-PowerShell/Operational`).
+
 **Off-server copy (recommended, yours to set up).** The copies are on the same disk as the data: a failed disk or a lost server loses both. Copy each weekly
 `.age` file and its manifest to another place (a share, a NAS, a rotated disk kept elsewhere) with a task of your own, for example on Sunday at 04:00. The
 files are already encrypted. Give your copy account **Read** on `C:\Accucut\backups` only. Keep the private key somewhere else again.

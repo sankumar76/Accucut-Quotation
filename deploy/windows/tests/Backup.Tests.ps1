@@ -137,7 +137,7 @@ Describe 'the order of the checks in backup.ps1: every check before the module i
         Mock Assert-AccucutBackupFolderTrusted { }
         Mock Invoke-AccucutBackup { throw 'pg_dump failed with exit code 1. connection refused' }
         { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'release' } | Should -Throw
-        Mock Invoke-AccucutBackup { throw 'Not enough free disk space for another copy: 1 KB is free.' }
+        Mock Invoke-AccucutBackup { $lowSpace = [System.InvalidOperationException]::new('Not enough free disk space for another copy: 1 KB is free.'); $lowSpace.Data['accucutCode'] = 'low-space'; throw $lowSpace }
         { Invoke-AccucutBackupScript -ScriptPath 'C:\Accucut\current\backup.ps1' -Reason 'weekly' } | Should -Throw
         $script:Events.Count | Should -Be 3
         ($script:Events | ForEach-Object { $_.Type }) | Should -Be @('Error', 'Error', 'Error')

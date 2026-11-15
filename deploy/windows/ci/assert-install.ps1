@@ -13,6 +13,8 @@
   The tag the `current` junction must point at.
 .PARAMETER RightsBefore
   The secedit /export of the user rights that stage 13 took BEFORE the install (read-only; an oracle that does not use the code under test).
+.PARAMETER AfterInstall
+  Set for the call straight after the install: then the install's own weekly copy and the one event of its run are checked. Later calls (after the exercise step has cleared the weekly copy) check the newest verified copy instead.
 .PARAMETER InstallStartedAt
   The time just before the install started, so that the checks of the task's run and of the Security log look at the install's own run only.
 .PARAMETER AgeKeyFile
@@ -27,7 +29,8 @@ param(
     [Parameter(Mandatory)][string]$ExpectedRelease,
     [Parameter(Mandatory)][string]$AgeKeyFile,
     [Parameter(Mandatory)][string]$RightsBefore,
-    [Parameter(Mandatory)][datetime]$InstallStartedAt
+    [Parameter(Mandatory)][datetime]$InstallStartedAt,
+    [switch]$AfterInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -256,10 +259,16 @@ Assert-That ([uint32]$taskInfo.LastTaskResult -eq 0) "the install's run of the w
 Assert-That ($taskInfo.LastRunTime -gt $InstallStartedAt) "the task ran after the install began (last run $($taskInfo.LastRunTime))"
 $copies = @(Get-AccucutBackupCopy -Directory $paths.Backups)
 Assert-That ($copies.Count -ge 1 -and @($copies | Where-Object { -not $_.Verified }).Count -eq 0) "the backups folder holds at least one copy, and each has a manifest that agrees with it (found $($copies.Count))"
-$first = @($copies | Where-Object { $_.Reason -eq 'weekly' })[0]
-Assert-That ($first.Reason -eq 'weekly' -and $first.Name -match '^accucut-\d{8}-\d{6}-weekly\.age$') "the first copy is named $($first.Name)"
-$manifest = Get-Content -LiteralPath $first.ManifestPath -Raw | ConvertFrom-Json
-Assert-That ($manifest.sha256 -eq (Get-AccucutFileSha256 -Path $first.Path) -and [int64]$manifest.sizeBytes -eq $first.SizeBytes -and $manifest.reason -eq 'weekly' -and [string]$manifest.postgresVersion -match '^17') 'the manifest holds the SHA-256, size, reason and PostgreSQL version of the copy'
+# The copy that is decrypted and restored. Straight after the install it is the install's own weekly copy; later (the exercise step has cleared it) the newest verified copy.
+if ($AfterInstall) {
+    $weekly = @($copies | Where-Object { $_.Reason -eq 'weekly' })
+    Assert-That ($weekly.Count -ge 1) 'the first backup of the install (a weekly copy) is in the backups folder'
+    $probe = $weekly[0]
+    Assert-That ($probe.Name -match '^accucut-\d{8}-\d{6}-weekly\.age$') "the first copy is named $($probe.Name)"
+}
+else { $probe = $copies[$copies.Count - 1] }
+$manifest = Get-Content -LiteralPath $probe.ManifestPath -Raw | ConvertFrom-Json
+Assert-That ($manifest.sha256 -eq (Get-AccucutFileSha256 -Path $probe.Path) -and [int64]$manifest.sizeBytes -eq $probe.SizeBytes -and $manifest.reason -eq $probe.Reason -and [string]$manifest.postgresVersion -match '^17') 'the manifest holds the SHA-256, size, reason and PostgreSQL version of the copy'
 $pgBin = [string]$installedState.pgBinDirectory
 $psqlExe = Join-Path $pgBin 'psql.exe'
 $suppliedValues = Read-AccucutValuesFile -Path $ValuesFile
@@ -279,8 +288,8 @@ $ageExe = Join-Path $paths.Current 'bin\age.exe'
 $scratchFile = Join-Path $env:RUNNER_TEMP ('accucut-restore-check-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.dump')
 $scratchDb = 'accucut_restore_check'
 try {
-    & $ageExe -d -i $AgeKeyFile -o $scratchFile $first.Path
-    Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $scratchFile)) 'the first copy decrypts with the key of this run'
+    & $ageExe -d -i $AgeKeyFile -o $scratchFile $probe.Path
+    Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $scratchFile)) 'the copy decrypts with the key of this run'
     [void](Invoke-SuperPsql -Database 'postgres' -Sql "CREATE DATABASE $scratchDb")
     $env:PGPASSWORD = $superuserPassword
     try { & (Join-Path $pgBin 'pg_restore.exe') --no-password --exit-on-error --no-owner --host 127.0.0.1 --port ([string]$installedState.pgPort) --username postgres --dbname $scratchDb $scratchFile } finally { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }
@@ -295,9 +304,12 @@ finally {
 
 # The event log (ADR-015 Amendment 3.1 point 5): the install registered the source Accucut, and its own run of the weekly task wrote exactly one Information event (1000).
 Assert-That ([System.Diagnostics.EventLog]::SourceExists('Accucut')) 'the event source Accucut is registered'
-$weeklyEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut'; Id = 1000 } -ErrorAction SilentlyContinue | Where-Object { $_.Properties.Count -gt 0 -and [string]$_.Properties[0].Value -like 'The weekly backup was made: accucut-*-weekly.age, * bytes.' })
-Assert-That ($weeklyEvents.Count -eq 1) "the install's run of the weekly task wrote exactly one Accucut Information event, with the file name and the size (found $($weeklyEvents.Count))"
-Assert-That ([string]$weeklyEvents[0].Properties[0].Value -notmatch '[A-Za-z]:\\') 'the event holds no path'
+# Only straight after the install: the exercise step later clears the weekly copy and writes events of its own.
+if ($AfterInstall) {
+    $weeklyEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut'; Id = 1000 } -ErrorAction SilentlyContinue | Where-Object { $_.Properties.Count -gt 0 -and [string]$_.Properties[0].Value -like 'The weekly backup was made: accucut-*-weekly.age, * bytes.' })
+    Assert-That ($weeklyEvents.Count -eq 1) "the install's run of the weekly task wrote exactly one Accucut Information event, with the file name and the size (found $($weeklyEvents.Count))"
+    Assert-That ([string]$weeklyEvents[0].Properties[0].Value -notmatch '[A-Za-z]:\\') 'the event holds no path'
+}
 
 # The database role, checked as accucut_backup through its own password file: a member of pg_read_all_data; INSERT on job_runs works; UPDATE and DELETE on it,
 # INSERT into any other table and CREATE TABLE are refused.

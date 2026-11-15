@@ -624,6 +624,15 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
         Test-AccucutLogonTypeFailure -TaskResult ([uint32]267009) | Should -BeFalse
     }
 
+    It 'reports module logging as on only when the policy value is 1, and off when it is absent, 0 or unreadable (SQR-02)' {
+        Mock Get-ItemProperty -ModuleName AccucutOps { [pscustomobject]@{ EnableModuleLogging = 1 } }
+        Test-AccucutModuleLogging | Should -BeTrue
+        Mock Get-ItemProperty -ModuleName AccucutOps { [pscustomobject]@{ EnableModuleLogging = 0 } }
+        Test-AccucutModuleLogging | Should -BeFalse
+        Mock Get-ItemProperty -ModuleName AccucutOps { throw 'no such key' }
+        Test-AccucutModuleLogging | Should -BeFalse
+    }
+
     It 'removes the task and the account when asked, and is quiet when they are not there' {
         Mock Unregister-ScheduledTask -ModuleName AccucutOps { throw 'no such task' }
         Mock Remove-LocalUser -ModuleName AccucutOps { throw 'no such user' }

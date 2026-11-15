@@ -587,7 +587,7 @@ function Invoke-AccucutBackupScript {
         if ($stage -eq 'backup') {
             $eventId = 1011
             $code = 'backup-failed'
-            if ($_.Exception.Message -like 'Not enough free disk space*') { $eventId = 1012; $code = 'low-space' }
+            if ($_.Exception.Data['accucutCode'] -eq 'low-space') { $eventId = 1012; $code = 'low-space' }
         }
         Write-AccucutBackupEvent -EntryType Error -EventId $eventId -Message "The $Reason backup failed (code $code): $($_.Exception.Message)"
         throw

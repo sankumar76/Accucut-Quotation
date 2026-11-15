@@ -1206,10 +1206,11 @@ function Get-AccucutLsaHolder {
 
     $native = Get-AccucutLsaNative
     $handle = Open-AccucutLsaPolicy
-    $name = New-AccucutLsaString -Value $Right
+    $name = $null
     $buffer = [System.IntPtr]::Zero
     [uint32]$count = 0
     try {
+        $name = New-AccucutLsaString -Value $Right
         $status = $native::LsaEnumerateAccountsWithUserRight($handle, $name.Structure, [ref]$buffer, [ref]$count)
         Assert-AccucutLsaStatus -Status $status -Operation "listing the holders of $Right" -Allowed @([uint32]2147483674)
         $holders = New-Object System.Collections.Generic.List[string]
@@ -1223,7 +1224,7 @@ function Get-AccucutLsaHolder {
     }
     finally {
         if ($buffer -ne [System.IntPtr]::Zero) { [void]$native::LsaFreeMemory($buffer) }
-        Remove-AccucutLsaString -LsaString $name
+        if ($null -ne $name) { Remove-AccucutLsaString -LsaString $name }
         Close-AccucutLsaPolicy -Handle $handle
     }
 }
@@ -1238,13 +1239,14 @@ function Add-AccucutLsaHolder {
 
     $native = Get-AccucutLsaNative
     $handle = Open-AccucutLsaPolicy
-    $name = New-AccucutLsaString -Value $Right
+    $name = $null
     try {
+        $name = New-AccucutLsaString -Value $Right
         $status = $native::LsaAddAccountRights($handle, (Get-AccucutSidBytes -Sid $Sid), $name.Structure, [uint32]1)
         Assert-AccucutLsaStatus -Status $status -Operation "giving $Right"
     }
     finally {
-        Remove-AccucutLsaString -LsaString $name
+        if ($null -ne $name) { Remove-AccucutLsaString -LsaString $name }
         Close-AccucutLsaPolicy -Handle $handle
     }
 }
@@ -1259,13 +1261,14 @@ function Remove-AccucutLsaHolder {
 
     $native = Get-AccucutLsaNative
     $handle = Open-AccucutLsaPolicy
-    $name = New-AccucutLsaString -Value $Right
+    $name = $null
     try {
+        $name = New-AccucutLsaString -Value $Right
         $status = $native::LsaRemoveAccountRights($handle, (Get-AccucutSidBytes -Sid $Sid), [byte]0, $name.Structure, [uint32]1)
         Assert-AccucutLsaStatus -Status $status -Operation "taking away $Right" -Allowed @([uint32]3221225524)
     }
     finally {
-        Remove-AccucutLsaString -LsaString $name
+        if ($null -ne $name) { Remove-AccucutLsaString -LsaString $name }
         Close-AccucutLsaPolicy -Handle $handle
     }
 }
@@ -1396,6 +1399,22 @@ function Test-AccucutBatchRightPolicy {
     throw "This server is in a domain and the Group Policy '$policyName' sets 'Log on as a batch job'. A right given here would be removed at the next policy refresh, and the weekly backup would stop. Ask the domain administrator to add $($env:COMPUTERNAME)\$($script:BackupAccountName) to that setting in that policy, keeping the accounts already there, or to take this server out of that setting. Then run 'gpupdate /target:computer /force' on this server and run the install again. Nothing was changed."
 }
 
+function Test-AccucutModuleLogging {
+    <#
+    True when a policy switches PowerShell module logging on for this server (HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging, EnableModuleLogging = 1).
+    Module logging records the values given to commands (event 4103 in Microsoft-Windows-PowerShell/Operational), which would include the passwords the install gives to the backup
+    account and the backup role. Read-only; an unreadable key counts as off (nothing is recorded by a key that is not there).
+    #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $value = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging' -Name 'EnableModuleLogging' -ErrorAction Stop
+        return ([int]$value.EnableModuleLogging -eq 1)
+    }
+    catch { return $false }
+}
+
 function Register-AccucutBackupTask {
     <#
     Makes the local user AccucutBackup and the weekly task that runs backup.ps1 as that user (ADR-015 Amendment 3 point 2).
@@ -1434,7 +1453,7 @@ function Register-AccucutBackupTask {
         return $user.SID.Value
     }
     catch {
-        if ($created) { Remove-AccucutBackupAccount }
+        if ($created) { Remove-AccucutBackupAccount -LogFile $LogFile }
         throw
     }
     finally {
@@ -1563,6 +1582,14 @@ function Set-AccucutBackupFileAcl {
     }
     $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($BackupSid), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Allow))
     [System.IO.File]::SetAccessControl($Path, $security)
+    # Read back what Windows holds, before any secret is written: protected, owner Administrators, and exactly the three entries (nothing inherited).
+    $actual = [System.IO.File]::GetAccessControl($Path)
+    $owner = $actual.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    $entries = @($actual.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { "$($_.IdentityReference.Value)|$($_.AccessControlType)|$($_.IsInherited)" } | Sort-Object)
+    $wanted = @($administrators.Value, $system.Value, [System.Security.Principal.SecurityIdentifier]::new($BackupSid).Value | ForEach-Object { "$_|Allow|False" } | Sort-Object)
+    if (-not $actual.AreAccessRulesProtected -or $owner -ne $administrators.Value -or ($entries -join ';') -ne ($wanted -join ';')) {
+        throw "The permissions of '$Path' are not what was set (owner $owner, entries: $($entries -join ', ')). Nothing was written to it."
+    }
 }
 
 function Write-AccucutBackupFile {
@@ -2040,7 +2067,10 @@ function Invoke-AccucutBackup {
         if (-not $room.Ok) {
             $failure = @{ status = 'failed'; code = 'low-space'; reason = $Reason; message = 'Not enough free disk space for another copy; none was made.'; freeBytes = $space.FreeBytes; totalBytes = $space.TotalBytes; plannedBytes = $room.PlannedBytes }
             Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $failure
-            throw $room.Message
+            # The code travels in the exception, so that no caller has to read the wording of the message (backup.ps1 picks event 1012 from it).
+            $lowSpace = [System.InvalidOperationException]::new($room.Message)
+            $lowSpace.Data['accucutCode'] = 'low-space'
+            throw $lowSpace
         }
         if ([System.IO.File]::Exists($final) -or [System.IO.File]::Exists($manifestPath)) { throw "A copy named '$base' already exists (two backups started in the same second). Nothing was changed." }
 
@@ -2072,8 +2102,9 @@ function Invoke-AccucutBackup {
     }
     catch {
         $message = $_.Exception.Message
+        $errorCode = $_.Exception.Data['accucutCode']
         try { if ([System.IO.File]::Exists($part)) { [System.IO.File]::Delete($part) } } catch { Write-Verbose "The temporary copy could not be deleted: $($_.Exception.Message)" }
-        if ($message -notlike 'Not enough free disk space*') {
+        if ($errorCode -ne 'low-space') {
             $failure = @{ status = 'failed'; code = 'error'; reason = $Reason; message = (ConvertTo-AccucutShortMessage -Text $message) }
             if ($null -ne $space) { $failure.freeBytes = $space.FreeBytes; $failure.totalBytes = $space.TotalBytes }
             try { Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $failure }
@@ -2232,7 +2263,7 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
-    'Get-AccucutBackupAccountSid', 'Get-AccucutRightHolder', 'Grant-AccucutBatchLogonRight', 'Revoke-AccucutBatchLogonRight', 'Test-AccucutBatchRightPolicy', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
+    'Get-AccucutBackupAccountSid', 'Get-AccucutRightHolder', 'Grant-AccucutBatchLogonRight', 'Revoke-AccucutBatchLogonRight', 'Test-AccucutBatchRightPolicy', 'Test-AccucutModuleLogging', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
     'Grant-AccucutBackupRootAccess', 'New-AccucutBackupFolder', 'Set-AccucutBackupFileAcl', 'Write-AccucutBackupFile', 'Test-AccucutBackupSetting', 'Read-AccucutBackupSettings', 'Write-AccucutBackupConfig',
     'Get-AccucutVolumeRoot', 'Get-AccucutVolumeSpace', 'Format-AccucutSize', 'Test-AccucutBackupRoom', 'ConvertFrom-AccucutBackupStamp', 'Get-AccucutBackupCopy', 'Get-AccucutBackupKeepSet', 'Get-AccucutBackupPruneCandidate',
     'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',

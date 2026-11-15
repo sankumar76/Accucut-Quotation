@@ -612,6 +612,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Wait-AccucutHealth { $true }
         Mock Get-AccucutHttpStatus { 200 }
         Mock Test-AccucutBatchRightPolicy { $script:Trace.Add("policy:$($PolicyConfirmed.IsPresent)") }
+        Mock Test-AccucutModuleLogging { $false }
         Mock Register-AccucutEventSource { $script:Trace.Add('event-source'); return $true }
         Mock Register-AccucutBackupTask { $script:Trace.Add('task'); return $script:BackupSid }
         Mock Grant-AccucutBackupRootAccess { $script:Trace.Add('grant:backup') }
@@ -695,6 +696,17 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
         Should -Invoke Register-AccucutBackupTask -Times 0 -Exactly
         Should -Invoke Remove-AccucutBackupAccount -Times 0 -Exactly
+    }
+
+    It 'warns, and carries on, when PowerShell module logging is on (it would record the passwords given to the backup account and role)' {
+        $folders = New-BackupInstallFolder -Name 'backup-modlog' -Tag 't-modlog'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-modlog' } }
+        Mock Test-AccucutModuleLogging { $true }
+        $values = Write-FakeValuesFile -Name 'backup-modlog-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Not -Throw
+        Should -Invoke Register-AccucutBackupTask -Times 1 -Exactly
+        @($script:Logged | Where-Object { $_ -like 'PowerShell module logging is switched on*event 4103*' }).Count | Should -Be 1
+        $script:Logged | Should -Contain 'The first backup was made.'
     }
 
     It 'passes -BatchRightPolicyConfirmed on to the policy check, and only to it' {

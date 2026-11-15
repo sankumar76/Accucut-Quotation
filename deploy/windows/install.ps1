@@ -957,7 +957,11 @@ function Invoke-AccucutInstall {
         }
         # Read-only, and before anything is created: the right "Log on as a batch job" will be given to the backup account (ADR-015 Amendment 3.2), and a deny entry or a domain
         # Group Policy that sets the right would make that useless, so the install stops here, with nothing changed, and says what to ask for.
-        Test-AccucutBatchRightPolicy -PolicyConfirmed:$BatchRightPolicyConfirmed
+        Test-AccucutBatchRightPolicy -PolicyConfirmed:$BatchRightPolicyConfirmed -LogFile $logFile
+        # Module logging would write the passwords this install gives to the backup account and role into the Windows event log (event 4103). Say so, and carry on.
+        if (Test-AccucutModuleLogging) {
+            Write-AccucutLog -Message 'PowerShell module logging is switched on for this server (Group Policy). It records the values given to commands, including the passwords this install gives to the backup account and the backup database role, in the event log Microsoft-Windows-PowerShell/Operational (event 4103). Clear that log after the install (wevtutil cl Microsoft-Windows-PowerShell/Operational), or switch module logging off for the install.' -Level Warning -LogFile $logFile
+        }
 
         # The values. Asked for before anything is created, so a typing slip costs nothing.
         $template = Read-AccucutEnvTemplate -Path ([System.IO.Path]::Combine($Release, '.env.example'))
@@ -1081,7 +1085,7 @@ function Invoke-AccucutInstall {
         # Only while the services are not registered: after that the database is in use and the folders are left for IT to look at.
         if ($null -eq (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
             if ($created.BackupAccount) {
-                try { Remove-AccucutBackupAccount } catch { Write-AccucutLog -Message "The local user AccucutBackup and its task could not be removed: $($_.Exception.Message). Remove them by hand before running the install again." -Level Error -LogFile $logFile }
+                try { Remove-AccucutBackupAccount -LogFile $logFile } catch { Write-AccucutLog -Message "The local user AccucutBackup and its task could not be removed: $($_.Exception.Message). Remove them by hand before running the install again." -Level Error -LogFile $logFile }
             }
             if ($created.Database -or $created.Roles) {
                 Undo-AccucutInstallDatabase -PsqlPath $psql -Connection $connection -Created $created -DatabaseName $script:DatabaseName -LogFile $logFile
