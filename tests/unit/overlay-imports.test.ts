@@ -78,8 +78,13 @@ describe('overlay imports (AQP-339 AC-6)', () => {
     expect(firstLoad, 'the page itself is in the first load').toContain(`${folder}/estimate-workspace.tsx`);
     expect(firstLoad, 'the focus helper is in the first load').toContain(`${folder}/focus-field.ts`);
     expect(firstLoad, 'and so are the ids it uses').toContain(`${folder}/field-ids.ts`);
+    expect(firstLoad, 'PartForm reads the definition through a module of its own').toContain(`${folder}/use-form-definition.ts`);
     for (const name of ['part-fields', 'field-renderer', 'section-card', 'section-strip', 'placeholder-fields', 'picture-slot', 'parts-tree-drawer']) {
       expect(firstLoad, name).not.toContain(`${folder}/${name}.tsx`);
+    }
+    // What reads and saves a part's values goes with the fields: `use-part-form.ts` may not come back into the first load through the definition hook.
+    for (const path of [`${folder}/use-part-form.ts`, 'src/lib/estimates/form-values.ts']) {
+      expect(firstLoad, path).not.toContain(path);
     }
   });
 

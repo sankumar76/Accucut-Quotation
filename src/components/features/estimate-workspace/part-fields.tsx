@@ -35,7 +35,8 @@ import { PictureSlot } from './picture-slot';
 import { PlaceholderFields } from './placeholder-fields';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
-import { usePartValues, type Loaded, type PartTarget, type SavedPart } from './use-part-form';
+import type { Loaded } from './use-form-definition';
+import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 
 export interface PartFieldsProps {
   readonly estimateId: string;
