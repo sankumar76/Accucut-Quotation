@@ -11,6 +11,7 @@ import type { CustomerView } from '@/lib/estimates/estimates-client';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { CalculateBarProps } from './calculate-bar';
+import { focusCalculate } from './calculate-button';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
@@ -18,6 +19,7 @@ import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED
 import { focusFirstField } from './part-fields';
 import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
+import type { QuantityWarningDialogProps } from './quantity-warning-dialog';
 import { useCalculate } from './use-calculate';
 import { useCustomerChoice } from './use-customer-choice';
 import { useLazyComponent } from './use-lazy-component';
@@ -39,6 +41,7 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
 const loadBar = () => import('./calculate-bar').then((module) => module.CalculateBar);
 const loadSummary = () => import('./calculate-summary').then((module) => module.CalculateSummary);
 const loadChangeDialog = () => import('./change-customer-dialog').then((module) => module.ChangeCustomerDialog);
+const loadWarningDialog = () => import('./quantity-warning-dialog').then((module) => module.QuantityWarningDialog);
 
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
@@ -62,9 +65,11 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const bar = useLazyComponent<CalculateBarProps>(loadBar, true);
   const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, calculation.blocked !== null);
   const changeDialog = useLazyComponent<ChangeCustomerDialogProps>(loadChangeDialog, choice.pending !== null);
+  const warningDialog = useLazyComponent<QuantityWarningDialogProps>(loadWarningDialog, calculation.warning !== null);
   const Bar = bar.Component;
   const Summary = summary.Component;
   const ChangeDialog = changeDialog.Component;
+  const WarningDialog = warningDialog.Component;
   const submittedNotice = useRef<HTMLDivElement>(null);
   // The press that submitted the estimate: the button has become "Submitted" and is off, so focus goes to the notice. A reload of a submitted estimate steals nothing (`done` is null).
   useEffect(() => {
@@ -78,6 +83,12 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const returnFocus = (event: Event): void => {
     event.preventDefault();
     document.getElementById(CUSTOMER_FIELD_ID)?.focus();
+  };
+
+  /** "Go back" on the quantity warning: the dialog closes, nothing was sent, and focus returns to Calculate once the dialog's focus trap is gone. */
+  const goBack = (): void => {
+    calculation.closeWarning();
+    window.setTimeout(focusCalculate, 0);
   };
 
   /** A save went through: the tree takes the part's revision and icon, and the summary drops the fields that now have a value. */
@@ -139,6 +150,16 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           )}
         </CardContent>
       </Card>
+      {WarningDialog === null || calculation.warning === null ? null : (
+        <WarningDialog
+          rows={calculation.warning.rows}
+          changed={calculation.warning.changed}
+          busy={calculation.busy}
+          onGoBack={goBack}
+          onGoAhead={() => void calculation.calculate(calculation.warning?.inputsRevision)}
+          onChoosePart={tree.select}
+        />
+      )}
       {status === 'APPROVED' ? null : Bar !== null ? (
         <Bar submitted={status === 'SUBMITTED'} busy={calculation.busy} onCalculate={() => void calculation.calculate()} />
       ) : bar.failed ? (

@@ -67,6 +67,19 @@ export interface NewCalculation {
   readonly productValues: ProductValues;
   /** The user who pressed Calculate. With the time, it is also the acknowledgement of any warning (ADR-007). */
   readonly createdById: string;
+  /**
+   * The warnings the person acknowledged for this calculation (STORY-05.12; architecture section 4.3): code, part, Sl. No and name, as text at that moment. Absent is none: the column takes its
+   * default `[]`. A calculation with warnings cannot exist unless they were acknowledged, so `createdById` and the time are the acknowledgement.
+   */
+  readonly warnings?: ReadonlyArray<StoredWarning>;
+}
+
+/** One acknowledged warning as the record keeps it: text only, no figure (the shape of `QuantityWarning`). */
+export interface StoredWarning {
+  readonly code: string;
+  readonly nodeId: string;
+  readonly slNo: string;
+  readonly label: string;
 }
 
 export interface NewCalculationRow {
@@ -83,9 +96,9 @@ export interface CalculationRowRecord extends NewCalculationRow {
   readonly id: string;
 }
 
-export interface CalculationRecord extends NewCalculation {
+export interface CalculationRecord extends Omit<NewCalculation, 'warnings'> {
   readonly id: string;
-  /** `[]` until STORY-05.12 writes any. */
+  /** The acknowledged warnings (STORY-05.12), `[]` for a calculation that had none. */
   readonly warnings: ReadonlyArray<unknown>;
   readonly createdAt: Date;
   /** Every node as calculated. The tree is rebuilt from `parentId` and `sortIndex`; the order of this list is only deterministic. */
@@ -113,7 +126,7 @@ export interface ReviewFigures {
 }
 
 export interface CalculationRepository {
-  /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` takes its default, `[]`. */
+  /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` is the acknowledged list, or the default `[]` when there is none. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
@@ -146,6 +159,8 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             inputsRevision: calculation.inputsRevision,
             masterSnapshot: calculation.masterSnapshot,
             productValues: calculation.productValues,
+            // Built key by key, so a record can only ever hold the four texts of a warning, whatever the caller hands over.
+            warnings: (calculation.warnings ?? []).map(({ code, nodeId, slNo, label }) => ({ code, nodeId, slNo, label })),
             createdById: calculation.createdById,
           },
           select: { id: true, createdAt: true },

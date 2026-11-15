@@ -49,6 +49,8 @@ export interface EstimateLock {
   readonly customerId: string | null;
   /** The count of input changes so far (architecture section 4.8). A calculation is stored against the value read here, under this lock (STORY-03.05). */
   readonly inputsRevision: number;
+  /** The task's code (`Q-2026-0501`), the name an audit entry gives the estimate (STORY-05.12). Read under the same lock; it never changes. */
+  readonly taskCode: string;
 }
 
 /** What the parts tree needs to decide who may read it and whether it may change: the estimate's owner and state, read without a lock. */
@@ -86,6 +88,15 @@ export interface EstimateRepository {
   linkCalculation(estimateId: string, calculationId: string, status: EstimateStatus, tx: Transaction): Promise<void>;
 }
 
+/**
+ * What a calculation needs of the estimate repository: the lock and the link (STORY-03.05, STORY-05.09). A named interface and not a `Pick`, so the audit-transaction check (architecture section 6,
+ * "The two checks as built") sees a repository type, declared in this directory, as the receiver of the lock the quantity warning's audit entry follows (STORY-05.12).
+ */
+export interface EstimateCalculationStorage {
+  readonly lockEstimate: EstimateRepository['lockEstimate'];
+  readonly linkCalculation: EstimateRepository['linkCalculation'];
+}
+
 const STATUS = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
 
 const WORKSPACE_ROWS = z.array(
@@ -103,7 +114,7 @@ const WORKSPACE_ROWS = z.array(
     assignedByName: z.string(),
   }),
 );
-const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int() }));
+const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string() }));
 const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
 
@@ -146,7 +157,7 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter.
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status", e.customer_id::text AS "customerId",
-                 e.inputs_revision::int AS "inputsRevision"
+                 e.inputs_revision::int AS "inputsRevision", t.code AS "taskCode"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE e.id = ${id}::uuid
           FOR UPDATE OF e FOR SHARE OF t`;

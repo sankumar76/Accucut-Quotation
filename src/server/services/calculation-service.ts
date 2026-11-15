@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { Decimal } from '../../lib/decimal';
-import { CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { CalculateAckRequiredError, CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import {
   CALCULATE_MESSAGE,
   CALCULATE_SUBMITTED_STATUS,
@@ -11,6 +11,8 @@ import {
   NO_PARTS_MESSAGE,
 } from '../../lib/estimate/calculate-words';
 import { calculateProductTotals, type ProductTotals } from '../../lib/estimate/product-totals';
+import { quantityFieldIdOf, quantityWarnings, type QuantityWarning } from '../../lib/estimate/quantity-warnings';
+import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { calculateRowOutputs } from '../../lib/estimate/row-calculator';
 import { storeRowOutputs, type RowOutputs } from '../../lib/estimate/row-outputs';
 import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
@@ -22,10 +24,11 @@ import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../../lib/fiel
 import { createPlanCache, type PlanCache } from '../../lib/formula';
 import type { CalculationRepository, NewCalculationRow, StoredValues } from '../repositories/calculation-repository';
 import type { EstimateNodeRepository } from '../repositories/estimate-node-repository';
-import type { EstimateRepository } from '../repositories/estimate-repository';
+import type { EstimateCalculationStorage } from '../repositories/estimate-repository';
 import type { MaterialValuesRecord } from '../repositories/master-repository';
 import type { TransactionRunner, Transaction } from '../repositories/transaction';
 
+import type { AuditContext, AuditService } from './audit-service';
 import { readMasters, type CalculationMasters } from './calculation-masters';
 import type { EstimateService, EstimateViewer } from './estimate-service';
 
@@ -102,6 +105,8 @@ export interface StoreCalculationRequest {
   /** The estimate's `inputs_revision` at the moment its nodes were read. The record is refused if the estimate has moved on since (409). */
   readonly inputsRevision: number;
   readonly nodes: ReadonlyArray<CalculationNodeRequest>;
+  /** The warnings the person acknowledged for this calculation (STORY-05.12), kept on the record as text. Absent is none. */
+  readonly warnings?: ReadonlyArray<QuantityWarning>;
 }
 
 /** What a store gives back: which record and when. No figure (the Engineer's Calculate answers with a status and a message only, STORY-05.09). */
@@ -127,8 +132,21 @@ export interface CalculationService {
    * (`transition(viewer, id, 'CALCULATE', tx)`: 404 for another Engineer's estimate, 403 for a Lead or an Admin (the route's role list refuses them first), 409 for a status that is not DRAFT), every part is checked for missing inputs
    * (422 `CALCULATE_BLOCKED`, which lists parts and fields and writes nothing), the customer must be chosen (409), the masters are read, the record is stored (`storeCalculation`'s work, with the
    * configuration read once for the check and the calculation) and the status is SUBMITTED, all or nothing. It answers `{status, message}`: **no number from the calculation leaves it** (NFR-002).
+   *
+   * **The quantity warning (STORY-05.12; architecture section 4.3).** After the 422 and the customer check, and before any master is read, every row with 0 in QTY per Assy is listed. With one or more, the
+   * request must carry `options.acknowledge.inputsRevision` equal to the estimate's revision under the lock; otherwise it is the 409 `CALCULATE_ACK_REQUIRED` (`CalculateAckRequiredError`, the current
+   * revision and list), and **nothing is written**. A good acknowledgement stores the list on the calculation (`calculations.warnings`) and writes one audit entry, `calculation.warning_acknowledged`,
+   * in the same transaction, naming the rows and holding no figure. With nothing to warn, `acknowledge` is ignored.
    */
-  calculate(viewer: EstimateViewer, estimateId: string): Promise<CalculateAnswer>;
+  calculate(viewer: EstimateViewer, estimateId: string, options?: CalculateOptions): Promise<CalculateAnswer>;
+}
+
+/** What a press of Calculate may carry besides who pressed: the acknowledgement of a warning, and who and which request the audit entry of it names. */
+export interface CalculateOptions {
+  /** The `inputsRevision` of the 409 the person saw and chose to go ahead past. Read for a number by the route's schema; compared with the estimate's under its lock. */
+  readonly acknowledge?: { readonly inputsRevision: number } | undefined;
+  /** Who pressed and on which request, for the audit entry of an acknowledged warning (`actorLabel` is their name now). Always given by the route. */
+  readonly audit?: AuditContext | undefined;
 }
 
 /** The whole of an Engineer's good Calculate: the estimate's new status and the fixed sentence (FR-056). Nothing else, whatever the estimate costs. */
@@ -150,7 +168,7 @@ export interface CalculationServiceDependencies {
   readonly storage?: {
     readonly calculations: CalculationRepository;
     /** The estimate is locked, read and linked through its own repository (STORY-05.01's), so there is one lock on one row for every writer. */
-    readonly estimates: Pick<EstimateRepository, 'lockEstimate' | 'linkCalculation'>;
+    readonly estimates: EstimateCalculationStorage;
     readonly transactions: TransactionRunner;
   };
   /**
@@ -160,6 +178,8 @@ export interface CalculationServiceDependencies {
   readonly workflow?: {
     readonly nodes: Pick<EstimateNodeRepository, 'listNodes'>;
     readonly transition: EstimateService['transition'];
+    /** Where an acknowledged warning is recorded, in the calculation's own transaction (STORY-05.12). */
+    readonly audit: AuditService;
   };
 }
 
@@ -213,6 +233,7 @@ const STORE_REQUEST = z.strictObject({
       texts: z.record(z.string(), z.string().max(MAX_TEXT_LENGTH)),
     }),
   ),
+  warnings: z.array(z.strictObject({ code: z.literal(QTY_ZERO_CODE), nodeId: z.uuid(), slNo: z.string().regex(/\S/).max(MAX_SL_NO_LENGTH), label: z.string().max(MAX_TEXT_LENGTH) })).optional(),
 });
 
 /** A path as the API names a field: `nodes[2].slNo`. */
@@ -329,6 +350,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
           pricePerToolCost: totals.pricePerToolCost?.toString() ?? null,
           toolCostTotal: totals.toolCostTotal?.toString() ?? null,
         },
+        warnings: request.warnings ?? [],
         createdById: request.createdById,
       },
       rows,
@@ -360,12 +382,25 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     });
   }
 
-  /** The Engineer's Calculate in the caller's transaction. The order is the architecture's (section 4.2): role, ownership and status, then every input, then the customer, then the masters. */
+  /**
+   * The rows with 0 in QTY per Assy that this press must be acknowledged for (STORY-05.12). None is none, and `acknowledge` is then ignored. Some are returned only when the acknowledgement names the
+   * revision the estimate has now, **read under the lock**, so an input saved after the 409 (which raised the revision) can never be passed by an acknowledgement given for the list before it; otherwise
+   * it is the 409 with the current revision and list. Nothing has been read from the masters at this point, so the 409 cannot depend on one (NFR-002).
+   */
+  function warningsToAcknowledge(document: ConfigDocument, nodes: ReadonlyArray<CalculationNodeRequest>, revision: number, acknowledge: CalculateOptions['acknowledge']): QuantityWarning[] {
+    const quantityId = quantityFieldIdOf(document);
+    const warnings = quantityId === undefined ? [] : quantityWarnings(nodes.map((node) => ({ id: node.nodeId, slNo: node.slNo, inputs: { ...node.inputs, ...node.texts } })), document);
+    if (quantityId !== undefined && warnings.length > 0 && acknowledge?.inputsRevision !== revision) throw new CalculateAckRequiredError(revision, quantityId, warnings);
+    return warnings;
+  }
+
+  /** The Engineer's Calculate in the caller's transaction. The order is the architecture's (section 4.2): role, ownership and status, then every input, then the customer, then the warning, then the masters. */
   async function submit(
     { storage: stored, flow }: { readonly storage: NonNullable<CalculationServiceDependencies['storage']>; readonly flow: NonNullable<CalculationServiceDependencies['workflow']> },
     viewer: EstimateViewer,
     estimateId: string,
     tx: Transaction,
+    options: CalculateOptions,
   ): Promise<CalculateAnswer> {
     // 404 (not this person's, or a role that may not Calculate), 409 (not a draft), under the estimate's row lock; it also moves the status, and the transaction puts it back if anything below refuses.
     await flow.transition(viewer, estimateId, 'CALCULATE', tx);
@@ -374,9 +409,21 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     const configuration = await currentConfiguration(tx);
     const nodes = await checkedPartsOf(flow.nodes, estimate.id, configuration.document, tx);
     if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: CUSTOMER_NOT_CHOSEN_CODE });
-    const request: StoreCalculationRequest = { estimateId: estimate.id, createdById: viewer.id, inputsRevision: estimate.inputsRevision, nodes };
+    const warnings = warningsToAcknowledge(configuration.document, nodes, estimate.inputsRevision, options.acknowledge);
+    const request: StoreCalculationRequest = { estimateId: estimate.id, createdById: viewer.id, inputsRevision: estimate.inputsRevision, nodes, warnings };
     checkStoreRequest(request);
     await store(stored, request, tx, configuration);
+    if (warnings.length > 0) {
+      // The person went ahead past a warning: one entry, in this transaction, naming the rows and no figure. An entry that cannot be written takes the calculation with it.
+      if (options.audit === undefined) throw new Error('A warning was acknowledged without the audit context of the request.');
+      await flow.audit.record(tx, {
+        event: 'calculation.warning_acknowledged',
+        ...options.audit,
+        object: { id: estimate.id, label: estimate.taskCode },
+        before: null,
+        after: { warnings: warnings.map(({ code, nodeId, slNo, label }) => ({ code, nodeId, slNo, label })) },
+      });
+    }
     return { status: CALCULATE_SUBMITTED_STATUS, message: CALCULATE_MESSAGE };
   }
 
@@ -392,9 +439,9 @@ export function createCalculationService(dependencies: CalculationServiceDepende
       checkStoreRequest(request);
       return tx === undefined ? storage.transactions.run((own) => store(storage, request, own)) : store(storage, request, tx);
     },
-    async calculate(viewer, estimateId) {
+    async calculate(viewer, estimateId, options = {}) {
       if (storage === undefined || workflow === undefined) throw new Error('This calculation service was built without storage or without the estimate workflow.');
-      return storage.transactions.run((tx) => submit({ storage, flow: workflow }, viewer, estimateId, tx));
+      return storage.transactions.run((tx) => submit({ storage, flow: workflow }, viewer, estimateId, tx, options));
     },
   };
 }

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { CalculateBlockedError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
+import { CalculateAckRequiredError, CalculateBlockedError, ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { createTransactionHandle, type Transaction } from '@/server/repositories/transaction';
+import { AuditEntryRefusedError } from '@/server/services/audit-secrets';
+import type { AuditService } from '@/server/services/audit-service';
 import { createCalculationService, type CalculationService } from '@/server/services/calculation-service';
 import { createEstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 
 import { completePartInputs, fieldIdOf, INVENTED_MATERIAL_ID } from '../support/complete-part';
 import { defined } from '../support/defined';
+import { createAuditSink, type AuditSink } from '../support/fake-audit-sink';
 import { createFakeCalculationWorld, type FakeCalculationWorld } from '../support/fake-calculations';
 import { fakeCustomer } from '../support/fake-customers';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeEstimateWorld, type FakeNode } from '../support/fake-estimates';
@@ -32,12 +35,16 @@ const PART_TWO = '00000000-0000-4000-8000-0d0d00000002';
 const PART_THREE = '00000000-0000-4000-8000-0d0d00000003';
 
 const ENGINEER: EstimateViewer = { id: ENGINEER_ID, role: 'ENGINEER' };
+/** Who pressed and on which request, as the route gives it to the audit entry of an acknowledged warning (STORY-05.12). */
+const AUDIT = { actorId: ENGINEER_ID, actorLabel: 'Invented Engineer', requestId: 'req-0badc0de' };
 
 interface Fixture {
   readonly masters: FakeMasterRepository;
   readonly estimates: FakeEstimateWorld;
   readonly world: FakeCalculationWorld;
   readonly service: CalculationService;
+  /** The audit entries the service wrote (STORY-05.12). */
+  readonly audit: AuditSink;
   readonly estimate: () => FakeEstimate;
   readonly opened: () => number;
   readonly configurationReads: ReadonlyArray<Transaction | undefined>;
@@ -52,7 +59,7 @@ const partNode = (id: string, parentId: string | null, sortIndex: number, inputs
   inputs: { ...inputs, [fieldIdOf('material-in-drawing')]: INVENTED_MATERIAL_ID },
 });
 
-function fixture(options: { status?: FakeEstimate['status']; customer?: boolean; nodes?: FakeNode[]; engineerId?: string; masterScale?: number } = {}): Fixture {
+function fixture(options: { status?: FakeEstimate['status']; customer?: boolean; nodes?: FakeNode[]; engineerId?: string; masterScale?: number; auditService?: AuditService } = {}): Fixture {
   const masters = createFakeMasterRepository(seedRecords());
   const scale = options.masterScale ?? 1;
   const rates = Object.fromEntries(SEED_PROCESS_ITEMS.map((item) => [item.id, String(Number(defined(TYPED_RATES[item.name], item.name)) * scale)]));
@@ -103,6 +110,7 @@ function fixture(options: { status?: FakeEstimate['status']; customer?: boolean;
     currentConfiguration: () => Promise.resolve(seedConfig),
   });
   const configurationReads: Array<Transaction | undefined> = [];
+  const audit = createAuditSink();
   const service = createCalculationService({
     masters,
     currentConfiguration: (tx) => {
@@ -110,9 +118,9 @@ function fixture(options: { status?: FakeEstimate['status']; customer?: boolean;
       return Promise.resolve({ id: CONFIG_VERSION_ID, document: seedConfig });
     },
     storage: { calculations: world.repository, estimates: world.estimates, transactions: runner },
-    workflow: { nodes: estimates.nodeRepository, transition: estimateService.transition },
+    workflow: { nodes: estimates.nodeRepository, transition: estimateService.transition, audit: options.auditService ?? audit.service },
   });
-  return { masters, estimates, world, service, estimate: () => defined(estimates.estimates[0]), opened: () => state.opened, configurationReads };
+  return { masters, estimates, world, service, audit, estimate: () => defined(estimates.estimates[0]), opened: () => state.opened, configurationReads };
 }
 
 async function rejection(promise: Promise<unknown>): Promise<Error> {
@@ -205,10 +213,12 @@ describe('AC-2: a complete estimate is calculated, stored and submitted in one t
 });
 
 describe('AC-3: a 0 in a number field is accepted', () => {
-  it('every number is 0, QTY per Assy included (the warning for it is STORY-05.12\'s), and the estimate is submitted', async () => {
+  it('every number is 0, QTY per Assy included, and the estimate is submitted once the warning for the 0 of QTY per Assy is acknowledged (STORY-05.12)', async () => {
     const zeros = Object.fromEntries(Object.entries(completePartInputs()).map(([id, value]) => [id, /^\d+\.\d+$/.test(value) ? '0' : value]));
     const f = fixture({ nodes: [partNode(PART_ONE, null, 0, zeros)] });
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(CalculateAckRequiredError);
+    expectNothingWritten(f);
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 6 }, audit: AUDIT })).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
     expect(f.estimate().status).toBe('SUBMITTED');
   });
 });
@@ -379,6 +389,205 @@ describe('AC-6 (NFR-002): the answer does not depend on what the masters hold', 
   it('the answer holds no digit at all', async () => {
     const f = fixture();
     expect(JSON.stringify(await f.service.calculate(ENGINEER, ESTIMATE_ID))).not.toMatch(/\d/);
+  });
+});
+
+/**
+ * STORY-05.12 (FR-104; architecture section 4.3 "A zero quantity"; test strategy section 5.2 CE-9 "Integration"): the quantity warning in Calculate, over in-memory storage (the same code runs against
+ * PostgreSQL in `tests/integration/calc/warn.test.ts`, including the race with an input save). An estimate of an item (1) with a part (1.1) and a sub-part (1.1.1), the part and sub-part with H 0.
+ */
+const QTY = fieldIdOf('qty-per-assy');
+const NAME = fieldIdOf('description');
+
+const warnedTree = (overrides: { part?: string; sub?: string } = {}): FakeNode[] => [
+  partNode(PART_ONE, null, 0),
+  partNode(PART_TWO, PART_ONE, 0, { ...completePartInputs(), [QTY]: overrides.part ?? '0', [NAME]: 'Invented top cover' }),
+  partNode(PART_THREE, PART_TWO, 0, { ...completePartInputs(), [QTY]: overrides.sub ?? '0.00', [NAME]: 'Invented lid' }),
+];
+
+const WARNED_ROWS = [
+  { code: 'QTY_ZERO', nodeId: PART_TWO, slNo: '1.1', label: 'Invented top cover' },
+  { code: 'QTY_ZERO', nodeId: PART_THREE, slNo: '1.1.1', label: 'Invented lid' },
+];
+
+const ACKNOWLEDGED = { acknowledge: { inputsRevision: 6 }, audit: AUDIT };
+
+/** The 409 a press earns, or a failure of the test when it earns none. */
+async function askedToConfirm(f: Fixture, options?: Parameters<CalculationService['calculate']>[2]): Promise<CalculateAckRequiredError> {
+  const failure = await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, options));
+  if (!(failure instanceof CalculateAckRequiredError)) throw new Error('Expected the 409 CALCULATE_ACK_REQUIRED.', { cause: failure });
+  return failure;
+}
+
+describe('STORY-05.12 AC-2: a first press with a warning due is the 409, and writes nothing', () => {
+  it('is 409 CALCULATE_ACK_REQUIRED with the revision, the field of QTY per Assy and one warning per row with a 0, in reading order', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    const failure = await askedToConfirm(f);
+    expect(failure).toMatchObject({ code: 'CALCULATE_ACK_REQUIRED', httpStatus: 409, inputsRevision: 6, quantityFieldId: QTY });
+    expect(failure.warnings).toEqual(WARNED_ROWS);
+  });
+
+  it('writes nothing: no calculation, no status change, no audit entry, and the revision is as it was', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    await askedToConfirm(f);
+    expectNothingWritten(f);
+    expect(f.audit.rows).toEqual([]);
+  });
+
+  it('a top-level item\'s own 0 warns too (A-27), and a row with 0.01 does not', async () => {
+    const f = fixture({ nodes: [partNode(PART_ONE, null, 0, { ...completePartInputs(), [QTY]: '0.00' }), partNode(PART_TWO, PART_ONE, 0, { ...completePartInputs(), [QTY]: '0.01' })] });
+    expect((await askedToConfirm(f)).warnings.map((warning) => warning.slNo)).toEqual(['1']);
+  });
+
+  it('is decided before any master is read: with the customer deleted, the answer is still the 409 about the quantity (NFR-002)', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    defined(f.masters.customers[0]).deleted = true;
+    await askedToConfirm(f);
+    f.masters.materials.length = 0;
+    await askedToConfirm(f);
+  });
+
+  it('holds the same body under two sets of masters: nothing in it depends on one (AC-7)', async () => {
+    const cheap = await askedToConfirm(fixture({ nodes: warnedTree(), masterScale: 1 }));
+    const dear = await askedToConfirm(fixture({ nodes: warnedTree(), masterScale: 7 }));
+    expect({ revision: dear.inputsRevision, warnings: dear.warnings, field: dear.quantityFieldId, message: dear.message }).toEqual({
+      revision: cheap.inputsRevision,
+      warnings: cheap.warnings,
+      field: cheap.quantityFieldId,
+      message: cheap.message,
+    });
+  });
+});
+
+describe('STORY-05.12 AC-3: the acknowledged press calculates, records the warnings and writes one audit entry', () => {
+  it('answers exactly {status, message}, and the calculation holds each warning as text, with the person who pressed as its creator', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(f.world.calculations).toHaveLength(1);
+    const record = defined(f.world.calculations[0]);
+    expect(record.warnings).toEqual(WARNED_ROWS);
+    expect(record.createdById).toBe(ENGINEER_ID);
+    expect(record.inputsRevision).toBe(6);
+    expect(f.estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: record.id, inputsRevision: 6 });
+  });
+
+  it('writes one `calculation.warning_acknowledged` entry in the same transaction, naming the rows and holding no figure', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED);
+    expect(f.opened()).toBe(1);
+    expect(f.audit.rows).toEqual([
+      {
+        actorId: ENGINEER_ID,
+        actorLabel: 'Invented Engineer',
+        event: 'calculation.warning_acknowledged',
+        objectType: 'estimate',
+        objectId: ESTIMATE_ID,
+        objectLabel: 'Q-2026-0501',
+        before: null,
+        after: { warnings: WARNED_ROWS },
+        requestId: 'req-0badc0de',
+      },
+    ]);
+  });
+
+  it('an entry that cannot be written takes the calculation with it: no record, and the estimate is a draft', async () => {
+    const refusing: AuditService = { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: createAuditSink().service.list };
+    const f = fixture({ nodes: warnedTree(), auditService: refusing });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toBeInstanceOf(AuditEntryRefusedError);
+    expectNothingWritten(f);
+  });
+
+  it('an acknowledgement with no audit context is a programming fault, a plain Error, and writes nothing', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    const failure = await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 6 } }));
+    expect(failure.message).toBe('A warning was acknowledged without the audit context of the request.');
+    expectNothingWritten(f);
+  });
+
+  it('the label is the part\'s name as typed when the calculation was made: renaming the part afterwards leaves the record as it was (text, not a reference)', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED);
+    defined(f.estimates.nodes.find((node) => node.id === PART_TWO)).inputs[NAME] = 'Invented renamed cover';
+    expect(defined(f.world.calculations[0]).warnings).toEqual(WARNED_ROWS);
+  });
+});
+
+describe('STORY-05.12 AC-4: a stale acknowledgement never passes', () => {
+  it('an input changed after the 409 (the revision moved): the same acknowledgement is the 409 again with the new revision and the current list, and nothing is written', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    expect((await askedToConfirm(f)).inputsRevision).toBe(6);
+    // The Engineer fixes the sub-part's count in another tab: the save raises the revision and the list is shorter.
+    f.estimate().inputsRevision = 7;
+    const sub = defined(f.estimates.nodes.find((node) => node.id === PART_THREE));
+    sub.inputs[QTY] = '3.00';
+    const again = await askedToConfirm(f, ACKNOWLEDGED);
+    expect(again.inputsRevision).toBe(7);
+    expect(again.warnings).toEqual([defined(WARNED_ROWS[0])]);
+    expect(f.world.calculations).toHaveLength(0);
+    expect(f.estimate()).toMatchObject({ status: 'DRAFT', inputsRevision: 7 });
+    expect(f.estimate().currentCalculationId ?? null).toBeNull();
+    expect(f.audit.rows).toEqual([]);
+  });
+
+  it('a change that leaves the list as it was still moves the revision, so the old acknowledgement is refused and the new one passes', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    f.estimate().inputsRevision = 7;
+    expect((await askedToConfirm(f, ACKNOWLEDGED)).warnings).toEqual(WARNED_ROWS);
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 7 }, audit: AUDIT })).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+  });
+
+  it.each([5, 7, 0])('an acknowledgement for revision %i, which is not the estimate\'s 6, is the 409', async (revision) => {
+    const f = fixture({ nodes: warnedTree() });
+    expect((await askedToConfirm(f, { acknowledge: { inputsRevision: revision }, audit: AUDIT })).inputsRevision).toBe(6);
+    expectNothingWritten(f);
+  });
+});
+
+describe('STORY-05.12 AC-5: an acknowledgement with nothing to warn is ignored', () => {
+  it('calculates as a press with none: warnings stay empty and no audit entry is written', async () => {
+    const f = fixture();
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(defined(f.world.calculations[0]).warnings).toEqual([]);
+    expect(f.audit.rows).toEqual([]);
+  });
+
+  it('even an acknowledgement for another revision is ignored when there is no warning', async () => {
+    const f = fixture();
+    await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 99 }, audit: AUDIT });
+    expect(f.world.calculations).toHaveLength(1);
+  });
+});
+
+describe('STORY-05.12 (order): the 409 about the quantity comes after everything that refuses first', () => {
+  it('a blank beside a 0 is the 422, so nobody acknowledges and is then refused for a blank', async () => {
+    const inputs = { ...completePartInputs(), [QTY]: '0', [fieldIdOf('length')]: '' };
+    const f = fixture({ nodes: [partNode(PART_ONE, null, 0, inputs)] });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toBeInstanceOf(CalculateBlockedError);
+    expectNothingWritten(f);
+  });
+
+  it('no customer chosen is the 409 CUSTOMER_NOT_CHOSEN, not the warning: nobody acknowledges and is then refused for a customer', async () => {
+    const f = fixture({ customer: false, nodes: warnedTree() });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'CUSTOMER_NOT_CHOSEN' });
+  });
+
+  it('a submitted estimate with a 0 is ESTIMATE_ALREADY_SUBMITTED, and another Engineer\'s is a 404 that says nothing of the 0', async () => {
+    expect(await rejection(fixture({ status: 'SUBMITTED', nodes: warnedTree() }).service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+    expect(await rejection(fixture({ engineerId: OTHER_ENGINEER_ID, nodes: warnedTree() }).service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('STORY-05.12 (each press stands alone)', () => {
+  it('after an acknowledged calculation the estimate is submitted, and a second press is the 409 for that; a press on a draft again asks again, even for the 0 acknowledged before', async () => {
+    const f = fixture({ nodes: warnedTree() });
+    await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED);
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+    // The estimate is a draft again (a Lead's unlock, a later story): the earlier acknowledgement is not remembered.
+    f.estimate().status = 'DRAFT';
+    await askedToConfirm(f);
+    await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED);
+    expect(f.world.calculations).toHaveLength(2);
+    expect(f.audit.rows).toHaveLength(2);
   });
 });
 

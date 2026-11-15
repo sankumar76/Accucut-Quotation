@@ -1,6 +1,8 @@
 import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
 import type { BlockedPart } from './estimate/calculate-check';
+import type { QuantityWarning } from './estimate/quantity-warnings';
+import { ACK_REQUIRED_TITLE, CALCULATE_ACK_REQUIRED_CODE } from './estimate/warning-copy';
 
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
@@ -200,6 +202,22 @@ export class TreeChangedError extends ConflictError {
 export class CalculateBlockedError extends ValidationError {
   constructor(readonly parts: ReadonlyArray<BlockedPart>) {
     super(blockedSummary(parts.length), { code: CALCULATE_BLOCKED_CODE });
+  }
+}
+
+/**
+ * Calculate found rows with 0 in QTY per Assy and the person has not yet said "go ahead" for this state of the estimate (STORY-05.12 AC-2, AC-4; architecture section 4.3): 409, nothing was
+ * written. The body carries the estimate's `inputsRevision`, which the acknowledgement must send back, the ID of the QTY per Assy field and the rows (code, part, Sl. No, name), and **nothing else**: no
+ * master value, rate or figure is read before this is raised (NFR-002), so the same estimate gives the same body under any masters. It is raised only after the estimate was found to be the
+ * person's and a draft and its inputs were complete, so it tells a stranger nothing.
+ */
+export class CalculateAckRequiredError extends ConflictError {
+  constructor(
+    readonly inputsRevision: number,
+    readonly quantityFieldId: string,
+    readonly warnings: ReadonlyArray<QuantityWarning>,
+  ) {
+    super(ACK_REQUIRED_TITLE, { code: CALCULATE_ACK_REQUIRED_CODE });
   }
 }
 
