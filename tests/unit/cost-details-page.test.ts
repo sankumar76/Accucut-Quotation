@@ -112,8 +112,9 @@ describe('AC-1, AC-7: a Lead and an Admin open the row', () => {
 
   it('a fault in the stored record is not turned into "not found": it is the error, which the framework answers with a fixed 500', async () => {
     plantCalculation();
-    const row = defined(harness.calculationWorld.calculations[0]?.rows[0]);
-    row.outputs = { ...row.outputs, [Object.keys(row.outputs)[0] ?? 'x']: '123456' };
+    const record = defined(harness.calculationWorld.calculations[0]);
+    const row = defined(record.rows[0]);
+    harness.calculationWorld.calculations.splice(0, 1, { ...record, rows: [{ ...row, outputs: { ...row.outputs, [Object.keys(row.outputs)[0] ?? 'x']: '123456' } }] });
     await expect(openCosts(CODE, '1')).rejects.toThrow('The stored figures of a row cannot be reproduced from the calculation record.');
   });
 });
