@@ -167,8 +167,10 @@ test.describe('AC-6: what happens while "Calculate anyway" is on its way, and wh
     });
     await goAhead(page).click();
     await expect(dialog(page).getByRole('link', { name: ROW_LINE })).toHaveAttribute('aria-disabled', 'true');
-    await dialog(page).getByRole('link', { name: ROW_LINE }).click();
+    // Playwright treats `aria-disabled` as disabled and would wait for it to clear, so the click is forced: it is a click a pointer or a screen reader can still make.
+    await dialog(page).getByRole('link', { name: ROW_LINE }).click({ force: true });
     await expect(dialog(page)).toBeVisible();
+    await expect(control(page, 'H')).not.toBeFocused();
     release();
     await expect(calculateButton(page)).toHaveText('Submitted');
     expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
