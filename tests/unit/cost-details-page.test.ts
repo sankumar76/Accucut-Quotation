@@ -98,8 +98,9 @@ describe('AC-1, AC-7: a Lead and an Admin open the row', () => {
     plantCalculation();
     estimate().inputsRevision += 1;
     const html = await openCosts(CODE, '1');
-    expect(html).toContain('The stages show again once the estimate is calculated again.');
-    expect(html).not.toContain('Recalculate');
+    expect(html).toContain('Press Recalculate on the estimate to see the stages again.');
+    expect(html).toContain('Go to the estimate to Recalculate');
+    expect(html).not.toContain('once the estimate is calculated again');
     expect(html).not.toContain('<details');
     for (const absent of ['451.39', '15.99', 'Material-Scrap-Rate', '0.3140']) expect(html, absent).not.toContain(absent);
   });

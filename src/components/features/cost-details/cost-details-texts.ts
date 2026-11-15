@@ -20,14 +20,16 @@ export const BOX_NAME = 'Unit Production Price';
 /** The state `none`: nothing has been calculated, so there is nothing to show (SCR-07 has no wording of its own for it; assumption A-2). */
 export const NOT_CALCULATED_TITLE = 'Not calculated';
 export const NOT_CALCULATED_BODY = 'The Engineer has not calculated this estimate yet, so there are no stages to show for this part.';
-export const GO_TO_ESTIMATE = 'Go to the estimate';
+/** The link to the estimate, where the button now is (STORY-06.04 AC-10; ux-spec v0.29 "SCR-07 final words": it names the button, as SCR-10 does). */
+export const GO_TO_ESTIMATE_TO_CALCULATE = 'Go to the estimate to Calculate';
+export const GO_TO_ESTIMATE_TO_RECALCULATE = 'Go to the estimate to Recalculate';
 
 /**
- * The state `out-of-date` (UX-57, AC-7): the row header stays and the stages are replaced by these words. Until STORY-06.04 ships a Recalculate button, the words name no button (ux-spec v0.29, "SCR-07 final words";
- * AQP-320, ux-expert); that story restores "Cleared. Press Recalculate" and its sentence.
+ * The state `out-of-date` (UX-57, AC-7): the row header stays and the stages are replaced by these words. They name the button now that it works (STORY-06.04 AC-10; ux-spec v0.29 "SCR-07 final words"): the interim
+ * words that AQP-320 shipped, which named none, are replaced by "Cleared. Press Recalculate", its sentence and the link above.
  */
-export const CLEARED_TITLE = 'Cleared';
-export const CLEARED_BODY = 'An input changed, so every calculated figure is cleared, on every row. The stages show again once the estimate is calculated again.';
+export const CLEARED_TITLE = 'Cleared. Press Recalculate';
+export const CLEARED_BODY = 'An input changed, so every calculated figure is cleared, on every row. Press Recalculate on the estimate to see the stages again.';
 
 /** The sentence under the stages (AC-2, UX-01): what the working prints and the rounding rule. */
 export const RULES_TITLE = 'How to read the working';

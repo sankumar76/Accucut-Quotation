@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { ColumnTag } from '@/components/shared/column-tag';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatFigure, formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -9,6 +10,7 @@ import {
   APPROVED_NOT_SET,
   APPROVED_NOT_SET_CLEARED_HINT,
   APPROVED_NOT_SET_HINT,
+  BL_CLEARED_HINT,
   BL_NAME,
   BN_CLEARED_HINT,
   BN_HINT,
@@ -25,6 +27,9 @@ import {
  * The three tiles of SCR-06 (STORY-06.02 AC-1, AC-6; UX spec SCR-06 "Content"): BL, BN and BO, each with its plain name, its letter tag and "File cell XX2", **once each**. The figure is only
  * ever what the server handed over for a `current` state; in the other states the tile says "Not calculated" or "Cleared" in words, never an empty box (UX spec SCR-06 "Accessibility").
  * BO is "Not set yet": an approval is STORY-06.06's. A server component with no script, so it adds nothing to the first load.
+ *
+ * **The skeleton while a recalculation is under way** (STORY-06.04 AC-9; UX spec SCR-06 "Loading: tile skeletons"): the bar's button is `aria-busy` while it works, the root of the review is a `group/review`, and
+ * `:has()` finds the busy button, so each figure is hidden and a skeleton shows in its place by CSS alone (the class names are written out whole, for the style scanner). No script, no state, nothing sent to the browser.
  */
 
 interface TileProps {
@@ -44,7 +49,10 @@ function Tile({ name, letter, children, note, fileCellLine = true }: TileProps) 
           <span>{name}</span>
           <ColumnTag letter={letter} kind="output" />
         </p>
-        <p className="text-heading font-semibold tracking-tight text-ink [overflow-wrap:anywhere] tabular-nums">{children}</p>
+        <p className="relative text-heading font-semibold tracking-tight text-ink [overflow-wrap:anywhere] tabular-nums">
+          <span className="group-has-[[aria-busy=true]]/review:invisible">{children}</span>
+          <Skeleton className="absolute inset-y-0 left-0 hidden w-2/3 group-has-[[aria-busy=true]]/review:block" />
+        </p>
         {note === undefined ? null : <p className="text-label text-ink-2">{note}</p>}
         {fileCellLine ? <p className="text-label text-ink-3">{fileCell(letter)}</p> : null}
       </CardContent>
@@ -67,7 +75,7 @@ export function FigureTiles({ state, letters, totals }: FigureTilesProps) {
   const noToolCostEntered = current && totals.pricePerToolCost === null;
   return (
     <section aria-label={TILES_LABEL} className="grid grid-cols-1 gap-s-4 md:grid-cols-3">
-      <Tile name={BL_NAME} letter={letters.totalPrice}>
+      <Tile name={BL_NAME} letter={letters.totalPrice} note={state === 'out-of-date' ? BL_CLEARED_HINT : undefined}>
         {current ? formatRupees(totals.totalPrice) : word(withheld)}
       </Tile>
       <Tile

@@ -19,20 +19,25 @@ import { CLEARED_NOTICE_BODY, CLEARED_NOTICE_TITLE, NOT_CALCULATED_NOTICE, REVIE
  *
  * **Restricted** (NFR-002): every file in this folder is for the Lead and the Admin. None is a client component, so none is ever sent to the browser as code, and none is imported by the Engineer's
  * page, which loads this folder with a dynamic `import()` only on the Lead's and the Admin's branch (`tests/unit/estimate-review-architecture.test.ts`).
+ *
+ * **The one script is the Calculate or Recalculate button** (STORY-06.04), in its own folder (`estimate-recalculate`) and as small as it can be (NFR-009, ADR-016). It holds no figure, and the root of the review is
+ * the `group/review` that lets the tiles show a skeleton while that button is busy, by CSS alone.
  */
 
 export interface EstimateReviewProps {
   readonly header: WorkspaceHeaderView;
+  /** The estimate's ID, for the Recalculate button's request (STORY-06.04). */
+  readonly estimateId: string;
   readonly customer: { readonly id: string; readonly name: string } | null;
   readonly costs: CostsView;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
 }
 
-export function EstimateReview({ header, customer, costs, calculatedAt }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   return (
-    <>
+    <div className="group/review contents">
       <WorkspaceHeader view={header} />
       <Card>
         <CardContent>
@@ -56,9 +61,10 @@ export function EstimateReview({ header, customer, costs, calculatedAt }: Estima
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} /> : null}
       <ReviewActions
+        estimateId={estimateId}
         state={state}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />
-    </>
+    </div>
   );
 }
