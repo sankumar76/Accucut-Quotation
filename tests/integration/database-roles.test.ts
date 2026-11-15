@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const OWNER_ROLE = 'accucut_owner';
 const RUNTIME_ROLE = 'accucut_app';
+const BACKUP_ROLE = 'accucut_backup';
 const PROBE_TABLE = 'aqp_role_probe';
 
 function requiredUrl(name: 'MIGRATE_DATABASE_URL' | 'DATABASE_URL'): string {
@@ -71,6 +72,25 @@ describe('database roles (AC-9)', () => {
     ['truncate a table', `TRUNCATE ${PROBE_TABLE}`],
   ])('AC-9: the runtime role cannot %s (no DDL rights)', async (_name, statement) => {
     await expect(runtime.query(statement)).rejects.toThrow(/permission denied|must be owner/);
+  });
+
+  it('STORY-10.05 (ADR-015 Amendment 3 point 3): the backup role is no superuser, cannot create databases or roles, reads all data (pg_read_all_data) and can write and change nothing', async () => {
+    const flags = await owner.query('SELECT rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = $1', [BACKUP_ROLE]);
+    expect(flags.rows).toEqual([{ rolsuper: false, rolcreatedb: false, rolcreaterole: false }]);
+    const privileges = await owner.query(
+      `SELECT pg_has_role($1, 'pg_read_all_data', 'member') AS reads_all,
+              has_table_privilege($1, '${PROBE_TABLE}', 'SELECT') AS can_select,
+              has_table_privilege($1, '${PROBE_TABLE}', 'INSERT') AS can_insert,
+              has_table_privilege($1, '${PROBE_TABLE}', 'UPDATE') AS can_update,
+              has_table_privilege($1, '${PROBE_TABLE}', 'DELETE') AS can_delete,
+              has_table_privilege($1, '${PROBE_TABLE}', 'TRUNCATE') AS can_truncate,
+              has_schema_privilege($1, 'public', 'USAGE') AS can_use_public,
+              has_schema_privilege($1, 'public', 'CREATE') AS can_create_in_public`,
+      [BACKUP_ROLE],
+    );
+    expect(privileges.rows).toEqual([
+      { reads_all: true, can_select: true, can_insert: false, can_update: false, can_delete: false, can_truncate: false, can_use_public: true, can_create_in_public: false },
+    ]);
   });
 
   it('AC-9: the owner can run DDL', async () => {

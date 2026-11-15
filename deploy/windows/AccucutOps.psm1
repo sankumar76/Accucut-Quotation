@@ -72,6 +72,8 @@ function Get-AccucutPaths {
         EnvFile        = Join-Path $config '.env'
         MigrateEnvFile = Join-Path $config 'migrate.env'
         StateFile      = Join-Path $config 'install-state.json'
+        BackupPgpass   = Join-Path $config 'backup.pgpass'
+        BackupSettings = Join-Path $config 'backup-settings.json'
     }
 }
 
@@ -948,6 +950,884 @@ function Invoke-AccucutMigration {
 
 #endregion
 
+#region Backups (STORY-10.05; ADR-015 Amendment 3; architecture section 9.9)
+
+# The local user the weekly task runs as, the task, and the database role that backup.ps1 and clear-copies.ps1 use (never the owner or the app role).
+$script:BackupAccountName = 'AccucutBackup'
+$script:BackupTaskName = 'Accucut weekly backup'
+$script:BackupDatabaseRole = 'accucut_backup'
+
+# 20 % of the volume is always kept free (architecture 9.5, A-36's neighbour): a copy is refused when making it would take the volume below that share.
+$script:BackupKeepFreeFraction = 0.20
+
+# The planned size of the next copy is the size of the last good one plus this share. With no earlier copy, the size of the database is used.
+$script:BackupGrowthMargin = 0.10
+
+# Pruning and clearing never touch the newest N copies (A-36, about a month), and the weekly rule removes only copies older than this many calendar years.
+$script:BackupKeepNewest = 4
+$script:BackupRetentionYears = 2
+
+# The only names this module ever creates or deletes in the backups folder (ADR-015 Amendment 3 point 4).
+$script:BackupCopyPattern = '^accucut-(\d{8})-(\d{6})-(weekly|release)\.age$'
+$script:BackupPartPattern = '^accucut-\d{8}-\d{6}-(weekly|release)\.age\.part$'
+$script:BackupStampFormat = 'yyyyMMdd-HHmmss'
+
+# An age public key (X25519), which is all that the server ever holds.
+$script:AgeRecipientPattern = '^age1[0-9a-z]{58}$'
+
+# The Task Scheduler result of a logon that the account may not make (0x80070569): the account lacks "Log on as a batch job".
+$script:LogonTypeFailure = [uint32]2147943785
+
+function Get-AccucutBackupAccountSid {
+    <# The SID of the local user AccucutBackup, looked up by name. Throws a plain message when the account does not exist. #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $account = [System.Security.Principal.NTAccount]::new([string]$env:COMPUTERNAME, $script:BackupAccountName)
+        return $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    }
+    catch {
+        throw "The local account '$($script:BackupAccountName)' does not exist on this server, so the backup cannot be checked or run. Call your IT person."
+    }
+}
+
+function Get-AccucutRandomNumber {
+    <# A uniformly random integer from 0 up to, not including, -Maximum, from the operating system's generator (rejection sampling, so every value is equally likely). #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidateRange(1, 65536)][int]$Maximum)
+
+    $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $buffer = New-Object byte[] 4
+        $limit = [int64]([math]::Floor(4294967296 / $Maximum) * $Maximum)
+        do {
+            $generator.GetBytes($buffer)
+            $number = [int64][System.BitConverter]::ToUInt32($buffer, 0)
+        } while ($number -ge $limit)
+        return [int]($number % $Maximum)
+    }
+    finally {
+        $generator.Dispose()
+    }
+}
+
+function New-AccucutComplexPassword {
+    <# A random password that meets Windows' complexity rule: at least one upper-case letter, one lower-case letter, one digit and one symbol. #>
+    [CmdletBinding()]
+    param([ValidateRange(16, 128)][int]$Length = 32)
+
+    $sets = @('ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!#$%&*+-=?@^_')
+    $all = $sets -join ''
+    $chars = New-Object System.Collections.Generic.List[char]
+    foreach ($set in $sets) { $chars.Add($set[(Get-AccucutRandomNumber -Maximum $set.Length)]) }
+    while ($chars.Count -lt $Length) { $chars.Add($all[(Get-AccucutRandomNumber -Maximum $all.Length)]) }
+    # Fisher-Yates, so that the first four characters are not always one of each kind.
+    for ($i = $chars.Count - 1; $i -gt 0; $i--) {
+        $j = Get-AccucutRandomNumber -Maximum ($i + 1)
+        $swap = $chars[$i]; $chars[$i] = $chars[$j]; $chars[$j] = $swap
+    }
+    return (-join $chars)
+}
+
+function Register-AccucutBackupTask {
+    <#
+    Makes the local user AccucutBackup and the weekly task that runs backup.ps1 as that user (ADR-015 Amendment 3 point 2).
+    The password is made here, in memory: 32 random characters with upper case, lower case, a digit and a symbol. It is registered for redaction, given as a
+    SecureString to the cmdlet that makes the user and as an in-process string to the cmdlet that registers the task, and then cleared. It is never on a command line, in a file or in a
+    log, and Task Scheduler (LSA) is the only place that keeps it. The account is a member of no group and has no password expiry, and it is for the task only.
+    Returns the account's SID. If the task cannot be registered, the account made here is removed again.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$PowerShellPath
+    )
+
+    # The program of the task action is given by the caller, which has checked it (Resolve-AccucutTrustedExecutable): it is never looked up here.
+    if (-not [System.IO.Path]::IsPathRooted($PowerShellPath) -or $PowerShellPath.StartsWith('\\') -or -not [System.IO.File]::Exists($PowerShellPath)) { throw "'$PowerShellPath' is not the full path of a program that exists." }
+    $password = New-AccucutComplexPassword -Length 32
+    Register-AccucutSecret -Value $password
+    $secure = [System.Security.SecureString]::new()
+    foreach ($char in $password.ToCharArray()) { $secure.AppendChar($char) }
+    $secure.MakeReadOnly()
+    $created = $false
+    try {
+        $user = New-LocalUser -Name $script:BackupAccountName -Password $secure -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires -Description 'Accucut weekly backup (no interactive use)' -ErrorAction Stop
+        $created = $true
+        $scriptPath = [System.IO.Path]::Combine($Paths.Current, 'backup.ps1')
+        $action = New-ScheduledTaskAction -Execute $PowerShellPath -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $scriptPath + '" -Reason weekly')
+        # Sunday 02:00 on the server's clock: the server is expected to keep India Standard Time (the caller warns when it does not).
+        $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '02:00'
+        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 6)
+        [void](Register-ScheduledTask -TaskName $script:BackupTaskName -Action $action -Trigger $trigger -Settings $settings -User "$($env:COMPUTERNAME)\$($script:BackupAccountName)" -Password $password -RunLevel Limited -Description 'Weekly encrypted backup of the Accucut database (STORY-10.05).' -ErrorAction Stop)
+        return $user.SID.Value
+    }
+    catch {
+        if ($created) { Remove-AccucutBackupAccount }
+        throw
+    }
+    finally {
+        $password = $null
+        $secure.Dispose()
+    }
+}
+
+function Remove-AccucutBackupAccount {
+    <# Removes the weekly task and the local user AccucutBackup, when they exist. Used when an install that made them fails before it is finished. #>
+    [CmdletBinding()]
+    param()
+
+    try { Unregister-ScheduledTask -TaskName $script:BackupTaskName -Confirm:$false -ErrorAction Stop } catch { Write-Verbose "No weekly backup task to remove: $($_.Exception.Message)" }
+    try { Remove-LocalUser -Name $script:BackupAccountName -ErrorAction Stop } catch { Write-Verbose "No backup account to remove: $($_.Exception.Message)" }
+}
+
+function Wait-AccucutBackupTask {
+    <#
+    Starts the weekly task once and waits for it to finish (the install's proof that the account can log on and that the first backup works).
+    Returns the task's LastTaskResult as an unsigned number (0 is success), or throws when it has not finished in -TimeoutSeconds.
+    #>
+    [CmdletBinding()]
+    param(
+        [ValidateRange(5, 1800)][int]$TimeoutSeconds = 300,
+        [ValidateRange(1, 30)][int]$IntervalSeconds = 3
+    )
+
+    $before = (Get-Date).AddSeconds(-2)
+    Start-ScheduledTask -TaskName $script:BackupTaskName -ErrorAction Stop
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds $IntervalSeconds
+        $info = Get-ScheduledTaskInfo -TaskName $script:BackupTaskName -ErrorAction Stop
+        $task = Get-ScheduledTask -TaskName $script:BackupTaskName -ErrorAction Stop
+        if ($info.LastRunTime -ge $before -and [string]$task.State -ne 'Running') { return [uint32]$info.LastTaskResult }
+    }
+    throw "The weekly backup task did not finish within $TimeoutSeconds seconds."
+}
+
+function Test-AccucutLogonTypeFailure {
+    <# True when a task result is 0x80070569: the account is not allowed this kind of logon ("Log on as a batch job"). #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][uint32]$TaskResult)
+
+    return ($TaskResult -eq $script:LogonTypeFailure)
+}
+
+function Grant-AccucutBackupRootAccess {
+    <# Read and execute (0x1200A9, inherited) for the backup account on the install root, so that the trust checks in backup.ps1 can read the descriptor of every folder down to the script, the module and the programs (Amendment 3 point 2). The fifth entry of the root. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$BackupSid
+    )
+
+    Grant-AccucutFolderAccess -Path $Paths.Root -Account $BackupSid -Rights ReadAndExecute
+}
+
+function New-AccucutBackupFolder {
+    <#
+    Creates the backups folder with its security in one call (ADR-015 Amendment 3 point 4): owner Administrators, no inheritance, exactly Administrators and SYSTEM
+    with full control (0x1F01FF) and the backup account with Modify (0x1301BF), all inherited by what the folder holds. No entry for the services. The folder must
+    not exist. The result is read back and compared exactly; a folder that differs is refused and left as it is.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$BackupSid
+    )
+
+    if ([System.IO.Directory]::Exists($Path) -or [System.IO.File]::Exists($Path)) { throw "'$Path' already exists. The backups folder is only ever made by the install." }
+    $administrators = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+    $system = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+    $backup = [System.Security.Principal.SecurityIdentifier]::new($BackupSid)
+    $security = [System.Security.AccessControl.DirectorySecurity]::new()
+    $security.SetOwner($administrators)
+    $security.SetAccessRuleProtection($true, $false)
+    $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $none = [System.Security.AccessControl.PropagationFlags]::None
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    foreach ($sid in @($administrators, $system)) {
+        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, $inherit, $none, $allow))
+    }
+    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($backup, [System.Security.AccessControl.FileSystemRights]::Modify, $inherit, $none, $allow))
+    [void][System.IO.Directory]::CreateDirectory($Path, $security)
+
+    $actual = [System.IO.Directory]::GetAccessControl($Path)
+    $rules = @($actual.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { '{0}|0x{1:X}|{2}|{3}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.IsInherited, [int]$_.InheritanceFlags } | Sort-Object)
+    $expected = @("S-1-5-32-544|0x1F01FF|False|3", "S-1-5-18|0x1F01FF|False|3", "$BackupSid|0x1301BF|False|3") | Sort-Object
+    $owner = $actual.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    if (-not $actual.AreAccessRulesProtected -or $owner -ne 'S-1-5-32-544' -or ($rules -join "`n") -ne ($expected -join "`n")) {
+        throw "'$Path' was not created as expected (owner, protection and the three entries are checked exactly). It is not used."
+    }
+}
+
+function Set-AccucutBackupFileAcl {
+    <# A file readable by the backup account and no one else except Administrators and SYSTEM (full control): protected, owner Administrators, exactly three entries (Amendment 3 points 3 and 5). #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$BackupSid
+    )
+
+    $administrators = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+    $system = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+    $security = [System.Security.AccessControl.FileSecurity]::new()
+    $security.SetOwner($administrators)
+    $security.SetAccessRuleProtection($true, $false)
+    foreach ($sid in @($administrators, $system)) {
+        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.Security.AccessControl.AccessControlType]::Allow))
+    }
+    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($BackupSid), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Allow))
+    [System.IO.File]::SetAccessControl($Path, $security)
+}
+
+function Write-AccucutBackupFile {
+    <# Creates a file with FileMode.CreateNew (never over an existing one), locks it with Set-AccucutBackupFileAcl while it is still empty, and only then writes the content. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Content,
+        [Parameter(Mandatory)][string]$BackupSid
+    )
+
+    $stream = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $stream.Dispose()
+    Set-AccucutBackupFileAcl -Path $Path -BackupSid $BackupSid
+    [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Test-AccucutBackupSetting {
+    <# Checks one backup setting against the pattern it must have. Anything else is refused: the values end up on a command line and in a file. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Name,
+        [AllowNull()]$Value
+    )
+
+    switch ($Name) {
+        'ageRecipient' { return ($Value -is [string] -and $Value -match $script:AgeRecipientPattern) }
+        'pgHost' { return ($Value -is [string] -and $Value -match '^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$') }
+        'pgPort' { return (($Value -is [int] -or $Value -is [long]) -and $Value -ge 1 -and $Value -le 65535) }
+        'database' { return ($Value -is [string] -and $Value -match '^[a-z_][a-z0-9_]{0,62}$') }
+        'pgBinDirectory' { return ($Value -is [string] -and $Value -match '^[A-Za-z]:\\[^"&|<>^%\r\n]{1,240}$' -and $Value -notmatch '\.\.') }
+        default { return $false }
+    }
+}
+
+function Read-AccucutBackupSettings {
+    <# Reads backup-settings.json (ageRecipient, pgHost, pgPort, database, pgBinDirectory) and refuses a file with a missing, extra or malformed field. The file has been trust-checked by the caller. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $length = ([System.IO.FileInfo]::new($Path)).Length
+    if ($length -gt 16384) { throw "The backup settings file is too large ($length bytes)." }
+    $json = [System.IO.File]::ReadAllText($Path) | ConvertFrom-Json
+    $names = @('ageRecipient', 'pgHost', 'pgPort', 'database', 'pgBinDirectory')
+    $present = @($json.PSObject.Properties.Name)
+    foreach ($name in $names) {
+        if ($present -notcontains $name) { throw "The backup settings file has no '$name'." }
+        if (-not (Test-AccucutBackupSetting -Name $name -Value $json.$name)) { throw "The backup settings file has a value for '$name' that is not allowed." }
+    }
+    foreach ($name in $present) { if ($names -notcontains $name) { throw "The backup settings file has a field '$name' that is not known." } }
+    return [pscustomobject]@{ AgeRecipient = [string]$json.ageRecipient; PgHost = [string]$json.pgHost; PgPort = [int]$json.pgPort; Database = [string]$json.database; PgBinDirectory = [string]$json.pgBinDirectory }
+}
+
+function Write-AccucutBackupConfig {
+    <#
+    Writes the two files that only the backup account (and Administrators) can read (ADR-015 Amendment 3 points 3 and 5):
+      config\backup.pgpass          the accucut_backup role's connection line, PGPASSFILE format. The one place its password is kept.
+      config\backup-settings.json   the age PUBLIC key, the database address and the folder of pg_dump. No secret.
+    Each has a protected list: owner Administrators, exactly Administrators and SYSTEM full control and the backup account read.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$BackupSid,
+        [Parameter(Mandatory)][string]$BackupPassword,
+        [Parameter(Mandatory)][string]$AgeRecipient,
+        [Parameter(Mandatory)][string]$PgHost,
+        [Parameter(Mandatory)][int]$PgPort,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$PgBinDirectory
+    )
+
+    foreach ($pair in @(@('ageRecipient', $AgeRecipient), @('pgHost', $PgHost), @('pgPort', $PgPort), @('database', $Database), @('pgBinDirectory', $PgBinDirectory))) {
+        if (-not (Test-AccucutBackupSetting -Name $pair[0] -Value $pair[1])) { throw "The value for '$($pair[0])' is not allowed in the backup settings." }
+    }
+    Register-AccucutSecret -Value $BackupPassword
+    # PGPASSFILE format: host:port:database:user:password, with a backslash or a colon in the password escaped by a backslash.
+    $escaped = $BackupPassword.Replace('\', '\\').Replace(':', '\:')
+    $line = '{0}:{1}:{2}:{3}:{4}' -f $PgHost, $PgPort, $Database, $script:BackupDatabaseRole, $escaped
+    Write-AccucutBackupFile -Path $Paths.BackupPgpass -Content ($line + "`r`n") -BackupSid $BackupSid
+    $settings = [ordered]@{ ageRecipient = $AgeRecipient; pgHost = $PgHost; pgPort = $PgPort; database = $Database; pgBinDirectory = $PgBinDirectory }
+    Write-AccucutBackupFile -Path $Paths.BackupSettings -Content (($settings | ConvertTo-Json) + "`r`n") -BackupSid $BackupSid
+}
+
+function Get-AccucutVolumeRoot {
+    <# The drive root of a full local path as X:/ (a forward slash, as .env needs), or $null when the path is not a full local drive path. #>
+    [CmdletBinding()]
+    param([AllowNull()][AllowEmptyString()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or $Path -notmatch '^[A-Za-z]:\\') { return $null }
+    return $Path.Substring(0, 2) + '/'
+}
+
+function Get-AccucutVolumeSpace {
+    <# Total and free bytes of the volume that holds -Path (the free space available to the caller). A function of its own so that Pester can mock it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($Path)))
+    return [pscustomobject]@{ TotalBytes = [int64]$drive.TotalSize; FreeBytes = [int64]$drive.AvailableFreeSpace }
+}
+
+function Format-AccucutSize {
+    <# A size in bytes in words an Admin reads: 12.3 GB, 456 MB, 7 KB. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int64]$Bytes)
+
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    if ($Bytes -ge 1GB) { return ([math]::Round($Bytes / 1GB, 2)).ToString('0.00', $inv) + ' GB' }
+    if ($Bytes -ge 1MB) { return ([math]::Round($Bytes / 1MB, 1)).ToString('0.0', $inv) + ' MB' }
+    return ([math]::Ceiling($Bytes / 1KB)).ToString($inv) + ' KB'
+}
+
+function Test-AccucutBackupRoom {
+    <#
+    The free-space check that comes first (AC-2): a copy is made only if, after it, at least 20 % of the volume is still free. The planned size is the last good
+    copy plus a margin of 10 %, or the size of the database when there is no copy yet. Returns Ok, the numbers and a plain message. It never deletes anything.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int64]$FreeBytes,
+        [Parameter(Mandatory)][int64]$TotalBytes,
+        [Parameter(Mandatory)][int64]$LastCopyBytes,
+        [Parameter(Mandatory)][int64]$DatabaseBytes
+    )
+
+    $basis = $LastCopyBytes
+    if ($basis -le 0) { $basis = $DatabaseBytes }
+    $planned = [int64][math]::Ceiling($basis * (1 + $script:BackupGrowthMargin))
+    $after = $FreeBytes - $planned
+    $minimum = [int64][math]::Ceiling($TotalBytes * $script:BackupKeepFreeFraction)
+    $ok = ($TotalBytes -gt 0 -and $after -ge $minimum)
+    $message = ''
+    if (-not $ok) {
+        $message = "Not enough free disk space for another copy: $(Format-AccucutSize -Bytes $FreeBytes) is free, the copy needs about $(Format-AccucutSize -Bytes $planned), and 20 % of the disk ($(Format-AccucutSize -Bytes $minimum)) must stay free. No copy was made and nothing was deleted. Clear old copies with Clear-AccucutCopies, or ask your IT person for a bigger disk."
+    }
+    return [pscustomobject]@{ Ok = $ok; FreeBytes = $FreeBytes; TotalBytes = $TotalBytes; PlannedBytes = $planned; MinimumFreeBytes = $minimum; Message = $message }
+}
+
+function ConvertFrom-AccucutBackupStamp {
+    <# The UTC time in a copy's name (yyyyMMdd-HHmmss), or $null when the text is not one. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Text)
+
+    $parsed = [datetime]::MinValue
+    if ([datetime]::TryParseExact($Text, $script:BackupStampFormat, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$parsed)) { return $parsed }
+    return $null
+}
+
+function Get-AccucutBackupCopy {
+    <#
+    The copies in the backups folder, oldest first. Looks only at the files directly in the folder (no recursion) and never follows a link. A copy is
+    a regular file named accucut-<yyyyMMdd-HHmmss>-<weekly|release>.age, and it is Verified only when its manifest (accucut-<stamp>-<reason>.manifest.json)
+    is a regular file whose file name, reason, time and size match, and whose SHA-256 is well formed. Only a Verified copy is ever deleted.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Directory)
+
+    $copies = New-Object System.Collections.Generic.List[object]
+    if (-not [System.IO.Directory]::Exists($Directory)) { return @() }
+    foreach ($file in [System.IO.Directory]::GetFiles($Directory)) {
+        $name = [System.IO.Path]::GetFileName($file)
+        if ($name -notmatch $script:BackupCopyPattern) { continue }
+        $stamp = "$($Matches[1])-$($Matches[2])"
+        $reason = $Matches[3]
+        $created = ConvertFrom-AccucutBackupStamp -Text $stamp
+        $attributes = [System.IO.File]::GetAttributes($file)
+        if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or ($attributes -band [System.IO.FileAttributes]::Directory) -ne 0) { continue }
+        $size = ([System.IO.FileInfo]::new($file)).Length
+        $manifestPath = [System.IO.Path]::Combine($Directory, "accucut-$stamp-$reason.manifest.json")
+        $problem = $null
+        if ($null -eq $created) { $problem = 'the time in the name is not valid' }
+        elseif (-not [System.IO.File]::Exists($manifestPath)) { $problem = 'it has no manifest' }
+        else {
+            $manifestAttributes = [System.IO.File]::GetAttributes($manifestPath)
+            if (($manifestAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { $problem = 'its manifest is a link' }
+            elseif (([System.IO.FileInfo]::new($manifestPath)).Length -gt 16384) { $problem = 'its manifest is too large' }
+            else {
+                try {
+                    $manifest = [System.IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+                    $names = @($manifest.PSObject.Properties.Name)
+                    foreach ($required in 'file', 'reason', 'createdAtUtc', 'sizeBytes', 'sha256') { if ($names -notcontains $required) { throw "no $required" } }
+                    $manifestStamp = ([datetime]::Parse([string]$manifest.createdAtUtc, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)).ToString($script:BackupStampFormat, [System.Globalization.CultureInfo]::InvariantCulture)
+                    if ([string]$manifest.file -ne $name) { $problem = 'its manifest names another file' }
+                    elseif ([string]$manifest.reason -ne $reason) { $problem = 'its manifest has another reason' }
+                    elseif ($manifestStamp -ne $stamp) { $problem = 'its manifest has another time' }
+                    elseif ([int64]$manifest.sizeBytes -ne $size) { $problem = 'its size is not the size in its manifest' }
+                    elseif ([string]$manifest.sha256 -notmatch '^[0-9a-f]{64}$') { $problem = 'its manifest has no valid SHA-256' }
+                }
+                catch { $problem = 'its manifest cannot be read' }
+            }
+        }
+        $copies.Add([pscustomobject]@{
+                Name         = $name
+                Path         = $file
+                ManifestPath = $manifestPath
+                CreatedUtc   = $created
+                Reason       = $reason
+                SizeBytes    = [int64]$size
+                Verified     = ($null -eq $problem)
+                Problem      = $problem
+            })
+    }
+    return @($copies | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name)
+}
+
+function Get-AccucutBackupKeepSet {
+    <# The newest copies that are never removed (A-36): the names of the newest -Count of all copies in the folder, verified or not. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Copy,
+        [int]$Count = 4
+    )
+
+    $newest = @($Copy | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name -Descending | Select-Object -First $Count)
+    return @($newest | ForEach-Object { $_.Name })
+}
+
+function Get-AccucutBackupPruneCandidate {
+    <# The copies the weekly rule may remove: Verified, older than 2 calendar years, and not one of the newest 4. Oldest first. A newer copy is never a candidate. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Copy,
+        [datetime]$NowUtc = [datetime]::UtcNow
+    )
+
+    $keep = Get-AccucutBackupKeepSet -Copy $Copy -Count $script:BackupKeepNewest
+    $limit = $NowUtc.ToUniversalTime().AddYears(-$script:BackupRetentionYears)
+    return @($Copy | Where-Object { $_.Verified -and ($keep -notcontains $_.Name) -and $_.CreatedUtc -lt $limit })
+}
+
+function Remove-AccucutBackupCopy {
+    <#
+    Deletes one copy and its manifest, only after proving again, just before, that they are its own: the name matches the pattern, both are regular files
+    directly in -Directory (no link), and the manifest agrees with the copy. The copy goes first, then the manifest, so a stop in between leaves a manifest
+    without a copy (harmless) and never a copy without a manifest. Returns the bytes freed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Directory,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ($Name -notmatch $script:BackupCopyPattern) { throw "'$Name' is not the name of a copy made by the backup. Nothing was deleted." }
+    $current = @(Get-AccucutBackupCopy -Directory $Directory | Where-Object { $_.Name -eq $Name })
+    if ($current.Count -ne 1 -or -not $current[0].Verified) {
+        $why = 'it is not a regular file here'
+        if ($current.Count -eq 1) { $why = $current[0].Problem }
+        throw "'$Name' was not deleted: $why."
+    }
+    $copy = $current[0]
+    $freed = $copy.SizeBytes + ([System.IO.FileInfo]::new($copy.ManifestPath)).Length
+    [System.IO.File]::Delete($copy.Path)
+    [System.IO.File]::Delete($copy.ManifestPath)
+    return [int64]$freed
+}
+
+function Remove-AccucutStaleBackupPart {
+    <# Deletes unfinished temporary copies (accucut-...age.part, regular files, directly in the folder) that no run has touched for -OlderThanHours. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Directory,
+        [datetime]$NowUtc = [datetime]::UtcNow,
+        [int]$OlderThanHours = 24
+    )
+
+    if (-not [System.IO.Directory]::Exists($Directory)) { return 0 }
+    $removed = 0
+    foreach ($file in [System.IO.Directory]::GetFiles($Directory)) {
+        if ([System.IO.Path]::GetFileName($file) -notmatch $script:BackupPartPattern) { continue }
+        $attributes = [System.IO.File]::GetAttributes($file)
+        if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or ($attributes -band [System.IO.FileAttributes]::Directory) -ne 0) { continue }
+        if ([System.IO.File]::GetLastWriteTimeUtc($file) -lt $NowUtc.AddHours(-$OlderThanHours)) {
+            [System.IO.File]::Delete($file)
+            $removed++
+        }
+    }
+    return $removed
+}
+
+function ConvertTo-AccucutShortMessage {
+    <# A program's message on one line: control characters become spaces, and it is cut at 300 characters. Registered secrets are blanked first. #>
+    [CmdletBinding()]
+    param([AllowNull()][AllowEmptyString()][string]$Text)
+
+    if ([string]::IsNullOrEmpty($Text)) { return '' }
+    $clean = ((Hide-AccucutSecrets -Text $Text) -replace '[\x00-\x1F]', ' ').Trim()
+    if ($clean.Length -gt 300) { $clean = $clean.Substring(0, 300) }
+    return $clean
+}
+
+function Invoke-AccucutBackupPipe {
+    <#
+    pg_dump -Fc | age -r <recipient> > <OutputPath>, as bytes. Nothing goes through a PowerShell pipeline (which would turn the bytes into text) and nothing through
+    cmd.exe: both programs are started here with redirected streams, the dump is copied to age's standard input, and age's standard output is copied to a file made
+    with FileMode.CreateNew. Both exit codes are checked (a pipe in cmd.exe reports only the last program's code, so a failed pg_dump would look like a good copy).
+    The password reaches pg_dump through PGPASSFILE in that child's environment only; the recipient is a public key and may be on the command line.
+    Returns the size of the file written. On any failure the output file is left for the caller to delete, and the message carries the programs' blanked messages.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PgDumpPath,
+        [Parameter(Mandatory)][string]$AgePath,
+        [Parameter(Mandatory)][string]$Recipient,
+        [Parameter(Mandatory)][string]$DbHost,
+        [Parameter(Mandatory)][int]$Port,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$OutputPath
+    )
+
+    if ($Recipient -notmatch $script:AgeRecipientPattern) { throw 'The age recipient is not a public key (age1...).' }
+    $dumpInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $dumpInfo.FileName = $PgDumpPath
+    $dumpInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--format=custom', '--no-password', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database)
+    $dumpInfo.EnvironmentVariables['PGPASSFILE'] = $PassFile
+    $dumpInfo.EnvironmentVariables['PGCONNECT_TIMEOUT'] = '15'
+    $ageInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ageInfo.FileName = $AgePath
+    $ageInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('-r', $Recipient)
+    foreach ($info in $dumpInfo, $ageInfo) {
+        $info.UseShellExecute = $false
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $info.CreateNoWindow = $true
+    }
+    $ageInfo.RedirectStandardInput = $true
+
+    $output = [System.IO.FileStream]::new($OutputPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $dump = New-Object System.Diagnostics.Process
+    $dump.StartInfo = $dumpInfo
+    $age = New-Object System.Diagnostics.Process
+    $age.StartInfo = $ageInfo
+    $dumpStarted = $false
+    $ageStarted = $false
+    $copyError = $null
+    try {
+        [void]$age.Start()
+        $ageStarted = $true
+        [void]$dump.Start()
+        $dumpStarted = $true
+        $dumpErrorTask = $dump.StandardError.ReadToEndAsync()
+        $ageErrorTask = $age.StandardError.ReadToEndAsync()
+        $outputTask = $age.StandardOutput.BaseStream.CopyToAsync($output)
+        $source = $dump.StandardOutput.BaseStream
+        $sink = $age.StandardInput.BaseStream
+        $buffer = New-Object byte[] 81920
+        try {
+            while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) { $sink.Write($buffer, 0, $read) }
+            $sink.Flush()
+        }
+        catch {
+            $copyError = $_.Exception.Message
+            try { $dump.Kill() } catch { Write-Verbose "pg_dump had already ended: $($_.Exception.Message)" }
+        }
+        finally {
+            try { $age.StandardInput.Close() } catch { Write-Verbose "age's input was already closed: $($_.Exception.Message)" }
+        }
+        $dump.WaitForExit()
+        $age.WaitForExit()
+        $outputTask.Wait()
+        $output.Flush()
+        $dumpMessage = Hide-AccucutSecrets -Text $dumpErrorTask.Result
+        $ageMessage = Hide-AccucutSecrets -Text $ageErrorTask.Result
+        $dumpCode = $dump.ExitCode
+        $ageCode = $age.ExitCode
+    }
+    finally {
+        if ($dumpStarted -and -not $dump.HasExited) { try { $dump.Kill() } catch { Write-Verbose "pg_dump could not be stopped: $($_.Exception.Message)" } }
+        if ($ageStarted -and -not $age.HasExited) { try { $age.Kill() } catch { Write-Verbose "age could not be stopped: $($_.Exception.Message)" } }
+        $output.Dispose()
+        $dump.Dispose()
+        $age.Dispose()
+    }
+    if ($dumpCode -ne 0) { throw "pg_dump failed with exit code $dumpCode. $(ConvertTo-AccucutShortMessage -Text $dumpMessage)" }
+    if ($ageCode -ne 0) { throw "age failed with exit code $ageCode. $(ConvertTo-AccucutShortMessage -Text $ageMessage)" }
+    if ($null -ne $copyError) { throw "The dump could not be passed to age: $copyError" }
+    $size = ([System.IO.FileInfo]::new($OutputPath)).Length
+    if ($size -le 0) { throw 'The encrypted copy is empty.' }
+    return [int64]$size
+}
+
+function Add-AccucutJobRun {
+    <#
+    Writes one job_runs row as the accucut_backup role (INSERT is the only right it has on that table). The values reach psql as variables and are quoted by
+    psql itself (:'name'), so nothing in them can change the statement; the SQL comes in on standard input. The password comes from PGPASSFILE in the child's
+    environment. -Result holds no secret and no path (status, sizes, free space, a short reason).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$DbHost,
+        [Parameter(Mandatory)][int]$Port,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z-]{1,31}$')][string]$Job,
+        [Parameter(Mandatory)][datetime]$StartedUtc,
+        [Parameter(Mandatory)][datetime]$FinishedUtc,
+        [Parameter(Mandatory)][hashtable]$Result
+    )
+
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $json = $Result | ConvertTo-Json -Compress -Depth 4
+    $sql = "INSERT INTO job_runs (job, started_at, finished_at, result) VALUES (:'job', :'started'::timestamptz, :'finished'::timestamptz, :'result'::jsonb);"
+    $arguments = @(
+        '-X', '-w', '-q', '-v', 'ON_ERROR_STOP=1',
+        '-v', "job=$Job", '-v', "started=$($StartedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "finished=$($FinishedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "result=$json",
+        '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database, '--file', '-'
+    )
+    [void](Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -StdIn $sql)
+}
+
+function Get-AccucutDatabaseInfo {
+    <# The PostgreSQL server version text and the size of the database in bytes, read as the accucut_backup role. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$DbHost,
+        [Parameter(Mandatory)][int]$Port,
+        [Parameter(Mandatory)][string]$Database
+    )
+
+    $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database,
+        '--command', "SELECT concat(current_setting('server_version'), '|', pg_database_size(current_database()))")
+    $answer = (Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' }).Output.Trim()
+    if ($answer -notmatch '^([0-9][0-9A-Za-z .()_-]{0,40})\|(\d{1,18})$') { throw 'The database did not answer with its version and size.' }
+    return [pscustomobject]@{ ServerVersion = $Matches[1]; SizeBytes = [int64]$Matches[2] }
+}
+
+function Invoke-AccucutBackup {
+    <#
+    The weekly or release backup (AC-1 to AC-4, AC-7): free-space check first; pg_dump -Fc encrypted with age to a temporary name in the backups folder; the
+    manifest (SHA-256, size, PostgreSQL version, time, reason, release); the copy renamed to its final name only after the manifest is written; pruning of
+    copies past 2 calendar years (never the newest 4, never a newer copy to make room); one job_runs row. On any failure a failed row is written (when the
+    database answers), the temporary file is removed and the error is thrown, so the caller exits non-zero.
+    -Program holds the full paths already checked by the caller: PgDump, Psql, Age.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][hashtable]$Program,
+        [Parameter(Mandatory)][ValidateSet('weekly', 'release')][string]$Reason,
+        [string]$ReleaseTag = '',
+        [string]$LogFile
+    )
+
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $started = [datetime]::UtcNow
+    $directory = $Paths.Backups
+    $stamp = $started.ToString($script:BackupStampFormat, $inv)
+    $base = "accucut-$stamp-$Reason"
+    $final = [System.IO.Path]::Combine($directory, "$base.age")
+    $part = [System.IO.Path]::Combine($directory, "$base.age.part")
+    $manifestPath = [System.IO.Path]::Combine($directory, "$base.manifest.json")
+    $row = @{ DbHost = $Settings.PgHost; Port = $Settings.PgPort; Database = $Settings.Database; PsqlPath = $Program.Psql; PassFile = $Paths.BackupPgpass }
+    $space = $null
+    try {
+        $info = Get-AccucutDatabaseInfo -PsqlPath $Program.Psql -PassFile $Paths.BackupPgpass -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database
+        $existing = @(Get-AccucutBackupCopy -Directory $directory)
+        $last = @($existing | Where-Object { $_.Verified } | Select-Object -Last 1)
+        $lastBytes = 0
+        if ($last.Count -eq 1) { $lastBytes = $last[0].SizeBytes }
+        $space = Get-AccucutVolumeSpace -Path $directory
+        $room = Test-AccucutBackupRoom -FreeBytes $space.FreeBytes -TotalBytes $space.TotalBytes -LastCopyBytes $lastBytes -DatabaseBytes $info.SizeBytes
+        if (-not $room.Ok) {
+            $failure = @{ status = 'failed'; code = 'low-space'; reason = $Reason; message = 'Not enough free disk space for another copy; none was made.'; freeBytes = $space.FreeBytes; totalBytes = $space.TotalBytes; plannedBytes = $room.PlannedBytes }
+            Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $failure
+            throw $room.Message
+        }
+        if ([System.IO.File]::Exists($final) -or [System.IO.File]::Exists($manifestPath)) { throw "A copy named '$base' already exists (two backups started in the same second). Nothing was changed." }
+
+        $size = Invoke-AccucutBackupPipe -PgDumpPath $Program.PgDump -AgePath $Program.Age -Recipient $Settings.AgeRecipient -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database -PassFile $Paths.BackupPgpass -OutputPath $part
+        $sha = Get-AccucutFileSha256 -Path $part
+        $manifest = [ordered]@{
+            file              = "$base.age"
+            reason            = $Reason
+            createdAtUtc      = $started.ToString('o', $inv)
+            sizeBytes         = $size
+            sha256            = $sha
+            postgresVersion   = $info.ServerVersion
+            dumpFormat        = 'pg_dump custom (-Fc)'
+            encryption        = 'age'
+            release           = $ReleaseTag
+        }
+        Write-AccucutBackupManifest -Path $manifestPath -Manifest $manifest
+        try { [System.IO.File]::Move($part, $final) }
+        catch { [System.IO.File]::Delete($manifestPath); throw }
+
+        $pruned = @()
+        try { $pruned = @(Invoke-AccucutBackupPrune -Directory $directory) }
+        catch { Write-AccucutLog -Message "Pruning old copies stopped: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        $after = Get-AccucutVolumeSpace -Path $directory
+        $ok = @{ status = 'ok'; reason = $Reason; sizeBytes = $size; freeBytes = $after.FreeBytes; totalBytes = $after.TotalBytes; pruned = $pruned.Count }
+        Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $ok
+        Write-AccucutLog -Message "Backup made: $base.age, $(Format-AccucutSize -Bytes $size). Free space now $(Format-AccucutSize -Bytes $after.FreeBytes) of $(Format-AccucutSize -Bytes $after.TotalBytes). Old copies removed: $($pruned.Count)." -LogFile $LogFile
+        return [pscustomobject]@{ Name = "$base.age"; SizeBytes = $size; Sha256 = $sha; FreeBytes = $after.FreeBytes; TotalBytes = $after.TotalBytes; Pruned = $pruned.Count }
+    }
+    catch {
+        $message = $_.Exception.Message
+        try { if ([System.IO.File]::Exists($part)) { [System.IO.File]::Delete($part) } } catch { Write-Verbose "The temporary copy could not be deleted: $($_.Exception.Message)" }
+        if ($message -notlike 'Not enough free disk space*') {
+            $failure = @{ status = 'failed'; code = 'error'; reason = $Reason; message = (ConvertTo-AccucutShortMessage -Text $message) }
+            if ($null -ne $space) { $failure.freeBytes = $space.FreeBytes; $failure.totalBytes = $space.TotalBytes }
+            try { Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $failure }
+            catch { Write-AccucutLog -Message "The failed run could not be recorded in job_runs: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        }
+        throw
+    }
+}
+
+function Write-AccucutBackupManifest {
+    <# The manifest beside a copy: JSON, created with FileMode.CreateNew (never over an existing file). #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Manifest
+    )
+
+    $text = ($Manifest | ConvertTo-Json) + "`r`n"
+    $stream = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($text)
+        $stream.Write($bytes, 0, $bytes.Length)
+    }
+    finally { $stream.Dispose() }
+}
+
+function Invoke-AccucutBackupPrune {
+    <# The weekly pruning rule (AC-3): removes the copies that Get-AccucutBackupPruneCandidate names, oldest first, and stale temporary files. Returns the names removed. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Directory,
+        [datetime]$NowUtc = [datetime]::UtcNow
+    )
+
+    [void](Remove-AccucutStaleBackupPart -Directory $Directory -NowUtc $NowUtc)
+    $removed = New-Object System.Collections.Generic.List[string]
+    foreach ($copy in @(Get-AccucutBackupPruneCandidate -Copy @(Get-AccucutBackupCopy -Directory $Directory) -NowUtc $NowUtc)) {
+        [void](Remove-AccucutBackupCopy -Directory $Directory -Name $copy.Name)
+        $removed.Add($copy.Name)
+    }
+    return $removed.ToArray()
+}
+
+function Clear-AccucutCopies {
+    <#
+    The Admin's guided clear (AC-6; architecture 9.5). Lists the copies oldest first with date and size, always keeps the newest 4, asks the Admin to TYPE the date
+    of the newest copy to remove, removes nothing if that date is not the date of a copy that may be removed, shows how much space the removal frees, asks once more,
+    removes oldest first up to that date, and writes one job_runs row (job 'backup-clear'). It deletes only what Remove-AccucutBackupCopy proves is its own.
+    Every question goes through Read-AccucutHostInput, so that Pester can answer it. Returns what it did.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [datetime]$NowUtc = [datetime]::UtcNow,
+        [string]$LogFile
+    )
+
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $started = [datetime]::UtcNow
+    $directory = $Paths.Backups
+    $copies = @(Get-AccucutBackupCopy -Directory $directory)
+    $space = Get-AccucutVolumeSpace -Path $directory
+    $percent = 0
+    if ($space.TotalBytes -gt 0) { $percent = [math]::Round(100 * $space.FreeBytes / $space.TotalBytes) }
+    Write-Host ''
+    Write-Host 'Backup copies on this server, oldest first (dates are UTC):'
+    if ($copies.Count -eq 0) { Write-Host '  There are none.' }
+    $keep = Get-AccucutBackupKeepSet -Copy $copies -Count $script:BackupKeepNewest
+    $number = 0
+    foreach ($copy in $copies) {
+        $number++
+        $note = ''
+        if ($keep -contains $copy.Name) { $note = '  KEEP (one of the newest 4, always kept)' }
+        elseif (-not $copy.Verified) { $note = "  KEEP (not removable: $($copy.Problem))" }
+        $date = 'unknown date   '
+        if ($null -ne $copy.CreatedUtc) { $date = $copy.CreatedUtc.ToString('yyyy-MM-dd HH:mm', $inv) }
+        Write-Host ('  {0,3}  {1}  {2,-8} {3,10}{4}' -f $number, $date, $copy.Reason, (Format-AccucutSize -Bytes $copy.SizeBytes), $note)
+    }
+    Write-Host "Free space now: $(Format-AccucutSize -Bytes $space.FreeBytes) of $(Format-AccucutSize -Bytes $space.TotalBytes) ($percent %)."
+
+    $eligible = @($copies | Where-Object { $_.Verified -and ($keep -notcontains $_.Name) })
+    if ($eligible.Count -gt 0 -and $space.TotalBytes -gt 0) {
+        # A hint only (architecture 9.5): how many of the oldest copies bring the free space back above 30 %.
+        $hint = 0
+        $gained = [int64]0
+        foreach ($copy in $eligible) {
+            if (($space.FreeBytes + $gained) / $space.TotalBytes -ge 0.30) { break }
+            $gained += $copy.SizeBytes
+            $hint++
+        }
+        if ($hint -gt 0) { Write-Host "To get back above 30 % free, about $hint of the oldest copies would have to go." }
+    }
+    if ($eligible.Count -eq 0) {
+        Write-Host 'Nothing can be removed: only the newest 4 copies are left, and they are always kept. If the disk is still too full, call your IT person: the disk is too small for the data.'
+        return [pscustomobject]@{ Removed = 0; FreedBytes = [int64]0; Cancelled = $false }
+    }
+    $answer = Read-AccucutHostInput -Prompt 'Type the date (YYYY-MM-DD) of the NEWEST copy to remove. Every older copy goes too. Press Enter to stop'
+    $cutoff = [datetime]::MinValue
+    if ([string]::IsNullOrWhiteSpace($answer) -or -not [datetime]::TryParseExact($answer.Trim(), 'yyyy-MM-dd', $inv, [System.Globalization.DateTimeStyles]::None, [ref]$cutoff)) {
+        Write-Host 'That is not a date in the form YYYY-MM-DD, so nothing was removed.'
+        return [pscustomobject]@{ Removed = 0; FreedBytes = [int64]0; Cancelled = $true }
+    }
+    if (@($eligible | Where-Object { $_.CreatedUtc.Date -eq $cutoff.Date }).Count -eq 0) {
+        Write-Host "No copy that may be removed has the date $($cutoff.ToString('yyyy-MM-dd', $inv)), so nothing was removed. Copy the date exactly as it is listed."
+        return [pscustomobject]@{ Removed = 0; FreedBytes = [int64]0; Cancelled = $true }
+    }
+    $selected = @($eligible | Where-Object { $_.CreatedUtc.Date -le $cutoff.Date })
+    $bytes = [int64]0
+    foreach ($copy in $selected) { $bytes += $copy.SizeBytes }
+    $noun = 'copies'
+    if ($selected.Count -eq 1) { $noun = 'copy' }
+    Write-Host "This removes $($selected.Count) $noun, from $($selected[0].CreatedUtc.ToString('yyyy-MM-dd', $inv)) to $($selected[$selected.Count - 1].CreatedUtc.ToString('yyyy-MM-dd', $inv)), and frees about $(Format-AccucutSize -Bytes $bytes). A copy that is removed cannot be restored."
+    $confirm = Read-AccucutHostInput -Prompt 'Type YES to remove them, anything else to stop'
+    if ($confirm -cne 'YES') {
+        Write-Host 'Stopped. Nothing was removed.'
+        return [pscustomobject]@{ Removed = 0; FreedBytes = [int64]0; Cancelled = $true }
+    }
+
+    $removedNames = New-Object System.Collections.Generic.List[string]
+    $freed = [int64]0
+    $failure = $null
+    foreach ($copy in $selected) {
+        try {
+            $freed += Remove-AccucutBackupCopy -Directory $directory -Name $copy.Name
+            $removedNames.Add($copy.CreatedUtc.ToString('yyyy-MM-dd', $inv))
+        }
+        catch {
+            $failure = $_.Exception.Message
+            break
+        }
+    }
+    $after = Get-AccucutVolumeSpace -Path $directory
+    $status = 'ok'
+    if ($null -ne $failure) { $status = 'failed' }
+    $result = @{ status = $status; removed = $removedNames.Count; sizeBytes = $freed; freeBytes = $after.FreeBytes; totalBytes = $after.TotalBytes; dates = @($removedNames.ToArray()) }
+    if ($null -ne $failure) { $result.message = (ConvertTo-AccucutShortMessage -Text $failure) }
+    Add-AccucutJobRun -PsqlPath $PsqlPath -PassFile $Paths.BackupPgpass -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database -Job 'backup-clear' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $result
+    Write-AccucutLog -Message "Removed $($removedNames.Count) of the copies, freed $(Format-AccucutSize -Bytes $freed). Free space now $(Format-AccucutSize -Bytes $after.FreeBytes) of $(Format-AccucutSize -Bytes $after.TotalBytes)." -LogFile $LogFile
+    if ($null -ne $failure) { throw "The clear stopped part way: $failure" }
+    return [pscustomobject]@{ Removed = $removedNames.Count; FreedBytes = $freed; Cancelled = $false }
+}
+
+#endregion
+
 Export-ModuleMember -Function @(
     'Get-AccucutPaths',
     'Get-AccucutFileSha256', 'Read-AccucutSha256File', 'Read-AccucutReleaseInfo', 'Test-AccucutAdministrator',
@@ -959,5 +1839,10 @@ Export-ModuleMember -Function @(
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
-    'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration'
+    'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
+    'Get-AccucutBackupAccountSid', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
+    'Grant-AccucutBackupRootAccess', 'New-AccucutBackupFolder', 'Set-AccucutBackupFileAcl', 'Write-AccucutBackupFile', 'Test-AccucutBackupSetting', 'Read-AccucutBackupSettings', 'Write-AccucutBackupConfig',
+    'Get-AccucutVolumeRoot', 'Get-AccucutVolumeSpace', 'Format-AccucutSize', 'Test-AccucutBackupRoom', 'ConvertFrom-AccucutBackupStamp', 'Get-AccucutBackupCopy', 'Get-AccucutBackupKeepSet', 'Get-AccucutBackupPruneCandidate',
+    'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',
+    'Invoke-AccucutBackup', 'Clear-AccucutCopies'
 )

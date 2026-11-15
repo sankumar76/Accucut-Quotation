@@ -2,7 +2,7 @@
 #
 # Builds the Windows release zip on a Windows runner, installs it there with install.ps1, updates it with update.ps1, proves the rollback
 # with a release that is broken on purpose, and runs the Pester tests of the scripts. It is the test of 10.04, 10.05 and 10.11 on the target
-# operating system.
+# operating system. STORY-10.05 adds the weekly backup task, a backup, a clear and the proof that a replaced module is never loaded by the backup scripts.
 #
 # Where it sits (master's ruling DL-211, AC-9):
 #   - It is NOT a required check, and it sits OUTSIDE the fan-in job `Stages 1 to 11` of ci.yml. Branch protection is unchanged. It is
@@ -103,6 +103,30 @@ jobs:
           }
           "ACCUCUT_TOOLS=$directory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      # ---- A throwaway age key pair for this run (STORY-10.05) ----------------------------------------------------------------------
+      # The install is given the PUBLIC key (BACKUP_AGE_RECIPIENT); the private key stays in a file in the runner's temp folder, is masked in the log, is used only to
+      # decrypt the install's own backup in the assertions, and is deleted at the end. Nothing here is a real key and nothing of it is committed.
+      - name: Make a throwaway age key pair for the backups of this run
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $tools = Import-PowerShellDataFile -LiteralPath deploy/windows/tools.psd1
+          $zip = Join-Path $env:ACCUCUT_TOOLS $tools.Age.File
+          $folder = Join-Path $env:RUNNER_TEMP 'accucut-age-test'
+          New-Item -ItemType Directory -Path $folder -Force | Out-Null
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $folder)
+          $keygen = Get-ChildItem -LiteralPath $folder -Recurse -Filter 'age-keygen.exe' | Select-Object -First 1
+          if ($null -eq $keygen) { throw 'The age zip holds no age-keygen.exe.' }
+          $keyFile = Join-Path $env:RUNNER_TEMP 'accucut-age-key.txt'
+          & $keygen.FullName -o $keyFile 2>$null
+          if ($LASTEXITCODE -ne 0) { throw 'age-keygen failed.' }
+          $lines = @(Get-Content -LiteralPath $keyFile)
+          foreach ($line in $lines) { if ($line -like 'AGE-SECRET-KEY-*') { Write-Host "::add-mask::$($line.Trim())" } }
+          $public = ($lines | Where-Object { $_ -like '# public key: *' } | Select-Object -First 1) -replace '^# public key: ', ''
+          if ($public -notmatch '^age1[0-9a-z]{58}$') { throw 'age-keygen did not give a public key.' }
+          "ACCUCUT_AGE_KEY=$keyFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ACCUCUT_AGE_PUBLIC=$public" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       # ---- Package -----------------------------------------------------------------------------------------------------------
       - name: Build the release package (accucut-<tag>-win-x64.zip and its SHA-256)
         run: |
@@ -150,6 +174,7 @@ jobs:
             'ADMIN_EMAIL=ci-admin@example.test',
             "ADMIN_INITIAL_PASSWORD=$admin",
             "PG_SUPERUSER_PASSWORD=$new",
+            "BACKUP_AGE_RECIPIENT=$($env:ACCUCUT_AGE_PUBLIC)",
             'SMTP_AUTH_MODE=none'
           )
           [System.IO.File]::WriteAllText($values, ($lines -join "`r`n") + "`r`n")
@@ -239,21 +264,33 @@ jobs:
           Write-Host 'PASS  the tampered module next to the zip was never loaded.'
           $global:LASTEXITCODE = 0
 
-      - name: Assert the install (services, health, sign-in, permissions, no secret in a log)
+      - name: Assert the install (services, health, sign-in, permissions, the backup account, task, files and role, no secret in a log)
         run: |
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY
+
+      # ---- Backup, clear and a replaced module (STORY-10.05; ADR-015 Amendments 2 and 3) ----------------------------------------------
+      # backup.ps1 -Reason release as an administrator (the call update.ps1 makes), more copies, clear-copies.ps1 with its answers on standard input (a wrong date
+      # removes nothing; the right one removes all but the newest 4 and leaves everything that is not provably its own), and a marker-writing module that the
+      # backup scripts must never load.
+      - name: Exercise backup.ps1 and clear-copies.ps1 on the real install (a backup, a clear, a replaced module)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $marker = Join-Path $env:RUNNER_TEMP 'accucut-tampered-backup-marker.txt'
+          & .\deploy\windows\ci\exercise-backup.ps1 -ValuesFile $env:ACCUCUT_VALUES -MarkerFile $marker
+          if (Test-Path -LiteralPath $marker) { throw 'A tampered module was loaded by a backup script.' }
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY
 
       # ---- Update and rollback (AC-3, AC-4) ----------------------------------------------------------------------------------
-      # `backup.ps1` is STORY-10.05's. Until it exists the update is run with -NoBackup, which the script warns about; the test of the backup step
-      # itself (a failed or missing backup stops the update before any change) is in update.Tests.ps1.
+      # The update takes a release backup first (backup.ps1 -Reason release, through the checked wrapper); a failed or missing backup stops the update before any
+      # change (update.Tests.ps1). Here the real backup runs.
       - name: Update to the second release (update.ps1)
         run: |
           $zip = (Resolve-Path "dist-u2\accucut-$($env:ACCUCUT_TAG)-u2-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup
+          & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip
           if ($LASTEXITCODE -ne 0) { throw "update.ps1 failed (exit code $LASTEXITCODE)." }
           $ErrorActionPreference = 'Stop'
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
           $releases = @(Get-ChildItem -LiteralPath 'C:\Accucut\releases' -Directory | Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host "Releases kept: $($releases -join ', ')"
           if ($releases.Count -ne 2) { throw "Only the current and the previous release should be kept, found: $($releases -join ', ')" }
@@ -271,7 +308,7 @@ jobs:
           $code = -1
           try {
             $ErrorActionPreference = 'Continue'
-            $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup 2>&1 | Out-String
+            $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip 2>&1 | Out-String
             $code = $LASTEXITCODE
           }
           finally {
@@ -284,19 +321,19 @@ jobs:
           foreach ($name in 'AccucutApp', 'AccucutWorker') {
             if ((Get-Service -Name $name).Status -ne 'Running') { throw "$name is not running." }
           }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
 
       - name: Update to a broken release, and see it rolled back (update.ps1)
         run: |
           $zip = (Resolve-Path "dist-bad\accucut-$($env:ACCUCUT_TAG)-bad-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup -HealthTimeoutSeconds 40 2>&1 | Out-String
+          $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -HealthTimeoutSeconds 40 2>&1 | Out-String
           $code = $LASTEXITCODE
           Write-Host $output
           $ErrorActionPreference = 'Stop'
           if ($code -eq 0) { throw 'The update to the broken release should have failed, and it did not.' }
           if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY
 
       # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
       # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.
@@ -314,6 +351,7 @@ jobs:
       - name: Show the install and update logs and the services' error logs (on failure only)
         if: ${{ failure() }}
         run: |
+          Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List LastRunTime, LastTaskResult
           foreach ($pattern in 'install-*.log', 'update-*.log', '*.err.log', '*.wrapper.log') {
             Get-ChildItem -LiteralPath 'C:\Accucut\logs' -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "===== $($_.Name)"
@@ -321,10 +359,11 @@ jobs:
             }
           }
 
-      - name: Delete the values file
+      - name: Delete the values file and the throwaway private key
         if: ${{ always() }}
         run: |
           if ($env:ACCUCUT_VALUES -and (Test-Path -LiteralPath $env:ACCUCUT_VALUES)) { Remove-Item -LiteralPath $env:ACCUCUT_VALUES -Force }
+          if ($env:ACCUCUT_AGE_KEY -and (Test-Path -LiteralPath $env:ACCUCUT_AGE_KEY)) { Remove-Item -LiteralPath $env:ACCUCUT_AGE_KEY -Force }
 
       # The zip and its checksum hold code and tools only, no data and no setting (the package script refuses a .env file).
       - name: Keep the release package and the Pester results

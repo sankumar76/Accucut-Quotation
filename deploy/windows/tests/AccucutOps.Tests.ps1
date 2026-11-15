@@ -178,11 +178,14 @@ Describe 'the access of the service accounts, on a real folder (ADR-015 Amendmen
         }
     }
 
-    It 'has no scheduled task and no LOCAL SERVICE grant anywhere in the install or the module (the worker prunes the logs)' {
+    It 'has no LOCAL SERVICE grant anywhere, no scheduled task in the install or the update, and in the module one task only: the weekly backup (the worker prunes the logs)' {
         foreach ($file in 'install.ps1', 'update.ps1', 'AccucutOps.psm1') {
             $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory $file) -Raw
-            $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask|S-1-5-19|LOCAL SERVICE'
+            $text | Should -Not -Match 'S-1-5-19|LOCAL SERVICE|S-1-5-20|NETWORK SERVICE'
+            if ($file -ne 'AccucutOps.psm1') { $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask' }
         }
+        $module = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
+        ([regex]::Matches($module, 'Register-ScheduledTask')).Count | Should -Be 1
         Test-Path -LiteralPath (Join-Path $script:WindowsDirectory 'clean-logs.ps1') | Should -BeFalse
     }
 }
@@ -484,5 +487,328 @@ Describe 'module hygiene (ADR-015 Amendment 2, test 4)' {
         }
         $script:ModuleAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.UsingStatementAst] }, $true).Count | Should -Be 0
         (Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw) | Should -Not -Match '(?i)powershell\.exe'
+    }
+}
+
+Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment 3 point 2)' {
+    BeforeAll {
+        $script:FakeBackupSid = 'S-1-5-21-1111111111-2222222222-3333333333-1005'
+        $script:FakePowerShell = Join-Path $TestDrive 'fake-powershell.exe'
+        [System.IO.File]::WriteAllBytes($script:FakePowerShell, [byte[]](1, 2, 3))
+        function ConvertFrom-FakeSecureString {
+            param([System.Security.SecureString]$Secure)
+            $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+            try { return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) } finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+        }
+    }
+
+    BeforeEach {
+        $script:UserCall = $null
+        $script:ActionCall = $null
+        $script:TriggerCall = $null
+        $script:RegisterCall = $null
+        $script:Logged = [System.Collections.Generic.List[string]]::new()
+        Mock New-LocalUser -ModuleName AccucutOps {
+            $script:UserCall = @{ Name = $Name; Password = $Password; PasswordNeverExpires = $PasswordNeverExpires.IsPresent; UserMayNotChangePassword = $UserMayNotChangePassword.IsPresent; AccountNeverExpires = $AccountNeverExpires.IsPresent; Description = $Description }
+            return [pscustomobject]@{ SID = [pscustomobject]@{ Value = $script:FakeBackupSid } }
+        }
+        Mock New-ScheduledTaskAction -ModuleName AccucutOps { $script:ActionCall = @{ Execute = $Execute; Argument = $Argument }; return 'action' }
+        Mock New-ScheduledTaskTrigger -ModuleName AccucutOps { $script:TriggerCall = @{ Weekly = $Weekly.IsPresent; DaysOfWeek = [string]$DaysOfWeek; At = $At }; return 'trigger' }
+        Mock New-ScheduledTaskSettingsSet -ModuleName AccucutOps { return 'settings' }
+        Mock Register-ScheduledTask -ModuleName AccucutOps { $script:RegisterCall = @{ TaskName = $TaskName; User = $User; Password = $Password; RunLevel = [string]$RunLevel } }
+        Mock Remove-LocalUser -ModuleName AccucutOps { }
+        Mock Unregister-ScheduledTask -ModuleName AccucutOps { }
+        Mock Invoke-AccucutNative -ModuleName AccucutOps { throw 'a password must never reach a native program' }
+        Mock Write-AccucutLog -ModuleName AccucutOps { $script:Logged.Add($Message) }
+    }
+
+    It 'makes a 32-character password with upper case, lower case, a digit and a symbol, and gives it to New-LocalUser as a SecureString and to Register-ScheduledTask in process, and to nothing else' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        $sid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell
+        $sid | Should -Be $script:FakeBackupSid
+        $script:UserCall.Password | Should -BeOfType [System.Security.SecureString]
+        $plain = ConvertFrom-FakeSecureString -Secure $script:UserCall.Password
+        $plain.Length | Should -Be 32
+        $plain | Should -MatchExactly '[A-Z]'
+        $plain | Should -MatchExactly '[a-z]'
+        $plain | Should -Match '\d'
+        $plain | Should -Match '[^A-Za-z0-9]'
+        $script:RegisterCall.Password | Should -BeExactly $plain
+        # It is registered for redaction, so it can never reach a log, and it was passed to no native program.
+        (Hide-AccucutSecrets -Text "x $plain y") | Should -Be 'x *** y'
+        Should -Invoke Invoke-AccucutNative -ModuleName AccucutOps -Times 0 -Exactly
+        ($script:Logged -join "`n") | Should -Not -BeLike "*$plain*"
+    }
+
+    It 'makes a local user that is for the task only: no password expiry, no password change, no account expiry, and no group is touched' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        [void](Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell)
+        $script:UserCall.Name | Should -Be 'AccucutBackup'
+        $script:UserCall.PasswordNeverExpires | Should -BeTrue
+        $script:UserCall.UserMayNotChangePassword | Should -BeTrue
+        $script:UserCall.AccountNeverExpires | Should -BeTrue
+        $script:UserCall.Description | Should -Be 'Accucut weekly backup (no interactive use)'
+        (Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw) | Should -Not -Match 'Add-LocalGroupMember'
+    }
+
+    It 'registers one weekly task for Sunday at 02:00, as AccucutBackup with a stored password and the limited run level, running backup.ps1 through current with exactly these arguments' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        [void](Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell)
+        $script:TriggerCall.Weekly | Should -BeTrue
+        $script:TriggerCall.DaysOfWeek | Should -Be 'Sunday'
+        ([datetime]@($script:TriggerCall.At)[0]).ToString('HH:mm') | Should -Be '02:00'
+        $script:ActionCall.Execute | Should -Be $script:FakePowerShell
+        $script:ActionCall.Argument | Should -BeExactly '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Accucut\current\backup.ps1" -Reason weekly'
+        $script:RegisterCall.TaskName | Should -Be 'Accucut weekly backup'
+        $script:RegisterCall.User | Should -Be "$($env:COMPUTERNAME)\AccucutBackup"
+        $script:RegisterCall.RunLevel | Should -Be 'Limited'
+        Should -Invoke Register-ScheduledTask -ModuleName AccucutOps -Times 1 -Exactly
+    }
+
+    It 'takes the program of the action from the caller, which has checked it, and refuses one that is not the full path of an existing file' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        foreach ($bad in 'powershell.exe', '\\server\share\powershell.exe', (Join-Path $TestDrive 'does-not-exist.exe')) {
+            { Register-AccucutBackupTask -Paths $paths -PowerShellPath $bad } | Should -Throw '*is not the full path of a program that exists*'
+        }
+        Should -Invoke New-LocalUser -ModuleName AccucutOps -Times 0 -Exactly
+    }
+
+    It 'removes the account that it made, and the task, when the task cannot be registered, and re-throws without the password' {
+        Mock Register-ScheduledTask -ModuleName AccucutOps { throw 'the task could not be registered' }
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        { Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell } | Should -Throw '*the task could not be registered*'
+        Should -Invoke Remove-LocalUser -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $Name -eq 'AccucutBackup' }
+        Should -Invoke Unregister-ScheduledTask -ModuleName AccucutOps -Times 1 -Exactly
+    }
+
+    It 'never removes an account that it did not make (New-LocalUser itself failed)' {
+        Mock New-LocalUser -ModuleName AccucutOps { throw 'The user account already exists.' }
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        { Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell } | Should -Throw '*already exists*'
+        Should -Invoke Remove-LocalUser -ModuleName AccucutOps -Times 0 -Exactly
+        Should -Invoke Register-ScheduledTask -ModuleName AccucutOps -Times 0 -Exactly
+    }
+
+    It 'makes a different password every time' {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        [void](Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell)
+        $first = $script:RegisterCall.Password
+        [void](Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell)
+        $script:RegisterCall.Password | Should -Not -Be $first
+    }
+
+    It 'knows the logon failure of a task without the batch-logon right (0x80070569), and no other result' {
+        Test-AccucutLogonTypeFailure -TaskResult ([uint32]2147943785) | Should -BeTrue
+        Test-AccucutLogonTypeFailure -TaskResult ([uint32]0) | Should -BeFalse
+        Test-AccucutLogonTypeFailure -TaskResult ([uint32]1) | Should -BeFalse
+        Test-AccucutLogonTypeFailure -TaskResult ([uint32]267009) | Should -BeFalse
+    }
+
+    It 'removes the task and the account when asked, and is quiet when they are not there' {
+        Mock Unregister-ScheduledTask -ModuleName AccucutOps { throw 'no such task' }
+        Mock Remove-LocalUser -ModuleName AccucutOps { throw 'no such user' }
+        { Remove-AccucutBackupAccount } | Should -Not -Throw
+    }
+}
+
+Describe 'the weekly task is waited for, and its result read (the first backup of the install)' {
+    It 'starts the task, waits until it has run and is not running, and returns the last result as an unsigned number' {
+        $script:Calls = 0
+        Mock Start-ScheduledTask -ModuleName AccucutOps { }
+        Mock Start-Sleep -ModuleName AccucutOps { }
+        Mock Get-ScheduledTaskInfo -ModuleName AccucutOps { [pscustomobject]@{ LastRunTime = (Get-Date).AddMinutes(1); LastTaskResult = [uint32]2147943785 } }
+        Mock Get-ScheduledTask -ModuleName AccucutOps {
+            $script:Calls++
+            if ($script:Calls -lt 3) { return [pscustomobject]@{ State = 'Running' } }
+            return [pscustomobject]@{ State = 'Ready' }
+        }
+        $result = Wait-AccucutBackupTask -TimeoutSeconds 30 -IntervalSeconds 1
+        $result | Should -BeOfType [uint32]
+        $result | Should -Be 2147943785
+        $script:Calls | Should -Be 3
+        Should -Invoke Start-ScheduledTask -ModuleName AccucutOps -Times 1 -Exactly -ParameterFilter { $TaskName -eq 'Accucut weekly backup' }
+    }
+
+    It 'gives up with a plain message when the task has not finished in time' {
+        Mock Start-ScheduledTask -ModuleName AccucutOps { }
+        Mock Start-Sleep -ModuleName AccucutOps { }
+        Mock Get-ScheduledTaskInfo -ModuleName AccucutOps { [pscustomobject]@{ LastRunTime = (Get-Date).AddYears(-1); LastTaskResult = [uint32]0 } }
+        Mock Get-ScheduledTask -ModuleName AccucutOps { [pscustomobject]@{ State = 'Ready' } }
+        { Wait-AccucutBackupTask -TimeoutSeconds 5 -IntervalSeconds 1 } | Should -Throw '*did not finish within 5 seconds*'
+    }
+}
+
+Describe 'the backups folder and the two files of the backup account: exact entries, made in one call (STORY-10.05, Amendment 3 points 3, 4 and 5)' {
+    BeforeAll {
+        $script:FakeBackupSid = 'S-1-5-21-1111111111-2222222222-3333333333-1005'
+        $script:ListAces = {
+            param([string]$Path, [bool]$IsFolder)
+            if ($IsFolder) { $security = [System.IO.Directory]::GetAccessControl($Path) } else { $security = [System.IO.File]::GetAccessControl($Path) }
+            $rules = $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+            return [pscustomobject]@{
+                Protected = $security.AreAccessRulesProtected
+                Owner     = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+                Aces      = @($rules | ForEach-Object { '{0}|0x{1:X}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.IsInherited, [int]$_.InheritanceFlags, $_.AccessControlType } | Sort-Object)
+            }
+        }
+    }
+
+    It 'makes the backups folder protected, owned by Administrators, with exactly Administrators and SYSTEM full control and the backup account Modify, none inherited, none for anyone else' -Skip:(-not $script:IsAdmin) {
+        $folder = Join-Path $TestDrive ('backups-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        New-AccucutBackupFolder -Path $folder -BackupSid $script:FakeBackupSid
+        $actual = & $script:ListAces $folder $true
+        $actual.Protected | Should -BeTrue
+        $actual.Owner | Should -Be 'S-1-5-32-544'
+        $expected = @('S-1-5-32-544|0x1F01FF|False|3|Allow', 'S-1-5-18|0x1F01FF|False|3|Allow', "$($script:FakeBackupSid)|0x1301BF|False|3|Allow") | Sort-Object
+        ($actual.Aces -join "`n") | Should -Be ($expected -join "`n")
+    }
+
+    It 'never uses an existing folder or file of that name' {
+        $folder = Join-Path $TestDrive 'backups-exists'
+        New-Item -ItemType Directory -Path $folder | Out-Null
+        { New-AccucutBackupFolder -Path $folder -BackupSid $script:FakeBackupSid } | Should -Throw '*already exists*'
+        $file = Join-Path $TestDrive 'backups-file'
+        [System.IO.File]::WriteAllText($file, 'x')
+        { New-AccucutBackupFolder -Path $file -BackupSid $script:FakeBackupSid } | Should -Throw '*already exists*'
+    }
+
+    It 'writes backup.pgpass and backup-settings.json, each protected with exactly Administrators and SYSTEM full control and the backup account read, and the password only in the first' -Skip:(-not $script:IsAdmin) {
+        $root = Join-Path $TestDrive ('cfg-root-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        $paths = Get-AccucutPaths -Root $root
+        New-Item -ItemType Directory -Path $paths.Config -Force | Out-Null
+        $recipient = 'age1' + ('q' * 58)
+        $password = 'FAKEbackupPassword0003'
+        Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid -BackupPassword $password -AgeRecipient $recipient -PgHost '127.0.0.1' -PgPort 5432 -Database 'accucut' -PgBinDirectory 'C:\Program Files\PostgreSQL\17\bin'
+        foreach ($file in $paths.BackupPgpass, $paths.BackupSettings) {
+            $actual = & $script:ListAces $file $false
+            $actual.Protected | Should -BeTrue
+            $actual.Owner | Should -Be 'S-1-5-32-544'
+            $expected = @('S-1-5-32-544|0x1F01FF|False|0|Allow', 'S-1-5-18|0x1F01FF|False|0|Allow', "$($script:FakeBackupSid)|0x120089|False|0|Allow") | Sort-Object
+            ($actual.Aces -join "`n") | Should -Be ($expected -join "`n")
+        }
+        (Get-Content -LiteralPath $paths.BackupPgpass -Raw).Trim() | Should -Be "127.0.0.1:5432:accucut:accucut_backup:$password"
+        $settingsText = Get-Content -LiteralPath $paths.BackupSettings -Raw
+        $settingsText | Should -Not -BeLike "*$password*"
+        $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
+        $settings.AgeRecipient | Should -Be $recipient
+        $settings.PgHost | Should -Be '127.0.0.1'
+        $settings.PgPort | Should -Be 5432
+        $settings.Database | Should -Be 'accucut'
+        $settings.PgBinDirectory | Should -Be 'C:\Program Files\PostgreSQL\17\bin'
+    }
+
+    It 'escapes a colon and a backslash in the password of the pgpass line, as libpq reads it, and refuses to overwrite an existing file' {
+        $root = Join-Path $TestDrive ('cfg-escape-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+        $paths = Get-AccucutPaths -Root $root
+        New-Item -ItemType Directory -Path $paths.Config -Force | Out-Null
+        Mock Set-AccucutBackupFileAcl -ModuleName AccucutOps { }
+        $recipient = 'age1' + ('q' * 58)
+        Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid -BackupPassword 'ab:c\d' -AgeRecipient $recipient -PgHost 'localhost' -PgPort 5433 -Database 'accucut' -PgBinDirectory 'D:\pg\bin'
+        (Get-Content -LiteralPath $paths.BackupPgpass -Raw).Trim() | Should -BeExactly 'localhost:5433:accucut:accucut_backup:ab\:c\\d'
+        { Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid -BackupPassword 'x' -AgeRecipient $recipient -PgHost 'localhost' -PgPort 5433 -Database 'accucut' -PgBinDirectory 'D:\pg\bin' } | Should -Throw
+    }
+
+    It 'locks each file BEFORE the content is written (create, then the list, then the text)' {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
+        $start = $text.IndexOf('function Write-AccucutBackupFile {')
+        $body = $text.Substring($start, $text.IndexOf('function ', $start + 10) - $start)
+        $body.IndexOf('FileMode]::CreateNew') | Should -BeGreaterThan 0
+        $body.IndexOf('Set-AccucutBackupFileAcl') | Should -BeGreaterThan $body.IndexOf('FileMode]::CreateNew')
+        $body.IndexOf('WriteAllText') | Should -BeGreaterThan $body.IndexOf('Set-AccucutBackupFileAcl')
+    }
+
+    It 'refuses a settings value that could not be a public key, a host, a port, a database name or a folder, before anything is written' {
+        $root = Join-Path $TestDrive 'cfg-refuse'
+        $paths = Get-AccucutPaths -Root $root
+        $good = @{ BackupPassword = 'FAKEbackupPassword0003'; AgeRecipient = ('age1' + ('q' * 58)); PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut'; PgBinDirectory = 'C:\pg\bin' }
+        foreach ($bad in @(
+                @{ AgeRecipient = ('AGE-SECRET-' + 'KEY-1' + ('Q' * 58)) }, @{ AgeRecipient = 'age1short' }, @{ PgHost = '127.0.0.1 & calc' }, @{ PgHost = '-h' }, @{ Database = 'acc"ucut' },
+                @{ Database = 'Accucut' }, @{ PgBinDirectory = 'C:\x" & calc & "' }, @{ PgBinDirectory = 'bin' }, @{ PgBinDirectory = 'C:\a\..\b' }, @{ PgBinDirectory = '\\server\share' }
+            )) {
+            $arguments = $good.Clone()
+            foreach ($key in $bad.Keys) { $arguments[$key] = $bad[$key] }
+            { Write-AccucutBackupConfig -Paths $paths -BackupSid $script:FakeBackupSid @arguments } | Should -Throw '*is not allowed in the backup settings*'
+        }
+        Test-Path -LiteralPath $paths.Config | Should -BeFalse
+    }
+
+    It 'reads the settings back only when every field is there, none is extra, and every value is allowed' {
+        $file = Join-Path $TestDrive 'settings-ok.json'
+        $ok = [ordered]@{ ageRecipient = ('age1' + ('q' * 58)); pgHost = 'db.example.test'; pgPort = 5432; database = 'accucut'; pgBinDirectory = 'C:\pg\bin' }
+        [System.IO.File]::WriteAllText($file, ($ok | ConvertTo-Json))
+        (Read-AccucutBackupSettings -Path $file).PgHost | Should -Be 'db.example.test'
+        foreach ($case in @(
+                @{ Remove = 'database' }, @{ Remove = 'ageRecipient' }, @{ Add = 'extra' }, @{ Change = 'pgPort'; Value = 70000 }, @{ Change = 'pgPort'; Value = '5432' }, @{ Change = 'pgHost'; Value = 'a b' }
+            )) {
+            $copy = [ordered]@{}
+            foreach ($key in $ok.Keys) { $copy[$key] = $ok[$key] }
+            if ($case.ContainsKey('Remove')) { $copy.Remove($case.Remove) }
+            if ($case.ContainsKey('Add')) { $copy[$case.Add] = 'x' }
+            if ($case.ContainsKey('Change')) { $copy[$case.Change] = $case.Value }
+            $bad = Join-Path $TestDrive 'settings-bad.json'
+            [System.IO.File]::WriteAllText($bad, ($copy | ConvertTo-Json))
+            { Read-AccucutBackupSettings -Path $bad } | Should -Throw
+        }
+    }
+}
+
+Describe 'the job_runs row is written as accucut_backup, through psql, with nothing secret on the command line (AC-7, AC-9)' {
+    BeforeEach {
+        $script:Call = $null
+        Mock Invoke-AccucutNative -ModuleName AccucutOps {
+            $script:Call = @{ FilePath = $FilePath; ArgumentList = $ArgumentList; Environment = $Environment; StdIn = $StdIn }
+            return [pscustomobject]@{ ExitCode = 0; Output = '' }
+        }
+    }
+
+    It 'quotes the values in psql (variables), takes the SQL on standard input, and reads the password from PGPASSFILE in the environment of that one process' {
+        $started = [datetime]::SpecifyKind([datetime]::new(2026, 11, 15, 2, 0, 0), [System.DateTimeKind]::Utc)
+        Add-AccucutJobRun -PsqlPath 'C:\pg\psql.exe' -PassFile 'C:\Accucut\config\backup.pgpass' -DbHost '127.0.0.1' -Port 5432 -Database 'accucut' -Job 'backup' -StartedUtc $started -FinishedUtc $started.AddSeconds(30) `
+            -Result @{ status = 'ok'; sizeBytes = [int64]123; freeBytes = [int64]456; totalBytes = [int64]789 }
+        $script:Call.FilePath | Should -Be 'C:\pg\psql.exe'
+        $script:Call.Environment['PGPASSFILE'] | Should -Be 'C:\Accucut\config\backup.pgpass'
+        $script:Call.Environment.Keys | Should -Not -Contain 'PGPASSWORD'
+        $arguments = $script:Call.ArgumentList -join ' '
+        $arguments | Should -BeLike '*--username accucut_backup*'
+        $arguments | Should -BeLike '*-v job=backup*'
+        $arguments | Should -BeLike '*-v started=2026-11-15T02:00:00.0000000Z*'
+        $arguments | Should -BeLike '*-v finished=2026-11-15T02:00:30.0000000Z*'
+        $script:Call.ArgumentList | Should -Contain '--file'
+        $result = ($script:Call.ArgumentList | Where-Object { $_ -like 'result=*' })
+        ($result.Substring(7) | ConvertFrom-Json).status | Should -Be 'ok'
+        ($result.Substring(7) | ConvertFrom-Json).totalBytes | Should -Be 789
+        $script:Call.StdIn | Should -Be "INSERT INTO job_runs (job, started_at, finished_at, result) VALUES (:'job', :'started'::timestamptz, :'finished'::timestamptz, :'result'::jsonb);"
+    }
+
+    It 'never puts a value into the SQL text: a quote in the result cannot change the statement' {
+        $now = [datetime]::UtcNow
+        Add-AccucutJobRun -PsqlPath 'C:\pg\psql.exe' -PassFile 'C:\x\p' -DbHost 'localhost' -Port 5432 -Database 'accucut' -Job 'backup' -StartedUtc $now -FinishedUtc $now -Result @{ status = 'failed'; message = "it's a '); DROP TABLE job_runs; --" }
+        $script:Call.StdIn | Should -Not -BeLike '*DROP*'
+        $script:Call.StdIn | Should -Not -BeLike "*it's*"
+    }
+
+    It 'accepts only a job name of lower-case letters and dashes' {
+        $now = [datetime]::UtcNow
+        foreach ($bad in 'Backup', "backup'; --", 'a', '', 'backup_clear') {
+            { Add-AccucutJobRun -PsqlPath 'C:\pg\psql.exe' -PassFile 'C:\x\p' -DbHost 'localhost' -Port 5432 -Database 'accucut' -Job $bad -StartedUtc $now -FinishedUtc $now -Result @{ status = 'ok' } } | Should -Throw
+        }
+    }
+}
+
+Describe 'volumes and sizes' {
+    It 'gives the drive root of a path with a forward slash for .env, and nothing for a path that is not a full drive path' {
+        Get-AccucutVolumeRoot -Path 'C:\Accucut\backups' | Should -Be 'C:/'
+        Get-AccucutVolumeRoot -Path 'd:\pgdata\17' | Should -Be 'd:/'
+        Get-AccucutVolumeRoot -Path $null | Should -BeNullOrEmpty
+        Get-AccucutVolumeRoot -Path '' | Should -BeNullOrEmpty
+        Get-AccucutVolumeRoot -Path 'relative\path' | Should -BeNullOrEmpty
+        Get-AccucutVolumeRoot -Path '\\server\share\x' | Should -BeNullOrEmpty
+    }
+
+    It 'writes a size in words an Admin reads' {
+        Format-AccucutSize -Bytes 0 | Should -Be '0 KB'
+        Format-AccucutSize -Bytes 1500 | Should -Be '2 KB'
+        Format-AccucutSize -Bytes (5MB + 300KB) | Should -Be '5.3 MB'
+        Format-AccucutSize -Bytes (12GB + 345MB) | Should -Be '12.34 GB'
     }
 }

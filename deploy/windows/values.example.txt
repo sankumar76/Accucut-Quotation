@@ -13,6 +13,11 @@ APP_ORIGIN=http://CHANGE_ME_SERVER_NAME:3000
 ADMIN_EMAIL=CHANGE_ME@example.test
 ADMIN_INITIAL_PASSWORD=CHANGE_ME_FIRST_PASSWORD
 
+# The age PUBLIC key that every backup is encrypted to (it starts with age1). Make the key pair with age-keygen on YOUR OWN computer, keep the private key
+# (AGE-SECRET-KEY-...) there, in two places, and give the install only the public key. The private key must never be put on this server or in this file:
+# whoever has it can read every backup, and without it no backup can be restored.
+BACKUP_AGE_RECIPIENT=CHANGE_ME_AGE_PUBLIC_KEY
+
 # The password of the PostgreSQL administrator (the one you typed when you installed PostgreSQL). Used by the install only, never stored.
 PG_SUPERUSER_PASSWORD=CHANGE_ME_POSTGRES_ADMIN_PASSWORD
 
