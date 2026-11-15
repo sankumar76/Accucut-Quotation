@@ -79,10 +79,11 @@ test.describe('the Lead (saved browser state)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Task queue' })).toBeVisible();
     const menu = await openMenu(page, testInfo);
     // "Assign task" (STORY-04.01) is the Lead's and the Admin's first working page, so it is in the Lead's menu now, under Work, after the queue.
-    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', ...IMPLEMENTED_MENU]);
+    // STORY-08.01: Fields and formulas is the Lead's too, under Configuration, and its label says the page is view only (AC-4).
+    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', 'Home', 'Fields and formulas (view only)', 'Design system']);
     await expect(menu.getByText('Work', { exact: true })).toBeVisible();
     await expect(menu.getByText('Review', { exact: true })).toBeVisible();
-    for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
+    for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task' && item !== 'Fields and formulas')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
   });
 
   test('AC-6: the top bar has the logo, the name, the bell and the account menu, and the account menu shows who is signed in', async ({ page }) => {
@@ -101,16 +102,35 @@ test.describe('the Lead (saved browser state)', () => {
     await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
   });
 
-  test('AC-7: GET /api/v1/me returns the person, the same menu and an overdue count of 0, in a strict shape, not cached', async ({ page }, testInfo) => {
+  // The E2E Lead is shared: other specs assign overdue tasks as them (`support/queue.ts`), and a Lead's bell counts the tasks they assigned, so which count it is depends on which specs
+  // ran before in this database. The exact count of 0 is judged for a Lead of the test's own, below.
+  test('AC-7: GET /api/v1/me returns the person, the same menu and an overdue count, in a strict shape, not cached', async ({ page }, testInfo) => {
     await page.goto('/queue');
     const response = await page.request.get('/api/v1/me');
     expect(response.status()).toBe(200);
     expect(response.headers()['cache-control']).toBe('private, no-store');
     expect(response.headers()['x-request-id']).toMatch(/^req-[0-9a-f]{8}$/);
     const me = meSchema.parse(await response.json());
-    expect(me).toMatchObject({ name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD', overdueCount: 0 });
+    expect(me).toMatchObject({ name: 'E2E Lead', email: 'e2e.lead@example.test', role: 'LEAD' });
+    expect(Number.isInteger(me.overdueCount) && me.overdueCount >= 0).toBe(true);
     expect(me.navigation.map((item) => item.label)).toEqual(await menuLabels(await openMenu(page, testInfo)));
     expect(JSON.stringify(me)).not.toMatch(/cost|rate|price/i);
+  });
+});
+
+test.describe('a Lead who has assigned nothing (AC-7)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test.beforeEach(async ({ context }) => {
+    await useFreshAddress(context);
+  });
+
+  test('AC-7: GET /api/v1/me gives an overdue count of 0, because a Lead\'s count is of the tasks they assigned and this Lead has assigned none', async ({ page }, testInfo) => {
+    const lead = await createDisposableUser('bell', testInfo, 'LEAD');
+    await signInAs(page, lead, 'Task queue');
+    const response = await page.request.get('/api/v1/me');
+    expect(response.status()).toBe(200);
+    expect(meSchema.parse(await response.json())).toMatchObject({ name: lead.name, email: lead.email, role: 'LEAD', overdueCount: 0 });
   });
 });
 

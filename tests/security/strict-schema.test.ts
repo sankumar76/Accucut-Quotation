@@ -5,6 +5,7 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 import { withRoute, type RouteHandler } from '@/server/http/with-route';
 import { meResponseSchema } from '@/server/views/schemas';
 
+import { bodyOfRecipe } from '../support/request-body';
 import { validCallFor } from '../support/route-calls';
 import { API_LOADERS } from '../support/route-loaders';
 import { nonEmpty } from '../support/security-loops';
@@ -39,6 +40,8 @@ vi.mock('@/server/composition', async () => {
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
+    getConfigReadService: () => shared.configReadService,
+    getCalculationService: () => shared.calculationService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -72,11 +75,11 @@ async function callAsEngineer(row: RouteRow, method: HttpMethod): Promise<Respon
   harness.signInAs('ENGINEER');
   const call = validCallFor(method, row.path, { targetId: harness.targetId });
   const path = row.path.replace(/\[(?:\.\.\.)?[^\]]+\]/g, call.id);
-  const hasBody = call.body !== undefined && method !== 'GET';
+  const sent = bodyOfRecipe(method, call);
   const request = new Request(`${ORIGIN}${path}${call.query ?? ''}`, {
     method,
-    headers: { origin: ORIGIN, ...(hasBody ? { 'content-type': 'application/json' } : {}) },
-    ...(hasBody ? { body: JSON.stringify(call.body) } : {}),
+    headers: { origin: ORIGIN, ...sent.headers },
+    ...(sent.body === undefined ? {} : { body: sent.body }),
   });
   const params = Object.fromEntries([...row.path.matchAll(/\[(?:\.\.\.)?([^\]]+)\]/g)].map((match) => [match[1] ?? '', call.id]));
   return (await handlerFor(row, method))(request, { params: Promise.resolve(params) });
@@ -161,6 +164,18 @@ describe.each(ENGINEER_CALLS)('$name (AC-2)', ({ row, method }) => {
     // that the delete route answers with that very schema), and the refusal's own body is read by the confidentiality scan.
     if (recipe.status >= 300) return;
     expect(answer.status).toBeLessThan(300);
+    if (recipe.file === true) {
+      // A stored file (`GET /api/v1/images/{id}`): the answer is the bytes with the stored type, not JSON, so there is no object to plant a key in. Its schema is strict (the walk above
+      // found no open object), accepts exactly a type of the four and bytes, and refuses a key it does not name.
+      expect(answer.headers.get('content-type')).toMatch(/^image\/(png|jpeg|gif|webp)$/);
+      const bytes = new Uint8Array(await answer.arrayBuffer());
+      expect(responseSchema.safeParse({ mime: answer.headers.get('content-type'), bytes }).success).toBe(true);
+      const planted = responseSchema.safeParse({ mime: 'image/png', bytes, [PLANTED_KEY]: 'x' });
+      expect(planted.success).toBe(false);
+      expect(JSON.stringify(planted.error?.issues ?? [])).toContain('unrecognized_keys');
+      expect(responseSchema.safeParse({ mime: 'image/svg+xml', bytes }).success).toBe(false);
+      return;
+    }
     if (answer.status === 204) {
       // A 204 has no body, so there is no object to plant a key in: its schema accepts "no body" and nothing else, so no field can leave.
       expect(responseSchema.safeParse(undefined).success).toBe(true);

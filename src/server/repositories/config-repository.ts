@@ -1,5 +1,6 @@
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
+import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the configuration versions (ADR-004, architecture section 5.1). A row is immutable: there
@@ -29,6 +30,14 @@ export interface ConfigVersionRecord extends ConfigVersionRef {
   readonly createdAt: Date;
 }
 
+/** Who saved a version, and how many estimates are worked out with it (STORY-08.01 AC-6). Counts and a name: no figure, formula or rate. */
+export interface ConfigVersionUse {
+  /** The name of the person who made the version now; null for the seed, which no person saved. */
+  readonly savedByName: string | null;
+  /** Estimates whose current stored calculation was worked out with this version. */
+  readonly estimatesInUse: number;
+}
+
 export interface ConfigRepository {
   /**
    * Inserts the seed as version 1 only if the table holds no version at all, in one statement. Returns
@@ -36,10 +45,12 @@ export interface ConfigRepository {
    * unique number settles it.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
-  /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. */
-  findLatestRef(): Promise<ConfigVersionRef | null>;
-  /** One version with its snapshot, or null if no version has this ID. */
-  findById(id: string): Promise<ConfigVersionRecord | null>;
+  /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. Pass `tx` to read inside the caller's transaction (STORY-05.09: Calculate holds a connection and must not take a second). */
+  findLatestRef(tx?: Transaction): Promise<ConfigVersionRef | null>;
+  /** One version with its snapshot, or null if no version has this ID. `tx` as above. */
+  findById(id: string, tx?: Transaction): Promise<ConfigVersionRecord | null>;
+  /** Who made this version and how many estimates use it. The two are read in parallel; neither reads the snapshot. */
+  readVersionUse(id: string): Promise<ConfigVersionUse>;
 }
 
 /**
@@ -61,20 +72,31 @@ export function createConfigRepository(db: PrismaClient): ConfigRepository {
       });
     },
 
-    findLatestRef() {
+    findLatestRef(tx) {
       // ORDER BY number DESC LIMIT 1 is a backward scan of uq_config_versions_number.
       return withDatabaseErrors(() =>
-        db.configVersion.findFirst({ orderBy: { number: 'desc' }, select: { id: true, number: true } }),
+        clientFor(db, tx).configVersion.findFirst({ orderBy: { number: 'desc' }, select: { id: true, number: true } }),
       );
     },
 
-    findById(id) {
+    findById(id, tx) {
       return withDatabaseErrors(() =>
-        db.configVersion.findUnique({
+        clientFor(db, tx).configVersion.findUnique({
           where: { id },
           select: { id: true, number: true, snapshot: true, createdBy: true, reason: true, createdAt: true },
         }),
       );
+    },
+
+    readVersionUse(id) {
+      return withDatabaseErrors(async () => {
+        // An estimate uses a version through its current calculation (`estimates.current_calculation_id`), the one Recalculate replaces; older calculations are history.
+        const [version, estimatesInUse] = await Promise.all([
+          db.configVersion.findUnique({ where: { id }, select: { creator: { select: { name: true } } } }),
+          db.estimate.count({ where: { currentCalculation: { configVersionId: id } } }),
+        ]);
+        return { savedByName: version?.creator?.name ?? null, estimatesInUse };
+      });
     },
   };
 }

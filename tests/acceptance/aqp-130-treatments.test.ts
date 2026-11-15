@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLateFailingRunner } from '../support/late-failure-runner';
+import { clearTreatments } from '../support/system-rows';
 import { world, db, adminId, leadId, engineerId, openWorld, closeWorld, setUserId, ORIGIN, FOREIGN_ORIGIN } from '../support/process-master-api';
 import type { Answer } from '../support/process-master-api';
 
@@ -26,6 +27,8 @@ vi.mock('@/server/composition', async () => (await import('../support/process-ma
 
 /** Architecture v0.35 section 5.6: the migration inserts "Other" with this fixed ID. Written out, so a change of the constant fails here. */
 const OTHER_ID = '00000000-0000-4000-8000-000700000001';
+/** The hidden "Not applicable" row the migration of STORY-02.06 inserts (a literal, as `OTHER_ID` is). It is on no Admin list and is the last of the options. */
+const NOT_APPLICABLE_ID = '00000000-0000-4000-8000-000700000002';
 const UNKNOWN_ID = '00000000-0000-4000-8000-0fffffffffff';
 const TAKEN = 'A treatment with this name already exists.';
 const RESERVED = 'That name cannot be used.';
@@ -103,8 +106,9 @@ interface Row {
   readonly is_system: boolean;
   readonly is_hidden: boolean;
 }
+/** Every row but the hidden "Not applicable" one: it is always there (STORY-02.06) and a snapshot of the others is what these tests compare. */
 const rows = async (): Promise<Row[]> =>
-  (await db.owner.query<Row>('SELECT id::text, name, is_system, is_hidden FROM treatments ORDER BY created_at, id')).rows;
+  (await db.owner.query<Row>('SELECT id::text, name, is_system, is_hidden FROM treatments WHERE id <> $1::uuid ORDER BY created_at, id', [NOT_APPLICABLE_ID])).rows;
 const stored = async (): Promise<string> => JSON.stringify(await rows());
 const names = async (): Promise<string[]> => (await rows()).map((row) => row.name);
 const idByName = async (name: string): Promise<string> => {
@@ -153,7 +157,7 @@ afterAll(closeWorld);
 beforeEach(async () => {
   vi.stubEnv('APP_ORIGIN', ORIGIN);
   setUserId(adminId);
-  await db.owner.query('DELETE FROM treatments WHERE id <> $1::uuid', [OTHER_ID]);
+  await clearTreatments(db.owner);
   since = (await db.owner.query<{ now: string }>("SELECT (clock_timestamp() + interval '1 millisecond')::text AS now")).rows[0]?.now ?? since;
   world.service = db.buildMastersService();
 });
@@ -177,19 +181,17 @@ describe('AQP-130 AC-1: the list shows the treatments, "Other" first and locked,
     for (const row of shown) expect(Object.keys(row).sort()).toEqual(['id', 'locked', 'name']);
   });
 
-  it('[AQP-130 AC-1] a hidden entry (the "Not applicable" row of story 02.06, written here by the owner) is on no list: not the Admin\'s, not the options (EG)', async () => {
+  it('[AQP-130 AC-1] the hidden "Not applicable" row (inserted by the migration of story 02.06) is on no Admin list, and is the last of the options (EG)', async () => {
     await add('Qa130 shown');
-    await db.owner.query("INSERT INTO treatments (name, is_system, is_hidden) VALUES ('Not applicable', true, true)");
-    try {
-      const admin = await list();
-      expect((admin.body?.['treatments'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 shown']);
-      const options = await optionList();
-      expect((options.body?.['options'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 shown']);
-      expect(admin.text).not.toMatch(/applicable/i);
-      expect(options.text).not.toMatch(/applicable/i);
-    } finally {
-      await db.owner.query("DELETE FROM treatments WHERE is_hidden = true");
-    }
+    const admin = await list();
+    expect((admin.body?.['treatments'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 shown']);
+    expect(admin.text).not.toMatch(/applicable/i);
+    const options = await optionList();
+    expect(options.body?.['options']).toEqual([
+      { id: OTHER_ID, name: 'Other' },
+      { id: expect.any(String), name: 'Qa130 shown' },
+      { id: NOT_APPLICABLE_ID, name: 'Not applicable' },
+    ]);
   });
 });
 
@@ -417,22 +419,17 @@ describe('AQP-130 AC-3: "Other" is locked, in the service and the API', () => {
   });
 
   it('[AQP-130 AC-3] a hidden ID is 404 on PATCH and DELETE, in the same words as an unknown ID; the hidden row is untouched (architecture section 4.9)', async () => {
-    const { rows: hidden } = await db.owner.query<{ id: string }>("INSERT INTO treatments (name, is_system, is_hidden) VALUES ('Not applicable', true, true) RETURNING id::text");
-    const hiddenId = hidden[0]?.id ?? '';
-    try {
-      const strip = (answer: Answer): string => answer.text.replace(/"requestId":"[^"]*"/, '');
-      const patchHidden = await rename(hiddenId, 'Qa130 renamed hidden');
-      const patchUnknown = await rename(UNKNOWN_ID, 'Qa130 renamed hidden');
-      expect(patchHidden.status).toBe(404);
-      expect(strip(patchHidden)).toBe(strip(patchUnknown));
-      const deleteHidden = await remove(hiddenId);
-      expect(deleteHidden.status).toBe(404);
-      expect(strip(deleteHidden)).toBe(strip(await remove(UNKNOWN_ID)));
-      expect((await rows()).find((row) => row.id === hiddenId)).toMatchObject({ name: 'Not applicable', is_hidden: true });
-      expect(await anyEntries()).toBe(0);
-    } finally {
-      await db.owner.query('DELETE FROM treatments WHERE is_hidden = true');
-    }
+    const strip = (answer: Answer): string => answer.text.replace(/"requestId":"[^"]*"/, '');
+    const patchHidden = await rename(NOT_APPLICABLE_ID, 'Qa130 renamed hidden');
+    const patchUnknown = await rename(UNKNOWN_ID, 'Qa130 renamed hidden');
+    expect(patchHidden.status).toBe(404);
+    expect(strip(patchHidden)).toBe(strip(patchUnknown));
+    const deleteHidden = await remove(NOT_APPLICABLE_ID);
+    expect(deleteHidden.status).toBe(404);
+    expect(strip(deleteHidden)).toBe(strip(await remove(UNKNOWN_ID)));
+    const { rows: still } = await db.owner.query<Row>('SELECT id::text, name, is_system, is_hidden FROM treatments WHERE id = $1::uuid', [NOT_APPLICABLE_ID]);
+    expect(still).toEqual([{ id: NOT_APPLICABLE_ID, name: 'Not applicable', is_system: true, is_hidden: true }]);
+    expect(await anyEntries()).toBe(0);
   });
 
   it.each(['invented-id', '123', 'not-a-uuid-at-all', "1; DROP TABLE treatments", '00000000-0000-4000-8000-00070000000g'])(
@@ -458,7 +455,7 @@ describe('AQP-130 AC-4: any Admin deletes an unused treatment, and it leaves the
     expect(answer.text).toBe('');
     expect(await names()).toEqual(['Other', 'Qa130 to keep']);
     expect(((await list()).body?.['treatments'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 to keep']);
-    expect(((await optionList()).body?.['options'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 to keep']);
+    expect(((await optionList()).body?.['options'] as Array<{ name: string }>).map((row) => row.name)).toEqual(['Other', 'Qa130 to keep', 'Not applicable']);
     expect((await remove(id)).status).toBe(404);
   });
 
@@ -484,7 +481,7 @@ describe('AQP-130 AC-5: the options list, for every role: IDs and names, no rate
     expect(answer.status).toBe(200);
     expect(Object.keys(answer.body ?? {})).toEqual(['options']);
     const shown = answer.body?.['options'] as Array<Record<string, unknown>>;
-    expect(shown.map((row) => row['name'])).toEqual(['Other', 'Qa130 powder coat', 'Qa130 anodised']);
+    expect(shown.map((row) => row['name'])).toEqual(['Other', 'Qa130 powder coat', 'Qa130 anodised', 'Not applicable']);
     expect(shown[0]?.['id']).toBe(OTHER_ID);
     for (const row of shown) expect(Object.keys(row).sort()).toEqual(['id', 'name']);
     expect(answer.text).not.toMatch(/rate|price|cost|usd|eur|inr|currency|locked|isSystem|isHidden/i);

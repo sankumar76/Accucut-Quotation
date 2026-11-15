@@ -18,6 +18,8 @@ import {
 import type { EstimateUse } from '../../src/lib/errors';
 import { ESTIMATE_USE_LIMIT, type EstimateUses } from '../../src/server/repositories/estimate-use';
 
+import { NOT_APPLICABLE_MATERIAL_ID, NOT_APPLICABLE_NAME, NOT_APPLICABLE_TREATMENT_ID } from '../../src/lib/masters/system-entries';
+
 import { createFakeCustomerMethods, type FakeCustomer } from './fake-customers';
 import { SEED_PROCESS_ITEMS } from './seed-config';
 import { FRESH_TREATMENTS } from './treatment-canary';
@@ -44,14 +46,16 @@ export type MutableTreatment = { -readonly [K in keyof TreatmentRecord]: Treatme
 export interface FakeMasterRepository extends MasterRepository {
   /** Mutable, so a test can set a state up the way the Admin would have. */
   readonly records: MutableProcessItem[];
-  /** The listed treatments, mutable in the same way. Starts with the locked "Other" row of the migration. There is no hidden row here: that is story 02.06's. */
+  /** The listed treatments, mutable in the same way. Starts with the locked "Other" row of the migration. The hidden "Not applicable" row is not in this array: the database always has it, so the fake always offers it (`findNotApplicableTreatmentOption`). */
   readonly treatments: MutableTreatment[];
   /** The listed customers, mutable in the same way (STORY-02.02). Starts empty. */
   readonly customers: FakeCustomer[];
   /** How many times the treatments' table lock was taken. */
   treatmentLockCount(): number;
-  /** The listed materials, mutable in the same way. There is no hidden row here: that is story 02.06's. */
+  /** The listed materials, mutable in the same way. The hidden "Not applicable" row is not in this array: the database always has it, so the fake always offers it (`findNotApplicableMaterialOption`). */
   readonly materials: MutableMaterial[];
+  /** The materials the Admin deleted (STORY-02.07): the row stays under the soft delete, and a calculation still finds it and says it is deleted (STORY-05.09). */
+  readonly deletedMaterials: MutableMaterial[];
   /** The Draft and Submitted estimates that have each material in a part, by material ID, in the order of their task code (STORY-02.07). A test sets an entry to make a material "in use". */
   readonly materialOpenEstimates: Map<string, EstimateUse[]>;
   /** The Exchange Rate Master, mutable in the same way (STORY-02.04). Starts with no rate set. */
@@ -74,6 +78,7 @@ const duplicateMaterial = (): MasterConstraintError => new MasterConstraintError
 /** The material half of the fake: the same behaviour the service relies on (order, a name unique ignoring letter case, a lock that is a record). */
 function createFakeMaterialMethods(
   materials: MutableMaterial[],
+  deletedMaterials: MutableMaterial[],
   openEstimates: Map<string, EstimateUse[]>,
   onLock: () => void,
 ): Pick<MasterRepository, MaterialMethod> {
@@ -84,9 +89,15 @@ function createFakeMaterialMethods(
   return {
     listMaterials: () => Promise.resolve(materials.map((material) => ({ ...material }))),
     listMaterialOptions: () => Promise.resolve(materials.map((material) => ({ id: material.id, name: material.materialInDrawing, materialConsidered: material.materialConsidered }))),
-    findMaterialForCalculation(id: string) {
-      const found = materials[indexOf(id)];
-      return Promise.resolve(found === undefined ? null : { id: found.id, materialInDrawing: found.materialInDrawing, materialConsidered: found.materialConsidered, pricePerKg: found.pricePerKg, specificGravity: found.specificGravity, scrapRate: found.scrapRate });
+    findNotApplicableMaterialOption: () => Promise.resolve({ id: NOT_APPLICABLE_MATERIAL_ID, name: NOT_APPLICABLE_NAME, materialConsidered: null }),
+    // One call for every ID; a deleted material is found and says so, an unknown ID has no entry (STORY-05.09).
+    findMaterialsForCalculation(ids: ReadonlyArray<string>) {
+      const wanted = new Set(ids.map((id) => id.toLowerCase()));
+      const entry = (material: MutableMaterial, deleted: boolean) => ({ ...material, deleted });
+      return Promise.resolve([
+        ...materials.filter((material) => wanted.has(material.id.toLowerCase())).map((material) => entry(material, false)),
+        ...deletedMaterials.filter((material) => wanted.has(material.id.toLowerCase())).map((material) => entry(material, true)),
+      ]);
     },
     lockMaterials() {
       onLock();
@@ -125,7 +136,8 @@ function createFakeMaterialMethods(
     softDeleteMaterial(id: string) {
       const index = indexOf(id);
       if (index === -1) return Promise.resolve(false);
-      materials.splice(index, 1);
+      const [removed] = materials.splice(index, 1);
+      if (removed !== undefined) deletedMaterials.push(removed);
       return Promise.resolve(true);
     },
     lockMaterialForUse: (id: string) => Promise.resolve(indexOf(id) !== -1),
@@ -160,7 +172,8 @@ type ExchangeMethod = 'readExchangeRates' | 'lockExchangeRates' | 'findExchangeR
 type MaterialMethod =
   | 'listMaterials'
   | 'listMaterialOptions'
-  | 'findMaterialForCalculation'
+  | 'findNotApplicableMaterialOption'
+  | 'findMaterialsForCalculation'
   | 'lockMaterials'
   | 'findMaterialForUpdate'
   | 'createMaterial'
@@ -172,6 +185,7 @@ type MaterialMethod =
 type TreatmentMethod =
   | 'listTreatments'
   | 'listTreatmentOptions'
+  | 'findNotApplicableTreatmentOption'
   | 'lockTreatments'
   | 'findTreatmentForUpdate'
   | 'createTreatment'
@@ -191,6 +205,7 @@ function createFakeTreatmentMethods(treatments: MutableTreatment[], onLock: () =
   return {
     listTreatments: () => Promise.resolve(ordered()),
     listTreatmentOptions: () => Promise.resolve(ordered().map(({ id, name }) => ({ id, name }))),
+    findNotApplicableTreatmentOption: () => Promise.resolve({ id: NOT_APPLICABLE_TREATMENT_ID, name: NOT_APPLICABLE_NAME }),
     lockTreatments() {
       onLock();
       return Promise.resolve();
@@ -232,6 +247,7 @@ export function createFakeMasterRepository(
   const records: MutableProcessItem[] = initial.map((record) => ({ ...record }));
   const customers: FakeCustomer[] = [];
   const materials: MutableMaterial[] = initialMaterials.map((material) => ({ ...material }));
+  const deletedMaterials: MutableMaterial[] = [];
   const materialOpenEstimates = new Map<string, EstimateUse[]>();
   const treatments: MutableTreatment[] = initialTreatments.map((treatment) => ({ ...treatment }));
   let locks = 0;
@@ -245,6 +261,7 @@ export function createFakeMasterRepository(
   return {
     records,
     materials,
+    deletedMaterials,
     materialOpenEstimates,
     treatments,
     customers,
@@ -260,7 +277,7 @@ export function createFakeMasterRepository(
     ...createFakeExchangeMethods(exchange, () => {
       exchangeLocks += 1;
     }),
-    ...createFakeMaterialMethods(materials, materialOpenEstimates, () => {
+    ...createFakeMaterialMethods(materials, deletedMaterials, materialOpenEstimates, () => {
       materialLocks += 1;
     }),
 

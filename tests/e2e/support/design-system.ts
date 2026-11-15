@@ -98,6 +98,8 @@ export async function expectNoAxeViolations(page: Page): Promise<void> {
     id: violation.id,
     impact: violation.impact,
     nodes: violation.nodes.map((node) => node.target.join(' ')).slice(0, 5),
+    // What the rule compared the node with (the elements that overlap it or sit too close), so a failure says which neighbour it was.
+    neighbours: violation.nodes.flatMap((node) => node.any.flatMap((check) => (check.relatedNodes ?? []).map((related) => related.target.join(' ')))).slice(0, 5),
   }));
   expect(summary).toEqual([]);
 }

@@ -23,6 +23,8 @@ vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof im
 vi.mock('@/server/composition', async () => (await import('../support/process-master-api')).compositionMock());
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-0fffffffffff';
+/** The hidden "Not applicable" material the migration of STORY-02.06 inserts (a literal: this file does not import the code it checks). It is the last option. */
+const NOT_APPLICABLE_MATERIAL_ID = '00000000-0000-4000-8000-000500000001';
 
 /** A number in the spellings a leak could take: plain, with two decimals, and grouped the Indian way (lakh and crore). */
 function spellings(value: string): string[] {
@@ -72,8 +74,12 @@ describe('AQP-122 AC-4 and AC-6: the safe options list and access control', () =
       expect(options.length).toBeGreaterThanOrEqual(3);
       for (const option of options) {
         expect(Object.keys(option).sort()).toEqual(['id', 'materialConsidered', 'name']);
-        expect(Object.values(option).every((value) => typeof value === 'string')).toBe(true);
+        // Every value is text, but for the one hidden "Not applicable" entry (story 02.06), which has no Material Considered.
+        const expectedNull = option['id'] === NOT_APPLICABLE_MATERIAL_ID ? ['materialConsidered'] : [];
+        expect(Object.entries(option).filter(([, value]) => value === null).map(([key]) => key)).toEqual(expectedNull);
+        expect(Object.values(option).every((value) => typeof value === 'string' || value === null)).toBe(true);
       }
+      expect(options.at(-1)).toEqual({ id: NOT_APPLICABLE_MATERIAL_ID, name: 'Not applicable', materialConsidered: null });
       const mine = options.find((option) => option['id'] === ownId);
       expect(mine).toEqual({ id: ownId, name: 'Qa4-Option-Sheet', materialConsidered: 'Invented option steel' });
       expect(options.map((option) => option['name'])).toEqual(expect.arrayContaining(MATERIAL_CANARIES.map((canary) => canary.materialInDrawing)));

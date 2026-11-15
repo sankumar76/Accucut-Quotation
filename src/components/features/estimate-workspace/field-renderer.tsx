@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import type { FormField as FormFieldView, MaterialChoice } from '@/lib/estimates/form-client';
+import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
 import type { Loaded } from './use-part-form';
@@ -16,7 +17,12 @@ export const FIELD_MARK = 'data-part-field';
 
 export interface FieldRendererProps {
   readonly field: FormFieldView;
-  /** The text shown: what the person typed, or what the server holds. For a derived field, the text it follows (Sl. No., Material Considered). */
+  /**
+   * The words of "Calculate found this blank" (STORY-05.09; UX spec SCR-05 "Calculate blocked"): shown under the field with the error icon while it still has no value, and gone as soon as
+   * something is typed. Undefined for a field Calculate did not name.
+   */
+  readonly missing?: string | undefined;
+  /** The text shown: what the person typed, or what the server holds, or the field's default. For a derived field, the text it follows (Sl. No., Material Considered). */
   readonly text: string;
   readonly error: string | undefined;
   /** False once the estimate may no longer be changed by this person: every control is read-only. */
@@ -27,23 +33,26 @@ export interface FieldRendererProps {
   readonly onCommit: (override?: string) => void;
 }
 
-/** The id of a field's control: the registry's field ID, which is unique on the page. */
-export const controlIdOf = (field: FormFieldView): string => `part-field-${field.id}`;
+/** The id of the control of the field with this ID: the registry's field ID, which is unique on the page. Calculate's list of missing fields links to it. */
+export const controlIdFor = (fieldId: string): string => `part-field-${fieldId}`;
+export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => controlIdFor(field.id);
 
 /**
  * One field of the part form (STORY-05.03 AC-1, AC-2, AC-3, AC-5): the label with its Excel column letter first ("Excel column J" is read before the name, UX spec SCR-05
  * "Accessibility"), the hint under it, the unit beside it, and the control the field's rule asks for: a number or a text box, the materials as a drop-down, or, for a field that follows
  * something else (Sl. No., Material Considered), a read-only box with the shaded look. Nothing here knows a field by its name: what it is and says comes from the server's form.
  */
-export function FieldRenderer({ field, text, error, editable, materials, onChange, onCommit }: FieldRendererProps) {
+export function FieldRenderer({ field, missing, text, error, editable, materials, onChange, onCommit }: FieldRendererProps) {
   const id = controlIdOf(field);
   const readOnly = !editable || !field.editable;
   const mark = field.editable && editable ? 'true' : undefined;
   const tag = <ColumnTag letter={field.letter} kind={field.kind} />;
   const common = { name: field.id, 'data-part-field': mark };
+  // A long text is told so while it is typed (Remarks, STORY-05.04 AC-4): the box lets it run over, so the message is seen and the text is kept; the same words come back on leaving.
+  const shownError = error ?? lengthProblem(field.rule, text) ?? (missing !== undefined && text.trim() === '' ? missing : undefined);
 
   return (
-    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(error === undefined ? {} : { error })}>
+    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(shownError === undefined ? {} : { error: shownError })}>
       {(control) => {
         const rule = field.rule;
         if (rule.type === 'select') {
@@ -77,7 +86,7 @@ export function FieldRenderer({ field, text, error, editable, materials, onChang
               {...control}
               {...common}
               readOnly={readOnly}
-              maxLength={rule.maxLength}
+              enterKeyHint="next"
               value={text}
               onChange={(event) => onChange(event.target.value)}
               onBlur={() => onCommit()}

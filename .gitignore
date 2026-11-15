@@ -34,6 +34,10 @@ npm-debug.log*
 # Files Next writes into the server-only build fixtures; the test removes them again.
 tests/fixtures/server-only-build/*/tsconfig.json
 
+# --- Windows release package (STORY-10.04) ---
+# scripts/package-windows.ps1 builds the zip, its checksum and a staging folder here.
+dist/
+
 # --- NFR-009 guards (STORY-10.10) ---
 # Lighthouse CI writes its working files and the kept reports here; the nightly workflow uploads them as an artefact.
 .lighthouseci/

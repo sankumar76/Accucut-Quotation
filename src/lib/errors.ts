@@ -1,4 +1,6 @@
+import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
+import type { BlockedPart } from './estimate/calculate-check';
 
 /**
  * Typed application errors. Throw one of these and let the single HTTP wrapper (`withRoute`, EPIC-01)
@@ -69,6 +71,20 @@ export class ConflictError extends AppError {
   }
 }
 
+/** A body or a file over the size a route accepts (STORY-05.07: an upload over its ceiling, or a picture of 200 KB or more): 413. The message is safe to show. */
+export class PayloadTooLargeError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super(options.code ?? 'PAYLOAD_TOO_LARGE', 413, message, options.cause);
+  }
+}
+
+/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG, GIF or WebP by its content): 415. */
+export class UnsupportedMediaTypeError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super(options.code ?? 'UNSUPPORTED_MEDIA_TYPE', 415, message, options.cause);
+  }
+}
+
 /** The `code` of the 429 of a counted try that is blocked (STORY-01.05 AC-6). The browser compares with it too. */
 export const TOO_MANY_ATTEMPTS_CODE = 'TOO_MANY_ATTEMPTS';
 
@@ -130,7 +146,7 @@ export class ActiveAdminExistsError extends ConflictError {
 /** A name that another master entry (a rate, a material or a treatment) already has, ignoring letter case (STORY-02.01 AC-2, STORY-02.03 AC-2, STORY-02.05 AC-2): said under the name field. */
 export const NAME_TAKEN_CODE = 'NAME_TAKEN';
 
-/** A treatment name the system keeps for itself ("Other", "Not applicable") in any letter case (STORY-02.05 AC-2; architecture section 4.9). The message does not name the hidden entry. */
+/** A treatment or material name the system keeps for itself ("Other" for a treatment, "Not applicable" for both) in any letter case (STORY-02.05 AC-2, STORY-02.06 AC-6; architecture section 4.9). The message does not name the hidden entry. */
 export const NAME_RESERVED_CODE = 'NAME_RESERVED';
 
 /** A change or a delete was asked of a locked system entry, the treatment "Other" (STORY-02.05 AC-3): refused with 409, nothing changes. */
@@ -173,6 +189,17 @@ export const TREE_CHANGED_CODE = 'TREE_CHANGED';
 export class TreeChangedError extends ConflictError {
   constructor(readonly tree: ReadonlyArray<PartView>) {
     super('The parts were changed by someone else. The tree has been refreshed. Check it and try again.', { code: TREE_CHANGED_CODE });
+  }
+}
+
+/**
+ * Calculate found a part with a missing input (STORY-05.09 AC-1; FR-055): 422, nothing was written. The body names each part with its Sl. No and name and each missing
+ * field by ID and label, so the screen can list them and link to them (`parts`), and nothing else: no value, rate or figure is carried (NFR-002). It is raised only after the
+ * estimate was found to be the person's and a draft, so it tells a stranger nothing.
+ */
+export class CalculateBlockedError extends ValidationError {
+  constructor(readonly parts: ReadonlyArray<BlockedPart>) {
+    super(blockedSummary(parts.length), { code: CALCULATE_BLOCKED_CODE });
   }
 }
 

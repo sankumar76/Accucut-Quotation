@@ -95,6 +95,8 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // ---- Implemented -------------------------------------------------------------------------------------------------
   { path: '/sign-in', kind: 'page', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', screen: 'SCR-01' },
   { path: '/api/auth/[...nextauth]', kind: 'api', methods: ['GET', 'POST'], roles: 'public', status: 'implemented', stage: 'R1' },
+  // STORY-10.04 (architecture sections 9.4, 9.9). The health check the Windows install, the update and the uptime monitor call: public, no input, answers `ok` or `unavailable` and nothing else.
+  { path: '/api/health', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1' },
   {
     path: '/queue',
     kind: 'page',
@@ -247,6 +249,29 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // from the registry through one strict schema with no rate, cost or formula in it, and a save answers with the part's revision and what is stored, so both are in the Engineer's list and the cost scan calls them.
   { path: '/api/v1/estimates/[id]/form', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/nodes/[nodeId]/inputs', kind: 'api', methods: ['PATCH'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-05.07 (SCR-05's part picture; architecture section 6 "Image", ADR-013): A L, and an Engineer on their own estimate. `PUT` and `DELETE` change the part's picture, only while this person may change the estimate's inputs; the
+  // upload is one multipart file read within a hard cap. `GET /api/v1/images/{id}` serves the stored file for a plain `<img>` to the same three roles, only for the estimate's owner: a picture of a part is no cost data, and the
+  // answers carry an ID, a sanitised name and a size, never a rate or a figure, so the cost scan reads them.
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/image', kind: 'api', methods: ['PUT', 'DELETE'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/images/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-08.01 (SCR-17). The Admin and the Lead (architecture section 6, "Configuration": A L): the list of every field with its letter, kind and formula. A Lead reads it and has no action
+  // (the page is told the role and offers none), and the side menu marks it "View only". The two API routes are for the same two roles and are in no Engineer's list, so a formula and a rate
+  // name never reach an Engineer (NFR-002); the cost scan covers them as routes an Engineer is refused. The edit routes (`PUT /config/fields/{id}/formula` and the rest) are stories 08.02 onward.
+  {
+    path: '/config/fields',
+    kind: 'page',
+    methods: ['GET'],
+    roles: ADMIN_AND_LEAD,
+    status: 'implemented',
+    stage: 'R2',
+    screen: 'SCR-17',
+    nav: { group: 'Configuration', label: 'Fields and formulas', order: 10, icon: 'sliders', labelFor: { LEAD: 'Fields and formulas (view only)' } },
+  },
+  { path: '/api/v1/config/fields', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/current', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
+  // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
+  // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
+  { path: '/api/v1/estimates/[id]/calculate', kind: 'api', methods: ['POST'], roles: ['ENGINEER'], status: 'implemented', stage: 'R1' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
@@ -257,16 +282,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
   // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------
-  {
-    path: '/config/fields',
-    kind: 'page',
-    methods: ['GET'],
-    roles: ADMIN_AND_LEAD,
-    status: 'planned',
-    stage: 'R2',
-    screen: 'SCR-17',
-    nav: { group: 'Configuration', label: 'Fields and formulas', order: 10, icon: 'sliders' },
-  },
   {
     path: '/config/checkpoints',
     kind: 'page',

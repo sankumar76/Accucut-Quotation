@@ -14,7 +14,9 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
-  | { readonly type: 'derived'; readonly from: string | null };
+  | { readonly type: 'derived'; readonly from: string | null }
+  /** A picture (Part Model, STORY-05.07): added, replaced and removed by its own routes, never typed or saved as a value. */
+  | { readonly type: 'picture' };
 
 export interface FormField {
   readonly id: string;
@@ -23,9 +25,18 @@ export interface FormField {
   readonly kind: 'input' | 'auto';
   readonly unit: string | null;
   readonly hint: string | null;
+  /** What the field shows while nothing is stored for it (Fasteners: "None"), or null. */
+  readonly defaultValue: string | null;
   readonly required: boolean;
   readonly editable: boolean;
   readonly rule: FormRule;
+}
+
+/** A field a later story builds: shown as a labelled placeholder, never typed into or saved. */
+export interface PlaceholderField {
+  readonly id: string;
+  readonly letter: string;
+  readonly label: string;
 }
 
 export interface FormSection {
@@ -35,6 +46,7 @@ export interface FormSection {
   readonly shortName: string;
   readonly columnRange: string;
   readonly fields: ReadonlyArray<FormField>;
+  readonly reserved: ReadonlyArray<PlaceholderField>;
 }
 
 export interface FormView {
@@ -49,6 +61,11 @@ export interface PartInputs {
   readonly revision: number;
   readonly completeness: Completeness;
   readonly inputs: Readonly<Record<string, string>>;
+  /**
+   * The part's picture as the server sent it (STORY-05.07): only the read of a part says (`GET .../nodes/{nodeId}`); a save of values does not, so it is `undefined` there. It is handed
+   * to the picture control **unread**, and the control (fetched when the form opens) reads it with `toPictureView`, so none of that code is in the first load of the page (NFR-009).
+   */
+  readonly picture: unknown;
 }
 
 /** A material to choose from: the ID, the name (Material in Drawing) and Material Considered, null for an entry that has none. No number of any kind. */
@@ -78,6 +95,8 @@ function toRule(value: unknown): FormRule | null {
       const from = value['from'];
       return from === null || isNonEmptyText(from) ? { type: 'derived', from } : null;
     }
+    case 'picture':
+      return { type: 'picture' };
     default:
       return null;
   }
@@ -85,19 +104,27 @@ function toRule(value: unknown): FormRule | null {
 
 function toField(value: unknown): FormField | null {
   if (!isRecord(value)) return null;
-  const { id, letter, label, kind, unit, hint, required, editable } = value;
+  const { id, letter, label, kind, unit, hint, defaultValue, required, editable } = value;
   const rule = toRule(value['rule']);
   if (!isNonEmptyText(id) || !isNonEmptyText(letter) || !isNonEmptyText(label) || (kind !== 'input' && kind !== 'auto') || rule === null) return null;
-  if ((unit !== null && !isText(unit)) || (hint !== null && !isText(hint)) || typeof required !== 'boolean' || typeof editable !== 'boolean') return null;
-  return { id, letter, label, kind, unit, hint, required, editable, rule };
+  if ((unit !== null && !isText(unit)) || (hint !== null && !isText(hint)) || (defaultValue !== null && !isText(defaultValue))) return null;
+  if (typeof required !== 'boolean' || typeof editable !== 'boolean') return null;
+  return { id, letter, label, kind, unit, hint, defaultValue, required, editable, rule };
+}
+
+function toPlaceholder(value: unknown): PlaceholderField | null {
+  if (!isRecord(value)) return null;
+  const { id, letter, label } = value;
+  return isNonEmptyText(id) && isNonEmptyText(letter) && isNonEmptyText(label) ? { id, letter, label } : null;
 }
 
 function toSection(value: unknown): FormSection | null {
-  if (!isRecord(value) || !Array.isArray(value['fields'])) return null;
+  if (!isRecord(value) || !Array.isArray(value['fields']) || !Array.isArray(value['reserved'])) return null;
   const { id, number, name, shortName, columnRange } = value;
   const fields = value['fields'].map(toField);
+  const reserved = value['reserved'].map(toPlaceholder);
   if (!isNonEmptyText(id) || typeof number !== 'number' || !isNonEmptyText(name) || !isNonEmptyText(shortName) || !isNonEmptyText(columnRange)) return null;
-  return fields.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields } : null;
+  return fields.every((field) => field !== null) && reserved.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields, reserved } : null;
 }
 
 function toForm(body: unknown): FormView | null {
@@ -124,7 +151,7 @@ function toPartInputs(body: unknown): PartInputs | null {
   const { id, revision, completeness } = body;
   const inputs = toInputs(body['inputs']);
   if (!isNonEmptyText(id) || typeof revision !== 'number' || !isCompleteness(completeness) || inputs === null) return null;
-  return { id, revision, completeness, inputs };
+  return { id, revision, completeness, inputs, picture: body['picture'] };
 }
 
 function toMaterial(value: unknown): MaterialChoice | null {

@@ -7,9 +7,11 @@ import { buildAuthOptions } from './auth/options';
 import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
+import { createCalculationRepository } from './repositories/calculation-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
+import { createImageRepository } from './repositories/image-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -19,6 +21,8 @@ import { createUserRepository, type UserRepository } from './repositories/user-r
 import { type AccountService, createAccountService } from './services/account-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { type CalculationService, createCalculationService } from './services/calculation-service';
+import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion } from './services/config-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createMastersService, type MastersService } from './services/masters-service';
@@ -44,6 +48,8 @@ let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
+let configReadService: ConfigReadService | undefined;
+let calculationService: CalculationService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -171,6 +177,8 @@ export function getEstimateService(): EstimateService {
     estimateService = createEstimateService({
       estimates: createEstimateRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
+      // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
+      images: createImageRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
       // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
       materials: createMasterRepository(runtimeClient()),
@@ -178,6 +186,37 @@ export function getEstimateService(): EstimateService {
     });
   }
   return estimateService;
+}
+
+/**
+ * The read side of the field registry (STORY-08.01): the list of fields and formulas and the line for the current version. Restricted: a formula and the rate names in it are
+ * for the Admin and the Lead only (NFR-002), and the routes and the page that call this are in the manifest for those two roles alone.
+ */
+export function getConfigReadService(): ConfigReadService {
+  configReadService ??= createConfigReadService({ configurations: createConfigRepository(runtimeClient()), masters: createMasterRepository(runtimeClient()) });
+  return configReadService;
+}
+
+/**
+ * The Engineer's Calculate (STORY-05.09): one transaction under the estimate's row lock, in which the state machine of the estimate service decides role, ownership and status, every part is
+ * checked, the masters and the registry are read **inside that transaction** (so the request holds one pooled connection, review SQR-01 of AQP-293), the immutable record is stored and the
+ * estimate is submitted. The service is the Restricted side (ADR-008): only a route handler asks for it here, and what it hands back is `{status, message}`.
+ */
+export function getCalculationService(): CalculationService {
+  if (calculationService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    const estimates = createEstimateRepository(runtimeClient());
+    calculationService = createCalculationService({
+      masters: createMasterRepository(runtimeClient()),
+      currentConfiguration: async (tx) => {
+        const version = await getCurrentVersion(configurations, undefined, tx);
+        return { id: version.id, document: version.document };
+      },
+      storage: { calculations: createCalculationRepository(runtimeClient()), estimates, transactions: createTransactionRunner(runtimeClient()) },
+      workflow: { nodes: createEstimateNodeRepository(runtimeClient()), transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx) },
+    });
+  }
+  return calculationService;
 }
 
 /**

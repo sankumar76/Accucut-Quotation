@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
 import { storeRowOutputs } from '@/lib/estimate/row-outputs';
+import type { Transaction } from '@/server/repositories/transaction';
 import { createCalculationService, type CalculationNodeRequest, type CalculationService, type StoreCalculationRequest } from '@/server/services/calculation-service';
 
 import { defined } from '../support/defined';
@@ -175,9 +176,12 @@ describe('AC-1: a stored calculation is one record and one row per node', () => 
     const { world, request, masters } = fixture();
     // The in-memory master list holds listed materials only (Material Considered is text there); the hidden row is the one real case of null, so it is served here.
     const hiddenId = '00000000-0000-4000-8000-0ccc00000009';
-    const hidden = { id: hiddenId, materialInDrawing: 'Not applicable', materialConsidered: null, pricePerKg: '0', specificGravity: '0', scrapRate: '0' };
+    const hidden = { id: hiddenId, materialInDrawing: 'Not applicable', materialConsidered: null, pricePerKg: '0', specificGravity: '0', scrapRate: '0', deleted: false };
     const service = createCalculationService({
-      masters: { ...masters, findMaterialForCalculation: (id) => (id === hiddenId ? Promise.resolve(hidden) : masters.findMaterialForCalculation(id)) },
+      masters: {
+        ...masters,
+        findMaterialsForCalculation: async (ids, tx) => [...(await masters.findMaterialsForCalculation(ids, tx)), ...(ids.includes(hiddenId) ? [hidden] : [])],
+      },
       currentConfiguration: () => Promise.resolve({ id: CONFIG_VERSION_ID, document: seedConfig }),
       storage: { calculations: world.repository, estimates: world.estimates, transactions: world.transactions },
     });
@@ -216,15 +220,81 @@ describe('AC-1: a stored calculation is one record and one row per node', () => 
     expect(Object.keys(stored).sort()).toEqual(['createdAt', 'id']);
   });
 
-  it('runs in the caller\'s transaction when one is given, and opens none of its own', async () => {
-    const { service, world, request } = fixture();
-    let opened = 0;
-    await world.transactions.run(async (tx) => {
-      opened += 1;
-      await service.storeCalculation(request(), tx);
+  // Review SQR-02 of AQP-293: the old test counted only the outer callback, so a store that opened a transaction of its own (which PostgreSQL would make wait on the caller's lock for 10 s)
+  // passed. This runner counts EVERY `run` and refuses a nested one, as a mutation that ignores the caller's `tx` must fail it.
+  function countingRunner(inner: FakeCalculationWorld['transactions']) {
+    const state = { opened: 0, active: 0 };
+    const runner: FakeCalculationWorld['transactions'] = {
+      run(work) {
+        if (state.active > 0) throw new Error('A transaction was opened inside a transaction.');
+        state.opened += 1;
+        state.active += 1;
+        return inner.run(work).finally(() => {
+          state.active -= 1;
+        });
+      },
+    };
+    return { runner, state };
+  }
+
+  it('runs in the caller\'s transaction when one is given, and opens none of its own: every opened transaction is counted, so a nested one is seen (SQR-02 of AQP-293)', async () => {
+    const { masters, world, request } = fixture();
+    const { runner, state } = countingRunner(world.transactions);
+    const service = createCalculationService({
+      masters,
+      currentConfiguration: () => Promise.resolve({ id: CONFIG_VERSION_ID, document: seedConfig }),
+      storage: { calculations: world.repository, estimates: world.estimates, transactions: runner },
     });
-    expect(opened).toBe(1);
+    await runner.run((tx) => service.storeCalculation(request(), tx));
+    expect(state.opened).toBe(1);
     expect(world.calculations).toHaveLength(1);
+    // Without a transaction it opens exactly one, and one is enough: the store and the link are one unit.
+    await service.storeCalculation(request());
+    expect(state.opened).toBe(2);
+    expect(world.calculations).toHaveLength(2);
+  });
+
+  it('reads the masters and the configuration in the caller\'s transaction, the materials in ONE statement, and the configuration once (SQR-01 and SQR-08 of AQP-293, #382)', async () => {
+    const { masters, world, request } = fixture();
+    const given: Array<Transaction | undefined> = [];
+    const materialCalls: string[][] = [];
+    const configurationReads: Array<Transaction | undefined> = [];
+    let version = 0;
+    const service = createCalculationService({
+      masters: {
+        findCustomerForCalculation: (id, tx) => {
+          given.push(tx);
+          return masters.findCustomerForCalculation(id, tx);
+        },
+        findMaterialsForCalculation: (ids, tx) => {
+          given.push(tx);
+          materialCalls.push([...ids]);
+          return masters.findMaterialsForCalculation(ids, tx);
+        },
+        readExchangeRates: (tx) => {
+          given.push(tx);
+          return masters.readExchangeRates(tx);
+        },
+      },
+      // A version published between two reads would give a different ID: the record must name the one the checks and the calculation used.
+      currentConfiguration: (tx) => {
+        configurationReads.push(tx);
+        version += 1;
+        return Promise.resolve({ id: `00000000-0000-4000-8000-0aaa0000000${version}`, document: seedConfig });
+      },
+      storage: { calculations: world.repository, estimates: world.estimates, transactions: world.transactions },
+    });
+    let callerTx: Transaction | undefined;
+    await world.transactions.run((tx) => {
+      callerTx = tx;
+      return service.storeCalculation(request({ nodes: [node({ nodeId: NODE_ONE }), node({ nodeId: NODE_TWO, materialId: MATERIAL_TWO_ID }), node({ nodeId: NODE_THREE, materialId: MATERIAL_ONE_ID })] }), tx);
+    });
+    expect(callerTx).toBeDefined();
+    expect(given).toHaveLength(3);
+    expect(given.every((tx) => tx === callerTx)).toBe(true);
+    expect(materialCalls).toEqual([[MATERIAL_ONE_ID, MATERIAL_TWO_ID]]);
+    expect(configurationReads).toEqual([callerTx]);
+    expect(world.calculations[0]?.configVersionId).toBe('00000000-0000-4000-8000-0aaa00000001');
   });
 
   it('a store inside a caller\'s transaction that later fails leaves nothing behind', async () => {
@@ -253,7 +323,7 @@ describe('AC-1: all or nothing', () => {
 
   const refusals: ReadonlyArray<[string, () => Fixture, (f: Fixture) => StoreCalculationRequest, (error: Error) => void]> = [
     ['an unknown estimate', () => fixture(), (f) => f.request({ estimateId: OTHER_ESTIMATE_ID }), (error) => expect(error).toBeInstanceOf(NotFoundError)],
-    ['an approved estimate', () => fixture({ status: 'APPROVED' }), (f) => f.request(), (error) => expect(error).toMatchObject({ code: 'ESTIMATE_APPROVED', httpStatus: 409 })],
+    ['an approved estimate', () => fixture({ status: 'APPROVED' }), (f) => f.request(), (error) => expect(error).toMatchObject({ code: 'ESTIMATE_APPROVED_IS_LOCKED', httpStatus: 409 })],
     ['an estimate with no customer', () => fixture({ customer: false }), (f) => f.request(), (error) => expect(error).toMatchObject({ code: 'CUSTOMER_NOT_CHOSEN', httpStatus: 409 })],
     ['an estimate that changed since its nodes were read', () => fixture({ revision: 5 }), (f) => f.request({ inputsRevision: 4 }), (error) => expect(error).toMatchObject({ code: 'INPUTS_CHANGED', httpStatus: 409 })],
     [

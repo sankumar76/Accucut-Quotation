@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, MasterInUseError } from '@/lib/errors';
 import { createEstimateNodeRepository } from '@/server/repositories/estimate-node-repository';
+import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { CHOOSE_MATERIAL_MESSAGE } from '@/server/services/estimate-inputs';
 import { createEstimateService, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
@@ -10,6 +11,7 @@ import { contextOf, insertPersonAsOwner, openAuditDatabase, type AuditDatabase }
 import { defined } from '../../support/defined';
 import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../support/hold-before-commit';
 import { seedConfig, seedFieldAt } from '../../support/seed-config';
+import { clearMaterials } from '../../support/system-rows';
 
 /**
  * STORY-05.03 T9 (review SQR-11 of AQP-302, AQP-306 AC-5) against real PostgreSQL in a throwaway database: the **real** `saveInputs` of the estimate service and the
@@ -37,6 +39,7 @@ const serviceOver = (transactions: ReturnType<typeof createHoldingRunner>): Esti
   createEstimateService({
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
+    images: createImageRepository(db.prisma),
     transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
@@ -58,7 +61,7 @@ afterEach(async () => {
   await db.owner.query('DELETE FROM estimate_nodes');
   await db.owner.query('DELETE FROM estimates');
   await db.owner.query('DELETE FROM tasks');
-  await db.owner.query('DELETE FROM materials');
+  await clearMaterials(db.owner);
 });
 
 /** A draft estimate with one empty part, for the engineer. */

@@ -47,7 +47,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = []) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
   const revision = (): number => world.estimates.find((candidate) => candidate.id === ESTIMATE)?.inputsRevision ?? -1;
   return { world, service, revision };
 }

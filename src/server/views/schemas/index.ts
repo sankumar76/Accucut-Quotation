@@ -15,10 +15,12 @@ import 'server-only';
  */
 export * from './account';
 export * from './audit';
+export * from './config';
 export * from './customers';
 export * from './estimates';
 export * from './exchange-rates';
 export * from './form';
+export * from './images';
 export * from './materials';
 export * from './me';
 export * from './options';

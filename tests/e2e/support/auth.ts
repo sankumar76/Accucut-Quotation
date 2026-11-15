@@ -5,7 +5,10 @@ import { Client } from 'pg';
 import { z } from 'zod';
 
 import { assertThrowawayDatabase } from '../../../scripts/lib/measurement-user';
+import type { ConfigDocument } from '../../../src/lib/fields/schema';
 import { PROCESS_CANARY_RATES } from '../../support/canary-masters';
+import { CANARY_PLANTED_RATE, CANARY_UNKNOWN_KEY, canaryPartInputs, canaryRateFieldId } from '../../support/canary-part-inputs';
+import { completePartInputsFor } from '../../support/complete-part-inputs';
 import { loadCanaryCustomers } from '../../support/customer-canary-loader';
 import { EXCHANGE_RATE_CANARIES } from '../../support/exchange-rate-canary';
 import { CANARY_FOLDER_PATH, canaryTaskCodeFor } from '../../support/estimate-recipe';
@@ -14,6 +17,7 @@ import { loadCanaryMaterials } from '../../support/material-canary-loader';
 import { assertSafeDatabaseTarget } from '../../support/db-guard';
 import { createTestHasher } from '../../support/builders/user';
 import { HARNESS_PASSWORD } from '../../support/harness-password';
+import { sha256Hex, smallPng } from '../../support/pictures';
 
 import { waitUntilHydrated } from './design-system';
 
@@ -176,6 +180,14 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
   // The one part the node routes of STORY-05.02 open: its ID is the estimate's too (`estimate-recipe.ts`), first at the top.
   await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index) VALUES ($1::uuid, $1::uuid, 0) ON CONFLICT DO NOTHING', [ownerId]);
+  // The one picture `GET /api/v1/images/{id}` opens (STORY-05.07): its ID and its estimate's are the owner's too. It is not the part's picture, so the node's recipes are unchanged. A tiny
+  // invented PNG; the table is append-only and the insert does nothing on a repeat.
+  const picture = smallPng();
+  await client.query(
+    `INSERT INTO part_images (id, estimate_id, sha256, mime, bytes, size_bytes, file_name)
+     VALUES ($1::uuid, $1::uuid, $2, 'image/png', $3::bytea, $4::int, 'canary-part.png') ON CONFLICT DO NOTHING`,
+    [ownerId, sha256Hex(picture), picture, picture.length],
+  );
 }
 
 /**
@@ -214,6 +226,98 @@ export async function putMaterialInCanaryPart(ownerId: string, materialId: strin
       `UPDATE estimate_nodes SET inputs = jsonb_build_object('invented-material-field', jsonb_build_object('id', $2::text, 'text', 'Invented material')) WHERE id = $1::uuid`,
       [ownerId, materialId],
     );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Fills the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` the way the scan needs it (STORY-05.04 AC-7; review SQR-05 of STORY-05.03;
+ * `tests/support/canary-part-inputs.ts`): every value an Engineer types into the part form, stored as the form stores it (Tool, Machining, Plating and Fasteners Cost among them), and,
+ * beside them, a canary price under Material Rate / Kg and a key that is no field. The routes that return a part, and the page, must send the typed values and never the other two, so
+ * the scan reads a part that really holds a Restricted value. Only the scan's own person has such a part, so no other spec sees it. The statement replaces the inputs and is repeatable.
+ */
+export async function fillCanaryPart(ownerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    // The registry is the newest version stored in this database, which the server's form is built from. It is read as stored: a Playwright process cannot load the formula engine that
+    // `parseConfigDocument` uses, and the shape was checked when the version was written.
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const snapshot = registryShape.parse(rows[0]?.snapshot);
+    const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
+    await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Makes the canary estimate of a person made by `createDisposableUser('scan', ...)` ready to Calculate (STORY-05.09): its one part holds every input Calculate needs
+ * (`tests/support/complete-part-inputs.ts`, with the material given), beside the planted Restricted price and unknown key of `fillCanaryPart` (Calculate must ignore both), and the customer is
+ * chosen. Only the scan's own person has such an estimate. The statements replace the inputs and set the customer, and are repeatable.
+ */
+export async function makeCanaryEstimateCalculable(ownerId: string, materialId: string, customerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const snapshot = registryShape.parse(rows[0]?.snapshot) as unknown as ConfigDocument;
+    const inputs = { ...completePartInputsFor(snapshot, materialId), [canaryRateFieldId(snapshot)]: CANARY_PLANTED_RATE, [CANARY_UNKNOWN_KEY]: 'x' };
+    await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+    await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * A material of the test's own, with these numbers (STORY-05.09: the same estimate calculated under two sets of masters). The name is unique to the call, so three screen sizes at once never
+ * meet on the name index, and the canary materials the other specs read are not touched. Answers its ID. Throwaway database only (guarded above); every value is invented.
+ */
+export async function insertPrivateMaterial(numbers: { readonly pricePerKg: string; readonly specificGravity: string; readonly scrapRate: string }): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const name = `E2E private material ${randomBytes(4).toString('hex')}`;
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO materials (material_in_drawing, material_considered, price_per_kg, specific_gravity, scrap_rate) VALUES ($1, $2, $3, $4, $5) RETURNING id::text`,
+      [name, `${name} considered`, numbers.pricePerKg, numbers.specificGravity, numbers.scrapRate],
+    );
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The private material could not be made.');
+    return id;
+  } finally {
+    await client.end();
+  }
+}
+
+/** Reads one estimate's status and whether it is linked to a calculation, as the database holds them (STORY-05.09: a blocked or refused Calculate writes nothing). */
+export async function readEstimateState(estimateId: string): Promise<{ readonly status: string; readonly calculations: number }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ status: string; calculations: string }>(
+      `SELECT e.status::text AS status, (SELECT count(*) FROM calculations c WHERE c.estimate_id = e.id) AS calculations FROM estimates e WHERE e.id = $1::uuid`,
+      [estimateId],
+    );
+    const row = rows[0];
+    if (row === undefined) throw new Error('The estimate does not exist.');
+    return { status: row.status, calculations: Number(row.calculations) };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * What this estimate's Calculate left in the database (review SQR-02 of AQP-317): `calculated` is the product values of each record and the outputs of each of its rows, and `typed` is the inputs of
+ * those rows (what the Engineer typed, with the resolved text), so the scan can look for the figures the calculation produced and leave out the ones the Engineer typed. Both are JSON values as
+ * stored; `tests/support/calculated-values.ts` turns them into strings to look for. Throwaway database only (guarded above).
+ */
+export async function readCalculatedValues(estimateId: string): Promise<{ readonly calculated: ReadonlyArray<unknown>; readonly typed: ReadonlyArray<unknown> }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ product_values: unknown; outputs: unknown; inputs: unknown }>(
+      `SELECT c.product_values, r.outputs, r.inputs FROM calculations c LEFT JOIN calculation_rows r ON r.calculation_id = c.id WHERE c.estimate_id = $1::uuid`,
+      [estimateId],
+    );
+    return { calculated: rows.flatMap((row) => [row.product_values, row.outputs]), typed: rows.map((row) => row.inputs) };
   } finally {
     await client.end();
   }
@@ -322,6 +426,9 @@ export async function ensureCanaryExchangeRates(): Promise<void> {
     await client.end();
   }
 }
+
+/** The registry as stored: its sections and fields are lists (every other property is the registry's own schema's, checked when the version was written). */
+const registryShape = z.looseObject({ sections: z.array(z.looseObject({})), fields: z.array(z.looseObject({ id: z.string(), key: z.string() })) });
 
 const snapshotShape = z.looseObject({
   fields: z.array(z.looseObject({ id: z.string(), position: z.number().int(), formula: z.string().nullish() })),

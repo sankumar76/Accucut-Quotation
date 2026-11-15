@@ -51,6 +51,8 @@ vi.mock('@/server/composition', async () => {
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
+    getConfigReadService: () => shared.configReadService,
+    getCalculationService: () => shared.calculationService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };

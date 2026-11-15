@@ -7,7 +7,8 @@ import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/se
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
-import { validCallFor, type ValidCall } from '../support/route-calls';
+import { bodyOfRecipe } from '../support/request-body';
+import { validCallFor, type UploadRecipe, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
 import { SPEC_ACCESS } from '../support/spec-access';
@@ -44,6 +45,8 @@ vi.mock('@/server/composition', async () => {
     getMastersService: () => shared.mastersService,
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
+    getConfigReadService: () => shared.configReadService,
+    getCalculationService: () => shared.calculationService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -58,7 +61,7 @@ const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
  * the negative control of the confidentiality scan, which answers 404 everywhere except under NODE_ENV=test and is in no role's list).
  */
-const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/test-only/leak'];
+const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/health', '/api/test-only/leak'];
 
 const expectedRoles = (path: string, method: HttpMethod = 'GET'): ReadonlyArray<RoleName> => SPEC_ACCESS[`${method} ${path}`] ?? SPEC_ACCESS[path] ?? ROLES;
 
@@ -85,6 +88,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
+  '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
@@ -99,18 +103,18 @@ const pageIdFor = (row: RouteRow): string => REAL_PAGE_ID[row.path] ?? 'invented
 const moduleShape = z.record(z.string(), z.unknown());
 
 /** A call to the route: the ID goes into the path, and a body, when given, is sent as JSON. */
-async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unknown, query = ''): Promise<Response> {
+async function callApi(row: RouteRow, method: HttpMethod, id: string, body?: unknown, query = '', upload?: UploadRecipe): Promise<Response> {
   const loader = API_LOADERS[row.path];
   if (loader === undefined) throw new Error(`no loader for ${row.path}`);
   const handler = moduleShape.parse(await loader())[method];
   if (typeof handler !== 'function') throw new Error(`${row.path} exports no ${method}`);
   const { url, params } = fill(row.path, id);
-  // A GET or HEAD request cannot carry a body.
-  const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
+  // A GET or HEAD request cannot carry a body; a route that takes an upload is sent its file as a multipart form (`request-body.ts`).
+  const sent = bodyOfRecipe(method, { body, ...(upload === undefined ? {} : { upload }) });
   const request = new Request(`https://portal.example.test${url}${query}`, {
     method,
-    headers: { origin: 'https://portal.example.test', ...(hasBody ? { 'content-type': 'application/json' } : {}) },
-    ...(hasBody ? { body: JSON.stringify(body) } : {}),
+    headers: { origin: 'https://portal.example.test', ...sent.headers },
+    ...(sent.body === undefined ? {} : { body: sent.body }),
   });
   const answer: unknown = await handler(request, { params: Promise.resolve(params) });
   if (!(answer instanceof Response)) throw new Error(`${row.path} ${method} did not answer with a Response`);
@@ -125,7 +129,7 @@ function validCall(row: RouteRow, method: HttpMethod): ValidCall {
 /** Calls the route with its valid ID and body. A refused role gets this call too: nothing about it may change the answer. */
 function callValid(row: RouteRow, method: HttpMethod): Promise<Response> {
   const call = validCall(row, method);
-  return callApi(row, method, call.id, call.body, call.query);
+  return callApi(row, method, call.id, call.body, call.query, call.upload);
 }
 
 type PageOutcome = 'renders' | 'forbidden' | 'not-found' | `redirect:${string}`;
@@ -177,7 +181,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
     expect(differences).toEqual([]);
   });
 
-  it('keeps the public routes to sign-in, next-auth and the test-only negative control, and nothing else', () => {
+  it('keeps the public routes to sign-in, next-auth, the health check and the test-only negative control, and nothing else', () => {
     expect(ROUTE_MANIFEST.filter((row) => row.roles === 'public').map((row) => row.path).sort()).toEqual([...PUBLIC_ROUTES].sort());
   });
 
@@ -253,7 +257,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
         const valid = validCall(row, method);
         const answers = await Promise.all(
           ['00000000-0000-4000-8000-000000000000', harness.idOf.ADMIN, 'Q-2026-0001', valid.id].map(async (id) => {
-            const response = await callApi(row, method, id, valid.body);
+            const response = await callApi(row, method, id, valid.body, '', valid.upload);
             const { requestId, ...fixed } = z.record(z.string(), z.unknown()).parse(await response.json());
             expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
             return { status: response.status, fixed };

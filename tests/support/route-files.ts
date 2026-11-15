@@ -29,6 +29,8 @@ export const OWN_PROTECTION: Readonly<Record<string, string>> = {
   '/api/auth/[...nextauth]': 'next-auth: its own CSRF token and its own refusals',
   // STORY-01.03 AC-4: no session, no input, no data of its own: it returns an invented sentinel under NODE_ENV=test and 404 elsewhere.
   '/api/test-only/leak': 'negative control of the confidentiality scan: public, test-only, one invented sentinel (src/lib/negative-control-gate.ts)',
+  // STORY-10.04: no session, no input; it answers `ok` or `unavailable` and nothing else (src/app/api/health/route.ts).
+  '/api/health': 'health check for the install, the update and the uptime monitor: public, no input, a one-word answer',
 };
 
 export function patternOf(file: string): string {

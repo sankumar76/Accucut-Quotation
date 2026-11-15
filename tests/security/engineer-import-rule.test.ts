@@ -62,6 +62,8 @@ const REPOSITORIES = {
     // STORY-02.07: the open estimates that use a customer or a material, read for the delete guard of the Admin's masters. No Engineer view needs it.
     'estimate-use',
     'exchange-rate-repository',
+    // STORY-05.07: the part pictures, stored whole and read by their ID. No Engineer view needs the bytes or their owner lookup; the picture route is a handler, not a view.
+    'image-repository',
     'master-constraints',
     'master-repository',
     'material-repository',
@@ -82,12 +84,17 @@ const SERVICES = {
     'audit-secrets',
     'audit-service',
     'bootstrap-admin-service',
+    // STORY-05.09: the masters one calculation reads (the customer's rates, every material's price and the exchange rates), in the caller's transaction. Restricted in full, like the service that reads it.
+    'calculation-masters',
     'calculation-service',
+    'config-read-service',
     'config-service',
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     'estimate-service',
+    // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
+    'image-service',
     'exchange-rate-service',
     'masters-service',
     'password-policy',
@@ -258,6 +265,31 @@ describe('every repository and service file is classed, and the lint agrees with
       'user-repository',
       'user-service',
     ]);
+  });
+});
+
+/**
+ * The worker's jobs (`src/server/jobs`, ADR-011, STORY-10.04). A job file is not a view and not part of the data layer, so the lint has no list for it; it is
+ * classed here instead. A job that reads the database is a service in all but name, so a job is allowed to exist only if it takes no repository, service, the
+ * container, the formula engine or the database driver: `log-prune` reads and deletes log files and holds no cost data, and its log lines hold counts only.
+ * A new job file fails this test until someone classes it, and a job that needs the data layer has to be classed (and reviewed) as the service it is.
+ */
+const JOBS = { holdsNoData: ['log-prune'] } as const;
+
+describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
+  it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
+    expect(filesIn('src/server/jobs').sort()).toEqual([...JOBS.holdsNoData].sort());
+  });
+
+  it.each(JOBS.holdsNoData)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
+    const source = readFileSync(`${ROOT}src/server/jobs/${job}.ts`, 'utf8');
+    const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
+    expect(specifiers.length).toBeGreaterThan(0);
+    for (const specifier of specifiers) {
+      expect(specifier, `${job} imports ${specifier}`).not.toMatch(/repositories|services|composition|@\/lib\/formula|lib\/formula|@prisma\/client|generated\/prisma|\/views\//);
+    }
+    // It never opens a file to read it: only lstat, readdir and unlink.
+    expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 });
 
