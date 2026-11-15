@@ -59,3 +59,7 @@ export const MATERIAL_RATE_KEY = 'material-rate-per-kg';
 
 /** Key of Total Unit Production Price / Tool Cost (column BN): the product-level field that is BL divided by the total Tool Cost. */
 export const PRICE_PER_TOOL_COST_KEY = 'price-per-tool-cost';
+
+/** Keys of Unit Production Price in US dollars (BJ) and in euros (BK): the two figures SCR-06 holds for a row besides its BG (STORY-06.02, FR-029). */
+export const UNIT_PRICE_USD_KEY = 'unit-price-usd';
+export const UNIT_PRICE_EUR_KEY = 'unit-price-eur';

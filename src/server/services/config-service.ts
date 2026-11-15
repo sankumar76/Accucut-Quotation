@@ -91,10 +91,18 @@ const processCache = createConfigVersionCache();
 export async function getCurrentVersion(repository: ConfigRepository, cache: ConfigVersionCache = processCache, tx?: Transaction): Promise<ConfigVersion> {
   const latest = await repository.findLatestRef(tx);
   if (latest === null) throw new ConfigVersionMissingError();
-  const cached = cache.get(latest.id);
+  return getVersionById(repository, latest.id, cache, tx);
+}
+
+/**
+ * One configuration version by its ID, parsed, deep-frozen and cached like the current one (STORY-06.02: the review reads the version a calculation was made with, which is not always
+ * the current one). A version never changes, so a cached entry is never stale. An ID that is no version is the same `ConfigVersionMissingError`.
+ */
+export async function getVersionById(repository: ConfigRepository, id: string, cache: ConfigVersionCache = processCache, tx?: Transaction): Promise<ConfigVersion> {
+  const cached = cache.get(id);
   if (cached !== undefined) return cached;
 
-  const record = await repository.findById(latest.id, tx);
+  const record = await repository.findById(id, tx);
   if (record === null) throw new ConfigVersionMissingError();
   const version = deepFreeze({
     id: record.id,

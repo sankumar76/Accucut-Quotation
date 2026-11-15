@@ -1,0 +1,124 @@
+import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
+import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues } from '../../src/server/repositories/calculation-repository';
+import type { ConfigVersion } from '../../src/server/services/config-service';
+import { createEstimateReviewService, type EstimateReviewDependencies, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
+import { findFieldByKey } from '../../src/lib/fields/registry';
+
+import { seedConfig, seedFieldAt } from './seed-config';
+import type { CaseRow } from '../unit/quantity/quantity-cases';
+
+/**
+ * An in-memory world for the estimate review (STORY-06.02): the parts of one estimate as the part form stored them, the calculation record as Calculate stored it, and the estimate review
+ * service over them, with every read counted so a test can say what was **not** read. The rows come from the constructed quantity cases CE-1 to CE-12 of test strategy section 5.2 (`quantity-cases.ts`),
+ * whose BG and BL were worked by hand, so a screen's figure is compared with a number nobody computed here. Every ID, name and number is invented.
+ */
+
+const INVENTED_VERSION_ID = '00000000-0000-4000-8000-0000000c0f19';
+const INVENTED_CALCULATION_ID = '00000000-0000-4000-8000-0000000ca1c0';
+export const REVIEW_ESTIMATE_ID = '00000000-0000-4000-8000-0000000e5717';
+export const REVIEW_CALCULATED_AT = new Date('2026-11-05T05:12:00.000Z');
+export const REVIEW_CONFIGURATION_NUMBER = 9;
+
+const BG = seedFieldAt('BG').id;
+const BJ = seedFieldAt('BJ').id;
+const BK = seedFieldAt('BK').id;
+const COUNT = seedFieldAt('H').id;
+const DESCRIPTION = findFieldByKey(seedConfig, 'description')?.id ?? '';
+const PART_NO = findFieldByKey(seedConfig, 'part-no')?.id ?? '';
+
+export const REVIEW_FIELDS = { bg: BG, bj: BJ, bk: BK, count: COUNT, description: DESCRIPTION, partNo: PART_NO } as const;
+
+const nodeIdOf = (index: number): string => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+
+/** The tree of a case: a row's parent is the row whose Sl. No is its own without the last number. */
+export function nodesOfCase(rows: ReadonlyArray<CaseRow>, names: Readonly<Record<string, string>> = {}): NodeRecord[] {
+  const idBySl = new Map(rows.map((row, index) => [row.sl, nodeIdOf(index)]));
+  return rows.map((row, index) => {
+    const parts = row.sl.split('.');
+    const parentSl = parts.slice(0, -1).join('.');
+    const name = names[row.sl];
+    return {
+      id: nodeIdOf(index),
+      parentId: parts.length === 1 ? null : (idBySl.get(parentSl) ?? null),
+      sortIndex: Number(parts[parts.length - 1]) - 1,
+      revision: 1,
+      inputs: { [COUNT]: row.h, ...(name === undefined ? {} : { [DESCRIPTION]: name }) },
+    };
+  });
+}
+
+/** A row's stored outputs: its own BG, and its BJ and BK worked from BG at invented exchange rates (80 and 90), as full-precision text. */
+const outputsOf = (bg: string): StoredValues => ({ [BG]: bg, [BJ]: (Number(bg) / 80).toString(), [BK]: (Number(bg) / 90).toString() });
+
+export interface ReviewWorldOptions {
+  readonly rows: ReadonlyArray<CaseRow>;
+  readonly bl: string;
+  readonly names?: Readonly<Record<string, string>>;
+  readonly toolCostTotal?: string | null;
+  readonly pricePerToolCost?: string | null;
+  /** `null`: no calculation is linked. */
+  readonly calculated?: boolean;
+  /** The estimate's input changes so far; the calculation was made at 3. */
+  readonly inputsRevision?: number;
+}
+
+export interface ReviewWorld {
+  readonly service: EstimateReviewService;
+  readonly dependencies: EstimateReviewDependencies;
+  readonly nodes: NodeRecord[];
+  readonly reads: { readonly basis: ReadLog; readonly figures: ReadLog; readonly nodes: ReadLog };
+}
+
+/** The arguments of every call of one read, so a test can say what was read and what was not. */
+export interface ReadLog {
+  readonly calls: unknown[][];
+  readonly record: (...args: unknown[]) => void;
+}
+
+function readLog(): ReadLog {
+  const calls: unknown[][] = [];
+  return { calls, record: (...args) => void calls.push(args) };
+}
+
+export const CALCULATION_REVISION = 3;
+
+export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
+  const nodes = nodesOfCase(options.rows, options.names);
+  const calculated = options.calculated ?? true;
+  const inputsRevision = options.inputsRevision ?? CALCULATION_REVISION;
+  const version: ConfigVersion = { id: INVENTED_VERSION_ID, number: REVIEW_CONFIGURATION_NUMBER, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: REVIEW_CALCULATED_AT.toISOString() };
+  const current: ConfigVersion = { ...version, id: '00000000-0000-4000-8000-0000000c0f20', number: REVIEW_CONFIGURATION_NUMBER + 1 };
+  const figures: ReviewFigures = {
+    productValues: { totalPrice: options.bl, pricePerToolCost: options.pricePerToolCost ?? null, toolCostTotal: options.toolCostTotal ?? '0' },
+    rows: options.rows.map((row, index) => ({ nodeId: nodeIdOf(index), outputs: outputsOf(row.bg) })),
+  };
+  const basis: FigureBasis = {
+    inputsRevision,
+    calculation: calculated ? { id: INVENTED_CALCULATION_ID, inputsRevision: CALCULATION_REVISION, configVersionId: INVENTED_VERSION_ID, createdAt: REVIEW_CALCULATED_AT } : null,
+  };
+  const reads = { basis: readLog(), figures: readLog(), nodes: readLog() };
+  const calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'> = {
+    findFigureBasis: (id) => {
+      reads.basis.record(id);
+      return Promise.resolve(id === REVIEW_ESTIMATE_ID ? basis : null);
+    },
+    findReviewFigures: (id) => {
+      reads.figures.record(id);
+      return Promise.resolve(id === INVENTED_CALCULATION_ID ? figures : null);
+    },
+  };
+  const dependencies: EstimateReviewDependencies = {
+    calculations,
+    nodes: {
+      listNodes: (id) => {
+        reads.nodes.record(id);
+        return Promise.resolve(nodes);
+      },
+    },
+    configuration: {
+      current: () => Promise.resolve(current),
+      byId: (id) => (id === INVENTED_VERSION_ID ? Promise.resolve(version) : Promise.reject(new Error('Invented: no such version.'))),
+    },
+  };
+  return { service: createEstimateReviewService(dependencies), dependencies, nodes, reads };
+}
