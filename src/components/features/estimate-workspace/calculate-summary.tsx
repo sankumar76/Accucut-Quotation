@@ -6,7 +6,7 @@ import { Notice } from '@/components/shared/notice';
 import { blockedSummary } from '@/lib/estimate/calculate-words';
 import type { BlockedPartView } from '@/lib/estimates/calculate-missing';
 
-import { controlIdFor } from './field-renderer';
+import { controlIdFor } from './field-ids';
 import { focusFieldWhenPresent } from './focus-field';
 
 /** The words of the summary, here and not in `estimate-texts.ts`, which the first load carries whole (NFR-009). */

@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { describeBreach, lazyModules, overlayBreaches, overlayHolders, readSources } from '../support/overlay-imports';
+import { describeBreach, firstLoadModules, lazyModules, overlayBreaches, overlayHolders, readSources } from '../support/overlay-imports';
 
 /**
  * AQP-339 AC-6 (ADR-016, architecture section 10, the overlay rule of AQP-188): no module that holds an overlay (Sheet, Dialog, AlertDialog, DropdownMenu, Popover), and no module that a
@@ -57,6 +57,17 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/part-fields.tsx',
     ]) {
       expect(lazy, name).toContain(name);
+    }
+  });
+
+  it('keeps the part form fields out of the first load of the estimate page (AQP-339 AC-4, AC-5: focus-field.ts reaches them through field-ids.ts only)', () => {
+    const firstLoad = firstLoadModules(sources);
+    const folder = 'src/components/features/estimate-workspace';
+    expect(firstLoad, 'the page itself is in the first load').toContain(`${folder}/estimate-workspace.tsx`);
+    expect(firstLoad, 'the focus helper is in the first load').toContain(`${folder}/focus-field.ts`);
+    expect(firstLoad, 'and so are the ids it uses').toContain(`${folder}/field-ids.ts`);
+    for (const name of ['part-fields', 'field-renderer', 'section-card', 'section-strip', 'placeholder-fields', 'picture-slot', 'parts-tree-drawer']) {
+      expect(firstLoad, name).not.toContain(`${folder}/${name}.tsx`);
     }
   });
 

@@ -38,8 +38,16 @@ export interface OverlayBreach {
 
 const EXTENSIONS = ['.ts', '.tsx'] as const;
 
+/** A source is parsed once however many of the walks below ask for it: the whole of `src` is a few seconds to parse, and the walks run in one test file. */
+const parsed = new Map<string, ts.SourceFile>();
+
 function parse(path: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const key = `${path}\0${source}`;
+  const known = parsed.get(key);
+  if (known !== undefined) return known;
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  parsed.set(key, file);
+  return file;
 }
 
 /** Every plain (value) static import or re-export of a source. `import type`, `export type` and `import()` are left out: they put nothing in the bundle. */
@@ -113,35 +121,48 @@ export function lazyModules(sources: Sources): ReadonlyArray<string> {
   return [...lazy].sort();
 }
 
-/**
- * The holders and lazy modules that the first load of some route reaches through plain imports alone, found by walking from every file under `src/app` (the routes, their layouts and
- * their pages). A module behind an `import()` is not reached, and a module only ever fetched lazily is never walked into. Each breach names the importing file and line, and the route file
- * it was reached from.
- */
-export function overlayBreaches(sources: Sources): ReadonlyArray<OverlayBreach> {
+/** Walks plain imports from every file under `src/app`, calling `onEdge` for each plain import found, once per importing file. Returns the files reached, each with the route file it was reached from. */
+function walkFirstLoad(sources: Sources, onEdge: (edge: { readonly importer: string; readonly target: string; readonly line: number; readonly root: string }) => void): ReadonlyMap<string, string> {
   const known = new Set(Object.keys(sources));
-  const reasons = new Map<string, BreachReason>(lazyModules(sources).map((path) => [path, 'is-loaded-lazily']));
-  for (const holder of overlayHolders(sources)) reasons.set(holder, 'holds-an-overlay');
   const roots = Object.keys(sources)
     .filter((path) => path.startsWith('src/app/'))
     .sort();
   const reachedFrom = new Map<string, string>(roots.map((root) => [root, root]));
   const queue = [...roots];
-  const breaches: OverlayBreach[] = [];
   for (let at = 0; at < queue.length; at += 1) {
     const path = queue[at] ?? '';
     const root = reachedFrom.get(path) ?? path;
     for (const item of staticImportsOf(path, sources[path] ?? '')) {
       const target = resolveSpecifier(path, item.specifier, known);
       if (target === null) continue;
-      const reason = reasons.get(target);
-      if (reason !== undefined) breaches.push({ module: target, reason, importer: path, line: item.line, root });
+      onEdge({ importer: path, target, line: item.line, root });
       if (!reachedFrom.has(target)) {
         reachedFrom.set(target, root);
         queue.push(target);
       }
     }
   }
+  return reachedFrom;
+}
+
+/** Every module of `src` that the first load of some route carries: reached from a file under `src/app` by plain imports alone. */
+export function firstLoadModules(sources: Sources): ReadonlySet<string> {
+  return new Set(walkFirstLoad(sources, () => undefined).keys());
+}
+
+/**
+ * The holders and lazy modules that the first load of some route reaches through plain imports alone, found by walking from every file under `src/app` (the routes, their layouts and
+ * their pages). A module behind an `import()` is not reached, and a module only ever fetched lazily is never walked into. Each breach names the importing file and line, and the route file
+ * it was reached from.
+ */
+export function overlayBreaches(sources: Sources): ReadonlyArray<OverlayBreach> {
+  const reasons = new Map<string, BreachReason>(lazyModules(sources).map((path) => [path, 'is-loaded-lazily']));
+  for (const holder of overlayHolders(sources)) reasons.set(holder, 'holds-an-overlay');
+  const breaches: OverlayBreach[] = [];
+  walkFirstLoad(sources, ({ importer, target, line, root }) => {
+    const reason = reasons.get(target);
+    if (reason !== undefined) breaches.push({ module: target, reason, importer, line, root });
+  });
   return breaches;
 }
 
