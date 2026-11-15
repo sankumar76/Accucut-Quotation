@@ -1,4 +1,5 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
+import type { ShownRule } from '../fields/visible-when';
 
 import type { Completeness } from './tree-client';
 
@@ -29,6 +30,8 @@ export interface FormField {
   readonly defaultValue: string | null;
   readonly required: boolean;
   readonly editable: boolean;
+  /** The field this one watches and the values that hide it (Fasteners Qty and Cost, STORY-05.05), or null for a field that always shows. Read by `isShownByRule`. */
+  readonly visibleWhen: ShownRule | null;
   readonly rule: FormRule;
 }
 
@@ -102,14 +105,22 @@ function toRule(value: unknown): FormRule | null {
   }
 }
 
+/** The rule that hides a field, or `null` for none; `undefined` when the answer's shape is wrong. */
+function toVisibleWhen(value: unknown): ShownRule | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value) || !isNonEmptyText(value['fieldId']) || !Array.isArray(value['values']) || !value['values'].every(isText)) return undefined;
+  return { fieldId: value['fieldId'], values: value['values'] };
+}
+
 function toField(value: unknown): FormField | null {
   if (!isRecord(value)) return null;
   const { id, letter, label, kind, unit, hint, defaultValue, required, editable } = value;
   const rule = toRule(value['rule']);
-  if (!isNonEmptyText(id) || !isNonEmptyText(letter) || !isNonEmptyText(label) || (kind !== 'input' && kind !== 'auto') || rule === null) return null;
+  const visibleWhen = toVisibleWhen(value['visibleWhen']);
+  if (!isNonEmptyText(id) || !isNonEmptyText(letter) || !isNonEmptyText(label) || (kind !== 'input' && kind !== 'auto') || rule === null || visibleWhen === undefined) return null;
   if ((unit !== null && !isText(unit)) || (hint !== null && !isText(hint)) || (defaultValue !== null && !isText(defaultValue))) return null;
   if (typeof required !== 'boolean' || typeof editable !== 'boolean') return null;
-  return { id, letter, label, kind, unit, hint, defaultValue, required, editable, rule };
+  return { id, letter, label, kind, unit, hint, defaultValue, required, editable, visibleWhen, rule };
 }
 
 function toPlaceholder(value: unknown): PlaceholderField | null {

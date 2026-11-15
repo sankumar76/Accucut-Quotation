@@ -295,12 +295,16 @@ describe('STORY-05.04 AC-1, AC-4, AC-5: saving the fields of the other sections'
 
   it('stores every number of sections 03 to 08 as decimal text with two decimals, and answers with what was typed, no figure of its own', async () => {
     const letters = ['P', 'Q', 'R', 'T', 'V', 'W', 'X', 'Y', ...COST_LETTERS];
-    const values = Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.5`]));
+    // Fasteners Qty and Cost are stored as typed only while Fasteners is not "None" (STORY-05.05), so the part has fasteners in this save.
+    const values = { ...Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.5`])), [PICK('S')]: 'M6 bolt' };
     const response = await save({ revision: 1, values });
     expect(response.status).toBe(200);
     const body = savedInputsSchema.parse(await response.json());
     expect(body.revision).toBe(2);
-    expect(Object.fromEntries(body.inputs.map((item) => [item.fieldId, item.value]))).toEqual(Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.50`])));
+    expect(Object.fromEntries(body.inputs.map((item) => [item.fieldId, item.value]))).toEqual({
+      ...Object.fromEntries(letters.map((letter, index) => [PICK(letter), `${index + 1}.50`])),
+      [PICK('S')]: 'M6 bolt',
+    });
     expect(estimate().inputsRevision).toBe(1);
   });
 

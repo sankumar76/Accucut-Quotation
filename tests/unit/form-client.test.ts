@@ -24,6 +24,7 @@ const field = (overrides: Record<string, unknown> = {}) => ({
   defaultValue: null,
   required: true,
   editable: true,
+  visibleWhen: null,
   rule: { type: 'number', decimals: 2 },
   ...overrides,
 });
@@ -72,8 +73,24 @@ describe('loadForm', () => {
     expect(outcome.status === 'ok' && outcome.value.sections[0]?.reserved).toEqual([placeholder]);
   });
 
+  it('STORY-05.05: reads the rule that hides a field (the field it watches and the values that hide it), and null for a field that always shows', async () => {
+    const rule = { fieldId: OTHER_FIELD, values: ['None', ''] };
+    const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section([field({ visibleWhen: rule }), field({ id: OTHER_FIELD })])], lastSavedAt: null })));
+    expect(outcome.status === 'ok' && outcome.value.sections[0]?.fields.map((entry) => entry.visibleWhen)).toEqual([rule, null]);
+  });
+
   it.each([
-    ['a field with a default that is not text', { sections: [section([field({ defaultValue: 5 })])], lastSavedAt: null }],
+    ['a field with a hiding rule that is not an object', { sections: [section([field({ visibleWhen: 'None' })])], lastSavedAt: null }],
+    ['a field with a hiding rule that names no field', { sections: [section([field({ visibleWhen: { fieldId: '', values: ['None'] } })])], lastSavedAt: null }],
+    ['a field with a hiding rule whose values are not a list', { sections: [section([field({ visibleWhen: { fieldId: OTHER_FIELD, values: 'None' } })])], lastSavedAt: null }],
+    ['a field with a hiding rule whose values are not all text', { sections: [section([field({ visibleWhen: { fieldId: OTHER_FIELD, values: ['None', 5] } })])], lastSavedAt: null }],
+    ['a field with no hiding rule key', { sections: [section([{ ...field(), visibleWhen: undefined }])], lastSavedAt: null }],
+  ])('an answer with %s is a failure, not a crash', async (_name, answer) => {
+    expect((await loadForm(ESTIMATE, () => Promise.resolve(json(200, answer)))).status).toBe('failed');
+  });
+
+  it.each([
+    ['a field with a default that is not text',{ sections: [section([field({ defaultValue: 5 })])], lastSavedAt: null }],
     ['a field with no default key', { sections: [section([{ ...field(), defaultValue: undefined }])], lastSavedAt: null }],
     ['a section whose placeholders are not a list', { sections: [{ ...section(), reserved: 'x' }], lastSavedAt: null }],
     ['a section with no placeholders list', { sections: [{ ...section(), reserved: undefined }], lastSavedAt: null }],

@@ -221,7 +221,7 @@ describe('AC-3, AC-8: nothing that carries a rate, a cost or a formula', () => {
     const text = JSON.stringify(sections);
     expect(Object.keys(sections[0] ?? {}).sort()).toEqual(['columnRange', 'fields', 'id', 'name', 'number', 'reserved', 'shortName']);
     for (const field of offered) {
-      expect(Object.keys(field).sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit']);
+      expect(Object.keys(field).sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit', 'visibleWhen']);
     }
     for (const placeholder of sections.flatMap((section) => section.reserved)) expect(Object.keys(placeholder).sort()).toEqual(['id', 'label', 'letter']);
     // The word "cost" is in the four labels of inputs an Engineer types (FR-008), and nowhere else; no formula, no price, no rate.

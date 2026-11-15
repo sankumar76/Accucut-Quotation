@@ -39,8 +39,10 @@ describe('visibility (AC-3, ADR-008)', () => {
     ['None', false],
     ['', false],
     [undefined, false],
+    // STORY-05.05 AC-1: "None" in any letter case, with spaces around it, hides them too.
+    ['none', false],
+    [' NONE ', false],
     ['M6 bolt', true],
-    ['none', true],
   ])('AC-3: Fasteners Qty is shown for Fasteners = %j: %s', (value, shown) => {
     const fasteners = seedFieldAt('S');
     const quantity = seedFieldAt('T');

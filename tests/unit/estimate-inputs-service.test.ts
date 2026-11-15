@@ -201,7 +201,8 @@ describe('STORY-05.04 AC-1, AC-2, AC-4, AC-5: the fields of sections 03 to 08', 
 
   it('AC-2: the typed Machining, Plating, Tool and Fasteners Cost come back as typed, to the person who typed them and to a Lead, and are no calculated value (FR-008)', async () => {
     const setup = setUp();
-    const typed = { [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
+    // Fasteners Cost shows, and so is kept as typed, only while Fasteners is not "None" (STORY-05.05): the part has fasteners here.
+    const typed = { [FASTENERS]: 'M6 bolt', [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
     await save(setup, typed);
     for (const viewer of [arjun, lead, admin]) {
       const part = await setup.service.getNode(viewer, ESTIMATE, PART);

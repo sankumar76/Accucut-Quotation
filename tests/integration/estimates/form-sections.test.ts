@@ -158,7 +158,8 @@ describe('AC-3, AC-4: Fasteners and Remarks', () => {
 describe('AC-2, AC-7: what is read back', () => {
   it('the typed Tool, Machining, Plating and Fasteners Cost come back as typed, for the Engineer and for a Lead', async () => {
     const nodeId = await setUpPart();
-    const typed = { [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
+    // Fasteners Cost shows, and so is stored as typed, only while Fasteners is not "None" (STORY-05.05): the part has fasteners here.
+    const typed = { [FASTENERS]: 'M6 bolt', [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
     await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: typed });
     for (const viewer of [arjun, lead]) expect((await service.getNode(viewer, estimateId, nodeId)).inputs).toEqual(typed);
   });

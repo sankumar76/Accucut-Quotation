@@ -2,6 +2,7 @@ import type { FieldDefinition, SectionDefinition } from '../fields/field-schema'
 import { fieldLetter, fieldsInFormOrder, findFieldById, findFieldByKey, sectionColumnRange } from '../fields/registry';
 import type { ConfigDocument } from '../fields/schema';
 import { isEngineerVisibleAllowed } from '../fields/visibility';
+import type { ShownRule } from '../fields/visible-when';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { RUPEE } from '../masters/master-rules';
 
@@ -84,6 +85,11 @@ export interface FormFieldView {
   readonly required: boolean;
   /** False for a field that is shown and never typed into. */
   readonly editable: boolean;
+  /**
+   * When the registry hides this field (STORY-05.05; Fasteners Qty and Cost): the field it watches and the values that hide it, or null for a field that always shows. It is the registry's own
+   * `visibleWhen` (the operator is always "not in"), read by `isShownByRule` in the browser and by `isFieldShown` on the server: the rule is written once, in the registry.
+   */
+  readonly visibleWhen: ShownRule | null;
   readonly rule: FormRule;
 }
 
@@ -152,6 +158,7 @@ function viewOf(document: ConfigDocument, field: FieldDefinition): FormFieldView
     required: field.mandatory,
     // A derived field is shown and never typed; a picture is changed by its own routes, so no save of values may name it either.
     editable: rule.type !== 'derived' && rule.type !== 'picture',
+    visibleWhen: field.kind === 'input' && field.visibleWhen !== null ? { fieldId: field.visibleWhen.fieldId, values: [...field.visibleWhen.values] } : null,
     rule,
   };
 }
