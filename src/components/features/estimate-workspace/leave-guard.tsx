@@ -67,7 +67,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       env: { win: window, doc: document },
       gate,
       ask,
-      navigate: (href) => router.push(href),
+      navigate: (href, replace) => (replace ? router.replace(href) : router.push(href)),
     });
     installed.current = handle;
     const withdraw = registerLeaveGuard(ask);

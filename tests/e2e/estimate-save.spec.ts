@@ -123,6 +123,12 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await brandLink(page).click();
     await expect(leaveDialog(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/\/estimates\//);
+
+    // Review SQR-03: the guard's extra history entry was replaced by the link, not left behind, so one Back returns to the estimate and the next Back leaves it (no dead press).
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(/\/estimates\//);
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(/\/queue$/);
   });
 
   test('AC-4, AC-8: a link asks "Leave without saving?", the safe choice holds focus, Escape and Keep editing stay with nothing lost, axe finds 0 violations; "Save draft and leave" saves and goes', async ({ page }, testInfo) => {

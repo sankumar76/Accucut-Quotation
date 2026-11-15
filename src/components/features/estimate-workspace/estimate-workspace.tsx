@@ -15,7 +15,7 @@ import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
-import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
+import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, LEAVE_GUARD_FAILED_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -102,7 +102,12 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   return (
     <>
       <WorkspaceHeader view={{ ...header, status }} />
-      {Guard === null ? null : <Guard gate={saves} />}
+      {Guard !== null ? (
+        <Guard gate={saves} />
+      ) : guard.failed ? (
+        // The warning on leaving could not be fetched: the page then has no protection for what is typed, and says so instead of looking as if it had (review SQR-05).
+        <Notice tone="danger" title={LEAVE_GUARD_FAILED_TITLE} />
+      ) : null}
       {calculation.blocked === null ? null : Summary === null ? (
         // The list's code is on its way (or could not be fetched): the sentence is the server's, and it is never missing.
         <Notice tone="danger" title={blockedSummary(calculation.blocked.length)} />

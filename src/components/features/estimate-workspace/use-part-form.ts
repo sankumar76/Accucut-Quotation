@@ -169,12 +169,17 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       onChanged();
     } else if (outcome.status === 'refused' && outcome.code === PART_CHANGED_CODE) {
       // The part moved on again and again while it was read and sent: what was typed is kept and the person is told, not looped on.
-      setProblem({ kind: 'refused', message: CONFLICT_RETRY_FAILED });
+      showProblem({ kind: 'refused', message: CONFLICT_RETRY_FAILED });
     } else if (outcome.status === 'refused') {
-      setProblem({ kind: 'refused', message: outcome.title });
+      showProblem({ kind: 'refused', message: outcome.title });
     } else {
-      setProblem({ kind: 'failed' });
+      showProblem({ kind: 'failed' });
     }
+  }
+
+  /** Shows a problem, or none, unless fields are waiting for the person to choose between their text and a newer value: that notice has the buttons, and nothing else may take its place (review SQR-02). */
+  function showProblem(next: PartProblem | null): void {
+    setProblem((current) => (current?.kind === 'conflict' && conflictRef.current.size > 0 ? current : next));
   }
 
   /**
@@ -192,7 +197,9 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     revisionRef.current = newer.revision;
     heldRef.current = newer.inputs;
     onSaved({ id: partId, revision: newer.revision, completeness: newer.completeness, inputs: newer.inputs });
-    clearError(fieldId);
+    // The field whose save was refused is settled below (sent again, shown newer, or in conflict) unless its text cannot be read: that text was never sent, keeps its message and stays unsaved (review SQR-04).
+    const refusedField = fieldOf(fieldId);
+    if (refusedField !== undefined && readTyped(refusedField.rule, textsRef.current[fieldId] ?? '').ok) clearError(fieldId);
     for (const [adoptedId, text] of Object.entries(plan.adopt)) {
       showText(adoptedId, text);
       clearError(adoptedId);
@@ -203,7 +210,12 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       setErrors((current) => ({ ...current, [conflictId]: conflictFieldMessage(shown === 'number' || shown === 'text' ? newerText : null) }));
     }
     conflictRef.current = new Set([...conflictRef.current, ...plan.conflicts.map((conflict) => conflict.fieldId)]);
-    setProblem(plan.conflicts.length > 0 ? { kind: 'conflict', fields: plan.conflicts } : null);
+    // The fields in conflict now, with those still waiting from an earlier read: one notice names them all.
+    setProblem((current) => {
+      const waiting = current?.kind === 'conflict' ? current.fields.filter((earlier) => !plan.conflicts.some((conflict) => conflict.fieldId === earlier.fieldId)) : [];
+      const fields = [...waiting, ...plan.conflicts];
+      return fields.length > 0 ? { kind: 'conflict', fields } : null;
+    });
     for (const resendId of plan.resend) {
       const field = fieldOf(resendId);
       const check = field === undefined ? null : readTyped(field.rule, textsRef.current[resendId] ?? '');
@@ -215,6 +227,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   }
 
   async function send(fieldId: string, value: string, refreshed = 0): Promise<void> {
+    // A save that was queued before a 409 can run after the re-read has found a newer value in this field: it waits for the person's choice, and sends nothing over the newer value (review SQR-01).
+    if (conflictRef.current.has(fieldId)) return;
     const outcome = await savePartInputs(estimateId, partId, { revision: revisionRef.current, values: { [fieldId]: value } });
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === PART_CHANGED_CODE && refreshed < MAX_REFRESHES) {
       await reconcile(fieldId, refreshed + 1);
@@ -230,7 +244,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     }
     revisionRef.current = outcome.value.revision;
     heldRef.current = outcome.value.inputs;
-    setProblem(null);
+    // A good save of another field does not answer a conflict: its notice and its two buttons stay until the person chooses (review SQR-02).
+    showProblem(null);
     onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
   }
 

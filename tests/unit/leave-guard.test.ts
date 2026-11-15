@@ -86,7 +86,7 @@ function setUp() {
   const gate = createSaveGate();
   const asked: LeaveRequest[] = [];
   const navigated: string[] = [];
-  const handle = installLeaveGuard({ env: page.env, gate, ask: (request) => void asked.push(request), navigate: (href) => void navigated.push(href) });
+  const handle = installLeaveGuard({ env: page.env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => void navigated.push(replace ? `replace ${href}` : `push ${href}`) });
   const typeSomething = (): void => gate.mark(PART, 'field-j', true);
   const saveIt = (): void => gate.mark(PART, 'field-j', false);
   const click = (to: Anchor): Event => {
@@ -153,7 +153,33 @@ describe('AC-4: a link inside the portal', () => {
     asked[0]?.cancel();
     expect(navigated).toEqual([]);
     asked[0]?.proceed();
-    expect(navigated).toEqual(['/audit']);
+    // The extra history entry is on top by now (typing put it there), so the link replaces it.
+    expect(navigated).toEqual(['replace /audit']);
+  });
+
+  it('with the extra history entry on top, a link on a clean page replaces it instead of stacking on it, with no question (review SQR-03: no dead Back press)', () => {
+    const { click, asked, navigated, typeSomething, saveIt } = setUp();
+    typeSomething();
+    saveIt();
+    expect(click(anchor('/audit')).defaultPrevented).toBe(true);
+    expect(asked).toEqual([]);
+    expect(navigated).toEqual(['replace /audit']);
+  });
+
+  it('without the extra entry (nothing was ever typed) the click is left to the router, which pushes', () => {
+    const { click, navigated } = setUp();
+    expect(click(anchor('/audit')).defaultPrevented).toBe(false);
+    expect(navigated).toEqual([]);
+  });
+
+  it('after Back asked and the extra entry was put back, a link still replaces it', () => {
+    const { click, navigated, typeSomething, pressBack, asked } = setUp();
+    typeSomething();
+    pressBack();
+    asked[0]?.cancel();
+    click(anchor('/audit'));
+    asked[1]?.proceed();
+    expect(navigated).toEqual(['replace /audit']);
   });
 
   it('leaves alone a click that was never going to leave, even with something unsaved', () => {

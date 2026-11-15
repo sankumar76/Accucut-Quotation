@@ -6,7 +6,8 @@ import type { SaveGate } from './save-gate';
  * what the guard does about each:
  *
  * - **A closed tab, a reload, a link to another site:** the browser's own prompt (`beforeunload`). The text of that prompt is the browser's; nothing can change it.
- * - **A link inside the portal:** the click is stopped in the capture phase, before Next.js's link sees it, and the person is asked; if they go, `navigate` takes them there.
+ * - **A link inside the portal:** the click is stopped in the capture phase, before Next.js's link sees it, and the person is asked; if they go, `navigate` takes them there. While the extra history entry
+ *   below is on top, the link **replaces** it (also on a clean page), so the history is not left with two entries of the same address.
  * - **The back button:** a browser does not let a page cancel it, so while something is unsaved the guard puts one extra entry of the same address on top of the history. Back then lands on the page's
  *   own entry (the same address, so Next.js keeps the page and what is typed in it) and the guard asks; the entry is put back at once, so Back asks again. When nothing is unsaved by then, the same
  *   press is passed on, so a person who saved is not made to press Back twice. This needs `history.state` to be Next.js's own entry, which it is on every page the router drew.
@@ -35,8 +36,8 @@ export interface LeaveGuardOptions {
   readonly gate: SaveGate;
   /** Asks the person, or lets them go at once when nothing turns out to be unsaved. */
   readonly ask: (request: LeaveRequest) => void;
-  /** Takes the person to a link inside the portal (the router's `push`). */
-  readonly navigate: (href: string) => void;
+  /** Takes the person to a link inside the portal: the router's `push`, or its `replace` when the guard's extra history entry is on top, so that entry is not left behind. */
+  readonly navigate: (href: string, replace: boolean) => void;
 }
 
 /** How long the page lets a full load through after the person chose to sign out: long enough for the request, short enough that a failed one leaves the page guarded again. */
@@ -132,12 +133,20 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
   };
 
   const onClick: Listener = (event) => {
-    if (!gate.isDirty()) return;
+    const dirty = gate.isDirty();
+    // With the extra history entry on top, even a clean page takes the click: the link then replaces that entry instead of stacking on it, so a later Back has no dead press (review SQR-03).
+    if (!dirty && armedFor === null) return;
     const href = leavingLinkOf(clickFactsOf(event), win.location);
     if (href === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    ask({ proceed: () => navigate(href), cancel: () => undefined });
+    const go = (): void => {
+      const replace = armedFor !== null;
+      armedFor = null;
+      navigate(href, replace);
+    };
+    if (dirty) ask({ proceed: go, cancel: () => undefined });
+    else go();
   };
 
   const onPopState: Listener = () => {
