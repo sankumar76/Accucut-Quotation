@@ -53,6 +53,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/shared/account-menu-panel.tsx',
       'src/components/features/estimate-workspace/change-customer-dialog.tsx',
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
+      'src/components/features/estimate-workspace/quantity-warning-dialog.tsx',
       'src/components/features/estimate-workspace/parts-tree-drawer.tsx',
     ]) {
       expect(holders, name).toContain(name);
@@ -67,6 +68,8 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
       'src/components/features/estimate-workspace/parts-tree-drawer.tsx',
       'src/components/features/estimate-workspace/part-fields.tsx',
+      // The Calculate bar holds the quantity-warning dialog of AQP-318 with a plain import, so the bar must stay lazy.
+      'src/components/features/estimate-workspace/calculate-bar.tsx',
     ]) {
       expect(lazy, name).toContain(name);
     }

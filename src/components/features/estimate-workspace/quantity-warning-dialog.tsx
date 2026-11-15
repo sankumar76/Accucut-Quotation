@@ -26,7 +26,7 @@ import {
 import type { WarnedRowView } from '@/lib/estimates/calculate-client';
 
 import { focusCalculate } from './calculate-button';
-import { controlIdFor } from './field-renderer';
+import { controlIdFor } from './field-ids';
 import { focusFieldWhenPresent } from './focus-field';
 
 export interface QuantityWarningDialogProps {
