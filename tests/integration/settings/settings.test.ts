@@ -106,9 +106,11 @@ describe('the table and its grants', () => {
     });
   });
 
-  it('grants the table to the runtime role and to the owner (which holds it) and to no one else: no backup role is made here', async () => {
+  it('grants the table to the runtime role, to the owner (which holds it) and, since STORY-10.05, to the backup role for INSERT only, and to no one else', async () => {
     const { rows } = await db.owner.query<{ grantee: string }>("SELECT DISTINCT grantee FROM information_schema.table_privileges WHERE table_name = 'job_runs' ORDER BY grantee");
-    expect(rows.map((row) => row.grantee)).toEqual(['accucut_app', 'accucut_owner']);
+    expect(rows.map((row) => row.grantee)).toEqual(['accucut_app', 'accucut_backup', 'accucut_owner']);
+    const backup = await db.owner.query<{ privilege_type: string }>("SELECT privilege_type FROM information_schema.table_privileges WHERE table_name = 'job_runs' AND grantee = 'accucut_backup'");
+    expect(backup.rows.map((row) => row.privilege_type)).toEqual(['INSERT']);
   });
 
   it('lets the runtime role add a row and read it back, and refuses an UPDATE, a DELETE and a TRUNCATE for lack of a grant', async () => {

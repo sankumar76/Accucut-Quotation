@@ -118,8 +118,12 @@ jobs:
           $keygen = Get-ChildItem -LiteralPath $folder -Recurse -Filter 'age-keygen.exe' | Select-Object -First 1
           if ($null -eq $keygen) { throw 'The age zip holds no age-keygen.exe.' }
           $keyFile = Join-Path $env:RUNNER_TEMP 'accucut-age-key.txt'
+          # age-keygen prints a warning and the public key on standard error; Windows PowerShell 5.1 turns that into an error under 'Stop', so it is read as plain output here.
+          $ErrorActionPreference = 'Continue'
           & $keygen.FullName -o $keyFile 2>$null
-          if ($LASTEXITCODE -ne 0) { throw 'age-keygen failed.' }
+          $keygenCode = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          if ($keygenCode -ne 0) { throw 'age-keygen failed.' }
           $lines = @(Get-Content -LiteralPath $keyFile)
           foreach ($line in $lines) { if ($line -like 'AGE-SECRET-KEY-*') { Write-Host "::add-mask::$($line.Trim())" } }
           $public = ($lines | Where-Object { $_ -like '# public key: *' } | Select-Object -First 1) -replace '^# public key: ', ''
