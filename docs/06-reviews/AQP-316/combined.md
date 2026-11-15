@@ -147,3 +147,64 @@ The queue and reconcile logic of `usePartValues` is covered only by E2E (three t
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer — fix SQR-01 and SQR-02 in `use-part-form.ts` (two small guards plus a hook-level test), ideally SQR-03; then reviewer-quality re-reviews the new diff only
+
+
+> Addenda for review rounds 2 and 3 appended on the delivery lead's instruction, 2026-11-15 (the reviewer could not write to the main checkout; text unchanged from its scratch file).
+
+## Addendum — re-review of 096b5e6 (2026-11-15)
+Scope: `git diff 7f60444 096b5e6` only (one commit; 10 files, +431/−16): `use-part-form.ts`, `leave-guard.ts`, `leave-guard.tsx`, `estimate-workspace.tsx`, `estimate-texts.ts`, new `tests/support/hook-harness.ts` and `part-server.ts`, new `tests/unit/use-part-values.test.ts`, new cases in `leave-guard.test.ts`, and one E2E Back step. CI 43713692860: 6 of 6 green (as briefed). Stage 11b: 180,434 B (+69 B from 7f60444), within ADR-016.
+
+**Checks run:** diff read in full. 9 targeted unit files (`use-part-values`, `leave-guard`, `save-gate-dirty`, `part-conflict`, `save-draft`, `calculate-bar-save`, `time-ist-time`, `overlay-imports`, `estimate-form-route`): **132 tests passed** locally at 096b5e6. A scratch test on the developer's own harness reproduced SQR-13. That scratch file (`tests/unit/zz-review-rr-repro.test.ts` in the reviewer's isolated worktree `.claude/worktrees/agent-af07e10eb965ccf59`, which is checked out on `feat/AQP-316-save-draft`) could not be deleted, because the permission system denied `rm`. It is untracked and was never committed. **It must be deleted before anyone commits from that worktree.**
+
+| Finding | Result | Evidence |
+|---------|--------|----------|
+| SQR-01 (Critical) | **Partly fixed** | `send` now returns at once for a field in `conflictRef` (`use-part-form.ts:231`). Every path that writes a value goes through `send`: a queued `commit` (leaving a field, a choice, Save draft's `flush`), a retry after a failure or a reconnect (`commit` again), the reconcile resend loop with its `MAX_REFRESHES` re-reads, and `syncWatchers`. The picture job (`inTurn`) writes no value. `use-part-values.test.ts` pins the queued case, plus leaving the field and Save draft. **The guard checks the conflict *now*, not whether the field entered conflict after the save was queued.** The remaining path is SQR-13 |
+| SQR-02 (Major, #425) | **Fixed** | `showProblem` keeps a conflict notice while `conflictRef` is not empty (`:181-183`, used in `send` and `explain`). `reconcile` merges earlier waiting conflicts with new ones. Test "keeps the notice and the field unsaved after a save of another field goes through". #425 can close on merge |
+| SQR-03 (Major, #426) | **Fixed** | `onClick` takes a leaving in-portal click while `armedFor !== null`, even when clean, and navigates with `router.replace`. **No real entry is lost:** `armedFor !== null` holds exactly while the current entry is the guard's own same-address entry. `arm` sets it right after `pushState`; `onPopState` clears it on landing on the page's own entry; `go(-2)` and the link `go()` clear it before leaving. So `replace` overwrites only that entry, and the history becomes `[prev, estimate, next]`. **Normal links are unchanged:** with nothing ever typed the click is left to Next's `Link` (push), and hash-only, same-path, modified, `target` and `download` clicks are still not intercepted (`leavingLinkOf`). Unit cases: armed+dirty, armed+clean, never-armed, after Back+Keep editing. E2E: one Back returns to the estimate, the next to `/queue`. Info: while armed, the anchor's own React `onClick` is skipped (`stopImmediatePropagation`). This was already true while dirty, and is harmless here because navigation unmounts the page. Sign out's full load still pushes (that part was optional). #426 can close on merge |
+| SQR-04 (Minor) | **Fixed** | The refused field is cleared only if its current text can be read. Test "SQR-04 ... the 409 does not make it look saved" |
+| SQR-05 (Minor) | **Fixed** | `guard.failed` shows `LEAVE_GUARD_FAILED_TITLE` as a danger notice (`estimate-workspace.tsx:105-110`). No "Try again" button; the words say to reload, which is acceptable |
+| SQR-06, SQR-07, SQR-08 (Minor) | Not fixed | Hardening window |
+| SQR-09 to SQR-12 (Info) | Unchanged | SQR-12's test gap is closed by `hook-harness.ts` and `use-part-values.test.ts` |
+
+### SQR-13 · Critical (new; what remains of SQR-01) — choosing "Use the newer values" while the re-read's resend is in flight lets the old queued save through
+- **Where:** `src/components/features/estimate-workspace/use-part-form.ts:231` (the guard reads `conflictRef` at run time), `:341-353` (`resolveConflict` empties `conflictRef` at `:343`), and the resend loop at the end of `reconcile`, which awaits each resend *after* it has set the conflict notice.
+- **Issue:** the notice and its two buttons render as soon as `reconcile` sets the conflict. B's save that was queued before the 409 runs only after `reconcile` returns, which is one resend round trip later, or more under churn. If the person presses "Use the newer values" in that window, `conflictRef` is empty when B's old save reaches `:231`, and it is sent with the fresh revision.
+- **Evidence (reproduced at 096b5e6 with `hook-harness.ts` and `part-server.ts`):** A and B typed, the other tab sets `b = 9.00`, A's resend held, "Use the newer values" pressed, then released. Sent: `[{r1,a:2.00},{r2,a:2.00},{r3,b:3.00}]`. Server holds `b: 3.00`, the screen shows `9.00`, and `gate.isDirty()` is `false`.
+- **Impact:** a silent overwrite of newer data, against the person's explicit choice. Screen and server disagree, and nothing warns, so a later Calculate uses the stale value. The window is short on a fast LAN, but it is widest on the slow, just-reconnected link where queued saves come from. Typing in B inside the same window also sends the stale value first. That is less harmful, because the person chose to override, and the next leave sends the new text.
+- **Fix:** invalidate a field's queued save when the field **enters** conflict: a per-field ticket bumped by `commit` and by `reconcile` for each conflict id, checked in `send`, plus `onItsWayRef.current.delete(id)` on conflict so "Keep what I typed" queues afresh rather than being deduplicated onto the dropped save. The sketch is in the PR thread of SQR-01. About 8 lines.
+- **Test:** `disagreeOnB` with `holdNextSave()` on the resend, `resolveConflict('newer')` before the release, then expect no save naming `b` and the server to keep `9.00`. Add a twin for `'mine'`: exactly one save of `b`, with the newest revision.
+
+### SQR-14 · Minor (new) — while the conflict notice is up, another field's network failure is not shown
+- **Where:** `use-part-form.ts:181-183` (`showProblem`), from `explain`'s `failed` branch.
+- **Issue:** `showProblem({ kind: 'failed' })` is swallowed while a conflict notice shows. The failed field is marked unsaved, so the leave guard and Save draft still cover it and nothing is lost, but the person is not told.
+- **Fix:** put a field-level message on the failed field, or show the failure notice beside the conflict notice.
+
+**Updated counts:** Blocker 0 · Critical 1 (SQR-13) · Major 0 · Minor 4 (SQR-06, SQR-07, SQR-08, SQR-14) · Info 4. **Verdict: REQUEST CHANGES. SQR-13 blocks the merge under CLAUDE.md §9 item 2.** After a fix with the test above, a third look at that diff alone is enough.
+
+PR review round 2: https://github.com/sankumar76/Accucut-Quotation/pull/424 (COMMENT, inline SQR-13; replies Fixed / Partly fixed / Not fixed in the SQR-01 to SQR-08 threads).
+
+## Addendum — re-review of 682e22b (2026-11-15, round 3)
+Scope: `git diff 096b5e6 682e22b` only (one commit; 4 files, +135/−20): `use-part-form.ts`, `part-fields.tsx`, `tests/support/part-server.ts` (`holdSaveNumber`, `failNextSave`), and `tests/unit/use-part-values.test.ts` (now 13 tests). CI 43715557617: 6 of 6 green (as briefed). Stage 11b: 180,435 B, within ADR-016.
+
+**Checks run:**
+- Diff read in full.
+- 9 targeted unit files (as in round 2): **136 tests passed** locally at 682e22b.
+- The reviewer's round-2 SQR-13 reproduction, re-run unchanged at 682e22b, now **fails as intended**. It asserted the overwrite, and the overwrite no longer happens. Sent: `[{r1,a:2.00},{r2,a:2.00}]`; the server keeps `b: 9.00`; the screen shows `9.00`; `gate.isDirty()` is false.
+- The scratch file was not committed by 682e22b. It remains untracked in the worktree and still needs deleting (permission was denied to the reviewer; this has been raised with the delivery lead).
+
+| Finding | Result | Evidence |
+|---------|--------|----------|
+| SQR-01 / SQR-13 (Critical) | **Fixed** | A per-field ticket (`use-part-form.ts:194`, `newTicket`). `commit` takes a new ticket for every queued save (`:293`). `reconcile` takes one for every field it puts in conflict and deletes it from `onItsWayRef` (`:224`). `send` goes only while the field is not in conflict **and** its ticket is the field's latest (`:251`). So a save queued before the field entered conflict is never sent, whatever the person chooses later: "Use the newer values" sends nothing, and "Keep what I typed" is a fresh `commit` with a fresh ticket, not deduplicated onto the dropped save. Resends and watcher saves take the field's current ticket, so they still go. Every value write goes through `send`. Tests: the two held-resend cases (`holdSaveNumber(2)`) cover "newer" (no save of B; part and screen agree on 9.00; clean) and "mine" (B sent exactly once; 3.00; clean). The developer reports both fail with the ticket check removed |
+| SQR-14 (Minor) | **Fixed** | The conflict carries another field's failure as `also` (`PartProblem`), set by `showProblem` (`:185`), kept by `reconcile`, and handed back by `resolveConflict` (`:365`) and `setText` when the last conflict ends. `part-fields.tsx:130,162` draws it beside the conflict notice. A later good save clears it, as it would without a conflict. Two SQR-14 tests |
+| SQR-02 to SQR-05 | Fixed (round 2) | — |
+| SQR-06, SQR-07, SQR-08 (Minor) | Not fixed | Hardening window |
+| SQR-09 to SQR-12 (Info) | Unchanged | — |
+
+Info notes (no change asked):
+- A later `commit` of the same field also makes an earlier queued save of it out of date. The last value still wins, with one request fewer.
+- A resend of a field that also has a queued `commit` sends the same value twice. The second is a 200 no-op, as before this commit.
+- A good save of field A clears field C's failure notice while C is still marked unsaved. That is the same as before this story; the leave guard and Save draft still cover C.
+
+**Updated counts:** Blocker 0 · Critical 0 · Major 0 · Minor 3 (SQR-06, SQR-07, SQR-08) · Info 4. **Verdict: APPROVE WITH COMMENTS. Nothing blocks the merge under CLAUDE.md §9 item 2.** #425 and #426 can close on merge; the three Minors go to the hardening window.
+
+PR review round 3: https://github.com/sankumar76/Accucut-Quotation/pull/424 (COMMENT; replies Fixed in the SQR-01, SQR-02/14 and SQR-13 threads; label `review:quality-approved`). Jira AQP-316 comment 11995.
