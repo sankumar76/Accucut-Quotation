@@ -196,7 +196,11 @@ Assert-That ($memberOf.Count -eq 0) "AccucutBackup is an explicit member of no l
 # The task: its principal, logon type, trigger and action, exactly.
 $task = Get-ScheduledTask -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue
 Assert-That ($null -ne $task) "the task 'Accucut weekly backup' exists"
-Assert-That ($task.Principal.UserId -like '*\AccucutBackup' -and [string]$task.Principal.LogonType -eq 'Password' -and [string]$task.Principal.RunLevel -eq 'Limited') "the task runs as AccucutBackup with a stored password and the limited run level (found: $($task.Principal.UserId), $($task.Principal.LogonType), $($task.Principal.RunLevel))"
+# The principal is compared by SID: Task Scheduler may report the user as 'AccucutBackup' or as 'COMPUTER\AccucutBackup'.
+$principalUser = ([string]$task.Principal.UserId).Trim()
+$principalSid = $null
+try { $principalSid = ([System.Security.Principal.NTAccount]$principalUser).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $principalSid = "unresolved:$($_.Exception.Message)" }
+Assert-That ($principalSid -eq $backupSid -and ([string]$task.Principal.LogonType).Trim() -eq 'Password' -and ([string]$task.Principal.RunLevel).Trim() -eq 'Limited') "the task runs as AccucutBackup (by SID) with a stored password and the limited run level (found: user '$principalUser' of type $(if ($null -ne $task.Principal.UserId) { $task.Principal.UserId.GetType().Name } else { 'null' }) = $principalSid, logon type '$($task.Principal.LogonType)', run level '$($task.Principal.RunLevel)'; expected SID $backupSid)"
 Assert-That (@($task.Triggers).Count -eq 1 -and $task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskWeeklyTrigger' -and [int]$task.Triggers[0].DaysOfWeek -eq 1 -and [int]$task.Triggers[0].WeeksInterval -eq 1 -and [string]$task.Triggers[0].StartBoundary -match 'T02:00:00') 'the task has one weekly trigger, on Sunday at 02:00'
 $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $expectedArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $paths.Current 'backup.ps1') + '" -Reason weekly'
