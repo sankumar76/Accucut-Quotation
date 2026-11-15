@@ -9,11 +9,14 @@ import { control, isPatchOfInputs, nextSave, openForm, partForm, showTree, waitF
  * part (`openForm`), and types with the keyboard. A save that cannot be sent is made by refusing the route of the save (`route.abort`), which is what a lost connection does to the page. The words are the UX
  * spec's and the story's, written out here and not imported, so a changed sentence fails a test. What the database holds (the revisions, the transaction, the lock) is judged in
  * `tests/integration/estimates/revision-rules.test.ts`. Every name and path is invented.
+ *
+ * Each test signs in and opens the form, which is most of its time, so the tests do several things each, and the limit is one minute (the shards run four at a time).
  */
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.beforeEach(async ({ context }) => {
+  test.setTimeout(60_000);
   await useFreshAddress(context);
 });
 
@@ -29,6 +32,8 @@ const draftAlert = (page: Page) => page.locator('[data-calculate-bar]').getByRol
 const brandLink = (page: Page) => page.getByRole('link', { name: /AccuCut logo/ });
 const leaveDialog = (page: Page) => page.getByRole('alertdialog', { name: LEAVE_TITLE });
 const keepEditing = (page: Page) => leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true });
+const leaveWithout = (page: Page) => leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true });
+const saveAndLeave = (page: Page) => leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true });
 
 /** The saves this page has sent so far. */
 function countSaves(page: Page): { readonly count: () => number } {
@@ -54,17 +59,21 @@ async function typeAValueThatCannotBeSaved(page: Page): Promise<void> {
   await expect(control(page, 'J')).toHaveValue('7.00');
 }
 
-test.describe('AC-1, AC-2: Save draft', () => {
-  test('AC-1, AC-2: saves with every field blank and no completeness error, says when, updates "Last saved", and sends nothing when nothing changed', async ({ page }, testInfo) => {
+test.describe('AC-1, AC-2, AC-5: Save draft', () => {
+  test('AC-1, AC-2: saves with every field blank and no completeness error, says when, updates "Last saved", sends nothing when nothing changed; 44 px high, in the bar, no sideways scroll', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     const saves = countSaves(page);
     await expect(saveDraftButton(page)).toBeVisible();
+    expect((await saveDraftButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    await expect(page.locator('[data-calculate-bar]')).toBeInViewport();
 
     await saveDraftButton(page).click();
     await expect(draftStatus(page)).toHaveText(DRAFT_SAVED);
+    await expect(draftStatus(page)).toHaveAttribute('role', 'status');
     await expect(partForm(page).getByText('Enter this value')).toHaveCount(0);
     await expect(draftAlert(page)).toHaveCount(0);
     expect(saves.count()).toBe(0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
     // A value still being typed in is saved by the press: one request, and "Last saved" moves.
     await control(page, 'J').fill('12.5');
@@ -73,7 +82,7 @@ test.describe('AC-1, AC-2: Save draft', () => {
     await expect(control(page, 'J')).toHaveValue('12.50');
     expect(saves.count()).toBe(1);
 
-    // The same again, and again: nothing is sent.
+    // The same again: nothing is sent.
     await saveDraftButton(page).click();
     await expect(draftStatus(page)).toHaveText(DRAFT_SAVED);
     await page.waitForTimeout(400);
@@ -82,16 +91,6 @@ test.describe('AC-1, AC-2: Save draft', () => {
     await page.reload();
     await waitForForm(page);
     await expect(control(page, 'J')).toHaveValue('12.50');
-  });
-
-  test('AC-1: the saved line is a polite status; the button is 44 px high, in the bar at the bottom, and the page does not scroll sideways', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    await expect(saveDraftButton(page)).toBeVisible();
-    await saveDraftButton(page).click();
-    await expect(draftStatus(page)).toHaveAttribute('role', 'status');
-    expect((await saveDraftButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    await expect(page.locator('[data-calculate-bar]')).toBeInViewport();
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
   test('AC-5: a draft that cannot be saved says so in an alert and keeps what was typed; the next press, once the connection is back, saves it', async ({ page }, testInfo) => {
@@ -126,7 +125,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await expect(page).not.toHaveURL(/\/estimates\//);
   });
 
-  test('AC-4, AC-8: a link asks "Leave without saving?", the safe choice "Keep editing" holds focus, Escape stays, nothing is lost, and axe finds 0 violations', async ({ page }, testInfo) => {
+  test('AC-4, AC-8: a link asks "Leave without saving?", the safe choice holds focus, Escape and Keep editing stay with nothing lost, axe finds 0 violations; "Save draft and leave" saves and goes', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     const here = page.url();
     await typeAValueThatCannotBeSaved(page);
@@ -135,11 +134,11 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await expect(leaveDialog(page)).toBeVisible();
     await expect(leaveDialog(page)).toContainText('You have changes that are not saved. If you leave now, they are lost.');
     await expect(keepEditing(page)).toBeFocused();
-    await expect(leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true })).toBeVisible();
-    await expect(leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true })).toBeVisible();
+    await expect(leaveWithout(page)).toBeVisible();
+    await expect(saveAndLeave(page)).toBeVisible();
     await expectNoAxeViolations(page);
-    for (const name of ['Keep editing', 'Leave without saving', 'Save draft and leave']) {
-      expect((await leaveDialog(page).getByRole('button', { name, exact: true }).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    for (const button of [keepEditing(page), leaveWithout(page), saveAndLeave(page)]) {
+      expect((await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
@@ -154,37 +153,32 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await page.keyboard.press('Enter');
     await expect(leaveDialog(page)).toHaveCount(0);
     expect(page.url()).toBe(here);
-  });
 
-  test('AC-4: "Leave without saving" leaves, and what was not saved is gone, by the person\'s own choice', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    const here = page.url();
-    await typeAValueThatCannotBeSaved(page);
-    await brandLink(page).click();
-    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
-    await expect(page).not.toHaveURL(/\/estimates\//);
-
+    // The connection is back: "Save draft and leave" saves first, then goes, and the value is there on the way back.
     await allowSaves(page);
-    await page.goto(here);
-    await waitForForm(page);
-    await expect(control(page, 'J')).toHaveValue('');
-  });
-
-  test('AC-4, AC-5: "Save draft and leave" saves first and goes only when it was saved: while saves fail it stays and says so, and once they work it saves and goes', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
-    const here = page.url();
-    await typeAValueThatCannotBeSaved(page);
     await brandLink(page).click();
-    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    await expect(leaveDialog(page)).toContainText('The draft was not saved, so you are still here.');
-    expect(page.url()).toBe(here);
-
-    await allowSaves(page);
-    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    await saveAndLeave(page).click();
     await expect(page).not.toHaveURL(/\/estimates\//);
     await page.goto(here);
     await waitForForm(page);
     await expect(control(page, 'J')).toHaveValue('7.00');
+  });
+
+  test('AC-4, AC-5: "Save draft and leave" goes only when the draft was saved, so while saves fail it stays and says so; "Leave without saving" then leaves, and what was not saved is gone', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
+    const here = page.url();
+    await typeAValueThatCannotBeSaved(page);
+    await brandLink(page).click();
+    await saveAndLeave(page).click();
+    await expect(leaveDialog(page)).toContainText('The draft was not saved, so you are still here.');
+    expect(page.url()).toBe(here);
+
+    await leaveWithout(page).click();
+    await expect(page).not.toHaveURL(/\/estimates\//);
+    await allowSaves(page);
+    await page.goto(here);
+    await waitForForm(page);
+    await expect(control(page, 'J')).toHaveValue('');
   });
 
   test('AC-4: the back button asks too, and asks again after "Keep editing"; "Leave without saving" goes back to the page before', async ({ page }, testInfo) => {
@@ -201,7 +195,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
 
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
-    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await leaveWithout(page).click();
     await expect(page).toHaveURL(/\/queue$/);
   });
 
@@ -221,7 +215,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
 
     await page.getByRole('button', { name: /Account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
-    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await leaveWithout(page).click();
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
@@ -287,13 +281,17 @@ async function twoTabsDisagree(page: Page, testInfo: TestInfo): Promise<Page> {
   return other;
 }
 
-test.describe('AC-5, AC-6: two tabs', () => {
-  test('AC-6: the second tab to save the same field is refused, keeps what it typed, shows the newer value under the field, and nothing is overwritten until the person chooses', async ({ page }, testInfo) => {
+test.describe('AC-5, AC-6, AC-8: two tabs', () => {
+  test('AC-6, AC-8: the second tab to save the same field is refused, keeps what it typed, shows the newer value, sends nothing over it until the person chooses; "Use the newer values" shows it', async ({ page }, testInfo) => {
     const other = await twoTabsDisagree(page, testInfo);
     await expect(other.getByRole('alert').filter({ hasText: 'This part was changed somewhere else.' })).toBeVisible();
     await expect(control(other, 'J')).toHaveValue('2.00');
     await expect(partForm(other).getByText('Changed somewhere else. The newer value is "1.00".')).toBeVisible();
     await expect(control(other, 'J')).toHaveAttribute('aria-invalid', 'true');
+    for (const name of ['Keep what I typed', 'Use the newer values']) {
+      expect((await other.getByRole('button', { name }).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    }
+    expect(await horizontalOverflow(other)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(other);
 
     // Neither leaving the field nor Save draft sends the typed value over the newer one.
@@ -304,15 +302,15 @@ test.describe('AC-5, AC-6: two tabs', () => {
     await expect(other.getByRole('alert').filter({ hasText: 'The draft was not saved.' })).toBeVisible();
     await other.waitForTimeout(400);
     expect(saves.count()).toBe(0);
-    await page.reload();
-    await waitForForm(page);
-    await expect(control(page, 'J')).toHaveValue('1.00');
 
     // "Use the newer values" shows what the part holds and sends nothing.
     await other.getByRole('button', { name: 'Use the newer values' }).click();
     await expect(control(other, 'J')).toHaveValue('1.00');
     await expect(other.getByText('This part was changed somewhere else.')).toHaveCount(0);
     expect(saves.count()).toBe(0);
+    await page.reload();
+    await waitForForm(page);
+    await expect(control(page, 'J')).toHaveValue('1.00');
   });
 
   test('AC-6: "Keep what I typed" sends it with the newer revision, and then it is what the part holds', async ({ page }, testInfo) => {
@@ -347,14 +345,5 @@ test.describe('AC-5, AC-6: two tabs', () => {
     await waitForForm(page);
     await expect(control(page, 'K')).toHaveValue('3.00');
     await expect(control(page, 'J')).toHaveValue('1.00');
-  });
-
-  test('AC-8: at every width the conflict notice and its two buttons fit, 44 px high, and the page does not scroll sideways', async ({ page }, testInfo) => {
-    const other = await twoTabsDisagree(page, testInfo);
-    for (const name of ['Keep what I typed', 'Use the newer values']) {
-      await expect(other.getByRole('button', { name })).toBeVisible();
-      expect((await other.getByRole('button', { name }).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    }
-    expect(await horizontalOverflow(other)).toBeLessThanOrEqual(0);
   });
 });
