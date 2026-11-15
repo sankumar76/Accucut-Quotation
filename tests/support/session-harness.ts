@@ -9,8 +9,11 @@ import { systemClock } from '../../src/lib/time';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
+import type { CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
+import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
+import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -102,6 +105,10 @@ export interface SessionHarness {
   readonly calculationService: CalculationService;
   /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
   readonly calculationWorld: FakeCalculationWorld;
+  /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
+  readonly estimateReviewService: EstimateReviewService;
+  /** The pieces `estimateReviewService` reads through, for a test that spies on what a refused caller causes to be read. */
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -208,8 +215,22 @@ export function createSessionHarness(): SessionHarness {
     storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
     workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition },
   });
+  // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
+  const reviewReads = {
+    findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
+    findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
+  };
+  const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
+  const estimateReviewService = createEstimateReviewService({
+    calculations: reviewReads,
+    nodes: reviewReads,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+  });
 
   return {
+    estimateReviewService,
+    reviewReads,
     users,
     throttles,
     auditService,

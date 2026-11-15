@@ -38,3 +38,11 @@ export function figureState({ inputsRevision, calculationInputsRevision }: Figur
 export function figuresWhenCurrent<T>(state: FigureState, figures: T): T | null {
   return state === 'current' ? figures : null;
 }
+
+/**
+ * The figures **read** only when the state is `current` (STORY-06.02 AC-7): `read` is not called in any other state, so a figure of a cleared or missing calculation is never even loaded,
+ * and a screen or a route that reads a calculation goes through this or `figuresWhenCurrent`, never around them.
+ */
+export async function readFiguresWhenCurrent<T>(state: FigureState, read: () => Promise<T>): Promise<T | null> {
+  return state === 'current' ? await read() : null;
+}

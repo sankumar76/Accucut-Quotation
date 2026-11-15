@@ -189,6 +189,10 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 200 };
     case 'GET /api/v1/images/[id]':
       return { id, file: true, status: 200 };
+    // STORY-06.02: the review's figures read nothing that changes, so the call answers 200 at any state for the two roles that may make it. The canary estimate has no calculation, so the answer holds no
+    // figure at all (state `none`); the figures of a calculated estimate are `estimate-review-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
+    case 'GET /api/v1/estimates/[id]/costs':
+      return { id, status: 200 };
     default:
       return undefined;
   }
