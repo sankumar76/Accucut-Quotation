@@ -37,13 +37,14 @@ const number = (id: string): FormField => ({
 
 const A = number('a');
 const B = number('b');
+const C = number('c');
 const NOTHING = (): void => undefined;
 const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function open(held: Record<string, string> = { a: '1.00', b: '1.00' }) {
   partServer.reset(held);
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B], onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B, C], onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await flushMicrotasks();
@@ -133,6 +134,73 @@ describe('SQR-02: a later good save does not take the conflict away', () => {
     form.commit(B);
     await gate.settle();
     expect(partServer.inputs['b']).toBe('4.00');
+  });
+});
+
+describe('SQR-13: a choice made while the re-read is still sending does not let an old queued save through', () => {
+  /** A and B are left together; the other tab changed B; the re-read's second save of A (the resend) is held, so the notice is on screen while B's old save is still queued behind it. */
+  async function noticeUpWhileResendIsHeld() {
+    const opened = await open();
+    const form = opened.hook.render();
+    form.setText('a', '2');
+    form.setText('b', '3');
+    partServer.changeElsewhere({ b: '9.00' });
+    const release = partServer.holdSaveNumber(2);
+    form.commit(A);
+    form.commit(B);
+    await flushMicrotasks();
+    expect(opened.hook.render().problem?.kind).toBe('conflict');
+    return { ...opened, release };
+  }
+
+  it('"Use the newer values" before the resend is answered: B is not sent afterwards, the screen and the part agree on 9.00, and nothing is left unsaved', async () => {
+    const { gate, hook, release } = await noticeUpWhileResendIsHeld();
+    hook.render().resolveConflict('newer');
+    release();
+    await gate.settle();
+    expect(sentForB()).toBe(0);
+    expect(partServer.inputs['b']).toBe('9.00');
+    expect(hook.render().texts['b']).toBe('9.00');
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('"Keep what I typed" before the resend is answered: B is sent once, by the choice, and not a second time by the old queued save', async () => {
+    const { gate, hook, release } = await noticeUpWhileResendIsHeld();
+    hook.render().resolveConflict('mine');
+    release();
+    await gate.settle();
+    expect(sentForB()).toBe(1);
+    expect(partServer.inputs['b']).toBe('3.00');
+    expect(gate.isDirty()).toBe(false);
+  });
+});
+
+describe('SQR-14: another field\'s failure is shown beside the conflict notice, not swallowed by it', () => {
+  it('keeps the notice and adds the failure, which stays when the conflict is resolved', async () => {
+    const { gate, hook } = await disagreeOnB();
+    const form = hook.render();
+    form.setText('c', '1');
+    partServer.failNextSave();
+    form.commit(C);
+    await gate.settle();
+    expect(hook.render().problem).toEqual({ kind: 'conflict', fields: [{ fieldId: 'b', newer: '9.00' }], also: { kind: 'failed' } });
+    expect(gate.isDirty()).toBe(true);
+    hook.render().resolveConflict('newer');
+    expect(hook.render().problem).toEqual({ kind: 'failed' });
+    expect(gate.isDirty()).toBe(true);
+  });
+
+  it('a good save clears that failure but not the conflict', async () => {
+    const { gate, hook } = await disagreeOnB();
+    const form = hook.render();
+    form.setText('c', '1');
+    partServer.failNextSave();
+    form.commit(C);
+    await gate.settle();
+    form.setText('a', '7');
+    form.commit(A);
+    await gate.settle();
+    expect(hook.render().problem).toEqual({ kind: 'conflict', fields: [{ fieldId: 'b', newer: '9.00' }], also: undefined });
   });
 });
 

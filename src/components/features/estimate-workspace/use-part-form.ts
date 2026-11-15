@@ -18,11 +18,9 @@ import { LOADING, loadedFrom, type Loaded } from './use-form-definition';
  * Why the last save did not go through, other than a value the server refused (that is under its field): the part is gone (read again), it changed somewhere else and the person's text is kept
  * beside the newer value (`conflict`, STORY-05.08 AC-5, AC-6), a refusal in the server's words, or "it failed".
  */
-export type PartProblem =
-  | { readonly kind: 'changed' }
-  | { readonly kind: 'conflict'; readonly fields: ReadonlyArray<FieldConflict> }
-  | { readonly kind: 'refused'; readonly message: string }
-  | { readonly kind: 'failed' };
+export type OtherProblem = { readonly kind: 'changed' } | { readonly kind: 'refused'; readonly message: string } | { readonly kind: 'failed' };
+/** A conflict carries the failure of another field's save that came while its notice was up (`also`), so both are shown (review SQR-14). */
+export type PartProblem = OtherProblem | { readonly kind: 'conflict'; readonly fields: ReadonlyArray<FieldConflict>; readonly also?: OtherProblem | undefined };
 
 /** A save that finds the part changed reads it again and sends again what nobody else touched; a part that changes three times in a row is told to the person instead of looped on. */
 const MAX_REFRESHES = 2;
@@ -92,6 +90,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const conflictRef = useRef<ReadonlySet<string>>(new Set());
   // The text of each field that a save in the queue is about to send or is sending, so the same text is not queued twice.
   const onItsWayRef = useRef(new Map<string, string>());
+  // A number for each field, raised whenever a save of it is queued and whenever it falls into conflict: a save is sent only while it still holds the field's latest number.
+  const ticketsRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     revisionRef.current = part.revision;
@@ -150,7 +150,11 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // Typing over a field that holds a newer value is a choice to keep one's own, made with the newer value in front of the person: it is no longer a conflict, and the next leave sends it.
     if (conflictRef.current.has(fieldId)) {
       conflictRef.current = new Set([...conflictRef.current].filter((id) => id !== fieldId));
-      setProblem((current) => (current?.kind !== 'conflict' ? current : current.fields.length > 1 ? { kind: 'conflict', fields: current.fields.filter((conflict) => conflict.fieldId !== fieldId) } : null));
+      setProblem((current) => {
+        if (current?.kind !== 'conflict') return current;
+        const rest = current.fields.filter((conflict) => conflict.fieldId !== fieldId);
+        return rest.length > 0 ? { ...current, fields: rest } : (current.also ?? null);
+      });
     }
     const field = fieldOf(fieldId);
     mark(fieldId, field !== undefined && differsFromHeld(field, text));
@@ -179,7 +183,18 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
 
   /** Shows a problem, or none, unless fields are waiting for the person to choose between their text and a newer value: that notice has the buttons, and nothing else may take its place (review SQR-02). */
   function showProblem(next: PartProblem | null): void {
-    setProblem((current) => (current?.kind === 'conflict' && conflictRef.current.size > 0 ? current : next));
+    setProblem((current) => {
+      if (current?.kind !== 'conflict' || conflictRef.current.size === 0) return next;
+      // The notice stays. Another field's failure is shown beside it (review SQR-14), and a good save clears that failure as it would anywhere else.
+      return { ...current, also: next === null || next.kind === 'conflict' ? undefined : next };
+    });
+  }
+
+  /** Makes every save already queued for this field out of date: it will not be sent, whatever happens to the conflict before it runs (review SQR-13). Answers the ticket of the save about to be queued. */
+  function newTicket(fieldId: string): number {
+    const ticket = (ticketsRef.current.get(fieldId) ?? 0) + 1;
+    ticketsRef.current.set(fieldId, ticket);
+    return ticket;
   }
 
   /**
@@ -205,6 +220,9 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       clearError(adoptedId);
     }
     for (const { fieldId: conflictId, newer: newerText } of plan.conflicts) {
+      // A save already queued for this field is out of date from now on, even if the person has chosen before it runs (review SQR-13).
+      newTicket(conflictId);
+      onItsWayRef.current.delete(conflictId);
       mark(conflictId, true);
       const shown = fieldOf(conflictId)?.rule.type;
       setErrors((current) => ({ ...current, [conflictId]: conflictFieldMessage(shown === 'number' || shown === 'text' ? newerText : null) }));
@@ -214,7 +232,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     setProblem((current) => {
       const waiting = current?.kind === 'conflict' ? current.fields.filter((earlier) => !plan.conflicts.some((conflict) => conflict.fieldId === earlier.fieldId)) : [];
       const fields = [...waiting, ...plan.conflicts];
-      return fields.length > 0 ? { kind: 'conflict', fields } : null;
+      return fields.length > 0 ? { kind: 'conflict', fields, also: current?.kind === 'conflict' ? current.also : undefined } : null;
     });
     for (const resendId of plan.resend) {
       const field = fieldOf(resendId);
@@ -226,9 +244,11 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     }
   }
 
-  async function send(fieldId: string, value: string, refreshed = 0): Promise<void> {
-    // A save that was queued before a 409 can run after the re-read has found a newer value in this field: it waits for the person's choice, and sends nothing over the newer value (review SQR-01).
-    if (conflictRef.current.has(fieldId)) return;
+  /** `ticket` is the one `commit` took when it queued this save; a save sent again by a re-read has none and takes the field's current one. */
+  async function send(fieldId: string, value: string, refreshed = 0, ticket = ticketsRef.current.get(fieldId) ?? 0): Promise<void> {
+    // A save that was queued before a 409 can run after the re-read has found a newer value in this field: it sends nothing over the newer value, while the person has not chosen (review SQR-01) and after they
+    // have, because the choice made it out of date (its ticket was taken from it, review SQR-13). A choice to keep the typed text is a new save with a new ticket.
+    if (conflictRef.current.has(fieldId) || (ticketsRef.current.get(fieldId) ?? 0) !== ticket) return;
     const outcome = await savePartInputs(estimateId, partId, { revision: revisionRef.current, values: { [fieldId]: value } });
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === PART_CHANGED_CODE && refreshed < MAX_REFRESHES) {
       await reconcile(fieldId, refreshed + 1);
@@ -270,7 +290,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // The same text is already on its way (leaving the field and then pressing Save draft ask for it twice): one request, not two. A save that fails clears this, so the next leave sends it again.
     if (onItsWayRef.current.get(field.id) === value) return;
     onItsWayRef.current.set(field.id, value);
-    queueRef.current = queueRef.current.then(() => send(field.id, value)).finally(() => {
+    const ticket = newTicket(field.id);
+    queueRef.current = queueRef.current.then(() => send(field.id, value, 0, ticket)).finally(() => {
       if (onItsWayRef.current.get(field.id) === value) onItsWayRef.current.delete(field.id);
     });
     if (watchersOf(fields, field.id).length > 0) queueRef.current = queueRef.current.then(() => syncWatchers(field.id));
@@ -341,7 +362,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   function resolveConflict(choice: 'mine' | 'newer'): void {
     if (problem?.kind !== 'conflict') return;
     conflictRef.current = new Set();
-    setProblem(null);
+    setProblem(problem.also ?? null);
     for (const { fieldId, newer } of problem.fields) {
       const field = fieldOf(fieldId);
       if (choice === 'mine' && field !== undefined) {

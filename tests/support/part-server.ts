@@ -18,6 +18,9 @@ const state = {
   inputs: {} as Record<string, string>,
   sent: [] as SentSave[],
   hold: null as Promise<void> | null,
+  /** The number (1 is the first save since `reset`) of the save that waits for `hold`, or 0 for the next one. */
+  holdAt: 0,
+  failNext: false,
   churn: false,
 };
 
@@ -30,7 +33,19 @@ export const partServer = {
     state.inputs = { ...inputs };
     state.sent = [];
     state.hold = null;
+    state.holdAt = 0;
+    state.failNext = false;
     state.churn = false;
+  },
+  /** The nth save since `reset` (1 is the first) waits until the returned function is called. */
+  holdSaveNumber(number: number): () => void {
+    const release = this.holdNextSave();
+    state.holdAt = number;
+    return release;
+  },
+  /** The next save is lost on the way, as a dropped connection loses it: no answer came. */
+  failNextSave(): void {
+    state.failNext = true;
   },
   /** While on, somebody else saves just before every save of this tab arrives, so every save is refused with 409. */
   churn(on: boolean): void {
@@ -61,8 +76,16 @@ export const partServer = {
   load: (): Promise<Outcome<PartInputs>> => Promise.resolve({ status: 'ok', value: view() }),
   async save(_estimateId: string, _nodeId: string, request: SaveInputsRequest): Promise<Outcome<PartInputs>> {
     state.sent.push({ revision: request.revision, values: { ...request.values } });
-    const held = state.hold;
-    state.hold = null;
+    if (state.failNext) {
+      state.failNext = false;
+      return { status: 'failed' };
+    }
+    const waits = state.hold !== null && (state.holdAt === 0 || state.holdAt === state.sent.length);
+    const held = waits ? state.hold : null;
+    if (waits) {
+      state.hold = null;
+      state.holdAt = 0;
+    }
     if (held !== null) await held;
     if (state.churn) {
       state.inputs = { ...state.inputs, c: '1.00' };
