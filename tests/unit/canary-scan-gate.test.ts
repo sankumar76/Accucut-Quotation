@@ -182,7 +182,7 @@ describe('the scan is in the Playwright list at three widths (AC-8)', () => {
     tests = [...found].map(([title, projects]) => ({ title, projects }));
   });
 
-  it('lists the twenty-one tests of the scan (two of them are of STORY-06.02, the review page of a Lead and its planted-leak control, and one of STORY-06.03, the Lead\'s cost details): the Engineer scan, the refusals, the real-data controls (the rates, the materials of STORY-02.03, the customers of STORY-02.02 and the exchange rates of STORY-02.04), the options lists, two planted-leak controls, the task states of STORY-04.04 with their own planted-leak control, the Calculate journey of STORY-05.09 with its own planted-leak control (a figure of the calculation) and its two-masters comparison, the quantity-warning journey of STORY-05.12 and its own two-masters comparison, the absent route', () => {
+  it('lists the twenty-three tests of the scan (two of them are of STORY-06.04, the Recalculate of a Lead and its planted-leak control; two are of STORY-06.02, the review page of a Lead and its planted-leak control, and one of STORY-06.03, the Lead\'s cost details): the Engineer scan, the refusals, the real-data controls (the rates, the materials of STORY-02.03, the customers of STORY-02.02 and the exchange rates of STORY-02.04), the options lists, two planted-leak controls, the task states of STORY-04.04 with their own planted-leak control, the Calculate journey of STORY-05.09 with its own planted-leak control (a figure of the calculation) and its two-masters comparison, the quantity-warning journey of STORY-05.12 and its own two-masters comparison, the absent route', () => {
     expect(tests.map((test) => test.title.split(':')[0]).sort()).toEqual([
       'AC-3',
       'AC-3, AC-4 (control with real data)',
@@ -203,7 +203,9 @@ describe('the scan is in the Playwright list at three widths (AC-8)', () => {
       'AC-6 (negative control, STORY-06.02)',
       'AC-7 (STORY-05.12)',
       'AC-7 (STORY-05.12)',
+      'AC-7 (STORY-06.04)',
       'AC-7 (control with real data, STORY-02.02)',
+      'AC-7 (negative control, STORY-06.04)',
       'AC-8 (STORY-06.03)',
     ]);
   });
