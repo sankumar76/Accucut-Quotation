@@ -140,7 +140,18 @@ export interface CalculationService {
    * in the same transaction, naming the rows and holding no figure. With nothing to warn, `acknowledge` is ignored.
    */
   calculate(viewer: EstimateViewer, estimateId: string, options?: CalculateOptions): Promise<CalculateAnswer>;
+  /**
+   * A Lead's or an Admin's Recalculate (`POST /api/v1/estimates/{id}/recalculate`, STORY-06.04; FR-061; architecture sections 4.2, 4.4 and 4.8): **the same work as `calculate`, not a second path**, in one
+   * transaction under the estimate's row lock, with the state machine's `RECALCULATE` event in place of `CALCULATE`. It makes a new immutable record from the masters as they are now, in the person's name, and links
+   * it, so the figures are `current` again. A DRAFT (unlocked) estimate becomes SUBMITTED, a SUBMITTED one stays so (the machine decides), an APPROVED one is the 409 `ESTIMATE_APPROVED_IS_LOCKED` and
+   * nothing is written. The checks and their order, the 422 `CALCULATE_BLOCKED`, the 409 for a customer not chosen, the quantity warning and its acknowledgement are `calculate`'s own. It answers nothing: the
+   * route reads the costs view afterwards, through the figure state, so no figure leaves this service (NFR-002). A role the machine does not allow is refused before the estimate's status is looked at.
+   */
+  recalculate(viewer: EstimateViewer, estimateId: string, options?: CalculateOptions): Promise<void>;
 }
+
+/** The two events that make a calculation: the Engineer's first Calculate and a Lead's or an Admin's Recalculate (`state-machine.ts`). */
+type CalculateEvent = 'CALCULATE' | 'RECALCULATE';
 
 /** What a press of Calculate may carry besides who pressed: the acknowledgement of a warning, and who and which request the audit entry of it names. */
 export interface CalculateOptions {
@@ -395,16 +406,20 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     return warnings;
   }
 
-  /** The Engineer's Calculate in the caller's transaction. The order is the architecture's (section 4.2): role, ownership and status, then every input, then the customer, then the warning, then the masters. */
+  /**
+   * A Calculate or a Recalculate in the caller's transaction: **one path for both** (STORY-06.04). The order is the architecture's (section 4.2): role, ownership and status, then every input, then the
+   * customer, then the warning, then the masters. Only the event differs: the Engineer's `CALCULATE`, or the Lead's and the Admin's `RECALCULATE`.
+   */
   async function submit(
     { storage: stored, flow }: { readonly storage: NonNullable<CalculationServiceDependencies['storage']>; readonly flow: NonNullable<CalculationServiceDependencies['workflow']> },
+    event: CalculateEvent,
     viewer: EstimateViewer,
     estimateId: string,
     tx: Transaction,
     options: CalculateOptions,
-  ): Promise<CalculateAnswer> {
-    // 404 (not this person's, or a role that may not Calculate), 409 (not a draft), under the estimate's row lock; it also moves the status, and the transaction puts it back if anything below refuses.
-    await flow.transition(viewer, estimateId, 'CALCULATE', tx);
+  ): Promise<void> {
+    // 404 (not this person's, or a role that may not apply the event), 409 (a status that does not allow it), under the estimate's row lock; it also moves the status, and the transaction puts it back if anything below refuses.
+    await flow.transition(viewer, estimateId, event, tx);
     const estimate = await stored.estimates.lockEstimate(estimateId, tx);
     if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
     const configuration = await currentConfiguration(tx);
@@ -425,7 +440,12 @@ export function createCalculationService(dependencies: CalculationServiceDepende
         after: { warnings: warnings.map(({ code, nodeId, slNo, label }) => ({ code, nodeId, slNo, label })) },
       });
     }
-    return { status: CALCULATE_SUBMITTED_STATUS, message: CALCULATE_MESSAGE };
+  }
+
+  /** Both presses run the same `submit` in one transaction; they differ in the event and in what they answer. */
+  function press(event: CalculateEvent, viewer: EstimateViewer, estimateId: string, options: CalculateOptions): Promise<void> {
+    if (storage === undefined || workflow === undefined) throw new Error('This calculation service was built without storage or without the estimate workflow.');
+    return storage.transactions.run((tx) => submit({ storage, flow: workflow }, event, viewer, estimateId, tx, options));
   }
 
   return {
@@ -441,8 +461,11 @@ export function createCalculationService(dependencies: CalculationServiceDepende
       return tx === undefined ? storage.transactions.run((own) => store(storage, request, own)) : store(storage, request, tx);
     },
     async calculate(viewer, estimateId, options = {}) {
-      if (storage === undefined || workflow === undefined) throw new Error('This calculation service was built without storage or without the estimate workflow.');
-      return storage.transactions.run((tx) => submit({ storage, flow: workflow }, viewer, estimateId, tx, options));
+      await press('CALCULATE', viewer, estimateId, options);
+      return { status: CALCULATE_SUBMITTED_STATUS, message: CALCULATE_MESSAGE };
+    },
+    async recalculate(viewer, estimateId, options = {}) {
+      await press('RECALCULATE', viewer, estimateId, options);
     },
   };
 }
