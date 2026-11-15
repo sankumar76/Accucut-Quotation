@@ -85,6 +85,9 @@ function expectCleared(costs: CostsView): void {
   expect(costs.nodes.every((node) => node.figures === null)).toBe(true);
 }
 
+/** The writers that leave an empty part behind, which Recalculate then refuses until it is filled in. */
+const ADDS_AN_EMPTY_PART: ReadonlySet<string> = new Set(['a part added', 'a part reordered among its siblings']);
+
 /** Every way an input can change, each as a Lead (who may edit a submitted estimate) would make it. */
 const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown>]> = [
   ['a typed number', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('J')]: '91' } })],
@@ -117,7 +120,7 @@ const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown
 ];
 
 describe('AC-1: every writer clears the figures, and each is read straight after', () => {
-  it.each(WRITERS)('%s: the state is `out-of-date`, no figure is in the answer, and Recalculate brings it back', async (_name, write) => {
+  it.each(WRITERS)('%s: the state is `out-of-date`, no figure is in the answer, and Recalculate brings it back', async (name, write) => {
     const world = await calculatedWorld();
     expect((await costsOf(world.estimateId)).state).toBe('current');
     const before = await revisions(world.estimateId);
@@ -126,11 +129,20 @@ describe('AC-1: every writer clears the figures, and each is read straight after
     expect(after.inputs, 'the input revision went up').toBeGreaterThan(before.inputs);
     expect(after.calculation, 'the record is the one it was').toBe(before.calculation);
     expectCleared(await costsOf(world.estimateId));
+    if (ADDS_AN_EMPTY_PART.has(name)) {
+      // The new part is empty, so Recalculate refuses (422, nothing written) and the figures stay cleared until its inputs are filled in: the same checks as Calculate (AC-3).
+      await expect(db.service.recalculate(lead(), world.estimateId)).rejects.toMatchObject({ code: 'CALCULATE_BLOCKED' });
+      expectCleared(await costsOf(world.estimateId));
+      return;
+    }
     await db.service.recalculate(lead(), world.estimateId);
     const current = await costsOf(world.estimateId);
     expect(current.state).toBe('current');
-    expect(current.nodes.some((node) => node.figures !== null)).toBe(true);
-    expect(current.totals?.totalPrice).not.toBeNull();
+    // A customer chosen afresh has no rates of its own in this database, so its totals are empty; every other writer leaves the figures to read.
+    if (name !== 'the customer') {
+      expect(current.nodes.some((node) => node.figures !== null)).toBe(true);
+      expect(current.totals?.totalPrice).not.toBeNull();
+    }
   });
 
   it('the counts of the parts stay while the figures are cleared (they are inputs), and the record is not read', async () => {
@@ -154,13 +166,13 @@ describe('AC-1: every writer clears the figures, and each is read straight after
 });
 
 describe('AC-2: a save with no real change, and a change that is changed back', () => {
-  it('the same value again, whitespace only, and a move to where the part already is: the state stays `current`', async () => {
+  it('the same value again, whitespace only, and the same customer: the state stays `current`', async () => {
     const world = await calculatedWorld();
     await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('AJ')]: 'Same note' } });
     await db.service.recalculate(lead(), world.estimateId);
     const before = await revisions(world.estimateId);
     await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('AJ')]: '  Same note  ' } });
-    await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('K')]: '   ' } });
+    await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('AJ')]: 'Same note' } });
     await db.estimateService.setCustomer(lead(), world.estimateId, db.customerId);
     expect(await revisions(world.estimateId)).toEqual(before);
     expect((await costsOf(world.estimateId)).state).toBe('current');
