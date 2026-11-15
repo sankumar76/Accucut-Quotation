@@ -255,6 +255,13 @@ jobs:
           # The step's exit code is the last native exit code (here the expected 1 of install.ps1): reset it.
           $global:LASTEXITCODE = 0
 
+      # The Task Scheduler operational log is off by default. It is switched on before the install so that a task that does not start leaves its reason (STORY-10.05).
+      - name: Switch on the Task Scheduler operational log (for the weekly backup task)
+        run: |
+          & wevtutil.exe set-log Microsoft-Windows-TaskScheduler/Operational /enabled:true
+          if ($LASTEXITCODE -ne 0) { Write-Host 'The operational log could not be switched on (diagnostics only).' }
+          $global:LASTEXITCODE = 0
+
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
         run: |
@@ -362,6 +369,24 @@ jobs:
               Get-Content -LiteralPath $_.FullName -Tail 60
             }
           }
+
+      # Why a task did not run: the right "Log on as a batch job" of the account, the failed logons (event 4625 names the reason), and the Task Scheduler's own events.
+      # Nothing here prints a secret: the password is held by Task Scheduler only.
+      - name: Why did the weekly backup task not run? (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-ScheduledTask -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List TaskName, State, @{ n = 'User'; e = { $_.Principal.UserId } }, @{ n = 'LogonType'; e = { $_.Principal.LogonType } }, @{ n = 'RunLevel'; e = { $_.Principal.RunLevel } }
+          Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List LastRunTime, LastTaskResult, NextRunTime, NumberOfMissedRuns
+          $user = Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue
+          if ($user) { Write-Host "AccucutBackup: enabled=$($user.Enabled) sid=$($user.SID.Value)" }
+          $rights = Join-Path $env:RUNNER_TEMP 'user-rights.inf'
+          & "$env:SystemRoot\System32\secedit.exe" /export /cfg $rights /areas USER_RIGHTS | Out-Null
+          if (Test-Path -LiteralPath $rights) { Get-Content -LiteralPath $rights | Where-Object { $_ -match 'SeBatchLogonRight|SeDenyBatchLogonRight' } }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625 } -MaxEvents 3 -ErrorAction SilentlyContinue | ForEach-Object { ($_.Message -split "`n" | Where-Object { $_ -match 'Account Name|Failure Reason|Status|Sub Status|Logon Type' }) -join ' | ' }
+          Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational' -MaxEvents 25 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'Accucut' } | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Message -replace '\s+', ' ')" }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          $global:LASTEXITCODE = 0
 
       - name: Delete the values file and the throwaway private key
         if: ${{ always() }}
