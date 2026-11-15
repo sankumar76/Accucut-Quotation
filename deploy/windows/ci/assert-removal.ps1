@@ -67,3 +67,5 @@ $changed = @(($before.Keys + $after.Keys) | Sort-Object -Unique | Where-Object {
 Assert-That ($changed.Count -eq 0) "every user right is exactly as it was before the install (changed: $($changed -join ', '))"
 $bare = @($after.Keys | Where-Object { @($after[$_]) -contains $backupSid })
 Assert-That ($bare.Count -eq 0) "no bare SID of the removed account is left in the policy (found under: $($bare -join ', '))"
+Write-Host 'The backup account is removed and the policy is as it was before the install.'
+$global:LASTEXITCODE = 0

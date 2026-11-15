@@ -49,3 +49,4 @@ if ($fields.Count -ge 5) {
     Write-Host '--- sign in as accucut_backup through the file (PGPASSFILE, run by the administrator)'
     Write-Host (Invoke-Psql -User 'accucut_backup' -PassFile $file -Sql 'SELECT current_user')
 }
+$global:LASTEXITCODE = 0

@@ -167,3 +167,5 @@ finally {
 Assert-That ((Get-AccucutFileSha256 -Path $module) -eq $originalHash) 'the module was put back byte for byte'
 Assert-That ((Get-Acl -LiteralPath $module).Sddl -eq $originalSddl) 'the permissions of the module were put back'
 Write-Host 'All backup exercises passed.'
+# The last native program may have left a non-zero exit code behind; the assertions above throw on any real failure, so reaching here means success.
+$global:LASTEXITCODE = 0

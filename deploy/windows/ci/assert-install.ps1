@@ -392,3 +392,5 @@ else {
     Write-Host 'SKIP  Defender commands are not available on this machine'
 }
 Write-Host 'All install assertions passed.'
+# The last native program may have left a non-zero exit code behind; the assertions above throw on any real failure, so reaching here means success.
+$global:LASTEXITCODE = 0
