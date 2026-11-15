@@ -15,6 +15,7 @@ import { DEVELOPMENT_URL } from './support/servers';
 
 const DAY_MS = 86_400_000;
 const PRICE_WORDS = /₹|\$|€|price|approved by|override|reason|formula/i;
+const APPROVAL_WORDS = /₹|\$|€|approved by|override|reason|formula/i;
 const ANSWER_KEYS = ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title'];
 
 const tab = (page: Page, name: string): Locator => page.getByRole('tab', { name: new RegExp(`^${name}`) });
@@ -163,6 +164,8 @@ test.describe('a Lead', () => {
     await page.goto(`/estimates/${states.approved.code}`);
     await expect(page.getByRole('heading', { level: 1, name: states.approved.code })).toBeVisible();
     await expect(page.locator('[data-slot="status-badge"]')).toHaveText('Approved and locked');
-    expect(await page.locator('main').innerText()).not.toMatch(PRICE_WORDS);
+    // STORY-06.02: a Lead's page is now the estimate review (SCR-06), whose tiles are named "Total Unit Production Price" and "Approved Quote Price", so the bare word "price" is no longer absent. What
+    // must still be absent is the approval itself: an amount, who approved, an override, a reason or a formula. This task has no calculation, so no figure is drawn either.
+    expect(await page.locator('main').innerText()).not.toMatch(APPROVAL_WORDS);
   });
 });
