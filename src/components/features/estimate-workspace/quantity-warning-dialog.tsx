@@ -25,6 +25,7 @@ import {
 } from '@/lib/estimate/warning-copy';
 import type { WarnedRowView } from '@/lib/estimates/calculate-client';
 
+import { focusCalculate } from './calculate-button';
 import { controlIdFor } from './field-renderer';
 import { focusFieldWhenPresent } from './focus-field';
 
@@ -35,7 +36,7 @@ export interface QuantityWarningDialogProps {
   readonly changed: boolean;
   /** True while "Calculate anyway" is on its way: the button is held and the dialog cannot be dismissed. */
   readonly busy: boolean;
-  /** "Go back": closes the dialog, changes nothing (the estimate stays a draft) and puts focus back on Calculate. Also Escape. */
+  /** "Go back" (also Escape): closes the dialog and changes nothing (the estimate stays a draft). The dialog puts focus back on Calculate. */
   readonly onGoBack: () => void;
   /** "Calculate anyway": sends the acknowledgement for the revision of this list. */
   readonly onGoAhead: () => void;
@@ -53,16 +54,22 @@ export interface QuantityWarningDialogProps {
  * answer moves focus to the Submitted notice, so every way out puts focus somewhere deliberate (WCAG 2.4.3).
  */
 export function QuantityWarningDialog({ rows, changed, busy, onGoBack, onGoAhead, onChoosePart }: QuantityWarningDialogProps) {
+  /** Closes the dialog and, once its focus trap is gone, puts focus back on Calculate (the row link then moves it on to the field). */
+  function goBack(): void {
+    onGoBack();
+    window.setTimeout(focusCalculate, 0);
+  }
+
   function goTo(event: MouseEvent<HTMLAnchorElement>, row: WarnedRowView): void {
     event.preventDefault();
-    onGoBack();
+    goBack();
     onChoosePart(row.nodeId);
     // Once the dialog has closed and its focus trap is gone: a focus placed now would be pulled back into the dialog.
     window.setTimeout(() => focusFieldWhenPresent(row.nodeId, row.fieldId), 0);
   }
 
   return (
-    <AlertDialog open onOpenChange={(open) => (open || busy ? undefined : onGoBack())}>
+    <AlertDialog open onOpenChange={(open) => (open || busy ? undefined : goBack())}>
       <AlertDialogContent onCloseAutoFocus={(event) => event.preventDefault()}>
         <AlertDialogHeader>
           <AlertDialogTitle>{warningDialogTitle(rows.length)}</AlertDialogTitle>

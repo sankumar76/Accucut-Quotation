@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
-import { blockedPartsFrom, calculateAnyway, calculateEstimate, warningFrom } from '@/lib/estimates/calculate-client';
+import { blockedPartsFrom, calculateAnyway, calculateEstimate, press, warningFrom } from '@/lib/estimates/calculate-client';
 
 /**
  * STORY-05.09 (AC-1, AC-2, AC-7): the browser's call to Calculate and the reading of its two answers: the good one (a status and a sentence) and the 422 that lists parts and fields. `fetch` is
@@ -136,6 +136,22 @@ describe('calculateAnyway (STORY-05.12 AC-3)', () => {
     await calculateEstimate(ESTIMATE, doFetch);
     expect(doFetch.mock.calls[0]?.[1]?.body).toBeUndefined();
   });
+
+  it('`press` is the first press without a revision and "Calculate anyway" with one, and nothing else', async () => {
+    const calls: Array<{ readonly url: string; readonly body: unknown }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body });
+      return Promise.resolve(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+    }) as typeof fetch;
+    try {
+      await press(ESTIMATE);
+      await press(ESTIMATE, 0);
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(calls.map((call) => call.body)).toEqual([undefined, JSON.stringify({ acknowledge: { inputsRevision: 0 } })]);
+  });
 });
 
 describe('warningFrom (STORY-05.12 AC-6)', () => {
@@ -146,7 +162,11 @@ describe('warningFrom (STORY-05.12 AC-6)', () => {
   }
 
   it('reads the revision and each row with its part, field, Sl. No, name and sentence', async () => {
-    expect(warningFrom(await refusal(asked()))).toEqual({ inputsRevision: 7, rows: [{ nodeId: PART, fieldId: FIELD, slNo: '1.4', label: 'Top cover', message: row().message }] });
+    expect(warningFrom(await refusal(asked()))).toEqual({ inputsRevision: 7, rows: [{ nodeId: PART, fieldId: FIELD, slNo: '1.4', label: 'Top cover', message: row().message }], changed: false });
+  });
+
+  it('says the list is a new one when it answers "Calculate anyway"', async () => {
+    expect(warningFrom(await refusal(asked()), true)?.changed).toBe(true);
   });
 
   it('keeps every row, in the order sent, and a row with no name', async () => {

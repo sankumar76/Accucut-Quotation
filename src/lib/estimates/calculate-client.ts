@@ -34,6 +34,10 @@ export function calculateAnyway(estimateId: string, inputsRevision: number, doFe
   return sendJson(doFetch, calculatePath(estimateId), { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ acknowledge: { inputsRevision } }) }, toDone);
 }
 
+/** One press: the first (no `acknowledged`) or "Calculate anyway" with the revision of the 409 the person saw. The choice is made here, in the lazy chunk, so the page's first load does not carry it. */
+export const press = (estimateId: string, acknowledged?: number): Promise<Outcome<CalculateDone>> =>
+  acknowledged === undefined ? calculateEstimate(estimateId) : calculateAnyway(estimateId, acknowledged);
+
 /** A row with a 0 in QTY per Assy as the dialog shows it: the part and the field to take the person to, the Sl. No and name, and the server's sentence. */
 export interface WarnedRowView {
   readonly nodeId: string;
@@ -47,6 +51,8 @@ export interface WarnedRowView {
 export interface AckRequestView {
   readonly inputsRevision: number;
   readonly rows: ReadonlyArray<WarnedRowView>;
+  /** True when this is the answer to "Calculate anyway": the list is a new one, because something changed after the person saw the last (AC-4). */
+  readonly changed: boolean;
 }
 
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== '';
@@ -61,12 +67,12 @@ function toWarnedRow(value: unknown): WarnedRowView | null {
  * The rows and the revision of a 409 `CALCULATE_ACK_REQUIRED`, or `null` for any other refusal or a body that is not the expected shape (then the screen shows the server's own sentence and no rows).
  * No number is read from the body but the revision: there is no other in it (NFR-002).
  */
-export function warningFrom(refusal: Refusal): AckRequestView | null {
+export function warningFrom(refusal: Refusal, changed = false): AckRequestView | null {
   const { inputsRevision, warnings } = refusal.body;
   if (refusal.code !== CALCULATE_ACK_REQUIRED_CODE || typeof inputsRevision !== 'number' || !Number.isInteger(inputsRevision) || inputsRevision < 0) return null;
   if (!Array.isArray(warnings) || warnings.length === 0) return null;
   const rows = warnings.map(toWarnedRow);
-  return rows.every((row) => row !== null) ? { inputsRevision, rows } : null;
+  return rows.every((row) => row !== null) ? { inputsRevision, rows, changed } : null;
 }
 
 function toField(value: unknown): MissingFieldView | null {
