@@ -187,7 +187,10 @@ describe('AC-1: the surface treatments are stored as 1 and 0', () => {
     expect((await stored(nodeId)).inputs).toEqual({ [PRIMER]: '1' });
     await save(nodeId, 2, { [PRIMER]: '0', [LENGTH]: '3' });
     expect((await stored(nodeId)).inputs).toEqual({ [PRIMER]: '0', [LENGTH]: '3.00' });
-    const clean = await setUpPart();
-    expect((await stored(clean)).inputs).toEqual({});
+  });
+
+  it('a part that never had a treatment chosen holds {} and stays EMPTY', async () => {
+    const nodeId = await setUpPart();
+    expect((await stored(nodeId)).inputs).toEqual({});
   });
 });
