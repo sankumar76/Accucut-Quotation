@@ -33,6 +33,7 @@ import { focusCalculate } from './calculate-button';
 import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PictureSlot } from './picture-slot';
+import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
 import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
@@ -126,6 +127,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
 
   const problem = values.problem;
+  const otherProblem = problem?.kind === 'conflict' ? (problem.also ?? null) : problem;
   const picture = values.stored.value.picture;
   // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check. A field the registry hides for what is
   // typed (Fasteners Qty and Cost while Fasteners is "None" or blank) is not drawn, not counted and not marked missing, and it comes back with what was typed when it shows (STORY-05.05 AC-1, AC-2).
@@ -143,9 +145,24 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
         <p className="text-label text-ink-3">{lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt)))}</p>
       </div>
       {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
-      {problem === null ? null : (
-        <Notice tone="danger" title={problem.kind === 'changed' ? PART_CHANGED_NOTICE : problem.kind === 'refused' ? problem.message : PART_SAVE_FAILED_TITLE}>
-          {problem.kind === 'failed' ? FAILED_BODY : null}
+      {problem?.kind !== 'conflict' ? null : (
+        // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
+        <Notice tone="danger" title={CONFLICT_TITLE}>
+          <p>{CONFLICT_BODY}</p>
+          <div className="mt-s-2 flex flex-wrap gap-s-2">
+            <Button variant="secondary" onClick={() => values.resolveConflict('mine')}>
+              {CONFLICT_KEEP_MINE}
+            </Button>
+            <Button variant="secondary" onClick={() => values.resolveConflict('newer')}>
+              {CONFLICT_USE_NEWER}
+            </Button>
+          </div>
+        </Notice>
+      )}
+      {otherProblem === null ? null : (
+        // A failure of another field's save while the conflict notice is up is shown beside it, not swallowed by it (review SQR-14).
+        <Notice tone="danger" title={otherProblem.kind === 'changed' ? PART_CHANGED_NOTICE : otherProblem.kind === 'refused' ? otherProblem.message : PART_SAVE_FAILED_TITLE}>
+          {otherProblem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
       {materials.status === 'failed' ? (
