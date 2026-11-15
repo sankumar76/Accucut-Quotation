@@ -276,6 +276,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
   // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-06.03 (SCR-07; architecture section 6 "Cost details": A L). The six stages of one row with each formula, rate and working, for the Lead and the Admin alone: the page and the read. An Engineer
+  // is refused with the fixed 403 (the page: SCR-26 with HTTP 403) before either ID is looked at, and neither row is in any Engineer's list, so the cost scan calls both as routes an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-07' },
   // STORY-02.09 (SCR-15, the Last backup line). The Admin only (BR-004, AC-6): the page and the read. Both are read-only: the page has no control that starts, restores or deletes a
   // backup, and the API has GET and nothing else (the alert switch and the sender, `PUT /settings`, are story 09.02's). The rows it reads are `job_runs` (cost data is never in them), so the
   // cost scan covers both as routes an Engineer is refused.
@@ -295,7 +299,6 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
 
   // ---- Planned: Work -----------------------------------------------------------------------------------------------
-  { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-07' },
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------

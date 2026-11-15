@@ -7,6 +7,7 @@ import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
 import {
   CLEARED,
+  COST_DETAILS_LINK,
   COUNT_FIELD_NAME,
   COUNT_HIDDEN_LABEL,
   COUNT_UNIT,
@@ -36,7 +37,10 @@ function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
   return state === 'out-of-date' ? <span className="italic">{CLEARED}</span> : NO_FIGURE;
 }
 
-function TreeRow({ node, state }: { readonly node: CostNode; readonly state: CostsView['state'] }) {
+/** The address of SCR-07 for a row: the task code and the row's Sl. No (STORY-06.03). A Lead and an Admin only: this folder is loaded for no one else. */
+const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
+
+function TreeRow({ node, state, code }: { readonly node: CostNode; readonly state: CostsView['state']; readonly code: string }) {
   return (
     <li className={cn('flex flex-col gap-s-1 rounded-md border border-border bg-surface px-s-3 py-s-2', indentOf(node.slNo))}>
       <div className="flex items-baseline gap-s-2 text-body text-ink">
@@ -51,17 +55,25 @@ function TreeRow({ node, state }: { readonly node: CostNode; readonly state: Cos
       {state === 'current' && node.figures !== null ? (
         <p className="text-label text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</p>
       ) : null}
+      <p>
+        <a href={costDetailsHref(code, node.slNo)} className="text-label font-semibold text-primary-ink underline underline-offset-2">
+          {COST_DETAILS_LINK}
+          <span className="sr-only">{` for ${node.slNo} ${node.name === '' ? TREE_PART_NAME : node.name}`}</span>
+        </a>
+      </p>
     </li>
   );
 }
 
 export interface ReviewTreeProps {
+  /** The task code of the estimate, for the address of each row's cost details (STORY-06.03). */
+  readonly code: string;
   readonly state: CostsView['state'];
   readonly letters: CostsView['letters'];
   readonly nodes: CostsView['nodes'];
 }
 
-export function ReviewTree({ state, letters, nodes }: ReviewTreeProps) {
+export function ReviewTree({ code, state, letters, nodes }: ReviewTreeProps) {
   return (
     <details open className="rounded-md border border-border bg-surface-2">
       <summary className="flex min-h-(--control-h) cursor-pointer items-center px-s-4 text-body font-semibold text-ink">{TREE_TITLE}</summary>
@@ -73,7 +85,7 @@ export function ReviewTree({ state, letters, nodes }: ReviewTreeProps) {
         ) : (
           <ul className="flex flex-col gap-s-2">
             {nodes.map((node) => (
-              <TreeRow key={node.id} node={node} state={state} />
+              <TreeRow key={node.id} node={node} state={state} code={code} />
             ))}
           </ul>
         )}

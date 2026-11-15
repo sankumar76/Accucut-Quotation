@@ -29,18 +29,26 @@ function sourceFiles(directory: string): string[] {
 const ALL = sourceFiles(SRC).map((path) => ({ path: relative(ROOT, path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') }));
 const pathsMatching = (files: ReadonlyArray<{ path: string; text: string }>, pattern: RegExp): string[] => files.filter((file) => pattern.test(file.text)).map((file) => file.path);
 
-const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation)\b/;
+const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation|findRowWorking)\b/;
 const PRISMA_ACCESS = /\.(calculation|calculationRow)\./;
 const REPOSITORY = 'src/server/repositories/calculation-repository.ts';
 const REVIEW_SERVICE = 'src/server/services/estimate-review-service.ts';
+const COST_DETAILS_SERVICE = 'src/server/services/cost-details-service.ts';
 
 describe('AC-7: every read of a figure goes through figure-state', () => {
   it('only the calculation repository names the Prisma accessors of calculations and calculation_rows', () => {
     expect(pathsMatching(ALL, PRISMA_ACCESS)).toEqual([REPOSITORY]);
   });
 
-  it('only the repository (which defines them) and the review service name a method that reads a record\'s figures', () => {
-    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE].sort());
+  it('only the repository (which defines them), the review service and the cost details service name a method that reads a record\'s figures', () => {
+    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE].sort());
+  });
+
+  it('the cost details service (STORY-06.03) imports the figure state and reads the working of a row only through readFiguresWhenCurrent, in one place', () => {
+    const service = ALL.find((file) => file.path === COST_DETAILS_SERVICE)?.text ?? '';
+    expect(service).toMatch(/from '\.\.\/\.\.\/lib\/estimate\/figure-state'/);
+    expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findRowWorking\(/);
+    expect(service.match(/findRowWorking\(/g)).toHaveLength(1);
   });
 
   it('the review service imports the figure state and reads the record only through readFiguresWhenCurrent', () => {

@@ -15,6 +15,7 @@ export const STUB_EMAIL = 'stub-admin@example.test';
 export const STUB_PASSWORD = 'invented-stub-password';
 export const STUB_CUSTOMER_ID = 'invented-stub-customer';
 export const STUB_ESTIMATE_CODE = 'Q-2026-0001';
+export const STUB_ESTIMATE_ID = 'invented-stub-estimate';
 const SESSION = 'invented-stub-session';
 
 /** Bytes that gzip cannot shrink (a hash chain), so the compressed size is about the raw size and a test can plant an overrun. */
@@ -62,6 +63,8 @@ export interface StubPortal {
   customersAdded(): number;
   /** How many tasks were assigned through `POST /api/v1/tasks` (a signed-in caller): the record the budget check opens `/estimates/[code]` at (STORY-05.01). */
   tasksAssigned(): number;
+  /** How many parts were added through `POST /api/v1/estimates/{id}/nodes` (a signed-in caller): the record the budget check opens `/estimates/[code]/costs/[slNo]` at (STORY-06.03). */
+  partsAdded(): number;
   readonly baseUrl: string;
   close(): Promise<void>;
 }
@@ -78,6 +81,7 @@ function readBody(request: IncomingMessage): Promise<string> {
 export async function startStubPortal(pages: Readonly<Record<string, StubPage>>, notFoundHtml: string): Promise<StubPortal> {
   let customersAdded = 0;
   let tasksAssigned = 0;
+  let partsAdded = 0;
   const server: Server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://stub.invalid');
@@ -105,7 +109,14 @@ export async function startStubPortal(pages: Readonly<Record<string, StubPage>>,
         // The Engineer and the task the budget check opens `/estimates/[code]` at (STORY-05.01): a signed-in caller gets an ID, and a code, back.
         if (signedIn && url.pathname === '/api/v1/tasks') tasksAssigned += 1;
         response.writeHead(signedIn ? 201 : 401, { 'content-type': 'application/json' });
-        response.end(JSON.stringify(signedIn ? (url.pathname === '/api/v1/users' ? { id: 'invented-stub-engineer' } : { code: STUB_ESTIMATE_CODE }) : {}));
+        response.end(JSON.stringify(signedIn ? (url.pathname === '/api/v1/users' ? { id: 'invented-stub-engineer' } : { code: STUB_ESTIMATE_CODE, estimate: { id: STUB_ESTIMATE_ID } }) : {}));
+        return;
+      }
+      if (url.pathname === `/api/v1/estimates/${STUB_ESTIMATE_ID}/nodes` && request.method === 'POST') {
+        // The part the budget check opens `/estimates/[code]/costs/[slNo]` at (STORY-06.03): a signed-in caller gets a part's ID back.
+        if (signedIn) partsAdded += 1;
+        response.writeHead(signedIn ? 201 : 401, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(signedIn ? { nodeId: 'invented-stub-part' } : {}));
         return;
       }
       const page = pages[url.pathname];
@@ -126,6 +137,7 @@ export async function startStubPortal(pages: Readonly<Record<string, StubPage>>,
     baseUrl: `http://127.0.0.1:${address.port}`,
     customersAdded: () => customersAdded,
     tasksAssigned: () => tasksAssigned,
+    partsAdded: () => partsAdded,
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();

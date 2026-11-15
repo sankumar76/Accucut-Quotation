@@ -7,6 +7,8 @@ import {
   formatReference,
   toDisplayForm,
   toInternalForm,
+  toWorkingForm,
+  type FormulaReference,
   type ReferenceContext,
 } from '@/lib/formula';
 
@@ -195,5 +197,38 @@ describe('extractReferences and formatReference', () => {
       { kind: 'exchange', currency: 'EUR' },
     ] as const;
     for (const reference of references) expect(extractReferences(formatReference(reference))).toEqual([reference]);
+  });
+});
+
+describe('toWorkingForm (STORY-06.03 AC-2): a formula with the values of its operands', () => {
+  const textOf = (reference: FormulaReference): string => {
+    switch (reference.kind) {
+      case 'field':
+        return reference.id === A ? '2.8260' : '0.4260';
+      case 'rate':
+        return '11%';
+      case 'material':
+        return reference.key === 'scrapRate' ? '22.00' : '58.00';
+      default:
+        return '80';
+    }
+  };
+
+  it('replaces each operand by its text, prints * as the multiplication sign, and copies every other character as it is', () => {
+    const internal = toInternalForm('(A * Material-Price-per-kg) - (B * Material-Scrap-Rate)', CONTEXT);
+    expect(toWorkingForm(internal, textOf)).toBe('(2.8260 × 58.00) - (0.4260 × 22.00)');
+  });
+
+  it('keeps spaces, brackets, functions and comparisons where they were, and prints a rate as the caller says (11%)', () => {
+    const internal = toInternalForm('IF(Material-Specific-Gravity > 0, A*Test Share %, 0)', CONTEXT);
+    expect(toWorkingForm(internal, textOf)).toBe('IF(58.00 > 0, 2.8260×11%, 0)');
+  });
+
+  it('is the text of the formula when it has no operand', () => {
+    expect(toWorkingForm('0', textOf)).toBe('0');
+  });
+
+  it('refuses a stored formula that cannot be read, with a rule and no word of the formula', () => {
+    expect(thrownAs(() => toWorkingForm('{{unknown:1}}', textOf), FormulaError).issue.code).toBe('BAD_REFERENCE');
   });
 });

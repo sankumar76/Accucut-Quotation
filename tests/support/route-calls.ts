@@ -76,12 +76,17 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
   return recipe(context);
 }
 
+/** The Sl. No of the canary estimate's one part (the part is first at the top, so it is 1). */
+const CANARY_PART_SL_NO = '1';
+
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
   // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
   '/masters/customers/[id]': () => `/masters/customers/${CUSTOMER_RECIPE_ID}`,
   // SCR-05 (STORY-05.01): the canary task of the signed-in Engineer, who owns it (`estimate-recipe.ts`).
   '/estimates/[code]': (context) => canaryEstimatePageFor(context.ownerId),
+  // SCR-07 (STORY-06.03): the first part of the canary estimate, which every canary estimate holds (its Sl. No is 1). Lead and Admin only: an Engineer is refused whatever the address.
+  '/estimates/[code]/costs/[slNo]': (context) => `${canaryEstimatePageFor(context.ownerId)}/costs/${CANARY_PART_SL_NO}`,
 };
 
 /**
@@ -194,6 +199,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // STORY-06.02: the review's figures read nothing that changes, so the call answers 200 at any state for the two roles that may make it. The canary estimate has no calculation, so the answer holds no
     // figure at all (state `none`); the figures of a calculated estimate are `estimate-review-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/costs':
+      return { id, status: 200 };
+    // STORY-06.03: the cost details of a row read nothing that changes, so the call answers 200 at any state for the two roles that may make it. One value fills both IDs, and the canary part's ID is
+    // the estimate's, so the call names a part that really exists; the canary estimate has no calculation, so the answer is the state alone (`none`, `details: null`). The stages of a calculated row are
+    // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
+    case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
       return { id, status: 200 };
     default:
       return undefined;

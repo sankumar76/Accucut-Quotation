@@ -47,6 +47,7 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/users': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/assign': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/estimates/${STUB_ESTIMATE_CODE}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  [`/estimates/${STUB_ESTIMATE_CODE}/costs/1`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/settings': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/config/fields': { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -204,6 +205,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
   let recordsAdded = -1;
   let noTasksAssigned = -1;
   let tasksAssigned = -1;
+  let noPartsAdded = -1;
+  let partsAdded = -1;
 
   beforeAll(async () => {
     scratch = mkdtempSync(join(tmpdir(), 'js-budget-cli-'));
@@ -220,6 +223,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     recordsAdded = good.customersAdded();
     noTasksAssigned = readOnly.tasksAssigned();
     tasksAssigned = good.tasksAssigned();
+    noPartsAdded = readOnly.partsAdded();
+    partsAdded = good.partsAdded();
   });
 
   afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -228,15 +233,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/account', '/assign', '/audit', '/config/fields', '/design-system', '/estimates/[code]', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 16 rows are within their limit');
+    for (const route of ['/', '/account', '/assign', '/audit', '/config/fields', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 17 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 16 rows failed');
+    expect(overrun.output).toContain('1 of 17 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -251,10 +256,14 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(tasksAssigned).toBe(1);
     expect(noRecordsAdded).toBe(0);
     expect(noTasksAssigned).toBe(0);
+    // STORY-06.03: one part, added to that one task, for the cost details page; none without the flag.
+    expect(partsAdded).toBe(1);
+    expect(noPartsAdded).toBe(0);
     expect(noRecords.code).toBe(1);
     expect(noRecords.output).toContain('/masters/customers/[id]');
     expect(noRecords.output).toContain('/estimates/[code]');
+    expect(noRecords.output).toContain('/estimates/[code]/costs/[slNo]');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('2 of 16 rows failed');
+    expect(noRecords.output).toContain('3 of 17 rows failed');
   });
 });

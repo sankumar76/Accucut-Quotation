@@ -580,6 +580,13 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   const costs = await callInBrowser(recorder, page, 'GET costs (API, after Calculate)', `/api/v1/estimates/${engineer.id}/costs`);
   expect(costs.status).toBe(403);
   expect(fixedForbiddenProblem(costs)).toBeNull();
+  // STORY-06.03 AC-8: the cost details of the row, the route and the page, are refused the same way now that a current calculation exists: the fixed 403 and the "no access" page, with nothing of the
+  // record in either (formula, rate name, value or figure). Both answers are recorded, so the scans below read them too.
+  const rowCosts = await callInBrowser(recorder, page, 'GET node costs (API, after Calculate)', `/api/v1/estimates/${engineer.id}/nodes/${engineer.id}/costs`);
+  expect(rowCosts.status).toBe(403);
+  expect(fixedForbiddenProblem(rowCosts)).toBeNull();
+  const rowPage = await recorder.recordNavigation(`GET /estimates/${code}/costs/1 (page, after Calculate)`, await page.goto(`/estimates/${code}/costs/1`));
+  expect(rowPage.status).toBe(403);
   await page.waitForLoadState('networkidle');
   await recorder.settled();
 
@@ -717,6 +724,47 @@ test('AC-6 (negative control, STORY-06.02): a master value planted in the Lead\'
     findings.some((finding) => finding.label.includes('/costs (API, planted)') && finding.found === customer),
     'the master value planted in the `/costs` answer',
   ).toBe(true);
+});
+
+/**
+ * STORY-06.03 AC-6 and AC-8 (NFR-002; test strategy section 6): the cost details of a row, SCR-07, for the Lead. This screen is meant to show formulas, rate names and the values of the row's own
+ * material and rates, so the scan turns round once more: on `/estimates/<code>/costs/1` and on `GET /nodes/{nodeId}/costs` those are **found** (the control that the scan looks at something real),
+ * and a master the row did not use (the second canary material) is **not**. The Engineer's side of the same addresses is the Calculate journey above and the refusals of AC-5, which iterate the manifest.
+ */
+test('AC-8 (STORY-06.03): the Lead\'s cost details page and answer show the working of the row, its own material and the formulas, and nothing of a material the row did not use', async ({ page, context }, testInfo) => {
+  await useFreshAddress(context);
+  const { id, code } = await calculatedEstimateOf(page, context, testInfo);
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  const details = await recorder.recordNavigation(`GET /estimates/${code}/costs/1 (page, Lead cost details)`, await page.goto(`/estimates/${code}/costs/1`));
+  expect(details.status).toBe(200);
+  const answer = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/nodes/${id}/costs (API, Lead)`, `/api/v1/estimates/${id}/nodes/${id}/costs`);
+  expect(answer.status).toBe(200);
+  expect(JSON.parse(answer.body ?? '{}')).toMatchObject({ state: 'current' });
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+
+  // The control that the scan looks at something real: the formulas and the row's own material are on the page and in the answer, as the Lead is meant to see them.
+  const used = defined(MATERIAL_CANARIES[0]);
+  for (const text of [details.body ?? '', answer.body ?? '']) {
+    expect(text).toContain('Material-Scrap-Rate');
+    expect(text).toContain(used.pricePerKg);
+    expect(text).toContain(used.scrapRate);
+  }
+  expect((await figuresOfTheRecord(id)).length).toBeGreaterThan(0);
+  expect(scanResponses(recorder.responses, await figuresOfTheRecord(id)).some((finding) => finding.label.includes('(page, Lead cost details)')), 'a figure of the record is on the cost details page').toBe(true);
+  // And nothing of the material that the row did not use, nor of the Exchange Rate Master's other rows: the answer holds the row's own operands and no master record.
+  const unused = defined(MATERIAL_CANARIES[1]);
+  for (const text of [details.body ?? '', answer.body ?? '']) {
+    for (const value of [unused.pricePerKg, unused.specificGravity, unused.scrapRate, unused.materialInDrawing]) expect(text).not.toContain(value);
+    expect(text).not.toContain('masterSnapshot');
+  }
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
 });
 
 /**
