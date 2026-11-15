@@ -8,6 +8,7 @@ import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-word
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CustomerView } from '@/lib/estimates/estimates-client';
+import { askToLeave } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { CalculateBarProps } from './calculate-bar';
@@ -16,13 +17,14 @@ import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
 import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
 import { focusFirstField } from './focus-field';
+import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
 import { PartsTreeArea } from './parts-tree-area';
 import { useCalculate } from './use-calculate';
 import { useCustomerChoice } from './use-customer-choice';
 import { useLazyComponent } from './use-lazy-component';
 import type { SavedPart } from './use-part-form';
-import { usePartsTree } from './use-parts-tree';
+import { usePartsTree, type PartsTreeState } from './use-parts-tree';
 import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
 
 /**
@@ -39,6 +41,9 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
 const loadBar = () => import('./calculate-bar').then((module) => module.CalculateBar);
 const loadSummary = () => import('./calculate-summary').then((module) => module.CalculateSummary);
 const loadChangeDialog = () => import('./change-customer-dialog').then((module) => module.ChangeCustomerDialog);
+/** The warning on leaving (STORY-05.08): typing is possible only once the form's code is here, and this is asked for on mount beside it. Its dialog is an overlay, so it is never imported with a plain import. */
+const loadGuard = () => import('./leave-guard').then((module) => module.LeaveGuard);
+const stay = (): void => undefined;
 
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
@@ -65,6 +70,14 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const Bar = bar.Component;
   const Summary = summary.Component;
   const ChangeDialog = changeDialog.Component;
+  const guard = useLazyComponent<LeaveGuardProps>(loadGuard, true);
+  const Guard = guard.Component;
+  /**
+   * Another part, or a new one, takes the form that shows the part now away, with whatever was typed into it and is not saved (STORY-05.08 AC-4, AC-5). So while anything is unsaved the person is asked
+   * first, once the saves in flight have finished; with nothing unsaved the choice goes through at once, as before.
+   */
+  const guarded = (go: () => void): void => (saves.isDirty() ? askToLeave({ proceed: go, cancel: stay }) : go());
+  const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), add: (kind) => guarded(() => tree.add(kind)) };
   const submittedNotice = useRef<HTMLDivElement>(null);
   // The press that submitted the estimate: the button has become "Submitted" and is off, so focus goes to the notice. A reload of a submitted estimate steals nothing (`done` is null).
   useEffect(() => {
@@ -89,11 +102,12 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   return (
     <>
       <WorkspaceHeader view={{ ...header, status }} />
+      {Guard === null ? null : <Guard gate={saves} />}
       {calculation.blocked === null ? null : Summary === null ? (
         // The list's code is on its way (or could not be fetched): the sentence is the server's, and it is never missing.
         <Notice tone="danger" title={blockedSummary(calculation.blocked.length)} />
       ) : (
-        <Summary parts={calculation.blocked} onChoosePart={tree.select} focusRequest={calculation.focusRequest} />
+        <Summary parts={calculation.blocked} onChoosePart={guardedTree.select} focusRequest={calculation.focusRequest} />
       )}
       {calculation.problem === null ? null : (
         <Notice tone="danger" title={calculation.problem.kind === 'refused' ? calculation.problem.message : calculation.problem.kind === 'unsaved' ? CALCULATE_UNSAVED_TITLE : CALCULATE_FAILED_TITLE}>
@@ -131,7 +145,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           <CardTitle id="estimate-form-area-title">{FORM_AREA_TITLE}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-s-4 lg:flex-row">
-          <PartsTreeArea tree={tree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
+          <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
           {hasCustomer ? (
             <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
           ) : (
@@ -140,7 +154,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
         </CardContent>
       </Card>
       {status === 'APPROVED' ? null : Bar !== null ? (
-        <Bar submitted={status === 'SUBMITTED'} calculation={calculation} onChoosePart={tree.select} />
+        <Bar submitted={status === 'SUBMITTED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (
         // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).
         <Notice tone="danger" title={CALCULATE_BAR_FAILED_TITLE} />

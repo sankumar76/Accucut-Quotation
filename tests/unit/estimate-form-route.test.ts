@@ -388,3 +388,72 @@ describe('SQR-09: the part is read back by field ID', () => {
     expect(formResponseSchema.safeParse({ sections: [], lastSavedAt: null, planted: 1 }).success).toBe(false);
   });
 });
+
+describe('STORY-05.08 AC-2, AC-3, AC-6, AC-7: a save that changes nothing is not a change, and a real change bumps inputs_revision once', () => {
+  const REMARKS = seedFieldAt('AJ').id;
+  const revisions = (): { readonly part: number; readonly estimate: number } => ({ part: stored().revision, estimate: estimate().inputsRevision });
+
+  it('AC-2: the same value again, `1.50` then `1.5`, and whitespace only are answered 200 with the part as it is, and neither revision moves', async () => {
+    const first = savedInputsSchema.parse(await (await save({ revision: 1, values: { [LENGTH]: '1.50', [PART_NO]: 'FR-1', [REMARKS]: 'None' } })).json());
+    const saved = revisions();
+    const answers = [];
+    for (const values of [{ [LENGTH]: '1.50' }, { [LENGTH]: '1.5' }, { [LENGTH]: ' 01.5 ' }, { [PART_NO]: '  FR-1  ' }, { [REMARKS]: ' None ' }, { [WIDTH]: '' }, { [WIDTH]: '   ' }]) {
+      const response = await save({ revision: saved.part, values });
+      expect(response.status, JSON.stringify(values)).toBe(200);
+      answers.push(savedInputsSchema.parse(await response.json()));
+    }
+    expect(revisions()).toEqual(saved);
+    // Every answer is the part as it is, the same as the save that wrote it: the same revision, completeness and values.
+    for (const answer of answers) expect(answer).toEqual(first);
+    expect(first).toMatchObject({ id: canary(), revision: saved.part, completeness: 'PARTIAL' });
+  });
+
+  it('AC-3: a real change in any input, Remarks included, raises inputs_revision once, by the same save that raises the part', async () => {
+    for (const [index, values] of [{ [LENGTH]: '3' }, { [PART_NO]: 'FR-2' }, { [REMARKS]: 'Deburr the edge.' }].entries()) {
+      const before = revisions();
+      const response = await save({ revision: before.part, values });
+      expect(response.status, JSON.stringify(values)).toBe(200);
+      expect(revisions(), `change ${String(index + 1)}`).toEqual({ part: before.part + 1, estimate: before.estimate + 1 });
+    }
+  });
+
+  it('AC-3: a value changed and changed back counts as two changes, so the figures stay cleared (the revision does not return)', async () => {
+    await save({ revision: 1, values: { [LENGTH]: '1' } });
+    const afterFirst = revisions();
+    await save({ revision: afterFirst.part, values: { [LENGTH]: '2' } });
+    await save({ revision: afterFirst.part + 1, values: { [LENGTH]: '1' } });
+    expect(revisions()).toEqual({ part: afterFirst.part + 2, estimate: afterFirst.estimate + 2 });
+  });
+
+  it('AC-3: a blank where nothing was stored is no change, and clearing a stored value is one', async () => {
+    const empty = revisions();
+    expect((await save({ revision: empty.part, values: { [REMARKS]: '' } })).status).toBe(200);
+    expect(revisions()).toEqual(empty);
+    await save({ revision: empty.part, values: { [REMARKS]: 'x' } });
+    const written = revisions();
+    await save({ revision: written.part, values: { [REMARKS]: '' } });
+    expect(revisions()).toEqual({ part: written.part + 1, estimate: written.estimate + 1 });
+  });
+
+  it('AC-6: two saves of the same part with the same revision, as two tabs would send them: the second is 409 PART_CHANGED, and the revision counts the one change', async () => {
+    const first = await save({ revision: 1, values: { [LENGTH]: '4' } });
+    const second = await save({ revision: 1, values: { [LENGTH]: '5' } });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(409);
+    expect(record.parse(await second.json())).toMatchObject({ code: 'PART_CHANGED' });
+    expect(stored().inputs).toEqual({ [LENGTH]: '4.00' });
+    expect(revisions()).toEqual({ part: 2, estimate: 1 });
+  });
+
+  it('AC-6: a second tab that saves the same value the first one saved still gets 409 for the stale revision, so it learns the part moved, and still loses nothing', async () => {
+    await save({ revision: 1, values: { [LENGTH]: '4' } });
+    const second = await save({ revision: 1, values: { [LENGTH]: '4' } });
+    expect(second.status).toBe(409);
+    expect(revisions()).toEqual({ part: 2, estimate: 1 });
+  });
+
+  it('AC-7: the answer to a real change names the part revision, and never a figure: only the inputs, by field ID', async () => {
+    const body = savedInputsSchema.parse(await (await save({ revision: 1, values: { [LENGTH]: '7' } })).json());
+    expect(Object.keys(body).sort()).toEqual(['completeness', 'id', 'inputs', 'revision']);
+  });
+});

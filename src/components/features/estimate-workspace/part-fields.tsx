@@ -33,6 +33,7 @@ import { focusCalculate } from './calculate-button';
 import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PictureSlot } from './picture-slot';
+import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
 import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
@@ -143,7 +144,20 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
         <p className="text-label text-ink-3">{lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt)))}</p>
       </div>
       {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
-      {problem === null ? null : (
+      {problem === null ? null : problem.kind === 'conflict' ? (
+        // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
+        <Notice tone="danger" title={CONFLICT_TITLE}>
+          <p>{CONFLICT_BODY}</p>
+          <div className="mt-s-2 flex flex-wrap gap-s-2">
+            <Button variant="secondary" onClick={() => values.resolveConflict('mine')}>
+              {CONFLICT_KEEP_MINE}
+            </Button>
+            <Button variant="secondary" onClick={() => values.resolveConflict('newer')}>
+              {CONFLICT_USE_NEWER}
+            </Button>
+          </div>
+        </Notice>
+      ) : (
         <Notice tone="danger" title={problem.kind === 'changed' ? PART_CHANGED_NOTICE : problem.kind === 'refused' ? problem.message : PART_SAVE_FAILED_TITLE}>
           {problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
