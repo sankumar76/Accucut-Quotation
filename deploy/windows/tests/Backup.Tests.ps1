@@ -731,7 +731,8 @@ Describe 'the module and the script keep the secrets out (AC-7, static checks)' 
         $withoutComments = [regex]::Replace([regex]::Replace($region, '(?s)<#.*?#>', ''), '(?m)^\s*#.*$', '')
         $withoutComments | Should -Not -Match 'PGPASSWORD'
         $withoutComments | Should -Not -Match '\bPGPASS\w*\s*=\s*\$(?!PassFile)'
-        $region | Should -Not -Match '--password|-W\b'
+        # Case matters: psql's -w (never ask for a password) is fine, --password and -W (ask on the command line) are not.
+        $withoutComments | Should -Not -MatchExactly '--password|-W\b'
         $region | Should -Not -Match 'AGE-SECRET-KEY'
         $region | Should -Match "'PGPASSFILE'"
         $backupScript = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'backup.ps1') -Raw
