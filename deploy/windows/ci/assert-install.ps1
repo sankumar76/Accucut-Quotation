@@ -11,13 +11,26 @@
   The values file the install was run with.
 .PARAMETER ExpectedRelease
   The tag the `current` junction must point at.
+.PARAMETER RightsBefore
+  The secedit /export of the user rights that stage 13 took BEFORE the install (read-only; an oracle that does not use the code under test).
+.PARAMETER AfterInstall
+  Set for the call straight after the install: then the install's own weekly copy and the one event of its run are checked. Later calls (after the exercise step has cleared the weekly copy) check the newest verified copy instead.
+.PARAMETER InstallStartedAt
+  The time just before the install started, so that the checks of the task's run and of the Security log look at the install's own run only.
+.PARAMETER AgeKeyFile
+  The file with the PRIVATE age key that stage 13 made for this run (its public half was given to the install as BACKUP_AGE_RECIPIENT). Used to decrypt the
+  install's own backup and restore it into a scratch database. It is a throwaway key made in the job, never a real one.
 #>
 [CmdletBinding()]
 param(
     [string]$Root = 'C:\Accucut',
     [int]$Port = 3000,
     [Parameter(Mandatory)][string]$ValuesFile,
-    [Parameter(Mandatory)][string]$ExpectedRelease
+    [Parameter(Mandatory)][string]$ExpectedRelease,
+    [Parameter(Mandatory)][string]$AgeKeyFile,
+    [Parameter(Mandatory)][string]$RightsBefore,
+    [Parameter(Mandatory)][datetime]$InstallStartedAt,
+    [switch]$AfterInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,20 +112,24 @@ function Get-AceList {
     return @($rules | ForEach-Object { '{0}|0x{1:X}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.IsInherited, [int]$_.InheritanceFlags, $_.AccessControlType } | Sort-Object)
 }
 $systemSid = 'S-1-5-18'
+# The backup account (ADR-015 Amendment 3): the fifth entry of the root is read and execute for it.
+$backupUser = Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue
+Assert-That ($null -ne $backupUser) 'the local user AccucutBackup exists'
+$backupSid = $backupUser.SID.Value
 $rootExpected = @(
-    "$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow"
+    "$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow", "$backupSid|0x1200A9|False|3|Allow"
 ) | Sort-Object
 $rootActual = Get-AceList -Path $paths.Root
-Assert-That (($rootActual -join "`n") -eq ($rootExpected -join "`n")) "the install folder holds exactly: Administrators and SYSTEM full control, and the two service accounts read and execute (found: $($rootActual -join '; '))"
+Assert-That (($rootActual -join "`n") -eq ($rootExpected -join "`n")) "the install folder holds exactly five entries: Administrators and SYSTEM full control, and the two service accounts and AccucutBackup read and execute (found: $($rootActual -join '; '))"
 $logsExpected = @(
-    "$adminSid|0x1F01FF|True|3|Allow", "$systemSid|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow",
+    "$adminSid|0x1F01FF|True|3|Allow", "$systemSid|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow", "$backupSid|0x1200A9|True|3|Allow",
     "$appSid|0x1301BF|False|3|Allow", "$workerSid|0x1301BF|False|3|Allow"
 ) | Sort-Object
 $logsActual = Get-AceList -Path $paths.Logs
-Assert-That (($logsActual -join "`n") -eq ($logsExpected -join "`n")) "the logs folder holds exactly those four inherited entries plus Modify for the two service accounts (found: $($logsActual -join '; '))"
+Assert-That (($logsActual -join "`n") -eq ($logsExpected -join "`n")) "the logs folder holds exactly those five inherited entries plus Modify for the two service accounts (found: $($logsActual -join '; '))"
 $bannedSids = @('S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0')
 $currentRelease = Get-AccucutCurrentRelease -Paths $paths
-$checkedFolders = @($paths.Root, $paths.Releases, (Join-Path $paths.Releases $currentRelease), $paths.Config, $paths.Services, $paths.Logs)
+$checkedFolders = @($paths.Root, $paths.Releases, (Join-Path $paths.Releases $currentRelease), $paths.Config, $paths.Services, $paths.Logs, $paths.Backups)
 foreach ($folder in $checkedFolders) {
     $present = (Get-AclSids -Path $folder).Sids | Where-Object { $bannedSids -contains $_ }
     Assert-That (@($present).Count -eq 0) "$folder grants nothing to LOCAL SERVICE, NETWORK SERVICE, Authenticated Users, Users or Everyone (found: $(@($present) -join ', '))"
@@ -147,6 +164,183 @@ Assert-That ($unexpected.Count -eq 0) "the install folder holds only what the in
 $scratch = Join-Path $paths.Root '.in'
 Assert-That ((-not (Test-Path -LiteralPath $scratch)) -or @(Get-ChildItem -LiteralPath $scratch -Force).Count -eq 0) 'the scratch folder .in is empty'
 
+# ADR-015 Amendment 3: the backups folder and the two files of the backup account. Each is protected, owned by Administrators, with EXACTLY these entries.
+$backupFolder = Get-AclSids -Path $paths.Backups
+Assert-That ($backupFolder.Protected -and $backupFolder.Owner -eq $adminSid) 'the backups folder is protected (no inheritance) and owned by Administrators'
+$backupsExpected = @("$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$backupSid|0x1301BF|False|3|Allow") | Sort-Object
+$backupsActual = Get-AceList -Path $paths.Backups
+Assert-That (($backupsActual -join "`n") -eq ($backupsExpected -join "`n")) "the backups folder holds exactly: Administrators and SYSTEM full control and AccucutBackup Modify, and no entry for the services (found: $($backupsActual -join '; '))"
+foreach ($file in $paths.BackupPgpass, $paths.BackupSettings) {
+    $fileAcl = Get-AclSids -Path $file
+    Assert-That ($fileAcl.Protected -and $fileAcl.Owner -eq $adminSid) "$file is protected and owned by Administrators"
+    $expectedFile = @("$adminSid|0x1F01FF|False|0|Allow", "$systemSid|0x1F01FF|False|0|Allow", "$backupSid|0x120089|False|0|Allow") | Sort-Object
+    $actualFile = Get-AceList -Path $file
+    Assert-That (($actualFile -join "`n") -eq ($expectedFile -join "`n")) "$file holds exactly: Administrators and SYSTEM full control and AccucutBackup read (found: $($actualFile -join '; '))"
+}
+foreach ($file in $paths.EnvFile, $paths.MigrateEnvFile) {
+    Assert-That ((Get-AclSids -Path $file).Sids -notcontains $backupSid) "$file does not name AccucutBackup"
+}
+$anywhere = @(Get-ChildItem -LiteralPath $paths.Root -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike (Join-Path $paths.Releases '*') -and $_.FullName -notlike (Join-Path $paths.Current '*') -and $_.FullName -notlike (Join-Path $paths.Root '.in*') } | ForEach-Object {
+        $rules = $_.GetAccessControl().GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+        foreach ($rule in $rules) { if ($bannedSids -contains $rule.IdentityReference.Value) { "$($_.FullName) -> $($rule.IdentityReference.Value)" } }
+    })
+Assert-That ($anywhere.Count -eq 0) "no entry for LOCAL SERVICE, NETWORK SERVICE, Authenticated Users, Users or Everyone anywhere in config, services, logs or backups (found: $($anywhere -join '; '))"
+
+# The account: enabled, password never expires, may not change it, an explicit member of no local group.
+Assert-That ($backupUser.Enabled) 'AccucutBackup is enabled'
+Assert-That ($null -eq $backupUser.PasswordExpires) 'the password of AccucutBackup never expires'
+Assert-That (-not $backupUser.UserMayChangePassword) 'AccucutBackup may not change its password'
+$memberOf = @()
+foreach ($group in Get-LocalGroup) {
+    try { if (@(Get-LocalGroupMember -Group $group.Name -ErrorAction Stop | Where-Object { $_.SID.Value -eq $backupSid }).Count -gt 0) { $memberOf += $group.Name } } catch { Write-Host "note: the members of '$($group.Name)' could not be listed ($($_.Exception.Message))" }
+}
+Assert-That ($memberOf.Count -eq 0) "AccucutBackup is an explicit member of no local group (found: $($memberOf -join ', '))"
+
+# The task: its principal, logon type, trigger and action, exactly.
+$task = Get-ScheduledTask -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue
+Assert-That ($null -ne $task) "the task 'Accucut weekly backup' exists"
+# The principal is compared by SID: Task Scheduler may report the user as 'AccucutBackup' or as 'COMPUTER\AccucutBackup'.
+$principalUser = ([string]$task.Principal.UserId).Trim()
+$principalSid = $null
+try { $principalSid = ([System.Security.Principal.NTAccount]$principalUser).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $principalSid = "unresolved:$($_.Exception.Message)" }
+Assert-That ($principalSid -eq $backupSid -and ([string]$task.Principal.LogonType).Trim() -eq 'Password' -and ([string]$task.Principal.RunLevel).Trim() -eq 'Limited') "the task runs as AccucutBackup (by SID) with a stored password and the limited run level (found: user '$principalUser' of type $(if ($null -ne $task.Principal.UserId) { $task.Principal.UserId.GetType().Name } else { 'null' }) = $principalSid, logon type '$($task.Principal.LogonType)', run level '$($task.Principal.RunLevel)'; expected SID $backupSid)"
+Assert-That (@($task.Triggers).Count -eq 1 -and $task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskWeeklyTrigger' -and [int]$task.Triggers[0].DaysOfWeek -eq 1 -and [int]$task.Triggers[0].WeeksInterval -eq 1 -and [string]$task.Triggers[0].StartBoundary -match 'T02:00:00') 'the task has one weekly trigger, on Sunday at 02:00'
+$powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$expectedArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $paths.Current 'backup.ps1') + '" -Reason weekly'
+Assert-That (@($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -ieq $powershellExe -and $task.Actions[0].Arguments -ceq $expectedArguments) "the task has one action: $powershellExe $expectedArguments"
+
+# ADR-015 Amendment 3.2: the install gave "Log on as a batch job" to AccucutBackup's SID and to nothing else. An independent export (secedit, read-only) is compared with the one
+# taken before the install: the batch holders are the old ones plus the SID, and every other right is exactly as it was.
+function Get-RightMap {
+    param([Parameter(Mandatory)][string]$Path)
+    $map = @{}
+    $inSection = $false
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match '^\[(.+)\]\s*$') { $inSection = ($Matches[1] -eq 'Privilege Rights'); continue }
+        if (-not $inSection) { continue }
+        if ($line -match '^\s*(Se\w+)\s*=\s*(.*)$') {
+            $name = $Matches[1]
+            $list = $Matches[2]
+            $sids = @()
+            foreach ($token in ($list -split ',')) {
+                $text = $token.Trim()
+                if ($text.Length -eq 0) { continue }
+                if ($text.StartsWith('*')) { $sids += $text.Substring(1) }
+                else {
+                    try { $sids += ([System.Security.Principal.NTAccount]$text).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $sids += "unresolved:$text" }
+                }
+            }
+            $map[$name] = @($sids | Sort-Object -Unique)
+        }
+    }
+    return $map
+}
+$rightsAfterFile = Join-Path $env:RUNNER_TEMP ('rights-after-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.inf')
+& "$env:SystemRoot\System32\secedit.exe" /export /areas USER_RIGHTS /cfg $rightsAfterFile | Out-Null
+Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $rightsAfterFile)) 'the user rights were exported again (secedit, read-only)'
+$beforeRights = Get-RightMap -Path $RightsBefore
+$rightsAfter = Get-RightMap -Path $rightsAfterFile
+Assert-That ($beforeRights.ContainsKey('SeBatchLogonRight') -and -not ($beforeRights['SeBatchLogonRight'] -contains $backupSid)) 'before the install, AccucutBackup did not hold Log on as a batch job'
+$expectedBatch = @(@($beforeRights['SeBatchLogonRight']) + @($backupSid) | Sort-Object -Unique)
+Assert-That ((@($rightsAfter['SeBatchLogonRight']) -join ';') -eq ($expectedBatch -join ';')) "Log on as a batch job is held by exactly the earlier holders and AccucutBackup (before: $(@($beforeRights['SeBatchLogonRight']) -join ', '); now: $(@($rightsAfter['SeBatchLogonRight']) -join ', '))"
+$changedRights = @(($beforeRights.Keys + $rightsAfter.Keys) | Sort-Object -Unique | Where-Object { $_ -ne 'SeBatchLogonRight' -and ((@($beforeRights[$_]) -join ';') -ne (@($rightsAfter[$_]) -join ';')) })
+Assert-That ($changedRights.Count -eq 0) "every other user right is exactly as it was before the install (changed: $($changedRights -join ', '))"
+$elsewhere = @($rightsAfter.Keys | Where-Object { $_ -ne 'SeBatchLogonRight' -and (@($rightsAfter[$_]) -contains $backupSid) })
+Assert-That ($elsewhere.Count -eq 0) "AccucutBackup holds no other right (found: $($elsewhere -join ', '))"
+$deniedGroups = @('S-1-1-0', 'S-1-5-11', 'S-1-5-113', 'S-1-5-32-545')
+$denyBatch = @($rightsAfter['SeDenyBatchLogonRight'] | Where-Object { $deniedGroups -contains $_ })
+Assert-That ($denyBatch.Count -eq 0) 'Deny log on as a batch job holds none of Everyone, Authenticated Users, Local account or Users'
+$failedLogons = @(Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625; StartTime = $InstallStartedAt } -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'Account Name:\s+AccucutBackup' })
+Assert-That ($failedLogons.Count -eq 0) "no failed logon of AccucutBackup was recorded since the install began (found $($failedLogons.Count))"
+
+# The install's own run of the task: result 0, a copy with its manifest, a job_runs row, and the copy decrypts with this run's key and restores.
+$taskInfo = Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup'
+Assert-That ([uint32]$taskInfo.LastTaskResult -eq 0) "the install's run of the weekly task ended with result 0 (found 0x$('{0:X8}' -f [uint32]$taskInfo.LastTaskResult))"
+Assert-That ($taskInfo.LastRunTime -gt $InstallStartedAt) "the task ran after the install began (last run $($taskInfo.LastRunTime))"
+$copies = @(Get-AccucutBackupCopy -Directory $paths.Backups)
+Assert-That ($copies.Count -ge 1 -and @($copies | Where-Object { -not $_.Verified }).Count -eq 0) "the backups folder holds at least one copy, and each has a manifest that agrees with it (found $($copies.Count))"
+# The copy that is decrypted and restored. Straight after the install it is the install's own weekly copy; later (the exercise step has cleared it) the newest verified copy.
+if ($AfterInstall) {
+    $weekly = @($copies | Where-Object { $_.Reason -eq 'weekly' })
+    Assert-That ($weekly.Count -ge 1) 'the first backup of the install (a weekly copy) is in the backups folder'
+    $probe = $weekly[0]
+    Assert-That ($probe.Name -match '^accucut-\d{8}-\d{6}-weekly\.age$') "the first copy is named $($probe.Name)"
+}
+else { $probe = $copies[$copies.Count - 1] }
+$manifest = Get-Content -LiteralPath $probe.ManifestPath -Raw | ConvertFrom-Json
+Assert-That ($manifest.sha256 -eq (Get-AccucutFileSha256 -Path $probe.Path) -and [int64]$manifest.sizeBytes -eq $probe.SizeBytes -and $manifest.reason -eq $probe.Reason -and [string]$manifest.postgresVersion -match '^17') 'the manifest holds the SHA-256, size, reason and PostgreSQL version of the copy'
+$pgBin = [string]$installedState.pgBinDirectory
+$psqlExe = Join-Path $pgBin 'psql.exe'
+$suppliedValues = Read-AccucutValuesFile -Path $ValuesFile
+$superuserPassword = [string]$suppliedValues['PG_SUPERUSER_PASSWORD']
+function Invoke-SuperPsql {
+    param([string]$Database, [string]$Sql)
+    $ErrorActionPreference = 'Continue'
+    $env:PGPASSWORD = $superuserPassword
+    try { $output = & $psqlExe --no-psqlrc --no-password --tuples-only --no-align --quiet --set ON_ERROR_STOP=1 --host 127.0.0.1 --port ([string]$installedState.pgPort) --username postgres --dbname $Database --command $Sql 2>&1 | Out-String } finally { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }
+    if ($LASTEXITCODE -ne 0) { throw "psql failed: $output" }
+    return $output.Trim()
+}
+$okRows = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT count(*) FROM job_runs WHERE job = 'backup' AND result->>'status' = 'ok' AND (result->>'sizeBytes')::bigint > 0 AND (result->>'freeBytes')::bigint > 0 AND (result->>'totalBytes')::bigint > 0"
+Assert-That ([int]$okRows -ge 1) "job_runs has a 'backup' row with status ok, sizeBytes, freeBytes and totalBytes (found $okRows)"
+# Decrypt with the run's own key and restore into a scratch database (the file is deleted at once; nothing here is a real key).
+$ageExe = Join-Path $paths.Current 'bin\age.exe'
+$scratchFile = Join-Path $env:RUNNER_TEMP ('accucut-restore-check-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.dump')
+$scratchDb = 'accucut_restore_check'
+try {
+    & $ageExe -d -i $AgeKeyFile -o $scratchFile $probe.Path
+    Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $scratchFile)) 'the copy decrypts with the key of this run'
+    # A custom-format archive starts with PGDMP. Checked on its own, so that a copy that is not an archive says what it is (its name, size and first bytes).
+    $decrypted = [System.IO.File]::ReadAllBytes($scratchFile)
+    $firstBytes = if ($decrypted.Length -gt 0) { [System.BitConverter]::ToString($decrypted, 0, [Math]::Min(16, $decrypted.Length)) } else { 'none' }
+    Assert-That ($decrypted.Length -ge 5 -and [System.Text.Encoding]::ASCII.GetString($decrypted, 0, 5) -eq 'PGDMP') "the decrypted copy $($probe.Name) starts with PGDMP, the magic of a custom-format archive (decrypted $($decrypted.Length) bytes; first bytes: $firstBytes)"
+    [void](Invoke-SuperPsql -Database 'postgres' -Sql "CREATE DATABASE $scratchDb")
+    $env:PGPASSWORD = $superuserPassword
+    try { & (Join-Path $pgBin 'pg_restore.exe') --no-password --exit-on-error --no-owner --host 127.0.0.1 --port ([string]$installedState.pgPort) --username postgres --dbname $scratchDb $scratchFile } finally { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }
+    Assert-That ($LASTEXITCODE -eq 0) 'the decrypted copy restores into a scratch database'
+    $migrations = Invoke-SuperPsql -Database $scratchDb -Sql 'SELECT count(*) FROM _prisma_migrations'
+    Assert-That ([int]$migrations -ge 1) "the restored database holds the migration history ($migrations rows)"
+}
+finally {
+    if (Test-Path -LiteralPath $scratchFile) { Remove-Item -LiteralPath $scratchFile -Force }
+    try { [void](Invoke-SuperPsql -Database 'postgres' -Sql "DROP DATABASE IF EXISTS $scratchDb WITH (FORCE)") } catch { Write-Host "note: the scratch database could not be dropped: $($_.Exception.Message)" }
+}
+
+# The event log (ADR-015 Amendment 3.1 point 5): the install registered the source Accucut, and its own run of the weekly task wrote exactly one Information event (1000).
+Assert-That ([System.Diagnostics.EventLog]::SourceExists('Accucut')) 'the event source Accucut is registered'
+# Only straight after the install: the exercise step later clears the weekly copy and writes events of its own.
+if ($AfterInstall) {
+    $weeklyEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut'; Id = 1000 } -ErrorAction SilentlyContinue | Where-Object { $_.Properties.Count -gt 0 -and [string]$_.Properties[0].Value -like 'The weekly backup was made: accucut-*-weekly.age, * bytes.' })
+    Assert-That ($weeklyEvents.Count -eq 1) "the install's run of the weekly task wrote exactly one Accucut Information event, with the file name and the size (found $($weeklyEvents.Count))"
+    Assert-That ([string]$weeklyEvents[0].Properties[0].Value -notmatch '[A-Za-z]:\\') 'the event holds no path'
+}
+
+# The database role, checked as accucut_backup through its own password file: a member of pg_read_all_data; INSERT on job_runs works; UPDATE and DELETE on it,
+# INSERT into any other table and CREATE TABLE are refused.
+function Invoke-BackupRolePsql {
+    param([string]$Sql)
+    $ErrorActionPreference = 'Continue'
+    $env:PGPASSFILE = $paths.BackupPgpass
+    try { $output = & $psqlExe --no-psqlrc --no-password --tuples-only --no-align --quiet --host 127.0.0.1 --port ([string]$installedState.pgPort) --username accucut_backup --dbname accucut --command $Sql 2>&1 | Out-String } finally { Remove-Item Env:\PGPASSFILE -ErrorAction SilentlyContinue }
+    return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output.Trim() }
+}
+$canLogin = Invoke-BackupRolePsql -Sql "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'accucut_backup'"
+Assert-That ($canLogin.Code -eq 0 -and $canLogin.Output -eq 't') 'accucut_backup can log in on a real install (it is NOLOGIN only in development and CI)'
+$member = Invoke-BackupRolePsql -Sql "SELECT pg_has_role('accucut_backup', 'pg_read_all_data', 'member')"
+Assert-That ($member.Code -eq 0 -and $member.Output -eq 't') 'accucut_backup is a member of pg_read_all_data'
+$insert = Invoke-BackupRolePsql -Sql "INSERT INTO job_runs (job, started_at, finished_at, result) VALUES ('ci-role-check', now(), now(), '{}'::jsonb)"
+Assert-That ($insert.Code -eq 0) 'accucut_backup can INSERT into job_runs'
+[void](Invoke-SuperPsql -Database 'accucut' -Sql "DELETE FROM job_runs WHERE job = 'ci-role-check'")
+foreach ($refused in @(
+        @{ Sql = "UPDATE job_runs SET job = 'x' WHERE false"; Text = 'UPDATE on job_runs' },
+        @{ Sql = "DELETE FROM job_runs WHERE false"; Text = 'DELETE on job_runs' },
+        @{ Sql = 'INSERT INTO _prisma_migrations DEFAULT VALUES'; Text = 'INSERT into another table' },
+        @{ Sql = 'CREATE TABLE ci_role_probe (a int)'; Text = 'CREATE TABLE' }
+    )) {
+    $attempt = Invoke-BackupRolePsql -Sql $refused.Sql
+    Assert-That ($attempt.Code -ne 0 -and $attempt.Output -match 'permission denied') "accucut_backup is refused $($refused.Text)"
+}
+
 # The settings: the runtime file holds no owner role and no first-Admin password; the owner file holds no first-Admin password once it was used.
 $runtime = Read-AccucutEnvFile -Path $paths.EnvFile
 $migrate = Read-AccucutEnvFile -Path $paths.MigrateEnvFile
@@ -158,13 +352,18 @@ Assert-That ($migrate.Contains('MIGRATE_DATABASE_URL') -and -not $migrate.Contai
 $secrets = New-Object System.Collections.Generic.List[string]
 $values = Read-AccucutValuesFile -Path $ValuesFile
 foreach ($name in 'ADMIN_INITIAL_PASSWORD', 'PG_SUPERUSER_PASSWORD') { if ($values.Contains($name)) { $secrets.Add([string]$values[$name]) } }
+# The password of the backup role, from its protected file (the last field of its one line), and the private age key of this run.
+$pgpassLine = @(Get-Content -LiteralPath $paths.BackupPgpass)[0]
+$backupPassword = ($pgpassLine -split ':', 5)[4]
+$secrets.Add($backupPassword)
+foreach ($line in Get-Content -LiteralPath $AgeKeyFile) { if ($line -like 'AGE-SECRET-KEY-*') { $secrets.Add($line.Trim()) } }
 foreach ($table in $runtime, $migrate) {
     foreach ($name in 'DATABASE_URL', 'MIGRATE_DATABASE_URL') {
         if ($table.Contains($name) -and ([string]$table[$name] -match '://[^:]+:([^@]+)@')) { $secrets.Add($Matches[1]) }
     }
 }
 if ($runtime.Contains('AUTH_SECRET')) { $secrets.Add([string]$runtime['AUTH_SECRET']) }
-Assert-That ($secrets.Count -ge 5) 'five secrets were found to look for'
+Assert-That ($secrets.Count -ge 7) 'seven secrets were found to look for'
 $logFiles = @(Get-ChildItem -LiteralPath $paths.Logs -File -Force)
 Assert-That ($logFiles.Count -gt 0) "logs exist under $($paths.Logs): $((($logFiles | ForEach-Object { $_.Name }) -join ', '))"
 foreach ($file in $logFiles) {
@@ -188,6 +387,15 @@ Assert-That $scheduled 'the worker scheduled its daily log-prune job (03:30 IST)
 $state = Get-Content -LiteralPath $paths.StateFile -Raw
 foreach ($secret in $secrets) { if ($state.Contains($secret)) { throw 'ASSERTION FAILED: a secret value is in install-state.json.' } }
 Write-Host 'PASS  no secret is in install-state.json'
+# No secret in the backup settings or in any manifest, and no private key anywhere under the install folder.
+foreach ($file in @($paths.BackupSettings) + @(Get-ChildItem -LiteralPath $paths.Backups -Filter '*.manifest.json' -File | ForEach-Object { $_.FullName })) {
+    $text = Get-Content -LiteralPath $file -Raw
+    foreach ($secret in $secrets) { if ($text.Contains($secret)) { throw "ASSERTION FAILED: a secret value is in '$file'." } }
+}
+Write-Host 'PASS  no secret is in backup-settings.json or in a manifest'
+$runtimeEnv = Read-AccucutEnvFile -Path $paths.EnvFile
+Assert-That ($runtimeEnv.Contains('BACKUP_VOLUME') -and [string]$runtimeEnv['BACKUP_VOLUME'] -eq ([System.IO.Path]::GetPathRoot($paths.Backups).Replace('\', '/'))) 'BACKUP_VOLUME in .env is the drive root of the backups folder (backup-watch reads its free space)'
+Assert-That ($runtimeEnv.Contains('PG_DATA_VOLUME') -and [string]$runtimeEnv['PG_DATA_VOLUME'] -eq ([System.IO.Path]::GetPathRoot([string]$installedState.pgDataDirectory).Replace('\', '/'))) 'PG_DATA_VOLUME in .env is the drive root of the PostgreSQL data folder'
 
 # AC-6, AC-7 and the helpers around them.
 Assert-That ($null -eq (Get-ScheduledTask -TaskName 'Accucut log cleanup' -ErrorAction SilentlyContinue)) 'there is no Accucut log cleanup task: the worker prunes the logs itself'
@@ -200,3 +408,5 @@ else {
     Write-Host 'SKIP  Defender commands are not available on this machine'
 }
 Write-Host 'All install assertions passed.'
+# The last native program may have left a non-zero exit code behind; the assertions above throw on any real failure, so reaching here means success.
+$global:LASTEXITCODE = 0

@@ -14,13 +14,15 @@ export const BACKUPS_HEADING = 'Backups';
 export const SAME_SERVER_NOTE = 'Backups are kept on the same server.';
 
 export const LAST_GOOD_LABEL = 'Last good backup';
-export const NO_BACKUP_YET = 'No backup has finished yet.';
+export const NO_BACKUP_YET = 'No good backup yet.';
 
 export const DISK_LABEL = 'Server disk';
 export const NO_DISK_READING = 'The server disk has not been read yet.';
 
 export const BACKUP_LATE_TITLE = 'Backup late';
 export const BACKUP_LATE_BODY = `No backup has finished for ${BACKUP_LATE_AFTER_DAYS} days. Ask Accucut IT to check the weekly backup.`;
+/** When there has never been a good backup (STORY-10.05 AC-10): no number of days, and true whether no backup ran or only failed ones did. */
+export const BACKUP_NEVER_BODY = 'No backup has finished without errors yet. Ask Accucut IT to check the weekly backup.';
 
 export const DISK_FULL_TITLE = 'Disk nearly full';
 export const DISK_FULL_BODY = `Less than ${DISK_NEARLY_FULL_BELOW_PERCENT} % of the server disk is free. Backups are kept on the same server, so ask Accucut IT to free space or add disk.`;

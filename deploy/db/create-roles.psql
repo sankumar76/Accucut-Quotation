@@ -1,8 +1,10 @@
--- The one source of the two database roles (STORY-10.01 AC-9 and STORY-10.04; architecture sections 5.1, 5.6, 9.9).
+-- The one source of the three database roles (STORY-10.01 AC-9, STORY-10.04 and STORY-10.05; architecture sections 5.1, 5.6, 9.9; ADR-015 Amendment 3).
 --
 --   accucut_owner  runs migrations and owns the schema. Used by the migrate step only.
 --   accucut_app    the runtime role used by the app and the worker. It can read and write rows but has
 --                  no DDL rights: it cannot create, alter or drop anything.
+--   accucut_backup backup.ps1 and clear-copies.ps1 only (Windows, STORY-10.05). It can read all data (pg_read_all_data, which pg_dump needs) and, by a
+--                  migration, INSERT into job_runs: nothing else. It is never given the owner or app role's rights, and it is not used by the app or the worker.
 --
 -- Read by two callers, so the roles are the same everywhere:
 --   - docker/postgres-init/01-create-roles.sh  (the local development database, and CI's PostgreSQL service)
@@ -13,16 +15,27 @@
 -- itself, so none of them is on a command line, where `ps` and /proc/*/cmdline (or Task Manager and
 -- Get-CimInstance Win32_Process) would show it. Nothing is printed.
 --   Needs: DB_OWNER_PASSWORD, DB_APP_PASSWORD, POSTGRES_DB.
+--   Optional: DB_BACKUP_PASSWORD gives accucut_backup its password (the Windows install always sets it; it is written only to config\backup.pgpass).
+--   Absent, accucut_backup is made NOLOGIN: the development database and CI never run a backup, and the role still exists for the grants of the migrations.
 --   Optional: DB_OWNER_CREATEDB=on gives the owner CREATEDB, which `prisma migrate dev` needs for its shadow
 --   database. Development only. Absent, the owner has no CREATEDB, which is the production setting.
 \getenv owner_password DB_OWNER_PASSWORD
 \getenv app_password DB_APP_PASSWORD
 \getenv dbname POSTGRES_DB
+\set backup_password ''
+\getenv backup_password DB_BACKUP_PASSWORD
 \set owner_createdb off
 \getenv owner_createdb DB_OWNER_CREATEDB
 
 CREATE ROLE accucut_owner LOGIN PASSWORD :'owner_password';
 CREATE ROLE accucut_app LOGIN PASSWORD :'app_password';
+
+SELECT (:'backup_password' <> '') AS has_backup_password \gset
+\if :has_backup_password
+CREATE ROLE accucut_backup LOGIN PASSWORD :'backup_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+\else
+CREATE ROLE accucut_backup NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+\endif
 
 \if :owner_createdb
 ALTER ROLE accucut_owner CREATEDB;
@@ -30,12 +43,15 @@ ALTER ROLE accucut_owner CREATEDB;
 
 ALTER DATABASE :"dbname" OWNER TO accucut_owner;
 REVOKE ALL ON DATABASE :"dbname" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"dbname" TO accucut_owner, accucut_app;
+GRANT CONNECT ON DATABASE :"dbname" TO accucut_owner, accucut_app, accucut_backup;
 
 -- The schema belongs to the owner; the runtime role may use it but not create in it.
 ALTER SCHEMA public OWNER TO accucut_owner;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO accucut_app;
+GRANT USAGE ON SCHEMA public TO accucut_app, accucut_backup;
+
+-- What pg_dump needs, and nothing else: read every table, view and sequence of the database (PostgreSQL 14 or later). INSERT on job_runs comes from a migration.
+GRANT pg_read_all_data TO accucut_backup;
 
 -- Whatever the owner creates later (migrations) is readable and writable by the runtime role.
 -- Stories that need less (append-only audit, immutable calculations) revoke per table.

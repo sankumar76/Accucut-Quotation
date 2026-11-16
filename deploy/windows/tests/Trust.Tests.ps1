@@ -110,6 +110,16 @@ Describe 'the trust block is one copy, in both scripts (required test 1)' {
     }
 }
 
+Describe 'the trust block is also one copy in backup.ps1 and clear-copies.ps1 (STORY-10.05, required test 1)' {
+    It 'is byte for byte the same as in install.ps1, with exactly one pair of markers (<File>)' -ForEach @(@{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory $File))
+        $pattern = '(?s)# >>> ACCUCUT TRUST BLOCK v1\r?\n.*?# <<< ACCUCUT TRUST BLOCK v1'
+        ([regex]::Matches($text, '# >>> ACCUCUT TRUST BLOCK v1')).Count | Should -Be 1
+        ([regex]::Matches($text, '# <<< ACCUCUT TRUST BLOCK v1')).Count | Should -Be 1
+        [regex]::Match($text, $pattern).Value | Should -BeExactly ([regex]::Match($script:InstallText, $pattern).Value)
+    }
+}
+
 Describe 'the trust block is self-contained, and nothing is loaded or run unchecked (required tests 2 and 5)' {
     BeforeAll {
         function Get-ScriptAst {
@@ -132,11 +142,13 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
             'Remove-AccucutTrustedTree', 'Assert-AccucutTrustedNoLinks', 'Expand-AccucutTrustedPackage', 'Get-AccucutTrustedCurrent', 'Resolve-AccucutTrustedExecutable',
             'Import-AccucutTrustedModule', 'ConvertTo-AccucutTrustedArgument', 'Invoke-AccucutTrustedScript'
         )
-        $script:Asts = @{ 'install.ps1' = (Get-ScriptAst -Text $script:InstallText); 'update.ps1' = (Get-ScriptAst -Text $script:UpdateText) }
-        $script:Texts = @{ 'install.ps1' = $script:InstallText; 'update.ps1' = $script:UpdateText }
+        $script:BackupText = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'backup.ps1'))
+        $script:ClearText = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'clear-copies.ps1'))
+        $script:Asts = @{ 'install.ps1' = (Get-ScriptAst -Text $script:InstallText); 'update.ps1' = (Get-ScriptAst -Text $script:UpdateText); 'backup.ps1' = (Get-ScriptAst -Text $script:BackupText); 'clear-copies.ps1' = (Get-ScriptAst -Text $script:ClearText) }
+        $script:Texts = @{ 'install.ps1' = $script:InstallText; 'update.ps1' = $script:UpdateText; 'backup.ps1' = $script:BackupText; 'clear-copies.ps1' = $script:ClearText }
     }
 
-    It 'the block defines exactly its 19 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+    It 'the block defines exactly its 19 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
         $text = $script:Texts[$File]
         $start = $text.IndexOf('# >>> ACCUCUT TRUST BLOCK v1')
         $end = $text.IndexOf('# <<< ACCUCUT TRUST BLOCK v1')
@@ -151,7 +163,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         }
     }
 
-    It 'neither script dot-sources, uses the call operator, Start-Process, Invoke-Expression, or a using-module statement (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+    It 'no script dot-sources, uses the call operator, Start-Process, Invoke-Expression, or a using-module statement (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
         $ast = $script:Asts[$File]
         foreach ($call in (Get-CommandNames -Node $ast)) {
             $call.Operator | Should -Be 'Unknown'
@@ -160,7 +172,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.UsingStatementAst] }, $true).Count | Should -Be 0
     }
 
-    It 'Import-Module is called in one place only, Import-AccucutTrustedModule, and Import-AccucutTrustedModule in one place only (<File>)' -ForEach @(@{ File = 'install.ps1'; Caller = 'Invoke-AccucutInstallSecondHalf' }, @{ File = 'update.ps1'; Caller = 'Import-AccucutUpdateEnvironment' }) {
+    It 'Import-Module is called in one place only, Import-AccucutTrustedModule, and Import-AccucutTrustedModule in one place only (<File>)' -ForEach @(@{ File = 'install.ps1'; Caller = 'Invoke-AccucutInstallSecondHalf' }, @{ File = 'update.ps1'; Caller = 'Import-AccucutUpdateEnvironment' }, @{ File = 'backup.ps1'; Caller = 'Invoke-AccucutBackupScript' }, @{ File = 'clear-copies.ps1'; Caller = 'Invoke-AccucutClearScript' }) {
         $ast = $script:Asts[$File]
         $imports = @(Get-CommandNames -Node $ast | Where-Object { $_.Name -like '*Import-Module' })
         $imports.Count | Should -Be 1
@@ -173,7 +185,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $loads[0].Offset | Should -BeLessThan $function.Extent.EndOffset
     }
 
-    It 'a child powershell.exe is started in one place only, Invoke-AccucutTrustedScript, and no other process is started except cmd.exe for rd (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+    It 'a child powershell.exe is started in one place only, Invoke-AccucutTrustedScript, and no other process is started except cmd.exe for rd (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
         $ast = $script:Asts[$File]
         $starts = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and [string]$n.Member.Value -eq 'Start' -and $n.Expression.Extent.Text -like '*Diagnostics.Process*' }, $true))
         $starts.Count | Should -Be 2
@@ -195,6 +207,43 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $startOffset = $function.Extent.Text.IndexOf('Process]::Start')
         $startOffset | Should -BeGreaterThan 0
         ($function.Extent.StartOffset + $startOffset) | Should -BeGreaterThan (& $offsetOf 'Assert-AccucutTrustedPath')
+    }
+
+    It 'before the module is loaded, backup.ps1 and clear-copies.ps1 call only the trust block and Get-AccucutScriptInstallRoot, and check the module file first (required test 2, <File>)' -ForEach @(
+        @{ File = 'backup.ps1'; Name = 'Invoke-AccucutBackupScript' }
+        @{ File = 'clear-copies.ps1'; Name = 'Invoke-AccucutClearScript' }
+    ) {
+        $ast = $script:Asts[$File]
+        $function = Get-FunctionAst -Ast $ast -Name $Name
+        $allowed = $script:BlockFunctionNames + @('Get-AccucutScriptInstallRoot')
+        $load = @(Get-CommandNames -Node $function | Where-Object { $_.Name -eq 'Import-AccucutTrustedModule' })[0]
+        foreach ($call in (Get-CommandNames -Node $function | Where-Object { $_.Offset -lt $load.Offset })) {
+            $call.Name | Should -BeIn $allowed -Because 'a function of the module may not run before the module has been checked and loaded'
+        }
+        @(Get-CommandNames -Node $function | Where-Object { $_.Offset -lt $load.Offset -and $_.Name -eq 'Assert-AccucutTrustedPath' }).Count | Should -BeGreaterOrEqual 2
+        # After the load, nothing that is run is run before its path was checked: every program goes through Resolve-AccucutTrustedExecutable, by a full path, never through PATH.
+        $text = $script:Texts[$File]
+        $text | Should -Not -Match '(?i)Start-Process|Get-Command -Name (?!Hide-AccucutSecrets)'
+    }
+
+    It 'backup.ps1 checks the settings files, the backups folder and every program before it does any work; clear-copies.ps1 the same for the files, the folder and psql' {
+        $backup = Get-FunctionAst -Ast $script:Asts['backup.ps1'] -Name 'Invoke-AccucutBackupScript'
+        $order = @('Import-AccucutTrustedModule', 'Get-AccucutBackupAccountSid', 'Read-AccucutBackupSettings', 'Assert-AccucutBackupFolderTrusted', 'Resolve-AccucutTrustedExecutable', 'Invoke-AccucutBackup')
+        $offsets = foreach ($name in $order) { @(Get-CommandNames -Node $backup | Where-Object { $_.Name -eq $name })[0].Offset }
+        for ($i = 1; $i -lt $offsets.Count; $i++) { $offsets[$i] | Should -BeGreaterThan $offsets[$i - 1] -Because "$($order[$i]) comes after $($order[$i - 1])" }
+        @(Get-CommandNames -Node $backup | Where-Object { $_.Name -eq 'Resolve-AccucutTrustedExecutable' }).Count | Should -Be 3
+        $clear = Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name 'Invoke-AccucutClearScript'
+        $order = @('Import-AccucutTrustedModule', 'Get-AccucutBackupAccountSid', 'Read-AccucutBackupSettings', 'Assert-AccucutBackupFolderTrusted', 'Resolve-AccucutTrustedExecutable', 'Clear-AccucutCopies')
+        $offsets = foreach ($name in $order) { @(Get-CommandNames -Node $clear | Where-Object { $_.Name -eq $name })[0].Offset }
+        for ($i = 1; $i -lt $offsets.Count; $i++) { $offsets[$i] | Should -BeGreaterThan $offsets[$i - 1] -Because "$($order[$i]) comes after $($order[$i - 1])" }
+    }
+
+    It 'the two helper functions that backup.ps1 and clear-copies.ps1 share are the same text in both' {
+        foreach ($name in 'Get-AccucutScriptInstallRoot', 'Assert-AccucutBackupFolderTrusted') {
+            $first = (Get-FunctionAst -Ast $script:Asts['backup.ps1'] -Name $name).Extent.Text
+            $second = (Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name $name).Extent.Text
+            $first | Should -BeExactly $second
+        }
     }
 
     It 'in the first half of the install, only the trust block and a few plain functions are called: the module is not loaded and none of its functions is used (required test 2)' {
@@ -222,7 +271,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         @(Get-CommandNames -Node $function | Where-Object { $_.Offset -lt $load.Offset -and $_.Name -eq 'Assert-AccucutTrustedPath' }).Count | Should -BeGreaterThan 0
     }
 
-    It 'the module is never dot-sourced or imported by a script before the entry guard, and nothing runs at the top level except parameters, strict mode, variables and functions (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }) {
+    It 'the module is never dot-sourced or imported by a script before the entry guard, and nothing runs at the top level except parameters, strict mode, variables and functions (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
         $ast = $script:Asts[$File]
         foreach ($statement in $ast.EndBlock.Statements) {
             $text = $statement.Extent.Text
@@ -260,6 +309,8 @@ Describe 'every packaged script: the block where code is loaded or run, no load 
         $names = @($script:Packaged | ForEach-Object { $_.Name })
         $names | Should -Contain 'install.ps1'
         $names | Should -Contain 'update.ps1'
+        $names | Should -Contain 'backup.ps1'
+        $names | Should -Contain 'clear-copies.ps1'
         $names | Should -Not -Contain 'clean-logs.ps1'
         $names | Should -Contain 'AccucutOps.psm1'
     }
@@ -278,10 +329,16 @@ Describe 'every packaged script: the block where code is loaded or run, no load 
         }
     }
 
-    It 'no script registers a scheduled task: the worker prunes the logs itself (Amendment 2.1); only the backup release may add a task' {
+    It 'no script registers a scheduled task except the module, once, to make the weekly backup task of Amendment 3; the worker prunes the logs itself (Amendment 2.1)' {
         foreach ($file in $script:Packaged) {
             $text = [System.IO.File]::ReadAllText($file.FullName)
-            $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask|schtasks' -Because "$($file.Name) must not register a task"
+            if ($file.Name -eq 'AccucutOps.psm1') {
+                ([regex]::Matches($text, 'Register-ScheduledTask')).Count | Should -Be 1
+                $text | Should -Not -Match 'schtasks'
+            }
+            else {
+                $text | Should -Not -Match 'Register-ScheduledTask|New-ScheduledTask|schtasks' -Because "$($file.Name) must not register a task"
+            }
         }
     }
 
