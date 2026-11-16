@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { APPROVAL_NOT_AVAILABLE_CODE, CALCULATION_CHANGED_CODE, NOT_CALCULATED_CODE, NOT_CALCULATED_MESSAGE, TOTALS_OUT_OF_DATE_CODE, TOTALS_OUT_OF_DATE_MESSAGE } from '@/lib/estimate/approval-words';
+import { CALCULATION_CHANGED_CODE, NOT_CALCULATED_CODE, NOT_CALCULATED_MESSAGE, TOTALS_OUT_OF_DATE_CODE, TOTALS_OUT_OF_DATE_MESSAGE } from '@/lib/estimate/approval-words';
 import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
-import { INTERNAL_TITLE } from '@/server/http/problem';
+import { approveAnswerSchema } from '@/server/views/schemas/estimates';
 
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
@@ -15,10 +15,11 @@ import { UNKNOWN_CALCULATION_ID } from '../support/route-calls';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
- * STORY-06.05 AC-1 to AC-5, AC-7 and AC-8 (FR-101, D-20; NFR-002, NFR-007; architecture sections 4.8 and 6 "Approve"), through the real `withRoute`, the real session, the real approval, calculation and estimate
- * services over in-memory storage: the server refuses an approval unless the estimate is SUBMITTED, its figures are `current` and the request names the current calculation, with a fixed sentence that names the
- * missing step; every refusal writes nothing and records no audit entry; an estimate that passes the guard reaches the approval, which is STORY-06.06's and until then the fixed 501. Who may call the route is
- * `tests/security/role-matrix.test.ts`; the PostgreSQL side (every writer of an input, the race with a save) is `tests/integration/approval/guard.test.ts`. Every name, ID and number is invented.
+ * STORY-06.05 AC-1 to AC-5, AC-7 and AC-8 (FR-101, D-20; NFR-002, NFR-007; architecture sections 4.8 and 6 "Approve") and STORY-06.06 AC-2, AC-6 and AC-7 (FR-062), through the real `withRoute`, the real session, the
+ * real approval, calculation and estimate services over in-memory storage: the server refuses an approval unless the estimate is SUBMITTED, its figures are `current` and the request names the current calculation,
+ * with a fixed sentence that names the missing step; every refusal writes nothing and records no audit entry; an estimate that passes the guard is approved: the status, the approvals row and the audit entry are
+ * written together or not at all, and two approvals at once leave one row. Who may call the route is `tests/security/role-matrix.test.ts`; the PostgreSQL side (every writer of an input, the race with a save, the
+ * grants) is `tests/integration/approval/`. Every name, ID and number is invented.
  */
 
 vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/session-harness')).harness.getServerSession }));
@@ -82,9 +83,16 @@ async function calculated(): Promise<void> {
   await harness.calculationService.calculate(engineer(), owned());
 }
 
-/** What a refusal must have left alone: the status, the link, the records, the revision and the audit entries. */
+/** What a refusal must have left alone: the status, the link, the records, the approvals, the revision and the audit entries. */
 function snapshot() {
-  return { status: estimate().status, link: estimate().currentCalculationId, revision: estimate().inputsRevision, records: harness.calculationWorld.calculations.length, audit: harness.calculationAudit.rows.length };
+  return {
+    status: estimate().status,
+    link: estimate().currentCalculationId,
+    revision: estimate().inputsRevision,
+    records: harness.calculationWorld.calculations.length,
+    approvals: harness.calculationWorld.approvals.length,
+    audit: harness.calculationAudit.rows.length,
+  };
 }
 
 beforeAll(holdSessionClock);
@@ -105,7 +113,9 @@ afterEach(() => {
   held.currentCalculationId = null;
   part().inputs = {};
   harness.calculationWorld.calculations.length = 0;
+  harness.calculationWorld.approvals.length = 0;
   harness.calculationAudit.rows.length = 0;
+  vi.restoreAllMocks();
 });
 
 describe('AC-1: a never-calculated estimate is the 409 NOT_CALCULATED, naming the step, and nothing is written', () => {
@@ -225,24 +235,89 @@ describe('AC-5: the order of the checks is role, estimate, status, state, calcul
   });
 });
 
-describe('AC-7: after Recalculate the guard passes and the approval is reached (STORY-06.06\'s)', () => {
-  it('cleared, then Recalculate, then the new calculation\'s ID: the fixed 501 APPROVAL_NOT_AVAILABLE, and nothing is written (the status is still SUBMITTED)', async () => {
+describe('STORY-06.06 AC-2: an approval that passes the guard is written, in one piece', () => {
+  it('after a Recalculate and with the new calculation\'s ID: 200, the estimate is APPROVED, one approvals row holds the price and the calculated total, and one audit entry names them and the approver', async () => {
     await calculated();
     estimate().inputsRevision += 1;
     expect((await approve(currentCalculation())).status).toBe(409);
     await harness.calculationService.recalculate(lead(), owned());
-    const before = snapshot();
-    const response = await approve(currentCalculation());
-    expect(response.status).toBe(501);
-    // `problem.ts` masks the title of every 5xx with the generic one, so that is the title on the wire (SQR-01 of the review of AQP-322); the code is what tells a client it is "not available yet".
-    expect(await bodyOf(response)).toMatchObject({ status: 501, code: APPROVAL_NOT_AVAILABLE_CODE, title: INTERNAL_TITLE });
-    expect(snapshot()).toEqual(before);
+    const calculationId = currentCalculation();
+    const entries = harness.calculationAudit.rows.length;
+    const response = await approve(calculationId);
+    expect(response.status).toBe(200);
+    expect(approveAnswerSchema.parse(await bodyOf(response))).toMatchObject({ status: 'APPROVED', approvedPrice: PRICE });
+    expect(estimate().status).toBe('APPROVED');
+    // The row is the one the story names: the estimate, the calculation it was approved on, the price, the total it was set against and who approved it.
+    const [row] = harness.calculationWorld.approvals;
+    const calculatedTotal = defined(harness.calculationWorld.calculations.find((record) => record.id === calculationId)).productValues.totalPrice;
+    expect(harness.calculationWorld.approvals).toHaveLength(1);
+    expect(row).toMatchObject({ estimateId: owned(), calculationId, approvedPrice: PRICE, calculatedTotal, approvedById: harness.idOf.LEAD });
+    // One entry, `approval.approved`, with the price, the calculated total and the approver (the person's name now).
+    expect(harness.calculationAudit.rows).toHaveLength(entries + 1);
+    expect(harness.calculationAudit.rows.at(-1)).toMatchObject({ event: 'approval.approved', actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: null });
+    expect(harness.calculationAudit.rows.at(-1)?.after).toEqual({ approvedPrice: PRICE, calculatedTotal, approver: 'Invented Lead' });
   });
 
-  it('an Admin passes it too', async () => {
+  it('an Admin passes it too, and a price in whole rupees is kept as rupees and paise', async () => {
     await calculated();
     harness.signInAs('ADMIN');
-    expect((await approve(currentCalculation())).status).toBe(501);
+    const response = await POST(request({ calculationId: currentCalculation(), price: '12600' }), withId(owned()));
+    expect(response.status).toBe(200);
+    expect(await bodyOf(response)).toMatchObject({ status: 'APPROVED', approvedPrice: '12600.00' });
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '12600.00', approvedById: harness.idOf.ADMIN });
+  });
+
+  it('a price that is not the calculated total is still approved (the override flag and its reason are STORY-06.07\'s), and the reason sent is not kept', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '1.00', reason: 'Rounded for the customer.' })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '1.00' });
+    expect(JSON.stringify(harness.calculationWorld.approvals)).not.toContain('Rounded for the customer.');
+  });
+
+  it('a failed insert takes the status back: nothing is half written (the transition ran first in the same transaction)', async () => {
+    await calculated();
+    const before = snapshot();
+    vi.spyOn(harness.calculationWorld.approvalRepository, 'insertApproval').mockRejectedValueOnce(new Error('Invented insert failure.'));
+    expect((await approve(currentCalculation())).status).toBe(500);
+    expect(snapshot()).toEqual(before);
+    expect(estimate().status).toBe('SUBMITTED');
+  });
+
+  it('an audit entry that cannot be written takes the approval and the status with it', async () => {
+    await calculated();
+    const before = snapshot();
+    vi.spyOn(harness.calculationAudit.service, 'record').mockRejectedValueOnce(new Error('Invented audit failure.'));
+    expect((await approve(currentCalculation())).status).toBe(500);
+    expect(snapshot()).toEqual(before);
+    expect(harness.calculationWorld.approvals).toHaveLength(0);
+  });
+});
+
+describe('STORY-06.06 AC-6: two approvals at once leave exactly one row', () => {
+  it('one wins with 200 and the other is the machine\'s 409 "already approved"; every answer is read before anything is asserted', async () => {
+    await calculated();
+    const calculationId = currentCalculation();
+    // Both answers are collected first, so a failing call cannot leave a rejection unhandled (#443).
+    const answers = await Promise.all([approve(calculationId), approve(calculationId, { price: '13000.00' })]);
+    const outcomes = await Promise.all(answers.map(async (answer) => ({ status: answer.status, code: (await bodyOf(answer))['code'] })));
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([200, 409]);
+    expect(outcomes.find((outcome) => outcome.status === 409)?.code).toBe(TRANSITION_REFUSALS.ALREADY_APPROVED.code);
+    expect(harness.calculationWorld.approvals).toHaveLength(1);
+    expect(harness.calculationAudit.rows.filter((row) => row.event === 'approval.approved')).toHaveLength(1);
+    expect(estimate().status).toBe('APPROVED');
+  });
+});
+
+describe('STORY-06.06 AC-7: nobody but a Lead or an Admin approves', () => {
+  it('an Engineer is 403 and a signed-out caller is 401, and no approval is written', async () => {
+    await calculated();
+    const calculationId = currentCalculation();
+    harness.signInAs('ENGINEER');
+    expect((await approve(calculationId)).status).toBe(403);
+    harness.signInAs(null);
+    expect((await approve(calculationId)).status).toBe(401);
+    expect(harness.calculationWorld.approvals).toHaveLength(0);
+    expect(estimate().status).toBe('SUBMITTED');
   });
 });
 
@@ -286,7 +361,7 @@ describe('the body is strict and is read after the role', () => {
   it('an empty body is 400, and a reason of exactly 500 characters is accepted by the shape', async () => {
     await calculated();
     expect((await POST(request(), withId(owned()))).status).toBe(400);
-    expect((await approve(currentCalculation(), { reason: 'x'.repeat(500) })).status).toBe(501);
+    expect((await approve(currentCalculation(), { reason: 'x'.repeat(500) })).status).toBe(200);
   });
 
   it('a request from another origin is refused before anything else', async () => {
@@ -298,7 +373,7 @@ describe('the body is strict and is read after the role', () => {
 });
 
 describe('NFR-002: no answer of the route holds a master value, rate name, formula, figure or ID', () => {
-  it('every refusal and the 501 pass the scan of the canary values, and none names the estimate or a calculation', async () => {
+  it('every refusal and the good answer pass the scan of the canary values, and none names the estimate or a calculation', async () => {
     await calculated();
     const calculationId = currentCalculation();
     const answers: Response[] = [];
@@ -310,14 +385,17 @@ describe('NFR-002: no answer of the route holds a master value, rate name, formu
     answers.push(await approve(calculationId));
     estimate().status = 'SUBMITTED';
     answers.push(await approve(calculationId));
-    expect(answers.map((answer) => answer.status)).toEqual([409, 409, 409, 501]);
+    expect(answers.map((answer) => answer.status)).toEqual([409, 409, 409, 200]);
+    const [good] = answers.slice(-1);
     for (const answer of answers) {
       const text = await answer.text();
       const recorded = { label: 'POST approve (API, Lead)', url: ORIGIN, status: answer.status, headers: Object.fromEntries(answer.headers), body: text };
       expect(scanResponse(recorded, forbiddenStrings())).toEqual([]);
       expect(text).not.toContain(calculationId);
       expect(text).not.toContain(owned());
-      expect(Object.keys(record.parse(JSON.parse(text))).sort()).toEqual(['code', 'requestId', 'status', 'title', 'type']);
+      // The refusals are the fixed problem body; the good answer is the status, the price the Lead set and the time, and nothing else (no calculated total, no ID).
+      const keys = Object.keys(record.parse(JSON.parse(text))).sort();
+      expect(keys).toEqual(answer === good ? ['approvedAt', 'approvedPrice', 'status'] : ['code', 'requestId', 'status', 'title', 'type']);
     }
   });
 });

@@ -675,7 +675,7 @@ async function calculatedEstimateOf(
   page: Page,
   context: BrowserContext,
   testInfo: TestInfo,
-): Promise<{ readonly id: string; readonly code: string; readonly forbidden: Awaited<ReturnType<typeof prepare>>['forbidden'] }> {
+): Promise<{ readonly id: string; readonly code: string; readonly forbidden: Awaited<ReturnType<typeof prepare>>['forbidden']; readonly engineer: E2eUser }> {
   const { forbidden, engineer } = await prepare(testInfo);
   await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
   const code = canaryTaskCodeFor(engineer.id);
@@ -686,7 +686,7 @@ async function calculatedEstimateOf(
   const status = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, engineer.id);
   expect(status).toBe(200);
   await context.clearCookies();
-  return { id: engineer.id, code, forbidden };
+  return { id: engineer.id, code, forbidden, engineer };
 }
 
 test('AC-6 (STORY-06.02): the Lead\'s review page and `/costs` show the figures of the record, and no master value, rate name or formula', async ({ page, context }, testInfo) => {
@@ -772,6 +772,72 @@ test('AC-7 (STORY-06.04): the cleared page holds no figure, the Lead\'s Recalcul
   expect(found.filter((finding) => finding.label.includes('(cleared)') || finding.label.includes('Lead, cleared')).map((finding) => finding.label), 'a figure on a cleared page or answer').toEqual([]);
   expect(found.some((finding) => finding.label.includes('/recalculate (API, Lead)')), 'a figure of the record is in the Lead\'s Recalculate answer').toBe(true);
   expect(found.some((finding) => finding.label.includes('after Recalculate')), 'a figure of the record is on the page after the press').toBe(true);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
+});
+
+/**
+ * STORY-06.06 AC-4, AC-7 (NFR-002; test strategy section 6): the approval journey, on an estate of its own (the canary estate every other scan reads is not approved by the scan, because an approved estimate
+ * cannot be calculated again). The Lead reads the review, approves at a price of their own, and the answer and the page after it hold the price and **no master value, rate name or formula**. The Engineer,
+ * signed in afterwards, is sent the same address: it says "Approved and locked." and holds **no price and no figure of the record**; `/costs` and `/approve` are the fixed 403 for them.
+ */
+const APPROVED_PRICE = '48271.37';
+const APPROVED_PRICE_FORMS: ReadonlyArray<{ readonly text: string; readonly reason: string }> = [APPROVED_PRICE, '48,271.37', '₹ 48,271.37'].map((text) => ({ text, reason: 'the approved price (BO)' }));
+
+test('AC-4, AC-7 (STORY-06.06): the Lead\'s approval and the page after it show the price and no master value, and the Engineer is sent "Approved and locked." with no price and no figure', async ({ page, context }, testInfo) => {
+  await useFreshAddress(context);
+  const { id, code, forbidden, engineer } = await calculatedEstimateOf(page, context, testInfo);
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  const review = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead, before approval)`, await page.goto(`/estimates/${code}`));
+  expect(review.status).toBe(200);
+  expect(review.body ?? '').toContain('Approve and lock');
+  const costs = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, Lead, before approval)`, `/api/v1/estimates/${id}/costs`);
+  const calculationId = z.object({ calculationId: z.string() }).parse(JSON.parse(costs.body ?? '{}')).calculationId;
+  const approved = await callInBrowser(recorder, page, `POST /api/v1/estimates/${id}/approve (API, Lead)`, `/api/v1/estimates/${id}/approve`, { method: 'POST', body: { calculationId, price: APPROVED_PRICE } });
+  expect(approved.status).toBe(200);
+  expect(JSON.parse(approved.body ?? '{}')).toMatchObject({ status: 'APPROVED', approvedPrice: APPROVED_PRICE });
+  const after = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead, approved)`, await page.goto(`/estimates/${code}`));
+  expect(after.status).toBe(200);
+  expect(after.body ?? '').toContain('Approved and locked on');
+  expect(after.body ?? '').toContain('₹ 48,271.37');
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+  const leadResponses = recorder.responses.length;
+
+  // The Engineer, on the same address, after the approval.
+  await context.clearCookies();
+  await signIn(page, recorder, engineer);
+  const engineerPage = await recorder.recordNavigation(`GET /estimates/${code} (page, Engineer, approved)`, await page.goto(`/estimates/${code}`));
+  expect(engineerPage.status).toBe(200);
+  expect(engineerPage.body ?? '').toContain('Approved and locked.');
+  for (const path of [`/api/v1/estimates/${id}/form`, `/api/v1/estimates/${id}/tree`, `/api/v1/tasks/${id}`]) {
+    expect((await callInBrowser(recorder, page, `GET ${path} (API, Engineer, approved)`, path)).status, path).toBe(200);
+  }
+  const engineerCosts = await callInBrowser(recorder, page, 'GET costs (API, Engineer, approved)', `/api/v1/estimates/${id}/costs`);
+  expect(engineerCosts.status).toBe(403);
+  expect(fixedForbiddenProblem(engineerCosts)).toBeNull();
+  const engineerApprove = await callInBrowser(recorder, page, 'POST approve (API, Engineer, approved)', `/api/v1/estimates/${id}/approve`, { method: 'POST', body: { calculationId, price: APPROVED_PRICE } });
+  expect(engineerApprove.status).toBe(403);
+  expect(fixedForbiddenProblem(engineerApprove)).toBeNull();
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  // Nobody was sent a master value, rate name or formula: not the Lead (who sees figures, not workings) and not the Engineer.
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  const watched = await figuresOfTheRecord(id);
+  // The control that the scan looks at something real: the Lead's approval answer and page hold the price.
+  const leadFound = scanResponses(recorder.responses.slice(0, leadResponses), APPROVED_PRICE_FORMS);
+  expect(leadFound.some((finding) => finding.label.includes('(API, Lead)')), 'the price is in the Lead\'s approval answer').toBe(true);
+  expect(leadFound.some((finding) => finding.label.includes('(page, Lead, approved)')), 'the price is on the Lead\'s approved page').toBe(true);
+  // The Engineer is sent no price and no figure of the record, in anything that came after the sign-in.
+  const engineerResponses = recorder.responses.slice(leadResponses);
+  expect(scanResponses(engineerResponses, APPROVED_PRICE_FORMS).map(describeFinding)).toEqual([]);
+  expect(scanResponses(engineerResponses, watched).map(describeFinding)).toEqual([]);
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
   await expectCanaryRatesStillStored();
 });

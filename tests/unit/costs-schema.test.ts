@@ -12,18 +12,35 @@ const letters = { count: 'H', unitPrice: 'BG', unitPriceUsd: 'BJ', unitPriceEur:
 const node = { id: 'node-1', parentId: null, slNo: '1', name: 'Invented frame', count: '2', figures: { unitPrice: '0', unitPriceUsd: '0', unitPriceEur: '0' } };
 const good = {
   state: 'current',
+  calculationId: '00000000-0000-4000-8000-0000000ca1c0',
   calculatedAt: '2026-11-05T05:12:00.000Z',
   configurationNumber: 9,
   letters,
   nodes: [node],
   totals: { totalPrice: '30', pricePerToolCost: null, toolCostTotal: '0' },
+  approval: null,
 };
 
 describe('the answer, and exactly what it may hold', () => {
   it('accepts a good answer, and an answer of a state with no figure at all', () => {
     expect(costsSchema.safeParse(good).success).toBe(true);
-    const none = { state: 'none', calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null };
+    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null };
     expect(costsSchema.safeParse(none).success).toBe(true);
+  });
+
+  it('STORY-06.06 AC-9: BO is the approval row, which is there whatever the state of the figures (cleared figures, no calculation id), and is the price, the time and the approver only', () => {
+    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead' };
+    const cleared = { ...good, state: 'out-of-date', calculationId: null, totals: null, nodes: [{ ...node, figures: null }] };
+    expect(costsSchema.safeParse({ ...cleared, approval }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.approval.unwrap().shape).sort()).toEqual(['approvedAt', 'approverName', 'price']);
+    // A price is rupees with two decimals as text; a number, a missing name and an extra key (a calculated total, say) are refused.
+    for (const planted of [{ ...approval, price: 12600 }, { ...approval, price: '12600' }, { ...approval, approverName: '' }, { ...approval, calculatedTotal: '12629.99' }]) {
+      expect(costsSchema.safeParse({ ...good, approval: planted }).success).toBe(false);
+    }
+  });
+
+  it('the calculation ID is an ID or null, never any other text', () => {
+    expect(costsSchema.safeParse({ ...good, calculationId: 'not-an-id' }).success).toBe(false);
   });
 
   it('the states are none, current and out-of-date, and nothing else', () => {
@@ -32,7 +49,7 @@ describe('the answer, and exactly what it may hold', () => {
   });
 
   it('holds these keys and no others, at every level: the only sums are totalPrice (BL), pricePerToolCost (BN) and toolCostTotal', () => {
-    expect(Object.keys(costsSchema.shape).sort()).toEqual(['calculatedAt', 'configurationNumber', 'letters', 'nodes', 'state', 'totals']);
+    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'state', 'totals']);
     expect(Object.keys(costsSchema.shape.letters.shape).sort()).toEqual(['approvedPrice', 'count', 'pricePerToolCost', 'totalPrice', 'unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     const nodeShape = costsSchema.shape.nodes.unwrap().element.shape;
     expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'parentId', 'slNo']);

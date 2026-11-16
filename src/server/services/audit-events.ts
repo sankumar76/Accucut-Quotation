@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
+import { formatRupees } from '../../lib/money';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { RUPEE } from '../../lib/masters/master-rules';
@@ -102,6 +103,12 @@ const nameState = z.strictObject({ name: z.string().min(1) });
 // ---- Shape of the quantity-warning event (SCR-16 "Quantity warning"; STORY-05.12) ---------------------------------------------------
 /** A row that was warned: the code, the part, its Sl. No and its name as typed. Text only: no number from a calculation has a place here. */
 const warnedRow = z.strictObject({ code: z.literal(QTY_ZERO_CODE), nodeId: z.string().min(1), slNo: z.string().min(1), label: z.string() });
+
+// ---- Shape of the approval event (SCR-16 "Approval"; STORY-06.06) ----------------------------------------------------------
+/** A price or a total as decimal text ("12600.00", "12629.9876"); never a JavaScript number (ADR-005). */
+const rupeesText = z.string().regex(/^\d+(\.\d+)?$/);
+/** What an approval keeps: the price set (BO), the calculated total it was set against (BL) and the approver's name at that moment. No rate, formula or master value has a key to sit in (NFR-002). */
+const approvedState = z.strictObject({ approvedPrice: rupeesText, calculatedTotal: rupeesText, approver: z.string().min(1) });
 
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
@@ -362,8 +369,22 @@ export const AUDIT_EVENTS = {
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
 
+  // ---- Wired in STORY-06.06: an estimate approved and locked -------------------------------------------------------------------
+  // One entry, in the approval's own transaction (under the estimate's row lock): the price the Lead set, the calculated total (BL) it was set against and the approver's name. The log is Admin-only
+  // (architecture section 5.3), so it may keep the price. The override flag and the reason are STORY-06.07's: `approval.price_overridden` is their entry.
+  'approval.approved': defineEvent({
+    objectType: 'estimate',
+    category: 'approval',
+    status: 'wired',
+    before: z.null(),
+    after: approvedState,
+    describe: (_before, after) => ({
+      before: 'Not approved',
+      after: `Approved at ${formatRupees(after.approvedPrice)}, the calculated total was ${formatRupees(after.calculatedTotal)}, by ${after.approver}`,
+    }),
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
-  'approval.approved': reserved('estimate', 'approval'),
   'approval.unlocked': reserved('estimate', 'unlock'),
   'approval.price_overridden': reserved('estimate', 'price_override'),
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------

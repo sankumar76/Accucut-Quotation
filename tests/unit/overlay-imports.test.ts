@@ -59,6 +59,8 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/surface-treatments.tsx',
       // "Leave without saving?" (STORY-05.08): an AlertDialog, reached only through leave-guard.tsx, which is lazy.
       'src/components/features/estimate-workspace/leave-dialog.tsx',
+      // "Approve and lock" (STORY-06.06): a Dialog, fetched on the first press of the Approve button, which imports its props as a type only.
+      'src/components/features/estimate-approve/approve-dialog.tsx',
     ]) {
       expect(holders, name).toContain(name);
     }
@@ -76,6 +78,8 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/calculate-bar.tsx',
       // The warning on leaving holds the AlertDialog of STORY-05.08 with a plain import, so the guard must stay lazy.
       'src/components/features/estimate-workspace/leave-guard.tsx',
+      // The dialog of "Approve and lock" is fetched on the first press (STORY-06.06, ADR-016).
+      'src/components/features/estimate-approve/approve-dialog.tsx',
     ]) {
       expect(lazy, name).toContain(name);
     }

@@ -7,6 +7,7 @@ import { fieldLetter, findFieldByKey, findSystemField } from '../../lib/fields/r
 import type { FieldDefinition } from '../../lib/fields/field-schema';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { PRICE_PER_TOOL_COST_KEY, UNIT_PRICE_EUR_KEY, UNIT_PRICE_USD_KEY } from '../../lib/fields/types';
+import type { ApprovalRepository } from '../repositories/approval-repository';
 import type { CalculationRepository, ReviewFigures, StoredValues } from '../repositories/calculation-repository';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
 import { costsSchema, type CostNode, type CostsView } from '../views/schemas/costs';
@@ -38,6 +39,8 @@ export interface EstimateReviewService {
 
 export interface EstimateReviewDependencies {
   readonly calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'>;
+  /** BO is read here, from the latest approval that has not been removed, and never through the figure state (STORY-06.06 AC-9). */
+  readonly approvals: Pick<ApprovalRepository, 'findLatestApproval'>;
   readonly nodes: Pick<EstimateNodeRepository, 'listNodes'>;
   readonly configuration: {
     /** The version in force now, used while no calculation exists (the letters and the count's field). */
@@ -114,7 +117,7 @@ function nodesOf(records: ReadonlyArray<NodeRecord>, document: ConfigDocument, c
   });
 }
 
-export function createEstimateReviewService({ calculations, nodes, configuration }: EstimateReviewDependencies): EstimateReviewService {
+export function createEstimateReviewService({ calculations, approvals, nodes, configuration }: EstimateReviewDependencies): EstimateReviewService {
   return {
     async getCosts(viewer, estimateId) {
       // Before any read, and by name: only the Lead and the Admin are let through, an Engineer is refused whatever the ID is (CR-33, NFR-002), and a role added one day fails to compile here
@@ -133,10 +136,12 @@ export function createEstimateReviewService({ calculations, nodes, configuration
 
       const { calculation } = basis;
       const state = figureState({ inputsRevision: basis.inputsRevision, calculationInputsRevision: calculation?.inputsRevision ?? null });
-      const [version, records, figures] = await Promise.all([
+      const [version, records, figures, approval] = await Promise.all([
         calculation === null ? configuration.current() : configuration.byId(calculation.configVersionId),
         nodes.listNodes(estimateId),
         calculation === null ? Promise.resolve(null) : readFiguresWhenCurrent(state, () => calculations.findReviewFigures(calculation.id)),
+        // BO: the approvals row, whatever the state of the figures (AC-9). It is not a calculated figure: clearing those cannot change it.
+        approvals.findLatestApproval(estimateId),
       ]);
       // A calculation that is current but cannot be read is a fault in the data: say nothing about the figures rather than show dashes as if they were the answer.
       if (state === 'current' && figures === null) throw new Error('The calculation linked to the estimate could not be read.');
@@ -144,11 +149,14 @@ export function createEstimateReviewService({ calculations, nodes, configuration
       const columns = columnsOf(version.document);
       return costsSchema.parse({
         state,
+        // The calculation the figures come from, only while they may be shown (the approval's request names it).
+        calculationId: state === 'current' && calculation !== null ? calculation.id : null,
         calculatedAt: calculation === null ? null : calculation.createdAt.toISOString(),
         configurationNumber: calculation === null ? null : version.number,
         letters: lettersOf(columns),
         nodes: nodesOf(records, version.document, columns, figures),
         totals: figures === null ? null : figures.productValues,
+        approval: approval === null ? null : { price: approval.approvedPrice, approvedAt: approval.approvedAt.toISOString(), approverName: approval.approverName },
       });
     },
   };

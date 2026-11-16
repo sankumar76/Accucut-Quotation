@@ -143,10 +143,69 @@ describe('AC-5: the service refuses an Engineer as a rejected promise, before it
     };
     const service = createApprovalService({
       estimates: { lockEstimate: touch },
-      calculations: { findFigureBasis: touch },
+      calculations: { findFigureBasis: touch, findCalculatedTotal: touch },
+      approvals: { insertApproval: touch },
       transactions: { run: touch },
+      workflow: { transition: touch, audit: { record: touch, list: touch } },
     });
-    await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00' })).rejects.toBeInstanceOf(ForbiddenError);
+    const audit = { actorId: engineer.id, actorLabel: 'Invented Engineer', requestId: 'request-1' };
+    await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit })).rejects.toBeInstanceOf(ForbiddenError);
     expect(touched).toBe(0);
+  });
+});
+
+describe('STORY-06.06: the write refuses what the guard cannot, and writes nothing', () => {
+  const audit = { actorId: lead.id, actorLabel: 'Invented Lead', requestId: 'request-2' };
+  /** A service whose storage holds a submitted estimate with current figures, and counts every write. */
+  function serviceWith(total: string | null) {
+    const writes: string[] = [];
+    const tx = { kind: 'database-transaction' } as const;
+    const service = createApprovalService({
+      estimates: { lockEstimate: () => Promise.resolve({ id: 'estimate-1', engineerId: 'engineer-1', status: 'SUBMITTED', customerId: 'customer-1', inputsRevision: 4, taskCode: 'Q-2026-0001' }) },
+      calculations: { findFigureBasis: () => Promise.resolve(CURRENT), findCalculatedTotal: () => Promise.resolve(total) },
+      approvals: {
+        insertApproval: () => {
+          writes.push('insert');
+          return Promise.resolve({ id: 'approval-1', approvedAt: new Date('2026-11-16T06:00:00.000Z') });
+        },
+      },
+      transactions: { run: (work) => work(tx) },
+      workflow: {
+        transition: () => {
+          writes.push('transition');
+          return Promise.resolve({ id: 'estimate-1', from: 'SUBMITTED', to: 'APPROVED' });
+        },
+        audit: {
+          record: () => {
+            writes.push('audit');
+            return Promise.resolve();
+          },
+          list: () => Promise.reject(new Error('Not used.')),
+        },
+      },
+    });
+    return { service, writes };
+  }
+
+  it('writes the status, the approval and the audit entry, in that order, in the one transaction, and answers the price in rupees and paise', async () => {
+    const { service, writes } = serviceWith('12629.9876');
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', audit })).resolves.toEqual({
+      status: 'APPROVED',
+      approvedPrice: '12600.00',
+      approvedAt: '2026-11-16T06:00:00.000Z',
+    });
+    expect(writes).toEqual(['transition', 'insert', 'audit']);
+  });
+
+  it('a current calculation with no total is a fault in the data (a plain error, a 500), and nothing is written', async () => {
+    const { service, writes } = serviceWith(null);
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit })).rejects.toThrow('no total to approve against');
+    expect(writes).toEqual([]);
+  });
+
+  it('a price that is no decimal is refused before anything is read (the route has already judged its shape; this is the second guard)', async () => {
+    const { service, writes } = serviceWith('1.00');
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: 'twelve', audit })).rejects.toThrow('not a decimal number');
+    expect(writes).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import type { ApprovalRepository, NewApproval } from '../../src/server/repositories/approval-repository';
 import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow } from '../../src/server/repositories/calculation-repository';
 import type { EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
@@ -11,8 +12,17 @@ import type { FakeEstimateWorld } from './fake-estimates';
  * `immutability.test.ts`. Every name and number is invented.
  */
 
+/** An approval as the fake keeps it: what was inserted, with the time it was made and whether it was removed (never, until STORY-06.13). */
+export interface FakeApproval extends NewApproval {
+  readonly id: string;
+  readonly approvedAt: Date;
+}
+
 export interface FakeCalculationWorld {
   readonly repository: CalculationRepository;
+  /** The approvals of committed transactions, oldest first (STORY-06.06); a transaction that throws takes its approval back, as PostgreSQL does. */
+  readonly approvals: FakeApproval[];
+  readonly approvalRepository: ApprovalRepository;
   /** The estimate repository of the world, with `linkCalculation` able to fail on demand. */
   readonly estimates: EstimateRepository;
   readonly transactions: TransactionRunner;
@@ -56,6 +66,7 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       const found = calculations.find((calculation) => calculation.id === calculationId);
       return Promise.resolve(found === undefined ? null : { productValues: found.productValues, rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: row.outputs })) });
     },
+    findCalculatedTotal: (calculationId: string) => Promise.resolve(calculations.find((calculation) => calculation.id === calculationId)?.productValues.totalPrice ?? null),
     findRowWorking: (calculationId: string, nodeId: string) => {
       const found = calculations.find((calculation) => calculation.id === calculationId);
       const row = found?.rows.find((candidate) => candidate.nodeId === nodeId);
@@ -79,14 +90,32 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     },
   };
 
+  const approvals: FakeApproval[] = [];
+  const approvalRepository: ApprovalRepository = {
+    insertApproval(approval) {
+      const id = nextId();
+      const approvedAt = new Date('2026-11-16T05:30:00.000Z');
+      approvals.push({ ...approval, id, approvedAt });
+      return Promise.resolve({ id, approvedAt });
+    },
+    findLatestApproval(estimateId) {
+      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
+      return Promise.resolve(found === undefined ? null : { id: found.id, calculationId: found.calculationId, approvedPrice: found.approvedPrice, approvedAt: found.approvedAt, approverName: 'Invented Approver' });
+    },
+  };
+
   const transactions: TransactionRunner = {
     run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-      const kept = calculations.length;
       return estimateWorld.transactions.run(async (tx) => {
+        // Counted when this transaction starts running, not when it was asked for: transactions queue on the estimate's lock, and a loser that was asked for before the winner finished must not
+        // roll back the winner's records (STORY-06.06 AC-6).
+        const kept = calculations.length;
+        const keptApprovals = approvals.length;
         try {
           return await work(tx);
         } catch (error) {
           calculations.length = kept;
+          approvals.length = keptApprovals;
           throw error;
         }
       });
@@ -95,6 +124,8 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
 
   return {
     repository,
+    approvals,
+    approvalRepository,
     estimates,
     transactions,
     calculations,

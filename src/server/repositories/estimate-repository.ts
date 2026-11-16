@@ -97,6 +97,14 @@ export interface EstimateCalculationStorage {
   readonly linkCalculation: EstimateRepository['linkCalculation'];
 }
 
+/**
+ * What an approval needs of the estimate repository: the lock alone (STORY-06.06). A named interface and not a `Pick`, for the same reason as `EstimateCalculationStorage`: the audit-transaction check sees
+ * a repository type, declared in this directory, as the receiver of the lock the approval's audit entry follows.
+ */
+export interface EstimateLocking {
+  readonly lockEstimate: EstimateRepository['lockEstimate'];
+}
+
 const STATUS = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
 
 const WORKSPACE_ROWS = z.array(

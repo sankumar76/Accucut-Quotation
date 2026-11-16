@@ -41,6 +41,7 @@ beforeAll(async () => {
         return db.calculations.findReviewFigures(calculationId);
       },
     },
+    approvals: db.approvals,
     nodes: db.nodes,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
   });

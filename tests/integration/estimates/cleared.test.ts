@@ -32,6 +32,7 @@ beforeAll(async () => {
   const cache = createConfigVersionCache();
   review = createEstimateReviewService({
     calculations: db.calculations,
+    approvals: db.approvals,
     nodes: db.nodes,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
   });

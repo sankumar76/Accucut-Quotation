@@ -94,6 +94,9 @@ export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part de
  * (UX-24), and none holds a figure.
  */
 export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
+/** The state "Approved" of SCR-05 (STORY-06.06 AC-4; UX spec SCR-05 states and the G3 screen): read-only, and **no price** (NFR-002); a status is not a cost. */
+export const APPROVED_LOCKED_TITLE = 'Approved and locked.';
+export const APPROVED_LOCKED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';
 export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
 /** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */
 export const CALCULATE_UNSAVED_TITLE = 'Nothing was submitted. A field has a value that is not saved. Fix the field that shows a message, then press Calculate again.';

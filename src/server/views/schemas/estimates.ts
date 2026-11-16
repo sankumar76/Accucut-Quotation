@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { MAX_REASON_LENGTH, PRICE_MESSAGE, PRICE_PATTERN } from '../../../lib/estimate/approve-price';
 import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
@@ -53,12 +54,6 @@ export const calculateBodySchema = z
   .strictObject({ acknowledge: z.strictObject({ inputsRevision: z.number().int().min(0).max(MAX_REVISION) }).optional() })
   .optional();
 
-/** The longest reason for a different price (architecture section 6 "Approve": at most 500 characters; UX spec SCR-08). */
-const MAX_REASON_LENGTH = 500;
-/** A price in rupees as plain decimal text: digits, then optionally a point and one or two digits (SCR-08: "0 or more, with up to 2 decimals"). Whether it is the right price is STORY-06.06's to judge. */
-const PRICE_PATTERN = /^\d{1,12}(?:\.\d{1,2})?$/;
-const PRICE_MESSAGE = 'Enter a price in rupees, 0 or more, with up to 2 decimals.';
-
 /**
  * `POST /api/v1/estimates/{id}/approve` (STORY-06.05; architecture section 6 "Approve"): the calculation the Lead was looking at, the price and, optionally, the reason for a price that differs. Strict, so a key that
  * is not named is refused. `calculationId` is compared with the estimate's current calculation under the lock (409 if it is not), which is how a figure that changed under the Lead cannot be approved.
@@ -68,6 +63,17 @@ export const approveBodySchema = z.strictObject({
   price: z.string().regex(PRICE_PATTERN, PRICE_MESSAGE),
   reason: z.string().max(MAX_REASON_LENGTH, `Use ${MAX_REASON_LENGTH} characters or fewer.`).optional(),
 });
+
+/**
+ * The answer of a good `POST /api/v1/estimates/{id}/approve` (STORY-06.06 AC-2; NFR-002): the new status, the price as it was stored (rupees with two decimals) and when, as UTC text. A strict schema, so
+ * nothing else can leave: no calculated figure, no master value, rate or formula, and no ID. The price is the one the Lead typed and the screen already shows it as BO.
+ */
+export const approveAnswerSchema = z.strictObject({
+  status: z.literal('APPROVED'),
+  approvedPrice: z.string().regex(/^\d{1,12}\.\d{2}$/),
+  approvedAt: z.iso.datetime(),
+});
+export type ApproveAnswer = z.infer<typeof approveAnswerSchema>;
 
 /**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`

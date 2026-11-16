@@ -7,6 +7,7 @@ import { buildAuthOptions } from './auth/options';
 import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
 import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
+import { createApprovalRepository } from './repositories/approval-repository';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
 import { createConfigRepository } from './repositories/config-repository';
@@ -246,6 +247,8 @@ export function getEstimateReviewService(): EstimateReviewService {
     const configurations = createConfigRepository(runtimeClient());
     estimateReviewService = createEstimateReviewService({
       calculations: createCalculationRepository(runtimeClient()),
+      // BO is read from the approvals row, never through the figure state (STORY-06.06 AC-9).
+      approvals: createApprovalRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
     });
@@ -254,14 +257,17 @@ export function getEstimateReviewService(): EstimateReviewService {
 }
 
 /**
- * The approval's guard (STORY-06.05): under the estimate's row lock in one transaction, the status, the state of the figures (read as counts through `figure-state`) and the calculation named. Restricted (NFR-002):
- * only the `/approve` route asks for it here, for the Lead and the Admin alone.
+ * The approval (STORY-06.05, STORY-06.06): under the estimate's row lock in one transaction, the guard (the status, the state of the figures read as counts through `figure-state`, the calculation named) and then
+ * the write: the estimate's move to APPROVED (the estimate service's `transition`, in the same transaction), the `approvals` row and the audit entry. Restricted (NFR-002): only the `/approve` route asks for it
+ * here, for the Lead and the Admin alone.
  */
 export function getApprovalService(): ApprovalService {
   approvalService ??= createApprovalService({
     estimates: createEstimateRepository(runtimeClient()),
     calculations: createCalculationRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
     transactions: createTransactionRunner(runtimeClient()),
+    workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
   });
   return approvalService;
 }
