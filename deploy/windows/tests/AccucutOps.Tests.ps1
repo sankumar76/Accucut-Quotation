@@ -527,9 +527,10 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
             $script:UserCall = @{ Name = $Name; Password = $Password; PasswordNeverExpires = $PasswordNeverExpires.IsPresent; UserMayNotChangePassword = $UserMayNotChangePassword.IsPresent; AccountNeverExpires = $AccountNeverExpires.IsPresent; Description = $Description }
             return [pscustomobject]@{ SID = [pscustomobject]@{ Value = $script:FakeBackupSid } }
         }
-        Mock New-ScheduledTaskAction -ModuleName AccucutOps { $script:ActionCall = @{ Execute = $Execute; Argument = $Argument }; return 'action' }
-        Mock New-ScheduledTaskTrigger -ModuleName AccucutOps { $script:TriggerCall = @{ Weekly = $Weekly.IsPresent; DaysOfWeek = [string]$DaysOfWeek; At = $At }; return 'trigger' }
-        Mock New-ScheduledTaskSettingsSet -ModuleName AccucutOps { return 'settings' }
+        Mock New-ScheduledTaskAction -ModuleName AccucutOps { $script:ActionCall = @{ Execute = $Execute; Argument = $Argument }; $fake = [pscustomobject]@{ Fake = 'action' }; $fake.PSObject.TypeNames.Insert(0, 'Microsoft.Management.Infrastructure.CimInstance#MSFT_TaskAction'); return $fake }
+        Mock New-ScheduledTaskTrigger -ModuleName AccucutOps { $script:TriggerCall = @{ Weekly = $Weekly.IsPresent; DaysOfWeek = [string]$DaysOfWeek; At = $At }; $fake = [pscustomobject]@{ Fake = 'trigger' }; $fake.PSObject.TypeNames.Insert(0, 'Microsoft.Management.Infrastructure.CimInstance#MSFT_TaskTrigger'); return $fake }
+        # The real Register-ScheduledTask only takes CIM objects of the right class, and a mock keeps that rule: the fakes carry the class names.
+        Mock New-ScheduledTaskSettingsSet -ModuleName AccucutOps { $fake = [pscustomobject]@{ Fake = 'settings' }; $fake.PSObject.TypeNames.Insert(0, 'Microsoft.Management.Infrastructure.CimInstance#MSFT_TaskSettings'); return $fake }
         Mock Register-ScheduledTask -ModuleName AccucutOps { $script:Order.Add('task'); $script:RegisterCall = @{ TaskName = $TaskName; User = $User; Password = $Password; RunLevel = [string]$RunLevel } }
         Mock Remove-LocalUser -ModuleName AccucutOps { }
         Mock Unregister-ScheduledTask -ModuleName AccucutOps { }
@@ -793,8 +794,9 @@ Describe 'the backups folder and the two files of the backup account: exact entr
         $start = $text.IndexOf('function Write-AccucutBackupFile {')
         $body = $text.Substring($start, $text.IndexOf('function ', $start + 10) - $start)
         $body.IndexOf('FileMode]::CreateNew') | Should -BeGreaterThan 0
-        $body.IndexOf('Set-AccucutBackupFileAcl') | Should -BeGreaterThan $body.IndexOf('FileMode]::CreateNew')
-        $body.IndexOf('WriteAllText') | Should -BeGreaterThan $body.IndexOf('Set-AccucutBackupFileAcl')
+        # The call, not the name in the comment above the function.
+        $body.IndexOf('Set-AccucutBackupFileAcl -Path') | Should -BeGreaterThan $body.IndexOf('FileMode]::CreateNew')
+        $body.IndexOf('WriteAllText') | Should -BeGreaterThan $body.IndexOf('Set-AccucutBackupFileAcl -Path')
     }
 
     It 'refuses a settings value that could not be a public key, a host, a port, a database name or a folder, before anything is written' {
@@ -926,7 +928,7 @@ Describe 'the batch-logon right: given to one SID, checked, and taken away again
         Mock Get-AccucutLsaHolder -ModuleName AccucutOps {
             $index = [math]::Min($script:Reads, $script:Holders.Count - 1)
             $script:Reads++
-            return , @($script:Holders[$index])
+            return $script:Holders[$index]
         }
         Mock Add-AccucutLsaHolder -ModuleName AccucutOps { $script:Calls.Add("add:$Sid|$Right") }
         Mock Remove-AccucutLsaHolder -ModuleName AccucutOps { $script:Calls.Add("remove:$Sid|$Right") }
@@ -960,7 +962,8 @@ Describe 'the batch-logon right: given to one SID, checked, and taken away again
     }
 
     It 'refuses, and changes nothing, when the SID already holds the right (a new account cannot, so it is not the account just made)' {
-        $script:Holders = @(@($script:Admins, $script:NewSid))
+        # One read only: a list that holds a list ( , @(...) keeps it from being flattened).
+        $script:Holders = , @($script:Admins, $script:NewSid)
         { Grant-AccucutBatchLogonRight -Sid $script:NewSid } | Should -Throw '*already holds*Nothing was changed*'
         Should -Invoke Add-AccucutLsaHolder -ModuleName AccucutOps -Times 0 -Exactly
     }
@@ -975,15 +978,18 @@ Describe 'the batch-logon right: given to one SID, checked, and taken away again
     }
 
     It 'revoke: does nothing when the SID does not hold the right' {
-        $script:Holders = @(@($script:Admins, $script:BackupOps))
+        $script:Holders = , @($script:Admins, $script:BackupOps)
         Revoke-AccucutBatchLogonRight -Sid $script:NewSid
         Should -Invoke Remove-AccucutLsaHolder -ModuleName AccucutOps -Times 0 -Exactly
     }
 
     It 'compares holders as sets of SIDs, in any order and any letter case' {
-        Test-AccucutSameSidSet -Left @('S-1-5-32-544', 'S-1-5-32-551') -Right @('s-1-5-32-551', 'S-1-5-32-544') | Should -BeTrue
-        Test-AccucutSameSidSet -Left @() -Right @() | Should -BeTrue
-        Test-AccucutSameSidSet -Left @('S-1-5-32-544') -Right @('S-1-5-32-544', 'S-1-5-32-551') | Should -BeFalse
+        # An internal function of the module, so it is called inside the module.
+        InModuleScope AccucutOps {
+            Test-AccucutSameSidSet -Left @('S-1-5-32-544', 'S-1-5-32-551') -Right @('s-1-5-32-551', 'S-1-5-32-544') | Should -BeTrue
+            Test-AccucutSameSidSet -Left @() -Right @() | Should -BeTrue
+            Test-AccucutSameSidSet -Left @('S-1-5-32-544') -Right @('S-1-5-32-544', 'S-1-5-32-551') | Should -BeFalse
+        }
     }
 
     It 'only the two rights are ever read' {
@@ -1002,9 +1008,9 @@ Describe 'the check before anything is changed: a deny entry, and a domain Group
         $script:Warnings = [System.Collections.Generic.List[string]]::new()
         $script:RealComputerName = $env:COMPUTERNAME
         $env:COMPUTERNAME = 'SERVER01'
-        Mock Get-AccucutRightHolder -ModuleName AccucutOps { if ($Right -eq 'SeDenyBatchLogonRight') { return , @($script:Denied) } return , @() }
+        Mock Get-AccucutRightHolder -ModuleName AccucutOps { if ($Right -eq 'SeDenyBatchLogonRight') { return $script:Denied } return @() }
         Mock Get-AccucutComputerSystem -ModuleName AccucutOps { [pscustomobject]@{ PartOfDomain = $script:InDomain } }
-        Mock Get-AccucutRsopBatchRight -ModuleName AccucutOps { $script:RsopCalls++; if ($script:RsopThrows) { throw 'Invalid namespace' } return , @($script:Rsop) }
+        Mock Get-AccucutRsopBatchRight -ModuleName AccucutOps { $script:RsopCalls++; if ($script:RsopThrows) { throw 'Invalid namespace' } return $script:Rsop }
         Mock Get-AccucutRsopPolicyName -ModuleName AccucutOps { 'Servers baseline' }
         Mock Write-AccucutLog -ModuleName AccucutOps { if ($Level -eq 'Warning') { $script:Warnings.Add($Message) } }
     }

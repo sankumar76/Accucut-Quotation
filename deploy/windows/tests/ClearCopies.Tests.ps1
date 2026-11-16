@@ -50,7 +50,7 @@ BeforeAll {
 }
 
 Describe 'clear-copies.ps1 runs only from the installed release (ADR-015 Amendment 3)' {
-    It 'works out the root from <root>\current\clear-copies.ps1 and from <root>\releases\<tag>\clear-copies.ps1 (<Path>)' -ForEach @(
+    It 'works out the root from ROOT\current\clear-copies.ps1 and from ROOT\releases\TAG\clear-copies.ps1 (<Path>)' -ForEach @(
         @{ Path = 'C:\Accucut\current\clear-copies.ps1'; Root = 'C:\Accucut' }
         @{ Path = 'D:\Acc-ucut_1\releases\1.2.3-abcdef0\clear-copies.ps1'; Root = 'D:\Acc-ucut_1' }
     ) {

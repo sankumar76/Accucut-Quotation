@@ -83,7 +83,7 @@ BeforeAll {
 }
 
 Describe 'backup.ps1 runs only from the installed release, and finds the install root from its own place (ADR-015 Amendment 3)' {
-    It 'works out the root from <root>\current\backup.ps1 and from <root>\releases\<tag>\backup.ps1 (<Path>)' -ForEach @(
+    It 'works out the root from ROOT\current\backup.ps1 and from ROOT\releases\TAG\backup.ps1 (<Path>)' -ForEach @(
         @{ Path = 'C:\Accucut\current\backup.ps1'; Root = 'C:\Accucut' }
         @{ Path = 'D:\Acc-ucut_1\releases\1.2.3-abcdef0\backup.ps1'; Root = 'D:\Acc-ucut_1' }
         @{ Path = 'c:\accucut\CURRENT\BACKUP.PS1'; Root = 'c:\accucut' }
@@ -727,7 +727,10 @@ Describe 'the module and the script keep the secrets out (AC-7, static checks)' 
         $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
         $start = $text.IndexOf('#region Backups')
         $region = $text.Substring($start)
-        $region | Should -Not -Match 'PGPASSWORD'
+        # PGPASSWORD may be named only to be cleared from the environment of a child (Clear-AccucutPgEnvironment, a wildcard on PG*) and in comments: never set, never read, never passed.
+        $withoutComments = [regex]::Replace([regex]::Replace($region, '(?s)<#.*?#>', ''), '(?m)^\s*#.*$', '')
+        $withoutComments | Should -Not -Match 'PGPASSWORD'
+        $withoutComments | Should -Not -Match '\bPGPASS\w*\s*=\s*\$(?!PassFile)'
         $region | Should -Not -Match '--password|-W\b'
         $region | Should -Not -Match 'AGE-SECRET-KEY'
         $region | Should -Match "'PGPASSFILE'"

@@ -789,7 +789,7 @@ function Get-AccucutInstallSettings {
     $values['ADMIN_INITIAL_PASSWORD'] = $adminPassword
     # The age PUBLIC key that every backup is encrypted to. The matching private key is never on this server: the Admin keeps it (architecture 9.5).
     $recipient = Get-AccucutInstallValue -Name 'BACKUP_AGE_RECIPIENT' -Prompt 'The age PUBLIC key for the backups (age1..., made with age-keygen on your own computer; keep the private key there, never on this server)' -Supplied $supplied -Required -NonInteractive:$ni
-    if ($recipient -notmatch '^age1[0-9a-z]{58}$') { throw 'BACKUP_AGE_RECIPIENT must be an age PUBLIC key: age1 followed by 58 lower-case letters and digits. Never give the private key (AGE-SECRET-KEY-...) to the install.' }
+    if ($recipient -cnotmatch '^age1[0-9a-z]{58}$') { throw 'BACKUP_AGE_RECIPIENT must be an age PUBLIC key: age1 followed by 58 lower-case letters and digits. Never give the private key (AGE-SECRET-KEY-...) to the install.' }
 
     $mode = Get-AccucutInstallValue -Name 'SMTP_AUTH_MODE' -Prompt 'Mail sign-in mode (none, password or oauth2-client-credentials)' -Supplied $supplied -Default 'none' -NonInteractive:$ni
     if (@('none', 'password', 'oauth2-client-credentials') -notcontains $mode) { throw "SMTP_AUTH_MODE '$mode' is not one of none, password, oauth2-client-credentials." }

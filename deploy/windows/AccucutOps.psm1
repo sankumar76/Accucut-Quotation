@@ -1616,10 +1616,10 @@ function Test-AccucutBackupSetting {
     )
 
     switch ($Name) {
-        'ageRecipient' { return ($Value -is [string] -and $Value -match $script:AgeRecipientPattern) }
+        'ageRecipient' { return ($Value -is [string] -and $Value -cmatch $script:AgeRecipientPattern) }
         'pgHost' { return ($Value -is [string] -and $Value -match '^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$') }
         'pgPort' { return (($Value -is [int] -or $Value -is [long]) -and $Value -ge 1 -and $Value -le 65535) }
-        'database' { return ($Value -is [string] -and $Value -match '^[a-z_][a-z0-9_]{0,62}$') }
+        'database' { return ($Value -is [string] -and $Value -cmatch '^[a-z_][a-z0-9_]{0,62}$') }
         'pgBinDirectory' { return ($Value -is [string] -and $Value -match '^[A-Za-z]:\\[^"&|<>^%\r\n]{1,240}$' -and $Value -notmatch '\.\.') }
         default { return $false }
     }
@@ -1902,7 +1902,7 @@ function Invoke-AccucutBackupPipe {
         [Parameter(Mandatory)][string]$OutputPath
     )
 
-    if ($Recipient -notmatch $script:AgeRecipientPattern) { throw 'The age recipient is not a public key (age1...).' }
+    if ($Recipient -cnotmatch $script:AgeRecipientPattern) { throw 'The age recipient is not a public key (age1...).' }
     $dumpInfo = New-Object System.Diagnostics.ProcessStartInfo
     $dumpInfo.FileName = $PgDumpPath
     $dumpInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--format=custom', '--no-password', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database)
@@ -2033,7 +2033,7 @@ function Add-AccucutJobRun {
         [Parameter(Mandatory)][string]$DbHost,
         [Parameter(Mandatory)][int]$Port,
         [Parameter(Mandatory)][string]$Database,
-        [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z-]{1,31}$')][string]$Job,
+        [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z-]{1,31}$', Options = 'None')][string]$Job,
         [Parameter(Mandatory)][datetime]$StartedUtc,
         [Parameter(Mandatory)][datetime]$FinishedUtc,
         [Parameter(Mandatory)][hashtable]$Result
