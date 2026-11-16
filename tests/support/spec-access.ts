@@ -55,6 +55,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   'POST /api/v1/estimates/[id]/calculate': ['ENGINEER'],
   // STORY-06.04 (SCR-06's Recalculate; architecture section 6 row "Recalculate": A L): a Lead's and an Admin's press. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
   'POST /api/v1/estimates/[id]/recalculate': ['ADMIN', 'LEAD'],
+  // STORY-06.05 (SCR-06's Approve and lock; architecture section 6 row "Approve": A L): the guard of an approval. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
+  'POST /api/v1/estimates/[id]/approve': ['ADMIN', 'LEAD'],
   // STORY-06.02 (SCR-06; architecture section 6 row "Cost": A L): the figures of the estimate review. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
   '/api/v1/estimates/[id]/costs': ['ADMIN', 'LEAD'],
   // STORY-06.03 (SCR-07; architecture section 6 row "Cost details": A L): the six stages of one row with each formula. An Engineer is refused with the fixed 403 before either ID is looked at (NFR-002, CR-33).
