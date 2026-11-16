@@ -69,6 +69,7 @@ describe('AC-7: every read of a figure goes through figure-state', () => {
 describe('AC-5: no review code reaches the Engineer', () => {
   const REVIEW_FOLDER = 'src/components/features/estimate-review/';
   const REVIEW_PAGE = 'src/app/(portal)/estimates/[code]/review-page.tsx';
+  const RECALCULATE_BUTTON = 'src/components/features/estimate-recalculate/recalculate-button.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -78,8 +79,10 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(reviewFiles.filter((file) => /\buse(State|Effect|Ref|Memo|Callback|Reducer|Transition)\b|\bnext\/dynamic\b|React\.lazy/.test(file.text)).map((file) => file.path)).toEqual([]);
   });
 
-  it('the review folder imports no shared client component (a `use client` file would carry its chunk to the page)', () => {
+  it('the review folder imports no shared client component but the one Recalculate button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, ADR-016)', () => {
     const clientFiles = new Set(ALL.filter((file) => /^\s*['"]use client['"]/m.test(file.text)).map((file) => file.path));
+    // The one exception, named: the Calculate / Recalculate button. It is imported by the action bar alone, holds no figure, and loads its request code only when first pressed (the next test).
+    clientFiles.delete(RECALCULATE_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -87,6 +90,23 @@ describe('AC-5: no review code reaches the Engineer', () => {
     };
     const reached = reviewFiles.flatMap((file) => importsOf(file.text).flatMap((specifier) => resolve(file.path, specifier)).filter((path) => clientFiles.has(path)));
     expect(reached).toEqual([]);
+  });
+
+  it('STORY-06.04 AC-7, ADR-016: the Recalculate button is the only client file of its folder, is a client component imported by the action bar alone, imports no figure, schema or service, and fetches its request code on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith('src/components/features/estimate-recalculate/'));
+    // The button, and the one id it shares with the action bar, in a file of its own (a server file cannot read a value out of a client file).
+    expect(folder.map((file) => file.path).sort()).toEqual([RECALCULATE_BUTTON, 'src/components/features/estimate-recalculate/recalculate-ids.ts']);
+    expect(folder.find((file) => file.path.endsWith('recalculate-ids.ts'))?.text ?? '').not.toMatch(/use client/);
+    const button = folder.find((file) => file.path === RECALCULATE_BUTTON)?.text ?? '';
+    expect(button).toMatch(/^\s*['"]use client['"]/m);
+    const code = button.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    // No restricted module: not the costs schema, not the review, not a service or a repository, not the calculation's own code.
+    expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation|row-outputs|product-totals|figure-state/);
+    // The request code is a bare dynamic `import()`, not a static import: the page's first load does not carry it.
+    expect(code).toMatch(/import\('@\/lib\/estimates\/recalculate-client'\)/);
+    expect(code).not.toMatch(/^import .*recalculate-client/m);
+    const importers = ALL.filter((file) => file.path !== RECALCULATE_BUTTON && /estimate-recalculate\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/review-actions.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

@@ -142,10 +142,14 @@ test.describe('AC-6: not calculated', () => {
 
     const notice = page.getByRole('status').filter({ hasText: 'The Engineer has not calculated this estimate yet.' });
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText('Press Calculate to see costs. Approve and lock and the Excel download stay off until then.');
+    // AC-10 (STORY-06.04; ux-spec v0.29 "SCR-06 interim and final words"): exactly two sentences, the second naming the button, which now works. The third sentence of 0.28 is gone.
+    await expect(notice).toHaveText('The Engineer has not calculated this estimate yet. Press Calculate to see costs.');
     await expect(tiles(page)).toContainText('Not calculated');
     await expect(page.getByText('How the total is built')).toHaveCount(0);
-    for (const [button, label] of [['review-calculate', 'Calculate'], ['review-approve', 'Approve and lock'], ['review-download', 'Download .xlsx']] as const) {
+    await expect(page.getByText('Calculating from this screen is not available yet.')).toHaveCount(0);
+    await expect(page.locator('#review-calculate')).toHaveText('Calculate');
+    await expect(page.locator('#review-calculate')).toBeEnabled();
+    for (const [button, label] of [['review-approve', 'Approve and lock'], ['review-download', 'Download .xlsx']] as const) {
       const control = page.locator(`#${button}`);
       await expect(control).toHaveText(label);
       await expect(control).toBeDisabled();

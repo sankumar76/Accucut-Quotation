@@ -22,11 +22,15 @@ export const APPROVED_NOT_SET = 'Not set yet';
 export const APPROVED_NOT_SET_HINT = 'You set it when you approve.';
 export const APPROVED_NOT_SET_CLEARED_HINT = 'You set it when you approve, after Recalculate.';
 export const BN_CLEARED_HINT = 'Cleared with the total.';
+/** The line under BL while the figures are cleared (ux-spec v0.29, "BL tile line when cleared", final words from STORY-06.04). */
+export const BL_CLEARED_HINT = 'An input changed, so every calculated figure is cleared. Press Recalculate to see them again.';
 export const noToolCost = (letter: string): string => `No Tool Cost entered on any part, so there is nothing to divide by. File cell ${letter}2 is left empty.`;
 
-/** The notices of the two states this story draws (SCR-06 "Not calculated" and "Total cleared"); both are live regions (`role="status"`). */
-export const NOT_CALCULATED_NOTICE =
-  'The Engineer has not calculated this estimate yet. Press Calculate to see costs. Approve and lock and the Excel download stay off until then.';
+/**
+ * The notices of the two states without a figure (SCR-06 "Not calculated" and "Total cleared"); both are live regions (`role="status"`). The words are the final ones of ux-spec v0.29 "SCR-06 interim and final words"
+ * (STORY-06.04 AC-10): the button they name now works, so they say so. The not-calculated notice is exactly two sentences (the 0.28 third sentence is withdrawn: the two disabled buttons say it in their reasons).
+ */
+export const NOT_CALCULATED_NOTICE = 'The Engineer has not calculated this estimate yet. Press Calculate to see costs.';
 export const CLEARED_NOTICE_TITLE = 'The total is cleared because an input changed.';
 export const CLEARED_NOTICE_BODY =
   'Every calculated figure, on every row, is cleared with it. They show again after you press Recalculate. Until then Approve and lock and the Excel download stay off.';
@@ -63,7 +67,9 @@ export const CALCULATE_LABEL = 'Calculate';
 export const RECALCULATE_LABEL = 'Recalculate';
 export const APPROVE_LABEL = 'Approve and lock';
 export const DOWNLOAD_LABEL = 'Download .xlsx';
-export const CALCULATE_NOT_YET_REASON = 'Calculating from this screen is not available yet.';
+/** What the control says while a press is under way (a polite live line, read by a screen reader), and when no usable answer came (STORY-06.04; UX spec SCR-06 "Loading" and "Error"). */
+export const CALCULATING_LINE = 'Calculating. This takes a moment.';
+export const CALCULATE_FAILED = 'We could not calculate this estimate. Nothing was changed. Try again.';
 export const APPROVE_NOT_CALCULATED_REASON = 'Calculate first. Approving is available once the figures have been calculated.';
 export const APPROVE_CLEARED_REASON = 'Recalculate first. Approving is available once the figures have been calculated again.';
 export const APPROVE_NOT_YET_REASON = 'Approving is not available yet.';

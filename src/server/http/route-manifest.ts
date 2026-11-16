@@ -273,6 +273,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).
   { path: '/api/v1/estimates/[id]/calculate', kind: 'api', methods: ['POST'], roles: ['ENGINEER'], status: 'implemented', stage: 'R1' },
+  // STORY-06.04 (SCR-06's Recalculate; architecture section 6 "Recalculate": A L): the Lead's and the Admin's own press, which is the same calculation as the Engineer's Calculate (one service, one path). Only the Lead and the Admin are
+  // listed, so an Engineer is refused 403 before the ID is looked at. The answer is the costs view (`costsSchema`), so it is in no Engineer's list and the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/recalculate', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
   // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },

@@ -31,6 +31,7 @@ import {
   readExchangeRatesFromDatabase,
   readFormulaTexts,
   readWarningRecord,
+  saveCanaryQuantity,
   setCanaryQuantity,
   signInThroughThePage,
   useFreshAddress,
@@ -723,6 +724,66 @@ test('AC-6 (negative control, STORY-06.02): a master value planted in the Lead\'
   expect(
     findings.some((finding) => finding.label.includes('/costs (API, planted)') && finding.found === customer),
     'the master value planted in the `/costs` answer',
+  ).toBe(true);
+});
+
+/**
+ * STORY-06.04 AC-7 (NFR-002; test strategy section 6): Recalculate. The Lead's press is meant to answer with the costs view, so the scan turns round once more: after an input of the calculated estimate
+ * changes (the figures are cleared), the Lead's `POST /recalculate` **answer** and the review page that follows it hold the figures of the new record and **no master value, rate name or formula**; the
+ * same press as the Engineer is the fixed 403, which is not a figure, a state or a count. The cleared page, which the Lead reads between the change and the press, holds no figure at all.
+ */
+test('AC-7 (STORY-06.04): the cleared page holds no figure, the Lead\'s Recalculate answer and the page after it show the figures of the record and no master value, and an Engineer\'s press is the fixed 403', async ({ page, context }, testInfo) => {
+  await useFreshAddress(context);
+  const { id, code, forbidden } = await calculatedEstimateOf(page, context, testInfo);
+  await saveCanaryQuantity(id, '7');
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  const cleared = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead, cleared)`, await page.goto(`/estimates/${code}`));
+  expect(cleared.status).toBe(200);
+  expect(cleared.body ?? '').toContain('The total is cleared because an input changed.');
+  const clearedCosts = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, Lead, cleared)`, `/api/v1/estimates/${id}/costs`);
+  expect(JSON.parse(clearedCosts.body ?? '{}')).toMatchObject({ state: 'out-of-date', totals: null });
+  const answer = await callInBrowser(recorder, page, `POST /api/v1/estimates/${id}/recalculate (API, Lead)`, `/api/v1/estimates/${id}/recalculate`, { method: 'POST' });
+  expect(answer.status).toBe(200);
+  expect(JSON.parse(answer.body ?? '{}')).toMatchObject({ state: 'current', totals: { totalPrice: expect.stringMatching(/^\d+(\.\d+)?$/) } });
+  const current = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead, after Recalculate)`, await page.goto(`/estimates/${code}`));
+  expect(current.status).toBe(200);
+  await page.waitForLoadState('networkidle');
+  await recorder.settled();
+
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  expect(sentences(recorder, forbidden)).toEqual([]);
+  const found = scanResponses(recorder.responses, await figuresOfTheRecord(id));
+  // The cleared page and the cleared `/costs` hold no figure of the record; the answer of the press and the page after it do.
+  expect(found.filter((finding) => finding.label.includes('(cleared)') || finding.label.includes('Lead, cleared')).map((finding) => finding.label), 'a figure on a cleared page or answer').toEqual([]);
+  expect(found.some((finding) => finding.label.includes('/recalculate (API, Lead)')), 'a figure of the record is in the Lead\'s Recalculate answer').toBe(true);
+  expect(found.some((finding) => finding.label.includes('after Recalculate')), 'a figure of the record is on the page after the press').toBe(true);
+  expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
+  await expectCanaryRatesStillStored();
+});
+
+test('AC-7 (negative control, STORY-06.04): a master value planted in the Lead\'s `/recalculate` answer is found by the same scan', async ({ page, context }, testInfo) => {
+  const customer = defined(canaryMasters.find((sentinel) => sentinel.kind === 'customer-rate')).value;
+  const plant: Plant = ({ url }, body) => (new URL(url).pathname.endsWith('/recalculate') ? `${body} ${customer}` : body);
+  await useFreshAddress(context);
+  const { id, forbidden } = await calculatedEstimateOf(page, context, testInfo);
+  await saveCanaryQuantity(id, '7');
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder(plant);
+  await recorder.attach(context);
+  await signIn(page, recorder, lead);
+
+  await page.goto('/queue');
+  await callInBrowser(recorder, page, `POST /api/v1/estimates/${id}/recalculate (API, planted)`, `/api/v1/estimates/${id}/recalculate`, { method: 'POST' });
+  await recorder.settled();
+
+  const findings = scanResponses(recorder.responses, forbidden);
+  expect(
+    findings.some((finding) => finding.label.includes('/recalculate (API, planted)') && finding.found === customer),
+    'the master value planted in the `/recalculate` answer',
   ).toBe(true);
 });
 
