@@ -17,7 +17,8 @@ vi.mock('next/headers', async () => ({ headers: (await import('../support/sessio
 vi.mock('next/navigation', async () => {
   const { harness: shared } = await import('../support/session-harness');
   // `usePathname`: the parts tree's drawer button is a first-open control (`useFirstOpen`, AQP-339), which reads the path to clear its failure line when the page changes.
-  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound, usePathname: () => '/estimates/invented' };
+  // `useRouter`: the Lead's Calculate or Recalculate button (STORY-06.04) reads the router to draw the page again after a press; a static render never calls it.
+  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound, usePathname: () => '/estimates/invented', useRouter: () => ({ refresh: () => undefined }) };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
@@ -16,6 +16,9 @@ import { QUANTITY_CASES } from './quantity/quantity-cases';
  * and for the two states without a figure. The words are written out here from the UX spec and the story, not imported from the product, so a changed sentence fails a test. Layouts at 360, 768 and
  * 1366 px, axe and the keyboard are `tests/e2e/estimate-review.spec.ts`. Every name and number is invented.
  */
+
+// The Recalculate control (STORY-06.04) reads the router; a static render has none, and the draw does not use it.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
 const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as const;
 
@@ -37,7 +40,7 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
 }
 
 const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header: HEADER, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
+  renderToStaticMarkup(createElement(EstimateReview, { header: HEADER, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -179,8 +182,10 @@ describe('AC-3: "How the total is built"', () => {
 describe('AC-6: not calculated', () => {
   it('says so in an info notice that is a live region, shows "Not calculated" on BL, dashes in the tree and no table, and shows no figure', async () => {
     const html = render(await current({ calculated: false }));
-    expect(html).toContain('The Engineer has not calculated this estimate yet.');
-    expect(html).toContain('Press Calculate to see costs. Approve and lock and the Excel download stay off until then.');
+    // AC-10 (STORY-06.04; ux-spec v0.29 "SCR-06 interim and final words"): exactly two sentences, the second naming the button that now works. The 0.28 third sentence is withdrawn (the two disabled buttons say it).
+    expect(html).toContain('The Engineer has not calculated this estimate yet. Press Calculate to see costs.');
+    expect(html).not.toContain('stay off until then');
+    expect(html).not.toContain('Costs show once it is calculated');
     expect(html).toMatch(/role="status"[^>]*>[\s\S]*The Engineer has not calculated/);
     expect(html).toContain('Not calculated');
     expect(html).not.toContain('How the total is built');
@@ -189,9 +194,12 @@ describe('AC-6: not calculated', () => {
     expect(countOf(html, '>—<')).toBeGreaterThanOrEqual(4);
   });
 
-  it('the primary button is Calculate, and Approve and Download are disabled, each described by its reason', async () => {
+  it('the primary button is Calculate and it works (AC-10: enabled, with no "not available yet" reason), and Approve and Download are disabled, each described by its reason', async () => {
     const html = render(await current({ calculated: false }));
-    for (const id of ['review-calculate', 'review-approve', 'review-download']) {
+    const calculate = html.match(/<button[^>]*id="review-calculate"[^>]*>/)?.[0] ?? '';
+    expect(calculate).not.toContain('disabled=""');
+    expect(calculate).not.toContain('aria-describedby');
+    for (const id of ['review-approve', 'review-download']) {
       const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
       expect(button, id).toContain('disabled=""');
       const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
@@ -201,11 +209,12 @@ describe('AC-6: not calculated', () => {
     expect(html).toContain('>Calculate</button>');
     expect(html).toContain('Calculate first. Approving is available once the figures have been calculated.');
     expect(html).toContain('Calculate or Recalculate first. There is no file until a calculation is current.');
+    expect(html).not.toContain('Calculating from this screen is not available yet.');
     expect(html).not.toContain('Calculated 05 Nov');
   });
 });
 
-describe('the cleared state (drawn here so the page has an answer for it; the story that refines it is STORY-06.04)', () => {
+describe('AC-1, AC-4 and AC-5: the cleared state', () => {
   it('says the total is cleared, shows "Cleared" on BL and in the tree, the count stays, and not one figure of the record is drawn', async () => {
     const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
     expect(html).toContain('The total is cleared because an input changed.');
@@ -218,6 +227,42 @@ describe('the cleared state (drawn here so the page has an answer for it; the st
     expect(html).not.toContain('How the total is built');
     expect(html).toContain('>Recalculate</button>');
     expect(html).toContain('Recalculate first. Approving is available once the figures have been calculated again.');
+  });
+
+  it('AC-5: the notice is a live region with its title and body; the primary Recalculate is enabled; Approve and Download are disabled, each described by its reason', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(html).toMatch(/role="status"[^>]*>[\s\S]*The total is cleared because an input changed\./);
+    const recalculate = html.match(/<button[^>]*id="review-calculate"[^>]*>/)?.[0] ?? '';
+    expect(recalculate).not.toContain('disabled=""');
+    for (const id of ['review-approve', 'review-download']) {
+      const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
+      expect(button, id).toContain('disabled=""');
+      expect(button, id).toMatch(/aria-describedby="[^"]+"/);
+    }
+    expect(html).toContain('Calculate or Recalculate first. There is no file until a calculation is current.');
+    expect(html).not.toContain('Calculating from this screen is not available yet.');
+  });
+
+  it('AC-10: the BL tile carries the cleared line with the button named, and the parts tree line names it too (the final words of ux-spec v0.29)', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(html).toContain('An input changed, so every calculated figure is cleared. Press Recalculate to see them again.');
+    expect(html).toContain('Every calculated figure is cleared because an input changed. Press Recalculate to see them again.');
+    expect(html).not.toContain('once the estimate is calculated again');
+    expect(html).not.toContain('Approving is not available yet');
+  });
+
+  it('AC-1: while the figures are current there is no cleared line and no Recalculate button', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('Press Recalculate');
+    expect(html).not.toContain('id="review-calculate"');
+  });
+});
+
+describe('AC-9: the tiles show a skeleton while a recalculation is under way, with no script', () => {
+  it('each tile figure is drawn with a hidden-while-busy figure and a skeleton that appears when the bar is busy (a CSS rule, so nothing is sent to the browser)', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(countOf(html, 'data-slot="skeleton"')).toBe(3);
+    expect(html).toContain('group-has-[[aria-busy=true]]/review');
   });
 });
 

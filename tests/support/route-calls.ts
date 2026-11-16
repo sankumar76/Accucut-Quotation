@@ -186,6 +186,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // now takes. It changes nothing: the blank input is refused 422 before any warning is looked at (an acknowledgement cannot pass a blank), and a refused role never has its body read.
     case 'POST /api/v1/estimates/[id]/calculate':
       return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
+    // STORY-06.04: a Lead's and an Admin's Recalculate is the same service as Calculate, so its valid call is the one that cannot change anything: the canary part is never complete, so the press is refused 422
+    // `CALCULATE_BLOCKED` and writes nothing (the status the machine would move is put back by the transaction), at any state of the customer, for the two roles that may call it. A good press, which answers the
+    // costs view, is `recalculate-route.test.ts`'s and `tests/integration/calc/recalculate.test.ts`'s.
+    case 'POST /api/v1/estimates/[id]/recalculate':
+      return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part

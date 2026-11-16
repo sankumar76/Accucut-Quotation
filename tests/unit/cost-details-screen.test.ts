@@ -158,12 +158,13 @@ describe('AC-6: read-only', () => {
 });
 
 describe('AC-7: the states with nothing current show the row header and no stage', () => {
-  it('OUT OF DATE: "Cleared", the sentence (no button named until STORY-06.04), and a link to the estimate; no stage, no formula, no figure', async () => {
+  it('OUT OF DATE (STORY-06.04 AC-10, ux-spec v0.29 "SCR-07 final words"): "Cleared. Press Recalculate", the sentence naming the button, and the link "Go to the estimate to Recalculate"; no stage, no formula, no figure', async () => {
     const html = render(await viewOf({ inputsRevision: COST_CALCULATION_REVISION + 1 }));
     const text = textOf(html);
-    expect(text).toContain('Cleared An input changed');
-    expect(text).not.toContain('Recalculate');
-    expect(text).toContain('An input changed, so every calculated figure is cleared, on every row. The stages show again once the estimate is calculated again.');
+    expect(text).toContain('Cleared. Press Recalculate An input changed');
+    expect(text).toContain('An input changed, so every calculated figure is cleared, on every row. Press Recalculate on the estimate to see the stages again.');
+    expect(text).toContain('Go to the estimate to Recalculate');
+    expect(text).not.toContain('once the estimate is calculated again');
     expect(html).toContain(`href="/estimates/${CODE}"`);
     expect(text).toContain('Part 1 Invented Bracket');
     expect(html).toContain('role="status"');
@@ -174,6 +175,8 @@ describe('AC-7: the states with nothing current show the row header and no stage
   it('NONE: says the estimate has not been calculated, with a link to it; no stage', async () => {
     const html = render(await viewOf({ calculated: false }));
     expect(textOf(html)).toContain('Not calculated The Engineer has not calculated this estimate yet, so there are no stages to show for this part.');
+    // AC-10: the link names the button the estimate's screen now has (ux-spec v0.29: "Go to the estimate to Calculate", as SCR-10 does).
+    expect(textOf(html)).toContain('Go to the estimate to Calculate');
     expect(html).toContain(`href="/estimates/${CODE}"`);
     expect(html).not.toContain('<details');
     expect(html).not.toContain('Stage total');
