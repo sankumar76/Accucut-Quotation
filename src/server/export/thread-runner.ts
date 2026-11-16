@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Worker } from 'node:worker_threads';
+import { Worker, type WorkerOptions } from 'node:worker_threads';
 
 import { AppError, ExportBusyError } from '../../lib/errors';
 
@@ -46,15 +46,21 @@ const DEFAULT_MAX_THREADS = 2;
 /** The heap a thread may grow to before it is ended (Node's default for a thread is the process's). STORY-07.02 sets it again with pictures in the file. */
 const DEFAULT_HEAP_LIMIT_MB = 512;
 
+/** Starts a thread. The real one is `new Worker`; a test passes its own to see the options a thread is started with. */
+export type StartThread = (entry: string, options: WorkerOptions) => Worker;
+
+const startWorker: StartThread = (entry, options) => new Worker(entry, options);
+
 export interface ThreadBuilderOptions {
   /** The bundle to run. */
   readonly entry: string;
   readonly timeoutMs?: number;
   readonly maxThreads?: number;
   readonly heapLimitMb?: number;
+  readonly startThread?: StartThread;
 }
 
-export function createThreadBuilder({ entry, timeoutMs = DEFAULT_TIMEOUT_MS, maxThreads = DEFAULT_MAX_THREADS, heapLimitMb = DEFAULT_HEAP_LIMIT_MB }: ThreadBuilderOptions): BuildFile {
+export function createThreadBuilder({ entry, timeoutMs = DEFAULT_TIMEOUT_MS, maxThreads = DEFAULT_MAX_THREADS, heapLimitMb = DEFAULT_HEAP_LIMIT_MB, startThread = startWorker }: ThreadBuilderOptions): BuildFile {
   let running = 0;
   return (model) =>
     new Promise((resolve, reject) => {
@@ -66,8 +72,15 @@ export function createThreadBuilder({ entry, timeoutMs = DEFAULT_TIMEOUT_MS, max
         reject(new ExportThreadError('missing'));
         return;
       }
+      let thread: Worker;
+      try {
+        thread = startThread(entry, { workerData: model, resourceLimits: { maxOldGenerationSizeMb: heapLimitMb } });
+      } catch {
+        // The constructor can throw at once (a model that cannot be cloned, or no memory or handle for a thread). No thread was started, so no place was taken (review QS-12).
+        reject(new ExportThreadError('failed'));
+        return;
+      }
       running += 1;
-      const thread = new Worker(entry, { workerData: model, resourceLimits: { maxOldGenerationSizeMb: heapLimitMb } });
       let settled = false;
       const settle = (finish: () => void): void => {
         if (settled) return;

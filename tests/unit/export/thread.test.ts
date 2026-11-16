@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Worker, type WorkerOptions } from 'node:worker_threads';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -9,7 +10,7 @@ import { headerOnlyModel, SHEET_NAME } from '@/server/export/export-columns';
 import type { ExportModel } from '@/server/export/export-model';
 import { runExportThread, type ThreadMessage } from '@/server/export/thread-protocol';
 import { ExportBusyError } from '@/lib/errors';
-import { createThreadBuilder, ExportThreadError, exportThreadFile, type ExportThreadFailure } from '@/server/export/thread-runner';
+import { createThreadBuilder, ExportThreadError, exportThreadFile, type ExportThreadFailure, type StartThread } from '@/server/export/thread-runner';
 
 import { seedConfig } from '../../support/seed-config';
 import { loadWorkbook } from '../../support/xlsx-parts';
@@ -110,6 +111,27 @@ describe('the thread, run for real from its bundle', () => {
     expect(outcome).toMatchObject({ name: 'ExportThreadError', reason: 'failed', code: 'EXPORT_THREAD_FAILED', httpStatus: 500 });
     // The process is alive and builds the next file.
     expect((await createThreadBuilder({ entry: bundle })(model)).byteLength).toBeGreaterThan(1_000);
+  }, 60_000);
+
+  it('starts every thread with the heap limit it was given, so the limit is proved to be passed and not only assumed (QS-13)', async () => {
+    const options: WorkerOptions[] = [];
+    const startThread: StartThread = (entry, given) => {
+      options.push(given);
+      return new Worker(entry, given);
+    };
+    await createThreadBuilder({ entry: bundle, heapLimitMb: 300, startThread })(model);
+    await createThreadBuilder({ entry: bundle, startThread })(model);
+    expect(options.map((given) => given.resourceLimits)).toEqual([{ maxOldGenerationSizeMb: 300 }, { maxOldGenerationSizeMb: 512 }]);
+  }, 60_000);
+
+  it('gives the place back when the thread cannot even be started: a model that cannot be cloned, then a valid one that builds (QS-12)', async () => {
+    const build = createThreadBuilder({ entry: bundle, maxThreads: 1 });
+    // A function cannot be cloned into a thread: the constructor throws at once.
+    const uncloneable: ExportModel = { ...model, rows: [{ cells: { A: () => 'x' } as unknown as Record<string, string> }] };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await build(uncloneable).catch((error: unknown) => error)).toMatchObject({ name: 'ExportThreadError', reason: 'failed' });
+    }
+    expect((await build(model)).byteLength).toBeGreaterThan(1_000);
   }, 60_000);
 
   it('gives the log a code for each kind of failure, so a missing bundle, a crash and a timeout can be told apart (QS-04)', () => {
