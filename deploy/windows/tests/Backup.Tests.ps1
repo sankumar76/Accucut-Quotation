@@ -590,8 +590,11 @@ public static class P {
     if (!string.IsNullOrEmpty(log)) File.WriteAllText(log, string.Join("|", args));
     var i = Console.OpenStandardInput(); var o = Console.OpenStandardOutput();
     if (Environment.GetEnvironmentVariable("FAKE_AGE_NOHEADER") == null) { var h = System.Text.Encoding.ASCII.GetBytes("age-encryption.org/v1\n"); o.Write(h, 0, h.Length); }
-    var b = new byte[65536]; int n;
-    while ((n = i.Read(b, 0, b.Length)) > 0) o.Write(b, 0, n);
+    var b = new byte[65536]; int n; bool first = true;
+    while ((n = i.Read(b, 0, b.Length)) > 0) {
+      if (first) { first = false; var stdinLog = Environment.GetEnvironmentVariable("FAKE_AGE_STDIN_LOG"); if (!string.IsNullOrEmpty(stdinLog)) File.WriteAllText(stdinLog, BitConverter.ToString(b, 0, Math.Min(n, 8))); }
+      o.Write(b, 0, n);
+    }
     o.Flush();
     var code = Environment.GetEnvironmentVariable("FAKE_AGE_EXIT");
     if (!string.IsNullOrEmpty(code)) { Console.Error.WriteLine("age: error: fake failure"); return int.Parse(code); }
@@ -624,7 +627,7 @@ public static class P {
     }
 
     AfterEach {
-        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_DUMP_NOMAGIC', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG', 'FAKE_AGE_NOHEADER') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
+        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_DUMP_NOMAGIC', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG', 'FAKE_AGE_STDIN_LOG', 'FAKE_AGE_NOHEADER') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
     }
 
     It 'carries every byte from the dump through age to the file unchanged (including 0x1A, CR LF and NUL), and returns the size' {
@@ -644,6 +647,24 @@ public static class P {
         $lines = Get-Content -LiteralPath $env:FAKE_LOG
         $lines | Should -Contain 'PGPASSFILE=C:\fake\config\backup.pgpass'
         $lines | Should -Contain 'PGPASSWORD='
+    }
+
+    It 'feeds age exactly the bytes of the dump when the console input encoding is UTF-8 (a text writer would put a byte order mark EF BB BF in front: stage 13, the release backup of an administrator)' {
+        $original = $null
+        try {
+            $original = [System.Console]::InputEncoding
+            [System.Console]::InputEncoding = [System.Text.UTF8Encoding]::new($true)
+        }
+        catch { Set-ItResult -Skipped -Because 'this host has no console whose input encoding can be set'; return }
+        try {
+            $env:FAKE_AGE_STDIN_LOG = Join-Path $TestDrive 'age-stdin.txt'
+            $size = Invoke-FakePipe -Name 'bom.part'
+            (Get-Content -LiteralPath $env:FAKE_AGE_STDIN_LOG -Raw).Trim() | Should -Be '50-47-44-4D-50-00-01-02' -Because 'age must see PGDMP first, not a byte order mark'
+            $size | Should -Be (1024000 + $script:Magic.Length + $script:Header.Length)
+            [System.BitConverter]::ToString([System.IO.File]::ReadAllBytes((Join-Path $TestDrive 'bom.part'))) | Should -BeExactly ([System.BitConverter]::ToString($script:Expected))
+            [System.Console]::InputEncoding.CodePage | Should -Be 65001 -Because 'the console encoding is put back after age is started'
+        }
+        finally { [System.Console]::InputEncoding = $original }
     }
 
     It 'refuses a dump that is not a custom-format archive (it must start with PGDMP), even when both programs exit 0, and says what the first bytes were' {

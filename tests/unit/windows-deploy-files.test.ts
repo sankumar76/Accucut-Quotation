@@ -751,6 +751,17 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(CI).toMatch(/needs: \[verify, e2e\]/);
   });
 
+  it('age is started with a console input encoding that has no preamble, and the encoding is put back (a UTF-8 console put EF BB BF in front of an administrator\'s release dump)', () => {
+    const pipe = functionBody(code('deploy/windows/AccucutOps.psm1'), 'Invoke-AccucutBackupPipe');
+    const swap = pipe.indexOf('[System.Console]::InputEncoding = [System.Text.Encoding]::GetEncoding(437)');
+    expect(swap).toBeGreaterThan(0);
+    expect(pipe.indexOf('[void]$age.Start()')).toBeGreaterThan(swap);
+    expect(pipe.indexOf('[System.Console]::InputEncoding = $consoleInput')).toBeGreaterThan(pipe.indexOf('[void]$age.Start()'));
+    // The dump only ever goes through the streams: no writer of age's standard input is used.
+    expect(pipe).not.toMatch(/StandardInput\.(Write|WriteLine|Flush)\b/);
+    expect(pipe).toContain('$age.StandardInput.BaseStream');
+  });
+
   it('a list of copies is always read as an array in the stage 13 scripts: one copy must not turn into a single object that has no Count (StrictMode)', () => {
     for (const name of ['exercise-backup.ps1', 'assert-install.ps1', 'assert-removal.ps1']) {
       const text = code('deploy/windows/ci/' + name);

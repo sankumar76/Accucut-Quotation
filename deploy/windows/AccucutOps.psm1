@@ -1931,8 +1931,28 @@ function Invoke-AccucutBackupPipe {
     $copyError = $null
     $magicError = $null
     $dumpMagic = [System.Text.Encoding]::ASCII.GetBytes('PGDMP')
+    # Windows PowerShell 5.1 builds age's standard input as a text writer in the console's input encoding and flushes it when the process starts. When the console is UTF-8
+    # (an administrator's console often is) that flush writes a byte order mark (EF BB BF) in front of the dump, and the copy no longer restores. The task's console is not UTF-8,
+    # which is why only an administrator's release backup was damaged. The console's input encoding is therefore switched to one with no preamble (OEM US, code page 437) for the
+    # moment age is started, and put back at once. The dump itself only ever goes through the stream, never through the writer.
+    $consoleInput = $null
     try {
-        [void]$age.Start()
+        $consoleInput = [System.Console]::InputEncoding
+        if ($consoleInput.GetPreamble().Length -gt 0) { [System.Console]::InputEncoding = [System.Text.Encoding]::GetEncoding(437) }
+        else { $consoleInput = $null }
+    }
+    catch {
+        # No console (a service, a task without one): there is no console encoding to write a preamble from.
+        Write-Verbose "The console input encoding could not be read or changed: $($_.Exception.Message)"
+        $consoleInput = $null
+    }
+    try {
+        try { [void]$age.Start() }
+        finally {
+            if ($null -ne $consoleInput) {
+                try { [System.Console]::InputEncoding = $consoleInput } catch { Write-Verbose "The console input encoding could not be put back: $($_.Exception.Message)" }
+            }
+        }
         $ageStarted = $true
         [void]$dump.Start()
         $dumpStarted = $true
