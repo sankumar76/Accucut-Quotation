@@ -184,6 +184,8 @@ function New-AccucutPackage {
     Copy-PackageFolder -Source (Join-Path $repo '.next\static') -Destination (Join-Path $app '.next\static')
     if (Test-Path -LiteralPath (Join-Path $repo 'public')) { Copy-PackageFolder -Source (Join-Path $repo 'public') -Destination (Join-Path $app 'public') }
     New-EsbuildBundle -Entry 'scripts/bootstrap-admin.ts' -OutFile (Join-Path $app 'bootstrap-admin.mjs') -External @('@node-rs/argon2')
+    # The export runs in its own thread, and Next.js does not bundle a thread's entry: the server looks for the file at `.next\export-worker.mjs` under its own folder (ADR-012, STORY-07.01 AC-5).
+    New-EsbuildBundle -Entry 'src/worker/export-thread.ts' -OutFile (Join-Path $app '.next\export-worker.mjs')
 
     # worker
     Write-Host 'Package: worker'

@@ -160,3 +160,12 @@ export function istYearOf(instant: Date): number {
 export function startOfNextIstDay(isoDate: string): Date {
   return new Date(startOfIstDay(isoDate).getTime() + MILLISECONDS_PER_DAY);
 }
+
+/** The length of `YYYY-MM-DD`. */
+const ISO_DATE_LENGTH = 10;
+
+/** The calendar date an instant falls on when read in IST, as `YYYY-MM-DD`: 19:00 UTC on 15 November is 00:30 on 16 November there (STORY-07.01 AC-2, the date in an export's file name). */
+export function istIsoDateOf(instant: Date): string {
+  if (Number.isNaN(instant.getTime())) throw new RangeError('istIsoDateOf needs a valid date.');
+  return new Date(instant.getTime() + IST_OFFSET_MILLISECONDS).toISOString().slice(0, ISO_DATE_LENGTH);
+}

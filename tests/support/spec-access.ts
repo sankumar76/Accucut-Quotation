@@ -59,6 +59,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/costs': ['ADMIN', 'LEAD'],
   // STORY-06.03 (SCR-07; architecture section 6 row "Cost details": A L): the six stages of one row with each formula. An Engineer is refused with the fixed 403 before either ID is looked at (NFR-002, CR-33).
   '/api/v1/estimates/[id]/nodes/[nodeId]/costs': ['ADMIN', 'LEAD'],
+  // STORY-07.01 (SCR-10; architecture section 6 rows "Export" and "Export summary": A L): the Excel file and what the page shows before it. An Engineer is refused with the fixed 403, and no file, before the ID is looked at (NFR-002, CR-33).
+  '/api/v1/estimates/[id]/export': ['ADMIN', 'LEAD'],
+  '/api/v1/estimates/[id]/export-summary': ['ADMIN', 'LEAD'],
   // STORY-05.02 (architecture section 6 "Tree", "Node", "Reorder": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/tree': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],

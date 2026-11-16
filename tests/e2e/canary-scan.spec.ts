@@ -588,6 +588,17 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   expect(fixedForbiddenProblem(rowCosts)).toBeNull();
   const rowPage = await recorder.recordNavigation(`GET /estimates/${code}/costs/1 (page, after Calculate)`, await page.goto(`/estimates/${code}/costs/1`));
   expect(rowPage.status).toBe(403);
+  // STORY-07.01 AC-3 (NFR-002): the Excel export, the file route, the summary route and the page, are refused the same way: the fixed 403 with no file (no attachment, no workbook bytes) and the "no access"
+  // page. All three answers are recorded, so the scans below read them too (a workbook would carry the layout of the cost columns).
+  for (const name of ['export', 'export-summary']) {
+    const exportRoute = await callInBrowser(recorder, page, `GET ${name} (API, after Calculate)`, `/api/v1/estimates/${engineer.id}/${name}`);
+    expect(exportRoute.status, name).toBe(403);
+    expect(fixedForbiddenProblem(exportRoute), name).toBeNull();
+    expect(exportRoute.headers['content-disposition'], name).toBeUndefined();
+    expect(exportRoute.body ?? '', name).not.toMatch(/^PK/);
+  }
+  const exportPage = await recorder.recordNavigation(`GET /estimates/${code}/export (page, after Calculate)`, await page.goto(`/estimates/${code}/export`));
+  expect(exportPage.status).toBe(403);
   await page.waitForLoadState('networkidle');
   await recorder.settled();
 

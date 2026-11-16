@@ -26,6 +26,7 @@ cp .env.example .env                           # PowerShell or Command Prompt: c
 npx prisma generate
 npx prisma migrate deploy
 node --conditions=react-server --import tsx scripts/ensure-seed-version.ts   # the field registry, once
+npx tsx scripts/build-export-worker.ts          # the file the Excel export runs in its own thread (.next/export-worker.mjs); again after a change to the export
 npx next dev
 ```
 
@@ -104,6 +105,7 @@ docker compose -f compose.dev.yml up -d db
 npx prisma generate
 npx prisma migrate deploy
 node --conditions=react-server --import tsx scripts/ensure-seed-version.ts   # the field registry, once; see below
+npx tsx scripts/build-export-worker.ts   # the Excel export's thread (.next/export-worker.mjs); again after a change to the export
 npx next dev
 ```
 

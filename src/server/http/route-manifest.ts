@@ -301,8 +301,12 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
 
-  // ---- Planned: Work -----------------------------------------------------------------------------------------------
-  { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
+  // STORY-07.01 (SCR-10; architecture section 6 rows "Export" and "Export summary": A L). The Excel file and what the page shows before it, for the Lead and the Admin alone. An Engineer is refused with
+  // the fixed 403, and no file, before the ID is looked at (the page: SCR-26 with HTTP 403, before anything is read), and none of the three rows is in any Engineer's list, so the cost scan calls
+  // all of them as routes an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/export', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/export-summary', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-10' },
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
   // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------

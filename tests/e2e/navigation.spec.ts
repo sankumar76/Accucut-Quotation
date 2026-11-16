@@ -234,7 +234,7 @@ test.describe('the Engineer (signs in through the page)', () => {
       await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
       return page.getByRole('main').innerText();
     };
-    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/estimates/Q-2026-0001/export'));
+    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/config/checkpoints'));
   });
 });
 

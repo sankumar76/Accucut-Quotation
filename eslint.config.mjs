@@ -134,6 +134,12 @@ const ENGINEER_VIEW_IMPORTS = [
     regex: `(^|${SLASH})schemas${SLASH}node-costs${END}`,
     message: 'The node costs schema holds the formulas, rates and calculated costs of a row: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
   },
+  {
+    // STORY-07.01: the contracts of `GET /estimates/{id}/export` and `/export-summary`. The file carries the worksheet's cost columns (their figures from STORY-07.02), for the Lead and the Admin only (NFR-002).
+    group: ['**/schemas/export'],
+    regex: `(^|${SLASH})schemas${SLASH}export${END}`,
+    message: 'The export schema is the contract of the Excel file and its summary: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
+  },
   ROW_OUTPUTS_IMPORT,
   FORMULA_IMPORT,
   PRISMA_IMPORT,

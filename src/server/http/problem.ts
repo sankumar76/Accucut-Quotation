@@ -10,6 +10,7 @@ import {
   CalculateBlockedError,
   AppError,
   DatabaseBusyError,
+  ExportBusyError,
   FieldValidationError,
   ForbiddenError,
   MasterInUseError,
@@ -176,7 +177,8 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
       estimateTotal: error.total,
     };
   }
-  if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError)) {
+  // A busy answer keeps its own fixed words: they tell the person to try again, which is true and holds nothing of the failure.
+  if (error.httpStatus >= STATUS_INTERNAL && !(error instanceof DatabaseBusyError) && !(error instanceof ExportBusyError)) {
     return problem(error.httpStatus, error.code, INTERNAL_TITLE, requestId);
   }
   return problem(error.httpStatus, error.code, error.message, requestId);
@@ -187,9 +189,9 @@ export function internalProblem(requestId: string): Problem {
 }
 
 /** The Response for a problem: its status, the problem media type, `no-store` and the request ID in a header. */
-export function problemResponse(body: Problem): Response {
+export function problemResponse(body: Problem, extraHeaders: Readonly<Record<string, string>> = {}): Response {
   return new Response(JSON.stringify(body), {
     status: body.status,
-    headers: { 'Content-Type': PROBLEM_CONTENT_TYPE, 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: body.requestId },
+    headers: { 'Content-Type': PROBLEM_CONTENT_TYPE, 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: body.requestId, ...extraHeaders },
   });
 }

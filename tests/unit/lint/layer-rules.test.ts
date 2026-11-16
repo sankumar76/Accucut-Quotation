@@ -75,6 +75,8 @@ const IMPORT_FAULTS: ReadonlyArray<ImportCase> = [
   { name: 'an Engineer view imports the working of a row by a relative path (STORY-06.03 AC-8)', filePath: 'src/server/views/engineer-form.ts', specifier: '../../lib/estimate/cost-working' },
   { name: 'an Engineer view imports the node costs schema (STORY-06.03 AC-8)', filePath: ENGINEER_VIEW, specifier: '@/server/views/schemas/node-costs' },
   { name: 'an Engineer view imports the cost details service (STORY-06.03 AC-8)', filePath: ENGINEER_VIEW, specifier: '@/server/services/cost-details-service' },
+  { name: 'an Engineer view imports the export schema (STORY-07.01 AC-3)', filePath: ENGINEER_VIEW, specifier: '@/server/views/schemas/export' },
+  { name: 'an Engineer view imports the export service (STORY-07.01 AC-3)', filePath: ENGINEER_VIEW, specifier: '@/server/services/export-service' },
   { name: 'a .tsx Engineer view imports a cost repository', filePath: 'src/server/views/engineer-a.tsx', specifier: COST_REPOSITORY },
   { name: 'an Engineer view imports the Prisma client', filePath: ENGINEER_VIEW, specifier: PRISMA },
 ];
