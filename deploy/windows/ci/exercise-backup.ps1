@@ -63,12 +63,12 @@ function Invoke-Script {
 function Get-Copies { return @(Get-AccucutBackupCopy -Directory $paths.Backups) }
 
 # ---- 1. A release backup (AC-1, AC-4, AC-7) ---------------------------------------------------------------------------------------------------
-$beforeCopies = Get-Copies
+$beforeCopies = @(Get-Copies)
 $beforeRows = [int](Invoke-Sql -Sql "SELECT count(*) FROM job_runs WHERE job = 'backup' AND result->>'status' = 'ok'")
 $run = Invoke-Script -Name 'backup.ps1' -Argument @('-Reason', 'release')
 Write-Host $run.Output
 Assert-That ($run.Code -eq 0) 'backup.ps1 -Reason release, run by an administrator, exits 0'
-$afterCopies = Get-Copies
+$afterCopies = @(Get-Copies)
 Assert-That ($afterCopies.Count -eq $beforeCopies.Count + 1) 'one new copy was made'
 $release = $afterCopies[$afterCopies.Count - 1]
 Assert-That ($release.Reason -eq 'release' -and $release.Verified) "the new copy is tagged release and its manifest agrees with it ($($release.Name))"
@@ -85,7 +85,7 @@ foreach ($i in 1..4) {
     $more = Invoke-Script -Name 'backup.ps1' -Argument @('-Reason', 'release')
     if ($more.Code -ne 0) { Write-Host $more.Output; throw "the extra backup $i failed" }
 }
-$all = Get-Copies
+$all = @(Get-Copies)
 Assert-That ($all.Count -eq $beforeCopies.Count + 5) "there are now $($all.Count) copies"
 
 # ---- 3. clear-copies.ps1 (AC-6) ---------------------------------------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ try {
     Assert-That ($notDate.Code -eq 0 -and $notDate.Output -match 'nothing was removed') 'text that is not a date removes nothing'
     $declined = Invoke-Script -Name 'clear-copies.ps1' -Answer @($today, 'no')
     Assert-That ($declined.Code -eq 0 -and $declined.Output -match 'Nothing was removed') 'the right date without YES removes nothing'
-    Assert-That ((Get-Copies | Where-Object { $_.Verified }).Count -eq $verifiedBefore.Count) 'no copy was removed by the three refused attempts'
+    Assert-That (@(Get-Copies | Where-Object { $_.Verified }).Count -eq $verifiedBefore.Count) 'no copy was removed by the three refused attempts'
 
     $beforeClearRows = [int](Invoke-Sql -Sql "SELECT count(*) FROM job_runs WHERE job = 'backup-clear'")
     $clear = Invoke-Script -Name 'clear-copies.ps1' -Answer @($today, 'YES')

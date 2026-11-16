@@ -751,6 +751,14 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(CI).toMatch(/needs: \[verify, e2e\]/);
   });
 
+  it('a list of copies is always read as an array in the stage 13 scripts: one copy must not turn into a single object that has no Count (StrictMode)', () => {
+    for (const name of ['exercise-backup.ps1', 'assert-install.ps1', 'assert-removal.ps1']) {
+      const text = code('deploy/windows/ci/' + name);
+      expect(text, name + ': a copy list is assigned without @()').not.toMatch(/^\s*\$\w+\s*=\s*(Get-Copies|Get-AccucutBackupCopy)\b/m);
+      expect(text, name + ': .Count of a bare pipeline result').not.toMatch(/(?<!@)\(\s*(Get-Copies|Get-AccucutBackupCopy)\b[^)]*\)\.Count/);
+    }
+  });
+
   it('every psql and pg_dump the backup runs sees only PGPASSFILE of the PostgreSQL settings: inherited PG* variables are cleared first (stage 13: PGPASSWORD of the runner image)', () => {
     const ops = code('deploy/windows/AccucutOps.psm1');
     for (const name of ['Add-AccucutJobRun', 'Get-AccucutDatabaseInfo']) {
