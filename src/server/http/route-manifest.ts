@@ -276,6 +276,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // STORY-06.04 (SCR-06's Recalculate; architecture section 6 "Recalculate": A L): the Lead's and the Admin's own press, which is the same calculation as the Engineer's Calculate (one service, one path). Only the Lead and the Admin are
   // listed, so an Engineer is refused 403 before the ID is looked at. The answer is the costs view (`costsSchema`), so it is in no Engineer's list and the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/recalculate', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-06.05 (SCR-06's Approve and lock; architecture section 6 "Approve": A L): the guard of an approval. Only the Lead and the Admin are listed, so an Engineer is refused 403 before the ID is looked at. Until STORY-06.06
+  // writes the approval, a request that passes the guard is the fixed 501 and nothing is written; every refusal is a fixed sentence that names the missing step and holds no figure, so the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/approve', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
   // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
