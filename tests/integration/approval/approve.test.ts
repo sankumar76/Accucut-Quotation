@@ -106,6 +106,7 @@ describe('AC-2: the approval is written in one piece', () => {
     const entries = await approvalEntries(db, estimateId);
     expect(entries).toHaveLength(1);
     expect(defined(entries[0])).toMatchObject({
+      event: 'approval.approved',
       actor_id: db.personId,
       actor_label: 'Calculation Lead',
       object_type: 'estimate',
@@ -288,7 +289,7 @@ describe('AC-9 (AQP-321 AC-4): BO is the approvals row, so clearing the calculat
     const current = await review.getCosts(lead(), estimateId);
     expect(current.state).toBe('current');
     expect(current.totals?.totalPrice).not.toBeNull();
-    expect(current.approval).toMatchObject({ price: '1234.50', approverName: 'Calculation Lead' });
+    expect(current.approval).toMatchObject({ price: '1234.50', approverName: 'Invented Calculation Lead' });
 
     // The figure state is forced out of date directly, as an input change after an unlock would leave it: the estimate is still approved and the approval row is untouched.
     await db.owner.query('UPDATE estimates SET inputs_revision = inputs_revision + 1 WHERE id = $1::uuid', [estimateId]);

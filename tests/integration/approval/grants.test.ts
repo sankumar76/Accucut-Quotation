@@ -117,12 +117,13 @@ describe('the table keeps what it must whoever writes (CHECK constraints and the
   });
 
   it.each([
-    ['a negative price', insert('-1'), 'ck_approvals_approved_price_not_negative'],
-    ['a reason on a price that is not an override', insert('5', ', override_reason', ", 'because'"), 'ck_approvals_override_reason_needs_override'],
-    ['a reason over 500 characters', insert('5', ', is_override, override_reason', `, true, '${'x'.repeat(501)}'`), 'ck_approvals_override_reason_length'],
-    ['an unlock with a person and no time', insert('5', ', unlocked_by', `, '${db.personId}'::uuid`), 'ck_approvals_unlock_by_and_at_together'],
+    // Each statement is built inside the test: the database and the IDs exist only after `beforeAll`.
+    ['a negative price', () => insert('-1'), 'ck_approvals_approved_price_not_negative'],
+    ['a reason on a price that is not an override', () => insert('5', ', override_reason', ", 'because'"), 'ck_approvals_override_reason_needs_override'],
+    ['a reason over 500 characters', () => insert('5', ', is_override, override_reason', `, true, '${'x'.repeat(501)}'`), 'ck_approvals_override_reason_length'],
+    ['an unlock with a person and no time', () => insert('5', ', unlocked_by', `, '${db.personId}'::uuid`), 'ck_approvals_unlock_by_and_at_together'],
   ])('refuses %s', async (_name, statement, constraint) => {
-    await expect(db.owner.query(statement)).rejects.toMatchObject({ code: '23514', constraint });
+    await expect(db.owner.query(statement())).rejects.toMatchObject({ code: '23514', constraint });
   });
 
   it('the later stories can set their columns as the runtime role, and then the approval is no longer live and a new cycle can be added', async () => {
