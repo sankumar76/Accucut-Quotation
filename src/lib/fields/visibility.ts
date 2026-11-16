@@ -1,5 +1,6 @@
 import type { FieldDefinition } from './field-schema';
 import { MATERIAL_CONSIDERED_KEY } from './types';
+import { isShownByRule } from './visible-when';
 
 /**
  * Who may see a field, and when it shows (SPEC sections 7.1 and 7.3; ADR-008; architecture section 4.5).
@@ -25,10 +26,9 @@ export function engineerVisibleFields(fields: ReadonlyArray<FieldDefinition>): F
 /**
  * Whether a field shows, given the current value of the field its rule watches. A field with no rule
  * always shows. A blank or absent watched value counts as `''`, so Fasteners Qty (T) and Fasteners Cost
- * (U) are hidden while Fasteners (S) is blank as well as while it is "None".
+ * (U) are hidden while Fasteners (S) is blank as well as while it is "None", in any letter case and with
+ * spaces around it (STORY-05.05 AC-1). The comparison is `isShownByRule`, which the part form reads too.
  */
 export function isFieldShown(field: FieldDefinition, valueOf: (fieldId: string) => string | undefined): boolean {
-  if (field.kind !== 'input' || field.visibleWhen === null) return true;
-  const watched = valueOf(field.visibleWhen.fieldId) ?? '';
-  return !field.visibleWhen.values.includes(watched);
+  return field.kind === 'input' ? isShownByRule(field.visibleWhen, valueOf) : true;
 }

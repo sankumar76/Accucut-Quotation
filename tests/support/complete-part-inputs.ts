@@ -1,5 +1,7 @@
 import { buildFormSections } from '../../src/lib/estimate/form-fields';
+import type { TreatmentChoice } from '../../src/lib/estimate/treatment-value';
 import type { ConfigDocument } from '../../src/lib/fields/schema';
+import { OTHER_TREATMENT_ID } from '../../src/lib/masters/system-entries';
 
 /**
  * A part with every input Calculate needs, as the part form stores it (STORY-05.09): each field of the form that a person types and Calculate needs, by field ID, with an invented value the field's
@@ -20,13 +22,14 @@ function isHidable(document: ConfigDocument, fieldId: string): boolean {
   return found?.kind === 'input' && found.visibleWhen !== null;
 }
 
-/** The stored inputs of a complete part, by field ID. `materialId` is the ID of the material chosen for Material in Drawing. */
-export function completePartInputsFor(document: ConfigDocument, materialId: string = INVENTED_MATERIAL_ID): Record<string, string> {
-  const inputs: Record<string, string> = {};
+/** The stored inputs of a complete part, by field ID. `materialId` is the ID of the material chosen for Material in Drawing. Treatment / Color is stored as `{ id, text }` ("Other" with invented words). */
+export function completePartInputsFor(document: ConfigDocument, materialId: string = INVENTED_MATERIAL_ID): Record<string, string | TreatmentChoice> {
+  const inputs: Record<string, string | TreatmentChoice> = {};
   for (const section of buildFormSections(document)) {
     for (const field of section.fields) {
       if (!field.editable || !field.required || isHidable(document, field.id)) continue;
       if (field.rule.type === 'select') inputs[field.id] = materialId;
+      else if (field.rule.type === 'treatment') inputs[field.id] = { id: OTHER_TREATMENT_ID, text: INVENTED_TEXT };
       else if (field.rule.type === 'number') inputs[field.id] = INVENTED_NUMBER;
       // A field with a default (Fasteners: "None") is left to it, as a part nobody typed into is.
       else if (field.defaultValue === null) inputs[field.id] = INVENTED_TEXT;

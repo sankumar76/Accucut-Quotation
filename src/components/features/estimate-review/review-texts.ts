@@ -38,6 +38,8 @@ export const COUNT_HIDDEN_LABEL = 'Count for the whole order';
 export const COUNT_UNIT = 'nos';
 export const TREE_CLEARED_LINE = 'Every calculated figure is cleared because an input changed. Press Recalculate to see them again.';
 export const TREE_EMPTY = 'No parts yet.';
+/** The link on each row to SCR-07 (STORY-06.03): its words, with the row named for a screen reader beside it. */
+export const COST_DETAILS_LINK = 'View cost details';
 export const treeLegend = (unitPriceLetter: string, countName: string): string =>
   `Each figure is that row's own ${unitPriceLetter}. The count for the whole order (${countName}) is shown beside it and is already included. The estimate total adds every row's ${unitPriceLetter}.`;
 export const COUNT_FIELD_NAME = 'QTY per Assy';

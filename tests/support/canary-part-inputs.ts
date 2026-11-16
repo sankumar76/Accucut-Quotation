@@ -1,7 +1,9 @@
 import { formFieldById } from '../../src/lib/estimate/form-fields';
+import { decodeTreatment, encodeTreatment, readFlagInput, readTreatmentInput } from '../../src/lib/estimate/treatment-value';
 import { validateNumberInput, validateTextInput, type InputCheck } from '../../src/lib/estimate/validation';
 import type { ConfigDocument } from '../../src/lib/fields/schema';
 import { MATERIAL_RATE_KEY } from '../../src/lib/fields/types';
+import { OTHER_TREATMENT_ID } from '../../src/lib/masters/system-entries';
 
 import { canaryEstimateInputs } from './canary-estimate-builder';
 import { MATERIAL_CANARIES } from './material-master-canary';
@@ -35,13 +37,16 @@ export function canaryRateFieldId(document: ConfigDocument): string {
 function checkedByRule(document: ConfigDocument, fieldId: string, text: string): InputCheck {
   const rule = formFieldById(document, fieldId)?.rule;
   if (rule === undefined || rule.type === 'derived' || rule.type === 'select' || rule.type === 'picture') return { ok: true, value: null };
+  // Treatment / Color is "Other" with the canary's words, as a person types it (STORY-05.06); a treatment flag is 0 or 1.
+  if (rule.type === 'treatment') return readTreatmentInput(encodeTreatment({ id: OTHER_TREATMENT_ID, text }));
+  if (rule.type === 'flag') return readFlagInput(text);
   return rule.type === 'number' ? validateNumberInput(text) : validateTextInput(text, { multiline: rule.multiline, maxLength: rule.maxLength });
 }
 
 export interface TypedCanaryValue {
   readonly key: string;
   readonly fieldId: string;
-  /** What the form stores for it. */
+  /** What the form sends and an answer carries for it: Treatment / Color is the JSON text of `{ id, text }` (`treatment-value.ts`). */
   readonly stored: string;
 }
 
@@ -61,8 +66,10 @@ export function canaryTypedValues(document: ConfigDocument): { readonly values: 
 }
 
 /** The whole `inputs` of the canary part: the typed values, the planted Restricted value and the unknown key. Throws if a typed value is one the form refuses. */
-export function canaryPartInputs(document: ConfigDocument): Record<string, string> {
+export function canaryPartInputs(document: ConfigDocument): Record<string, unknown> {
   const { values, refused } = canaryTypedValues(document);
   if (refused.length > 0) throw new Error(`The canary estimate holds values that the part form refuses: ${refused.join('; ')}.`);
-  return { ...Object.fromEntries(values.map((value) => [value.fieldId, value.stored])), [canaryRateFieldId(document)]: CANARY_PLANTED_RATE, [CANARY_UNKNOWN_KEY]: 'x' };
+  // Treatment / Color is stored as the object `{ id, text }`, every other value as its text.
+  const stored = values.map((value) => [value.fieldId, formFieldById(document, value.fieldId)?.rule.type === 'treatment' ? decodeTreatment(value.stored) : value.stored]);
+  return { ...Object.fromEntries(stored), [canaryRateFieldId(document)]: CANARY_PLANTED_RATE, [CANARY_UNKNOWN_KEY]: 'x' };
 }

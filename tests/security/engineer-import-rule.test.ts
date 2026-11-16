@@ -91,6 +91,8 @@ const SERVICES = {
     'calculation-service',
     'config-read-service',
     'config-service',
+    // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
+    'cost-details-service',
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
@@ -145,12 +147,29 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
  * The contract of `GET /estimates/{id}/costs` (STORY-06.02 AC-4, AC-5): every figure of an estimate. The lint refuses it to an Engineer view by name (the other schema files are refused only through
  * the barrel), as a static import and as `import()`, in the two spellings a view would use. `lib/estimate/figure-state` holds only counts and stays allowed.
  */
-const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = ['@/server/views/schemas/costs', './schemas/costs', '../views/schemas/costs'];
+const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = [
+  '@/server/views/schemas/costs',
+  './schemas/costs',
+  '../views/schemas/costs',
+  // STORY-06.03 (AC-8, NFR-002): the contract of `GET /estimates/{id}/nodes/{nodeId}/costs`, which holds the formulas, rates and calculated costs of a row.
+  '@/server/views/schemas/node-costs',
+  './schemas/node-costs',
+  '../views/schemas/node-costs',
+];
 
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 /** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
-const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = ['@/lib/estimate/row-outputs', '@/lib/estimate/row-calculator', '@/lib/estimate/product-totals', '../../lib/estimate/row-outputs', '../../lib/estimate/product-totals'];
+const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = [
+  '@/lib/estimate/row-outputs',
+  '@/lib/estimate/row-calculator',
+  '@/lib/estimate/product-totals',
+  '../../lib/estimate/row-outputs',
+  '../../lib/estimate/product-totals',
+  // STORY-06.03 (AC-8, NFR-002): the working of a stored row, with its formulas, rate values and calculated costs.
+  '@/lib/estimate/cost-working',
+  '../../lib/estimate/cost-working',
+];
 
 const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generated/prisma/client'];
 

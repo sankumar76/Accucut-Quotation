@@ -11,6 +11,7 @@ import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
 import { controlIdFor, FIELD_MARK } from './field-ids';
+import { TreatmentSelect } from './treatment-select';
 import type { Loaded } from './use-form-definition';
 
 export interface FieldRendererProps {
@@ -35,8 +36,8 @@ export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => control
 
 /**
  * One field of the part form (STORY-05.03 AC-1, AC-2, AC-3, AC-5): the label with its Excel column letter first ("Excel column J" is read before the name, UX spec SCR-05
- * "Accessibility"), the hint under it, the unit beside it, and the control the field's rule asks for: a number or a text box, the materials as a drop-down, or, for a field that follows
- * something else (Sl. No., Material Considered), a read-only box with the shaded look. Nothing here knows a field by its name: what it is and says comes from the server's form.
+ * "Accessibility"), the hint under it, the unit beside it, and the control the field's rule asks for: a number or a text box, the materials or the treatments as a drop-down, or, for a field that
+ * follows something else (Sl. No., Material Considered), a read-only box with the shaded look. The surface-treatment flags are drawn together by `SurfaceTreatments`, never one by one here. Nothing here knows a field by its name: what it is and says comes from the server's form.
  */
 export function FieldRenderer({ field, missing, text, error, editable, materials, onChange, onCommit }: FieldRendererProps) {
   const id = controlIdOf(field);
@@ -75,6 +76,9 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
               ))}
             </NativeSelect>
           );
+        }
+        if (rule.type === 'treatment') {
+          return <TreatmentSelect control={control} name={field.id} maxLength={rule.maxLength} text={text} readOnly={readOnly} marked={mark !== undefined} onChange={onChange} onCommit={onCommit} />;
         }
         if (rule.type === 'text' && rule.multiline) {
           return (

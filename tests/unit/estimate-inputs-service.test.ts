@@ -145,7 +145,8 @@ describe('AC-4, AC-7: a value saved with a real change', () => {
 });
 
 describe('review SQR-01: a save changes only the keys it names', () => {
-  const NOT_BUILT = field('Z');
+  // Blank Weight (M) is a calculated field: it is on no form, so what is stored under it is neither read, changed nor sent back.
+  const NOT_BUILT = field('M');
   const stored = (): Record<string, unknown> => ({ [LENGTH]: '1.00', [NOT_BUILT]: '7.00', invented: true, [field('I')]: '917373.37' });
 
   it('a stored value of a field that is not on the form (another story\'s, one not built yet, one that is not text) survives a save of another field; the answer lists only the form\'s', async () => {
@@ -201,7 +202,8 @@ describe('STORY-05.04 AC-1, AC-2, AC-4, AC-5: the fields of sections 03 to 08', 
 
   it('AC-2: the typed Machining, Plating, Tool and Fasteners Cost come back as typed, to the person who typed them and to a Lead, and are no calculated value (FR-008)', async () => {
     const setup = setUp();
-    const typed = { [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
+    // Fasteners Cost shows, and so is kept as typed, only while Fasteners is not "None" (STORY-05.05): the part has fasteners here.
+    const typed = { [FASTENERS]: 'M6 bolt', [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
     await save(setup, typed);
     for (const viewer of [arjun, lead, admin]) {
       const part = await setup.service.getNode(viewer, ESTIMATE, PART);
@@ -249,7 +251,7 @@ describe('STORY-05.04 AC-1, AC-2, AC-4, AC-5: the fields of sections 03 to 08', 
   });
 
   it('a stored Restricted value and an unknown key are read back by nobody: only what the form offers leaves, with the typed costs among it', async () => {
-    const stored = { [field('BM')]: '45678.75', [RATE_FIELD]: '917373.37', invented: 'x', [field('Z')]: '1.00' };
+    const stored = { [field('BM')]: '45678.75', [RATE_FIELD]: '917373.37', invented: 'x', [field('M')]: '1.00' };
     const setup = setUp([estimate()], [node(PART, { inputs: stored })]);
     for (const viewer of [arjun, lead, admin]) {
       const part = await setup.service.getNode(viewer, ESTIMATE, PART);
@@ -334,8 +336,6 @@ describe('AC-3, AC-7: a field that is unknown or Restricted is a 422', () => {
     ['Sl. No. (A), which is the tree', () => field('A')],
     ['Material Considered (F), which follows the material', () => field('F')],
     ['Part Model (C), the picture, which is changed by its own routes (STORY-05.07)', () => field('C')],
-    ['Treatment / Color (G), story 05.06', () => field('G')],
-    ['Hot Dip Galvanizing (Z), a surface treatment that story 05.06 builds', () => field('Z')],
     ['Total Process Cost (AY), the calculated twin of Machining Cost', () => field('AY')],
     ['Approved Quote Price (BO), entered at approval', () => field('BO')],
     ['an ID the registry does not have', () => MISSING],

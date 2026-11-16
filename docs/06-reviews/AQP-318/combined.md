@@ -1,0 +1,110 @@
+# Review Report — AQP-318 (STORY-05.12 Warn on a 0 in QTY per Assy) — Combined security and quality (CLAUDE.md §9 item 2)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (combined security-and-quality review, `critical-review`) |
+| Review round | 1 |
+| Base…branch | `master (5c89585)...feat/AQP-318-qty-warning-3` (PR #416, a DL-215 re-cut of #414) |
+| Commit reviewed | **14805c1** (the full diff from 5c89585, plus the follow-up diff `fb02beb..14805c1` on its own) |
+| Date | 2026-11-15 |
+| **Verdict** | **REQUEST CHANGES** (role rule: 1 Major). **Nothing blocks the merge under §9 item 2**: 0 Blocker, 0 Critical. The Major is tracked as #419 for the hardening window. It is a two-line fix inside the lazy chunk, so it costs no first-load bytes. I recommend fixing it in this PR. |
+| PR review | posted on PR #416 as a COMMENT (single-token) |
+
+## Summary
+The server side is correct and safe on NFR-002 and data integrity:
+- **Success answer unchanged.** A good Calculate still answers only `calculateAnswerSchema`, a strict object of two literals.
+- **The 409 carries no figure.** The new 409 `CALCULATE_ACK_REQUIRED` is built key by key in `problem.ts`: `type, title, status, code, requestId, inputsRevision, warnings[{code,nodeId,fieldId,slNo,label,message}]`. It is raised before any master is read. A unit test, an integration test and the canary scan each show it is identical under two sets of masters, and the canary scan also looks for every figure of the acknowledged record in all the Engineer was sent.
+- **The acknowledgement cannot be stale.** It is compared with `inputs_revision` read under the estimate's `FOR UPDATE` lock, taken first by `transition`. Every input save, tree change, picture change and customer change bumps that revision under the same lock (`finishChange`, `estimate-inputs`, `image-service`, `setCustomer`). So no acknowledgement can pass a list the person did not see. The PostgreSQL race test covers both lock orders.
+- **One transaction, nothing written on refusal.** The 409 is thrown inside the one `TransactionRunner.run`, so the status move made by `transition` rolls back too. The audit entry is written in the same `tx`, after `store`, so a refused entry takes the calculation with it (tested on PostgreSQL).
+- **Immutable record untouched.** `calculations.warnings` is written only on insert. No update path was added.
+- **Shared wrapper unchanged for other routes.** `withRoute` keeps its order (origin check, then session, then role) before any body is read. The two new options are opt-in, and tests show nothing changes without them.
+
+The one Major is in the client. In the "list changed" case, focus falls out of the dialog and the new notice is not announced (SQR-01).
+
+| Severity | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 1 |
+| Minor | 4 |
+| Info | 6 |
+
+## Checks Run
+| Check | Method | Result |
+|-------|--------|--------|
+| Diff read | `git diff 5c89585...14805c1` (38 files, +2048/−82 at fb02beb; then `fb02beb..14805c1`, 6 files, +29/−22). Read in full: all of `src/**`, and the test titles and key assertions of every changed test | Read |
+| Callers and callees | `calculate-check.ts` (`validateForCalculate`, `numbersOf`, hidden → `0.00`), `estimate-service.ts` (`applyTransition`, `finishChange`, revision bumps), `audit-service.ts` (`record`: shape, label length, `findSecretPath`), `audit-secrets.ts`, `with-route.ts` (`run` order), `problem.ts` (`problemFromAppError` order), `notice.tsx` (`TONE_ROLE`), `button.tsx` (`loading` = disabled), `seed-config.ts` (H mandatory, no `visibleWhen`), `document-rules.ts` | Read |
+| Context | Jira AQP-318 (AC-1 to AC-9, Dev Context, Testing notes); PR body (Dev Record, decisions 1 to 8); architecture §4.3 "A zero quantity" table and options; earlier reviews AQP-317 and AQP-319 | Read |
+| Unit tests (local, head 14805c1) | Temporary detached worktree, `vitest run` on `tests/unit/estimate/quantity-warnings`, `warning-copy`, `calculate-service`, `calculate-route`, `calculate-client`, `http-with-route`, `audit-events`, `canary-scan-gate` | **8 files, 277 tests passed** |
+| Type-check (local) | `tsc --noEmit` in the same worktree | **Not usable.** The generated Prisma client in the main checkout belongs to another branch, so the errors were about Prisma models this PR does not touch. I rely on CI |
+| CI | fb02beb: 6 of 6 green (as briefed). 14805c1: **running at the time of review** (all 5 jobs pending) | The orchestrator must confirm green on 14805c1 before merge |
+| PostgreSQL integration, Playwright, canary scan | CI only (no Docker or browser locally; heavy tests run in CI per §9 item 5) | Green on fb02beb |
+| JS budget `/estimates/[code]` | Not re-measured. Lazy loading checked by reading: see the security scope table, row 6 | Correct; the budget itself is the solution-architect's plan (#418) |
+
+## AC conformance
+| AC | Implemented in | Tests | Result |
+|----|----------------|-------|--------|
+| AC-1 rule | `src/lib/estimate/quantity-warnings.ts` (`quantityWarnings(rows, document)`, H found by `systemRole: 'quantity'`, `validateNumberInput` normalises) | `quantity-warnings.test.ts` (CE-9 A to G; 0 / 0.00 / 0.01 / blank; re-lettered H; no H; move; `@ts-expect-error` RowOutputs); 100 % lines and branches | **Met, with a documented deviation**: the story names `validation.ts` and `quantityWarnings(rows)`. Decision 1 and A-1 explain the change (first-load bytes; the registry is needed). See SQR-10 |
+| AC-2 first press | `calculation-service.ts:391-394` `warningsToAcknowledge`, `CalculateAckRequiredError` (now in `src/lib/estimate/calculate-ack-required-error.ts`), `problem.ts:162` | unit service and route; `warn.test.ts` (nothing written; before any master; 422 first; customer 409 first) | Met |
+| AC-3 acknowledged | `submit` (store, then `audit.record` in `tx`), `calculation-repository.ts` `warnings` key by key, `audit-events.ts` `calculation.warning_acknowledged` (strict) | unit; `warn.test.ts` (text record, `created_by`, one entry, refused entry rolls back, failed store writes no entry) | Met |
+| AC-4 stale | Revision compared under the lock | unit (5/7/0 vs 6; same list but revision moved); `warn.test.ts` (0/2/4 vs 3; race in both lock orders) | Met on the server. Client wording: SCR-02 |
+| AC-5 ignored / 400 | `calculateBodySchema` (strict, `.optional()`), `withRoute` `optionalBody` + `badBodyIs400` | `http-with-route.test.ts`, `calculate-route.test.ts` (no body, empty, `{}`, 10 malformed shapes), `warn.test.ts` | Met |
+| AC-6 UX | `quantity-warning-dialog.tsx`, `warning-copy.ts`, `use-calculate.ts`, `calculate-bar.tsx` | `warning-copy.test.ts`, `calculate-client.test.ts`, `estimate-warning.spec.ts` | **Met for sighted users**. The list-changed state is not reachable by a screen reader: SQR-01 (Major) |
+| AC-7 NFR-002 | `calculateAckRequiredSchema` (strict), body built key by key | route unit (two master sets; no figure of the later record); canary scan: exact key sets, record figures scanned, two master sets | Met |
+| AC-8 CE-9 BL/BG | Engine unchanged | `warn.test.ts` seven trees acknowledged | Met (CI) |
+| AC-9 a11y | `estimate-warning.spec.ts` at 360/768/1366 | Keyboard, focus on "Go back", axe, Submitted | Met for the first press. The re-409 focus case is not tested (SQR-01) |
+
+## Findings
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-----------------|-------|--------|---------------|--------------------------|
+| SQR-01 | **Major** | `src/components/features/estimate-workspace/quantity-warning-dialog.tsx:78` and `:94`; `calculate-bar.tsx:52` | AC-6, AC-4 intent; NFR-016 to 018 (WCAG 2.2 SC 4.1.3, 2.4.3) | "Calculate anyway" is a `Button loading`, which is disabled while the request is in flight, so the browser drops focus to `<body>`. Radix FocusScope ignores a focus loss with no related target. On a stale 409 the same dialog stays mounted with the new rows, so nothing puts focus back. The new "The list changed… Check it again." notice is `tone="warn"`, which has no live role (`notice.tsx` `TONE_ROLE.warn = undefined`), so nothing announces it. | A screen-reader or keyboard user hears nothing after the press, and focus sits outside the dialog. Pressing "Calculate anyway" again acknowledges and submits a list they were never told about. The server keeps its guarantee (the acknowledgement is tied to the new revision), but "Check it again" does not reach these users. axe cannot see this. | In `calculate-bar.tsx`: `<QuantityWarningDialog key={warning.inputsRevision} …/>`, so a new list remounts the dialog and Radix puts focus on "Go back". In the dialog: `<Notice tone="warn" role="alert">`. Both are in the lazy chunk, so the first load gains no bytes. Tracked as **#419**. | E2E, the "list changed" case of `estimate-warning.spec.ts`: after the second 409, `expect(page.locator(':focus')).toHaveText('Go back')`, and the notice has `role="alert"`. |
+| SQR-02 | Minor | `src/components/features/estimate-workspace/use-calculate.ts:76` | AC-6 ("if the list changed") | `changed` is `acknowledged !== undefined`, so any 409 after "Calculate anyway" shows "The list changed…". A change that keeps the same rows still moves the revision (the service test "a change that leaves the list as it was" proves this case exists), and the dialog then claims the list changed when it did not. | The words are misleading. Harmless to data. | Pass the previous `warning` into `warningFrom` and set `changed` only when the `nodeId` list differs, or reword it to "Something changed after you pressed Calculate. Check the list again." (UX to choose). | Unit (`calculate-client`): a second 409 with the same rows gives `changed: false`. |
+| SQR-03 | Minor | `quantity-warning-dialog.tsx:73` with `use-calculate.ts:64` | WCAG 2.4.3; the component's own docblock ("every way out puts focus somewhere deliberate") | When "Calculate anyway" ends in `failed`, `refused` or `blocked`, the hook's `setWarning(null)` unmounts the dialog, and `onCloseAutoFocus` is prevented. Only "Go back" and the row links call `focusCalculate`, so focus lands on `<body>`. The danger notice is `role="alert"` and is heard, but keyboard focus is lost. | A keyboard user has to tab from the top of the page. | In `onCloseAutoFocus`, prevent the default and then focus Calculate, unless the estimate was just submitted (the workspace already focuses the Submitted notice). Or have the hook focus Calculate on a non-ok outcome after an acknowledgement. | E2E: route-abort the acknowledged POST; expect focus on `#calculate-button`. |
+| SQR-04 | Minor | `quantity-warning-dialog.tsx:84` (`goTo`) | AC-6 | The guard `busy` blocks Escape and "Go back", but not the row links. A click on a row while "Calculate anyway" is in flight closes the dialog and opens the field, but the request was already sent and still submits the estimate. | The person thinks they went back to fix the row, and the estimate is submitted under them. | While `busy`, make the links inert: `aria-disabled` and an early return in `goTo`, or render the list with `inert` while busy. | Unit or E2E: hold the acknowledged POST, click a row link, and expect the dialog to stay open. |
+| SQR-05 | Minor | `src/server/services/calculation-service.ts:393` (reads `node.inputs`, which `calculate-check.ts` `numbersOf` builds with hidden numbers set to `0.00`); `quantity-warnings.ts:64` | AC-1, FR-104 | The rule reads the numbers after the hidden-field substitution. If an Admin's registry ever puts a `visibleWhen` on H, a hidden H becomes `0.00`: it warns, and the row link points to a control that is not rendered. If H stops being `mandatory`, a blank H is absent, so there is no warning, yet the engine reads it as 0 and the row costs 0 silently. The seed (H mandatory, no `visibleWhen`) is safe today. | Latent and config-dependent. FR-104's promise ("a zero count is a decision") can fail on a changed registry. | Either a document rule that the `quantity` system field is `mandatory` and has no `visibleWhen` (`document-rules.ts` `systemRoleIssues`), or skip hidden H in `quantityWarnings`. The document rule is simpler, and it also protects 06.10 and 07.06. | Unit (`document-rules`): a registry whose quantity field is not mandatory, or has a `visibleWhen`, is refused. |
+| SQR-06 | Info | `calculation-service.ts:391-394` | Maintainability | `quantityId === undefined ? [] : quantityWarnings(...)` and the `quantityId !== undefined &&` in the throw repeat a check `quantityWarnings` already makes (it returns `[]` with no H). The function is right; it just reads like two rules. | — | Keep `quantityFieldIdOf` only to pass the field ID to the error; drop the duplicate ternary. | n/a |
+| SQR-07 | Info | `tests/unit/estimate/quantity-warnings.test.ts`, `tests/integration/calc/warn.test.ts` | Test adequacy (brief item 7) | Covered: a 0 in a nested part (CE-9 1.1.1), a top-level 0, a move, recalculating after a change (unit, integration, E2E "the next press goes through"). Not covered: a large list (for example 50 rows of 0). The 409, the audit `after` and `describe` grow with the row count. Nothing caps them, which is fine, but no test pins it. | Low risk. | Add one unit or route case with many rows (order kept, one audit entry, body still passes the strict schema). | — |
+| SQR-08 | Info | `src/server/http/with-route.ts:161` | Robustness (pre-existing) | `optionalBody` reads `request.text()` with no size cap, the same as the existing `request.json()` path. It is reached only after the origin check, session and role. | Same exposure as every JSON route today. | Hardening: one JSON body cap in `withRoute` for all routes. | — |
+| SQR-09 | Info | `src/lib/estimate/calculate-ack-required-error.ts` (commit 14805c1) | JS budget, maintainability | A pure move: same class, same base (`ConflictError`), and the same place in `problemFromAppError` (after `CalculateBlockedError`, before the generic branch). `errors.ts` no longer imports `warning-copy`. The lazy-loading layout is sound (see the security scope table, row 6). It is not fragile, except that any byte added to a first-load module now fails the budget. That is #418's to solve. | — | — | — |
+| SQR-10 | Info | Story AQP-318 AC-1 / Dev Context; architecture §6 | Traceability | The story says `src/lib/estimate/validation.ts` and `quantityWarnings(rows)`. The code has its own file and `(rows, document)`, as Dev Record decision 1 and A-1 explain. Architecture §6 does not yet say a malformed `acknowledge` is 400 (decision 3). | Docs drift. | Scrum-master: note the deviation on the story. Solution-architect: add the 400 to §6 in the next records PR (the PR names this follow-up). | — |
+| SQR-11 | Info (praise) | Whole server path | NFR-002, ADR-007, architecture §4.3 | The 409 is decided before any master read. Both bodies are rebuilt key by key. The record copies the four keys of each warning, whatever the caller passes. The audit event has a strict shape, text only, `before: null`. The audit runs in the same transaction, after `store`, with a test that a refusal rolls everything back. The race is tested in both lock orders on PostgreSQL. The canary scan checks the exact key sets and scans the record's own figures. This is thorough work. | — | — | — |
+
+## Security scope verdicts (brief items 1 to 7)
+| # | Point | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | Calculate answer contract; new fields carry no figure; canary covers it | **Yes** | Success: `calculateAnswerSchema` (two literals), output-validated by `withRoute`. 409: `problem.ts:162-166`, key by key; `message` is `warningLine(slNo, label)`, so its only number is the typed 0. `calculateAckRequiredSchema` is strict. Route test: same body under two master sets, and no figure of the later record. Canary (`canary-scan.spec.ts`, two journeys): exact `ACK_BODY_KEYS` and `ACK_WARNING_KEYS`, `figuresOfTheRecord` scanned over everything after the press, and the second master set gives the same body. Only an Engineer reaches the route (manifest `['ENGINEER']`; Lead and Admin get the fixed 403 before the body is read, which is tested) |
+| 2 | A 0 cannot be stored without the acknowledgement; confirm path CSRF- and role-checked server-side | **Yes** | `warningsToAcknowledge` throws unless `acknowledge.inputsRevision === estimate.inputsRevision` read under `FOR UPDATE`. A flag (`true`), a string, a negative or a fraction is 400. `withRoute.run`: `isSameOriginRequest` for POST, then `requireUser`, then the must-change-password guard, then `allowsRole`, and only then `bodyOf`. Ownership and status come from `transition` (404 for another Engineer, 409 when not a draft). The only other writer of `warnings` is `storeCalculation`, which has no caller outside the service |
+| 3 | No change to an immutable cost record | **Yes** | `warnings` only on `insertCalculation`; no update or delete added; ADR-007 trigger untouched; no migration |
+| 4 | Audit event shape; nothing secret or personal | **Yes** | `after: {warnings:[{code:'QTY_ZERO', nodeId, slNo, label}]}` strict, `before: null`; actor = `user.id` and `user.name` (the standard actor label); object = estimate ID with its task code (from the same lock query). `findSecretPath` still runs. A label is a part name, which is not personal data |
+| 5 | `errors.ts` / `problem.ts` / `with-route.ts` do not leak internals or change other routes | **Yes** | The new error is a 409 with a fixed title; no stack or message from below. `badBodyIs400` gives the fixed `MALFORMED_REQUEST` body (names nothing, echoes nothing). Both options are opt-in; `http-with-route.test.ts` shows an empty body is still 400 and a wrong shape is still 422 without them. Commit 14805c1 changes no behaviour |
+| 6 | Lazy dialog accessible and loads when needed | **Mostly.** SQR-01 (Major), SQR-03 | The dialog is a static import of `calculate-bar.tsx`, which is itself lazy (`Bar !== null`), so the dialog is in the bar's chunk and always present once the button is. `calculate-client` (with `warningFrom`, `press`) is a lazy `import()` on the first press. `warning-copy.ts` has no imports. `quantity-warnings.ts` (registry, validation) is imported only by the server. The type import in `use-calculate.ts` is erased. Radix `AlertDialog`: `role="alertdialog"`, labelled by the title, described by the description, initial focus on Cancel ("Go back"), Escape guarded while busy. Gaps: SQR-01 (re-409 focus and announcement), SQR-03 (focus after a failed acknowledgement) |
+| 7 | Test quality: ACs mapped, edge cases | **Good** | Every AC has unit tests plus integration or E2E (table above). Nested 0, top-level 0, 0.01, blank-before-0, customer-before-0, stale revision (several values), race in both orders, refused audit, failed store, each press standing alone, and 0 to 1 warnings across the seven trees. Gaps: many rows (SQR-07); the re-409 focus (SQR-01) |
+
+## Issues for other roles
+- **solution-architect:** architecture §6 Calculate should name 400 for a malformed `acknowledge` (SQR-10). JS headroom is #418.
+- **scrum-master / product-owner:** record on AQP-318 that AC-1's file and signature deviate as documented (SQR-10). Consider a registry rule for the `quantity` field (SQR-05), possibly in the fields-and-formulas story (AQP-337).
+- **orchestrator:** CI on 14805c1 was pending when this review was written. Confirm 6 of 6 green before merge. On merge, decide whether #419 is closed by a fix in this PR or kept for the hardening window.
+
+## Hand-off
+- Status: COMPLETE
+- Verdict: REQUEST CHANGES by the role rule (1 Major). No Blocker or Critical, so it is not merge-blocking under CLAUDE.md §9 item 2
+- Counts: Blocker 0 · Critical 0 · Major 1 · Minor 4 · Info 6
+- Artefacts written/updated: `docs/06-reviews/AQP-318/combined.md`
+- Jira / GitHub updates: PR #416 review (COMMENT, inline SQR-01 to SQR-06), label `review:quality-changes-requested`; issue #419 (`tech-debt`, `ai-delivery`) for SQR-01; Jira AQP-318 hand-off comment
+- Open questions: none
+- Risks raised: none new (JS headroom is #418)
+- Recommended next agent: developer — fix SQR-01 (two lines, lazy chunk), and optionally SQR-02 to SQR-04; then orchestrator merges once CI on the final head is green
+
+## Addendum — re-review of c25aa1b (2026-11-15)
+Scope: `git diff 14805c1 c25aa1b` only (`calculate-bar.tsx` +1, `quantity-warning-dialog.tsx` +30/−6, `tests/e2e/estimate-warning.spec.ts` +40). CI on c25aa1b: running at the time of this addendum.
+
+| Finding | Result | Evidence |
+|---------|--------|----------|
+| SQR-01 (Major) | **Fixed** | `key={warning.inputsRevision}` on the dialog (`calculate-bar.tsx:53`), so a new list mounts a fresh dialog and Radix focuses "Go back". `<Notice tone="warn" role="alert">`. E2E list-changed case asserts the alert text and that "Go back" has focus. Note: when the dialog is re-keyed, the old instance's deferred `onCloseAutoFocus` calls `focusCalculate()` while the new dialog is open, and the new dialog's focus trap returns focus to "Go back". The E2E assertion covers the end state. Not a finding. #419 can be closed on merge |
+| SQR-02 (Minor) | Not fixed | Out of the commit's scope; hardening window |
+| SQR-03 (Minor) | **Fixed** | `onCloseAutoFocus` → `focusCalculate()` unless a row link was followed (`toField` ref). On success the button is disabled and `focusCalculate` returns early for a disabled button, so the Submitted notice keeps focus. New E2E test: aborted acknowledgement leaves focus on Calculate |
+| SQR-04 (Minor) | **Fixed** | `goTo` returns early while `busy`, and links carry `aria-disabled`. New E2E test: a held acknowledgement, then a row click, and the dialog stays open, then Submitted |
+| SQR-05 (Minor) | Not fixed | Config-dependent, the seed is safe; hardening window |
+| SQR-06 to 11 (Info) | Unchanged | — |
+
+No new findings. **Updated counts: Blocker 0 · Critical 0 · Major 0 · Minor 2 (SQR-02, SQR-05) · Info 6. Verdict: APPROVE WITH COMMENTS**, subject to CI green on c25aa1b.

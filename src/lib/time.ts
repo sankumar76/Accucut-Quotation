@@ -87,6 +87,16 @@ export function formatIst(date: Date): string {
   return `${day} ${month} ${year}, ${hour}:${minute} ${IST_LABEL}`;
 }
 
+/**
+ * The time of day alone, as a notice writes it: "10:42 IST" (STORY-05.08 AC-1, "Draft saved at 10:42 IST."). Built from the same parts as `formatIst`, so the two cannot disagree. An invalid
+ * date is a mistake in the code and throws.
+ */
+export function formatIstTime(date: Date): string {
+  if (Number.isNaN(date.getTime())) throw new RangeError('formatIstTime needs a valid date.');
+  const parts = IST_PARTS.formatToParts(date);
+  return `${partOf(parts, 'hour')}:${partOf(parts, 'minute')} ${IST_LABEL}`;
+}
+
 const IST_WEEKDAY = new Intl.DateTimeFormat('en-US', { timeZone: IST_TIME_ZONE, weekday: 'long' });
 
 /**

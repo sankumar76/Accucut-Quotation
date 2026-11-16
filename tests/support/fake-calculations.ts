@@ -56,6 +56,11 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       const found = calculations.find((calculation) => calculation.id === calculationId);
       return Promise.resolve(found === undefined ? null : { productValues: found.productValues, rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: row.outputs })) });
     },
+    findRowWorking: (calculationId: string, nodeId: string) => {
+      const found = calculations.find((calculation) => calculation.id === calculationId);
+      const row = found?.rows.find((candidate) => candidate.nodeId === nodeId);
+      return Promise.resolve(found === undefined || row === undefined ? null : { masterSnapshot: found.masterSnapshot, inputs: row.inputs, outputs: row.outputs });
+    },
   };
 
   const estimates: EstimateRepository = {

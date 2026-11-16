@@ -125,6 +125,16 @@ export interface ReviewFigures {
   readonly rows: ReadonlyArray<{ readonly nodeId: string; readonly outputs: StoredValues }>;
 }
 
+/**
+ * What the cost details of one row are worked out from (STORY-06.03): the row's own stored inputs and outputs, and the master snapshot of the calculation (the rates, the materials and the exchange rates it
+ * used, with their names then). Nothing of another row, and neither the customer's name nor the product totals are selected.
+ */
+export interface RowWorkingRecord {
+  readonly masterSnapshot: MasterSnapshot;
+  readonly inputs: StoredValues;
+  readonly outputs: StoredValues;
+}
+
 export interface CalculationRepository {
   /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` is the acknowledged list, or the default `[]` when there is none. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
@@ -137,6 +147,11 @@ export interface CalculationRepository {
    * inputs are read). Null for an unknown ID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
    */
   findReviewFigures(calculationId: string): Promise<ReviewFigures | null>;
+  /**
+   * The stored working of one row of a calculation (STORY-06.03): its inputs and outputs, and the master snapshot, selected column by column. Null for an unknown calculation, a row it does not hold,
+   * or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   */
+  findRowWorking(calculationId: string, nodeId: string): Promise<RowWorkingRecord | null>;
 }
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -234,6 +249,21 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         return {
           productValues: productValuesSchema.parse(found.productValues),
           rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
+        };
+      }),
+
+    findRowWorking: (calculationId, nodeId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId) || !isUuid(nodeId)) return null;
+        const found = await db.calculationRow.findUnique({
+          where: { calculationId_nodeId: { calculationId, nodeId } },
+          select: { inputs: true, outputs: true, calculation: { select: { masterSnapshot: true } } },
+        });
+        if (found === null) return null;
+        return {
+          masterSnapshot: masterSnapshotSchema.parse(found.calculation.masterSnapshot),
+          inputs: storedValuesSchema.parse(found.inputs),
+          outputs: storedValuesSchema.parse(found.outputs),
         };
       }),
   };

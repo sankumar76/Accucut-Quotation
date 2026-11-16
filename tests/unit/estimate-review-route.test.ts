@@ -26,7 +26,7 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getCostDetailsService: () => shared.costDetailsService };
 });
 
 const route = await import('@/app/api/v1/estimates/[id]/costs/route');

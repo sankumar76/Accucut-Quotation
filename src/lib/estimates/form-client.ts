@@ -1,4 +1,5 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
+import type { ShownRule } from '../fields/visible-when';
 
 import type { Completeness } from './tree-client';
 
@@ -14,6 +15,10 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
+  /** Treatment / Color (STORY-05.06): a listed treatment, or "Other" with words of up to `maxLength` characters. */
+  | { readonly type: 'treatment'; readonly maxLength: number }
+  /** A surface treatment (STORY-05.06): chosen or not. The form draws the flags of a section as one multi-select. */
+  | { readonly type: 'flag' }
   | { readonly type: 'derived'; readonly from: string | null }
   /** A picture (Part Model, STORY-05.07): added, replaced and removed by its own routes, never typed or saved as a value. */
   | { readonly type: 'picture' };
@@ -29,14 +34,9 @@ export interface FormField {
   readonly defaultValue: string | null;
   readonly required: boolean;
   readonly editable: boolean;
+  /** The field this one watches and the values that hide it (Fasteners Qty and Cost, STORY-05.05), or null for a field that always shows. Read by `isShownByRule`. */
+  readonly visibleWhen: ShownRule | null;
   readonly rule: FormRule;
-}
-
-/** A field a later story builds: shown as a labelled placeholder, never typed into or saved. */
-export interface PlaceholderField {
-  readonly id: string;
-  readonly letter: string;
-  readonly label: string;
 }
 
 export interface FormSection {
@@ -46,7 +46,6 @@ export interface FormSection {
   readonly shortName: string;
   readonly columnRange: string;
   readonly fields: ReadonlyArray<FormField>;
-  readonly reserved: ReadonlyArray<PlaceholderField>;
 }
 
 export interface FormView {
@@ -91,6 +90,10 @@ function toRule(value: unknown): FormRule | null {
       return typeof value['maxLength'] === 'number' && typeof value['multiline'] === 'boolean' ? { type: 'text', maxLength: value['maxLength'], multiline: value['multiline'] } : null;
     case 'select':
       return value['source'] === 'materials' ? { type: 'select', source: 'materials' } : null;
+    case 'treatment':
+      return typeof value['maxLength'] === 'number' ? { type: 'treatment', maxLength: value['maxLength'] } : null;
+    case 'flag':
+      return { type: 'flag' };
     case 'derived': {
       const from = value['from'];
       return from === null || isNonEmptyText(from) ? { type: 'derived', from } : null;
@@ -102,29 +105,30 @@ function toRule(value: unknown): FormRule | null {
   }
 }
 
+/** The rule that hides a field, or `null` for none; `undefined` when the answer's shape is wrong. */
+function toVisibleWhen(value: unknown): ShownRule | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value) || !isNonEmptyText(value['fieldId']) || !Array.isArray(value['values']) || !value['values'].every(isText)) return undefined;
+  return { fieldId: value['fieldId'], values: value['values'] };
+}
+
 function toField(value: unknown): FormField | null {
   if (!isRecord(value)) return null;
   const { id, letter, label, kind, unit, hint, defaultValue, required, editable } = value;
   const rule = toRule(value['rule']);
-  if (!isNonEmptyText(id) || !isNonEmptyText(letter) || !isNonEmptyText(label) || (kind !== 'input' && kind !== 'auto') || rule === null) return null;
+  const visibleWhen = toVisibleWhen(value['visibleWhen']);
+  if (!isNonEmptyText(id) || !isNonEmptyText(letter) || !isNonEmptyText(label) || (kind !== 'input' && kind !== 'auto') || rule === null || visibleWhen === undefined) return null;
   if ((unit !== null && !isText(unit)) || (hint !== null && !isText(hint)) || (defaultValue !== null && !isText(defaultValue))) return null;
   if (typeof required !== 'boolean' || typeof editable !== 'boolean') return null;
-  return { id, letter, label, kind, unit, hint, defaultValue, required, editable, rule };
-}
-
-function toPlaceholder(value: unknown): PlaceholderField | null {
-  if (!isRecord(value)) return null;
-  const { id, letter, label } = value;
-  return isNonEmptyText(id) && isNonEmptyText(letter) && isNonEmptyText(label) ? { id, letter, label } : null;
+  return { id, letter, label, kind, unit, hint, defaultValue, required, editable, visibleWhen, rule };
 }
 
 function toSection(value: unknown): FormSection | null {
-  if (!isRecord(value) || !Array.isArray(value['fields']) || !Array.isArray(value['reserved'])) return null;
+  if (!isRecord(value) || !Array.isArray(value['fields'])) return null;
   const { id, number, name, shortName, columnRange } = value;
   const fields = value['fields'].map(toField);
-  const reserved = value['reserved'].map(toPlaceholder);
   if (!isNonEmptyText(id) || typeof number !== 'number' || !isNonEmptyText(name) || !isNonEmptyText(shortName) || !isNonEmptyText(columnRange)) return null;
-  return fields.every((field) => field !== null) && reserved.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields, reserved } : null;
+  return fields.every((field) => field !== null) ? { id, number, name, shortName, columnRange, fields } : null;
 }
 
 function toForm(body: unknown): FormView | null {

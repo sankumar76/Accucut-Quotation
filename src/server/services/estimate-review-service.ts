@@ -1,6 +1,6 @@
 import { assertNever } from '../../lib/assert-never';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
-import { PART_NAME_KEYS } from '../../lib/estimate/calculate-check';
+import { partNameOf, typedText } from '../../lib/estimate/part-name';
 import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
 import { buildTree } from '../../lib/estimate/tree';
 import { fieldLetter, findFieldByKey, findSystemField } from '../../lib/fields/registry';
@@ -88,21 +88,6 @@ const lettersOf = (columns: Columns): CostsView['letters'] => ({
   approvedPrice: fieldLetter(columns.approvedPrice),
 });
 
-/** The typed text of a part's field, or `null` when none was typed. */
-const typedText = (inputs: NodeRecord['inputs'], field: FieldDefinition | undefined): string | null => {
-  const value = field === undefined ? undefined : inputs[field.id];
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
-};
-
-/** The words of a part's name: Description, else Part No., else empty. */
-function nameOf(document: ConfigDocument, inputs: NodeRecord['inputs']): string {
-  for (const key of PART_NAME_KEYS) {
-    const name = typedText(inputs, findFieldByKey(document, key));
-    if (name !== null) return name;
-  }
-  return '';
-}
-
 /** A stored figure as decimal text, or `null` when the row has none (a field with no figure, or a value that is no decimal). */
 const figureOf = (stored: StoredValues | undefined, field: FieldDefinition): string | null => {
   const value = stored?.[field.id];
@@ -118,7 +103,7 @@ function nodesOf(records: ReadonlyArray<NodeRecord>, document: ConfigDocument, c
       id: node.id,
       parentId: node.parentId,
       slNo,
-      name: nameOf(document, node.inputs),
+      name: partNameOf(document, node.inputs),
       count: count !== null && DECIMAL_TEXT.test(count) ? count : null,
       // A row's own figures and nothing summed over the rows below it (architecture section 4.3).
       figures:

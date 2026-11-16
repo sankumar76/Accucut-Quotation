@@ -158,28 +158,29 @@ describe('AC-3, AC-4: Fasteners and Remarks', () => {
 describe('AC-2, AC-7: what is read back', () => {
   it('the typed Tool, Machining, Plating and Fasteners Cost come back as typed, for the Engineer and for a Lead', async () => {
     const nodeId = await setUpPart();
-    const typed = { [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
+    // Fasteners Cost shows, and so is stored as typed, only while Fasteners is not "None" (STORY-05.05): the part has fasteners here.
+    const typed = { [FASTENERS]: 'M6 bolt', [field('AP')]: '1234.50', [field('AU')]: '678.25', [field('BM')]: '45678.75', [field('U')]: '3.50' };
     await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: typed });
     for (const viewer of [arjun, lead]) expect((await service.getNode(viewer, estimateId, nodeId)).inputs).toEqual(typed);
   });
 
-  it('a part that holds a canary price under Material Rate / Kg, a value of a later story\'s field and an unknown key is read back with the typed values only, and a save keeps all three where they were (reviews SQR-01, SQR-05)', async () => {
+  it('a part that holds a canary price under Material Rate / Kg, a value of a calculated field (on no form) and an unknown key is read back with the typed values only, and a save keeps all three where they were (reviews SQR-01, SQR-05)', async () => {
     const nodeId = await setUpPart();
     const planted = canaryPartInputs(seedConfig);
-    await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify({ ...planted, [field('Z')]: '1' })]);
+    await db.owner.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [nodeId, JSON.stringify({ ...planted, [field('M')]: '1' })]);
     for (const viewer of [arjun, lead]) {
       const part = await service.getNode(viewer, estimateId, nodeId);
       expect(JSON.stringify(part)).not.toContain(CANARY_PLANTED_RATE);
       expect(Object.keys(part.inputs)).not.toContain(canaryRateFieldId(seedConfig));
       expect(Object.keys(part.inputs)).not.toContain(CANARY_UNKNOWN_KEY);
-      expect(Object.keys(part.inputs)).not.toContain(field('Z'));
+      expect(Object.keys(part.inputs)).not.toContain(field('M'));
     }
     const saved = await service.saveInputs(arjun, estimateId, { nodeId, revision: 1, values: { [field('Y')]: '9' } });
     expect(JSON.stringify(saved)).not.toContain(CANARY_PLANTED_RATE);
     const held = (await row(nodeId)).inputs;
     expect(held[canaryRateFieldId(seedConfig)]).toBe(CANARY_PLANTED_RATE);
     expect(held[CANARY_UNKNOWN_KEY]).toBe('x');
-    expect(held[field('Z')]).toBe('1');
+    expect(held[field('M')]).toBe('1');
     expect(held[field('Y')]).toBe('9.00');
   });
 });
