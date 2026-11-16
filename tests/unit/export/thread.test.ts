@@ -8,7 +8,8 @@ import { bundleExportWorker, EXPORT_WORKER_OUTPUT } from '../../../scripts/lib/e
 import { headerOnlyModel, SHEET_NAME } from '@/server/export/export-columns';
 import type { ExportModel } from '@/server/export/export-model';
 import { runExportThread, type ThreadMessage } from '@/server/export/thread-protocol';
-import { createThreadBuilder, ExportThreadError, exportThreadFile } from '@/server/export/thread-runner';
+import { ExportBusyError } from '@/lib/errors';
+import { createThreadBuilder, ExportThreadError, exportThreadFile, type ExportThreadFailure } from '@/server/export/thread-runner';
 
 import { seedConfig } from '../../support/seed-config';
 import { loadWorkbook } from '../../support/xlsx-parts';
@@ -87,6 +88,38 @@ describe('the thread, run for real from its bundle', () => {
     const outcome = await createThreadBuilder({ entry })(model).catch((error: unknown) => error);
     expect(outcome).toMatchObject({ name: 'ExportThreadError', reason });
     expect((outcome as Error).message).not.toContain('secret');
+  });
+
+  it('refuses a build beyond the number of threads allowed, with ExportBusyError and no thread, and takes builds again once one has ended (QS-01)', async () => {
+    const entry = join(scratch, 'hang-busy.mjs');
+    writeFileSync(entry, 'setInterval(() => {}, 1000);');
+    const build = createThreadBuilder({ entry, timeoutMs: 400, maxThreads: 1 });
+    const first = build(model).catch((error: unknown) => error);
+    const second = await build(model).catch((error: unknown) => error);
+    expect(second).toBeInstanceOf(ExportBusyError);
+    expect(second).toMatchObject({ httpStatus: 503, code: 'EXPORT_BUSY', retryAfterSeconds: 10 });
+    expect(await first).toMatchObject({ reason: 'timeout' });
+    // The first has ended and given its place back.
+    expect(await build(model).catch((error: unknown) => error)).toMatchObject({ reason: 'timeout' });
+  });
+
+  it('ends a build that outgrows its heap as that thread\'s failure alone, and the test process goes on (QS-01)', async () => {
+    const entry = join(scratch, 'grow.mjs');
+    writeFileSync(entry, 'const kept = []; for (;;) kept.push(new Array(1_000_000).fill(1));');
+    const outcome = await createThreadBuilder({ entry, heapLimitMb: 64 })(model).catch((error: unknown) => error);
+    expect(outcome).toMatchObject({ name: 'ExportThreadError', reason: 'failed', code: 'EXPORT_THREAD_FAILED', httpStatus: 500 });
+    // The process is alive and builds the next file.
+    expect((await createThreadBuilder({ entry: bundle })(model)).byteLength).toBeGreaterThan(1_000);
+  }, 60_000);
+
+  it('gives the log a code for each kind of failure, so a missing bundle, a crash and a timeout can be told apart (QS-04)', () => {
+    const reasons: ExportThreadFailure[] = ['missing', 'failed', 'exited', 'timeout'];
+    expect(reasons.map((reason) => new ExportThreadError(reason).code)).toEqual([
+      'EXPORT_THREAD_MISSING',
+      'EXPORT_THREAD_FAILED',
+      'EXPORT_THREAD_EXITED',
+      'EXPORT_THREAD_TIMEOUT',
+    ]);
   });
 
   it('stops a thread that never answers, after the time allowed', async () => {

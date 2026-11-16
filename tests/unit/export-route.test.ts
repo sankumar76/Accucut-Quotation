@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { ExportBusyError } from '@/lib/errors';
 import { XLSX_MIME } from '@/server/export/export-model';
+import { ExportThreadError } from '@/server/export/thread-runner';
 import { exportSummarySchema } from '@/server/views/schemas/export';
 
 import { forbiddenStrings } from '../support/canary-masters';
@@ -96,6 +98,24 @@ describe('AC-2, AC-4: the file', () => {
 
   it('is a read: each route exports GET and no other method', () => {
     for (const route of [fileRoute, summaryRoute]) expect(Object.keys(route).filter((name) => /^(GET|HEAD|POST|PUT|PATCH|DELETE)$/.test(name))).toEqual(['GET']);
+  });
+
+  it('a build refused because too many are running is 503 EXPORT_BUSY with fixed words and Retry-After, and no file (QS-01)', async () => {
+    vi.spyOn(harness.exportService, 'getFile').mockRejectedValueOnce(new ExportBusyError());
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('10');
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(record.parse(await response.json())).toMatchObject({ status: 503, code: 'EXPORT_BUSY', title: 'Other files are being built right now. Try again in a moment.' });
+  });
+
+  it('a thread that failed is a 500 with the fixed words of every fault: its code tells the log which kind, and no message or setting is in the body (QS-04)', async () => {
+    vi.spyOn(harness.exportService, 'getFile').mockRejectedValueOnce(new ExportThreadError('timeout'));
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(500);
+    const { requestId, ...fixed } = record.parse(await response.json());
+    expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
+    expect(fixed).toEqual({ type: 'about:blank', title: 'Something went wrong on our side.', status: 500, code: 'EXPORT_THREAD_TIMEOUT' });
   });
 
   it('an estimate that does not exist and an ID that is no UUID are the same 404, with no file', async () => {

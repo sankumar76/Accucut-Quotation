@@ -31,7 +31,8 @@ export function bundleExportWorker(root: string = process.cwd(), outFile: string
       format: 'esm',
       target: 'node22',
       banner: { js: BANNER },
-      logLevel: 'warning',
+      // Silent: esbuild's messages are in the error thrown below (its first line), so a failure says why once, in the log of the caller, and not a second time on the error output.
+      logLevel: 'silent',
     });
   } catch (error) {
     // The first line of esbuild's own message (a path or a missing file: never a value of the application) says why, in a log that does not show the error output of a test.

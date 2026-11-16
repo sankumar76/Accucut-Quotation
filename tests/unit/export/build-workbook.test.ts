@@ -128,6 +128,30 @@ describe('text is only ever text (AC-4; GitHub #394)', () => {
     for (const value of ['=1+1', '+1+1', '-1+1', '@1+1']) expect(shared).toContain(value);
   });
 
+  // Review QS-05: Excel and its imports skip a leading tab, carriage return or line feed before a formula character, so these are the same attack as the four above.
+  const LEADING_SPACE = ['\t', '\r', '\n'] as const;
+  const spaced = LEADING_SPACE.flatMap((space) => FORMULA_STARTS.map((start) => `${space}${start}1+1`));
+  const spacedModel: ExportModel = { sheetName: SHEET_NAME, columns: smallColumns, rows: spaced.map((value, index) => ({ cells: { A: String(index + 1), B: value } })) };
+
+  it.each(LEADING_SPACE)('a value that starts with a %j and then a formula character is stored as a string cell with exactly the typed text, and is no formula in the XML', async (space) => {
+    const bytes = await buildWorkbook(spacedModel);
+    const sheet = await read(bytes);
+    const own = spaced.map((value, index) => ({ value, row: index + 2 })).filter((entry) => entry.value.startsWith(space));
+    expect(own).toHaveLength(FORMULA_STARTS.length);
+    for (const { value, row } of own) {
+      const cell = sheet.getCell(`B${row}`);
+      expect(cell.type).toBe(ExcelJS.ValueType.String);
+      // An XML reader folds a raw carriage return into a line feed, as Excel does: the cell is still the same string of text, with a line break before the character.
+      expect(cell.value).toBe(value.replace('\r', '\n'));
+      expect(cell.formula).toBeUndefined();
+    }
+    const sheetXml = readXlsxParts(bytes).get('xl/worksheets/sheet1.xml') ?? '';
+    expect(sheetXml).not.toMatch(/<f[ >/]/);
+    const column = [...sheetXml.matchAll(/<c r="B(\d+)"([^>]*)>/g)].filter((match) => Number(match[1]) >= 2);
+    expect(column).toHaveLength(spaced.length);
+    for (const match of column) expect(match[2]).toMatch(/t="s"/);
+  });
+
   it('writes the registry\'s own header the same way, so a label that starts with a formula character is text too', async () => {
     const columns: ExportColumn[] = [{ letter: 'A', header: '=HYPERLINK("http://example.invalid")', width: 10, numFmt: '@' }];
     const bytes = await buildWorkbook({ sheetName: SHEET_NAME, columns, rows: [] });

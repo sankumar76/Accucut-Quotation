@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 
+import { AppError, ExportBusyError } from '../../lib/errors';
+
 import type { ExportModel } from './export-model';
 import type { ThreadMessage } from './thread-protocol';
 
@@ -13,17 +15,22 @@ import type { ThreadMessage } from './thread-protocol';
  * under the folder the server runs in. A missing file is a mistake in the install, not something to work around: the build fails with a plain error (a 500 with fixed words, logged), and the file is
  * **never** built on the main thread instead.
  *
+ * **Bounded** (review QS-01): at most `maxThreads` builds run at once (the next is refused 503 `EXPORT_BUSY` with `Retry-After`, never queued), and each thread has a ceiling on its heap
+ * (`resourceLimits`), so a build that outgrows it ends only its own thread and the portal goes on. The counter belongs to the builder; the composition makes one, so it is one for the process.
+ *
  * What passes to the thread is the plain `ExportModel` (structured clone). What comes back is the file's bytes, or the kind of a failure and nothing else (`thread-protocol.ts`).
  */
 
 /** The file a model is built into: the thread in production, the build function itself in a test. */
 export type BuildFile = (model: ExportModel) => Promise<Uint8Array<ArrayBuffer>>;
 
-/** A thread that could not give a file: the kind of failure is the only thing kept, never a message that could hold what a person typed. */
-export class ExportThreadError extends Error {
-  constructor(readonly reason: 'missing' | 'failed' | 'exited' | 'timeout') {
-    super(`The export thread did not give a file (${reason}).`);
-    this.name = 'ExportThreadError';
+/** Why a thread did not give a file. It is the code of the error too, so the log tells a missing bundle, a crash and a timeout apart (the body of the answer says none of it). */
+export type ExportThreadFailure = 'missing' | 'failed' | 'exited' | 'timeout';
+
+/** A thread that could not give a file: a 500 with fixed words, and a code of `EXPORT_THREAD_<REASON>` for the log. Only the kind of failure is kept, never a message that could hold typed text. */
+export class ExportThreadError extends AppError {
+  constructor(readonly reason: ExportThreadFailure) {
+    super(`EXPORT_THREAD_${reason.toUpperCase()}`, 500, `The export thread did not give a file (${reason}).`);
   }
 }
 
@@ -34,25 +41,38 @@ export function exportThreadFile(folder: string): string {
 
 /** A build that takes longer than the proxy's read timeout (architecture section 4.6: at least 120 s) has nobody left to receive the file. */
 const DEFAULT_TIMEOUT_MS = 120_000;
+/** Builds at once. Each holds a workbook in memory: measured +405 MB for ten header-only builds together and +1,037 MB for four of 2,000 rows (review QS-01). */
+const DEFAULT_MAX_THREADS = 2;
+/** The heap a thread may grow to before it is ended (Node's default for a thread is the process's). STORY-07.02 sets it again with pictures in the file. */
+const DEFAULT_HEAP_LIMIT_MB = 512;
 
 export interface ThreadBuilderOptions {
   /** The bundle to run. */
   readonly entry: string;
   readonly timeoutMs?: number;
+  readonly maxThreads?: number;
+  readonly heapLimitMb?: number;
 }
 
-export function createThreadBuilder({ entry, timeoutMs = DEFAULT_TIMEOUT_MS }: ThreadBuilderOptions): BuildFile {
+export function createThreadBuilder({ entry, timeoutMs = DEFAULT_TIMEOUT_MS, maxThreads = DEFAULT_MAX_THREADS, heapLimitMb = DEFAULT_HEAP_LIMIT_MB }: ThreadBuilderOptions): BuildFile {
+  let running = 0;
   return (model) =>
     new Promise((resolve, reject) => {
+      if (running >= maxThreads) {
+        reject(new ExportBusyError());
+        return;
+      }
       if (!existsSync(entry)) {
         reject(new ExportThreadError('missing'));
         return;
       }
-      const thread = new Worker(entry, { workerData: model });
+      running += 1;
+      const thread = new Worker(entry, { workerData: model, resourceLimits: { maxOldGenerationSizeMb: heapLimitMb } });
       let settled = false;
       const settle = (finish: () => void): void => {
         if (settled) return;
         settled = true;
+        running -= 1;
         clearTimeout(timer);
         finish();
       };
