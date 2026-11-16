@@ -105,9 +105,10 @@ const NOT_IMPLEMENTED_STATUS = 501;
 
 export function createApprovalService({ estimates, calculations, transactions }: ApprovalDependencies): ApprovalService {
   return {
-    approve(viewer, estimateId, request) {
+    // `async`, so every refusal, the role's included, is a rejected promise and never a throw before one (a caller that handles the promise sees them all alike).
+    async approve(viewer, estimateId, request) {
       assertMayApprove(viewer);
-      return transactions.run(async (tx) => {
+      return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
         // In the same transaction, so the basis is read under the lock: no input can change between the lock and this read, and none can after it until the transaction ends.
