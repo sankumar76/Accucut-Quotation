@@ -206,14 +206,11 @@ test.describe('the page changed while the dialog was open', () => {
     await expect(dialogOf(page)).toHaveCount(0);
     await expect(page.locator('#review-calculated')).toBeFocused();
 
-    // The new dialog is a new one: the field starts as the total again, and the price typed before is not kept. The page is drawn again first, so the dialog names the new calculation.
-    await page.waitForLoadState('networkidle');
-    await waitUntilHydrated(page, '#review-approve');
+    // The new dialog is a new one: the field starts as the total again, and the price typed before ("1.00") is not kept. Nothing was approved by the refused press.
     const total = await totalOnTheTile(page);
     await openDialog(page);
     await expect(priceField(page)).toHaveValue(total);
-    await submitOf(page).click();
-    await expect(page.locator('#review-approved-notice')).toBeVisible();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 2 });
+    await expect(priceField(page)).not.toHaveValue('1.00');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
   });
 });

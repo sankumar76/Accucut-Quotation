@@ -198,7 +198,8 @@ test.describe('the filters (AC-6)', () => {
     await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
     await page.getByLabel('From', { exact: true }).fill('2020-01-01');
     await page.getByLabel('To', { exact: true }).fill('2036-01-01');
-    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Approval' });
+    // "Unlock", not "Approval": the approval is raised since STORY-06.06, and the unlock is STORY-06.08's.
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Unlock' });
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
     // Neither empty state shows the count line (ux-spec v0.16).
@@ -342,9 +343,12 @@ test.describe('by keyboard (AC-9)', () => {
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
     // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
-    // first and "Approval" second; typing the letters instead depends on the pause between keys, which a busy machine stretches.)
+    // first, "Approval" second and "Unlock" third; typing the letters instead depends on the pause between keys, which a busy machine stretches.
+    // "Approval" holds entries since STORY-06.06 (the approval tests of the same run write them), so the empty result is the one of "Unlock", whose event is declared and not yet written: STORY-06.08.)
     await page.keyboard.press('ArrowDown');
     await expect(event).toHaveValue('approval');
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('unlock');
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
 
     const clear = page.getByRole('button', { name: 'Clear filters' });
