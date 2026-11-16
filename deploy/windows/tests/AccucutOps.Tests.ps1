@@ -508,11 +508,6 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
         $script:FakeBackupSid = 'S-1-5-21-1111111111-2222222222-3333333333-1005'
         $script:FakePowerShell = Join-Path $TestDrive 'fake-powershell.exe'
         [System.IO.File]::WriteAllBytes($script:FakePowerShell, [byte[]](1, 2, 3))
-        function ConvertFrom-FakeSecureString {
-            param([System.Security.SecureString]$Secure)
-            $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
-            try { return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) } finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
-        }
     }
 
     BeforeEach {
@@ -524,7 +519,10 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
         $script:Logged = [System.Collections.Generic.List[string]]::new()
         Mock New-LocalUser -ModuleName AccucutOps {
             $script:Order.Add('user')
-            $script:UserCall = @{ Name = $Name; Password = $Password; PasswordNeverExpires = $PasswordNeverExpires.IsPresent; UserMayNotChangePassword = $UserMayNotChangePassword.IsPresent; AccountNeverExpires = $AccountNeverExpires.IsPresent; Description = $Description }
+            # The product disposes the SecureString after the call (correct), so what the test needs is read here, at call time: its type and its text.
+            $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+            try { $plainAtCall = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) } finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+            $script:UserCall = @{ Name = $Name; PasswordType = $Password.GetType().FullName; PlainPassword = $plainAtCall; PasswordNeverExpires = $PasswordNeverExpires.IsPresent; UserMayNotChangePassword = $UserMayNotChangePassword.IsPresent; AccountNeverExpires = $AccountNeverExpires.IsPresent; Description = $Description }
             return [pscustomobject]@{ SID = [pscustomobject]@{ Value = $script:FakeBackupSid } }
         }
         Mock New-ScheduledTaskAction -ModuleName AccucutOps { $script:ActionCall = @{ Execute = $Execute; Argument = $Argument }; $fake = New-CimInstance -ClassName MSFT_TaskAction -Namespace Root/Microsoft/Windows/TaskScheduler -ClientOnly -Property @{ Id = 'fake' }; $fake.PSObject.TypeNames.Insert(0, 'Microsoft.Management.Infrastructure.CimInstance#MSFT_TaskAction'); return $fake }
@@ -546,8 +544,8 @@ Describe 'the backup account and the weekly task (STORY-10.05, ADR-015 Amendment
         $paths = Get-AccucutPaths -Root 'C:\Accucut'
         $sid = Register-AccucutBackupTask -Paths $paths -PowerShellPath $script:FakePowerShell
         $sid | Should -Be $script:FakeBackupSid
-        $script:UserCall.Password | Should -BeOfType [System.Security.SecureString]
-        $plain = ConvertFrom-FakeSecureString -Secure $script:UserCall.Password
+        $script:UserCall.PasswordType | Should -Be 'System.Security.SecureString'
+        $plain = $script:UserCall.PlainPassword
         $plain.Length | Should -Be 32
         $plain | Should -MatchExactly '[A-Z]'
         $plain | Should -MatchExactly '[a-z]'
