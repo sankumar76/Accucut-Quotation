@@ -33,6 +33,25 @@ describe('docker/postgres-init/01-create-roles.sh and deploy/db/create-roles.psq
     expect(SQL).not.toMatch(/CREATE ROLE accucut_owner[^;]*CREATEDB/);
   });
 
+  it('STORY-10.05: the backup role gets its password from DB_BACKUP_PASSWORD through psql, or is NOLOGIN when none is given (development, CI), and is never made with a literal password', () => {
+    expect(SQL).toContain("\\set backup_password ''");
+    expect(SQL).toContain('\\getenv backup_password DB_BACKUP_PASSWORD');
+    expect(SQL).toMatch(/CREATE ROLE accucut_backup LOGIN PASSWORD :'backup_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;/);
+    expect(SQL).toMatch(/\\else\s+CREATE ROLE accucut_backup NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;\s+\\endif/);
+    // The shell script (the development database and CI) does not need the variable: CI calls it with the two passwords it always had.
+    expect(SCRIPT).not.toMatch(/DB_BACKUP_PASSWORD:\?/);
+  });
+
+  it('STORY-10.05 (ADR-015 Amendment 3 point 3): the backup role can connect, use the public schema and read all data, and holds nothing else here', () => {
+    expect(CODE).toMatch(/GRANT CONNECT ON DATABASE :"dbname" TO accucut_owner, accucut_app, accucut_backup;/);
+    expect(CODE).toMatch(/GRANT USAGE ON SCHEMA public TO accucut_app, accucut_backup;/);
+    expect(CODE).toMatch(/GRANT pg_read_all_data TO accucut_backup;/);
+    const mentions = CODE.split('\n').filter((line) => line.includes('accucut_backup'));
+    for (const line of mentions) expect(line, line).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|SUPERUSER|CREATEDB|CREATEROLE|OWNER)\b/);
+    expect(CODE).not.toMatch(/DEFAULT PRIVILEGES[^;]*accucut_backup/);
+    expect(CODE).not.toMatch(/OWNER TO accucut_backup/);
+  });
+
   it('STD-02: passes no password on the psql command line (it would show in the process list)', () => {
     expect(CODE).not.toMatch(/-v\s+\w*password/i);
     expect(CODE).not.toMatch(/--set[= ]\w*password/i);

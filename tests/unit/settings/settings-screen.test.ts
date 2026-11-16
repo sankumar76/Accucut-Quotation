@@ -52,12 +52,21 @@ describe('AC-2: "Backup late"', () => {
   });
 });
 
-describe('AC-3: no backup yet', () => {
-  it('says so, and shows no "Backup late"', () => {
-    const html = render({ ...GOOD, lastGoodBackupAt: null, backupLate: false });
-    expect(html).toContain('No backup has finished yet.');
-    expect(html).not.toContain('Backup late');
+describe('STORY-10.05 AC-10 (replaces 02.09 AC-3): no good backup yet', () => {
+  it('says "No good backup yet." and shows "Backup late" with the sentence for "never" and no number of days', () => {
+    const html = render({ ...GOOD, lastGoodBackupAt: null, backupLate: true });
+    expect(html).toContain('Last good backup');
+    expect(html).toContain('No good backup yet.');
+    expect(html).toContain('Backup late');
+    expect(html).toContain('No backup has finished without errors yet. Ask Accucut IT to check the weekly backup.');
+    expect(html).not.toContain('for 8 days');
     expect(html).not.toContain('Finished without errors.');
+  });
+
+  it('with a previous good backup, the late notice keeps the 8-day sentence (nothing changes there)', () => {
+    const html = render({ ...GOOD, backupLate: true });
+    expect(html).toContain('No backup has finished for 8 days. Ask Accucut IT to check the weekly backup.');
+    expect(html).not.toContain('without errors yet');
   });
 });
 

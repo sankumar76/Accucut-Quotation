@@ -126,13 +126,16 @@ package's behaviour. `src/lib/formula/internal-form.ts` is the one converter bet
 Cost`) and the stored form (`{{f:<id>}}`, `{{rate:<id>}}`, `{{mat:<key>}}`, `{{fx:USD}}`). Formula error messages
 state a rule and a character number and never repeat text from the formula.
 
-The development database listens on `127.0.0.1:55432` only. It has two roles, created by
+The development database listens on `127.0.0.1:55432` only. It has three roles, created by
 `docker/postgres-init/01-create-roles.sh` on first start:
 
 | Role | Used by | Rights |
 |------|---------|--------|
 | `accucut_owner` | migrations (`MIGRATE_DATABASE_URL`) | owns the schema; runs DDL |
 | `accucut_app` | the app and worker (`DATABASE_URL`) | read and write rows; **no DDL** |
+| `accucut_backup` | the Windows backup scripts only (STORY-10.05) | read all data (`pg_read_all_data`) and `INSERT` into `job_runs`; nothing else. In development it is `NOLOGIN` unless `DB_BACKUP_PASSWORD` is set |
+
+A development database made before STORY-10.05 has no `accucut_backup` role: start again from an empty database (below) to get it.
 
 To start again from an empty database: `docker compose -f compose.dev.yml down -v`.
 
@@ -150,9 +153,11 @@ rollback and the fixes, is [`deploy/windows/README.md`](deploy/windows/README.md
    folder that **only administrators can write**, such as `C:\Program Files\accucut-pkg`. Do not unpack it into a new folder under `C:\`: ordinary users
    may be able to change files there before you run the script, and the script is where the trust starts.
 3. In **Windows PowerShell as administrator**: `cd "C:\Program Files\accucut-pkg"`, then
-   `.\install.ps1 -ZipPath <the zip> -Sha256 <the SHA-256 from the release page>`. Answer the questions. It checks the zip's
-   SHA-256 first, creates the database, the settings (readable by Administrators and the two service accounts only), the services, and waits for
-   `/api/health`. It offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning and says so; you may refuse.
+   `.\install.ps1 -ZipPath <the zip> -Sha256 <the SHA-256 from the release page>`. Answer the questions (they include the **age public key** that the
+   backups are encrypted to: make the key pair on your own computer with `age-keygen` and never put the private key on the server). It checks the zip's
+   SHA-256 first, creates the database, the settings (readable by Administrators and the two service accounts only), the services, the weekly backup
+   (a local user `AccucutBackup`, the task "Accucut weekly backup", the protected folder `C:\Accucut\backups`) and waits for
+   `/api/health`; then it runs the first backup. It offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning and says so; you may refuse.
 4. Open the address you gave and sign in as the first Admin. You will be asked to choose a new password.
 
 To **update**: `cd C:\Accucut\current`, then `.\update.ps1 <the new zip> -Sha256 <the SHA-256 from the release page>`. It takes a release backup, migrates,

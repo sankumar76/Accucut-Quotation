@@ -62,7 +62,7 @@ export interface DiskReadingStatus {
 export interface BackupStatus {
   /** The finish time of the newest good backup, or null when none has finished yet. */
   readonly lastGoodBackupAt: Date | null;
-  /** True only when a good backup exists and is more than 8 days old. With none at all it is false: the portal cannot know the install date (assumption A-1). */
+  /** True when there is no good backup at all (STORY-10.05 AC-10, ADR-015 Amendment 3.1 point 6), or the newest one is more than 8 days old. See {@link isBackupLate}. */
   readonly backupLate: boolean;
   readonly diskReading: DiskReadingStatus | null;
   /** True when the newest reading has less than 20 % free. */
@@ -75,9 +75,20 @@ function isUsable(reading: DiskReadingRow): boolean {
   return Number.isFinite(freeBytes) && Number.isFinite(totalBytes) && totalBytes > 0 && freeBytes >= 0 && freeBytes <= totalBytes;
 }
 
+/**
+ * Whether the backup is late (STORY-10.05 AC-10, ADR-015 Amendment 3.1 point 6): the ONE rule, used by the worker's daily `backup-watch` job and by the Settings service, so the log
+ * line of the worker and the notice on the page cannot disagree. With no good backup at all the answer is late: the install takes the first backup, so "never" means that
+ * the first run failed, which must not stay silent. With a good backup it is late only when that finished MORE than 8 days before `now` (at exactly 8 days: not late). A later failed
+ * run is not an input, so it never resets the clock. A time in the future (a host clock a little ahead) is not late.
+ */
+export function isBackupLate(latestGoodBackupAt: Date | null, now: Date): boolean {
+  if (latestGoodBackupAt === null) return true;
+  return now.getTime() - latestGoodBackupAt.getTime() > BACKUP_LATE_AFTER_DAYS * MILLISECONDS_PER_DAY;
+}
+
 export function deriveBackupStatus(input: BackupStatusInput, now: Date): BackupStatus {
   const { lastGoodBackupAt, diskReading } = input;
-  const backupLate = lastGoodBackupAt !== null && now.getTime() - lastGoodBackupAt.getTime() > BACKUP_LATE_AFTER_DAYS * MILLISECONDS_PER_DAY;
+  const backupLate = isBackupLate(lastGoodBackupAt, now);
 
   if (diskReading === null || !isUsable(diskReading)) {
     return { lastGoodBackupAt, backupLate, diskReading: null, diskNearlyFull: false };
