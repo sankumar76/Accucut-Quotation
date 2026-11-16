@@ -140,8 +140,11 @@ export interface CalculationRepository {
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
-  /** The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. */
-  findFigureBasis(estimateId: string): Promise<FigureBasis | null>;
+  /**
+   * The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. Pass `tx` to read it in the caller's transaction (STORY-06.05: an approval
+   * reads it under the estimate's row lock, on the one connection it already holds); without it the read is a plain one.
+   */
+  findFigureBasis(estimateId: string, tx?: Transaction): Promise<FigureBasis | null>;
   /**
    * The figures the estimate review shows, of the calculation with this ID: the product's values and every row's outputs, selected column by column (neither the master snapshot nor a row's
    * inputs are read). Null for an unknown ID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
@@ -228,10 +231,10 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         };
       }),
 
-    findFigureBasis: (estimateId) =>
+    findFigureBasis: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         if (!isUuid(estimateId)) return null;
-        const found = await db.estimate.findUnique({
+        const found = await clientFor(db, tx).estimate.findUnique({
           where: { id: estimateId },
           select: { inputsRevision: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
         });

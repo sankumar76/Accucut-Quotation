@@ -13,6 +13,7 @@ import { createMastersService, type MastersService } from '../../src/server/serv
 import type { CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
+import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -122,6 +123,8 @@ export interface SessionHarness {
   readonly calculationAudit: AuditSink;
   /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
   readonly calculationWorld: FakeCalculationWorld;
+  /** The approval's guard (STORY-06.05) over the same estimates and calculation records (`getApprovalService` in the composition mock). It writes nothing in any case, so a valid call of the recipe is a 409 at every state. */
+  readonly approvalService: ApprovalService;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
@@ -245,6 +248,8 @@ export function createSessionHarness(): SessionHarness {
     storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
     workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // The approval's guard (STORY-06.05) over the same world: the lock of the estimate, the basis of its figure state and the transactions that put a record back when one throws.
+  const approvalService = createApprovalService({ estimates: calculationWorld.estimates, calculations: calculationWorld.repository, transactions: calculationWorld.transactions });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
@@ -301,6 +306,7 @@ export function createSessionHarness(): SessionHarness {
     estimateService,
     calculationService,
     calculationWorld,
+    approvalService,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     jobRuns,

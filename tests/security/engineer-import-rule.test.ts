@@ -83,6 +83,8 @@ const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
     'account-service',
+    // STORY-06.05 (NFR-002): the approval's guard reads the calculation basis under the estimate's lock, for the Lead and the Admin only; from STORY-06.06 it also holds the approved price.
+    'approval-service',
     'audit-cursor',
     'audit-events',
     'audit-secrets',
