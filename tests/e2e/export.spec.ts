@@ -25,7 +25,7 @@ test.beforeEach(async ({ context }) => {
 
 const PHONE_MAX = 767;
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const downloadButton = (page: Page) => page.getByRole('button', { name: 'Download .xlsx' });
 

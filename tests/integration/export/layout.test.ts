@@ -54,7 +54,7 @@ async function headerAsStored(estimateId: string): Promise<{ readonly code: stri
 describe('the export repository, as the runtime role', () => {
   it('reads the task code and the customer\'s name of an estimate with a customer, and a null name for one without', async () => {
     const withCustomer = await db.addEstimate({ engineer: true, withCustomer: true });
-    const without = await db.addEstimate({ engineer: true });
+    const without = await db.addEstimate({ engineer: true, withCustomer: false });
     const repository = createExportRepository(db.prisma);
     expect(await repository.findHeader(withCustomer)).toEqual(await headerAsStored(withCustomer));
     expect(defined(await repository.findHeader(withCustomer)).customerName).not.toBeNull();
