@@ -53,6 +53,22 @@ export const calculateBodySchema = z
   .strictObject({ acknowledge: z.strictObject({ inputsRevision: z.number().int().min(0).max(MAX_REVISION) }).optional() })
   .optional();
 
+/** The longest reason for a different price (architecture section 6 "Approve": at most 500 characters; UX spec SCR-08). */
+const MAX_REASON_LENGTH = 500;
+/** A price in rupees as plain decimal text: digits, then optionally a point and one or two digits (SCR-08: "0 or more, with up to 2 decimals"). Whether it is the right price is STORY-06.06's to judge. */
+const PRICE_PATTERN = /^\d{1,12}(?:\.\d{1,2})?$/;
+const PRICE_MESSAGE = 'Enter a price in rupees, 0 or more, with up to 2 decimals.';
+
+/**
+ * `POST /api/v1/estimates/{id}/approve` (STORY-06.05; architecture section 6 "Approve"): the calculation the Lead was looking at, the price and, optionally, the reason for a price that differs. Strict, so a key that
+ * is not named is refused. `calculationId` is compared with the estimate's current calculation under the lock (409 if it is not), which is how a figure that changed under the Lead cannot be approved.
+ */
+export const approveBodySchema = z.strictObject({
+  calculationId: z.uuid(),
+  price: z.string().regex(PRICE_PATTERN, PRICE_MESSAGE),
+  reason: z.string().max(MAX_REASON_LENGTH, `Use ${MAX_REASON_LENGTH} characters or fewer.`).optional(),
+});
+
 /**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`
  * (a count of changes) and the Sl. No. Text and one revision: nothing that comes from a master, a rate or a calculation has a key to sit in. The wrapper builds this body in `problem.ts`, key by key;
