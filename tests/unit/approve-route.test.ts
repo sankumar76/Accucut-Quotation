@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { APPROVAL_NOT_AVAILABLE_CODE, CALCULATION_CHANGED_CODE, NOT_CALCULATED_CODE, NOT_CALCULATED_MESSAGE, TOTALS_OUT_OF_DATE_CODE, TOTALS_OUT_OF_DATE_MESSAGE } from '@/lib/estimate/approval-words';
 import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
+import { INTERNAL_TITLE } from '@/server/http/problem';
 
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
@@ -62,6 +63,12 @@ const bodyOf = async (response: Response): Promise<Record<string, unknown>> => r
 /** The ID of the calculation the estimate is linked to, which is what the Lead's page names. */
 const currentCalculation = (): string => defined(estimate().currentCalculationId);
 const approve = (calculationId: string, extra: Record<string, unknown> = {}): Promise<Response> => POST(request({ calculationId, price: PRICE, ...extra }), withId(owned()));
+
+/** The status and code of an answer. */
+const refusalOf = async (answer: Promise<Response>): Promise<{ readonly status: number; readonly code: unknown }> => {
+  const response = await answer;
+  return { status: response.status, code: (await bodyOf(response))['code'] };
+};
 
 /** A complete estimate: the customer chosen, and the one part holding every input, with a canary material. */
 function makeComplete(): void {
@@ -224,7 +231,8 @@ describe('AC-7: after Recalculate the guard passes and the approval is reached (
     const before = snapshot();
     const response = await approve(currentCalculation());
     expect(response.status).toBe(501);
-    expect(await bodyOf(response)).toMatchObject({ status: 501, code: APPROVAL_NOT_AVAILABLE_CODE });
+    // `problem.ts` masks the title of every 5xx with the generic one, so that is the title on the wire (SQR-01 of the review of AQP-322); the code is what tells a client it is "not available yet".
+    expect(await bodyOf(response)).toMatchObject({ status: 501, code: APPROVAL_NOT_AVAILABLE_CODE, title: INTERNAL_TITLE });
     expect(snapshot()).toEqual(before);
   });
 
@@ -240,14 +248,15 @@ describe('AC-8 (NFR-007): a refusal writes no audit entry', () => {
     await calculated();
     const calculationId = currentCalculation();
     const entries = harness.calculationAudit.rows.length;
+    // Each call must really be the refusal it is named for (SQR-03 of the review of AQP-322), so a call that stopped being refused cannot leave the audit check true by accident.
     estimate().status = 'DRAFT';
-    await approve(calculationId);
+    expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TRANSITION_REFUSALS.NOT_SUBMITTED.code });
     estimate().status = 'APPROVED';
-    await approve(calculationId);
+    expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TRANSITION_REFUSALS.ALREADY_APPROVED.code });
     estimate().status = 'SUBMITTED';
-    await approve(UNKNOWN_CALCULATION_ID);
+    expect(await refusalOf(approve(UNKNOWN_CALCULATION_ID))).toEqual({ status: 409, code: CALCULATION_CHANGED_CODE });
     estimate().inputsRevision += 1;
-    await approve(calculationId);
+    expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TOTALS_OUT_OF_DATE_CODE });
     expect(harness.calculationAudit.rows.length).toBe(entries);
   });
 });

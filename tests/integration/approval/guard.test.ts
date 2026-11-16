@@ -61,6 +61,22 @@ async function stored(estimateId: string): Promise<unknown> {
 
 const request = (calculationId: string) => ({ calculationId, price: PRICE });
 
+const LOCK_POLL_MILLISECONDS = 20;
+const LOCK_WAIT_LIMIT_MILLISECONDS = 5_000;
+
+/** Resolves once some session waits for a lock it was not granted (on the owner's connection, apart from the pool under test); throws when none does within the limit. */
+async function untilALockWaits(): Promise<void> {
+  const deadline = Date.now() + LOCK_WAIT_LIMIT_MILLISECONDS;
+  while (Date.now() < deadline) {
+    const { rows } = await db.owner.query<{ n: number }>('SELECT count(*)::int AS n FROM pg_locks WHERE NOT granted');
+    if (defined(rows[0]).n > 0) return;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, LOCK_POLL_MILLISECONDS);
+    });
+  }
+  throw new Error('No session waited for a lock: the approval did not wait for the estimate\'s row lock.');
+}
+
 /** The refusal a call ends in, read without leaving a rejection unhandled; `undefined` when it did not refuse. */
 async function refusalOf(call: Promise<unknown>): Promise<unknown> {
   return call.then(
@@ -152,6 +168,8 @@ describe('AC-5: the order of the checks, under the estimate\'s lock', () => {
       await db.estimates.lockEstimate(estimateId, tx);
       await db.estimates.bumpInputsRevision(estimateId, tx);
       waiting.current = refusalOf(approvals.approve(lead(), estimateId, request(seen)));
+      // Hold the lock until the approval is seen waiting for it, so the test fails if the approval does not take the estimate's lock (SQR-02 of the review of AQP-322).
+      await untilALockWaits();
     });
     expect(await waiting.current).toMatchObject({ httpStatus: 409, code: TOTALS_OUT_OF_DATE_CODE });
   });

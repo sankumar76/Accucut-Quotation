@@ -18,8 +18,9 @@ export const CALCULATION_CHANGED_CODE = 'CALCULATION_CHANGED';
 export const CALCULATION_CHANGED_MESSAGE = 'The figures were calculated again since this page was loaded. Reload the page and check them before approving.';
 
 /**
- * The answer to an approval that passed every check, until STORY-06.06 writes the approval (assumption A-1 of STORY-06.05). A fixed sentence and code, no estimate and no figure; the status is 501 and
- * **nothing is written**, so a request that reaches it cannot change an estimate.
+ * The answer to an approval that passed every check, until STORY-06.06 writes the approval (assumption A-1 of STORY-06.05). A fixed code and no estimate and no figure; the status is 501 and
+ * **nothing is written**, so a request that reaches it cannot change an estimate. The sentence below is the error's own message (the log's); **on the wire `problem.ts` masks the title of every 5xx with the
+ * generic `INTERNAL_TITLE`**, so a client tells this answer by its status and its code.
  */
 export const APPROVAL_NOT_AVAILABLE_CODE = 'APPROVAL_NOT_AVAILABLE';
 export const APPROVAL_NOT_AVAILABLE_MESSAGE = 'Approving is not available yet.';
