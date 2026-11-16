@@ -20,6 +20,7 @@ import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AccountService, createAccountService } from './services/account-service';
+import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
@@ -55,6 +56,7 @@ let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
+let approvalService: ApprovalService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
@@ -245,6 +247,19 @@ export function getEstimateReviewService(): EstimateReviewService {
     });
   }
   return estimateReviewService;
+}
+
+/**
+ * The approval's guard (STORY-06.05): under the estimate's row lock in one transaction, the status, the state of the figures (read as counts through `figure-state`) and the calculation named. Restricted (NFR-002):
+ * only the `/approve` route asks for it here, for the Lead and the Admin alone.
+ */
+export function getApprovalService(): ApprovalService {
+  approvalService ??= createApprovalService({
+    estimates: createEstimateRepository(runtimeClient()),
+    calculations: createCalculationRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+  });
+  return approvalService;
 }
 
 /**
