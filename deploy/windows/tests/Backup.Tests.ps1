@@ -571,6 +571,7 @@ public static class P {
     var log = Environment.GetEnvironmentVariable("FAKE_LOG");
     if (!string.IsNullOrEmpty(log)) File.WriteAllText(log, string.Join("|", args) + "\nPGPASSFILE=" + Environment.GetEnvironmentVariable("PGPASSFILE") + "\nPGPASSWORD=" + Environment.GetEnvironmentVariable("PGPASSWORD"));
     var o = Console.OpenStandardOutput();
+    if (Environment.GetEnvironmentVariable("FAKE_DUMP_NOMAGIC") == null) { var m = System.Text.Encoding.ASCII.GetBytes("PGDMP"); o.Write(m, 0, m.Length); }
     var seed = new byte[256]; for (int i = 0; i < 256; i++) seed[i] = (byte)i;
     for (int r = 0; r < 4000; r++) o.Write(seed, 0, 256);
     o.Flush();
@@ -610,9 +611,12 @@ public static class P {
         $script:Recipient = 'age1' + ('q' * 58)
         # What the fake age writes: the age header and a line end, then everything it was given.
         $script:Header = [System.Text.Encoding]::ASCII.GetBytes("age-encryption.org/v1`n")
-        $script:Expected = New-Object byte[] (1024000 + $script:Header.Length)
+        # The fake pg_dump writes the magic of a custom archive (PGDMP) and then every byte value 4000 times; the fake age puts its header in front.
+        $script:Magic = [System.Text.Encoding]::ASCII.GetBytes('PGDMP')
+        $script:Expected = New-Object byte[] (1024000 + $script:Magic.Length + $script:Header.Length)
         [System.Array]::Copy($script:Header, $script:Expected, $script:Header.Length)
-        for ($i = 0; $i -lt 1024000; $i++) { $script:Expected[$script:Header.Length + $i] = [byte]($i % 256) }
+        [System.Array]::Copy($script:Magic, 0, $script:Expected, $script:Header.Length, $script:Magic.Length)
+        for ($i = 0; $i -lt 1024000; $i++) { $script:Expected[$script:Header.Length + $script:Magic.Length + $i] = [byte]($i % 256) }
         function Invoke-FakePipe {
             param([string]$Name)
             return (Invoke-AccucutBackupPipe -PgDumpPath (Join-Path $script:ToolFolder 'dump.exe') -AgePath (Join-Path $script:ToolFolder 'age.exe') -Recipient $script:Recipient -DbHost '127.0.0.1' -Port 5432 -Database 'accucut' -PassFile 'C:\fake\config\backup.pgpass' -OutputPath (Join-Path $TestDrive $Name))
@@ -620,14 +624,14 @@ public static class P {
     }
 
     AfterEach {
-        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG', 'FAKE_AGE_NOHEADER') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
+        foreach ($name in 'FAKE_DUMP_EXIT', 'FAKE_DUMP_NOMAGIC', 'FAKE_AGE_EXIT', 'FAKE_LOG', 'FAKE_AGE_LOG', 'FAKE_AGE_NOHEADER') { Remove-Item -LiteralPath "Env:\$name" -ErrorAction SilentlyContinue }
     }
 
     It 'carries every byte from the dump through age to the file unchanged (including 0x1A, CR LF and NUL), and returns the size' {
         $size = Invoke-FakePipe -Name 'bytes.part'
-        $size | Should -Be (1024000 + $script:Header.Length)
+        $size | Should -Be (1024000 + $script:Magic.Length + $script:Header.Length)
         $actual = [System.IO.File]::ReadAllBytes((Join-Path $TestDrive 'bytes.part'))
-        $actual.Length | Should -Be (1024000 + $script:Header.Length)
+        $actual.Length | Should -Be (1024000 + $script:Magic.Length + $script:Header.Length)
         [System.BitConverter]::ToString($actual) | Should -BeExactly ([System.BitConverter]::ToString($script:Expected))
     }
 
@@ -640,6 +644,11 @@ public static class P {
         $lines = Get-Content -LiteralPath $env:FAKE_LOG
         $lines | Should -Contain 'PGPASSFILE=C:\fake\config\backup.pgpass'
         $lines | Should -Contain 'PGPASSWORD='
+    }
+
+    It 'refuses a dump that is not a custom-format archive (it must start with PGDMP), even when both programs exit 0, and says what the first bytes were' {
+        $env:FAKE_DUMP_NOMAGIC = '1'
+        { Invoke-FakePipe -Name 'nomagic.part' } | Should -Throw '*PGDMP*first bytes: 00 01 02 03 04*'
     }
 
     It 'fails, naming pg_dump and its exit code, when pg_dump fails but age ends well (a pipe in cmd.exe would report only age)' {

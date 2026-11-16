@@ -290,6 +290,10 @@ $scratchDb = 'accucut_restore_check'
 try {
     & $ageExe -d -i $AgeKeyFile -o $scratchFile $probe.Path
     Assert-That ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $scratchFile)) 'the copy decrypts with the key of this run'
+    # A custom-format archive starts with PGDMP. Checked on its own, so that a copy that is not an archive says what it is (its name, size and first bytes).
+    $decrypted = [System.IO.File]::ReadAllBytes($scratchFile)
+    $firstBytes = if ($decrypted.Length -gt 0) { [System.BitConverter]::ToString($decrypted, 0, [Math]::Min(16, $decrypted.Length)) } else { 'none' }
+    Assert-That ($decrypted.Length -ge 5 -and [System.Text.Encoding]::ASCII.GetString($decrypted, 0, 5) -eq 'PGDMP') "the decrypted copy $($probe.Name) starts with PGDMP, the magic of a custom-format archive (decrypted $($decrypted.Length) bytes; first bytes: $firstBytes)"
     [void](Invoke-SuperPsql -Database 'postgres' -Sql "CREATE DATABASE $scratchDb")
     $env:PGPASSWORD = $superuserPassword
     try { & (Join-Path $pgBin 'pg_restore.exe') --no-password --exit-on-error --no-owner --host 127.0.0.1 --port ([string]$installedState.pgPort) --username postgres --dbname $scratchDb $scratchFile } finally { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }

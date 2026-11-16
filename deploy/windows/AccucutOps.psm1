@@ -1929,6 +1929,8 @@ function Invoke-AccucutBackupPipe {
     $dumpStarted = $false
     $ageStarted = $false
     $copyError = $null
+    $magicError = $null
+    $dumpMagic = [System.Text.Encoding]::ASCII.GetBytes('PGDMP')
     try {
         [void]$age.Start()
         $ageStarted = $true
@@ -1940,8 +1942,25 @@ function Invoke-AccucutBackupPipe {
         $source = $dump.StandardOutput.BaseStream
         $sink = $age.StandardInput.BaseStream
         try {
-            $source.CopyTo($sink)
-            $sink.Flush()
+            # The first bytes of a custom-format archive are PGDMP. Anything else is not a dump (an error text, a plain-text dump, a damaged stream): it is never encrypted and kept.
+            $head = New-Object byte[] $dumpMagic.Length
+            $got = 0
+            while ($got -lt $head.Length) {
+                $read = $source.Read($head, $got, $head.Length - $got)
+                if ($read -le 0) { break }
+                $got += $read
+            }
+            $isArchive = ($got -eq $head.Length)
+            if ($isArchive) { for ($i = 0; $i -lt $head.Length; $i++) { if ($head[$i] -ne $dumpMagic[$i]) { $isArchive = $false } } }
+            if ($isArchive) {
+                $sink.Write($head, 0, $head.Length)
+                $source.CopyTo($sink)
+                $sink.Flush()
+            }
+            else {
+                $magicError = 'pg_dump did not write a custom-format archive (its output must start with PGDMP; first bytes: ' + $(if ($got -gt 0) { [System.BitConverter]::ToString($head, 0, $got).Replace('-', ' ') } else { 'none' }) + ').'
+                try { $dump.Kill() } catch { Write-Verbose "pg_dump had already ended: $($_.Exception.Message)" }
+            }
         }
         catch {
             $copyError = $_.Exception.Message
@@ -1966,6 +1985,7 @@ function Invoke-AccucutBackupPipe {
         $dump.Dispose()
         $age.Dispose()
     }
+    if ($null -ne $magicError) { throw "$magicError $(ConvertTo-AccucutShortMessage -Text $dumpMessage)".Trim() }
     if ($dumpCode -ne 0) { throw "pg_dump failed with exit code $dumpCode. $(ConvertTo-AccucutShortMessage -Text $dumpMessage)" }
     if ($ageCode -ne 0) { throw "age failed with exit code $ageCode. $(ConvertTo-AccucutShortMessage -Text $ageMessage)" }
     if ($null -ne $copyError) { throw "The dump could not be passed to age: $copyError" }
