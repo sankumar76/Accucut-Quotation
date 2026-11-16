@@ -4,6 +4,7 @@ import type { Value } from '../decimal';
 import { ValidationError } from '../errors';
 
 import type { FormulaIssue } from './errors';
+import { referencesOf } from './ast';
 import { evaluate, type Resolver } from './evaluator';
 import type { OrderedFormula } from './graph';
 import { analyzeConfiguration, type ValidatableField, type ValidationOptions } from './validate';
@@ -23,6 +24,12 @@ export type CompiledFormula = OrderedFormula;
 export interface CompiledPlan {
   readonly rowFormulas: ReadonlyArray<CompiledFormula>;
   readonly productFormulas: ReadonlyArray<CompiledFormula>;
+  /**
+   * The Process Master items (rates) some formula of this plan reads, each ID once, in order of first appearance over the row formulas and then the product formulas (architecture section 4.2,
+   * GitHub #432). The calculation reads, and its master snapshot keeps, exactly these of the customer's rates. A rate inside `IF`, `MIN`, `MAX`, `ROUND` or a negation counts; `SUM(column)`
+   * reads a field, never a rate. Computed once here, so the plan cache holds it with the plan.
+   */
+  readonly referencedRateIds: ReadonlyArray<string>;
 }
 
 const MAX_LISTED_ISSUES = 5;
@@ -49,7 +56,18 @@ export class FormulaConfigurationError extends ValidationError {
 export function compilePlan(fields: ReadonlyArray<ValidatableField>, options: ValidationOptions = {}): CompiledPlan {
   const { issues, order } = analyzeConfiguration(fields, options);
   if (issues.length > 0 || order === null) throw new FormulaConfigurationError(issues);
-  return { rowFormulas: order.rowOrder, productFormulas: order.productOrder };
+  return { rowFormulas: order.rowOrder, productFormulas: order.productOrder, referencedRateIds: referencedRateIdsOf([...order.rowOrder, ...order.productOrder]) };
+}
+
+/** Every rate the formulas read, each once, at its first appearance (a `Set` keeps insertion order). */
+function referencedRateIdsOf(formulas: ReadonlyArray<CompiledFormula>): ReadonlyArray<string> {
+  const ids = new Set<string>();
+  for (const { expression } of formulas) {
+    for (const reference of referencesOf(expression)) {
+      if (reference.kind === 'rate') ids.add(reference.id);
+    }
+  }
+  return [...ids];
 }
 
 /** Plans held in memory. A version is immutable, so this only bounds memory (architecture section 4.2). */

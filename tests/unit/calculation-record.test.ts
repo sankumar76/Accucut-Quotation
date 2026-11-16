@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ConflictError, FieldValidationError, NotFoundError } from '@/lib/errors';
 import { storeRowOutputs } from '@/lib/estimate/row-outputs';
+import { compilePlan } from '@/lib/formula';
 import type { Transaction } from '@/server/repositories/transaction';
 import { createCalculationService, type CalculationNodeRequest, type CalculationService, type StoreCalculationRequest } from '@/server/services/calculation-service';
 
@@ -409,14 +410,14 @@ describe('the request is checked before anything is read or written (a record ca
 });
 
 describe('the master snapshot holds what the calculation used, with the names then', () => {
-  it('has the customer, every rate of that customer, only the materials used (once each, in order of use) and both exchange rates', async () => {
+  it('has the customer, only the rates the plan references (#432, DL-225), only the materials used (once each, in order of use) and both exchange rates', async () => {
     const { service, world, request, customerId } = fixture();
     await service.storeCalculation(
       request({ nodes: [node({ nodeId: NODE_ONE }), node({ nodeId: NODE_TWO, materialId: MATERIAL_TWO_ID }), node({ nodeId: NODE_THREE, materialId: MATERIAL_ONE_ID })] }),
     );
     const snapshot = defined(world.calculations[0]).masterSnapshot;
     expect(snapshot.customer).toEqual({ id: customerId, name: 'Invented customer' });
-    expect(snapshot.rates).toHaveLength(SEED_PROCESS_ITEMS.length);
+    expect(snapshot.rates.map((rate) => rate.id)).toEqual(compilePlan(seedConfig.fields).referencedRateIds);
     const cutting = defined(SEED_PROCESS_ITEMS.find((item) => item.name === 'Cutting-Rate-per-Sec'));
     expect(snapshot.rates.find((rate) => rate.id === cutting.id)).toEqual({ id: cutting.id, name: cutting.name, value: TYPED_RATES['Cutting-Rate-per-Sec'] });
     expect(snapshot.materials.map((material) => material.id)).toEqual([MATERIAL_ONE_ID, MATERIAL_TWO_ID]);

@@ -4,9 +4,13 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { storeRowOutputs } from '@/lib/estimate/row-outputs';
+import { parseConfigDocument } from '@/lib/fields/schema';
+import { compilePlan } from '@/lib/formula';
+import { masterSnapshotSchema } from '@/server/repositories/calculation-repository';
 
 import { type CalculationDatabase, idOf, openCalculationDatabase, typedRow } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
+import { reevaluateRecord } from '../../support/reevaluate-record';
 import { TYPED_RATES } from '../../support/row-oracle';
 import { SEED_PROCESS_ITEMS } from '../../support/seed-config';
 
@@ -318,5 +322,43 @@ describe('what the tables keep whoever writes to them', () => {
     const stored = await db.service.storeCalculation(request(estimateId, [db.node({ parentId: randomUUID(), imageId: randomUUID() })]));
     expect(await countFor(estimateId)).toEqual({ calculations: 1, rows: 1 });
     expect(stored.id).toBeTruthy();
+  });
+});
+
+describe('the snapshot keeps only the rates the plan references, and the record explains itself (#432, DL-225; architecture 4.2 test 3)', () => {
+  /** The stored record read as the runtime role reads it, and the plan of the record's own configuration version. */
+  async function readBack(calculationId: string) {
+    const header = await db.runtime.query<{ config_version_id: string; master_snapshot: unknown; product_values: unknown }>(
+      'SELECT config_version_id::text, master_snapshot, product_values FROM calculations WHERE id = $1::uuid',
+      [calculationId],
+    );
+    const version = await db.runtime.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions WHERE id = $1::uuid', [defined(header.rows[0]).config_version_id]);
+    const rows = await db.runtime.query<{ inputs: Record<string, string | null>; outputs: Record<string, string | null> }>(
+      'SELECT inputs, outputs FROM calculation_rows WHERE calculation_id = $1::uuid ORDER BY sort_index, sl_no',
+      [calculationId],
+    );
+    const document = parseConfigDocument(defined(version.rows[0]).snapshot);
+    return { masterSnapshot: masterSnapshotSchema.parse(defined(header.rows[0]).master_snapshot), productValues: defined(header.rows[0]).product_values, rows: rows.rows, document };
+  }
+
+  it('the stored rates are only the plan\'s referenced IDs, in the order of the set, each once', async () => {
+    const estimateId = await db.addEstimate();
+    const stored = await db.service.storeCalculation(request(estimateId));
+    const record = await readBack(stored.id);
+    const plan = compilePlan(record.document.fields);
+    expect(record.masterSnapshot.rates.map((rate) => rate.id)).toEqual(plan.referencedRateIds);
+    expect(record.masterSnapshot.rates.length).toBeLessThan(SEED_PROCESS_ITEMS.length);
+  });
+
+  it('re-evaluating every row and the product formulas from the stored record alone gives the stored text exactly, on a tree of two materials', async () => {
+    const estimateId = await db.addEstimate();
+    const first = db.node();
+    const second = db.node({ parentId: first.nodeId, sortIndex: 0, slNo: '1.1', materialId: db.materialTwoId });
+    const stored = await db.service.storeCalculation(request(estimateId, [first, second]));
+    const record = await readBack(stored.id);
+    expect(record.masterSnapshot.materials).toHaveLength(2);
+    const again = reevaluateRecord(record, record.document, compilePlan(record.document.fields), idOf('E'));
+    expect(again.rows).toEqual(record.rows.map((row) => row.outputs));
+    expect(again.productValues).toEqual(record.productValues);
   });
 });
