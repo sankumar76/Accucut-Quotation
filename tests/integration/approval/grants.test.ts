@@ -139,3 +139,60 @@ describe('the table keeps what it must whoever writes (CHECK constraints and the
     expect(count).toBe(2);
   });
 });
+
+/**
+ * SQR-02 of the review of AQP-323: the unlock, cancel and remove columns are write-once. Each is null until its story sets it (the runtime role may, by column), and then it can neither be
+ * rewritten nor cleared, by the runtime role or by the owner: clearing `removed_at` would bring a removed price back, and clearing `unlocked_at` would make a second live approval possible.
+ */
+describe('the unlock, cancel and remove columns are write-once (SQR-02)', () => {
+  const COLUMNS: ReadonlyArray<readonly [act: string, column: string, kind: 'person' | 'time' | 'text']> = [
+    ['unlock', 'unlocked_by', 'person'],
+    ['unlock', 'unlocked_at', 'time'],
+    ['unlock', 'unlock_reason', 'text'],
+    ['cancel', 'cancelled_by', 'person'],
+    ['cancel', 'cancelled_at', 'time'],
+    ['cancel', 'cancel_reason', 'text'],
+    ['remove', 'removed_by', 'person'],
+    ['remove', 'removed_at', 'time'],
+  ];
+  let approvalId: string;
+
+  beforeAll(async () => {
+    const calculated = await calculatedEstimate(db);
+    const seen = await currentCalculationOf(db, calculated.estimateId);
+    await db.approvalService.approve(leadOf(db), calculated.estimateId, requestFor(db, seen, '2000.00'));
+    approvalId = defined((await db.owner.query<{ id: string }>('SELECT id::text FROM approvals WHERE estimate_id = $1::uuid', [calculated.estimateId])).rows[0]).id;
+    // Each act is set once, the way its story will: person, time and (not for a removal) reason together. The runtime role holds the column grants.
+    await db.runtime.query(
+      `UPDATE approvals SET unlocked_by = $2::uuid, unlocked_at = '2026-11-16T06:00:00Z', unlock_reason = 'First unlock',
+              cancelled_by = $2::uuid, cancelled_at = '2026-11-16T06:01:00Z', cancel_reason = 'First cancel',
+              removed_by = $2::uuid, removed_at = '2026-11-16T06:02:00Z' WHERE id = $1::uuid`,
+      [approvalId, db.personId],
+    );
+  }, 120_000);
+
+  const rowOf = async (): Promise<unknown> => (await db.owner.query('SELECT * FROM approvals WHERE id = $1::uuid', [approvalId])).rows;
+  /** Another value of the column's own type, built inside the test (the IDs exist only after `beforeAll`). */
+  const otherValue = (kind: 'person' | 'time' | 'text'): string => (kind === 'person' ? db.engineerId : kind === 'time' ? '2030-01-01T00:00:00Z' : 'Second text');
+  const cast = (kind: 'person' | 'time' | 'text'): string => (kind === 'person' ? '::uuid' : kind === 'time' ? '::timestamptz' : '');
+  const WRITE_ONCE = { code: '23000', message: expect.stringContaining('cannot be changed once it is set') };
+
+  it.each(COLUMNS)('%s: %s cannot be rewritten once set, by the runtime role or by the owner', async (_act, column, kind) => {
+    const before = await rowOf();
+    await expect(db.runtime.query(`UPDATE approvals SET ${column} = $2${cast(kind)} WHERE id = $1::uuid`, [approvalId, otherValue(kind)])).rejects.toMatchObject(WRITE_ONCE);
+    await expect(db.owner.query(`UPDATE approvals SET ${column} = $2${cast(kind)} WHERE id = $1::uuid`, [approvalId, otherValue(kind)])).rejects.toMatchObject(WRITE_ONCE);
+    expect(await rowOf()).toEqual(before);
+  });
+
+  it.each(COLUMNS)('%s: %s cannot be cleared once set, so a removed price or an unlock cannot be undone', async (_act, column) => {
+    const before = await rowOf();
+    await expect(db.runtime.query(`UPDATE approvals SET ${column} = NULL WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(WRITE_ONCE);
+    await expect(db.owner.query(`UPDATE approvals SET ${column} = NULL WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(WRITE_ONCE);
+    expect(await rowOf()).toEqual(before);
+  });
+
+  it.each(COLUMNS)('%s: %s is untouched when the same value is written again (an update that changes nothing is allowed)', async (_act, column) => {
+    const updated = await db.runtime.query(`UPDATE approvals SET ${column} = ${column} WHERE id = $1::uuid`, [approvalId]);
+    expect(updated.rowCount).toBe(1);
+  });
+});

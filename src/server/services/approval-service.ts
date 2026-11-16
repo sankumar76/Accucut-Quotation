@@ -142,13 +142,17 @@ export function createApprovalService({ estimates, calculations, approvals, tran
         if (calculationId === undefined || calculatedTotal === null) throw new Error('The calculation linked to the estimate has no total to approve against.');
         // The write, in this transaction and in this order: the status (the machine decides again under the same lock), the approval, the entry. Any of them failing takes the others back.
         await workflow.transition(viewer, estimate.id, 'APPROVE', tx);
-        const approval = await approvals.insertApproval({ estimateId: estimate.id, calculationId, approvedPrice, calculatedTotal, approvedById: viewer.id }, tx);
+        // The total is kept as rupees and paise, rounded by the one rule the dialog pre-fills its price with (`toTwoPlaces`, half away from zero), so the price and the total are always compared at the
+        // same precision and 06.07 can compare them directly (SQR-03 of the review of AQP-323). The full-precision BL stays in the immutable calculation the approval points at.
+        const calculatedPaise = toTwoPlaces(calculatedTotal);
+        if (calculatedPaise === null) throw new Error('The calculated total of the linked calculation is not a decimal number.');
+        const approval = await approvals.insertApproval({ estimateId: estimate.id, calculationId, approvedPrice, calculatedTotal: calculatedPaise, approvedById: viewer.id }, tx);
         await workflow.audit.record(tx, {
           event: 'approval.approved',
           ...request.audit,
           object: { id: estimate.id, label: estimate.taskCode },
           before: null,
-          after: { approvedPrice, calculatedTotal, approver: request.audit.actorLabel },
+          after: { approvedPrice, calculatedTotal: calculatedPaise, approver: request.audit.actorLabel },
         });
         return { status: 'APPROVED', approvedPrice, approvedAt: approval.approvedAt.toISOString() };
       });

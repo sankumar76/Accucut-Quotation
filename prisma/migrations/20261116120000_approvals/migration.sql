@@ -4,6 +4,9 @@
 -- Rollback note, for use only before an approval has been stored; restore from backup after that, because dropping the table drops the prices:
 --   DROP TABLE "approvals"; DROP FUNCTION "forbid_approval_core_change";
 --
+-- "calculated_bl" is the calculated total (BL) **rounded to rupees and paise by the same rule the dialog pre-fills its price with** (half away from zero, `toTwoPlaces`), so the two always agree and
+-- STORY-06.07 compares the price with it directly; the full-precision BL stays in the immutable calculation the row points at (SQR-03 of the review of AQP-323).
+--
 -- One row per approval cycle. The approve columns (price, calculated total, calculation, approver, time, and the override pair that STORY-06.07 fills) are written once, by INSERT, and never
 -- changed. The unlock, cancel and remove columns are null until STORY-06.08, 06.12 and 06.13 set them, so the table is created whole now and those stories add no migration. BO is the latest
 -- row of an estimate that has not been removed (architecture section 4.8).
@@ -17,7 +20,7 @@ CREATE TABLE "approvals" (
     "estimate_id" UUID NOT NULL,
     "calculation_id" UUID NOT NULL,
     "approved_price" DECIMAL(18,2) NOT NULL,
-    "calculated_bl" DECIMAL(18,4) NOT NULL,
+    "calculated_bl" DECIMAL(18,2) NOT NULL,
     "is_override" BOOLEAN NOT NULL DEFAULT false,
     "override_reason" TEXT,
     "approved_by" UUID NOT NULL,
@@ -81,7 +84,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON TABLE "approvals" FROM "accucut_app";
 GRANT SELECT, INSERT ON TABLE "approvals" TO "accucut_app";
 GRANT UPDATE ("unlocked_by", "unlocked_at", "unlock_reason", "cancelled_by", "cancelled_at", "cancel_reason", "removed_by", "removed_at") ON TABLE "approvals" TO "accucut_app";
 
--- 4. Triggers, the backstop for every role, the owner included. A change of any approve column is refused (the approved values stand), and so is every DELETE and TRUNCATE. The owner could still drop
+-- 4. Triggers, the backstop for every role, the owner included. A change of any approve column is refused (the approved values stand), a column of the unlock, cancel and remove acts is write-once, and so is every DELETE and TRUNCATE. The owner could still drop
 --    a trigger with DDL; that is a schema change, made only by a migration, and the runtime role cannot do it (architecture section 9.5, ARCH-R8).
 CREATE FUNCTION "forbid_approval_core_change"() RETURNS trigger
     LANGUAGE plpgsql
@@ -98,6 +101,19 @@ BEGIN
         OR NEW."approved_by" IS DISTINCT FROM OLD."approved_by"
         OR NEW."approved_at" IS DISTINCT FROM OLD."approved_at" THEN
         RAISE EXCEPTION 'The approved values of an approval cannot be changed.'
+            USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+    -- The unlock, cancel and remove columns are write-once (SQR-02 of the review of AQP-323): null until their story sets them, then fixed. A value that was set cannot be rewritten or cleared,
+    -- so a removed price cannot be brought back by clearing "removed_at", and an unlock or a cancel cannot be erased or re-attributed. A later act on the same estimate is a new row.
+    IF (OLD."unlocked_by" IS NOT NULL AND NEW."unlocked_by" IS DISTINCT FROM OLD."unlocked_by")
+        OR (OLD."unlocked_at" IS NOT NULL AND NEW."unlocked_at" IS DISTINCT FROM OLD."unlocked_at")
+        OR (OLD."unlock_reason" IS NOT NULL AND NEW."unlock_reason" IS DISTINCT FROM OLD."unlock_reason")
+        OR (OLD."cancelled_by" IS NOT NULL AND NEW."cancelled_by" IS DISTINCT FROM OLD."cancelled_by")
+        OR (OLD."cancelled_at" IS NOT NULL AND NEW."cancelled_at" IS DISTINCT FROM OLD."cancelled_at")
+        OR (OLD."cancel_reason" IS NOT NULL AND NEW."cancel_reason" IS DISTINCT FROM OLD."cancel_reason")
+        OR (OLD."removed_by" IS NOT NULL AND NEW."removed_by" IS DISTINCT FROM OLD."removed_by")
+        OR (OLD."removed_at" IS NOT NULL AND NEW."removed_at" IS DISTINCT FROM OLD."removed_at") THEN
+        RAISE EXCEPTION 'An unlock, a cancel or a removal of an approval cannot be changed once it is set.'
             USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     RETURN NEW;

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { CALCULATION_CHANGED_CODE, NOT_CALCULATED_CODE, NOT_CALCULATED_MESSAGE, TOTALS_OUT_OF_DATE_CODE, TOTALS_OUT_OF_DATE_MESSAGE } from '@/lib/estimate/approval-words';
 import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
+import { toTwoPlaces } from '@/lib/money';
 import { approveAnswerSchema } from '@/server/views/schemas/estimates';
 
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
@@ -250,12 +251,13 @@ describe('STORY-06.06 AC-2: an approval that passes the guard is written, in one
     // The row is the one the story names: the estimate, the calculation it was approved on, the price, the total it was set against and who approved it.
     const [row] = harness.calculationWorld.approvals;
     const calculatedTotal = defined(harness.calculationWorld.calculations.find((record) => record.id === calculationId)).productValues.totalPrice;
+    const paise = toTwoPlaces(defined(calculatedTotal));
     expect(harness.calculationWorld.approvals).toHaveLength(1);
-    expect(row).toMatchObject({ estimateId: owned(), calculationId, approvedPrice: PRICE, calculatedTotal, approvedById: harness.idOf.LEAD });
+    expect(row).toMatchObject({ estimateId: owned(), calculationId, approvedPrice: PRICE, calculatedTotal: paise, approvedById: harness.idOf.LEAD });
     // One entry, `approval.approved`, with the price, the calculated total and the approver (the person's name now).
     expect(harness.calculationAudit.rows).toHaveLength(entries + 1);
     expect(harness.calculationAudit.rows.at(-1)).toMatchObject({ event: 'approval.approved', actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: null });
-    expect(harness.calculationAudit.rows.at(-1)?.after).toEqual({ approvedPrice: PRICE, calculatedTotal, approver: 'Invented Lead' });
+    expect(harness.calculationAudit.rows.at(-1)?.after).toEqual({ approvedPrice: PRICE, calculatedTotal: paise, approver: 'Invented Lead' });
   });
 
   it('an Admin passes it too, and a price in whole rupees is kept as rupees and paise', async () => {

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { CALCULATION_CHANGED_CODE, TOTALS_OUT_OF_DATE_CODE } from '@/lib/estimate/approval-words';
+import { prefillPrice } from '@/lib/estimate/approve-price';
+import { toTwoPlaces } from '@/lib/money';
 import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
 import { createApprovalService } from '@/server/services/approval-service';
 import { createConfigRepository } from '@/server/repositories/config-repository';
@@ -68,7 +70,10 @@ describe('AC-2: the approval is written in one piece', () => {
   it('moves the estimate to APPROVED, stores the approvals row (price, calculated total, calculation, approver, time) and records one audit entry', async () => {
     const { estimateId } = await calculatedEstimate(db);
     const calculationId = await currentCalculationOf(db, estimateId);
-    const total = defined((await db.owner.query<{ bl: string }>("SELECT product_values->>'totalPrice' AS bl FROM calculations WHERE id = $1::uuid", [calculationId])).rows[0]).bl;
+    const stored = defined((await db.owner.query<{ bl: string }>("SELECT product_values->>'totalPrice' AS bl FROM calculations WHERE id = $1::uuid", [calculationId])).rows[0]).bl;
+    // The total is kept as rupees and paise by the rule the dialog pre-fills its price with (SQR-03 of the review): the screen's own rounding of the calculation's full-precision BL.
+    const total = defined(toTwoPlaces(stored));
+    expect(total).toBe(prefillPrice(stored));
 
     const answer = await db.approvalService.approve(lead(), estimateId, request(calculationId, '1000'));
     expect(answer).toMatchObject({ status: 'APPROVED', approvedPrice: '1000.00' });
@@ -99,8 +104,8 @@ describe('AC-2: the approval is written in one piece', () => {
       removed_by: null,
       removed_at: null,
     });
-    // The total the price was set against is the calculation's own BL, to the four places the column keeps.
-    expect(Number(row['calculated_bl'])).toBeCloseTo(Number(total), 4);
+    // The total the price was set against is the calculation's own BL in rupees and paise, exactly what the dialog pre-fills.
+    expect(row['calculated_bl']).toBe(total);
     expect(Math.abs(Date.now() - (row['approved_at'] as Date).getTime())).toBeLessThan(60_000);
 
     const entries = await approvalEntries(db, estimateId);

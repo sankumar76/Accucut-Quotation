@@ -8,6 +8,7 @@ import {
   TOTALS_OUT_OF_DATE_CODE,
   TOTALS_OUT_OF_DATE_MESSAGE,
 } from '@/lib/estimate/approval-words';
+import { prefillPrice } from '@/lib/estimate/approve-price';
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { FigureBasis } from '@/server/repositories/calculation-repository';
 import { assertApprovable, assertMayApprove, createApprovalService } from '@/server/services/approval-service';
@@ -159,13 +160,16 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
   /** A service whose storage holds a submitted estimate with current figures, and counts every write. */
   function serviceWith(total: string | null) {
     const writes: string[] = [];
+    const inserted: Array<{ readonly calculatedTotal: string; readonly approvedPrice: string }> = [];
+    const audited: unknown[] = [];
     const tx = { kind: 'database-transaction' } as const;
     const service = createApprovalService({
       estimates: { lockEstimate: () => Promise.resolve({ id: 'estimate-1', engineerId: 'engineer-1', status: 'SUBMITTED', customerId: 'customer-1', inputsRevision: 4, taskCode: 'Q-2026-0001' }) },
       calculations: { findFigureBasis: () => Promise.resolve(CURRENT), findCalculatedTotal: () => Promise.resolve(total) },
       approvals: {
-        insertApproval: () => {
+        insertApproval: (approval) => {
           writes.push('insert');
+          inserted.push({ calculatedTotal: approval.calculatedTotal, approvedPrice: approval.approvedPrice });
           return Promise.resolve({ id: 'approval-1', approvedAt: new Date('2026-11-16T06:00:00.000Z') });
         },
       },
@@ -176,15 +180,16 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
           return Promise.resolve({ id: 'estimate-1', from: 'SUBMITTED', to: 'APPROVED' });
         },
         audit: {
-          record: () => {
+          record: (_tx, entry) => {
             writes.push('audit');
+            audited.push(entry.after);
             return Promise.resolve();
           },
           list: () => Promise.reject(new Error('Not used.')),
         },
       },
     });
-    return { service, writes };
+    return { service, writes, inserted, audited };
   }
 
   it('writes the status, the approval and the audit entry, in that order, in the one transaction, and answers the price in rupees and paise', async () => {
@@ -195,6 +200,22 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
       approvedAt: '2026-11-16T06:00:00.000Z',
     });
     expect(writes).toEqual(['transition', 'insert', 'audit']);
+  });
+
+  it.each([
+    // The values where rounding the full total once and rounding it twice (to 4 places, then to 2) disagree (SQR-03 of the review): 12.34495 is 12.34 at the third digit, and 12.3450 would give 12.35.
+    ['12.34495', '12.34'],
+    ['12.344999', '12.34'],
+    ['12.345', '12.35'],
+    ['0.00495', '0.00'],
+    ['12629.9876', '12629.99'],
+    ['30', '30.00'],
+  ])('the total kept for %s is %s: the one rule the dialog pre-fills its price with, so the two always agree', async (total, expected) => {
+    const { service, inserted, audited } = serviceWith(total);
+    await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit });
+    expect(inserted).toEqual([{ calculatedTotal: expected, approvedPrice: '1.00' }]);
+    expect(prefillPrice(total)).toBe(expected);
+    expect(audited).toEqual([{ approvedPrice: '1.00', calculatedTotal: expected, approver: 'Invented Lead' }]);
   });
 
   it('a current calculation with no total is a fault in the data (a plain error, a 500), and nothing is written', async () => {

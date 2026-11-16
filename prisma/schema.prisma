@@ -415,7 +415,7 @@ model Approval {
   estimateId     String    @map("estimate_id") @db.Uuid
   calculationId  String    @map("calculation_id") @db.Uuid
   approvedPrice  Decimal   @map("approved_price") @db.Decimal(18, 2)
-  calculatedBl   Decimal   @map("calculated_bl") @db.Decimal(18, 4)
+  calculatedBl   Decimal   @map("calculated_bl") @db.Decimal(18, 2)
   isOverride     Boolean   @default(false) @map("is_override")
   overrideReason String?   @map("override_reason")
   approvedById   String    @map("approved_by") @db.Uuid

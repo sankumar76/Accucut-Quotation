@@ -18,7 +18,7 @@ import { clientFor, type Transaction } from './transaction';
  * figures cannot change the price.
  */
 
-/** The decimals the price column stores: rupees and paise. (The calculated total keeps the four places the masters do; the column rounds it.) */
+/** The decimals the price column stores: rupees and paise. The calculated total column stores the same: the service hands it over already rounded by `toTwoPlaces`, the rule the dialog pre-fills with. */
 const PRICE_DECIMALS = 2;
 
 export interface NewApproval {
@@ -26,7 +26,7 @@ export interface NewApproval {
   readonly calculationId: string;
   /** The price in rupees as decimal text with two decimals ("12600.00"). */
   readonly approvedPrice: string;
-  /** The calculated total (BL) the price was set against, as decimal text. */
+  /** The calculated total (BL) the price was set against, as rupees and paise ("12629.99"): BL rounded by the rule the dialog pre-fills its price with. */
   readonly calculatedTotal: string;
   readonly approvedById: string;
 }

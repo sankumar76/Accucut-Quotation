@@ -84,7 +84,11 @@ const LOCK_WAIT_LIMIT_MILLISECONDS = 5_000;
 export async function untilALockWaits(db: CalculationDatabase): Promise<void> {
   const deadline = Date.now() + LOCK_WAIT_LIMIT_MILLISECONDS;
   while (Date.now() < deadline) {
-    const { rows } = await db.owner.query<{ n: number }>('SELECT count(*)::int AS n FROM pg_locks WHERE NOT granted');
+    // Only a session of this test file's own database counts: `pg_locks` is cluster-wide, and another file's wait must not end this poll early (SQR-01 of the review of AQP-323).
+    const { rows } = await db.owner.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_locks l
+       WHERE NOT l.granted AND l.pid IN (SELECT pid FROM pg_stat_activity WHERE datname = current_database())`,
+    );
     if (defined(rows[0]).n > 0) return;
     await new Promise<void>((resolve) => {
       setTimeout(resolve, LOCK_POLL_MILLISECONDS);
