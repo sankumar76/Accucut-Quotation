@@ -47,6 +47,9 @@ export interface CallContext {
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
+/** A calculation ID that no estimate has (STORY-06.05): the approval recipe names it, so the guard refuses the call whatever the estimate holds. */
+export const UNKNOWN_CALCULATION_ID = '00000000-0000-4000-8000-00000000ca1c';
+
 /** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
 export const NO_RECIPE_ID = 'invented-id';
 
@@ -193,6 +196,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // costs view, is `recalculate-route.test.ts`'s and `tests/integration/calc/recalculate.test.ts`'s.
     case 'POST /api/v1/estimates/[id]/recalculate':
       return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
+    // STORY-06.05: an approval that passes the guard is, until STORY-06.06, the fixed 501 and writes nothing; a call that names a calculation the estimate does not have is refused 409 at every state the canary
+    // estimate can be in (a Draft is "not submitted", a Submitted estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
+    // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
+    case 'POST /api/v1/estimates/[id]/approve':
+      return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
