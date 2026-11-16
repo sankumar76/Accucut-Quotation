@@ -301,8 +301,8 @@ export function createCalculationService(dependencies: CalculationServiceDepende
   async function run(request: EstimateCalculationRequest, prefixOf: (index: number) => string, configuration?: CalculationConfiguration, tx?: Transaction) {
     const { id, document } = configuration ?? (await currentConfiguration(tx));
     const typed = request.rows.map((row, index) => ({ materialId: row.materialId, inputs: parseInputs(document, row.inputs, prefixOf(index)) }));
-    const values = await readMasters(masters, request.customerId, [...new Set(typed.map((row) => row.materialId))], tx);
     const plan = plans.get(id, document.fields);
+    const values = await readMasters(masters, request.customerId, [...new Set(typed.map((row) => row.materialId))], plan.referencedRateIds, tx);
     const calculated = typed.map(({ materialId, inputs }) => {
       const material = values.materials.get(materialId);
       if (material === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);

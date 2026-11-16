@@ -103,7 +103,7 @@ export interface DeletePartRequest {
 }
 
 /**
- * The most parts one estimate may hold. **Assumption, to be confirmed by the architect or the product manager**: NFR-008 sizes Calculate and the screens at 500 parts,
+ * The most parts one estimate may hold. **Decision (DL-217)**: NFR-008 sizes Calculate and the screens at 500 parts,
  * and this is four times that. Depth stays unlimited (FR-043), but every change reads and answers the whole tree, and the Sl. No of a deep part grows with its depth, so
  * an estimate with no bound could make each request cost seconds and megabytes (review SQR-02).
  */
