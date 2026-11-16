@@ -103,7 +103,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `npx next dev --port ${DEV_PORT}`,
+      // The export runs in its own thread, from a bundle made before the server starts (`.next/export-worker.mjs`, STORY-07.01 AC-5).
+      command: `npx tsx scripts/build-export-worker.ts && npx next dev --port ${DEV_PORT}`,
       // Ready when the page the set-up project signs in on has compiled: the development server compiles a page on
       // its first request, which took longer than a test's 30 s when three projects asked at once on a slow machine.
       url: `http://localhost:${DEV_PORT}/sign-in`,
@@ -113,7 +114,7 @@ export default defineConfig({
     },
     {
       // CI stage 9 has built the sources already; a developer's run builds first, so it never tests a stale build.
-      command: IN_CI ? `npx next start --port ${PRODUCTION_PORT}` : `npx next build && npx next start --port ${PRODUCTION_PORT}`,
+      command: IN_CI ? `npx next start --port ${PRODUCTION_PORT}` : `npx next build && npx tsx scripts/build-export-worker.ts && npx next start --port ${PRODUCTION_PORT}`,
       url: `http://localhost:${PRODUCTION_PORT}/sign-in`,
       reuseExistingServer: !IN_CI,
       timeout: 300_000,

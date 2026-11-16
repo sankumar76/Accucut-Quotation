@@ -50,6 +50,7 @@ vi.mock('@/server/composition', async () => {
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
     getCostDetailsService: () => shared.costDetailsService,
+    getExportService: () => shared.exportService,
     getAccountService: () => shared.accountService,
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
@@ -95,6 +96,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/assign': 'redirect:/sign-in?callbackUrl=%2Fassign',
   '/estimates/[code]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D',
   '/estimates/[code]/costs/[slNo]': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D%2Fcosts%2F%5BslNo%5D',
+  '/estimates/[code]/export': 'redirect:/sign-in?callbackUrl=%2Festimates%2F%5Bcode%5D%2Fexport',
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/settings': 'redirect:/sign-in?callbackUrl=%2Fsettings',
   '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
@@ -111,6 +113,8 @@ const REAL_PAGE_ID: Readonly<Record<string, SegmentValues>> = {
   '/estimates/[code]': canaryTaskCodeFor(harness.targetId),
   // SCR-07 (STORY-06.03): the canary estimate's code, and the Sl. No of its one part (the part is first at the top).
   '/estimates/[code]/costs/[slNo]': { code: canaryTaskCodeFor(harness.targetId), slNo: '1' },
+  // SCR-10 (STORY-07.01): the canary estimate's code. An invented code is SCR-26 "not found" for the two roles that may open it.
+  '/estimates/[code]/export': canaryTaskCodeFor(harness.targetId),
 };
 const pageIdFor = (row: RouteRow): SegmentValues => REAL_PAGE_ID[row.path] ?? 'invented-id';
 

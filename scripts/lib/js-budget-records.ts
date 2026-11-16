@@ -21,6 +21,8 @@ export const CUSTOMER_PAGE_ROUTE = '/masters/customers/[id]';
 export const ESTIMATE_PAGE_ROUTE = '/estimates/[code]';
 /** The route pattern of the cost details of a row (STORY-06.03), as the route manifest spells it. */
 export const COSTS_PAGE_ROUTE = '/estimates/[code]/costs/[slNo]';
+/** The route pattern of the Excel export page (STORY-07.01), as the route manifest spells it. */
+export const EXPORT_PAGE_ROUTE = '/estimates/[code]/export';
 /** The Sl. No of the first part added to an estimate: the part at the top of its tree. */
 const FIRST_PART_SL_NO = '1';
 const CUSTOMERS_API_PATH = '/api/v1/customers';
@@ -116,17 +118,18 @@ export async function makeRecordPaths(options: RecordOptions): Promise<Readonly<
   try {
     admin = await signedInAdmin(options);
   } catch (error: unknown) {
-    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, COSTS_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
+    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, COSTS_PAGE_ROUTE, EXPORT_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
     return {};
   }
   if (admin === undefined) return {};
-  // One estimate serves both of its pages: the workspace and the cost details of its first part. It is made once, on first use, and a failure to make it is every page's failure.
+  // One estimate serves all of its pages: the workspace, the cost details of its first part and the export. It is made once, on first use, and a failure to make it is every page's failure.
   let estimate: Promise<MadeEstimate> | undefined;
   const estimateOf = (call: AdminCall): Promise<MadeEstimate> => (estimate ??= makeEstimate(call));
   const makers: ReadonlyArray<readonly [string, (call: AdminCall) => Promise<string>]> = [
     [CUSTOMER_PAGE_ROUTE, makeCustomerPath],
     [ESTIMATE_PAGE_ROUTE, async (call) => estimatePathOf(await estimateOf(call))],
     [COSTS_PAGE_ROUTE, async (call) => makeCostsPath(call, await estimateOf(call))],
+    [EXPORT_PAGE_ROUTE, async (call) => `${estimatePathOf(await estimateOf(call))}/export`],
   ];
   const paths: Record<string, string> = {};
   for (const [route, make] of makers) {

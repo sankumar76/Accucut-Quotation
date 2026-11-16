@@ -240,6 +240,7 @@ jobs:
         run: |
           npx prisma generate
           npx next build
+          npx tsx scripts/build-export-worker.ts
           npx tsx scripts/check-production-routes.ts
 
       # ---- Stage 10: migrations --------------------------------------------------------------
@@ -439,7 +440,9 @@ jobs:
 
       # Playwright starts `next start` on this build (playwright.config.ts), so each shard builds for itself.
       - name: "Shard: build (next build)"
-        run: npx next build
+        run: |
+          npx next build
+          npx tsx scripts/build-export-worker.ts
 
       # Throwaway passwords, made in the job and masked, as in `verify` (stage 10). They exist only for this database.
       - name: "Shard: create the two database roles (throwaway passwords)"

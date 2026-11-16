@@ -4,6 +4,7 @@ import { loadAppEnv } from '../lib/env';
 import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
+import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
 import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
 import { createAuditRepository } from './repositories/audit-repository';
@@ -11,6 +12,7 @@ import { createCalculationRepository } from './repositories/calculation-reposito
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
+import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
 import { createMasterRepository } from './repositories/master-repository';
@@ -28,6 +30,7 @@ import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
@@ -56,6 +59,7 @@ let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let costDetailsService: CostDetailsService | undefined;
+let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
@@ -271,6 +275,24 @@ export function getCostDetailsService(): CostDetailsService {
     });
   }
   return costDetailsService;
+}
+
+/**
+ * The Excel export (STORY-07.01): the summary of SCR-10 and the `.xlsx`, for the Lead and the Admin. The file is built in a `worker_threads` thread from the bundle `scripts/build-export-worker.ts` makes at
+ * `.next/export-worker.mjs` under the folder the server runs in (ADR-012). Restricted (NFR-002): only the two export routes and the export page ask for it here, all for the Lead and the Admin alone.
+ */
+export function getExportService(): ExportService {
+  if (exportService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    exportService = createExportService({
+      header: createExportRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations) },
+      build: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      clock: systemClock,
+    });
+  }
+  return exportService;
 }
 
 /**

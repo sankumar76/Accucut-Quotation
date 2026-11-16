@@ -17,6 +17,9 @@ import { createCalculationService, type CalculationService } from '../../src/ser
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
+import { buildWorkbook } from '../../src/server/export/build-workbook';
+import type { ExportRepository } from '../../src/server/repositories/export-repository';
+import { createExportService, type ExportService } from '../../src/server/services/export-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
@@ -125,6 +128,10 @@ export interface SessionHarness {
   readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
   readonly costDetailsService: CostDetailsService;
+  /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
+  readonly exportService: ExportService;
+  /** The pieces `exportService` reads through, for a test that spies on what a refused caller causes to be read. */
+  readonly exportReads: ExportRepository & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -259,9 +266,29 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
+  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  const exportReads = {
+    findHeader: (estimateId: string) => {
+      const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
+      if (estimate === undefined) return Promise.resolve(null);
+      const customer = masters.customers.find((candidate) => candidate.id === estimate.customerId);
+      return Promise.resolve({ code: estimate.code, customerName: customer?.name ?? null });
+    },
+    listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
+  };
+  const exportService = createExportService({
+    header: exportReads,
+    nodes: exportReads,
+    configuration: { current: () => Promise.resolve(reviewVersion) },
+    build: buildWorkbook,
+    clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
+  });
+
   return {
     estimateReviewService,
     costDetailsService,
+    exportService,
+    exportReads,
     reviewReads,
     calculationAudit,
     users,

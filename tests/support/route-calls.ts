@@ -87,6 +87,8 @@ const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string
   '/estimates/[code]': (context) => canaryEstimatePageFor(context.ownerId),
   // SCR-07 (STORY-06.03): the first part of the canary estimate, which every canary estimate holds (its Sl. No is 1). Lead and Admin only: an Engineer is refused whatever the address.
   '/estimates/[code]/costs/[slNo]': (context) => `${canaryEstimatePageFor(context.ownerId)}/costs/${CANARY_PART_SL_NO}`,
+  // SCR-10 (STORY-07.01): the canary estimate's export page. Lead and Admin only: an Engineer is refused whatever the address.
+  '/estimates/[code]/export': (context) => `${canaryEstimatePageFor(context.ownerId)}/export`,
 };
 
 /**
@@ -209,6 +211,12 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // the estimate's, so the call names a part that really exists; the canary estimate has no calculation, so the answer is the state alone (`none`, `details: null`). The stages of a calculated row are
     // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
+      return { id, status: 200 };
+    // STORY-07.01: the export reads nothing that changes. The two roles that may call it get 200: the summary as JSON and the file as an attachment (a `.xlsx` header row, built in process by the harness).
+    // The canary estimate's header and parts are the harness's own. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press.
+    case 'GET /api/v1/estimates/[id]/export':
+      return { id, file: true, status: 200 };
+    case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
     default:
       return undefined;
