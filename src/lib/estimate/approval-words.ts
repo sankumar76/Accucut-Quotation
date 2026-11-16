@@ -15,7 +15,7 @@ export const TOTALS_OUT_OF_DATE_MESSAGE = 'An input changed since the last calcu
 
 /** The `code` of the 409 for a `calculationId` that is no longer the estimate's current calculation: a figure that changed under the Lead cannot be approved (architecture section 4.8). */
 export const CALCULATION_CHANGED_CODE = 'CALCULATION_CHANGED';
-export const CALCULATION_CHANGED_MESSAGE = 'The figures were calculated again since this page was loaded. Reload the page and check them before approving.';
+export const CALCULATION_CHANGED_MESSAGE = 'The figures were calculated again after this page was loaded, so nothing was approved. Show the new figures and check the total before you approve.';
 
 /**
  * The answer to an approval that passed every check, until STORY-06.06 writes the approval (assumption A-1 of STORY-06.05). A fixed code and no estimate and no figure; the status is 501 and

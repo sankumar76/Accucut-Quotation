@@ -65,7 +65,12 @@ describe('AC-2: an estimate changed since its last calculation is the 409 TOTALS
 
 describe('AC-3: a calculationId that is not the current calculation is a 409', () => {
   it('another ID, with the figures current', () => {
-    expect(refusalOf(() => assertApprovable(lead, submitted, CURRENT, { calculationId: OTHER_ID }))).toMatchObject({ httpStatus: 409, code: CALCULATION_CHANGED_CODE });
+    expect(refusalOf(() => assertApprovable(lead, submitted, CURRENT, { calculationId: OTHER_ID }))).toMatchObject({
+      httpStatus: 409,
+      code: CALCULATION_CHANGED_CODE,
+      // The words settled by the ux-expert (ux-spec v0.30, AQP-322 comment 12055), pinned as written.
+      message: 'The figures were calculated again after this page was loaded, so nothing was approved. Show the new figures and check the total before you approve.',
+    });
   });
 
   it('the same ID in capitals is the same ID', () => {

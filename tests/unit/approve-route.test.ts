@@ -147,7 +147,10 @@ describe('AC-3: a calculationId that is not the current calculation is a 409', (
     const before = snapshot();
     const response = await approve(UNKNOWN_CALCULATION_ID);
     expect(response.status).toBe(409);
-    expect(await bodyOf(response)).toMatchObject({ code: CALCULATION_CHANGED_CODE });
+    expect(await bodyOf(response)).toMatchObject({
+      code: CALCULATION_CHANGED_CODE,
+      title: 'The figures were calculated again after this page was loaded, so nothing was approved. Show the new figures and check the total before you approve.',
+    });
     expect(snapshot()).toEqual(before);
   });
 
