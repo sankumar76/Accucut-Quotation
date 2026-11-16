@@ -204,3 +204,89 @@ Stage 13 is outside the required checks (DL-211). For this `critical-review` sto
 
 - **orchestrator:** see section 4. Do not merge on the required checks alone; wait for a Stage 13 run that is green end to end. Then send the CI delta (SQR-01, SQR-11) for a short re-check.
 - **developer:** SQR-01 (with SQR-11) before the squash. SQR-02 (README line), SQR-04 and SQR-05 are a few lines each and fit this PR. SQR-03, SQR-06 and SQR-07 can go in this PR or in the hardening window.
+
+---
+
+## Addendum, round 2 (2026-11-16): re-check of `git diff 7f17383 4533597`
+
+| Item | Value |
+|---|---|
+| Heads | from `7f17383` to `4533597` (8 PR commits plus the merge `4540164` of master; the merge's application files are out of scope and were not reviewed here) |
+| Scope | `deploy/windows/**` (module, `backup.ps1`, `install.ps1`, README, `ci/*`, `tests/*`), `.github/workflows/windows-package.yml`, `tests/unit/windows-deploy-files.test.ts` |
+| Verdict | **APPROVE WITH COMMENTS.** **No Blocker or Critical is left.** The Critical defect that Stage 13 found (BOM before the dump) is fixed and proven. No Major is open. |
+| Counts (open after this round) | Blocker 0, Critical 0, Major 0, Minor 3 (SQR-03 part, SQR-06, SQR-13), Info 5 (SQR-08, 09, 10, 14, 15) |
+| Merge condition | Stage 13 on `4533597` green from start to end (run 43802148274, running at the time of writing) |
+
+### A. Evidence
+
+- **Stage 13 run 43800283595 (`0b8858f`):** install, assert, exercise, both updates, refused update, rollback and removal **all passed**.
+  - Every decrypted copy starts with `PGDMP` and restores. That covers the install's weekly copy and the **release copies made by an administrator** (`accucut-20261116-040107-release.age`, `…040125…`, `…040219…`), which is the exact case of the BOM defect.
+  - Pester: **450 passed, 1 failed**. The one failure is the SecureString-disposal test; its fix in `4533597` is test-only (the value is read at call time).
+- **Local:** `vitest run tests/unit/windows-deploy-files.test.ts` on a scratch copy of `4533597` gave 46 passed, 0 failed.
+- **Read:** every changed line of the scope above.
+
+### B. Earlier findings
+
+| ID | Result | Where and why |
+|---|---|---|
+| SQR-01 (Major) | **Fixed** | `assert-install.ps1` gets `-AfterInstall` (passed only at `windows-package.yml:315`). It checks the install's weekly copy and its one event only then; later calls decrypt and restore the newest verified copy. Proven in run 43800283595. Issue #438 can be closed when the PR merges. |
+| SQR-02 | **Fixed** | `Test-AccucutModuleLogging` (read-only, policy key), a warning in `install.ps1:961-964` that does not stop the install, a README paragraph, and Pester cases. |
+| SQR-03 | **Fixed in part; the rest stays Minor** | `Set-AccucutBackupFileAcl` now reads back the owner, protection and the three SIDs before any secret is written. It still does not compare the **access masks**, so a Full Control ACE for AccucutBackup would pass. A handle opened before the lock would keep its access (not exploitable at install, because the services start later). Fix: add `[int]$_.FileSystemRights` to the compared string (`0x1F01FF`, `0x1F01FF`, `0x120089`). This can go to the hardening window. |
+| SQR-04 | **Fixed** | `-LogFile` at `install.ps1:960` and `:1088`, and in `Register-AccucutBackupTask`'s catch. |
+| SQR-05 | **Fixed** | `New-AccucutLsaString` runs inside `try` in all three callers, with a null guard in `finally`. |
+| SQR-06 | Not fixed (Minor, allowed) | Unchanged; for the hardening window. |
+| SQR-07 | **Fixed** | An `InvalidOperationException` with `Data['accucutCode'] = 'low-space'`, read in `Invoke-AccucutBackup`'s catch and in `backup.ps1:590`. The bare `throw` rethrows the same exception object, so the code survives. A Pester mock throws the same shape. |
+| SQR-08, 09, 10 | Info, unchanged | — |
+| SQR-11 | **Fixed** | `$global:LASTEXITCODE = 0` at the end of `assert-install.ps1`, `exercise-backup.ps1`, `assert-removal.ps1` and `diagnose-backup-login.ps1`, after every assertion. |
+
+### C. The five questions
+
+1. **Is the BOM fix correct and complete for every path that feeds a binary stream to a child? Yes for this PR.**
+   - **Cause.** .NET Framework's `Process.Start` builds `StandardInput` as `new StreamWriter(pipe, Console.InputEncoding)` with `AutoFlush = true`. The flush writes the encoding's preamble, and a pipe cannot seek, so it is never skipped. With console code page 65001 that is EF BB BF.
+   - **Fix.** `Invoke-AccucutBackupPipe` swaps the console input encoding to code page 437 (no preamble) only when the current one has a preamble, starts `age`, and puts the encoding back. The dump goes only through `BaseStream`, never through the writer, and a static guard enforces that.
+   - **Only binary path.** `age`'s standard input is the only binary standard input in this PR; `pg_dump` has no standard input redirect.
+   - **Text path.** `Invoke-AccucutNative -StdIn` (psql SQL) gets the same BOM on a UTF-8 console. Stage 13 shows that psql accepts it (the admin release backup's `job_runs` row is asserted and passed). It is tracked as #439.
+   - **Forward note (SQR-14):** 10.11's `age -d | pg_restore` redirects `pg_restore`'s standard input and needs the same treatment.
+2. **Can the console be left changed if `Start()` throws? No.** `Start()` is inside its own `try`, and the restore is in that `finally`.
+   - If reading or setting the encoding throws, `$consoleInput` is `$null`. The .NET setter changes nothing when `SetConsoleCP` fails, so nothing needs restoring.
+   - A failed restore is only logged with `Write-Verbose`, which leaves code page 437 on the console. It affects only typed non-ASCII input in that console. Acceptable.
+3. **Can the PGDMP checks be bypassed? Not on the pg_dump side.**
+   - **How the check works.** The first 5 bytes are read in a loop (short reads are handled). Anything other than `PGDMP` kills `pg_dump` and raises `$magicError` before the exit-code checks, so the caller deletes the `.part` file.
+   - **What it does not see (SQR-13).** The check reads `pg_dump`'s output. It **cannot** see bytes that .NET puts in front on `age`'s side, which is the BOM class itself. In the product, that class is prevented only by the encoding swap; Stage 13's decrypt-and-check is the only proof, and the server has no private key.
+   - **Residual.** A theoretical case where the getter reports a preamble encoding but the setter fails would again give a silently unrestorable copy recorded as `ok`. See SQR-13 for a one-line post-condition.
+4. **Did the `-cmatch` changes loosen any rule? No; each one tightens.**
+   - `ageRecipient` (`Test-AccucutBackupSetting`, `Invoke-AccucutBackupPipe`, `install.ps1:792`), `database`, and `Add-AccucutJobRun -Job` (`ValidatePattern … Options = 'None'`) were case-insensitive and now reject upper case. The patterns themselves are unchanged.
+   - `pgHost` and `pgBinDirectory` stay `-match`, but list both cases explicitly, so there is no change.
+   - The Pester password guard now uses `-MatchExactly '--password|-W\b'`. Before, the case-insensitive `-W` also matched psql's legitimate `-w`. Its comment stripping keeps `PGPASSWORD` and `PGPASS* = $…` (other than `$PassFile`) banned in code. That is a correctness fix, not a loosening.
+   - See SQR-15 for the remaining case-insensitive matches. They are harmless.
+5. **Did any diagnostic introduce a secret? No.**
+   - The Stage 13 PGDMP assertion prints the copy's name, size and first 16 bytes of the decrypted archive. That is the archive header (`50-47-44-4D-50-01-10-00…`), not data.
+   - The product's `$magicError` prints up to 5 bytes of `pg_dump`'s output.
+   - `diagnose-backup-login.ps1` only gains an exit-code reset.
+   - No new variable holds or prints a password.
+
+### D. New findings
+
+#### SQR-13 · Minor: the BOM fix has no post-condition in the product
+
+- **Where:** `deploy/windows/AccucutOps.psm1`, `Invoke-AccucutBackupPipe`, right after `[void]$age.Start()`.
+- **Issue:** the fix is preventive only. If the swap is skipped while the encoding has a preamble (the setter's `catch`), the BOM is written again and the copy is recorded `ok` but cannot be restored. Neither the pipe's PGDMP check nor the age-header check can see it.
+- **Fix (one line, exact):** the writer's encoding shows whether a preamble was written.
+  ```powershell
+  if ($age.StandardInput.Encoding.GetPreamble().Length -gt 0) { try { $age.Kill() } catch { Write-Verbose $_.Exception.Message }; throw 'age was started with a standard input that writes a byte order mark; no copy is made.' }
+  ```
+- **Test:** a Pester case that mocks the swap to fail on a UTF-8 console and asserts that the run fails and no `.age` file is kept.
+- **Placement:** cheap, so recommended in this PR, given the defect class; otherwise the hardening window.
+
+#### SQR-14 · Info: make the no-preamble start a helper for 10.11 and #439
+
+The swap is inline in `Invoke-AccucutBackupPipe`. 10.11's `age -d | pg_restore` (`pg_restore`'s standard input) and #439 (`Invoke-AccucutNative -StdIn`) need the same logic. One module function, for example `Start-AccucutProcessNoPreamble -Process $p`, with the swap, the restore and the SQR-13 post-condition, keeps the three in step. ADR-015 Amendment 3.1 point 1 says the restore follows the same pattern.
+
+#### SQR-15 · Info: case-insensitive matches that remain
+
+`Get-AccucutBackupCopy` and `Remove-AccucutBackupCopy` match copy names with `-match`/`-notmatch`, so `ACCUCUT-…-WEEKLY.AGE` matches. The manifest's `sha256` also accepts upper-case hex. On NTFS, names are case-insensitive anyway, so this deletes nothing that the rule would keep. Use `-cmatch` for consistency when convenient.
+
+### E. Issues for other roles
+
+- **orchestrator:** no Blocker or Critical is left, so CLAUDE.md section 9 item 2 does not hold the merge. Merge after Stage 13 run 43802148274 (or a later one) is green from start to end, including Pester. Close #438 when the PR merges.
+- **developer:** SQR-13 is recommended in this PR (one line). SQR-03 (masks), SQR-06, SQR-14 and SQR-15 can go to the hardening window.
