@@ -10,7 +10,7 @@ import {
 } from '@/lib/estimate/approval-words';
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { FigureBasis } from '@/server/repositories/calculation-repository';
-import { assertApprovable, assertMayApprove } from '@/server/services/approval-service';
+import { assertApprovable, assertMayApprove, createApprovalService } from '@/server/services/approval-service';
 
 /**
  * STORY-06.05 AC-1 to AC-5 (FR-101, D-20; architecture sections 4.8 and 6 "Approve"): the guard of an approval, pure and with no storage. It runs in the order the story fixes: the role, the status (the state
@@ -126,5 +126,22 @@ describe('NFR-002: no refusal holds an ID, a figure or a revision', () => {
     expect(text).not.toContain(CURRENT_ID);
     expect(text).not.toContain(OTHER_ID);
     expect(text).not.toMatch(/\d/);
+  });
+});
+
+describe('AC-5: the service refuses an Engineer as a rejected promise, before it reads or locks anything', () => {
+  it('rejects with the 403 (it does not throw before returning a promise), and the stores are not touched', async () => {
+    let touched = 0;
+    const touch = (): never => {
+      touched += 1;
+      throw new Error('The store was touched.');
+    };
+    const service = createApprovalService({
+      estimates: { lockEstimate: touch },
+      calculations: { findFigureBasis: touch },
+      transactions: { run: touch },
+    });
+    await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00' })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(touched).toBe(0);
   });
 });
