@@ -26,7 +26,7 @@ export interface CompiledPlan {
   readonly productFormulas: ReadonlyArray<CompiledFormula>;
   /**
    * The Process Master items (rates) some formula of this plan reads, each ID once, in order of first appearance over the row formulas and then the product formulas (architecture section 4.2,
-   * GitHub #432). The calculation reads, and its master snapshot keeps, exactly these of the customer's rates. A rate inside `IF`, `MIN`, `MAX`, `ROUND` or a negation counts; `SUM(column)`
+   * GitHub issue 432). The calculation reads, and its master snapshot keeps, exactly these of the customer's rates. A rate inside `IF`, `MIN`, `MAX`, `ROUND` or a negation counts; `SUM(column)`
    * reads a field, never a rate. Computed once here, so the plan cache holds it with the plan.
    */
   readonly referencedRateIds: ReadonlyArray<string>;
