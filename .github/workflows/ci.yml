@@ -526,6 +526,22 @@ jobs:
           echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
           npx playwright test --shard="${SHARD_INDEX}/${SHARD_TOTAL}"
 
+      # MEASUREMENT ONLY (AQP-340): keep the traces of the suspect specs so the time of each action can be read. Not for merge.
+      - name: "Measurement: upload traces"
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: traces-shard-${{ matrix.shard }}
+          path: |
+            test-results/estimate-calculate-*
+            test-results/export-*
+            test-results/estimate-picture-*
+            test-results/estimate-fasteners-*
+            test-results/estimate-tree-*
+            test-results/lead-warning-*
+          retention-days: 3
+          if-no-files-found: ignore
+
   # ---- The required check (AQP-208, test strategy sections 10.3 and 10.5) -----------------------------------------
   # The fan-in job. Its name is the required status check on master and must not change (the nightly CI-time step also
   # finds the end of a run by this name). It is the only job with `needs`. `if: always()` makes it run when a needed job
