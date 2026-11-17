@@ -13,7 +13,7 @@ import {
   ensureCanaryMaterials,
   makeCanaryEstimateCalculable,
   readEstimateState,
-  signInThroughThePage,
+  signInWithoutThePage,
   type E2eUser,
 } from './auth';
 
@@ -25,11 +25,13 @@ import {
 const ALPHA_CUSTOMER_ID = defined(CUSTOMER_CANARIES[0]).id;
 const ALPHA_MATERIAL_ID = defined(MATERIAL_CANARIES[0]).id;
 
+/**
+ * Signs the person in without the sign-in screen and the queue behind it (`signInWithoutThePage`): these specs open an estimate page next, and the two page loads cost the development server a
+ * quarter of a test's 30 s on a loaded runner (AQP-340). Every caller goes to a page, or already stands on one, right after it.
+ */
 export async function signInAs(page: Page, person: E2eUser): Promise<void> {
   await page.context().clearCookies();
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expect(page).toHaveURL(/\/queue$/);
+  await signInWithoutThePage(page, person.email, E2E_PASSWORD);
 }
 
 /** An Engineer with an estimate that can be calculated: the customer chosen and one part holding every input. */

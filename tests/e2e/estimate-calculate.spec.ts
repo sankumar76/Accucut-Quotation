@@ -4,6 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
 
 import { makeCanaryEstimateCalculable, readCalculatedValues, readEstimateState, useFreshAddress } from './support/auth';
+import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
 
@@ -280,6 +281,9 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await openForm(page, testInfo);
     const bar = page.locator('[data-calculate-bar]');
     await expect(bar).toBeInViewport();
+    // The page keeps a focused field clear of the bar with `scroll-padding-bottom: var(--sticky-bottom)`, which a client effect publishes on <html> after the bar is measured (`use-sticky-offsets.ts`). A focus before that
+    // scrolls the field to the edge, behind the bar: the failure of AQP-340's run 44048490092, on both attempts. Like DEF-011, the wait is for the page to be ready, not for time.
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--sticky-bottom') !== '');
     await control(page, 'AJ').focus();
     await expect(bar).toBeInViewport();
     const field = await control(page, 'AJ').boundingBox();
@@ -288,14 +292,24 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await expectNoSidewaysScroll(page);
   });
 
-  test('AC-9: axe finds 0 violations in the blocked state and in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
+  // One test for each state (AQP-340, DEF-037). The two states were one test that opened the form, scanned, reloaded, pressed again and scanned again: 26 to 30 s of the 30 s a test has on a loaded
+  // runner (traces: 19 to 30 s), so it was the first to time out when the runner slowed. Each test now holds half of that, with the same assertions and the same scans.
+  test('AC-9: axe finds 0 violations in the blocked state, and the page does not scroll sideways', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     await press(page);
     await expect(summary(page)).toBeVisible();
     await expectFormAccessible(page);
     await expectNoSidewaysScroll(page);
+  });
 
-    await makeComplete(page, owner.id);
+  test('AC-9: axe finds 0 violations in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
+    // The estimate is made complete in the database before the page is opened (the same `makeCanaryEstimateCalculable` that `makeComplete` calls), so the test does not open an empty form, choose the customer and reload
+    // to see it: the page it scans is the same page in the same state, reached with about 10 s less work.
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await signInAs(page, owner);
+    await page.goto(`/estimates/${code}`);
+    await expect(partForm(page)).toBeVisible();
+    await expect(control(page, 'E')).toBeEnabled();
     const response = await press(page);
     expect(response.status()).toBe(200);
     await expect(calculateButton(page)).toHaveText('Submitted');

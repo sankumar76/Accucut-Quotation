@@ -7,6 +7,7 @@ import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 import { createDisposableUser, useFreshAddress } from './support/auth';
 import { engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { withExportTurn } from './support/export-slot';
 
 /**
  * STORY-07.01 (AC-2 to AC-7; NFR-002, NFR-027): the Excel export, SCR-10, for a Lead and an Admin at `/estimates/<code>/export`, at 360x800, 768x1024 and 1366x768. Each test makes an Engineer of its own with an
@@ -47,7 +48,7 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     await expect(card).toContainText('A to BO');
     await expect(page.getByRole('region', { name: 'The rows in the file' })).toBeVisible();
 
-    const [download] = await Promise.all([page.waitForEvent('download'), downloadButton(page).click()]);
+    const [download] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), downloadButton(page).click()]));
     expect(download.suggestedFilename()).toMatch(FILE_NAME);
     expect(download.suggestedFilename()).toContain(`_${code}_`);
     const path = await download.path();
@@ -64,10 +65,12 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     const { owner } = await engineerWithEstimate(testInfo);
     await signInAsLead(page, testInfo, 'ADMIN');
     await page.goto('/queue');
-    const answer = await page.evaluate(async (id) => {
-      const response = await fetch(`/api/v1/estimates/${id}/export`);
-      return { status: response.status, type: response.headers.get('content-type'), disposition: response.headers.get('content-disposition'), cache: response.headers.get('cache-control'), size: (await response.arrayBuffer()).byteLength };
-    }, owner.id);
+    const answer = await withExportTurn(() =>
+      page.evaluate(async (id) => {
+        const response = await fetch(`/api/v1/estimates/${id}/export`);
+        return { status: response.status, type: response.headers.get('content-type'), disposition: response.headers.get('content-disposition'), cache: response.headers.get('cache-control'), size: (await response.arrayBuffer()).byteLength };
+      }, owner.id),
+    );
     expect(answer.status).toBe(200);
     expect(answer.type).toBe(XLSX_TYPE);
     expect(answer.disposition).toMatch(/^attachment; filename="Quotation_[A-Za-z0-9_-]+\.xlsx"$/);
@@ -94,8 +97,11 @@ test.describe('AC-6: the Building and Error states of the button', () => {
     await downloadButton(page).click();
     await expect(downloadButton(page)).toBeDisabled();
     await expect(page.getByText('Building the file. 1 part, 0 pictures. This usually takes a few seconds.')).toBeVisible();
-    release();
-    await downloaded;
+    // The held request reaches the server when it is released, so the build is taken in its turn from here.
+    await withExportTurn(async () => {
+      release();
+      await downloaded;
+    });
     await expect(downloadButton(page)).toBeEnabled();
     await expect(page.getByText(/^Building the file/)).toHaveCount(0);
   });

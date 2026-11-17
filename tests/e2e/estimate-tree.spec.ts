@@ -4,7 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, expectOnQueue, signInThroughThePage, useFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 
 /**
@@ -40,9 +40,7 @@ async function slNumbers(page: Page): Promise<string[]> {
 async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
   await page.context().clearCookies();
   const person = await createDisposableUser('scan', testInfo);
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expectOnQueue(page, 'My tasks');
+  await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
 }
 
@@ -67,6 +65,9 @@ async function showTree(page: Page): Promise<void> {
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
   test('AC-1, AC-2: New item, Sub-part and Part beside add parts and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
+    // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
+    // (44021154191), and it ran out of its 30 s on the tablet shard in runs 43905784789, 44025795508 and 44045571667. Three times the default, for this test only.
+    test.slow();
     await openTree(page, testInfo);
     expect(await slNumbers(page)).toEqual(['1']);
 

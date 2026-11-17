@@ -7,8 +7,9 @@ import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, expectOnQueue, signInThroughThePage } from './auth';
-import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage } from './auth';
+import { expectNoAxeViolations } from './design-system';
+import { DEVELOPMENT_URL } from './servers';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -17,6 +18,7 @@ import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
  */
 
 export const ALPHA_CUSTOMER = defined(CUSTOMER_CANARIES[0]).name;
+const ALPHA_CUSTOMER_ID = defined(CUSTOMER_CANARIES[0]).id;
 export const ALPHA_MATERIAL = defined(MATERIAL_CANARIES[0]);
 export const PHONE_MAX = 767;
 export const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
@@ -33,12 +35,14 @@ export function nextSave(page: Page): Promise<number> {
   return page.waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method())).then((response) => response.status());
 }
 
+/**
+ * A new Engineer who owns a task, signed in without the sign-in screen and the queue (`signInWithoutThePage`): the part-form specs start from the workspace, and the two page loads before it
+ * were a quarter of a journey test's 30 s on a loaded runner (AQP-340). The caller goes to the workspace next, as every caller does.
+ */
 export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
   await page.context().clearCookies();
   const person = await createDisposableUser('scan', testInfo);
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expectOnQueue(page, 'My tasks');
+  await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
 }
 
@@ -52,16 +56,19 @@ export async function waitForForm(page: Page): Promise<void> {
 /**
  * Signs in as a person who owns a task, chooses the customer, and waits for the form of the first part. On a phone the tree is in a drawer that stays shut. Answers the person: their ID is
  * the ID of their estimate and of its one part too (the recipe of the scan), so a test can read the routes of that estimate.
+ * `fromTheQueue` is for a test whose subject is the history (Back from the estimate must land on the queue, as it does for a person who signed in on the page): the workspace is then
+ * reached from the queue page, the one page load the other tests save.
  */
-export async function openForm(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+export async function openForm(page: Page, testInfo: TestInfo, options: { readonly fromTheQueue?: boolean } = {}): Promise<{ readonly id: string }> {
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
+  if (options.fromTheQueue === true) await page.goto('/queue');
+  // The customer is chosen with the call that the drop-down makes (`PUT /api/v1/estimates/{id}/customer`), before the page is opened, so the page opens on the form. Choosing it through the
+  // drop-down cost 3 to 4 s of a test's 30 s on a loaded runner (traces of AQP-340) and is judged by `estimate-customer.spec.ts`, whose subject it is.
+  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID } });
+  expect(chosen.status(), 'the customer is chosen').toBe(200);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-  await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-  await expect(page.locator('#estimate-customer')).toBeEnabled();
-  await page.locator('#estimate-customer').selectOption({ label: ALPHA_CUSTOMER });
-  await expect(page.getByText('Customer saved.')).toBeVisible();
   await waitForForm(page);
   return owner;
 }
