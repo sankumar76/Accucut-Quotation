@@ -22,17 +22,17 @@ const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
-/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total. Registry order puts them before the quantity warning. */
-const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden'];
+/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked. Registry order puts them before the quantity warning. */
+const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
-const RESERVED: ReadonlyArray<AuditEventName> = ['approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
+const RESERVED: ReadonlyArray<AuditEventName> = ['approval.cancelled', 'approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval and the price override, and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval, the price override and the unlock, and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: unlock, cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: cancel, remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -228,6 +228,39 @@ describe('STORY-06.07 AC-2, AC-3 (SCR-16): the price-override event keeps the ca
     ['a before that is null', null, after],
   ])('refuses %s', (_name, stored, storedAfter) => {
     expect(event.describeStored(stored, storedAfter)).toBeNull();
+  });
+});
+
+describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the reason, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.unlocked'];
+  const before = { approvedPrice: '12600.00' };
+  const after = { reason: 'The customer asked for a thicker plate.' };
+
+  it('is wired, about the estimate, under the "Unlock" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'unlock' });
+    expect(eventsInCategory('unlock')).toEqual(['approval.unlocked']);
+  });
+
+  it('says what the approval stood at and why it was unlocked', () => {
+    expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it.each([
+    ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
+    ['an extra key in the after', before, { ...after, rate: '0.37' }],
+    ['a price as a number', { approvedPrice: 12600 }, after],
+    ['a negative price', { approvedPrice: '-1.00' }, after],
+    ['no reason', before, {}],
+    ['an empty reason', before, { reason: '' }],
+    ['a reason over 500 characters', before, { reason: 'x'.repeat(501) }],
+    ['a before that is null', null, after],
+    ['an after that is null', before, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+
+  it('accepts a reason of exactly 500 characters', () => {
+    expect(event.describeStored(before, { reason: 'x'.repeat(500) })).not.toBeNull();
   });
 });
 

@@ -122,6 +122,8 @@ const SERVICES = {
     'task-queue-cursor',
     'task-service',
     'treatment-service',
+    // STORY-06.08 (NFR-002): unlock reads the approved calculation's master snapshot (rates and prices) to count what changed, and writes the approval's unlock. For the Lead and the Admin only; no Engineer view imports it.
+    'unlock-service',
   ],
 } as const;
 

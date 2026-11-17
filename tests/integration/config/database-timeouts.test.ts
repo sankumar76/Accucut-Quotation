@@ -150,6 +150,8 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
       .finally(() => {
         holderDone = true;
       });
+    // However the holder ends, it is observed from the start: its own sleep can run past the statement limit on a starved machine, and an unobserved rejection fails the run (DEF-039).
+    const holderSettled = Promise.allSettled([holder]);
     await held;
 
     await expect(createConfigRepository(client).findLatestRef()).rejects.toMatchObject({ code: 'DATABASE_BUSY', httpStatus: 503 });
@@ -158,6 +160,6 @@ describe('waiting for a connection becomes DATABASE_BUSY (R4)', { timeout: 60_00
     expect(holderDone).toBe(false);
     // Only let the holder finish. How it ends is not what this test checks: on a starved machine its own sleep can
     // run past the pool's statement limit, which is the previous describe's subject.
-    await Promise.allSettled([holder]);
+    await holderSettled;
   });
 });

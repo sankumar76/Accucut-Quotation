@@ -21,6 +21,17 @@ import type { Transaction } from '../repositories/transaction';
  * **409** with its own code (`CUSTOMER_DELETED`, `MATERIAL_DELETED`; STORY-02.07, A-13: the row stays under the soft delete), and one that is not there at all is a 404.
  */
 
+/**
+ * The sentence of the 409 for a customer or a material the Admin deleted, which depends on what is being done: Calculate says "choose another" (STORY-02.07), the unlock preview says the estimate cannot be unlocked
+ * (STORY-06.08). The codes are the same.
+ */
+export interface DeletedWords {
+  readonly customer: string;
+  readonly material: string;
+}
+
+const CALCULATE_WORDS: DeletedWords = { customer: CUSTOMER_DELETED_MESSAGE, material: MATERIAL_DELETED_MESSAGE };
+
 export type CalculationMasters = Pick<MasterRepository, 'findCustomerForCalculation' | 'findMaterialsForCalculation' | 'readExchangeRates'>;
 
 /** The masters one calculation reads, once: the customer's rates, each distinct material, and the two exchange rates, as numbers and as the text they were stored as. */
@@ -39,13 +50,13 @@ const NOT_FOUND_MESSAGE = 'The customer or the material was not found.';
 const decimalOrNull = (text: string | null): Decimal | null => (text === null ? null : new Decimal(text));
 
 /** The distinct materials by the ID that was asked for, in the order of first use: a deleted one is the 409, one that is not there is the 404. */
-async function readMaterials(masters: CalculationMasters, materialIds: ReadonlyArray<string>, tx?: Transaction): Promise<ReadonlyMap<string, MaterialValuesRecord>> {
+async function readMaterials(masters: CalculationMasters, materialIds: ReadonlyArray<string>, words: DeletedWords, tx?: Transaction): Promise<ReadonlyMap<string, MaterialValuesRecord>> {
   const found = new Map((await masters.findMaterialsForCalculation(materialIds, tx)).map((record) => [record.id.toLowerCase(), record]));
   const records = new Map<string, MaterialValuesRecord>();
   for (const id of materialIds) {
     const record = found.get(id.toLowerCase());
     if (record === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
-    if (record.deleted) throw new ConflictError(MATERIAL_DELETED_MESSAGE, { code: MATERIAL_DELETED_CODE });
+    if (record.deleted) throw new ConflictError(words.material, { code: MATERIAL_DELETED_CODE });
     records.set(id, record);
   }
   return records;
@@ -66,12 +77,13 @@ export async function readMasters(
   materialIds: ReadonlyArray<string>,
   referencedRateIds: ReadonlyArray<string>,
   tx?: Transaction,
+  words: DeletedWords = CALCULATE_WORDS,
 ): Promise<MasterValues> {
   const found = await masters.findCustomerForCalculation(customerId, tx);
   if (found === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
-  if (found.deleted) throw new ConflictError(CUSTOMER_DELETED_MESSAGE, { code: CUSTOMER_DELETED_CODE });
+  if (found.deleted) throw new ConflictError(words.customer, { code: CUSTOMER_DELETED_CODE });
   const { customer } = found;
-  const materialRecords = await readMaterials(masters, materialIds, tx);
+  const materialRecords = await readMaterials(masters, materialIds, words, tx);
   const exchange = await masters.readExchangeRates(tx);
   const rates = referencedRates(customer.rates, referencedRateIds);
   return {
