@@ -110,7 +110,8 @@ export default defineConfig({
       url: `http://localhost:${DEV_PORT}/sign-in`,
       reuseExistingServer: !IN_CI,
       timeout: 120_000,
-      env: serverEnvironment(DEV_PORT),
+      // The development server keeps idle connections longer than Node's 5 s, so a `page.request` call is never reset on a connection the server is closing (AQP-340; the file says why).
+      env: { ...serverEnvironment(DEV_PORT), NODE_OPTIONS: [process.env['NODE_OPTIONS'], '--require ./tests/e2e/support/server-keep-alive.cjs'].filter((option) => option !== undefined && option !== '').join(' ') },
     },
     {
       // CI stage 9 has built the sources already; a developer's run builds first, so it never tests a stale build.
