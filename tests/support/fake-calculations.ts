@@ -154,11 +154,18 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
         // roll back the winner's records (STORY-06.06 AC-6).
         const kept = calculations.length;
         const keptApprovals = approvals.length;
+        // An unlock is stored on a row that was already there, so a failed transaction puts the rows back as they were (STORY-06.08).
+        const keptUnlocks = approvals.map((approval) => approval.unlock);
         try {
           return await work(tx);
         } catch (error) {
           calculations.length = kept;
           approvals.length = keptApprovals;
+          approvals.forEach((approval, index) => {
+            const before = keptUnlocks[index];
+            if (before === undefined) delete approval.unlock;
+            else approval.unlock = before;
+          });
           throw error;
         }
       });
