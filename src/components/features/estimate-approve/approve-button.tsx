@@ -40,11 +40,13 @@ export interface ApproveButtonProps {
   readonly calculatedTotal: string;
   /** The Excel letter of BO, drawn beside the field's label. */
   readonly approvedLetter: string;
+  /** The rows of the calculation's quantity warning, for the dialog's one line (STORY-06.10 AC-5); empty when there is none. */
+  readonly warningRows: ApproveDialogProps['warningRows'];
   /** Aria description: the id of the line that explains the button, when there is one. */
   readonly describedBy?: string;
 }
 
-export function ApproveButton({ id, label, failedLine, estimateId, calculationId, calculatedTotal, approvedLetter, describedBy }: ApproveButtonProps) {
+export function ApproveButton({ id, label, failedLine, estimateId, calculationId, calculatedTotal, approvedLetter, warningRows, describedBy }: ApproveButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [, startRefresh] = useTransition();
@@ -85,6 +87,7 @@ export function ApproveButton({ id, label, failedLine, estimateId, calculationId
           calculationId={calculationId}
           calculatedTotal={calculatedTotal}
           approvedLetter={approvedLetter}
+          warningRows={warningRows}
           onApproved={() => {
             focusAfter.current = APPROVED_NOTICE_ID;
             setOpen(false);

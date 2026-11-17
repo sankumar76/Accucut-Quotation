@@ -117,6 +117,12 @@ function nodesOf(records: ReadonlyArray<NodeRecord>, document: ConfigDocument, c
   });
 }
 
+/** Who went ahead and the rows they went ahead on, from the figures read for the calculation in view, or `null` when there is no warning or the figures were not read. */
+function warningOf(figures: ReviewFigures | null): CostsView['warning'] {
+  if (figures === null || figures.warnings.length === 0) return null;
+  return { madeBy: figures.madeByName, rows: figures.warnings.map(({ nodeId, slNo, label }) => ({ nodeId, slNo, label })) };
+}
+
 export function createEstimateReviewService({ calculations, approvals, nodes, configuration }: EstimateReviewDependencies): EstimateReviewService {
   return {
     async getCosts(viewer, estimateId) {
@@ -157,6 +163,8 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
         nodes: nodesOf(records, version.document, columns, figures),
         totals: figures === null ? null : figures.productValues,
         approval: approval === null ? null : { price: approval.approvedPrice, approvedAt: approval.approvedAt.toISOString(), approverName: approval.approverName },
+        // The warning of the calculation in view (STORY-06.10): it comes in with the figures, so it is read only while the state is `current` and is `null` in the other two (AC-4).
+        warning: warningOf(figures),
       });
     },
   };

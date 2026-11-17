@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
-import { recalculateEstimate } from '@/lib/estimates/recalculate-client';
+import { press, recalculateAnyway, recalculateEstimate, warningFrom } from '@/lib/estimates/recalculate-client';
 
 /**
  * STORY-06.04 (AC-3, AC-5, AC-9; NFR-002): the browser's call to Recalculate and the one control that makes it. `fetch` is replaced, so the test answers for the server. The only thing read from a good
@@ -62,6 +62,67 @@ describe('recalculateEstimate', () => {
   ])('a refusal for %s keeps the server\'s code and words', async (_name, code, title, status) => {
     const outcome = await recalculateEstimate(ESTIMATE, fetching(answer({ type: 'about:blank', title, status, code, requestId: 'req-00000000' }, status)));
     expect(outcome).toMatchObject({ status: 'refused', httpStatus: status, code, title });
+  });
+});
+
+describe('STORY-06.10 AC-1, AC-2: "Recalculate anyway" and the 409 that asks', () => {
+  const PART = '00000000-0000-4000-8000-0000000000a1';
+  const FIELD = '00000000-0000-4000-8000-0000000000f1';
+  const asked = (): Response =>
+    answer(
+      {
+        type: 'about:blank',
+        title: 'Check the quantity before you calculate.',
+        status: 409,
+        code: 'CALCULATE_ACK_REQUIRED',
+        requestId: 'req-00000000',
+        inputsRevision: 5,
+        quantityFieldId: FIELD,
+        warnings: [{ code: 'QTY_ZERO', nodeId: PART, fieldId: FIELD, slNo: '2.2', label: 'Support arm', message: 'QTY per Assy is 0 on 2.2 Support arm. That row will cost 0 in this estimate.' }],
+      },
+      409,
+    );
+
+  it('sends the same POST with `{acknowledge: {inputsRevision}}` and reads the answer as the first press\'s', async () => {
+    const doFetch = fetching(answer({ state: 'current' }));
+    expect(await recalculateAnyway(ESTIMATE, 5, doFetch)).toEqual({ status: 'ok', value: true });
+    expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/recalculate`);
+    const init = doFetch.mock.calls[0]?.[1];
+    expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin' });
+    expect(init?.body).toBe(JSON.stringify({ acknowledge: { inputsRevision: 5 } }));
+  });
+
+  it('`press` is the first press without a revision and "Recalculate anyway" with one (0 is a revision), and nothing else', async () => {
+    const calls: Array<{ readonly url: string; readonly body: unknown }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body });
+      return Promise.resolve(answer({ state: 'current' }));
+    }) as typeof fetch;
+    try {
+      await press(ESTIMATE);
+      await press(ESTIMATE, 0);
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(calls.map((call) => call.body)).toEqual([undefined, JSON.stringify({ acknowledge: { inputsRevision: 0 } })]);
+  });
+
+  it('`warningFrom` reads the 409 of a 0 in QTY per Assy: the revision and each row, and says the list is new after "anyway"', async () => {
+    const outcome = await recalculateEstimate(ESTIMATE, fetching(asked()));
+    if (outcome.status !== 'refused') throw new Error('The test expected a refusal.');
+    expect(warningFrom(outcome)).toEqual({
+      inputsRevision: 5,
+      rows: [{ nodeId: PART, fieldId: FIELD, slNo: '2.2', label: 'Support arm', message: 'QTY per Assy is 0 on 2.2 Support arm. That row will cost 0 in this estimate.' }],
+      changed: false,
+    });
+    expect(warningFrom(outcome, true)?.changed).toBe(true);
+  });
+
+  it('`warningFrom` is null for a refusal that is not the question, so the screen shows the server\'s own sentence', async () => {
+    const outcome = await recalculateEstimate(ESTIMATE, fetching(answer({ type: 'about:blank', title: 'x', status: 409, code: 'ESTIMATE_APPROVED_IS_LOCKED', requestId: 'req-00000000' }, 409)));
+    if (outcome.status !== 'refused') throw new Error('The test expected a refusal.');
+    expect(warningFrom(outcome)).toBeNull();
   });
 });
 

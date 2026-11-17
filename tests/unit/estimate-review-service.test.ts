@@ -7,7 +7,7 @@ import { createEstimateReviewService } from '@/server/services/estimate-review-s
 import { costsSchema } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
-import { CALCULATION_REVISION, createReviewWorld, INVENTED_CALCULATION_ID, REVIEW_CALCULATED_AT, REVIEW_CONFIGURATION_NUMBER, REVIEW_ESTIMATE_ID, REVIEW_FIELDS } from '../support/review-world';
+import { CALCULATION_REVISION, createReviewWorld, INVENTED_CALCULATION_ID, nodeIdOfRow, REVIEW_CALCULATED_AT, REVIEW_CONFIGURATION_NUMBER, REVIEW_ESTIMATE_ID, REVIEW_FIELDS } from '../support/review-world';
 import { seedConfig } from '../support/seed-config';
 
 import { QUANTITY_CASES, type QuantityCase } from './quantity/quantity-cases';
@@ -271,6 +271,45 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval });
     await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
     expect(world.reads.approvals.calls).toEqual([]);
+  });
+});
+
+describe('STORY-06.10 AC-3, AC-4, AC-6: the quantity warning of the calculation in view', () => {
+  // CE-1: rows 1 (H 0), 1.1 (H 6) and 1.1.1 (H 24): the item's own 0 is the one warned row.
+  const CE1 = caseOf('CE-1');
+  const warned = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+
+  it('AC-3: a current calculation with warnings gives who went ahead and each warned row (part, Sl. No and name as text), and the calculation\'s own time', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, madeBy: 'Invented Priya' }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('current');
+    expect(costs.warning).toEqual({ madeBy: 'Invented Priya', rows: [{ nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }] });
+    expect(costs.calculatedAt).toBe(REVIEW_CALCULATED_AT.toISOString());
+  });
+
+  it('AC-3: the code of a warning is not passed on, and a calculation made without warnings has none', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned }).service.getCosts(ADMIN, REVIEW_ESTIMATE_ID);
+    expect(JSON.stringify(costs.warning)).not.toContain('QTY_ZERO');
+    expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).warning).toBeNull();
+  });
+
+  it('AC-4: while the figures are cleared (`out-of-date`) there is no warning, and the record is not read to say so', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, inputsRevision: CALCULATION_REVISION + 1 });
+    const costs = await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('out-of-date');
+    expect(costs.warning).toBeNull();
+    expect(world.reads.figures.calls).toEqual([]);
+  });
+
+  it('AC-4: while nothing was calculated (`none`) there is no warning either', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, calculated: false }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('none');
+    expect(costs.warning).toBeNull();
+  });
+
+  it('AC-6 (NFR-002): an Engineer is refused before the record, and so its warnings, is read', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned });
+    await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(world.reads.figures.calls).toEqual([]);
   });
 });
 

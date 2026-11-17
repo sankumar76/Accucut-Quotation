@@ -19,12 +19,13 @@ const good = {
   nodes: [node],
   totals: { totalPrice: '30', pricePerToolCost: null, toolCostTotal: '0' },
   approval: null,
+  warning: null,
 };
 
 describe('the answer, and exactly what it may hold', () => {
   it('accepts a good answer, and an answer of a state with no figure at all', () => {
     expect(costsSchema.safeParse(good).success).toBe(true);
-    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null };
+    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null, warning: null };
     expect(costsSchema.safeParse(none).success).toBe(true);
   });
 
@@ -39,6 +40,26 @@ describe('the answer, and exactly what it may hold', () => {
     }
   });
 
+  it('STORY-06.10 AC-3: the warning is who went ahead and the rows (Sl. No and name as text), and nothing else: no figure, no ID of a calculation, no code, no time of its own', () => {
+    const warning = { madeBy: 'Invented Lead', rows: [{ nodeId: 'node-1', slNo: '2.2', label: 'Invented arm' }] };
+    expect(costsSchema.safeParse({ ...good, warning }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.warning.unwrap().shape).sort()).toEqual(['madeBy', 'rows']);
+    expect(Object.keys(costsSchema.shape.warning.unwrap().shape.rows.unwrap().element.shape).sort()).toEqual(['label', 'nodeId', 'slNo']);
+    // A warning with no row, no name, a figure or a key that is not named is refused; the part's name may be empty (a part with no name).
+    for (const planted of [
+      { ...warning, rows: [] },
+      { ...warning, madeBy: '' },
+      { ...warning, total: '30' },
+      { ...warning, rows: [{ ...warning.rows[0], unitPrice: '0' }] },
+      { ...warning, rows: [{ ...warning.rows[0], slNo: '' }] },
+    ]) {
+      expect(costsSchema.safeParse({ ...good, warning: planted }).success).toBe(false);
+    }
+    expect(costsSchema.safeParse({ ...good, warning: { ...warning, rows: [{ ...warning.rows[0], label: '' }] } }).success).toBe(true);
+    // The key is always there: `null` says "no warning", and an answer that leaves it out is a fault, not a clean estimate.
+    expect(costsSchema.safeParse({ ...good, warning: undefined }).success).toBe(false);
+  });
+
   it('the calculation ID is an ID or null, never any other text', () => {
     expect(costsSchema.safeParse({ ...good, calculationId: 'not-an-id' }).success).toBe(false);
   });
@@ -49,7 +70,7 @@ describe('the answer, and exactly what it may hold', () => {
   });
 
   it('holds these keys and no others, at every level: the only sums are totalPrice (BL), pricePerToolCost (BN) and toolCostTotal', () => {
-    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'state', 'totals']);
+    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'state', 'totals', 'warning']);
     expect(Object.keys(costsSchema.shape.letters.shape).sort()).toEqual(['approvedPrice', 'count', 'pricePerToolCost', 'totalPrice', 'unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     const nodeShape = costsSchema.shape.nodes.unwrap().element.shape;
     expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'parentId', 'slNo']);

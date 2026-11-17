@@ -1,5 +1,5 @@
 import type { ApprovalRepository, NewApproval } from '../../src/server/repositories/approval-repository';
-import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow } from '../../src/server/repositories/calculation-repository';
+import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
 
@@ -34,6 +34,9 @@ export interface FakeCalculationWorld {
   lockCount(): number;
 }
 
+/** The name the fake gives to whoever made a calculation: the real repository joins the person's name now, and this world knows no people. */
+export const FAKE_MADE_BY_NAME = 'Invented Person';
+
 let counter = 0;
 const nextId = (): string => {
   counter += 1;
@@ -64,7 +67,16 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     },
     findReviewFigures: (calculationId: string) => {
       const found = calculations.find((calculation) => calculation.id === calculationId);
-      return Promise.resolve(found === undefined ? null : { productValues: found.productValues, rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: row.outputs })) });
+      return Promise.resolve(
+        found === undefined
+          ? null
+          : {
+              productValues: found.productValues,
+              rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: row.outputs })),
+              warnings: found.warnings.map((warning) => warning as StoredWarning),
+              madeByName: FAKE_MADE_BY_NAME,
+            },
+      );
     },
     findCalculatedTotal: (calculationId: string) => Promise.resolve(calculations.find((calculation) => calculation.id === calculationId)?.productValues.totalPrice ?? null),
     findRowWorking: (calculationId: string, nodeId: string) => {

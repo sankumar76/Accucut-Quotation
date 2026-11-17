@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
+import { QuantityTag } from './quantity-tag';
 import {
   CLEARED,
   COST_DETAILS_LINK,
@@ -40,7 +41,7 @@ function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
 /** The address of SCR-07 for a row: the task code and the row's Sl. No (STORY-06.03). A Lead and an Admin only: this folder is loaded for no one else. */
 const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
 
-function TreeRow({ node, state, code }: { readonly node: CostNode; readonly state: CostsView['state']; readonly code: string }) {
+function TreeRow({ node, state, code, warned }: { readonly node: CostNode; readonly state: CostsView['state']; readonly code: string; readonly warned: boolean }) {
   return (
     <li className={cn('flex flex-col gap-s-1 rounded-md border border-border bg-surface px-s-3 py-s-2', indentOf(node.slNo))}>
       <div className="flex items-baseline gap-s-2 text-body text-ink">
@@ -54,6 +55,11 @@ function TreeRow({ node, state, code }: { readonly node: CostNode; readonly stat
       </div>
       {state === 'current' && node.figures !== null ? (
         <p className="text-label text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</p>
+      ) : null}
+      {warned ? (
+        <p>
+          <QuantityTag />
+        </p>
       ) : null}
       <p>
         <a href={costDetailsHref(code, node.slNo)} className="text-label font-semibold text-primary-ink underline underline-offset-2">
@@ -71,9 +77,11 @@ export interface ReviewTreeProps {
   readonly state: CostsView['state'];
   readonly letters: CostsView['letters'];
   readonly nodes: CostsView['nodes'];
+  /** The rows of the calculation's quantity warning (STORY-06.10): each carries the mark "Quantity 0". Empty while the figures are not current. */
+  readonly warned: ReadonlySet<string>;
 }
 
-export function ReviewTree({ code, state, letters, nodes }: ReviewTreeProps) {
+export function ReviewTree({ code, state, letters, nodes, warned }: ReviewTreeProps) {
   return (
     <details open className="rounded-md border border-border bg-surface-2">
       <summary className="flex min-h-(--control-h) cursor-pointer items-center px-s-4 text-body font-semibold text-ink">{TREE_TITLE}</summary>
@@ -85,7 +93,7 @@ export function ReviewTree({ code, state, letters, nodes }: ReviewTreeProps) {
         ) : (
           <ul className="flex flex-col gap-s-2">
             {nodes.map((node) => (
-              <TreeRow key={node.id} node={node} state={state} code={code} />
+              <TreeRow key={node.id} node={node} state={state} code={code} warned={warned.has(node.id)} />
             ))}
           </ul>
         )}

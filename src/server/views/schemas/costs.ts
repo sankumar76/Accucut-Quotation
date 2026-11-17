@@ -66,6 +66,19 @@ const approvalSchema = z.strictObject({
   approverName: z.string().min(1),
 });
 
+/**
+ * The quantity warning of the calculation in view (STORY-06.10 AC-3; architecture section 4.3 "What the Lead sees"): who pressed Calculate or Recalculate and went ahead (their name now: the calculation's `created_by`
+ * is the acknowledgement), and each row that had 0 in QTY per Assy, by its part, Sl. No and name **as text at that moment**. No figure and no code. The time is the calculation's own, `calculatedAt`. It is there
+ * only while the state is `current` (AC-4), like every figure: while the figures are cleared the list may be stale, so it is not read at all.
+ */
+const warningSchema = z.strictObject({
+  madeBy: z.string().min(1),
+  rows: z
+    .array(z.strictObject({ nodeId: z.string().min(1), slNo: z.string().min(1), label: z.string() }))
+    .min(1)
+    .readonly(),
+});
+
 export const costsSchema = z.strictObject({
   state: z.enum(FIGURE_STATES),
   /** The calculation the figures come from, while the state is `current`; `null` otherwise. The approval names it (`POST .../approve`, `calculationId`). */
@@ -79,6 +92,8 @@ export const costsSchema = z.strictObject({
   totals: totalsSchema.nullable(),
   /** BO: the approved price and who approved it, or `null` before any approval. */
   approval: approvalSchema.nullable(),
+  /** The quantity warning on the calculation the figures come from; `null` when there is none, and always `null` unless the state is `current` (AC-4). */
+  warning: warningSchema.nullable(),
 });
 
 export type CostsView = z.infer<typeof costsSchema>;

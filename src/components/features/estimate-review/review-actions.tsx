@@ -44,6 +44,8 @@ export interface ApproveOffer {
   readonly calculationId: string;
   readonly calculatedTotal: string;
   readonly approvedLetter: string;
+  /** The rows of the calculation's quantity warning, for the one line of the approval dialog (STORY-06.10 AC-5); empty when it has none. Approving is not stopped either way. */
+  readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
 }
 
 export interface ReviewActionsProps {
@@ -72,10 +74,10 @@ const Reason = ({ id, text }: ReasonProps) => (
  * Whether Approve and lock is on, and with what: a SUBMITTED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
  * server's guard (`assertApprovable`), which stays the authority: a button that is on for an estimate the server would refuse only earns the refusal's sentence.
  */
-export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters'>): ApproveOffer | null {
+export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning'>): ApproveOffer | null {
   const total = costs.totals?.totalPrice ?? null;
   if (status !== 'SUBMITTED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
-  return { calculationId: costs.calculationId, calculatedTotal: total, approvedLetter: costs.letters.approvedPrice };
+  return { calculationId: costs.calculationId, calculatedTotal: total, approvedLetter: costs.letters.approvedPrice, warningRows: costs.warning?.rows ?? [] };
 }
 
 function ApproveControl({ estimateId, state, approve }: Pick<ReviewActionsProps, 'estimateId' | 'state' | 'approve'>) {
@@ -89,6 +91,7 @@ function ApproveControl({ estimateId, state, approve }: Pick<ReviewActionsProps,
         calculationId={approve.calculationId}
         calculatedTotal={approve.calculatedTotal}
         approvedLetter={approve.approvedLetter}
+        warningRows={approve.warningRows}
       />
     );
   }

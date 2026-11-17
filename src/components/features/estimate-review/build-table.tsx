@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
+import { QuantityTag } from './quantity-tag';
 import {
   BUILD_CAPTION,
   BUILD_EXAMPLE,
@@ -29,9 +30,11 @@ export interface BuildTableProps {
   readonly letters: CostsView['letters'];
   readonly nodes: CostsView['nodes'];
   readonly totalPrice: string | null;
+  /** The rows of the calculation's quantity warning (STORY-06.10): each carries the mark "Quantity 0" in its Part cell. */
+  readonly warned: ReadonlySet<string>;
 }
 
-export function BuildTable({ letters, nodes, totalPrice }: BuildTableProps) {
+export function BuildTable({ letters, nodes, totalPrice, warned }: BuildTableProps) {
   return (
     <details className="rounded-md border border-border bg-surface">
       <summary className="flex min-h-(--control-h) cursor-pointer items-center px-s-4 text-body font-semibold text-ink">{BUILD_TITLE(letters.unitPrice)}</summary>
@@ -56,7 +59,15 @@ export function BuildTable({ letters, nodes, totalPrice }: BuildTableProps) {
             {nodes.map((node) => (
               <TableRow key={node.id}>
                 <TableCell className="tabular-nums">{node.slNo}</TableCell>
-                <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>{node.name === '' ? TREE_PART_NAME : node.name}</TableCell>
+                <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>
+                  {node.name === '' ? TREE_PART_NAME : node.name}
+                  {warned.has(node.id) ? (
+                    <>
+                      {' '}
+                      <QuantityTag />
+                    </>
+                  ) : null}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{node.count === null ? NO_FIGURE : formatCount(node.count)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatFigure(node.figures?.unitPrice ?? null)}</TableCell>
               </TableRow>

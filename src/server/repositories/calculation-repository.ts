@@ -123,6 +123,10 @@ export interface FigureBasis {
 export interface ReviewFigures {
   readonly productValues: ProductValues;
   readonly rows: ReadonlyArray<{ readonly nodeId: string; readonly outputs: StoredValues }>;
+  /** The warnings the person acknowledged for this calculation (STORY-06.10), as text; `[]` for none. Read with the figures, so only while the state is `current` (AC-4). */
+  readonly warnings: ReadonlyArray<StoredWarning>;
+  /** The name now of the person who pressed Calculate or Recalculate: with the time, the acknowledgement of the warnings. */
+  readonly madeByName: string;
 }
 
 /**
@@ -177,6 +181,9 @@ const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 const ROWS_PER_INSERT = 1_000;
 
 const WARNINGS = z.array(z.unknown());
+
+/** The warnings of a record as the review reads them: the four texts `insertCalculation` keeps, and no other key. A value of another shape is a fault in the data, not a half-drawn notice. */
+const storedWarningsSchema = z.array(z.strictObject({ code: z.string(), nodeId: z.string(), slNo: z.string(), label: z.string() }));
 
 /** Builds the calculation methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createCalculationRepository(db: PrismaClient): CalculationRepository {
@@ -260,12 +267,19 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(calculationId)) return null;
         const found = await db.calculation.findUnique({
           where: { id: calculationId },
-          select: { productValues: true, rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] } },
+          select: {
+            productValues: true,
+            warnings: true,
+            creator: { select: { name: true } },
+            rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
+          },
         });
         if (found === null) return null;
         return {
           productValues: productValuesSchema.parse(found.productValues),
           rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
+          warnings: storedWarningsSchema.parse(found.warnings),
+          madeByName: found.creator.name,
         };
       }),
 

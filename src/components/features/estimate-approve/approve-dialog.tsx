@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CALCULATION_CHANGED_CODE, CALCULATION_CHANGED_MESSAGE, TOTALS_OUT_OF_DATE_CODE } from '@/lib/estimate/approval-words';
 import { isPrice, PRICE_MESSAGE, prefillPrice } from '@/lib/estimate/approve-price';
+import { approveWarningLine } from '@/lib/estimate/lead-warning-copy';
 import { approveEstimate, canReadFigures } from '@/lib/estimates/approve-client';
 
 import {
@@ -47,6 +48,8 @@ export interface ApproveDialogProps {
   readonly calculatedTotal: string;
   /** The Excel letter of BO, from the configuration version the figures belong to. */
   readonly approvedLetter: string;
+  /** The rows of the calculation's quantity warning (STORY-06.10 AC-5): one info line names them when there are any. It never stops the approval and has no box to tick. */
+  readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
   /** The approval worked: the page is drawn again and shows the approved estimate. */
   readonly onApproved: () => void;
   /** The way on after a 409 that left the page out of date: close, and read the estimate again. */
@@ -171,6 +174,7 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
         <DialogTitle>{DIALOG_TITLE}</DialogTitle>
       </DialogHeader>
       <Alerts phase={phase} />
+      {props.warningRows.length === 0 ? null : <Notice tone="info">{approveWarningLine(props.warningRows)}</Notice>}
       <Notice tone="info">{PRICE_INFO}</Notice>
       <FormField id="approve-price" label={PRICE_LABEL} tag={<ColumnTag letter={props.approvedLetter} kind="output" />} {...(priceError === null ? {} : { error: priceError })}>
         {(control) => (
