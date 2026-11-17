@@ -65,6 +65,9 @@ async function showTree(page: Page): Promise<void> {
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
   test('AC-1, AC-2: New item, Sub-part and Part beside add parts and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
+    // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
+    // (44021154191), and it ran out of its 30 s on the tablet shard in runs 43905784789, 44025795508 and 44045571667. Three times the default, for this test only.
+    test.slow();
     await openTree(page, testInfo);
     expect(await slNumbers(page)).toEqual(['1']);
 
