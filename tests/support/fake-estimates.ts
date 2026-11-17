@@ -80,6 +80,8 @@ export interface FakeEstimateWorld {
   writes(): number;
   /** How many times `setStatus` changed a status. */
   statusWrites(): number;
+  /** The materials the parts name, with whether each was deleted (STORY-06.08 `lockMaterialsInUse`); a test fills it in. Empty: no part names a material. */
+  readonly materialsInUse: Array<{ id: string; deleted: boolean }>;
 }
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
@@ -102,6 +104,7 @@ export function createFakeEstimateWorld(
   const estimates: FakeEstimate[] = initial.map((estimate) => ({ ...estimate }));
   const nodes: FakeNode[] = initialNodes.map((node) => ({ ...node, inputs: { ...node.inputs } }));
   const images: FakeImage[] = [...initialImages];
+  const materialsInUse: Array<{ id: string; deleted: boolean }> = [];
   let imageWrites = 0;
   let writes = 0;
   let nodeWrites = 0;
@@ -144,6 +147,7 @@ export function createFakeEstimateWorld(
       const found = customers().find((customer) => same(customer.id, id) && !customer.deleted);
       return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
     },
+    lockMaterialsInUse: () => Promise.resolve([...materialsInUse].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))),
     linkCalculation: (estimateId, calculationId, status) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
       if (estimate === undefined) return Promise.reject(new Error('The estimate to link does not exist.'));
@@ -288,5 +292,6 @@ export function createFakeEstimateWorld(
     writes: () => writes,
     nodeWrites: () => nodeWrites,
     statusWrites: () => statusWrites,
+    materialsInUse,
   };
 }

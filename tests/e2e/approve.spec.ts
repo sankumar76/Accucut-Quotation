@@ -151,7 +151,8 @@ test.describe('AC-2, AC-5: a good approval', () => {
     await expect(tiles(page)).toContainText('₹ 48,271.37');
     await expect(tiles(page)).toContainText('Approved by');
     await expect(approveButton(page)).toHaveCount(0);
-    await expect(page.locator('#review-unlock')).toBeDisabled();
+    // Unlock works from STORY-06.08: the button is on (its own tests are `unlock.spec.ts`).
+    await expect(page.locator('#review-unlock')).toBeEnabled();
     await expect(page.locator('#review-download')).toBeDisabled();
     expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
 

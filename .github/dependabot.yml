@@ -9,6 +9,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Major versions of these three stay put until after the first release (DL-119: delivery lead, 2026-11-09; the solution-architect
+    # revisits them after G8). The runtime is Node 22 LTS, so `@types/node` stays on 22.x (AQP-340). Minor and patch updates still come.
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -1,3 +1,4 @@
+import type { UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
@@ -76,6 +77,7 @@ export interface ReviewWorldOptions {
     readonly isOverride?: boolean;
     /** The reason given with an override; absent: none. */
     readonly reason?: string;
+    readonly unlock?: UnlockRecord;
   };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
@@ -145,6 +147,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
               calculatedTotal: approval.calculatedTotal ?? approval.price,
               isOverride: approval.isOverride ?? false,
               overrideReason: approval.reason ?? null,
+              unlock: approval.unlock ?? null,
             },
       );
     },

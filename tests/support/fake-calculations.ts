@@ -1,4 +1,4 @@
-import type { ApprovalRepository, NewApproval } from '../../src/server/repositories/approval-repository';
+import type { ApprovalRepository, NewApproval, UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
@@ -16,6 +16,8 @@ import type { FakeEstimateWorld } from './fake-estimates';
 export interface FakeApproval extends NewApproval {
   readonly id: string;
   readonly approvedAt: Date;
+  /** Set by `markUnlocked` (STORY-06.08); a row with one is no longer live. */
+  unlock?: UnlockRecord;
 }
 
 export interface FakeCalculationWorld {
@@ -79,6 +81,10 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       );
     },
     findCalculatedTotal: (calculationId: string) => Promise.resolve(calculations.find((calculation) => calculation.id === calculationId)?.productValues.totalPrice ?? null),
+    findMasterSnapshot: (calculationId: string) => {
+      const found = calculations.find((calculation) => calculation.id === calculationId);
+      return Promise.resolve(found === undefined ? null : { configVersionId: found.configVersionId, masterSnapshot: found.masterSnapshot });
+    },
     findRowWorking: (calculationId: string, nodeId: string) => {
       const found = calculations.find((calculation) => calculation.id === calculationId);
       const row = found?.rows.find((candidate) => candidate.nodeId === nodeId);
@@ -124,8 +130,20 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
               calculatedTotal: found.calculatedTotal,
               isOverride: found.isOverride,
               overrideReason: found.overrideReason,
+              unlock: found.unlock ?? null,
             },
       );
+    },
+    findLiveApproval(estimateId) {
+      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId && approval.unlock === undefined);
+      return Promise.resolve(found === undefined ? null : { id: found.id, calculationId: found.calculationId, approvedPrice: found.approvedPrice, engineerName: 'Invented Engineer' });
+    },
+    markUnlocked(unlock) {
+      const found = approvals.find((approval) => approval.id === unlock.approvalId && approval.unlock === undefined);
+      if (found === undefined) return Promise.resolve(null);
+      const unlockedAt = new Date('2026-11-16T06:30:00.000Z');
+      found.unlock = { unlockedAt, byName: 'Invented Unlocker', reason: unlock.reason, engineerName: 'Invented Engineer' };
+      return Promise.resolve(unlockedAt);
     },
   };
 
@@ -136,11 +154,18 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
         // roll back the winner's records (STORY-06.06 AC-6).
         const kept = calculations.length;
         const keptApprovals = approvals.length;
+        // An unlock is stored on a row that was already there, so a failed transaction puts the rows back as they were (STORY-06.08).
+        const keptUnlocks = approvals.map((approval) => approval.unlock);
         try {
           return await work(tx);
         } catch (error) {
           calculations.length = kept;
           approvals.length = keptApprovals;
+          approvals.forEach((approval, index) => {
+            const before = keptUnlocks[index];
+            if (before === undefined) delete approval.unlock;
+            else approval.unlock = before;
+          });
           throw error;
         }
       });
