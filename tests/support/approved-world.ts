@@ -7,6 +7,7 @@ import { createConfigVersionCache, getCurrentVersion, getVersionById } from '../
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import type { EstimateViewer } from '../../src/server/services/estimate-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
+import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
 
 import { contextOf, insertPersonAsOwner } from './audit-database';
 import { currentCalculationOf, engineerOf, leadOf, PRICE, requestFor } from './approval-helpers';
@@ -27,6 +28,8 @@ export interface ApprovedWorld {
   readonly db: CalculationDatabase;
   readonly review: EstimateReviewService;
   readonly details: CostDetailsService;
+  /** The unlock service over the real repositories, as the composition builds it (STORY-06.08). */
+  readonly unlock: UnlockService;
   /** The Lead who reads the screens and approves. */
   readonly lead: EstimateViewer;
   /** Who changes the masters, as the master services are called: an Admin's audit context. */
@@ -43,6 +46,15 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
     db,
     review: createEstimateReviewService({ calculations: db.calculations, approvals: db.approvals, nodes: db.nodes, configuration }),
     details: createCostDetailsService({ calculations: db.calculations, nodes: db.nodes, configuration }),
+    unlock: createUnlockService({
+      estimates: db.estimates,
+      approvals: db.approvals,
+      calculations: db.calculations,
+      masters: db.masterRepository,
+      configuration,
+      transactions: db.transactions,
+      workflow: { transition: db.estimateService.transition, audit: db.audit },
+    }),
     lead: leadOf(db),
     admin: contextOf(adminId, 'Invented Approval Admin'),
   };

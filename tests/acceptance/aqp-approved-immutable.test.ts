@@ -4,13 +4,14 @@ import { Decimal } from '@/lib/decimal';
 import { createConfigRepository } from '@/server/repositories/config-repository';
 import { createConfigVersionCache, getCurrentVersion } from '@/server/services/config-service';
 
+import { auditOf, currentCalculationOf } from '../support/approval-helpers';
 import { approvedEstimateOf, approvedValuesOf, changeTheMasters, openApprovedWorld, totalOfANewCalculation, type ApprovedWorld } from '../support/approved-world';
 import { idOf } from '../support/calculation-database';
 import { defined } from '../support/defined';
 import { seedConfig, seedFieldAt } from '../support/seed-config';
 
 /**
- * STORY-06.09 AC-1, AC-2, AC-3, AC-4 and AC-6 (FR-065, NFR-026, NFR-007; ADR-007; architecture sections 4.8 and 5.1; test strategy section 9) against real PostgreSQL in a throwaway database, as the **runtime
+ * STORY-06.09 AC-1 to AC-4, AC-6 and AC-7 (FR-065, NFR-026, NFR-007; ADR-007; architecture sections 4.8 and 5.1; test strategy section 9) against real PostgreSQL in a throwaway database, as the **runtime
  * role**: an estimate is calculated and approved, the Admin then changes the masters **through the real master services** (a process rate, a material price, an exchange rate; a rename and a delete of
  * the material and of the treatment; a reset and a rename of the customer) and a new configuration version is written, and what the approved estimate shows (the review, the cost details of every part)
  * and stores (the record, its rows, the approval) is compared with what it was, by deep equality, to the last digit. Each test first shows that the change **did** change what a calculation made now would
@@ -153,5 +154,64 @@ describe('AC-4 (configuration): a later configuration version leaves the approve
     expect(after).toEqual(before);
     expect(after.costs.configurationNumber).toBe(1);
     for (const view of after.nodeCosts) expect(view.details?.configurationNumber).toBe(1);
+  });
+});
+
+describe('AC-7: an unlocked-then-recalculated estimate uses the current masters, and the earlier calculation stays as it was', () => {
+  it('unlock, then Recalculate: a new calculation from the masters as they are now is linked, the old record and the earlier approval are unchanged and readable', async () => {
+    const approved = await approvedEstimateOf(world, '1000.00');
+    const { db, lead } = world;
+    const before = await approvedValuesOf(world, approved.estimateId);
+    const oldTotal = defined(before.costs.totals).totalPrice;
+    const oldRecord = await db.calculations.findCalculation(approved.calculationId);
+
+    await changeTheMasters(world, approved.materialId);
+    const unlocked = await world.unlock.unlock(lead, approved.estimateId, { reason: 'Rates have moved since.', audit: auditOf(db) });
+    expect(unlocked.status).toBe('DRAFT');
+    await db.service.recalculate(lead, approved.estimateId);
+
+    // A new calculation, from the masters as they are now (FR-063).
+    const newId = await currentCalculationOf(db, approved.estimateId);
+    expect(newId).not.toBe(approved.calculationId);
+    const created = await db.owner.query<{ n: number }>('SELECT count(*)::int AS n FROM calculations WHERE estimate_id = $1::uuid', [approved.estimateId]);
+    expect(defined(created.rows[0]).n).toBe(2);
+    const fresh = defined(await db.calculations.findCalculation(newId));
+    expect(new Decimal(defined(fresh.masterSnapshot.materials[0]).pricePerKg).equals(999)).toBe(true);
+    expect(new Decimal(defined(fresh.masterSnapshot.exchangeRates.usd)).equals(101)).toBe(true);
+    expect(new Decimal(defined(fresh.masterSnapshot.exchangeRates.eur)).equals(111)).toBe(true);
+    const costs = await world.review.getCosts(lead, approved.estimateId);
+    expect(costs.state).toBe('current');
+    expect(costs.calculationId).toBe(newId);
+    const newTotal = defined(costs.totals).totalPrice;
+    expect(newTotal).not.toBe(oldTotal);
+    // It is the total a calculation of the same inputs would give now, to the last digit.
+    expect(newTotal).toBe(await totalOfANewCalculation(world, approved.materialId));
+    // The price approved earlier stays the price on record until a new approval replaces it.
+    expect(costs.approval).toMatchObject({ price: '1000.00', unlock: { reason: 'Rates have moved since.' } });
+
+    // The old calculation is as it was: the record as the repository reads it, and its rows, to the last digit.
+    expect(await db.calculations.findCalculation(approved.calculationId)).toEqual(oldRecord);
+    const after = await approvedValuesOf(world, approved.estimateId);
+    expect(after.records.calculations).toContainEqual(defined(before.records.calculations[0]));
+    const oldRows = after.records.rows.filter((row) => (row as { calculation_id: string }).calculation_id === approved.calculationId);
+    expect(oldRows).toEqual(before.records.rows);
+    expect(defined(oldRecord).productValues.totalPrice).toBe(oldTotal);
+
+    // The earlier approval record points to the old calculation and holds its approved values; only the unlock columns were set.
+    const approvals = await db.owner.query<Record<string, unknown>>(
+      'SELECT calculation_id::text, approved_price::text, calculated_bl::text, is_override, approved_by::text, approved_at, unlocked_at FROM approvals WHERE estimate_id = $1::uuid',
+      [approved.estimateId],
+    );
+    const earlier = before.records.approvals[0] as Record<string, unknown>;
+    expect(approvals.rows).toHaveLength(1);
+    expect(approvals.rows[0]).toMatchObject({
+      calculation_id: approved.calculationId,
+      approved_price: '1000.00',
+      calculated_bl: earlier['calculated_bl'],
+      is_override: earlier['is_override'],
+      approved_by: earlier['approved_by'],
+      approved_at: earlier['approved_at'],
+    });
+    expect(defined(approvals.rows[0])['unlocked_at']).not.toBeNull();
   });
 });
