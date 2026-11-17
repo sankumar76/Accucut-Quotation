@@ -8,13 +8,52 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-15 by orchestrator (daily update, §9 item 6) |
+| Last updated       | 2026-11-16 by orchestrator (daily update, §9 item 6) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-16, orchestrator)
+
+> One ledger update a day (§9 item 6). It updates the 2026-11-15 entries below. Where they differ, this one wins.
+
+**`master` = dc2f98e** (#449 AQP-327). Merged since the last entry (squash, fully green CI). Each `critical-review` story [c] had its one combined security-and-quality review, with no open Blocker or Critical at merge:
+
+| PR | Story | Merge | Review (combined) |
+|---|---|---|---|
+| #427 | AQP-320 (06.03 cost details and Lead formula view) [c] | 538489a | APPROVE WITH COMMENTS, 0 Major |
+| #437 | AQP-321 (06.04 Recalculate and the cleared figures) [c] | e808579 | APPROVE WITH COMMENTS, 0 Major |
+| #417 | AQP-311 (10.05 weekly backups on Windows) [c] | 83c57b1 | Round 2: the Major (#438) closed in the PR; Minors open (#439) |
+| #441 | AQP-331 (07.01 worksheet download) [c] | c23acd5 | APPROVE WITH COMMENTS. Majors: QS-01 thread cap (#442, closed in the PR), QS-02 seed formats (#440, open, a G8 condition before the first install), QS-12 (addendum 1) |
+| #446 | AQP-322 (06.05 approval blocked while not current) [c] | 63c31db | Re-cut of #444 (closed). APPROVE WITH COMMENTS, 0 Major |
+| #445 | AQP-293 fix: snapshot keeps only referenced rates (DL-225, #432) [c] | a82569c | APPROVE WITH COMMENTS, 0 Major. Lands before 06.11, as DL-225 requires |
+| #448 | AQP-323 (06.06 approve and lock) [c] | 7960846 | APPROVE WITH COMMENTS, 0 Major; addendum 1 |
+| #449 | AQP-327 (06.10 quantity warning for Lead and Admin) | dc2f98e | Not critical; CI only |
+
+Jira **Done**: AQP-320, 321, 311, 331, 322, 293, 323, 327 (all checked 2026-11-16).
+
+**In flight (one lane; free RAM about 1.0 GB):**
+| Story | State |
+|---|---|
+| AQP-324 06.07 price override [c], #450 (draft) | CI 6 of 6 green. Critical (approve action, audit, cost confidentiality AC-7): the combined review is running. It merges once no Blocker or Critical is open |
+| AQP-325 06.08 unlock with reason and notices [c] | Work in progress from the last session in worktree `agent-ad018d01ac3784f70` (`feat/AQP-325-unlock`): 19 files changed and 10 new, **not committed or pushed**. It resumes after #450, in the same worktree; nothing is discarded |
+
+**Next, in order (R1 core):** EPIC-06: AQP-326 (06.09), AQP-328 (06.11; #432 has landed), AQP-329 (06.12, includes the DL-220 state-machine extension), AQP-330 (06.13). EPIC-07: AQP-332 to AQP-336 (07.02 to 07.06). Then AQP-338 (08.02), AQP-308, AQP-309, AQP-312 and AQP-90.
+
+**Records:** reviews for AQP-311, 316 (addenda), 321, 322, 293 (#432), 323 and 331; DL-226 (scratchpad review copies, standing rule); architecture v0.50 and test strategy v0.42; ux-spec 0.30 and 0.31. All on this records branch.
+
+**For the delivery lead:**
+- **Dependabot:** five new PRs, #451 to #455 (`lucide-react`, `react-hook-form`, `typescript-eslint`, `@types/node` 22 to 25, `@lhci/cli`). Only you act on these. `@types/node` 25 is a major jump; the runtime is Node 22 LTS.
+- **Merged branches to delete:** `feat/AQP-320-cost-details`, `feat/AQP-321-recalculate`, `feat/AQP-311-backups`, `feat/AQP-331-worksheet-download`, `feat/AQP-322-approval-blocked`, `feat/AQP-322-approval-blocked-2`, `fix/AQP-293-snapshot-referenced-rates`, `feat/AQP-323-approve-and-lock`, `feat/AQP-327-lead-quantity-warning`, plus the 2026-11-15 lists below. Check that each exists with `git ls-remote --heads origin` first: a bare `--delete` of a missing branch fails the whole command.
+- **Finished worktrees (all clean apart from agent memory and scratch tsconfig files).** Under `.claude/worktrees`: `agent-a188f19b23200d394` (310), `agent-a21bf19c74da91dfc` (304), `agent-a29d40af7c3259451` (314), `agent-a2b410ff6aba81457` (296), `agent-a344dd18f77012006` (297), `agent-a4272b55d7f340113` (321), `agent-a486200e388cf60a2` (302), `agent-a49f93fae324c2f73` (298), `agent-a566dd4e9b85f35a0` (315), `agent-a58020df90ed88fba` (327), `agent-a5978ee47b3cddc7d` (295), `agent-a5f97afa325a29a54` (303), `agent-a7d64835134a21382` (81), `agent-a950feb2b7cb6fa3c` (317), `agent-aa8df85c937dd5f7f` (289), `agent-ab1019c8b9dce3f6d` (306), `agent-ab9dbb50583f08c97` (293), `agent-aba29c02684ff3c95` (319), `agent-abc17bed8159f68c7` (323, detached), `agent-ad0b4f6f15805c9ed` (293 fix), `agent-ad93e490559305c26` (337), `agent-ae4c4621b99a4029e` (305), `agent-ae9bb823fe981514f` (331), `agent-aed4d5ffbe0f6c603` (318), `agent-aeff6b41b13272928` (307), `agent-af03117903bccf489` (313), `agent-af7953c02cf194dc9` (339), `agent-af9452910f4c87dd4` (299), and `aqp-311-backups`. Outside the project: `C:\Users\sanku\Documents\Accucut-AQP-183-phone` (detached). Some are locked: unlock them first. **Keep** `agent-aa1f064f6080db977` (AQP-324) and `agent-ad018d01ac3784f70` (AQP-325, uncommitted work). Ready commands, from the project folder in Git Bash (copy agent memory you want to keep first):
+  ```
+  for w in agent-a188f19b23200d394 agent-a21bf19c74da91dfc agent-a29d40af7c3259451 agent-a2b410ff6aba81457 agent-a344dd18f77012006 agent-a4272b55d7f340113 agent-a486200e388cf60a2 agent-a49f93fae324c2f73 agent-a566dd4e9b85f35a0 agent-a58020df90ed88fba agent-a5978ee47b3cddc7d agent-a5f97afa325a29a54 agent-a7d64835134a21382 agent-a950feb2b7cb6fa3c agent-aa8df85c937dd5f7f agent-ab1019c8b9dce3f6d agent-ab9dbb50583f08c97 agent-aba29c02684ff3c95 agent-abc17bed8159f68c7 agent-ad0b4f6f15805c9ed agent-ad93e490559305c26 agent-ae4c4621b99a4029e agent-ae9bb823fe981514f agent-aed4d5ffbe0f6c603 agent-aeff6b41b13272928 agent-af03117903bccf489 agent-af7953c02cf194dc9 agent-af9452910f4c87dd4 aqp-311-backups; do git worktree unlock ".claude/worktrees/$w" 2>/dev/null; git worktree remove --force ".claude/worktrees/$w"; done
+  git worktree prune
+  ```
+- **Scratchpad review and QA worktrees** (detached or `control/*`, all clean), in two old session scratchpads under `C:\Users\sanku\AppData\Local\Temp\claude\859e50c63dd2e28b\`: `ca57e222-…\scratchpad\` (`qa81-ctl`, `qa81-report`, `qlt289-ctl`, `qlt289-h2`, `qlt81`, `qlt81-ctl`, `wt-control`, `wt-control-q12`, `wt-report`) and `f8facd72-…\scratchpad\` (`pr381`, `pr381b`, `wt-445`, `wt-aqp293`, `wt-aqp322`, `wt-aqp323`, `wt437`). Any that hold a `node_modules` junction: run `cmd /c rmdir <path>\node_modules` first (never a recursive delete), then `git worktree remove --force <path>`. The AQP-324 reviewer's `wt-450` is in use now; it is listed in the next update.
 
 ## Daily update (2026-11-15, later, orchestrator)
 
@@ -430,6 +469,7 @@ Status from Jira (JQL, 2026-11-10 by master). Each gate decision is in `docs/00-
 ## Activity Log (newest first)
 
 | Date | Agent | Action | Artefacts |
+| 2026-11-16 | orchestrator | Daily update (§9): eight PRs squashed since 2026-11-15 (#427, #437, #417, #441, #446, #445, #448, #449), all Done in Jira; #450 AQP-324 in its combined review; AQP-325 WIP found uncommitted in its worktree, kept; clean-up list with ready commands | docs/project-state.md |
 | 2026-11-14 | orchestrator | Daily update (§9): squashed #375 AQP-294, #371 AQP-148, #373 records, #377 AQP-300 (combined review), #378 AQP-301, #381 AQP-298 (focused guard check), #380 AQP-293 (combined review; Major to #382); Gitleaks false positive on the old AQP-300 branch cleared by the delivery lead deleting it; lanes A AQP-299 and B AQP-302 building | docs/project-state.md |
 | 2026-11-13 | master | DL-211 (records, no gate): **ADR-015 accepted and logged:** native Node 22 and PostgreSQL 17 as Windows services, PowerShell 5.1 scripts, WinSW, a JEA endpoint for A-35; supersedes ADR-002 for the runtime and install model only. A-01 restated (Windows Server 2022 recommended), A-35 Windows form (assumption). **OQ-ARCH-14 closed** by the delivery lead's own selection (provenance checked): one disk of about 100 GB, backups on it, single-disk loss accepted; ceiling about 10 GB of data, 2 years while data is under about 0.5 GB (architecture v0.44). +2 to 4 h, no new story, G8 planning figure +0 to 0.5 day (not adopted). **CI ruling:** the `windows-latest` stage 13 job is STORY-10.04's own scope, not frozen by §9 item 4 (not new, not an enabler, not a measure; not required; no branch-protection change). 10.04, 10.05, 10.11 are §9 item 2 critical. Risks: RISK-029 new (9), RISK-017 12 → 9, RISK-011, 018, 021 restated. **Merges:** #361 (DEF-035) as 18c6a2d, push run 43398773339 6 of 6 at 3,340 / 5,825 / 884 / 24 / 908 = DL-206's target; #341 H_f 62661e6 (`--cc` empty, 80 files, both DL-201 (3) comparisons equal), run 43398870641 6 of 6 at 3,531 / 6,061 / 897 / 24 / 921, 0 names missing, +13 = DL-196; squashed as 0f5fb72 (tree = H_f, Refs #346), push run 43400137399 in progress, expected the same totals | `docs/00-governance/decision-log.md` DL-211; `risk-register.md` RISK-011, 017, 018, 021, 029; this file (Open Questions); Jira AQP-1 |
 | 2026-11-13 | master | DL-209 and DL-210 (records of the delivery lead's decisions): **CLAUDE.md §9 fast track adopted until G8** (their own approval in the main session; 45e0511, on `master` in 4b3579f); measure windows void until G8. **"All of R2 is a must"** is a date consequence, not a scope change: scope A whole with no separate release, MoSCoW unchanged; G8 planning figure about 2026-12-03 (4 lanes) or 12-04 to 12-07 (3 lanes), not adopted (release plan v0.25 §3.17, PRD v0.28 §13.21). OQ-PM-09 closed as moot; DL-207 (6) narrowed to removing `sprint-01` and Jira sprint 37 from AQP-148 plus a one-line sprint plan close | `docs/00-governance/decision-log.md` DL-209, DL-210; Jira AQP-1 11800 |
