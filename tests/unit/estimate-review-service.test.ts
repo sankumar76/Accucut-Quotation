@@ -250,6 +250,7 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
       price: '12600.00',
       approvedAt: '2026-11-05T05:50:00.000Z',
       approverName: 'Invented Kiran',
+      engineerName: 'Invented Priya',
       calculatedTotal: '12600.00',
       isOverride: false,
       reason: null,

@@ -72,6 +72,8 @@ export interface ApprovalRecord {
   readonly approvedAt: Date;
   /** The approver's name now (a later rename shows). */
   readonly approverName: string;
+  /** The name now of the Engineer whose task it is: the Admin's Cancel approval dialog says the task returns to their Open queue (STORY-06.12). */
+  readonly engineerName: string;
   /** The calculated total (BL) the price was set against, as rupees and paise: what SCR-06 says the price is lower or higher than (STORY-06.07 AC-3). */
   readonly calculatedTotal: string;
   readonly isOverride: boolean;
@@ -260,6 +262,7 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
           approvedPrice: found.approvedPrice.toFixed(PRICE_DECIMALS),
           approvedAt: found.approvedAt,
           approverName: found.approver.name,
+          engineerName: found.estimate.task.engineer.name,
           calculatedTotal: found.calculatedBl.toFixed(PRICE_DECIMALS),
           isOverride: found.isOverride,
           overrideReason: found.overrideReason,

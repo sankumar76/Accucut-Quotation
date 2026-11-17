@@ -170,6 +170,7 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
                 price: approval.approvedPrice,
                 approvedAt: approval.approvedAt.toISOString(),
                 approverName: approval.approverName,
+                engineerName: approval.engineerName,
                 calculatedTotal: approval.calculatedTotal,
                 isOverride: approval.isOverride,
                 reason: approval.overrideReason,

@@ -22,5 +22,5 @@ export interface ReviewPageArgs {
 
 export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {
   const costs = await getEstimateReviewService().getCosts(viewer, estimateId);
-  return <EstimateReview header={header} estimateId={estimateId} customer={customer} costs={costs} calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))} />;
+  return <EstimateReview header={header} estimateId={estimateId} customer={customer} costs={costs} calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))} viewerRole={viewer.role} />;
 }

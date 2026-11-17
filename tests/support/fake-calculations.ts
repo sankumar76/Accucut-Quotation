@@ -129,6 +129,7 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
               approvedPrice: found.approvedPrice,
               approvedAt: found.approvedAt,
               approverName: 'Invented Approver',
+              engineerName: 'Invented Engineer',
               calculatedTotal: found.calculatedTotal,
               isOverride: found.isOverride,
               overrideReason: found.overrideReason,

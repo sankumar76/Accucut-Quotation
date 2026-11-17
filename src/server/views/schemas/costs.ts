@@ -96,6 +96,8 @@ const approvalSchema = z
     price: z.string().regex(/^\d+\.\d{2}$/),
     approvedAt: z.iso.datetime(),
     approverName: z.string().min(1),
+    /** The Engineer whose task it is (their name now): the Cancel approval dialog says whose Open queue the task returns to (STORY-06.12). A person's name, not a cost. */
+    engineerName: z.string().min(1),
     calculatedTotal: z.string().regex(/^\d+\.\d{2}$/),
     isOverride: z.boolean(),
     reason: z.string().min(1).nullable(),

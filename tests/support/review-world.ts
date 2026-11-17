@@ -71,6 +71,8 @@ export interface ReviewWorldOptions {
   readonly approval?: {
     readonly price: string;
     readonly approverName?: string;
+    /** The Engineer whose task it is. Absent: Invented Priya. */
+    readonly engineerName?: string;
     /** The total the price was set against, rupees and paise; absent: the price itself (an approval at the calculated total). */
     readonly calculatedTotal?: string;
     /** Absent: not an override. */
@@ -146,6 +148,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
               approvedPrice: approval.price,
               approvedAt: REVIEW_APPROVED_AT,
               approverName: approval.approverName ?? 'Invented Approver',
+              engineerName: approval.engineerName ?? 'Invented Priya',
               calculatedTotal: approval.calculatedTotal ?? approval.price,
               isOverride: approval.isOverride ?? false,
               overrideReason: approval.reason ?? null,
