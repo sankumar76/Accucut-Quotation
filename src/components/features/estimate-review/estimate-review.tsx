@@ -64,7 +64,16 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
   const approval: ApprovedTileView | null =
-    costs.approval === null ? null : { price: costs.approval.price, approverName: costs.approval.approverName, approvedAtLabel: formatIst(new Date(costs.approval.approvedAt)) };
+    costs.approval === null
+      ? null
+      : {
+          price: costs.approval.price,
+          approverName: costs.approval.approverName,
+          approvedAtLabel: formatIst(new Date(costs.approval.approvedAt)),
+          calculatedTotal: costs.approval.calculatedTotal,
+          isOverride: costs.approval.isOverride,
+          reason: costs.approval.reason,
+        };
   return (
     <div className="group/review contents">
       <WorkspaceHeader view={header} />

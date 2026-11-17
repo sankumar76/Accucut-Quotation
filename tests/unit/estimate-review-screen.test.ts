@@ -328,6 +328,70 @@ describe('STORY-06.06 AC-5: the approved state', () => {
   });
 });
 
+describe('STORY-06.07 AC-3 (UX spec SCR-06 "Content"): BO shows the difference from the calculated total and the reason given, or "No reason given."', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+  const LOWER = { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, approverName: 'Invented Kiran' };
+  const REASON = 'Rounded down to a whole hundred for the customer quote.';
+
+  it('a lower price with a reason: "₹ 29.99 lower than the calculated total (₹ 12,629.99)." and "Reason given: …", under the approver line', async () => {
+    const html = render(await current({ approval: { ...LOWER, reason: REASON } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain(`Reason given: ${REASON}`);
+    expect(html).not.toContain('No reason given.');
+    expect(html.indexOf('Approved by Invented Kiran')).toBeLessThan(html.indexOf('lower than the calculated total'));
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+  });
+
+  it('a higher price says "higher"', async () => {
+    const html = render(await current({ approval: { price: '12630.01', calculatedTotal: '12629.99', isOverride: true } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 0.02 higher than the calculated total (₹ 12,629.99).');
+  });
+
+  it('a price of 0 is "₹ 12,629.99 lower than the calculated total (₹ 12,629.99)." (AC-8)', async () => {
+    const html = render(await current({ approval: { price: '0.00', calculatedTotal: '12629.99', isOverride: true } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,629.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain('No reason given.');
+  });
+
+  it('an override with no reason says "No reason given."', async () => {
+    const html = render(await current({ approval: LOWER }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain('No reason given.');
+    expect(html).not.toContain('Reason given:');
+  });
+
+  it('an approval at the calculated total shows neither a difference nor a reason line', async () => {
+    const html = render(await current({ approval: { price: '12629.99', calculatedTotal: '12629.99' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,629.99');
+    expect(html).not.toContain('than the calculated total');
+    expect(html).not.toContain('No reason given.');
+    expect(html).not.toContain('Reason given:');
+  });
+
+  it('shows a reason as text: markup and a line break are kept as typed and a long word wraps', async () => {
+    const html = render(await current({ approval: { ...LOWER, reason: '<b>bold</b> =SUM(A1)\nSecond line' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('Reason given: &lt;b&gt;bold&lt;/b&gt; =SUM(A1)\nSecond line');
+    expect(html).not.toContain('<b>bold</b>');
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain('[overflow-wrap:anywhere]');
+  });
+
+  it('BO keeps the line whatever the state of the figures: it is the approval row\'s, like the price (AC-9)', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { ...LOWER, reason: REASON } });
+    const html = render(await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain(`Reason given: ${REASON}`);
+  });
+
+  it('before any approval there is no such line', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('than the calculated total');
+    expect(html).not.toContain('No reason given.');
+  });
+});
+
 describe('STORY-06.06 AC-9: BO is the approval row, never the figure state', () => {
   it('with the figures cleared (an input changed after the approval) BO keeps the approved price and BL is cleared', async () => {
     const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { price: '12600.00' } });

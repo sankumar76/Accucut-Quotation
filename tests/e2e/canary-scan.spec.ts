@@ -782,7 +782,15 @@ test('AC-7 (STORY-06.04): the cleared page holds no figure, the Lead\'s Recalcul
  * signed in afterwards, is sent the same address: it says "Approved and locked." and holds **no price and no figure of the record**; `/costs` and `/approve` are the fixed 403 for them.
  */
 const APPROVED_PRICE = '48271.37';
-const APPROVED_PRICE_FORMS: ReadonlyArray<{ readonly text: string; readonly reason: string }> = [APPROVED_PRICE, '48,271.37', '₹ 48,271.37'].map((text) => ({ text, reason: 'the approved price (BO)' }));
+/**
+ * STORY-06.07 AC-7 (FR-011, NFR-002): the approval is an override, with a reason of the Lead's. The reason is a text no master, rate or customer holds, so a finding of it is the reason itself. The Lead's own
+ * answers and page hold it (the controls that show the scan reads something real); the Engineer's pages and answers must not, and the 403s are the fixed body.
+ */
+const OVERRIDE_REASON = 'Rounded to the nearest hundred for the scan customer quote';
+const APPROVED_PRICE_FORMS: ReadonlyArray<{ readonly text: string; readonly reason: string }> = [
+  ...[APPROVED_PRICE, '48,271.37', '₹ 48,271.37'].map((text) => ({ text, reason: 'the approved price (BO)' })),
+  { text: OVERRIDE_REASON, reason: 'the reason for a different price (FR-103, FR-011)' },
+];
 
 test('AC-4, AC-7 (STORY-06.06): the Lead\'s approval and the page after it show the price and no master value, and the Engineer is sent "Approved and locked." with no price and no figure', async ({ page, context }, testInfo) => {
   await useFreshAddress(context);
@@ -797,13 +805,19 @@ test('AC-4, AC-7 (STORY-06.06): the Lead\'s approval and the page after it show 
   expect(review.body ?? '').toContain('Approve and lock');
   const costs = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, Lead, before approval)`, `/api/v1/estimates/${id}/costs`);
   const calculationId = z.object({ calculationId: z.string() }).parse(JSON.parse(costs.body ?? '{}')).calculationId;
-  const approved = await callInBrowser(recorder, page, `POST /api/v1/estimates/${id}/approve (API, Lead)`, `/api/v1/estimates/${id}/approve`, { method: 'POST', body: { calculationId, price: APPROVED_PRICE } });
+  const approved = await callInBrowser(recorder, page, `POST /api/v1/estimates/${id}/approve (API, Lead)`, `/api/v1/estimates/${id}/approve`, { method: 'POST', body: { calculationId, price: APPROVED_PRICE, reason: OVERRIDE_REASON } });
   expect(approved.status).toBe(200);
+  // The answer is the status, the price and the time: the reason is not in it (STORY-06.07 AC-7).
   expect(JSON.parse(approved.body ?? '{}')).toMatchObject({ status: 'APPROVED', approvedPrice: APPROVED_PRICE });
+  expect(approved.body ?? '').not.toContain(OVERRIDE_REASON);
   const after = await recorder.recordNavigation(`GET /estimates/${code} (page, Lead, approved)`, await page.goto(`/estimates/${code}`));
   expect(after.status).toBe(200);
   expect(after.body ?? '').toContain('Approved and locked on');
   expect(after.body ?? '').toContain('₹ 48,271.37');
+  expect(after.body ?? '').toContain(`Reason given: ${OVERRIDE_REASON}`);
+  const approvedCosts = await callInBrowser(recorder, page, `GET /api/v1/estimates/${id}/costs (API, Lead, approved)`, `/api/v1/estimates/${id}/costs`);
+  expect(approvedCosts.status).toBe(200);
+  expect(JSON.parse(approvedCosts.body ?? '{}')).toMatchObject({ approval: { price: APPROVED_PRICE, isOverride: true, reason: OVERRIDE_REASON } });
   await page.waitForLoadState('networkidle');
   await recorder.settled();
   const leadResponses = recorder.responses.length;
@@ -834,7 +848,10 @@ test('AC-4, AC-7 (STORY-06.06): the Lead\'s approval and the page after it show 
   const leadFound = scanResponses(recorder.responses.slice(0, leadResponses), APPROVED_PRICE_FORMS);
   expect(leadFound.some((finding) => finding.label.includes('(API, Lead)')), 'the price is in the Lead\'s approval answer').toBe(true);
   expect(leadFound.some((finding) => finding.label.includes('(page, Lead, approved)')), 'the price is on the Lead\'s approved page').toBe(true);
-  // The Engineer is sent no price and no figure of the record, in anything that came after the sign-in.
+  // The reason is a control too: the Lead's approved page (next to BO) and the Lead's costs answer hold it, so the empty finding below for the Engineer means something.
+  expect(leadFound.some((finding) => finding.label.includes('(page, Lead, approved)') && finding.found === OVERRIDE_REASON), 'the reason is on the Lead\'s approved page').toBe(true);
+  expect(leadFound.some((finding) => finding.label.includes('costs (API, Lead, approved)') && finding.found === OVERRIDE_REASON), 'the reason is in the Lead\'s costs answer').toBe(true);
+  // The Engineer is sent no price, no reason and no figure of the record, in anything that came after the sign-in.
   const engineerResponses = recorder.responses.slice(leadResponses);
   expect(scanResponses(engineerResponses, APPROVED_PRICE_FORMS).map(describeFinding)).toEqual([]);
   expect(scanResponses(engineerResponses, watched).map(describeFinding)).toEqual([]);
