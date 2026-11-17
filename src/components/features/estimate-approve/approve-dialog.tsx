@@ -8,10 +8,12 @@ import { Notice } from '@/components/shared/notice';
 import { UnitInput } from '@/components/shared/unit-input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { CALCULATION_CHANGED_CODE, CALCULATION_CHANGED_MESSAGE, TOTALS_OUT_OF_DATE_CODE } from '@/lib/estimate/approval-words';
-import { isPrice, PRICE_MESSAGE, prefillPrice } from '@/lib/estimate/approve-price';
+import { isPrice, PRICE_MESSAGE, prefillPrice, priceDifference, validateReason } from '@/lib/estimate/approve-price';
 import { approveWarningLine } from '@/lib/estimate/lead-warning-copy';
 import { approveEstimate, canReadFigures } from '@/lib/estimates/approve-client';
+import { formatRupees } from '@/lib/money';
 
 import {
   APPROVE_UNCONFIRMED,
@@ -20,6 +22,9 @@ import {
   OUT_OF_DATE_ALERT,
   PRICE_INFO,
   PRICE_LABEL,
+  priceChangedNote,
+  REASON_HINT,
+  REASON_LABEL,
   RECALCULATE_FIRST_LABEL,
   RUPEE_SIGN,
   SAVING_LABEL,
@@ -35,7 +40,12 @@ import {
  * **States.** Default; Invalid (the price is not rupees with up to 2 decimals: the message is under the field); Saving ("Approving", the button held and the dialog cannot be dismissed); **Estimate changed while open**
  * (409 `TOTALS_OUT_OF_DATE`: a danger alert, Approve and lock off, and "Recalculate first" in place of Cancel); **Figures recalculated while open** (409 `CALCULATION_CHANGED`: a danger alert with the server's sentence,
  * Approve and lock off, and "Show the new figures" in place of Cancel, which holds focus; if the page cannot be read a second alert says so and the button stays). Any other refusal shows the server's own sentence and
- * leaves Cancel. When no usable answer comes the dialog says it could not confirm and the page is drawn again, because the approval may have gone through. The reason for a different price is STORY-06.07's.
+ * leaves Cancel. When no usable answer comes the dialog says it could not confirm and the page is drawn again, because the approval may have gone through.
+ *
+ * **A different price (STORY-06.07 AC-1, AC-4, AC-5; SCR-08 "Price changed", "Reason too long").** While the typed price differs from the calculated total at rupees and paise (`priceDifference`, the one rule the
+ * server compares with), the information line is replaced by the warn note that names the difference, and the optional **Reason for the different price** field shows. A reason is read only while the field shows:
+ * it is checked by the shared rule (at most 500 characters, no hidden character), and a refusal, the browser's or the server's 422, is shown under the field with what was typed kept. Putting the price back to
+ * the total hides the field and sends no reason. The field has no `maxLength`, so a longer text is told about and never cut. Whether the price is an override, and whether the reason is kept, is the server's.
  */
 
 export interface ApproveDialogProps {
@@ -84,7 +94,11 @@ function useApproval(props: ApproveDialogProps, inFlightRef: RefObject<boolean>)
   const { estimateId, calculationId, calculatedTotal, onApproved, onShowFigures, onUnconfirmed } = props;
   const [price, setPrice] = useState(() => prefillPrice(calculatedTotal));
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>(EDITING);
+  // The price differs from the calculated total at rupees and paise: the warning and the reason field show. Only a way to show them; the server decides, from the total it reads itself, whether it is an override.
+  const difference = isPrice(price) ? priceDifference(price, calculatedTotal) : null;
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -93,16 +107,27 @@ function useApproval(props: ApproveDialogProps, inFlightRef: RefObject<boolean>)
       setPriceError(PRICE_MESSAGE);
       return;
     }
+    // The reason is read only while its field shows (a price equal to the calculated total sends none, AC-5). Too long, or holding a hidden character: the sentence is under the field, nothing is sent, and
+    // what was typed stays (AC-4).
+    const checkedReason = difference === null ? null : validateReason(reason);
+    if (checkedReason !== null && !checkedReason.ok) {
+      setReasonError(checkedReason.message);
+      return;
+    }
+    const keptReason = checkedReason?.value ?? null;
     inFlightRef.current = true;
     setPriceError(null);
+    setReasonError(null);
     setPhase({ kind: 'saving' });
-    const outcome = await approveEstimate(estimateId, { calculationId, price: price.trim() });
+    const outcome = await approveEstimate(estimateId, { calculationId, price: price.trim(), ...(keptReason === null ? {} : { reason: keptReason }) });
     inFlightRef.current = false;
     if (outcome.status === 'ok') return onApproved();
     if (outcome.status === 'refused') {
-      // A price the server refused is shown under the field, in its own words, and nothing typed is cleared.
-      if (outcome.fields['price'] !== undefined) {
-        setPriceError(outcome.fields['price']);
+      // A price or a reason the server refused is shown under its own field, in the server's words, and nothing typed is cleared.
+      const { price: priceRefusal, reason: reasonRefusal } = outcome.fields;
+      if (priceRefusal !== undefined || reasonRefusal !== undefined) {
+        setPriceError(priceRefusal ?? null);
+        setReasonError(reasonRefusal ?? null);
         return setPhase(EDITING);
       }
       return setPhase(refusalPhase(outcome.code, outcome.httpStatus, outcome.title));
@@ -128,7 +153,11 @@ function useApproval(props: ApproveDialogProps, inFlightRef: RefObject<boolean>)
     setPrice(value);
     setPriceError(null);
   };
-  return { price, priceError, phase, setPrice: type, submit, showFigures };
+  const typeReason = (value: string): void => {
+    setReason(value);
+    setReasonError(null);
+  };
+  return { price, priceError, reason, reasonError, difference, phase, setPrice: type, setReason: typeReason, submit, showFigures };
 }
 
 type Approval = ReturnType<typeof useApproval>;
@@ -154,8 +183,9 @@ function Alerts({ phase }: { readonly phase: Phase }) {
 }
 
 function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; readonly approval: Approval }) {
-  const { phase, price, priceError } = approval;
+  const { phase, price, priceError, reason, reasonError, difference } = approval;
   const priceInput = useRef<HTMLInputElement>(null);
+  const reasonInput = useRef<HTMLTextAreaElement>(null);
   const wayOn = useRef<HTMLButtonElement>(null);
   const stopped = phase.kind === 'out-of-date' || phase.kind === 'recalculated';
   const saving = phase.kind === 'saving';
@@ -167,6 +197,10 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
   useEffect(() => {
     if (priceError !== null) priceInput.current?.focus();
   }, [priceError]);
+  // A reason that was refused takes focus back to its field, unless the price was refused too (the price comes first, as it does on the form).
+  useEffect(() => {
+    if (reasonError !== null && priceError === null) reasonInput.current?.focus();
+  }, [reasonError, priceError]);
 
   return (
     <form noValidate onSubmit={(event) => void approval.submit(event)} className="flex flex-col gap-s-4">
@@ -175,7 +209,7 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
       </DialogHeader>
       <Alerts phase={phase} />
       {props.warningRows.length === 0 ? null : <Notice tone="info">{approveWarningLine(props.warningRows)}</Notice>}
-      <Notice tone="info">{PRICE_INFO}</Notice>
+      {difference === null ? <Notice tone="info">{PRICE_INFO}</Notice> : <Notice tone="warn">{priceChangedNote(difference.direction, formatRupees(difference.amount))}</Notice>}
       <FormField id="approve-price" label={PRICE_LABEL} tag={<ColumnTag letter={props.approvedLetter} kind="output" />} {...(priceError === null ? {} : { error: priceError })}>
         {(control) => (
           <UnitInput
@@ -192,6 +226,14 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
           />
         )}
       </FormField>
+      {difference === null ? null : (
+        <FormField id="approve-reason" label={REASON_LABEL} hint={REASON_HINT} {...(reasonError === null ? {} : { error: reasonError })}>
+          {(control) => (
+            // No `maxLength`: a browser would cut a longer text silently. The limit is told under the field and on submit, and what was typed stays (AC-4).
+            <Textarea {...control} ref={reasonInput} name="reason" autoComplete="off" disabled={stopped || saving} value={reason} onChange={(event) => approval.setReason(event.target.value)} />
+          )}
+        </FormField>
+      )}
       <DialogFooter>
         {stopped ? (
           <Button ref={wayOn} type="button" variant="secondary" loading={(phase.kind === 'recalculated' || phase.kind === 'out-of-date') && phase.reading} onClick={() => void approval.showFigures()}>

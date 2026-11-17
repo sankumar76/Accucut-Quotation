@@ -8,8 +8,17 @@ export const DIALOG_TITLE = 'Approve and lock';
 /** The label of the field; the Excel letter of BO is drawn beside it from the configuration version (UX-26), never typed. */
 export const PRICE_LABEL = 'Approved Quote Price';
 export const RUPEE_SIGN = '₹';
-/** The Default state's information line (AC-1). The reason it speaks of is STORY-06.07's field. */
+/** The Default state's information line (STORY-06.06 AC-1). The reason it speaks of is the field below, which shows once the price differs (STORY-06.07). */
 export const PRICE_INFO = 'If you change the price, the difference is recorded as an override. You can add a reason for it; the reason is optional.';
+
+/**
+ * State "Price changed" (STORY-06.07 AC-1; UX spec SCR-08 "States"): the warn note that replaces the information line while the price differs from the calculated total, and the optional reason's field. `amount` is
+ * the difference as rupees ("₹ 29.99"), computed from the calculated total and the price, never typed here. No word holds a rate or a formula (NFR-002).
+ */
+export const priceChangedNote = (direction: 'lower' | 'higher', amount: string): string =>
+  `This price is ${amount} ${direction} than the calculated total. A different price is recorded as an override with your name, the time, the calculated total, the price you set and your reason, if you give one.`;
+export const REASON_LABEL = 'Reason for the different price (Optional)';
+export const REASON_HINT = 'You can leave this empty. If you give one, it is kept with the override in the audit log and shown next to the Approved Quote Price. Up to 500 characters.';
 export const CANCEL_LABEL = 'Cancel';
 export const SAVING_LABEL = 'Approving';
 

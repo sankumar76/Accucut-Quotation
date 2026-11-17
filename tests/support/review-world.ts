@@ -67,7 +67,16 @@ export interface ReviewWorldOptions {
   /** The estimate's input changes so far; the calculation was made at 3. */
   readonly inputsRevision?: number;
   /** An approval row of the estimate (STORY-06.06): the price as stored (two decimals) and who approved it. Absent: none, BO is "Not set yet". */
-  readonly approval?: { readonly price: string; readonly approverName?: string };
+  readonly approval?: {
+    readonly price: string;
+    readonly approverName?: string;
+    /** The total the price was set against, rupees and paise; absent: the price itself (an approval at the calculated total). */
+    readonly calculatedTotal?: string;
+    /** Absent: not an override. */
+    readonly isOverride?: boolean;
+    /** The reason given with an override; absent: none. */
+    readonly reason?: string;
+  };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
   readonly madeBy?: string;
@@ -127,7 +136,16 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
       return Promise.resolve(
         approval === undefined || id !== REVIEW_ESTIMATE_ID
           ? null
-          : { id: '00000000-0000-4000-8000-0000000a9901', calculationId: INVENTED_CALCULATION_ID, approvedPrice: approval.price, approvedAt: REVIEW_APPROVED_AT, approverName: approval.approverName ?? 'Invented Approver' },
+          : {
+              id: '00000000-0000-4000-8000-0000000a9901',
+              calculationId: INVENTED_CALCULATION_ID,
+              approvedPrice: approval.price,
+              approvedAt: REVIEW_APPROVED_AT,
+              approverName: approval.approverName ?? 'Invented Approver',
+              calculatedTotal: approval.calculatedTotal ?? approval.price,
+              isOverride: approval.isOverride ?? false,
+              overrideReason: approval.reason ?? null,
+            },
       );
     },
   };

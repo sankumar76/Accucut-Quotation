@@ -112,7 +112,20 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     },
     findLatestApproval(estimateId) {
       const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
-      return Promise.resolve(found === undefined ? null : { id: found.id, calculationId: found.calculationId, approvedPrice: found.approvedPrice, approvedAt: found.approvedAt, approverName: 'Invented Approver' });
+      return Promise.resolve(
+        found === undefined
+          ? null
+          : {
+              id: found.id,
+              calculationId: found.calculationId,
+              approvedPrice: found.approvedPrice,
+              approvedAt: found.approvedAt,
+              approverName: 'Invented Approver',
+              calculatedTotal: found.calculatedTotal,
+              isOverride: found.isOverride,
+              overrideReason: found.overrideReason,
+            },
+      );
     },
   };
 
