@@ -115,7 +115,7 @@ test.describe('AC-1, AC-2, AC-5: Save draft', () => {
 
 test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
   test('AC-4: nothing prompts when nothing is unsaved: a link goes straight on, a value that was saved by leaving its field is not "unsaved"', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await openForm(page, testInfo, { fromTheQueue: true });
     const saved = nextSave(page);
     await control(page, 'J').fill('5');
     await control(page, 'J').blur();
@@ -188,7 +188,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
   });
 
   test('AC-4: the back button asks too, and asks again after "Keep editing"; "Leave without saving" goes back to the page before', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    await openForm(page, testInfo, { fromTheQueue: true });
     const here = page.url();
     await typeAValueThatCannotBeSaved(page);
 

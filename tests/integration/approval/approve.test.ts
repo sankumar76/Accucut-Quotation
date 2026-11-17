@@ -92,7 +92,8 @@ describe('AC-2: the approval is written in one piece', () => {
       estimate_id: estimateId,
       calculation_id: calculationId,
       approved_price: '1000.00',
-      is_override: false,
+      // 1000.00 is not the calculation's total, so it is an override with no reason given (STORY-06.07; its own tests are `override.test.ts`).
+      is_override: true,
       override_reason: null,
       approved_by: db.personId,
       unlocked_by: null,
@@ -118,15 +119,15 @@ describe('AC-2: the approval is written in one piece', () => {
       before: null,
       request_id: auditOf(db).requestId,
     });
-    expect(defined(entries[0]).after).toEqual({ approvedPrice: '1000.00', calculatedTotal: total, approver: 'Calculation Lead' });
+    expect(defined(entries[0]).after).toEqual({ approvedPrice: '1000.00', calculatedTotal: total, approver: 'Calculation Lead', isOverride: true });
   });
 
-  it('an Admin approves too, and a price that is not the calculated total is stored as it was typed (the override is STORY-06.07\'s)', async () => {
+  it('an Admin approves too, and the price is stored as it was typed', async () => {
     const { estimateId } = await calculatedEstimate(db);
     const calculationId = await currentCalculationOf(db, estimateId);
     await db.approvalService.approve({ id: db.personId, role: 'ADMIN' }, estimateId, request(calculationId, '1.50'));
     const { rows } = await db.owner.query<{ approved_price: string; is_override: boolean }>('SELECT approved_price::text, is_override FROM approvals WHERE estimate_id = $1::uuid', [estimateId]);
-    expect(rows).toEqual([{ approved_price: '1.50', is_override: false }]);
+    expect(rows).toEqual([{ approved_price: '1.50', is_override: true }]);
   });
 
   it('an audit entry that cannot be written takes the status and the approval with it', async () => {

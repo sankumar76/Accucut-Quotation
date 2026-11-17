@@ -10,7 +10,11 @@ import { approveAnswerSchema, approveBodySchema, estimateIdParamsSchema } from '
  * APPROVED, stores the approval (the price, the calculated total, the approver, the time) and records the audit entry `approval.approved`, together or not at all.
  *
  * **The answer** is `{status, approvedPrice, approvedAt}` and nothing else (NFR-002): the new status, the price the Lead set (the one figure the Lead typed) and when. No calculated figure, no master value, rate or
- * formula, and no ID, so there is nothing for a scan to find. The body is strict; the price is shape-checked here and written as paise. The optional `reason` is shape-checked here and kept from STORY-06.07.
+ * formula, and no ID, so there is nothing for a scan to find. The body is strict; the price is shape-checked here and written as paise.
+ *
+ * **A price that differs from the calculated total is an override** (STORY-06.07 AC-2 to AC-6; FR-103, D-18): the service compares at rupees and paise, from the total it reads itself, and writes the flag, the
+ * price and the optional reason with the approval, in the same transaction. The `reason` is checked here by the shared text rule (at most 500 characters, counted as the column counts them, no control or invisible
+ * character: a 422 under `reason`); it is kept, trimmed, only with an override, and one sent with the calculated total is dropped. It is in no answer of this route, and none reaches an Engineer (FR-011, NFR-002).
  */
 export const POST = withRoute({
   route: '/api/v1/estimates/[id]/approve',

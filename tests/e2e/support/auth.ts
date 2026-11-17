@@ -360,6 +360,32 @@ export async function readEstimateState(estimateId: string): Promise<{ readonly 
   }
 }
 
+/** What an approval of an estimate kept (STORY-06.07): the price, the total it was set against, whether it is an override and the reason, and the reason the price-override audit entry holds (`undefined`: no such entry). */
+export interface StoredApproval {
+  readonly approvedPrice: string;
+  readonly calculatedBl: string;
+  readonly isOverride: boolean;
+  readonly overrideReason: string | null;
+  readonly entryReason: string | null | undefined;
+}
+
+/** The estimate's one approval and its override entry, read from the throwaway database as its owner; `null` when it has no approval. */
+export async function readApproval(estimateId: string): Promise<StoredApproval | null> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ approved_price: string; calculated_bl: string; is_override: boolean; override_reason: string | null }>(
+      'SELECT approved_price::text, calculated_bl::text, is_override, override_reason FROM approvals WHERE estimate_id = $1::uuid',
+      [estimateId],
+    );
+    const row = rows[0];
+    if (row === undefined) return null;
+    const entries = await client.query<{ reason: string | null }>("SELECT after->>'reason' AS reason FROM audit_log WHERE event = 'approval.price_overridden' AND object_id = $1::uuid", [estimateId]);
+    return { approvedPrice: row.approved_price, calculatedBl: row.calculated_bl, isOverride: row.is_override, overrideReason: row.override_reason, entryReason: entries.rows[0]?.reason };
+  } finally {
+    await client.end();
+  }
+}
+
 /**
  * What this estimate's Calculate left in the database (review SQR-02 of AQP-317): `calculated` is the product values of each record and the outputs of each of its rows, and `typed` is the inputs of
  * those rows (what the Engineer typed, with the resolved text), so the scan can look for the figures the calculation produced and leave out the ones the Engineer typed. Both are JSON values as
@@ -541,6 +567,24 @@ export async function signInThroughThePage(page: Page, email: string, password: 
   await page.getByLabel('E-mail').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+/**
+ * Signs in with the two calls the sign-in page itself makes (`src/lib/auth/auth-client.ts`: the CSRF token, then the credentials), and leaves the session cookie in the
+ * browser context, without loading SCR-01 or the queue behind it. For a test whose subject is not the sign-in: each of those two page loads costs the development server
+ * 1 to 3.7 s on a loaded runner (traces of AQP-340), a quarter of the 30 s a journey test has. The sign-in screen itself is judged by `sign-in.spec.ts` and the others that go through the page.
+ * Fails with the server's own code when the sign-in is refused, so a wrong password is not a later timeout.
+ */
+export async function signInWithoutThePage(page: Page, email: string, password: string): Promise<void> {
+  // Made once, no repeat (DL-229, DL-231): a connection reset here is DEF-036's signature, and the E2E server's longer keep-alive (`server-keep-alive.cjs`) is what prevents it.
+  // A refused sign-in fails below with the server's code.
+  const token = await page.request.get('/api/auth/csrf');
+  expect(token.ok(), 'the CSRF token of the sign-in').toBe(true);
+  const { csrfToken } = (await token.json()) as { readonly csrfToken: string };
+  const answer = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email, password, json: 'true' } });
+  expect(answer.ok(), 'the credentials post of the sign-in').toBe(true);
+  const { url } = (await answer.json()) as { readonly url: string };
+  expect(new URL(url, 'http://sign-in.invalid').searchParams.get('error'), 'the error the server names, if it refused').toBeNull();
 }
 
 export async function expectOnQueue(page: Page, title: string): Promise<void> {

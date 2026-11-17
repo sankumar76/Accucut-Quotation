@@ -88,6 +88,14 @@ export const APPROVED_NOTICE_TITLE_PLAIN = 'Approved and locked.';
 export const APPROVED_NOTICE_BODY = 'Locked. Values stay as approved even if rates change later. Only the Admin can cancel an approval.';
 /** The line under BO once approved: "Approved by Kiran Bose, 05 Nov 2026, 11:20 IST." (the tile adds "File cell BO2." itself). */
 export const approvedByLine = (name: string, time: string): string => `Approved by ${name}, ${time}.`;
+/**
+ * The two lines BO adds for a price that differs from the calculated total (STORY-06.07 AC-3; UX spec SCR-06 "Content"): "₹ 29.99 lower than the calculated total (₹ 12,629.99)." and then "Reason given: …", or
+ * "No reason given." when the Lead left it empty (UX-31). `amount` and `calculatedTotal` are figures already written as rupees ("₹ 29.99"), so this file stays free of imports; the sentence is written once
+ * here, and the figures come from the approval row.
+ */
+export const overrideLine = (direction: 'lower' | 'higher', amount: string, calculatedTotal: string): string => `${amount} ${direction} than the calculated total (${calculatedTotal}).`;
+export const reasonGivenLine = (reason: string): string => `Reason given: ${reason}`;
+export const NO_REASON_GIVEN = 'No reason given.';
 export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;
