@@ -166,6 +166,7 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
           approval === null
             ? null
             : {
+                id: approval.id,
                 price: approval.approvedPrice,
                 approvedAt: approval.approvedAt.toISOString(),
                 approverName: approval.approverName,
@@ -176,6 +177,10 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
                   approval.unlock === null
                     ? null
                     : { at: approval.unlock.unlockedAt.toISOString(), byName: approval.unlock.byName, reason: approval.unlock.reason, engineerName: approval.unlock.engineerName },
+                cancel:
+                  approval.cancel === null
+                    ? null
+                    : { at: approval.cancel.cancelledAt.toISOString(), byName: approval.cancel.byName, reason: approval.cancel.reason, engineerName: approval.cancel.engineerName },
               },
         // The warning of the calculation in view (STORY-06.10): it comes in with the figures, so it is read only while the state is `current` and is `null` in the other two (AC-4).
         warning: warningOf(figures),

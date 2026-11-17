@@ -245,7 +245,17 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     expect(after.state).toBe('out-of-date');
     expect(after.totals).toBeNull();
     expect(after.approval).toEqual(before.approval);
-    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran', calculatedTotal: '12600.00', isOverride: false, reason: null, unlock: null });
+    expect(after.approval).toEqual({
+      id: '00000000-0000-4000-8000-0000000a9901',
+      price: '12600.00',
+      approvedAt: '2026-11-05T05:50:00.000Z',
+      approverName: 'Invented Kiran',
+      calculatedTotal: '12600.00',
+      isOverride: false,
+      reason: null,
+      unlock: null,
+      cancel: null,
+    });
     // BL is cleared, and no calculated figure was read to say so.
     expect(cleared.reads.figures.calls).toEqual([]);
     expect(cleared.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
@@ -297,6 +307,17 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     expect(after.approval).toEqual(before.approval);
     expect(after.approval?.price).toBe('12600.00');
     expect(cleared.reads.figures.calls).toEqual([]);
+  });
+
+  it('STORY-06.12 AC-6: a cancelled approval carries who cancelled, when, why and whose queue, whatever the state of the figures, and BO stays the price', async () => {
+    const cancel = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+    const cancelled = { ...approval, cancel };
+    const before = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: cancelled }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(before.approval?.cancel).toEqual({ at: '2026-11-05T07:35:00.000Z', byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' });
+    expect(before.approval?.price).toBe('12600.00');
+    const after = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: cancelled, inputsRevision: CALCULATION_REVISION + 1 }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(after.state).toBe('out-of-date');
+    expect(after.approval).toEqual(before.approval);
   });
 
   it('an Engineer is refused before the approvals are read, as before everything else', async () => {

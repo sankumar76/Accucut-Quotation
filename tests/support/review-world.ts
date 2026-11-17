@@ -1,4 +1,4 @@
-import type { UnlockRecord } from '../../src/server/repositories/approval-repository';
+import type { CancelRecord, UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
@@ -78,6 +78,8 @@ export interface ReviewWorldOptions {
     /** The reason given with an override; absent: none. */
     readonly reason?: string;
     readonly unlock?: UnlockRecord;
+    /** The cancel of the approval (STORY-06.12). Absent: not cancelled. */
+    readonly cancel?: CancelRecord;
   };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
@@ -148,6 +150,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
               isOverride: approval.isOverride ?? false,
               overrideReason: approval.reason ?? null,
               unlock: approval.unlock ?? null,
+              cancel: approval.cancel ?? null,
             },
       );
     },

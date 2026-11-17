@@ -343,10 +343,10 @@ test.describe('by keyboard (AC-9)', () => {
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
     // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
-    // first, "Approval" second, "Unlock" third, "Price override" fourth and "Approval cancelled" fifth; typing the letters instead depends on the pause between keys, which a busy machine stretches.
-    // "Approval", "Unlock" and "Price override" hold entries since STORY-06.06, STORY-06.08 and STORY-06.07 (the tests of the same run write them), so the empty result is the one of "Approval cancelled",
-    // whose event is declared and not yet written: STORY-06.12.)
-    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled']) {
+    // first, "Approval" second, "Unlock" third, "Price override" fourth, "Approval cancelled" fifth and "Price removed" sixth; typing the letters instead depends on the pause between keys, which a busy machine stretches.
+    // "Approval", "Unlock", "Price override" and "Approval cancelled" hold entries since STORY-06.06, STORY-06.08, STORY-06.07 and STORY-06.12 (the tests of the same run write them), so the empty result is the one of
+    // "Price removed", whose event is declared and not yet written: STORY-06.13.)
+    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled', 'price_removed']) {
       await page.keyboard.press('ArrowDown');
       await expect(event).toHaveValue(value);
     }

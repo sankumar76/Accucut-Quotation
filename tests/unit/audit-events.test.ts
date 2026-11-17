@@ -22,17 +22,17 @@ const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
-/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked. Registry order puts them before the quantity warning. */
-const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked'];
+/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked; STORY-06.12: an approval cancelled. Registry order puts them before the quantity warning. */
+const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
-const RESERVED: ReadonlyArray<AuditEventName> = ['approval.cancelled', 'approval.price_removed'];
+const RESERVED: ReadonlyArray<AuditEventName> = ['approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval, the price override and the unlock, and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval, the price override, the unlock and the cancel, and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -121,7 +121,7 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
   });
 
   it('gives a declared event no words yet, whatever it holds', () => {
-    expect(describeOf('approval.cancelled', { price: 1 }, null)).toEqual(NO_DETAIL);
+    expect(describeOf('approval.price_removed', { price: 1 }, null)).toEqual(NO_DETAIL);
   });
 });
 
@@ -261,6 +261,51 @@ describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the
 
   it('accepts a reason of exactly 500 characters', () => {
     expect(event.describeStored(before, { reason: 'x'.repeat(500) })).not.toBeNull();
+  });
+});
+
+describe('STORY-06.12 AC-3, AC-7, AC-10: the cancel event keeps the price it stood at, the reason and the status before and after, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.cancelled'];
+  const before = { approvedPrice: '4750.00', status: 'APPROVED' };
+  const after = { reason: 'The wrong customer was priced.', status: 'DRAFT' };
+
+  it('is wired, about the estimate, under the "Approval cancelled" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'approval_cancelled' });
+    expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
+  });
+
+  it('says what the approval stood at and why it was cancelled (SCR-16: "Approved at ₹ 4,750.00 to Cancelled. Reason: …")', () => {
+    expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 4,750.00', after: 'Cancelled. Reason: The wrong customer was priced.' });
+  });
+
+  it.each([
+    ['DRAFT', 'a Draft'],
+    ['SUBMITTED', 'Submitted'],
+  ])('says so when the estimate stayed %s (AC-10): the entry shows that the status did not change', (status, words) => {
+    expect(event.describeStored({ ...before, status }, { ...after, status })).toEqual({
+      before: 'Approved at ₹ 4,750.00',
+      after: `Cancelled, the estimate stayed ${words}. Reason: The wrong customer was priced.`,
+    });
+  });
+
+  it.each([
+    ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
+    ['an extra key in the after (the password has no place here)', before, { ...after, password: 'x' }],
+    ['a price as a number', { ...before, approvedPrice: 4750 }, after],
+    ['a status that is none', { ...before, status: 'CLOSED' }, after],
+    ['no status in the after', before, { reason: after.reason }],
+    ['no reason', before, { status: 'DRAFT' }],
+    ['an empty reason', before, { ...after, reason: '' }],
+    ['a reason over 500 characters', before, { ...after, reason: 'x'.repeat(501) }],
+    ['a before that is null', null, after],
+    ['an after that is null', before, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+
+  it('accepts a reason of exactly 500 characters, counted as code points', () => {
+    expect(event.describeStored(before, { ...after, reason: 'x'.repeat(500) })).not.toBeNull();
+    expect(event.describeStored(before, { ...after, reason: '😀'.repeat(500) })).not.toBeNull();
   });
 });
 
