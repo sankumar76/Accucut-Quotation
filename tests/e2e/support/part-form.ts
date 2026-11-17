@@ -7,7 +7,7 @@ import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, expectOnQueue, signInThroughThePage } from './auth';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage } from './auth';
 import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
 
 /**
@@ -33,12 +33,14 @@ export function nextSave(page: Page): Promise<number> {
   return page.waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method())).then((response) => response.status());
 }
 
+/**
+ * A new Engineer who owns a task, signed in without the sign-in screen and the queue (`signInWithoutThePage`): the part-form specs start from the workspace, and the two page loads before it
+ * were a quarter of a journey test's 30 s on a loaded runner (AQP-340). The caller goes to the workspace next, as every caller does.
+ */
 export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
   await page.context().clearCookies();
   const person = await createDisposableUser('scan', testInfo);
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expectOnQueue(page, 'My tasks');
+  await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
 }
 

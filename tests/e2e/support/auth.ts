@@ -569,6 +569,22 @@ export async function signInThroughThePage(page: Page, email: string, password: 
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
+/**
+ * Signs in with the two calls the sign-in page itself makes (`src/lib/auth/auth-client.ts`: the CSRF token, then the credentials), and leaves the session cookie in the
+ * browser context, without loading SCR-01 or the queue behind it. For a test whose subject is not the sign-in: each of those two page loads costs the development server
+ * 1 to 3.7 s on a loaded runner (traces of AQP-340), a quarter of the 30 s a journey test has. The sign-in screen itself is judged by `sign-in.spec.ts` and the others that go through the page.
+ * Fails with the server's own code when the sign-in is refused, so a wrong password is not a later timeout.
+ */
+export async function signInWithoutThePage(page: Page, email: string, password: string): Promise<void> {
+  const token = await page.request.get('/api/auth/csrf');
+  expect(token.ok(), 'the CSRF token of the sign-in').toBe(true);
+  const { csrfToken } = (await token.json()) as { readonly csrfToken: string };
+  const answer = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email, password, json: 'true' } });
+  expect(answer.ok(), 'the credentials post of the sign-in').toBe(true);
+  const { url } = (await answer.json()) as { readonly url: string };
+  expect(new URL(url, 'http://sign-in.invalid').searchParams.get('error'), 'the error the server names, if it refused').toBeNull();
+}
+
 export async function expectOnQueue(page: Page, title: string): Promise<void> {
   await expect(page).toHaveURL(/\/queue$/);
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();

@@ -288,13 +288,18 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await expectNoSidewaysScroll(page);
   });
 
-  test('AC-9: axe finds 0 violations in the blocked state and in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
+  // One test for each state (AQP-340, DEF-037). The two states were one test that opened the form, scanned, reloaded, pressed again and scanned again: 26 to 30 s of the 30 s a test has on a loaded
+  // runner (traces: 19 to 30 s), so it was the first to time out when the runner slowed. Each test now holds half of that, with the same assertions and the same scans.
+  test('AC-9: axe finds 0 violations in the blocked state, and the page does not scroll sideways', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     await press(page);
     await expect(summary(page)).toBeVisible();
     await expectFormAccessible(page);
     await expectNoSidewaysScroll(page);
+  });
 
+  test('AC-9: axe finds 0 violations in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
+    const owner = await openForm(page, testInfo);
     await makeComplete(page, owner.id);
     const response = await press(page);
     expect(response.status()).toBe(200);

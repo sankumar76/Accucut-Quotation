@@ -4,7 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, expectOnQueue, signInThroughThePage, useFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 
 /**
@@ -40,9 +40,7 @@ async function slNumbers(page: Page): Promise<string[]> {
 async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
   await page.context().clearCookies();
   const person = await createDisposableUser('scan', testInfo);
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expectOnQueue(page, 'My tasks');
+  await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
 }
 
