@@ -53,6 +53,12 @@ export interface EstimateLock {
   readonly taskCode: string;
 }
 
+/** A material one of the estimate's parts names, and whether the Admin deleted it (a soft delete: the row stays). */
+export interface MaterialInUse {
+  readonly id: string;
+  readonly deleted: boolean;
+}
+
 /** What the parts tree needs to decide who may read it and whether it may change: the estimate's owner and state, read without a lock. */
 export interface EstimateAccess {
   readonly id: string;
@@ -69,6 +75,13 @@ export interface EstimateRepository {
   lockEstimate(id: string, tx: Transaction): Promise<EstimateLock | null>;
   /** The customer with this ID, locked for share; null for an unknown ID, a deleted customer or an ID that is not a UUID. */
   findActiveCustomer(id: string, tx: Transaction): Promise<CustomerChoice | null>;
+  /**
+   * The materials the estimate's parts name, **each locked for share in ascending ID order** until the transaction ends, with whether it was deleted (STORY-06.08 AC-10). The lock order is the estimate, then
+   * the task, then the customer, then these, as the writers of a part's material take it (`lockMaterialForUse`), so there is no cycle with a material delete, which takes no estimate lock. A material is found by
+   * its ID **anywhere** in a part's inputs, as the delete guard finds it (`findOpenEstimatesOfMaterial`): the shape of that value belongs to the part form, so this can only over-match, never miss. Call it under
+   * the estimate's row lock.
+   */
+  lockMaterialsInUse(estimateId: string, tx: Transaction): Promise<ReadonlyArray<MaterialInUse>>;
   /** Sets the customer and raises `inputs_revision` by one, in the caller's transaction. The caller has already checked the state and that the customer differs. */
   setCustomer(estimateId: string, customerId: string, tx: Transaction): Promise<void>;
   /** Raises `inputs_revision` by one, in the caller's transaction: a part added, deleted, moved or reordered is an input change (architecture section 4.8). The caller holds the estimate's lock. */
@@ -105,6 +118,18 @@ export interface EstimateLocking {
   readonly lockEstimate: EstimateRepository['lockEstimate'];
 }
 
+/**
+ * What an unlock needs of the estimate repository (STORY-06.08 AC-10): the estimate's lock, then its customer and the materials its parts name, each locked for share in that order. A named interface and not a
+ * `Pick`, for the same reason as `EstimateLocking`.
+ */
+export interface EstimateUnlocking {
+  readonly lockEstimate: EstimateRepository['lockEstimate'];
+  /** The status of the estimate, read without a lock, for the preview (a read). */
+  readonly findEstimateAccess: EstimateRepository['findEstimateAccess'];
+  readonly findActiveCustomer: EstimateRepository['findActiveCustomer'];
+  readonly lockMaterialsInUse: EstimateRepository['lockMaterialsInUse'];
+}
+
 const STATUS = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
 
 const WORKSPACE_ROWS = z.array(
@@ -125,6 +150,7 @@ const WORKSPACE_ROWS = z.array(
 const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string() }));
 const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
+const MATERIAL_ROWS = z.array(z.strictObject({ id: z.string(), deleted: z.boolean() }));
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -178,6 +204,24 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT id::text AS "id", name FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
         return CUSTOMER_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    lockMaterialsInUse: (estimateId, tx) =>
+      withDatabaseErrors(async () => {
+        // Fails closed as the delete guard does: an ID that is not a UUID is a programming fault, never "no material in use", which would let an unlock through.
+        if (!isUuid(estimateId)) throw new Error('The material check needs an estimate ID.');
+        // The IDs found in the parts' inputs (a UUID as a JSON string, in lower case), then the materials with those IDs, locked `FOR SHARE` in ascending ID order. The deleted ones are listed too: the caller refuses.
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT m.id::text AS "id", (m.deleted_at IS NOT NULL) AS "deleted"
+          FROM materials m
+          WHERE m.id::text IN (
+            SELECT lower(found[1])
+            FROM estimate_nodes n
+            CROSS JOIN LATERAL regexp_matches(lower(n.inputs::text), '"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"', 'g') AS found
+            WHERE n.estimate_id = ${estimateId}::uuid)
+          ORDER BY m.id
+          FOR SHARE OF m`;
+        return MATERIAL_ROWS.parse(rows);
       }),
 
     setCustomer: (estimateId, customerId, tx) =>
