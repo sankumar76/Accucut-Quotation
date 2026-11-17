@@ -88,7 +88,9 @@ describe('a change as the owner is refused by the triggers (AC-3)', () => {
     ['the calculated total', 'UPDATE approvals SET calculated_bl = 1'],
     ['the approver', 'UPDATE approvals SET approved_by = estimate_id'],
     ['the time', "UPDATE approvals SET approved_at = now() + interval '1 day'"],
-    ['the override flag', 'UPDATE approvals SET is_override = true'],
+    // The fixture is approved at a price that is not the calculated total, so its flag is already true (STORY-06.07): the statement flips it, so it is a change whichever way the fixture is.
+    ['the override flag', 'UPDATE approvals SET is_override = NOT is_override'],
+    ['the override reason', "UPDATE approvals SET override_reason = 'Another reason.'"],
   ])('UPDATE of %s', async (_name, statement) => {
     const before = await snapshotOfTable();
     await expect(db.owner.query(statement)).rejects.toThrow('The approved values of an approval cannot be changed.');
