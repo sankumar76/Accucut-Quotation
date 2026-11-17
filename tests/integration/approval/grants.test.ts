@@ -196,3 +196,57 @@ describe('the unlock, cancel and remove columns are write-once (SQR-02)', () => 
     expect(updated.rowCount).toBe(1);
   });
 });
+
+/**
+ * SQR-12 of the review of AQP-323 (AQP-325 precondition): an act is stored once, **whole**. Once the time of an unlock or of a cancel is set, the reason cannot be added, changed or cleared either: a reason that was
+ * null when the act was stored stays null, by the runtime role and by the owner. A reason cannot be put on a row before its time, because the trigger leaves an act open until its time is set.
+ */
+describe('an unlock and a cancel freeze whole once their time is set (SQR-12)', () => {
+  const FROZEN = { code: '23000', message: expect.stringContaining('cannot be changed once it is set') };
+  const ACTS = [
+    { act: 'unlock', by: 'unlocked_by', at: 'unlocked_at', reason: 'unlock_reason', constraint: 'ck_approvals_unlock_reason_needs_unlock' },
+    { act: 'cancel', by: 'cancelled_by', at: 'cancelled_at', reason: 'cancel_reason', constraint: 'ck_approvals_cancel_reason_needs_cancel' },
+  ] as const;
+
+  /** A new approved estimate's approval row, as the runtime role would find it. */
+  async function freshApproval(): Promise<string> {
+    const calculated = await calculatedEstimate(db);
+    await db.approvalService.approve(leadOf(db), calculated.estimateId, requestFor(db, await currentCalculationOf(db, calculated.estimateId), '3000.00'));
+    return defined((await db.owner.query<{ id: string }>('SELECT id::text FROM approvals WHERE estimate_id = $1::uuid', [calculated.estimateId])).rows[0]).id;
+  }
+  const rowOf = async (id: string): Promise<unknown> => (await db.owner.query('SELECT * FROM approvals WHERE id = $1::uuid', [id])).rows;
+
+  it.each(ACTS)('$act: a reason that was null when the act was stored cannot be added afterwards, by the runtime role or by the owner', async ({ by, at, reason }) => {
+    const approvalId = await freshApproval();
+    // The act is stored with no reason (the whole act at once, as its story writes it, here with the reason left out).
+    await db.runtime.query(`UPDATE approvals SET ${by} = $2::uuid, ${at} = now() WHERE id = $1::uuid`, [approvalId, db.personId]);
+    const before = await rowOf(approvalId);
+    await expect(db.runtime.query(`UPDATE approvals SET ${reason} = 'Added later' WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(FROZEN);
+    await expect(db.owner.query(`UPDATE approvals SET ${reason} = 'Added later' WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(FROZEN);
+    expect(await rowOf(approvalId)).toEqual(before);
+  });
+
+  it.each(ACTS)('$act: a reason stored with the act still cannot be changed or cleared', async ({ by, at, reason }) => {
+    const approvalId = await freshApproval();
+    await db.runtime.query(`UPDATE approvals SET ${by} = $2::uuid, ${at} = now(), ${reason} = 'Stored with the act' WHERE id = $1::uuid`, [approvalId, db.personId]);
+    const before = await rowOf(approvalId);
+    await expect(db.runtime.query(`UPDATE approvals SET ${reason} = 'Changed' WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(FROZEN);
+    await expect(db.owner.query(`UPDATE approvals SET ${reason} = NULL WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject(FROZEN);
+    expect(await rowOf(approvalId)).toEqual(before);
+  });
+
+  it.each(ACTS)('$act: a reason cannot be put on a row that has no act yet, as the runtime role or as the owner', async ({ reason, constraint }) => {
+    const approvalId = await freshApproval();
+    const before = await rowOf(approvalId);
+    await expect(db.runtime.query(`UPDATE approvals SET ${reason} = 'Early' WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject({ code: '23514', constraint });
+    await expect(db.owner.query(`UPDATE approvals SET ${reason} = 'Early' WHERE id = $1::uuid`, [approvalId])).rejects.toMatchObject({ code: '23514', constraint });
+    expect(await rowOf(approvalId)).toEqual(before);
+  });
+
+  it('an act that has not been stored is still open: the unlock can be stored whole on a row whose cancel was stored first', async () => {
+    const approvalId = await freshApproval();
+    await db.runtime.query("UPDATE approvals SET cancelled_by = $2::uuid, cancelled_at = now(), cancel_reason = 'Cancelled first' WHERE id = $1::uuid", [approvalId, db.personId]);
+    const updated = await db.runtime.query("UPDATE approvals SET unlocked_by = $2::uuid, unlocked_at = now(), unlock_reason = 'Unlocked after' WHERE id = $1::uuid", [approvalId, db.personId]);
+    expect(updated.rowCount).toBe(1);
+  });
+});
