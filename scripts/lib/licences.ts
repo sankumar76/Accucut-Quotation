@@ -19,6 +19,8 @@ export const ALLOWED_LICENCES: ReadonlySet<string> = new Set([
   'CC-BY-4.0',
   'Unlicense',
   'Python-2.0',
+  // PSF part of Python-2.0 (argparse 3.x, through @lhci/utils > js-yaml; development tooling only). Architect ruling AQP-1 12089, delivery lead DL-230.
+  'PSF-2.0',
   'Zlib',
   'PostgreSQL',
   // File-level copyleft: used by development tooling only (lightningcss, axe-core); the test strategy
@@ -55,6 +57,11 @@ export const LICENCE_EXCEPTIONS: ReadonlyArray<LicenceException> = [
     name: 'parse-cache-control',
     reason:
       'No `license` field, only the legacy `licenses` field of type BSD (1.0.1, through @lhci/cli > lighthouse; development tooling only). Its LICENSE file is the BSD 3-clause text. Solution-architect ruling on STORY-10.10 AC-6 (AQP-169 comment 10738; architecture v0.15 section 11, "Licence finding").',
+  },
+  {
+    name: 'sentry',
+    reason:
+      'FSL-1.1-Apache-2.0 (0.49.0, Sentry CLI), through @lhci/cli > lighthouse > @sentry/node > @sentry/bundler-plugins. Allows every use except a competing commercial product, and turns into Apache-2.0 two years after each release. Used only inside CI and development tooling, never shipped, so internal use is permitted. FSL is NOT an allowed licence type: this exception is by exact name, and `tests/unit/licences.test.ts` fails if `sentry` is ever not a development-only package. Architect ruling AQP-1 12089, delivery lead DL-230.',
   },
 ];
 
