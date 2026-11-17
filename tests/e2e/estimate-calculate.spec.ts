@@ -4,6 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
 
 import { makeCanaryEstimateCalculable, readCalculatedValues, readEstimateState, useFreshAddress } from './support/auth';
+import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
 
@@ -302,8 +303,13 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
   });
 
   test('AC-9: axe finds 0 violations in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    // The estimate is made complete in the database before the page is opened (the same `makeCanaryEstimateCalculable` that `makeComplete` calls), so the test does not open an empty form, choose the customer and reload
+    // to see it: the page it scans is the same page in the same state, reached with about 10 s less work.
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await signInAs(page, owner);
+    await page.goto(`/estimates/${code}`);
+    await expect(partForm(page)).toBeVisible();
+    await expect(control(page, 'E')).toBeEnabled();
     const response = await press(page);
     expect(response.status()).toBe(200);
     await expect(calculateButton(page)).toHaveText('Submitted');

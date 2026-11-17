@@ -8,7 +8,8 @@ import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sec
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage } from './auth';
-import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
+import { expectNoAxeViolations } from './design-system';
+import { DEVELOPMENT_URL } from './servers';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -17,6 +18,7 @@ import { expectNoAxeViolations, waitUntilHydrated } from './design-system';
  */
 
 export const ALPHA_CUSTOMER = defined(CUSTOMER_CANARIES[0]).name;
+const ALPHA_CUSTOMER_ID = defined(CUSTOMER_CANARIES[0]).id;
 export const ALPHA_MATERIAL = defined(MATERIAL_CANARIES[0]);
 export const PHONE_MAX = 767;
 export const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
@@ -62,11 +64,11 @@ export async function openForm(page: Page, testInfo: TestInfo, options: { readon
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
   if (options.fromTheQueue === true) await page.goto('/queue');
+  // The customer is chosen with the call that the drop-down makes (`PUT /api/v1/estimates/{id}/customer`), before the page is opened, so the page opens on the form. Choosing it through the
+  // drop-down cost 3 to 4 s of a test's 30 s on a loaded runner (traces of AQP-340) and is judged by `estimate-customer.spec.ts`, whose subject it is.
+  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID }, maxRetries: 3 });
+  expect(chosen.status(), 'the customer is chosen').toBe(200);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-  await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-  await expect(page.locator('#estimate-customer')).toBeEnabled();
-  await page.locator('#estimate-customer').selectOption({ label: ALPHA_CUSTOMER });
-  await expect(page.getByText('Customer saved.')).toBeVisible();
   await waitForForm(page);
   return owner;
 }
