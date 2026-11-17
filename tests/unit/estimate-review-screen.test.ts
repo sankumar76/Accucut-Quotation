@@ -17,8 +17,8 @@ import { QUANTITY_CASES } from './quantity/quantity-cases';
  * 1366 px, axe and the keyboard are `tests/e2e/estimate-review.spec.ts`. Every name and number is invented.
  */
 
-// The Recalculate control (STORY-06.04) reads the router; a static render has none, and the draw does not use it.
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+// The Recalculate control (STORY-06.04) and the Approve button (STORY-06.06) read the router and the path; a static render has neither, and the draw does not use them.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/estimates/Q-2026-0318' }));
 
 const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as const;
 
@@ -39,8 +39,8 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
   return createReviewWorld(options).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
 }
 
-const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header: HEADER, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
+const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }, header: WorkspaceHeaderView = HEADER): string =>
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -263,6 +263,89 @@ describe('AC-9: the tiles show a skeleton while a recalculation is under way, wi
     const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
     expect(countOf(html, 'data-slot="skeleton"')).toBe(3);
     expect(html).toContain('group-has-[[aria-busy=true]]/review');
+  });
+});
+
+describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would let the press through', () => {
+  const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
+
+  it('a submitted estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
+    const html = render(await current());
+    const button = approveButton(html);
+    expect(button).not.toContain(' disabled=""');
+    expect(button).toContain('aria-haspopup="dialog"');
+    expect(button).toContain('data-early-intent="review-approve"');
+    expect(html).not.toContain('Approved Quote Price (BO)');
+    expect(html).not.toContain('Enter a price in rupees');
+    expect(html).not.toContain('Approving is not available yet');
+  });
+
+  it.each([
+    ['never calculated', { calculated: false }, 'Calculate first. Approving is available once the figures have been calculated.'],
+    ['cleared by an input change', { inputsRevision: 4 }, 'Recalculate first. Approving is available once the figures have been calculated again.'],
+  ])('%s: the button is off, named by its reason', async (_name, options, reason) => {
+    const html = render(await current(options));
+    expect(approveButton(html)).toContain(' disabled=""');
+    expect(approveButton(html)).toContain('aria-describedby="review-approve-reason"');
+    expect(html).toContain(reason);
+  });
+
+  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words it had', async () => {
+    const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
+    expect(approveButton(html)).toContain(' disabled=""');
+    expect(html).toContain('Approving is not available yet.');
+  });
+});
+
+describe('STORY-06.06 AC-5: the approved state', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+
+  it('the notice names the approver and the time, BO shows the price, and Unlock replaces Approve and lock', async () => {
+    const html = render(await current({ approval: { price: '12600.00', approverName: 'Invented Kiran' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('Approved and locked on 05 Nov 2026, 11:20 IST by Invented Kiran.');
+    expect(html).toContain('Locked. Values stay as approved even if rates change later.');
+    expect(html).toContain('Only the Admin can cancel an approval.');
+    expect(html).toContain('id="review-approved-notice"');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+    expect(countOf(html, 'Not set yet')).toBe(0);
+    expect(html).not.toContain('id="review-approve"');
+    expect(defined(/<button[^>]*id="review-unlock"[^>]*>/.exec(html))[0]).toContain(' disabled=""');
+    expect(html).toContain('Unlocking is not available yet.');
+  });
+
+  it('Download is not affected by the approval: it is the same control with the same reason as before', async () => {
+    const html = render(await current({ approval: { price: '12600.00' } }), undefined, APPROVED_HEADER);
+    expect(html).toMatch(/<button[^>]*id="review-download"/);
+    expect(html).toContain('The Excel download is not available yet.');
+  });
+
+  it('an approved estimate with no approvals row says only that it is approved and locked, and BO stays "Not set yet"', async () => {
+    const html = render(await current(), undefined, APPROVED_HEADER);
+    expect(html).toContain('Approved and locked.');
+    expect(countOf(html, 'Not set yet')).toBe(1);
+  });
+});
+
+describe('STORY-06.06 AC-9: BO is the approval row, never the figure state', () => {
+  it('with the figures cleared (an input changed after the approval) BO keeps the approved price and BL is cleared', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { price: '12600.00' } });
+    const costs = await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    const html = render(costs, undefined, { ...HEADER, status: 'APPROVED' });
+    expect(costs.state).toBe('out-of-date');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('Not set yet');
+    // BL is cleared: its tile says so and no calculated figure is on the page; no figure was read at all.
+    expect(html).toContain('An input changed, so every calculated figure is cleared.');
+    expect(world.reads.figures.calls).toEqual([]);
+    expect(world.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
+  });
+
+  it('before any approval BO is the fixed "Not set yet", in every state', async () => {
+    for (const options of [{}, { inputsRevision: 4 }, { calculated: false }]) {
+      expect(countOf(render(await current(options)), 'Not set yet')).toBe(1);
+    }
   });
 });
 

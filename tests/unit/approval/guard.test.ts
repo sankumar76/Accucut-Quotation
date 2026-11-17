@@ -8,6 +8,7 @@ import {
   TOTALS_OUT_OF_DATE_CODE,
   TOTALS_OUT_OF_DATE_MESSAGE,
 } from '@/lib/estimate/approval-words';
+import { prefillPrice } from '@/lib/estimate/approve-price';
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { FigureBasis } from '@/server/repositories/calculation-repository';
 import { assertApprovable, assertMayApprove, createApprovalService } from '@/server/services/approval-service';
@@ -143,10 +144,89 @@ describe('AC-5: the service refuses an Engineer as a rejected promise, before it
     };
     const service = createApprovalService({
       estimates: { lockEstimate: touch },
-      calculations: { findFigureBasis: touch },
+      calculations: { findFigureBasis: touch, findCalculatedTotal: touch },
+      approvals: { insertApproval: touch },
       transactions: { run: touch },
+      workflow: { transition: touch, audit: { record: touch, list: touch } },
     });
-    await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00' })).rejects.toBeInstanceOf(ForbiddenError);
+    const audit = { actorId: engineer.id, actorLabel: 'Invented Engineer', requestId: 'request-1' };
+    await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit })).rejects.toBeInstanceOf(ForbiddenError);
     expect(touched).toBe(0);
+  });
+});
+
+describe('STORY-06.06: the write refuses what the guard cannot, and writes nothing', () => {
+  const audit = { actorId: lead.id, actorLabel: 'Invented Lead', requestId: 'request-2' };
+  /** A service whose storage holds a submitted estimate with current figures, and counts every write. */
+  function serviceWith(total: string | null) {
+    const writes: string[] = [];
+    const inserted: Array<{ readonly calculatedTotal: string; readonly approvedPrice: string }> = [];
+    const audited: unknown[] = [];
+    const tx = { kind: 'database-transaction' } as const;
+    const service = createApprovalService({
+      estimates: { lockEstimate: () => Promise.resolve({ id: 'estimate-1', engineerId: 'engineer-1', status: 'SUBMITTED', customerId: 'customer-1', inputsRevision: 4, taskCode: 'Q-2026-0001' }) },
+      calculations: { findFigureBasis: () => Promise.resolve(CURRENT), findCalculatedTotal: () => Promise.resolve(total) },
+      approvals: {
+        insertApproval: (approval) => {
+          writes.push('insert');
+          inserted.push({ calculatedTotal: approval.calculatedTotal, approvedPrice: approval.approvedPrice });
+          return Promise.resolve({ id: 'approval-1', approvedAt: new Date('2026-11-16T06:00:00.000Z') });
+        },
+      },
+      transactions: { run: (work) => work(tx) },
+      workflow: {
+        transition: () => {
+          writes.push('transition');
+          return Promise.resolve({ id: 'estimate-1', from: 'SUBMITTED', to: 'APPROVED' });
+        },
+        audit: {
+          record: (_tx, entry) => {
+            writes.push('audit');
+            audited.push(entry.after);
+            return Promise.resolve();
+          },
+          list: () => Promise.reject(new Error('Not used.')),
+        },
+      },
+    });
+    return { service, writes, inserted, audited };
+  }
+
+  it('writes the status, the approval and the audit entry, in that order, in the one transaction, and answers the price in rupees and paise', async () => {
+    const { service, writes } = serviceWith('12629.9876');
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', audit })).resolves.toEqual({
+      status: 'APPROVED',
+      approvedPrice: '12600.00',
+      approvedAt: '2026-11-16T06:00:00.000Z',
+    });
+    expect(writes).toEqual(['transition', 'insert', 'audit']);
+  });
+
+  it.each([
+    // The values where rounding the full total once and rounding it twice (to 4 places, then to 2) disagree (SQR-03 of the review): 12.34495 is 12.34 at the third digit, and 12.3450 would give 12.35.
+    ['12.34495', '12.34'],
+    ['12.344999', '12.34'],
+    ['12.345', '12.35'],
+    ['0.00495', '0.00'],
+    ['12629.9876', '12629.99'],
+    ['30', '30.00'],
+  ])('the total kept for %s is %s: the one rule the dialog pre-fills its price with, so the two always agree', async (total, expected) => {
+    const { service, inserted, audited } = serviceWith(total);
+    await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit });
+    expect(inserted).toEqual([{ calculatedTotal: expected, approvedPrice: '1.00' }]);
+    expect(prefillPrice(total)).toBe(expected);
+    expect(audited).toEqual([{ approvedPrice: '1.00', calculatedTotal: expected, approver: 'Invented Lead' }]);
+  });
+
+  it('a current calculation with no total is a fault in the data (a plain error, a 500), and nothing is written', async () => {
+    const { service, writes } = serviceWith(null);
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit })).rejects.toThrow('no total to approve against');
+    expect(writes).toEqual([]);
+  });
+
+  it('a price that is no decimal is refused before anything is read (the route has already judged its shape; this is the second guard)', async () => {
+    const { service, writes } = serviceWith('1.00');
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: 'twelve', audit })).rejects.toThrow('not a decimal number');
+    expect(writes).toEqual([]);
   });
 });

@@ -43,6 +43,10 @@ model User {
   tasksToDo      Task[]          @relation("TaskEngineer")
   tasksAssigned  Task[]          @relation("TaskAssigner")
   calculations   Calculation[]
+  approvals      Approval[]      @relation("ApprovalApprover")
+  unlocks        Approval[]      @relation("ApprovalUnlocker")
+  cancellations  Approval[]      @relation("ApprovalCanceller")
+  removals       Approval[]      @relation("ApprovalRemover")
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -307,6 +311,7 @@ model Estimate {
   customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
   currentCalculation Calculation?   @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
   calculations       Calculation[]  @relation("EstimateCalculations")
+  approvals          Approval[]
   nodes              EstimateNode[]
   partImages         PartImage[]
 
@@ -392,9 +397,48 @@ model Calculation {
   creator         User             @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_created_by")
   rows            CalculationRow[]
   linkedEstimates Estimate[]       @relation("CurrentCalculation")
+  approvals       Approval[]
 
   @@index([estimateId, createdAt(sort: Desc)], map: "idx_calculations_estimate_id")
   @@map("calculations")
+}
+
+/// One approval cycle of an estimate (STORY-06.06; FR-062, FR-064, NFR-007; architecture sections 4.8, 4.10 and 5.1): the Approved Quote Price (BO, `approved_price`), the calculated total (BL) it was set
+/// against, the calculation it was approved on and who approved it and when. BO is the latest row of the estimate that has not been removed. The approve columns are written once, by INSERT: the runtime role
+/// holds SELECT and INSERT and UPDATE **by column** on the unlock, cancel and remove columns only (STORY-06.08, 06.12, 06.13), and a trigger refuses a change of any other column and every DELETE and TRUNCATE for
+/// every role, so a price cannot change after it is approved. `is_override` and `override_reason` are filled by STORY-06.07 at INSERT (null and false until then). There is no `created_at` or `updated_at`:
+/// `approved_at` is when the row was made and each later change has its own time (the exception to coding standards section 10 "SQL" for a table that is added to and changed only in named columns). The
+/// partial unique index `uq_approvals_one_live_per_estimate` (one approval per estimate that is not unlocked, cancelled or removed) and the CHECK constraints are hand-written in the migration: Prisma cannot
+/// express them. Class Restricted (ADR-008, NFR-002): the price is cost data and never reaches an Engineer.
+model Approval {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId     String    @map("estimate_id") @db.Uuid
+  calculationId  String    @map("calculation_id") @db.Uuid
+  approvedPrice  Decimal   @map("approved_price") @db.Decimal(18, 2)
+  calculatedBl   Decimal   @map("calculated_bl") @db.Decimal(18, 2)
+  isOverride     Boolean   @default(false) @map("is_override")
+  overrideReason String?   @map("override_reason")
+  approvedById   String    @map("approved_by") @db.Uuid
+  approvedAt     DateTime  @default(now()) @map("approved_at") @db.Timestamptz(6)
+  unlockedById   String?   @map("unlocked_by") @db.Uuid
+  unlockedAt     DateTime? @map("unlocked_at") @db.Timestamptz(6)
+  unlockReason   String?   @map("unlock_reason")
+  cancelledById  String?   @map("cancelled_by") @db.Uuid
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason   String?   @map("cancel_reason")
+  removedById    String?   @map("removed_by") @db.Uuid
+  removedAt      DateTime? @map("removed_at") @db.Timestamptz(6)
+
+  estimate    Estimate    @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_estimate_id")
+  calculation Calculation @relation(fields: [calculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_calculation_id")
+  approver    User        @relation("ApprovalApprover", fields: [approvedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_approved_by")
+  unlocker    User?       @relation("ApprovalUnlocker", fields: [unlockedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_unlocked_by")
+  canceller   User?       @relation("ApprovalCanceller", fields: [cancelledById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_cancelled_by")
+  remover     User?       @relation("ApprovalRemover", fields: [removedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_removed_by")
+
+  @@index([estimateId, approvedAt(sort: Desc)], map: "idx_approvals_estimate_id")
+  @@index([calculationId], map: "idx_approvals_calculation_id")
+  @@map("approvals")
 }
 
 /// One node of the tree as it was calculated (STORY-03.05; architecture section 5.1): a full copy, so the record needs nothing live. `sl_no` is the derived Sl. No as text,

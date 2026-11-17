@@ -70,6 +70,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REVIEW_FOLDER = 'src/components/features/estimate-review/';
   const REVIEW_PAGE = 'src/app/(portal)/estimates/[code]/review-page.tsx';
   const RECALCULATE_BUTTON = 'src/components/features/estimate-recalculate/recalculate-button.tsx';
+  const APPROVE_FOLDER = 'src/components/features/estimate-approve/';
+  const APPROVE_BUTTON = `${APPROVE_FOLDER}approve-button.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -79,10 +81,11 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(reviewFiles.filter((file) => /\buse(State|Effect|Ref|Memo|Callback|Reducer|Transition)\b|\bnext\/dynamic\b|React\.lazy/.test(file.text)).map((file) => file.path)).toEqual([]);
   });
 
-  it('the review folder imports no shared client component but the one Recalculate button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, ADR-016)', () => {
+  it('the review folder imports no shared client component but the Recalculate button and the Approve button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, STORY-06.06, ADR-016)', () => {
     const clientFiles = new Set(ALL.filter((file) => /^\s*['"]use client['"]/m.test(file.text)).map((file) => file.path));
-    // The one exception, named: the Calculate / Recalculate button. It is imported by the action bar alone, holds no figure, and loads its request code only when first pressed (the next test).
+    // The two exceptions, named: the Calculate / Recalculate button and the Approve and lock button. Each is imported by the action bar alone and loads its request code (or its dialog) only when first pressed (the next tests).
     clientFiles.delete(RECALCULATE_BUTTON);
+    clientFiles.delete(APPROVE_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -105,8 +108,31 @@ describe('AC-5: no review code reaches the Engineer', () => {
     // The request code is a bare dynamic `import()`, not a static import: the page's first load does not carry it.
     expect(code).toMatch(/import\('@\/lib\/estimates\/recalculate-client'\)/);
     expect(code).not.toMatch(/^import .*recalculate-client/m);
+    // The action bar imports the button; the Approve button imports the one id of the "Calculated ..." line (`recalculate-ids.ts`, constants only) so that focus can go there after "Show the new figures".
     const importers = ALL.filter((file) => file.path !== RECALCULATE_BUTTON && /estimate-recalculate\//.test(file.text)).map((file) => file.path);
-    expect(importers).toEqual(['src/components/features/estimate-review/review-actions.tsx']);
+    expect(importers).toEqual([APPROVE_BUTTON, 'src/components/features/estimate-review/review-actions.tsx']);
+    expect(ALL.filter((file) => file.path === APPROVE_BUTTON).every((file) => !/estimate-recalculate\/recalculate-button/.test(file.text))).toBe(true);
+  });
+
+  it('STORY-06.06 ADR-016: the Approve button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(APPROVE_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-texts.ts`]);
+    for (const name of ['approve-ids.ts', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
+    expect(button).toMatch(/import\('\.\/approve-dialog'\)/);
+    expect(button).toMatch(/^import type \{ ApproveDialogProps \} from '\.\/approve-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts)/m);
+    expect(button).not.toMatch(/approve-client/);
+    expect(dialog).toMatch(/@\/lib\/estimates\/approve-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(APPROVE_FOLDER) && /estimate-approve\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

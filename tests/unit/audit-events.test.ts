@@ -22,15 +22,17 @@ const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_CALCULATION];
-const RESERVED: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.unlocked', 'approval.price_overridden', 'approval.cancelled', 'approval.price_removed'];
+/** STORY-06.06: an estimate approved and locked. Registry order puts it before the quantity warning. */
+const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
+const RESERVED: ReadonlyArray<AuditEventName> = ['approval.unlocked', 'approval.price_overridden', 'approval.cancelled', 'approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: approval, unlock, price override, cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: unlock, price override, cancel, remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -146,6 +148,31 @@ describe('STORY-05.12 AC-3: the quantity warning event names the rows and holds 
     ['no warnings key', null, {}],
   ])('refuses %s, so nothing but the rows can be kept', (_name, before, after) => {
     expect(event.describeStored(before, after)).toBeNull();
+  });
+});
+
+describe('STORY-06.06 AC-2: the approval event keeps the price, the calculated total and the approver, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.approved'];
+  const after = { approvedPrice: '12600.00', calculatedTotal: '12629.9876', approver: 'Invented Lead' };
+
+  it('is wired, about the estimate, under the "Approval" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'approval' });
+    expect(eventsInCategory('approval')).toEqual(['approval.approved']);
+  });
+
+  it('says what was approved, at what price, against which total and by whom', () => {
+    expect(event.describeStored(null, after)).toEqual({ before: 'Not approved', after: 'Approved at ₹ 12,600.00, the calculated total was ₹ 12,629.99, by Invented Lead' });
+  });
+
+  it.each([
+    ['an extra key (a rate has no place here)', null, { ...after, rate: '0.37' }],
+    ['a price as a number', null, { ...after, approvedPrice: 12600 }],
+    ['a negative price', null, { ...after, approvedPrice: '-1.00' }],
+    ['no approver', null, { approvedPrice: after.approvedPrice, calculatedTotal: after.calculatedTotal }],
+    ['an empty approver', null, { ...after, approver: '' }],
+    ['a before that is not null', { approvedPrice: '1.00' }, after],
+  ])('refuses %s', (_name, before, stored) => {
+    expect(event.describeStored(before, stored)).toBeNull();
   });
 });
 

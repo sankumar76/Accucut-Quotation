@@ -15,7 +15,7 @@ import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
 import { CUSTOMER_FIELD_ID, CustomerPicker } from './customer-picker';
-import { CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, LEAVE_GUARD_FAILED_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
+import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_LOCKED, FORM_AREA_TITLE, LEAVE_GUARD_FAILED_TITLE, NO_CUSTOMER_BODY, NO_CUSTOMER_TITLE } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -126,6 +126,12 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
             {calculation.done ?? CALCULATE_MESSAGE}
           </Notice>
         </div>
+      ) : null}
+      {status === 'APPROVED' ? (
+        // The state "Approved": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
+        <Notice tone="success" title={APPROVED_LOCKED_TITLE}>
+          {APPROVED_LOCKED_BODY}
+        </Notice>
       ) : null}
       {hasCustomer || !editable ? null : (
         <Notice tone="info" title={NO_CUSTOMER_TITLE}>

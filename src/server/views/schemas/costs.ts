@@ -12,6 +12,10 @@ import { z } from 'zod';
  * **Figures only while `current`** (architecture section 4.8): in the states `none` and `out-of-date` every `figures` is `null` and so is `totals`. The count (H) is an input, so it stays.
  *
  * Every figure is full-precision decimal text, never a JavaScript number (ADR-005); the screen rounds it to two decimals.
+ *
+ * **BO is not a calculated figure** (STORY-06.06 AC-9, SQR-07 of AQP-321): `approval` is read from the estimate's latest `approvals` row that has not been removed, never through the figure state, so it is there
+ * in every state (clearing the calculated figures cannot change it) and `null` only before any approval. `calculationId` is the calculation the figures come from, for the approval's request: it is there only
+ * while the state is `current`, like every figure, and it is the only ID of the answer besides the parts'.
  */
 
 /** A stored decimal as text: digits, an optional point and digits, an optional sign. */
@@ -55,8 +59,17 @@ const lettersSchema = z.strictObject({
   approvedPrice: z.string().min(1),
 });
 
+/** The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). */
+const approvalSchema = z.strictObject({
+  price: z.string().regex(/^\d+\.\d{2}$/),
+  approvedAt: z.iso.datetime(),
+  approverName: z.string().min(1),
+});
+
 export const costsSchema = z.strictObject({
   state: z.enum(FIGURE_STATES),
+  /** The calculation the figures come from, while the state is `current`; `null` otherwise. The approval names it (`POST .../approve`, `calculationId`). */
+  calculationId: z.uuid().nullable(),
   /** When the calculation was made (ISO 8601, UTC); `null` while there is none. */
   calculatedAt: z.iso.datetime().nullable(),
   /** The number of the configuration version the calculation used; `null` while there is none. */
@@ -64,6 +77,8 @@ export const costsSchema = z.strictObject({
   letters: lettersSchema,
   nodes: z.array(costNodeSchema).readonly(),
   totals: totalsSchema.nullable(),
+  /** BO: the approved price and who approved it, or `null` before any approval. */
+  approval: approvalSchema.nullable(),
 });
 
 export type CostsView = z.infer<typeof costsSchema>;

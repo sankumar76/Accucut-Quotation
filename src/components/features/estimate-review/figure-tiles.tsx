@@ -10,6 +10,7 @@ import {
   APPROVED_NOT_SET,
   APPROVED_NOT_SET_CLEARED_HINT,
   APPROVED_NOT_SET_HINT,
+  approvedByLine,
   BL_CLEARED_HINT,
   BL_NAME,
   BN_CLEARED_HINT,
@@ -26,7 +27,8 @@ import {
 /**
  * The three tiles of SCR-06 (STORY-06.02 AC-1, AC-6; UX spec SCR-06 "Content"): BL, BN and BO, each with its plain name, its letter tag and "File cell XX2", **once each**. The figure is only
  * ever what the server handed over for a `current` state; in the other states the tile says "Not calculated" or "Cleared" in words, never an empty box (UX spec SCR-06 "Accessibility").
- * BO is "Not set yet": an approval is STORY-06.06's. A server component with no script, so it adds nothing to the first load.
+ * BO is "Not set yet" until an approval exists; then it is the approved price from the `approvals` row, with who approved it and when (STORY-06.06 AC-5, AC-9), **whatever the state of the figures**: BO is not a calculated
+ * figure, so clearing them cannot change it (BL clears, BO stays). A server component with no script, so it adds nothing to the first load.
  *
  * **The skeleton while a recalculation is under way** (STORY-06.04 AC-9; UX spec SCR-06 "Loading: tile skeletons"): the bar's button is `aria-busy` while it works, the root of the review is a `group/review`, and
  * `:has()` finds the busy button, so each figure is hidden and a skeleton shows in its place by CSS alone (the class names are written out whole, for the style scanner). No script, no state, nothing sent to the browser.
@@ -62,13 +64,22 @@ function Tile({ name, letter, children, note, fileCellLine = true }: TileProps) 
 
 const word = (text: string): ReactNode => <span className="italic">{text}</span>;
 
+/** The approval BO shows (STORY-06.06 AC-5, AC-9): the price as stored, who approved it and when (IST), read from the `approvals` row, never through the figure state. */
+export interface ApprovedTileView {
+  readonly price: string;
+  readonly approverName: string;
+  readonly approvedAtLabel: string;
+}
+
 export interface FigureTilesProps {
   readonly state: CostsView['state'];
   readonly letters: CostsView['letters'];
   readonly totals: CostsView['totals'];
+  /** `null` before any approval: BO is then "Not set yet". Present in every state, cleared figures included (AC-9). */
+  readonly approval?: ApprovedTileView | null;
 }
 
-export function FigureTiles({ state, letters, totals }: FigureTilesProps) {
+export function FigureTiles({ state, letters, totals, approval = null }: FigureTilesProps) {
   const current = state === 'current' && totals !== null;
   const withheld = state === 'none' ? NOT_CALCULATED : CLEARED;
   // BN is a dash with the sentence when no Tool Cost was entered; the sentence names the file cell, so the tile's own line would name it twice.
@@ -86,9 +97,15 @@ export function FigureTiles({ state, letters, totals }: FigureTilesProps) {
       >
         {current ? formatFigure(totals.pricePerToolCost) : formatFigure(null)}
       </Tile>
-      <Tile name={BO_NAME} letter={letters.approvedPrice} note={state === 'out-of-date' ? APPROVED_NOT_SET_CLEARED_HINT : APPROVED_NOT_SET_HINT}>
-        {APPROVED_NOT_SET}
-      </Tile>
+      {approval === null ? (
+        <Tile name={BO_NAME} letter={letters.approvedPrice} note={state === 'out-of-date' ? APPROVED_NOT_SET_CLEARED_HINT : APPROVED_NOT_SET_HINT}>
+          {APPROVED_NOT_SET}
+        </Tile>
+      ) : (
+        <Tile name={BO_NAME} letter={letters.approvedPrice} note={approvedByLine(approval.approverName, approval.approvedAtLabel)}>
+          {formatRupees(approval.price)}
+        </Tile>
+      )}
     </section>
   );
 }

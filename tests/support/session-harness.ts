@@ -249,17 +249,26 @@ export function createSessionHarness(): SessionHarness {
     workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition, audit: calculationAudit.service },
   });
   // The approval's guard (STORY-06.05) over the same world: the lock of the estimate, the basis of its figure state and the transactions that put a record back when one throws.
-  const approvalService = createApprovalService({ estimates: calculationWorld.estimates, calculations: calculationWorld.repository, transactions: calculationWorld.transactions });
+  // From STORY-06.06 it also writes: the estimate's move (`transition` of the estimate service, in the same transaction), the approval row (the fake rolls it back with the transaction) and the audit entry.
+  const approvalService = createApprovalService({
+    estimates: calculationWorld.estimates,
+    calculations: calculationWorld.repository,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
     findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
   const estimateReviewService = createEstimateReviewService({
     calculations: reviewReads,
+    approvals: reviewReads,
     nodes: reviewReads,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });

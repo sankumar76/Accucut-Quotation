@@ -1,16 +1,27 @@
+import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
+import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
-import { FigureTiles } from './figure-tiles';
-import { ReviewActions } from './review-actions';
+import { FigureTiles, type ApprovedTileView } from './figure-tiles';
+import { approveOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
-import { CLEARED_NOTICE_BODY, CLEARED_NOTICE_TITLE, NOT_CALCULATED_NOTICE, REVIEW_CUSTOMER_LABEL, REVIEW_NO_CUSTOMER } from './review-texts';
+import {
+  APPROVED_NOTICE_BODY,
+  APPROVED_NOTICE_TITLE_PLAIN,
+  approvedNoticeTitle,
+  CLEARED_NOTICE_BODY,
+  CLEARED_NOTICE_TITLE,
+  NOT_CALCULATED_NOTICE,
+  REVIEW_CUSTOMER_LABEL,
+  REVIEW_NO_CUSTOMER,
+} from './review-texts';
 
 /**
  * SCR-06 "Estimate review" (STORY-06.02; UX spec SCR-06), what a Lead or an Admin sees at `/estimates/<code>`: the task's header and customer, the notice of the state, the BL, BN and BO tiles, the parts
@@ -34,8 +45,22 @@ export interface EstimateReviewProps {
   readonly calculatedAt: string | null;
 }
 
+/** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
+function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | null }) {
+  return (
+    <div id={APPROVED_NOTICE_ID} tabIndex={-1} className="rounded-md">
+      <Notice tone="success" title={approval === null ? APPROVED_NOTICE_TITLE_PLAIN : approvedNoticeTitle(approval.approvedAtLabel, approval.approverName)}>
+        {APPROVED_NOTICE_BODY}
+      </Notice>
+    </div>
+  );
+}
+
 export function EstimateReview({ header, estimateId, customer, costs, calculatedAt }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
+  // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
+  const approval: ApprovedTileView | null =
+    costs.approval === null ? null : { price: costs.approval.price, approverName: costs.approval.approverName, approvedAtLabel: formatIst(new Date(costs.approval.approvedAt)) };
   return (
     <div className="group/review contents">
       <WorkspaceHeader view={header} />
@@ -57,12 +82,15 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           {CLEARED_NOTICE_BODY}
         </Notice>
       ) : null}
-      <FigureTiles state={state} letters={letters} totals={totals} />
+      {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
+      <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} /> : null}
       <ReviewActions
         estimateId={estimateId}
         state={state}
+        status={header.status}
+        approve={approveOffer(header.status, costs)}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />
     </div>

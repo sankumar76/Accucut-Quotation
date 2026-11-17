@@ -73,6 +73,21 @@ export const CALCULATE_FAILED = 'We could not calculate this estimate. Nothing w
 export const APPROVE_NOT_CALCULATED_REASON = 'Calculate first. Approving is available once the figures have been calculated.';
 export const APPROVE_CLEARED_REASON = 'Recalculate first. Approving is available once the figures have been calculated again.';
 export const APPROVE_NOT_YET_REASON = 'Approving is not available yet.';
+/** The line under the button when the dialog's code did not arrive (the shared first-open failure line; the wording follows "The parts tree did not open." of SCR-05, assumption A-4 of STORY-06.06). */
+export const APPROVE_FIRST_OPEN_FAILED = 'The approval window did not open. Check your connection and try again.';
+/** Unlock replaces Approve once an estimate is approved (STORY-06.06 AC-5); what it does is STORY-06.08's, so it is off with a reason until then (assumption A-3 of STORY-06.06). */
+export const UNLOCK_LABEL = 'Unlock';
+export const UNLOCK_NOT_YET_REASON = 'Unlocking is not available yet.';
+
+/**
+ * The Approved state of SCR-06 (STORY-06.06 AC-5; UX spec SCR-06 "Approved (Lead)" and the G3 screen): the notice with the approver and the time, and the two sentences the spec gives for what approval means.
+ * `time` is written in IST (`formatIst`). A notice for an approved estimate with no approvals row (data made before approvals existed) says only that it is approved and locked.
+ */
+export const approvedNoticeTitle = (time: string, name: string): string => `Approved and locked on ${time} by ${name}.`;
+export const APPROVED_NOTICE_TITLE_PLAIN = 'Approved and locked.';
+export const APPROVED_NOTICE_BODY = 'Locked. Values stay as approved even if rates change later. Only the Admin can cancel an approval.';
+/** The line under BO once approved: "Approved by Kiran Bose, 05 Nov 2026, 11:20 IST." (the tile adds "File cell BO2." itself). */
+export const approvedByLine = (name: string, time: string): string => `Approved by ${name}, ${time}.`;
 export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

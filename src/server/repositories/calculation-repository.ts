@@ -155,6 +155,20 @@ export interface CalculationRepository {
    * or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
    */
   findRowWorking(calculationId: string, nodeId: string): Promise<RowWorkingRecord | null>;
+  /**
+   * The calculated total (BL) of one calculation as decimal text, selected on its own (STORY-06.06: the approval keeps it beside the price and pre-fills nothing else): neither a row nor the snapshot is
+   * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
+   */
+  findCalculatedTotal(calculationId: string, tx?: Transaction): Promise<string | null>;
+}
+
+/**
+ * What an approval reads of the calculation repository: the basis of the figure state and the calculated total (STORY-06.06). A named interface and not a `Pick`, so the audit-transaction check sees a
+ * repository type, declared in this directory, as the receiver of the reads the approval's audit entry follows.
+ */
+export interface CalculationApprovalReads {
+  readonly findFigureBasis: CalculationRepository['findFigureBasis'];
+  readonly findCalculatedTotal: CalculationRepository['findCalculatedTotal'];
 }
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -253,6 +267,13 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
           productValues: productValuesSchema.parse(found.productValues),
           rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
         };
+      }),
+
+    findCalculatedTotal: (calculationId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await clientFor(db, tx).calculation.findUnique({ where: { id: calculationId }, select: { productValues: true } });
+        return found === null ? null : productValuesSchema.parse(found.productValues).totalPrice;
       }),
 
     findRowWorking: (calculationId, nodeId) =>
