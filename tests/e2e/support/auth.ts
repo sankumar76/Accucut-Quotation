@@ -576,12 +576,12 @@ export async function signInThroughThePage(page: Page, email: string, password: 
  * Fails with the server's own code when the sign-in is refused, so a wrong password is not a later timeout.
  */
 export async function signInWithoutThePage(page: Page, email: string, password: string): Promise<void> {
-  // `maxRetries` repeats a call only when the connection was reset (Playwright retries nothing else): the Node server closes an idle keep-alive connection after 5 s, and a call that
-  // picks that connection up at that moment is reset before the server reads it (the same fault as DEF-036). A refused sign-in is not retried and fails below with the server's code.
-  const token = await page.request.get('/api/auth/csrf', { maxRetries: 3 });
+  // Made once, no repeat (DL-229, DL-231): a connection reset here is DEF-036's signature, and the E2E server's longer keep-alive (`server-keep-alive.cjs`) is what prevents it.
+  // A refused sign-in fails below with the server's code.
+  const token = await page.request.get('/api/auth/csrf');
   expect(token.ok(), 'the CSRF token of the sign-in').toBe(true);
   const { csrfToken } = (await token.json()) as { readonly csrfToken: string };
-  const answer = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email, password, json: 'true' }, maxRetries: 3 });
+  const answer = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email, password, json: 'true' } });
   expect(answer.ok(), 'the credentials post of the sign-in').toBe(true);
   const { url } = (await answer.json()) as { readonly url: string };
   expect(new URL(url, 'http://sign-in.invalid').searchParams.get('error'), 'the error the server names, if it refused').toBeNull();

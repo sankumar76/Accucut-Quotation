@@ -253,10 +253,11 @@ test.describe('AC-2: what is refused, in the words of SCR-05, inline in section 
 test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture to its owner only', () => {
   test('the server refuses a wrong type with 415 and a large picture with 413, by content and by size, and a body over 256 KB with 413; nothing is stored', async ({ page }, testInfo) => {
     const owner = await open(page, testInfo);
-    const put = (name: string, mimeType: string, bytes: Uint8Array) =>
-      // `maxRetries` repeats the call only if the connection is reset. The server refuses a body over its cap before reading it (413), and a client still sending the rest can see the connection reset first (AQP-340);
-      // the refusal asserted below is the server's answer to the repeat.
-      page.request.put(ownerRoute(owner), { headers: { origin: DEVELOPMENT_URL }, multipart: { file: { name, mimeType, buffer: Buffer.from(bytes) } }, maxRetries: 3 });
+    // `maxRetries` is passed only for the 400 KB `huge.png` call (DL-231): Playwright repeats a call only if the connection is reset. The server refuses a body over its cap before reading it (413)
+    // and closes, and a client still sending the rest can see the connection reset before the answer (AQP-340); that is not the keep-alive race, and the refusal asserted below is the server's answer
+    // to the repeat. Every other call here is made once, so a reset on it fails the test.
+    const put = (name: string, mimeType: string, bytes: Uint8Array, maxRetries?: number) =>
+      page.request.put(ownerRoute(owner), { headers: { origin: DEVELOPMENT_URL }, multipart: { file: { name, mimeType, buffer: Buffer.from(bytes) } }, ...(maxRetries === undefined ? {} : { maxRetries }) });
     for (const [name, type, bytes] of [
       ['notes.png', 'image/png', PLAIN_TEXT],
       ['logo.svg', 'image/svg+xml', SVG_TEXT],
@@ -270,7 +271,7 @@ test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture 
     const large = await put('cabinet-photo.png', 'image/png', pngOfSize(201 * KB));
     expect(large.status()).toBe(413);
     expect(await large.json()).toMatchObject({ code: 'PICTURE_TOO_LARGE', title: tooLarge('cabinet-photo.png', 201) });
-    const over = await put('huge.png', 'image/png', pngOfSize(400 * KB));
+    const over = await put('huge.png', 'image/png', pngOfSize(400 * KB), 3);
     expect(over.status()).toBe(413);
     // A type is read from the content and not from the declared type: a PNG declared as text is accepted.
     expect((await put('plain-declared.png', 'text/plain', fresh())).status()).toBe(200);
