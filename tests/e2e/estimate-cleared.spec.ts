@@ -117,7 +117,7 @@ test.describe('AC-3: Recalculate from the screen', () => {
     expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   });
 
-  test('a press that the server refuses (a 0 in QTY per Assy needs the dialog of a later story) shows the server\'s sentence, writes nothing and leaves the figures cleared', async ({ page }, testInfo) => {
+  test("a 0 in QTY per Assy is asked about in the Lead's dialog (STORY-06.10), writes nothing and leaves the figures cleared; Go back closes it", async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await saveCanaryQuantity(owner.id, '0');
     await openAsLead(page, code, testInfo);
@@ -127,9 +127,25 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await button(page).click();
     expect((await answered).status()).toBe(409);
 
-    await expect(page.getByRole('alert').filter({ hasText: 'Check the quantity before you calculate.' })).toBeVisible();
-    await expect(button(page)).toBeVisible();
+    await expect(page.getByRole('alertdialog').getByRole('heading', { name: 'Check the quantity on 1 row' })).toBeVisible();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Go back', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(button(page)).toBeFocused();
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
+  });
+
+  test("a press that the server refuses shows the server's own sentence, writes nothing and leaves the figures cleared", async ({ page }, testInfo) => {
+    const { owner } = await clearedEstimate(page, testInfo);
+    await waitUntilHydrated(page, '#review-calculate');
+    const sentence = 'This estimate is approved and locked. Unlock it first.';
+    await page.route(RECALCULATE_ROUTE, (route) =>
+      route.fulfill({ status: 409, contentType: 'application/problem+json', body: JSON.stringify({ type: 'about:blank', title: sentence, status: 409, code: 'ESTIMATE_APPROVED_IS_LOCKED', requestId: 'req-00000000' }) }),
+    );
+    await button(page).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: sentence })).toBeVisible();
+    await expect(button(page)).toBeVisible();
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
   });
 });
 
