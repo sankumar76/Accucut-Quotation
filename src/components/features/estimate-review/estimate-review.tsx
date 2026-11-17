@@ -13,6 +13,7 @@ import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { warnedNodeIds } from './quantity-tag';
 import { approveOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
+import { UnlockedNotice } from './unlocked-notice';
 import { WarningNotice } from './warning-notice';
 import {
   APPROVED_NOTICE_BODY,
@@ -73,6 +74,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           calculatedTotal: costs.approval.calculatedTotal,
           isOverride: costs.approval.isOverride,
           reason: costs.approval.reason,
+          unlocked: costs.approval.unlock !== null,
         };
   return (
     <div className="group/review contents">
@@ -96,12 +98,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         </Notice>
       ) : null}
       {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
+      <UnlockedNotice state={state} unlock={costs.approval?.unlock ?? null} isDraft={header.status === 'DRAFT'} />
       <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <ReviewActions
         estimateId={estimateId}
+        code={header.code}
         state={state}
         status={header.status}
         approve={approveOffer(header.status, costs)}

@@ -201,6 +201,13 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
     case 'POST /api/v1/estimates/[id]/approve':
       return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };
+    // STORY-06.08: the canary estimate is never APPROVED, so a good reason is refused 409 by the state machine ("not approved") at every state it can be in, for the two roles that may call either route, and
+    // writes nothing (no unlock, no status move, no audit entry). The preview is the same refusal with no body. The refusals hold a fixed sentence and no figure, so the scan reads them. The rest of the
+    // order (the reason, a deleted customer) is `unlock-route.test.ts`'s, and the row lock and the grants are `tests/integration/approval/unlock.test.ts`.
+    case 'GET /api/v1/estimates/[id]/unlock-preview':
+      return { id, status: 409 };
+    case 'POST /api/v1/estimates/[id]/unlock':
+      return { id, body: { reason: 'Invented reason for the canary estimate.' }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part

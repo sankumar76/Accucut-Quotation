@@ -164,6 +164,11 @@ export interface CalculationRepository {
    * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
    */
   findCalculatedTotal(calculationId: string, tx?: Transaction): Promise<string | null>;
+  /**
+   * The master snapshot of one calculation and the configuration version it used, selected on their own (STORY-06.08: the unlock preview compares the snapshot with the masters now). Neither a row nor a figure is
+   * read. Null for an unknown calculation or an ID that is not a UUID. **The snapshot holds rates and prices, which are cost data**: only the Lead's and the Admin's code may ask (ADR-008).
+   */
+  findMasterSnapshot(calculationId: string): Promise<{ readonly configVersionId: string; readonly masterSnapshot: MasterSnapshot } | null>;
 }
 
 /**
@@ -288,6 +293,13 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(calculationId)) return null;
         const found = await clientFor(db, tx).calculation.findUnique({ where: { id: calculationId }, select: { productValues: true } });
         return found === null ? null : productValuesSchema.parse(found.productValues).totalPrice;
+      }),
+
+    findMasterSnapshot: (calculationId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await db.calculation.findUnique({ where: { id: calculationId }, select: { configVersionId: true, masterSnapshot: true } });
+        return found === null ? null : { configVersionId: found.configVersionId, masterSnapshot: masterSnapshotSchema.parse(found.masterSnapshot) };
       }),
 
     findRowWorking: (calculationId, nodeId) =>
