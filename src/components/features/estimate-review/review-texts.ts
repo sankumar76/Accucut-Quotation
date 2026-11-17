@@ -111,7 +111,7 @@ export const APPROVED_EARLIER_STAYS = 'It stays until a new approval replaces it
  * `time` is written in IST (`formatIst`). The words of the figures follow the state: current (nothing changed since), or cleared (an input has changed since). The reason is the Lead's own text.
  */
 export const unlockedNoticeTitle = (time: string, name: string): string => `Unlocked on ${time} by ${name}.`;
-export const unlockedReasonLine = (reason: string | null): string => (reason === null ? '' : `Reason: ${reason}`);
+export const unlockedReasonLine = (reason: string): string => `Reason: ${reason}`;
 export const UNLOCKED_FIGURES_CURRENT = 'The figures below are still the ones from the approval. As soon as you change an input every calculated figure is cleared. Recalculate to bring them up to date.';
 export const UNLOCKED_FIGURES_CLEARED = 'An input has changed since, so every calculated figure is cleared. Recalculate to bring them up to date.';
 export const UNLOCKED_PRICE_STAYS = 'The price approved earlier stays until a new approval replaces it.';

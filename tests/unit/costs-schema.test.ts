@@ -57,7 +57,7 @@ describe('the answer, and exactly what it may hold', () => {
 
   it('STORY-06.08 AC-3: the unlock of the approval is who, when, why and whose queue, as text and a time, and nothing else: no figure, no ID', () => {
     const unlock = { at: '2026-11-05T06:35:00.000Z', byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' };
-    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', unlock };
+    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', calculatedTotal: '12629.99', isOverride: true, reason: null, unlock };
     expect(costsSchema.safeParse({ ...good, approval }).success).toBe(true);
     expect(costsSchema.safeParse({ ...good, approval: { ...approval, unlock: { ...unlock, reason: null } } }).success).toBe(true);
     expect(Object.keys(costsSchema.shape.approval.unwrap().shape.unlock.unwrap().shape).sort()).toEqual(['at', 'byName', 'engineerName', 'reason']);
