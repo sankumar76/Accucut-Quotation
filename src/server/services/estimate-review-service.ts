@@ -1,9 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
-import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '../../lib/estimate/calculate-words';
+import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { partNameOf, typedText } from '../../lib/estimate/part-name';
 import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
-import { nothingChanged } from '../../lib/estimate/rate-diff';
 import { buildTree } from '../../lib/estimate/tree';
 import { fieldLetter, findFieldByKey, findSystemField } from '../../lib/fields/registry';
 import type { FieldDefinition } from '../../lib/fields/field-schema';
@@ -16,10 +14,9 @@ import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimat
 import type { EstimateRepository } from '../repositories/estimate-repository';
 import { costsSchema, type CostNode, type CostsView } from '../views/schemas/costs';
 
-import type { CalculationMasters } from './calculation-masters';
 import type { ConfigVersion } from './config-service';
 import type { EstimateViewer } from './estimate-service';
-import { countRateChanges } from './rate-changes';
+import { ratesChangedSince, type CalculationMasters } from './rate-changes';
 
 /**
  * The read side of the estimate review (STORY-06.02; FR-024, FR-025, FR-029, FR-030; architecture sections 4.3, 4.8 and 6 "Cost"): the figures of SCR-06, for the Lead and the Admin.
@@ -141,32 +138,6 @@ function warningOf(figures: ReviewFigures | null): CostsView['warning'] {
   return { madeBy: figures.madeByName, rows: figures.warnings.map(({ nodeId, slNo, label }) => ({ nodeId, slNo, label })) };
 }
 
-/**
- * The counts of what changed since the calculation in view, or `null` when there is nothing to tell (STORY-06.11 AC-1, AC-3, AC-4, AC-6): the estimate is APPROVED (its figures stand), nothing changed in the
- * masters the calculation used, or one of them was deleted since. Called only while the state is `current`.
- */
-async function ratesChangedOf(
-  { calculations, estimates, masters, plans }: Pick<EstimateReviewDependencies, 'calculations' | 'estimates' | 'masters'> & { readonly plans: PlanCache },
-  estimateId: string,
-  calculation: { readonly id: string },
-  version: ConfigVersion,
-): Promise<CostsView['ratesChanged']> {
-  const access = await estimates.findEstimateAccess(estimateId);
-  // An approved estimate keeps the figures it was approved with (NFR-026): no notice, and neither the snapshot nor a master is read. An estimate that is not there any more is the caller's 404, not this notice's.
-  if (access === null || access.status === 'APPROVED') return null;
-  const stored = await calculations.findMasterSnapshot(calculation.id);
-  if (stored === null) throw new Error('The calculation linked to the estimate could not be read.');
-  try {
-    const counts = await countRateChanges({ masters, plans }, stored.masterSnapshot, version);
-    return nothingChanged(counts) ? null : counts;
-  } catch (error) {
-    // A customer or a material that was deleted since (409) or that is not there at all (404) cannot be counted. The notice is a help beside the figures, never a reason to lose them: the page is drawn without it,
-    // and Calculate or Unlock says what is wrong with the master in its own words (architecture section 4.8).
-    if (error instanceof NotFoundError || (error instanceof ConflictError && (error.code === CUSTOMER_DELETED_CODE || error.code === MATERIAL_DELETED_CODE))) return null;
-    throw error;
-  }
-}
-
 export function createEstimateReviewService({ calculations, approvals, nodes, configuration, estimates, masters, plans = createPlanCache() }: EstimateReviewDependencies): EstimateReviewService {
   return {
     async getCosts(viewer, estimateId) {
@@ -197,7 +168,7 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
       if (state === 'current' && figures === null) throw new Error('The calculation linked to the estimate could not be read.');
 
       // Only while the figures are current: in the other two states the masters are not read at all (AC-4).
-      const ratesChanged = state === 'current' && calculation !== null ? await ratesChangedOf({ calculations, estimates, masters, plans }, estimateId, calculation, version) : null;
+      const ratesChanged = state === 'current' && calculation !== null ? await ratesChangedSince({ calculations, estimates, masters, plans }, estimateId, calculation.id, version) : null;
 
       const columns = columnsOf(version.document);
       return costsSchema.parse({
