@@ -44,6 +44,9 @@ const QTY = (): string => idOf('H');
 const FIRST_REVISION = 3;
 const ENGINEER_NAME = 'Calculation Engineer';
 const LEAD_NAME = 'Calculation Lead';
+/** The names the test database stores for the two people (`insertPersonAsOwner` adds "Invented"): what the costs view names, because it reads a person's name now. The labels above are what the audit entry was given. */
+const ENGINEER_STORED_NAME = `Invented ${ENGINEER_NAME}`;
+const LEAD_STORED_NAME = `Invented ${LEAD_NAME}`;
 const ENGINEER_REQUEST = 'req-engineer-0001';
 const LEAD_REQUEST = 'req-lead-0001';
 
@@ -200,7 +203,7 @@ describe('AC-3, AC-4: the costs view names whoever went ahead on the calculation
     const costs = await review.getCosts(leadOf(db), estimateId);
     expect(costs.state).toBe('current');
     expect(costs.warning).toEqual({
-      madeBy: ENGINEER_NAME,
+      madeBy: ENGINEER_STORED_NAME,
       rows: [
         { nodeId: part, slNo: '1.1', label: 'Invented support arm' },
         { nodeId: sub, slNo: '1.1.1', label: 'Invented spacer' },
@@ -214,7 +217,7 @@ describe('AC-3, AC-4: the costs view names whoever went ahead on the calculation
     await db.service.recalculate(leadOf(db), estimateId, leadAcknowledges(FIRST_REVISION));
     const [engineers, leads] = await calculationsOf(estimateId);
     const costs = await review.getCosts(adminOf(db), estimateId);
-    expect(costs.warning?.madeBy).toBe(LEAD_NAME);
+    expect(costs.warning?.madeBy).toBe(LEAD_STORED_NAME);
     expect(costs.calculatedAt).toBe(defined(leads).created_at.toISOString());
     expect(costs.calculatedAt).not.toBe(defined(engineers).created_at.toISOString());
   });
@@ -254,7 +257,7 @@ describe('AC-3 (Approved), AC-5: a warning never stops an approval, and stays wi
     expect(await statusOf(db, estimateId)).toBe('APPROVED');
     const costs = await review.getCosts(leadOf(db), estimateId);
     expect(costs.approval).not.toBeNull();
-    expect(costs.warning?.madeBy).toBe(ENGINEER_NAME);
+    expect(costs.warning?.madeBy).toBe(ENGINEER_STORED_NAME);
     expect(costs.warning?.rows.map((row) => row.slNo)).toEqual(['1.1', '1.1.1']);
   });
 });
