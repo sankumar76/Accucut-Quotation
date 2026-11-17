@@ -8,13 +8,39 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9). See "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-16 by orchestrator (daily update, §9 item 6) |
+| Last updated       | 2026-11-17 by orchestrator (resume point, shutdown) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Resume point (2026-11-17, shutdown)
+
+> The delivery lead shut down the PC mid-run. Everything is committed and pushed. This section wins over everything below it. It sits on records branch `docs/AQP-1-records-t`, because `docs/AQP-1-records-s` merged as #456. The branch has no PR yet.
+
+**`master` = 9eef6e7** (#456 records, on top of 342237e #450 AQP-324). Master's own CI push run 44026420626 on 9eef6e7 is **red**: the intermittent E2E timeouts of DEF-037. The previous push run, 44021154191 on 342237e, was green. Merged today: #450 (AQP-324, combined review 0 Blocker, Critical or Major, Jira Done) and #456 (records).
+
+**Master fix, top of the lane (AQP-340, DEF-037, Sev-2, DL-229, RISK-031):** PR **#459** (draft, `fix/AQP-340-e2e-calculate-flake`, head b80279a). The fix is tests only, with no timeout or retry change. Root cause 1: the estimate-workspace specs spend 13 to 19 s of the 30 s budget on the shared sign-in, queue and workspace prelude. Root cause 2: export.spec builds 3 workbooks against the limit of 2. Three-run proof: run 44053813502 attempt 1 is green and clean (1,572 passed, 0 flaky). Attempt 2 was in progress at shutdown, and attempt 3 has not started. **On resume:** read attempts 2 and 3, then have the developer finish the PR body (root cause and evidence), mark it ready and squash it. **Check the fix against DL-229 before merging.** Master should rule on three things: `test.slow()` on two tests (`fasteners:113`, `tree:67`) with measured durations; Playwright `maxRetries` on connection resets for the sign-in calls and one upload `PUT`; and a dev-server keep-alive preload in `NODE_OPTIONS`. DL-229 bars extra retries and blanket timeout increases. Also open: `estimate-picture:169` (the fix is a hypothesis, not proven), and a possible follow-up issue for the 413 that resets an oversize upload. Then update and merge the PRs below, one at a time.
+
+**Open PRs:**
+| PR | State | Next |
+|---|---|---|
+| #459 AQP-340 master E2E fix | Draft, b80279a; proof 1 of 3 | As above |
+| #458 `dependabot.yml` ignores (DL-119 majors plus `@types/node` majors, DL-227) | d2d5442, red only on DEF-037 specs | Update the branch after #459, then merge on green |
+| #453 typescript-eslint 8.72.2 | d784c26, red only on DEF-037 specs | Same (DL-227) |
+| #451 lucide-react 1.72.0, #452 react-hook-form 7.92.0 | Red only on DEF-037 specs | Same (DL-227) |
+| #455 `@lhci/cli` 0.16.1 | cf93755: licence and pin fix pushed (DL-230); Lighthouse nightly run 44037928001 green; E2E red only on DEF-037 specs | Before merge: the architect's one-line PR comment that the `licences.ts` diff matches AQP-1 12089 (DL-230). Then update after #459 and merge on green. After merge: the architect re-takes B0, updates §11 and closes #39 |
+| AQP-325 (06.08 unlock) | No PR yet. Branch `feat/AQP-325-unlock-2` at e3f8da8 (DL-215 re-cut from 342237e; clash set resolved). Paused. | Resume the developer: write `tests/integration/approval/unlock.test.ts` (CI fails without it), the route and client unit tests and `tests/e2e/unlock.spec.ts`, then open the draft PR. The combined review (§9 item 2) follows |
+
+**Worktrees in use** (keep): `agent-a358ec5d24f2e0364` (#459, also used for #455), `agent-ad018d01ac3784f70` (AQP-325), and `agent-aa1f064f6080db977` (AQP-324, merged; it can now be removed).
+
+**Jira:** AQP-324 Done. AQP-325 In Progress (paused). AQP-340 In Progress. No transition is half-done.
+
+**Decisions:** DL-227 to DL-230 and RISK-031 are recorded on this branch (7d33b18 and 30992c3). DL-227: Dependabot merges and ignores. DL-228: vitest 5.1.0 in the hardening window. DL-229: DEF-037 first in the lane, re-runs only when every failure is an AQP-340 test. DL-230: #455 upgrade now. **No decision is pending** from the delivery lead.
+
+**Lanes:** one, because free RAM is about 0.8 GB. After #459 and the Dependabot merges, the next story is AQP-325, then AQP-326, 328, 329, 330 and EPIC-07 (AQP-332 to 336).
 
 ## Daily update (2026-11-16, orchestrator)
 
