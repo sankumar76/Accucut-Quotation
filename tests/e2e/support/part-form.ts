@@ -54,11 +54,14 @@ export async function waitForForm(page: Page): Promise<void> {
 /**
  * Signs in as a person who owns a task, chooses the customer, and waits for the form of the first part. On a phone the tree is in a drawer that stays shut. Answers the person: their ID is
  * the ID of their estimate and of its one part too (the recipe of the scan), so a test can read the routes of that estimate.
+ * `fromTheQueue` is for a test whose subject is the history (Back from the estimate must land on the queue, as it does for a person who signed in on the page): the workspace is then
+ * reached from the queue page, the one page load the other tests save.
  */
-export async function openForm(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+export async function openForm(page: Page, testInfo: TestInfo, options: { readonly fromTheQueue?: boolean } = {}): Promise<{ readonly id: string }> {
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
+  if (options.fromTheQueue === true) await page.goto('/queue');
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
   await waitUntilHydrated(page, '#estimate-customer', 'onChange');
   await expect(page.locator('#estimate-customer')).toBeEnabled();
