@@ -171,7 +171,10 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
     const choose = zone(page).getByRole('button', { name: 'Choose a file' });
     await choose.focus();
     await expect(choose).toBeFocused();
-    const [picker] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Enter')]);
+    // The press goes through the button's own locator (AQP-340): it takes focus again if the page re-rendered or moved it since the line above, and presses on that button with the keyboard. The page's keyboard presses on
+    // whatever has focus at that moment. The first attempt of this test waited out its 60 s on the picker in every width of a full run and never when this spec ran alone (948 runs); a lost focus under load is the likely
+    // cause and is not proven by a trace, so a recurrence is to be reported with its trace.
+    const [picker] = await Promise.all([page.waitForEvent('filechooser'), choose.press('Enter')]);
     const written = writeOfPicture(page, 'PUT');
     await picker.setFiles(file('keyboard.png', fresh()));
     expect((await written).status()).toBe(200);
