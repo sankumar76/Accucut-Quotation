@@ -10,8 +10,10 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace
 
 import { BuildTable } from './build-table';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
+import { warnedNodeIds } from './quantity-tag';
 import { approveOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
+import { WarningNotice } from './warning-notice';
 import {
   APPROVED_NOTICE_BODY,
   APPROVED_NOTICE_TITLE_PLAIN,
@@ -58,6 +60,8 @@ function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | nu
 
 export function EstimateReview({ header, estimateId, customer, costs, calculatedAt }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
+  // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
+  const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
   const approval: ApprovedTileView | null =
     costs.approval === null ? null : { price: costs.approval.price, approverName: costs.approval.approverName, approvedAtLabel: formatIst(new Date(costs.approval.approvedAt)) };
@@ -83,9 +87,10 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         </Notice>
       ) : null}
       {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
+      <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
-      <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} />
-      {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} /> : null}
+      <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
+      {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <ReviewActions
         estimateId={estimateId}
         state={state}

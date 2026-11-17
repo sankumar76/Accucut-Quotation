@@ -2,27 +2,8 @@
 
 import { useRef, type MouseEvent } from 'react';
 
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
-import { Notice } from '@/components/shared/notice';
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
-import {
-  WARNING_CHANGED_NOTICE,
-  WARNING_DIALOG_DESCRIPTION,
-  WARNING_GO_AHEAD,
-  WARNING_GO_BACK,
-  WARNING_LIST_LABEL,
-  warningDialogTitle,
-} from '@/lib/estimate/warning-copy';
+import { QuantityWarningDialogView } from '@/components/shared/quantity-warning-dialog';
+import { WARNING_GO_AHEAD } from '@/lib/estimate/warning-copy';
 import type { WarnedRowView } from '@/lib/estimates/calculate-client';
 
 import { focusCalculate } from './calculate-button';
@@ -50,6 +31,7 @@ export interface QuantityWarningDialogProps {
  * calculation, NFR-002). "Go back" leaves the estimate a draft; "Calculate anyway" sends `{acknowledge: {inputsRevision}}`, which the server accepts only for the revision it named. If the list changed in between,
  * the same dialog shows the new list with the words that say so. Its words are in `warning-copy.ts`. The dialog is fetched after the page is up (NFR-009).
  *
+ * The dialog itself is the shared `QuantityWarningDialogView` (STORY-06.10 reuses it for the Lead's Recalculate); this file is the Engineer's half: the row links to the form's fields, and the focus.
  * Focus is placed here and not left to Radix, which has no trigger to return it to: "Go back" and every refusal or failure of "Calculate anyway" put it back on the Calculate button, a row link takes the person
  * to the field, and a good answer moves it to the Submitted notice (the workspace; Calculate is then disabled and takes none), so every way out puts focus somewhere deliberate (WCAG 2.4.3). A new list
  * (the bar gives the dialog a new `key`) mounts the dialog again, so focus starts on "Go back" again and the notice, a live region, is announced (WCAG 4.1.3).
@@ -76,44 +58,24 @@ export function QuantityWarningDialog({ rows, changed, busy, onGoBack, onGoAhead
   }
 
   return (
-    <AlertDialog open onOpenChange={(open) => (open || busy ? undefined : goBack())}>
-      <AlertDialogContent
-        onCloseAutoFocus={(event) => {
-          // Radix has no trigger to return focus to. A dialog that goes away for any reason but a row link (a refusal, a failure, Escape) leaves focus on Calculate; once submitted that button is disabled and takes none.
-          event.preventDefault();
-          if (!toField.current) focusCalculate();
-        }}
-      >
-        <AlertDialogHeader>
-          <AlertDialogTitle>{warningDialogTitle(rows.length)}</AlertDialogTitle>
-          <AlertDialogDescription>{WARNING_DIALOG_DESCRIPTION}</AlertDialogDescription>
-        </AlertDialogHeader>
-        {changed ? (
-          <Notice tone="warn" role="alert">
-            {WARNING_CHANGED_NOTICE}
-          </Notice>
-        ) : null}
-        <ul aria-label={WARNING_LIST_LABEL} data-quantity-warning-rows="" className="flex flex-col gap-s-2">
-          {rows.map((row) => (
-            <li key={row.nodeId} className="min-w-0">
-              <a
-                href={`#${controlIdFor(row.fieldId)}`}
-                onClick={(event) => goTo(event, row)}
-                aria-disabled={busy ? true : undefined}
-                className={cn('inline-flex min-h-(--control-h) items-center text-body font-semibold text-primary-ink underline underline-offset-2', BREAK_LONG_NAMES)}
-              >
-                {row.message}
-              </a>
-            </li>
-          ))}
-        </ul>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{WARNING_GO_BACK}</AlertDialogCancel>
-          <Button loading={busy} onClick={onGoAhead}>
-            {WARNING_GO_AHEAD}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <QuantityWarningDialogView
+      lines={rows.map((row) => ({
+        key: row.nodeId,
+        text: row.message,
+        href: `#${controlIdFor(row.fieldId)}`,
+        disabled: busy,
+        onFollow: (event) => goTo(event, row),
+      }))}
+      changed={changed}
+      busy={busy}
+      goAheadLabel={WARNING_GO_AHEAD}
+      onGoBack={goBack}
+      onGoAhead={onGoAhead}
+      onCloseAutoFocus={(event) => {
+        // Radix has no trigger to return focus to. A dialog that goes away for any reason but a row link (a refusal, a failure, Escape) leaves focus on Calculate; once submitted that button is disabled and takes none.
+        event.preventDefault();
+        if (!toField.current) focusCalculate();
+      }}
+    />
   );
 }

@@ -1,17 +1,22 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type ComponentType } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
+import type { AckRequestView } from '@/lib/estimates/calculate-client';
 
 import { CALCULATED_LINE_ID } from './recalculate-ids';
+import type { RecalculateWarningDialogProps } from './recalculate-warning-dialog';
 
 /**
  * The Calculate or Recalculate button of SCR-06 (STORY-06.04 AC-3, AC-5, AC-9; UX spec SCR-06 "Total cleared", "Loading", "Error"): the one piece of the review that is a script. It is the **only** client
  * component the review draws, and it is as small as it can be (NFR-009, ADR-016: `/estimates/[code]` has no room to spare in its first load): the button, a line for a screen reader, and the notice of a refusal.
  * The code that sends the request and reads the answer (`recalculate-client.ts`) is fetched by a bare `import()` when the button is **first pressed**, so the page does not carry it.
+ * **The quantity warning (STORY-06.10).** A 0 in QTY per Assy earns every press the 409 `CALCULATE_ACK_REQUIRED`, even when the Engineer already went ahead (A-26). The button then fetches the dialog
+ * (`recalculate-warning-dialog.tsx`, again a bare `import()`, so it is not in the first load: NFR-009, ADR-016) and shows the server's rows; "Recalculate anyway" ("Calculate anyway" on a Draft) sends the same
+ * request with `{acknowledge: {inputsRevision}}`. What the acknowledgement is good for is the server's to say, under the estimate's lock; this only sends the revision it was given.
  *
  * **It decides nothing.** One press is one request, and a press while one is in flight is ignored (a double click is one request). Who may press, whether the estimate is approved, which inputs are missing and
  * whether a quantity warning applies are the server's; a refusal is shown in the server's own sentence. **No figure passes through here** (NFR-002): after a good press, and after an answer that was lost, the
@@ -23,6 +28,9 @@ import { CALCULATED_LINE_ID } from './recalculate-ids';
 
 /** Fetched on the first press only (NFR-009). A fetch that fails is the same "no answer" as a network that fails, and the next press tries again. */
 const loadClient = () => import('@/lib/estimates/recalculate-client');
+
+/** Fetched only when the server has answered with the 409 of a 0 in QTY per Assy (STORY-06.10, ADR-016): the Lead's quantity warning is an overlay, so it is not in the first load. A fetch that fails is the "no answer" line, and the next press tries again. */
+const loadDialog = () => import('./recalculate-warning-dialog').then((module) => module.RecalculateWarningDialog);
 
 /** A 409 may mean the estimate moved on in another tab (approved, unlocked), so the page is drawn again to show it as it is now. */
 const CONFLICT = 409;
@@ -43,6 +51,9 @@ export function RecalculateButton({ id, estimateId, label, busyLine, failedLine 
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
+  // The 409 of a 0 in QTY per Assy (the rows and the revision to send back) and the dialog's code, while the dialog is open. Client state only, never stored.
+  const [warning, setWarning] = useState<AckRequestView | null>(null);
+  const [Dialog, setDialog] = useState<ComponentType<RecalculateWarningDialogProps> | null>(null);
   // A second press while the first is in flight must not send a second request, and state is read after the render, so the guard is a ref.
   const inFlight = useRef(false);
   const worked = useRef(false);
@@ -55,15 +66,26 @@ export function RecalculateButton({ id, estimateId, label, busyLine, failedLine 
     [],
   );
 
-  async function press(): Promise<void> {
+  /** `acknowledged` is the revision of the 409 the person chose to go ahead past ("Recalculate anyway"); a first press sends none. */
+  async function press(acknowledged?: number): Promise<void> {
     if (inFlight.current) return;
     inFlight.current = true;
     setSending(true);
     setProblem(null);
     const client = await loadClient().catch(() => null);
-    const outcome = client === null ? null : await client.recalculateEstimate(estimateId);
+    const outcome = client === null ? null : await client.press(estimateId, acknowledged);
+    // A 0 in QTY per Assy: nothing was written and the person is asked. After "anyway" this is a new list (something changed in between), and the dialog says so.
+    const ask = client !== null && outcome !== null && outcome.status === 'refused' ? client.warningFrom(outcome, acknowledged !== undefined) : null;
+    const loaded = ask === null ? null : await loadDialog().catch(() => null);
     inFlight.current = false;
     setSending(false);
+    // Whatever the answer, the dialog of the last 409 is closed, unless this answer is a new one.
+    setWarning(null);
+    if (ask !== null) {
+      if (loaded === null) return setProblem(failedLine);
+      setDialog(() => loaded);
+      return setWarning(ask);
+    }
     worked.current = outcome !== null && outcome.status === 'ok';
     if (outcome !== null && outcome.status === 'refused') setProblem(outcome.title);
     else if (!worked.current) setProblem(failedLine);
@@ -82,6 +104,23 @@ export function RecalculateButton({ id, estimateId, label, busyLine, failedLine 
         {busy ? busyLine : ''}
       </p>
       {problem === null ? null : <Notice tone="danger">{problem}</Notice>}
+      {Dialog === null || warning === null ? null : (
+        <Dialog
+          key={warning.inputsRevision}
+          rows={warning.rows}
+          changed={warning.changed}
+          busy={sending}
+          pressed={label}
+          onGoBack={() => setWarning(null)}
+          onGoAhead={() => void press(warning.inputsRevision)}
+          onCloseAutoFocus={(event) => {
+            // Radix has no trigger to return focus to. A dialog that goes away for any reason but a good answer (Go back, Escape, a refusal, a failure) leaves focus on this button; after a good answer the button
+            // leaves the page and the line that says when the figures were calculated takes focus (the effect above).
+            event.preventDefault();
+            if (!worked.current) document.getElementById(id)?.focus();
+          }}
+        />
+      )}
     </>
   );
 }

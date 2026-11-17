@@ -7,7 +7,7 @@ import type { WorkspaceHeaderView } from '@/components/features/estimate-workspa
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
-import { createReviewWorld, REVIEW_ESTIMATE_ID, type ReviewWorldOptions } from '../support/review-world';
+import { createReviewWorld, nodeIdOfRow, REVIEW_ESTIMATE_ID, type ReviewWorldOptions } from '../support/review-world';
 
 import { QUANTITY_CASES } from './quantity/quantity-cases';
 
@@ -346,6 +346,86 @@ describe('STORY-06.06 AC-9: BO is the approval row, never the figure state', () 
     for (const options of [{}, { inputsRevision: 4 }, { calculated: false }]) {
       expect(countOf(render(await current(options)), 'Not set yet')).toBe(1);
     }
+  });
+});
+
+describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in view', () => {
+  // CE-1 has a 0 on its item (Sl. No 1): the one warned row. The words are the UX spec's (v0.30, SCR-06 "Warning on this calculation").
+  const WARNED = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+  const NOTICE_WHEN = 'Invented Lead went ahead on 05 Nov 2026, 10:42 IST with 0 in QTY per Assy on 1 row: 1 Invented frame.';
+  const NOTICE_MEANING = 'This row costs 0 in this estimate. Approving is not stopped. Check that the zeros are meant.';
+  const notice = (html: string): string => defined(/<div[^>]*role="status"[^>]*>(?:(?!<\/div><\/div>)[\s\S])*?Quantity warning on this calculation\.[\s\S]*?<\/div><\/div>/.exec(html))[0];
+
+  it('a current calculation with a warning gets a warn notice above the tiles that names who went ahead, when and the rows, in a live region', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Lead' }));
+    expect(html).toContain('Quantity warning on this calculation.');
+    expect(notice(html)).toContain(NOTICE_WHEN);
+    expect(notice(html)).toContain(NOTICE_MEANING);
+    expect(notice(html)).toContain('border-l-accent');
+    expect(html.indexOf('Quantity warning on this calculation.')).toBeLessThan(html.indexOf('aria-label="Totals"'));
+  });
+
+  it('names a Lead who recalculated with that calculation\'s own time (the Lead\'s name comes from the view; the time is the calculation\'s)', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Meera' }));
+    expect(html).toContain('Invented Meera went ahead on 05 Nov 2026, 10:42 IST');
+    expect(html).not.toContain('Invented Lead went ahead');
+  });
+
+  it('each warned row carries the mark "Quantity 0" (icon and words) in the tree and in "How the total is built", and a row that did not go ahead does not', async () => {
+    const html = render(await current({ warnings: WARNED }));
+    // The tree and the table: one mark each, and only on the warned row (the item), not on 1.1 and 1.1.1.
+    expect(countOf(html, 'data-quantity-tag=""')).toBe(2);
+    expect(countOf(html, 'Quantity 0')).toBe(2);
+    const tree = html.slice(html.indexOf('Parts tree'), html.indexOf('How the total is built'));
+    expect(countOf(tree, 'Quantity 0')).toBe(1);
+    expect(tree.indexOf('Quantity 0')).toBeLessThan(tree.indexOf('1.1'));
+  });
+
+  it('a calculation with no warning has no notice and no mark', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it.each([
+    ['cleared by an input change (out-of-date)', { inputsRevision: 4 }],
+    ['never calculated (none)', { calculated: false }],
+  ])('AC-4: %s: no notice and no mark, because the list may be stale and the costs view holds none', async (_name, options) => {
+    const html = render(await current({ warnings: WARNED, ...options }));
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it('AC-4: even a view that carries a warning in a state that is not `current` draws none (the notice checks the state itself)', async () => {
+    const cleared = { ...(await current({ inputsRevision: 4 })), warning: { madeBy: 'Invented Lead', rows: [{ nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }] } };
+    const html = render(cleared);
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it('shows the warning on an approved estimate too (the Approved case of AC-3), and no more than once', async () => {
+    const html = render(await current({ warnings: WARNED, approval: { price: '12600.00' } }), undefined, { ...HEADER, status: 'APPROVED' });
+    expect(countOf(html, 'Quantity warning on this calculation.')).toBe(1);
+    expect(html).toContain('Approved and locked');
+  });
+
+  it('says nothing about a rate, a price or a formula in the notice, and names no figure', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Lead' }));
+    const words = notice(html).replace(/<[^>]*>/g, ' ').toLowerCase();
+    expect(words).not.toMatch(/rate|formula|₹|\$|€/);
+  });
+});
+
+describe('STORY-06.10 AC-5: the approval dialog is told the rows of the warning, and Approve is not stopped', () => {
+  const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
+
+  it('the button is on with a warning exactly as it is without one', async () => {
+    const warned = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+    const html = render(await current({ warnings: warned }));
+    expect(approveButton(html)).not.toContain(' disabled=""');
+    expect(approveButton(html)).toContain('aria-haspopup="dialog"');
+    // The dialog's own line is in the dialog's code, fetched on the first press: the page holds none of it.
+    expect(html).not.toContain('This calculation has a quantity warning.');
   });
 });
 

@@ -1,5 +1,5 @@
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
-import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues } from '../../src/server/repositories/calculation-repository';
+import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
 import { createEstimateReviewService, type EstimateReviewDependencies, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { findFieldByKey } from '../../src/lib/fields/registry';
@@ -27,6 +27,9 @@ const BK = seedFieldAt('BK').id;
 const COUNT = seedFieldAt('H').id;
 const DESCRIPTION = findFieldByKey(seedConfig, 'description')?.id ?? '';
 const PART_NO = findFieldByKey(seedConfig, 'part-no')?.id ?? '';
+
+/** The ID the world gives to the node of the row with this Sl. No in a case (for a warning that names it). */
+export const nodeIdOfRow = (rows: ReadonlyArray<CaseRow>, sl: string): string => nodeIdOf(rows.findIndex((row) => row.sl === sl));
 
 export const REVIEW_FIELDS = { bg: BG, bj: BJ, bk: BK, count: COUNT, description: DESCRIPTION, partNo: PART_NO } as const;
 
@@ -65,6 +68,9 @@ export interface ReviewWorldOptions {
   readonly inputsRevision?: number;
   /** An approval row of the estimate (STORY-06.06): the price as stored (two decimals) and who approved it. Absent: none, BO is "Not set yet". */
   readonly approval?: { readonly price: string; readonly approverName?: string };
+  /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
+  readonly warnings?: ReadonlyArray<StoredWarning>;
+  readonly madeBy?: string;
 }
 
 export interface ReviewWorld {
@@ -96,6 +102,8 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
   const figures: ReviewFigures = {
     productValues: { totalPrice: options.bl, pricePerToolCost: options.pricePerToolCost ?? null, toolCostTotal: options.toolCostTotal ?? '0' },
     rows: options.rows.map((row, index) => ({ nodeId: nodeIdOf(index), outputs: outputsOf(row.bg) })),
+    warnings: options.warnings ?? [],
+    madeByName: options.madeBy ?? 'Invented Calculator',
   };
   const basis: FigureBasis = {
     inputsRevision,
