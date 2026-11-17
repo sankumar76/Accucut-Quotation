@@ -575,6 +575,22 @@ function Import-AccucutUpdateEnvironment {
     return $old
 }
 
+function Write-AccucutBatchRightWarning {
+    # An update neither gives nor takes away "Log on as a batch job" (ADR-015 Amendment 3.2): the account, the task and the right are not touched, because the task runs through current.
+    # It only looks, and warns when AccucutBackup no longer holds the right (a policy refresh or a person removed it), because the weekly task then cannot start. It never stops the update:
+    # the update's own release backup runs as the administrator, not as the task.
+    [CmdletBinding()]
+    param([string]$LogFile)
+
+    try {
+        $sid = Get-AccucutBackupAccountSid
+        if (@(Get-AccucutRightHolder -Right 'SeBatchLogonRight') -notcontains $sid) {
+            Write-AccucutLog -Message "The weekly backup cannot log on: AccucutBackup no longer has 'Log on as a batch job' (see the README, 'Backups', 'Log on as a batch job')." -Level Warning -LogFile $LogFile
+        }
+    }
+    catch { Write-AccucutLog -Message "Could not check that AccucutBackup still has 'Log on as a batch job': $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+}
+
 function Invoke-AccucutReleaseBackup {
     # Runs backup.ps1 -Reason release from the running release (STORY-10.05), through the checked wrapper. Returns $true if it ran, $false if there is none.
     [CmdletBinding()]
@@ -722,6 +738,7 @@ function Invoke-AccucutUpdate {
     # A fresh, unpredictable name, created with CreateNew and held open by Write-AccucutLog (the logs folder is writable by the services).
     $logFile = [System.IO.Path]::Combine($paths.Logs, (New-AccucutLogFileName -Prefix 'update'))
     Write-AccucutLog -Message "Update started. Running release: $oldTag. Zip SHA-256 checked." -LogFile $logFile
+    Write-AccucutBatchRightWarning -LogFile $logFile
 
     # The release backup. No backup, no update (unless -NoBackup was given on purpose).
     if ($NoBackup) {

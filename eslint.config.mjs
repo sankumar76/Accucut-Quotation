@@ -59,9 +59,9 @@ const FORMULA_IMPORT = {
 // The calculated outputs of a row (STORY-03.03 AC-7; ADR-008, NFR-002): the Restricted types and the calculators that make them. Other modules of
 // `lib/estimate` (the tree, the validation) hold nothing Restricted, so only these two are named.
 const ROW_OUTPUTS_IMPORT = {
-  group: ['**/lib/estimate/row-outputs', '**/lib/estimate/row-calculator', '**/lib/estimate/product-totals'],
-  regex: `(^|${SLASH})lib${SLASH}estimate${SLASH}(row-(outputs|calculator)|product-totals)${END}`,
-  message: 'Engineer views must not import the calculated row outputs, the product totals or the calculators: outputs live only in Restricted types (ADR-008, NFR-002).',
+  group: ['**/lib/estimate/row-outputs', '**/lib/estimate/row-calculator', '**/lib/estimate/product-totals', '**/lib/estimate/cost-working'],
+  regex: `(^|${SLASH})lib${SLASH}estimate${SLASH}(row-(outputs|calculator)|product-totals|cost-working)${END}`,
+  message: 'Engineer views must not import the calculated row outputs, the product totals, the working of a row or the calculators: outputs live only in Restricted types (ADR-008, NFR-002).',
 };
 
 // Presentation code reaches data through services and views only (architecture section 4.1, 10). Pages
@@ -127,6 +127,18 @@ const ENGINEER_VIEW_IMPORTS = [
     group: ['**/schemas/costs'],
     regex: `(^|${SLASH})schemas${SLASH}costs${END}`,
     message: 'The costs schema holds every calculated figure of an estimate: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
+  },
+  {
+    // STORY-06.03: the contract of `GET /estimates/{id}/nodes/{nodeId}/costs`. It holds the formulas, rate values and calculated costs of one row, for the Lead and the Admin only (NFR-002).
+    group: ['**/schemas/node-costs'],
+    regex: `(^|${SLASH})schemas${SLASH}node-costs${END}`,
+    message: 'The node costs schema holds the formulas, rates and calculated costs of a row: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
+  },
+  {
+    // STORY-07.01: the contracts of `GET /estimates/{id}/export` and `/export-summary`. The file carries the worksheet's cost columns (their figures from STORY-07.02), for the Lead and the Admin only (NFR-002).
+    group: ['**/schemas/export'],
+    regex: `(^|${SLASH})schemas${SLASH}export${END}`,
+    message: 'The export schema is the contract of the Excel file and its summary: it is for the Lead and the Admin only, never for an Engineer view (ADR-008, NFR-002).',
   },
   ROW_OUTPUTS_IMPORT,
   FORMULA_IMPORT,

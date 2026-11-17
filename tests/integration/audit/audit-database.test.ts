@@ -202,7 +202,13 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
    * Events whose one test needs more than a user or a master: an estimate with parts and a calculation over it. Each names the file that holds that test, and the test below fails if the file is gone
    * or no longer names the event, so the registry still cannot wire an event that no test writes (STORY-05.12: `calculation.warning_acknowledged`).
    */
-  const TESTED_ELSEWHERE: Readonly<Record<string, string>> = { 'calculation.warning_acknowledged': 'tests/integration/calc/warn.test.ts' };
+  const TESTED_ELSEWHERE: Readonly<Record<string, string>> = {
+    'calculation.warning_acknowledged': 'tests/integration/calc/warn.test.ts',
+    // STORY-06.06: an estimate approved and locked; the one test is the approval's own, against the real estimate row lock.
+    'approval.approved': 'tests/integration/approval/approve.test.ts',
+    // STORY-06.07: a price that differs from the calculated total, with the reason the Lead gave; the one test is the override's own.
+    'approval.price_overridden': 'tests/integration/approval/override.test.ts',
+  };
 
   it('has a scenario for every event the registry wires, and for no other', () => {
     expect([...Object.keys(SCENARIOS), ...Object.keys(TESTED_ELSEWHERE)].sort()).toEqual([...wiredEvents()].sort());

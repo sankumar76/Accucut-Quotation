@@ -13,6 +13,10 @@ import type { Transaction } from '../repositories/transaction';
  * lock it holds one pooled connection, so a read on another connection would wait for a free one, and ten Calculates at once could each hold one and wait for another until all failed. Passing `tx`
  * takes none. Without `tx` (the calculation alone, `calculateRow` and `calculateEstimate`) the reads are plain.
  *
+ * **Only the rates the plan references are kept from the customer** (GitHub 432, DL-225; architecture section 4.2): `referencedRateIds` of the compiled plan, in its order. The evaluator and the stored snapshot get the
+ * same filtered list, so what was stored is exactly what was evaluated, and a rate that no formula reads is neither passed on nor kept. A referenced rate the customer has no row for is left out, and the
+ * evaluator gets no figure for it, as before.
+ *
  * The values are the masters' current ones, as decimal text and as `Decimal`, and nothing is rounded on the way in. A customer or a material that the Admin deleted after a part chose it is a
  * **409** with its own code (`CUSTOMER_DELETED`, `MATERIAL_DELETED`; STORY-02.07, A-13: the row stays under the soft delete), and one that is not there at all is a 404.
  */
@@ -47,15 +51,31 @@ async function readMaterials(masters: CalculationMasters, materialIds: ReadonlyA
   return records;
 }
 
-export async function readMasters(masters: CalculationMasters, customerId: string, materialIds: ReadonlyArray<string>, tx?: Transaction): Promise<MasterValues> {
+/** The customer's rates whose ID is in `referencedRateIds`, each once, in the order of that list (IDs compared ignoring letter case, as the masters do). */
+function referencedRates<T extends { readonly processItemId: string }>(rates: ReadonlyArray<T>, referencedRateIds: ReadonlyArray<string>): T[] {
+  const byId = new Map(rates.map((rate) => [rate.processItemId.toLowerCase(), rate]));
+  return referencedRateIds.flatMap((id) => {
+    const rate = byId.get(id.toLowerCase());
+    return rate === undefined ? [] : [rate];
+  });
+}
+
+export async function readMasters(
+  masters: CalculationMasters,
+  customerId: string,
+  materialIds: ReadonlyArray<string>,
+  referencedRateIds: ReadonlyArray<string>,
+  tx?: Transaction,
+): Promise<MasterValues> {
   const found = await masters.findCustomerForCalculation(customerId, tx);
   if (found === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
   if (found.deleted) throw new ConflictError(CUSTOMER_DELETED_MESSAGE, { code: CUSTOMER_DELETED_CODE });
   const { customer } = found;
   const materialRecords = await readMaterials(masters, materialIds, tx);
   const exchange = await masters.readExchangeRates(tx);
+  const rates = referencedRates(customer.rates, referencedRateIds);
   return {
-    rates: customer.rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: new Decimal(rate.value) })),
+    rates: rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: new Decimal(rate.value) })),
     materials: new Map(
       [...materialRecords].map(([id, material]) => [
         id,
@@ -66,7 +86,7 @@ export async function readMasters(masters: CalculationMasters, customerId: strin
     materialRecords,
     snapshot: {
       customer: { id: customer.id, name: customer.name },
-      rates: customer.rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: rate.value })),
+      rates: rates.map((rate) => ({ id: rate.processItemId, name: rate.name, value: rate.value })),
       // In the order the materials were first used, so the same tree gives the same snapshot.
       materials: materialIds.map((id) => {
         const record = materialRecords.get(id);

@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import { loadOriginEnv } from '../../lib/env';
-import { AppError, ForbiddenError, isAppError, PASSWORD_CHANGE_REQUIRED_CODE } from '../../lib/errors';
+import { AppError, ExportBusyError, ForbiddenError, isAppError, PASSWORD_CHANGE_REQUIRED_CODE } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { requireUser, type AuthenticatedUser } from '../auth/session';
 
@@ -247,7 +247,7 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
         if (body.status >= 500) logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed');
         else if (body.status === UNAUTHORIZED_STATUS) logger.debug({ requestId, route: options.route, method: options.method }, 'signed-out request');
         else logger.warn({ requestId, route: options.route, method: options.method, status: body.status, code: body.code }, 'route refused');
-        return problemResponse(body);
+        return problemResponse(body, error instanceof ExportBusyError ? { 'Retry-After': String(error.retryAfterSeconds) } : {});
       }
       // The log gets the kind of failure and the request ID, and the body only what went wrong in general. Neither carries the
       // message, the stack or the cause: they can hold an e-mail address, a value from a query or a rate (coding standards section 4).

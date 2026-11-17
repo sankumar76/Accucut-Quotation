@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
+import { createApprovalRepository, type ApprovalRepository } from '../../src/server/repositories/approval-repository';
 import { createCalculationRepository, type CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
 import { createEstimateNodeRepository, type EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createEstimateRepository, type EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import { createImageRepository } from '../../src/server/repositories/image-repository';
+import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createCalculationService, type CalculationNodeRequest, type CalculationService, type CalculationServiceDependencies } from '../../src/server/services/calculation-service';
 import { createConfigVersionCache, getCurrentVersion } from '../../src/server/services/config-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
@@ -35,6 +37,9 @@ export interface CalculationDatabase extends AuditDatabase {
   buildService(storage?: Partial<NonNullable<CalculationServiceDependencies['storage']>>, workflow?: Partial<NonNullable<CalculationServiceDependencies['workflow']>>): CalculationService;
   /** The estimate service over the same database (STORY-05.09): `calculate` asks its `transition` for role, ownership and status in the caller's transaction. */
   readonly estimateService: EstimateService;
+  /** The approvals repository and the approval service over the same database (STORY-06.06), as the composition builds them. */
+  readonly approvals: ApprovalRepository;
+  readonly approvalService: ApprovalService;
   /** The part repository over the same database, for the parts `calculate` reads. */
   readonly nodes: EstimateNodeRepository;
   /** An Engineer, who owns the tasks of `addEstimate({ engineer: true })`, and a second one, who does not. */
@@ -99,6 +104,14 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
   });
+  const approvals = createApprovalRepository(db.prisma);
+  const approvalService = createApprovalService({
+    estimates,
+    calculations,
+    approvals,
+    transactions: db.transactions,
+    workflow: { transition: estimateService.transition, audit: db.audit },
+  });
   const buildService = (
     storage: Partial<NonNullable<CalculationServiceDependencies['storage']>> = {},
     workflow: Partial<NonNullable<CalculationServiceDependencies['workflow']>> = {},
@@ -143,6 +156,8 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     service: buildService(),
     buildService,
     estimateService,
+    approvals,
+    approvalService,
     nodes,
     engineerId,
     otherEngineerId,

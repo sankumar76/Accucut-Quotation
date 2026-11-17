@@ -4,13 +4,16 @@ import { loadAppEnv } from '../lib/env';
 import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
+import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
 import { passwordHasher } from './auth/password-hasher';
 import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/session-cookie';
+import { createApprovalRepository } from './repositories/approval-repository';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
+import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
 import { createMasterRepository } from './repositories/master-repository';
@@ -20,13 +23,16 @@ import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AccountService, createAccountService } from './services/account-service';
+import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
+import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
@@ -54,6 +60,9 @@ let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
+let approvalService: ApprovalService | undefined;
+let costDetailsService: CostDetailsService | undefined;
+let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
@@ -238,11 +247,29 @@ export function getEstimateReviewService(): EstimateReviewService {
     const configurations = createConfigRepository(runtimeClient());
     estimateReviewService = createEstimateReviewService({
       calculations: createCalculationRepository(runtimeClient()),
+      // BO is read from the approvals row, never through the figure state (STORY-06.06 AC-9).
+      approvals: createApprovalRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
     });
   }
   return estimateReviewService;
+}
+
+/**
+ * The approval (STORY-06.05, STORY-06.06): under the estimate's row lock in one transaction, the guard (the status, the state of the figures read as counts through `figure-state`, the calculation named) and then
+ * the write: the estimate's move to APPROVED (the estimate service's `transition`, in the same transaction), the `approvals` row and the audit entry. Restricted (NFR-002): only the `/approve` route asks for it
+ * here, for the Lead and the Admin alone.
+ */
+export function getApprovalService(): ApprovalService {
+  approvalService ??= createApprovalService({
+    estimates: createEstimateRepository(runtimeClient()),
+    calculations: createCalculationRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+  });
+  return approvalService;
 }
 
 /**
@@ -252,6 +279,41 @@ export function getEstimateReviewService(): EstimateReviewService {
 export function getSettingsService(): SettingsService {
   settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
   return settingsService;
+}
+
+/**
+ * The cost details of one row (STORY-06.03): the six stages of SCR-07 for the Lead and the Admin, worked from the stored calculation record only while its state is `current`. Built like the review
+ * (the configuration version a calculation was made with is read by its ID). Restricted (NFR-002): only the `/nodes/{nodeId}/costs` route and the cost details page ask for it here, both for the
+ * Lead and the Admin alone.
+ */
+export function getCostDetailsService(): CostDetailsService {
+  if (costDetailsService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    costDetailsService = createCostDetailsService({
+      calculations: createCalculationRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+    });
+  }
+  return costDetailsService;
+}
+
+/**
+ * The Excel export (STORY-07.01): the summary of SCR-10 and the `.xlsx`, for the Lead and the Admin. The file is built in a `worker_threads` thread from the bundle `scripts/build-export-worker.ts` makes at
+ * `.next/export-worker.mjs` under the folder the server runs in (ADR-012). Restricted (NFR-002): only the two export routes and the export page ask for it here, all for the Lead and the Admin alone.
+ */
+export function getExportService(): ExportService {
+  if (exportService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    exportService = createExportService({
+      header: createExportRepository(runtimeClient()),
+      nodes: createEstimateNodeRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations) },
+      build: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      clock: systemClock,
+    });
+  }
+  return exportService;
 }
 
 /**

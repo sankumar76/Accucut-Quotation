@@ -19,6 +19,12 @@ import { signIn, type CredentialsProvider } from './js-budget-http';
 export const CUSTOMER_PAGE_ROUTE = '/masters/customers/[id]';
 /** The route pattern of the estimate workspace, as the route manifest spells it. */
 export const ESTIMATE_PAGE_ROUTE = '/estimates/[code]';
+/** The route pattern of the cost details of a row (STORY-06.03), as the route manifest spells it. */
+export const COSTS_PAGE_ROUTE = '/estimates/[code]/costs/[slNo]';
+/** The route pattern of the Excel export page (STORY-07.01), as the route manifest spells it. */
+export const EXPORT_PAGE_ROUTE = '/estimates/[code]/export';
+/** The Sl. No of the first part added to an estimate: the part at the top of its tree. */
+const FIRST_PART_SL_NO = '1';
 const CUSTOMERS_API_PATH = '/api/v1/customers';
 const USERS_API_PATH = '/api/v1/users';
 const TASKS_API_PATH = '/api/v1/tasks';
@@ -30,7 +36,7 @@ const BUDGET_FOLDER_PATH = '\\\\budget-check-server\\budget-check-share\\RFQ-bud
 const BUDGET_DEADLINE = '2099-01-01T10:00';
 
 const idSchema = z.object({ id: z.string().min(1) });
-const codeSchema = z.object({ code: z.string().min(1) });
+const taskSchema = z.object({ code: z.string().min(1), estimate: z.object({ id: z.string().min(1) }) });
 
 export interface RecordOptions {
   readonly baseUrl: string;
@@ -76,18 +82,33 @@ async function makeCustomerPath(admin: AdminCall): Promise<string> {
   return `/masters/customers/${encodeURIComponent(created.data.id)}`;
 }
 
-/** Adds an invented Engineer, assigns them one task and returns the path of its workspace. */
-async function makeEstimatePath(admin: AdminCall): Promise<string> {
+/** The task code and the estimate ID of an invented task. */
+interface MadeEstimate {
+  readonly code: string;
+  readonly estimateId: string;
+}
+
+/** Adds an invented Engineer and assigns them one task. */
+async function makeEstimate(admin: AdminCall): Promise<MadeEstimate> {
   const unique = randomUUID();
   const engineer = idSchema.safeParse(
     await admin.post(USERS_API_PATH, { name: `Budget check engineer ${unique}`, email: `budget-check-${unique}@example.test`, role: 'ENGINEER', password: `${unique}-Aa1!` }),
   );
   if (!engineer.success) throw new Error(`POST ${USERS_API_PATH} did not answer with the Engineer's ID`);
-  const task = codeSchema.safeParse(
+  const task = taskSchema.safeParse(
     await admin.post(TASKS_API_PATH, { engineerId: engineer.data.id, folderPath: BUDGET_FOLDER_PATH, deadline: BUDGET_DEADLINE, title: 'Budget check task', notes: 'Invented.' }),
   );
   if (!task.success) throw new Error(`POST ${TASKS_API_PATH} did not answer with the task's code`);
-  return `/estimates/${encodeURIComponent(task.data.code)}`;
+  return { code: task.data.code, estimateId: task.data.estimate.id };
+}
+
+/** The path of an estimate's workspace. */
+const estimatePathOf = (estimate: MadeEstimate): string => `/estimates/${encodeURIComponent(estimate.code)}`;
+
+/** Adds one part to the estimate, which is then the part at the top (Sl. No 1), and returns the path of its cost details (STORY-06.03). */
+async function makeCostsPath(admin: AdminCall, estimate: MadeEstimate): Promise<string> {
+  await admin.post(`/api/v1/estimates/${encodeURIComponent(estimate.estimateId)}/nodes`, { kind: 'item' });
+  return `${estimatePathOf(estimate)}/costs/${FIRST_PART_SL_NO}`;
 }
 
 /** The paths of the records made for the dynamic routes, keyed by route pattern. A route whose record could not be made is left out, with a line saying why. */
@@ -97,13 +118,18 @@ export async function makeRecordPaths(options: RecordOptions): Promise<Readonly<
   try {
     admin = await signedInAdmin(options);
   } catch (error: unknown) {
-    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
+    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, COSTS_PAGE_ROUTE, EXPORT_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
     return {};
   }
   if (admin === undefined) return {};
+  // One estimate serves all of its pages: the workspace, the cost details of its first part and the export. It is made once, on first use, and a failure to make it is every page's failure.
+  let estimate: Promise<MadeEstimate> | undefined;
+  const estimateOf = (call: AdminCall): Promise<MadeEstimate> => (estimate ??= makeEstimate(call));
   const makers: ReadonlyArray<readonly [string, (call: AdminCall) => Promise<string>]> = [
     [CUSTOMER_PAGE_ROUTE, makeCustomerPath],
-    [ESTIMATE_PAGE_ROUTE, makeEstimatePath],
+    [ESTIMATE_PAGE_ROUTE, async (call) => estimatePathOf(await estimateOf(call))],
+    [COSTS_PAGE_ROUTE, async (call) => makeCostsPath(call, await estimateOf(call))],
+    [EXPORT_PAGE_ROUTE, async (call) => `${estimatePathOf(await estimateOf(call))}/export`],
   ];
   const paths: Record<string, string> = {};
   for (const [route, make] of makers) {

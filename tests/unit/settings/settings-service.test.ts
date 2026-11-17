@@ -45,10 +45,10 @@ describe('AC-2: late after more than 8 days', () => {
   });
 });
 
-describe('AC-3: no backup row ever', () => {
-  it('has no time and is not late', async () => {
+describe('STORY-10.05 AC-10 (replaces 02.09 AC-3): no good backup ever', () => {
+  it('has no time and is late', async () => {
     const service = createSettingsService({ jobRuns: fakeRepository(null, null), clock: createFixedClock(NOW) });
-    expect(await service.getBackupStatus()).toEqual({ lastGoodBackupAt: null, backupLate: false, diskReading: null, diskNearlyFull: false });
+    expect(await service.getBackupStatus()).toEqual({ lastGoodBackupAt: null, backupLate: true, diskReading: null, diskNearlyFull: false });
   });
 });
 
@@ -59,7 +59,7 @@ describe('AC-4: the disk reading', () => {
     const service = createSettingsService({ jobRuns: fakeRepository(null, { readAt, freeBytes: 250, totalBytes: 1000 }), clock: createFixedClock(NOW) });
     expect(await service.getBackupStatus()).toEqual({
       lastGoodBackupAt: null,
-      backupLate: false,
+      backupLate: true,
       diskReading: { freePercent: 25, readAt: readAt.toISOString(), ageSeconds: 7200, stale: false },
       diskNearlyFull: false,
     });

@@ -159,11 +159,18 @@ Describe 'Invoke-AccucutUpdate (AC-3, AC-4)' {
         Mock Remove-AccucutOldReleases { , @('older0') }
         Mock Remove-AccucutOldLogs { , @() }
         Mock Write-AccucutLog { $script:Logged.Add($Message) }
+        Mock Write-AccucutBatchRightWarning { }
+        Mock Grant-AccucutBatchLogonRight { throw 'an update never grants the right' }
+        Mock Revoke-AccucutBatchLogonRight { throw 'an update never takes the right away' }
     }
 
     It 'AC-3: checks the zip, takes the release backup, unpacks the checked copy, stops, checks the new release, migrates, switches, starts, checks health, and keeps the current and the previous release only' {
         Invoke-AccucutUpdate -ZipPath $script:Zip -Root $script:Root -OldRelease $script:OldRelease -HealthTimeoutSeconds 10
         ($script:Trace -join '|') | Should -Be 'backup|expand|stop|path:new2|nolinks|check:node.exe|migrate|switch:new2|check:AccucutApp.exe|check:AccucutWorker.exe|start'
+        # The update only looks at the batch-logon right once, and neither gives nor takes it away (ADR-015 Amendment 3.2).
+        Should -Invoke Write-AccucutBatchRightWarning -Times 1 -Exactly
+        Should -Invoke Grant-AccucutBatchLogonRight -Times 0 -Exactly
+        Should -Invoke Revoke-AccucutBatchLogonRight -Times 0 -Exactly
         Should -Invoke Expand-AccucutTrustedPackage -Times 1 -Exactly -ParameterFilter { $Root -eq $script:Root -and $ZipPath -eq $script:Zip -and $Sha256 -eq $script:ZipHash -and $RefuseTag -eq 'old1' -and $ReplaceExisting }
         Should -Invoke Invoke-AccucutMigration -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*\releases\new2' -and $MigrateDatabaseUrl -like '*accucut_owner*' }
         Should -Invoke Set-AccucutCurrentRelease -Times 0 -Exactly -ParameterFilter { $Tag -eq 'old1' }
@@ -433,5 +440,42 @@ Describe 'Start-AccucutServicesAndCheck always lets the caller reach its rollbac
         Mock Start-AccucutServices { }
         Mock Wait-AccucutHealth { $true }
         Start-AccucutServicesAndCheck -HealthUrl 'http://127.0.0.1:3000/api/health' -TimeoutSeconds 10 | Should -BeTrue
+    }
+}
+
+Describe 'the update warns when AccucutBackup lost the batch-logon right, and still completes (ADR-015 Amendment 3.2)' {
+    BeforeEach {
+        $script:Warned = New-Object System.Collections.Generic.List[string]
+        Mock Write-AccucutLog { if ($Level -eq 'Warning') { $script:Warned.Add($Message) } }
+    }
+
+    It 'says nothing when the account still holds the right' {
+        Mock Get-AccucutBackupAccountSid { 'S-1-5-21-1-2-3-1005' }
+        Mock Get-AccucutRightHolder { @('S-1-5-32-544', 'S-1-5-21-1-2-3-1005') }
+        Write-AccucutBatchRightWarning
+        $script:Warned.Count | Should -Be 0
+    }
+
+    It 'warns, without stopping, when the right is missing' {
+        Mock Get-AccucutBackupAccountSid { 'S-1-5-21-1-2-3-1005' }
+        Mock Get-AccucutRightHolder { @('S-1-5-32-544', 'S-1-5-32-551') }
+        { Write-AccucutBatchRightWarning } | Should -Not -Throw
+        $script:Warned.Count | Should -Be 1
+        $script:Warned[0] | Should -BeLike "The weekly backup cannot log on: AccucutBackup no longer has 'Log on as a batch job'*"
+    }
+
+    It 'warns, without stopping, when the account or the policy cannot be read' {
+        Mock Get-AccucutBackupAccountSid { throw "The local account 'AccucutBackup' does not exist on this server" }
+        { Write-AccucutBatchRightWarning } | Should -Not -Throw
+        $script:Warned.Count | Should -Be 1
+        $script:Warned[0] | Should -BeLike '*Could not check that AccucutBackup still has*'
+    }
+
+    It 'only reads: it calls neither the grant nor the revoke' {
+        Mock Get-AccucutBackupAccountSid { 'S-1-5-21-1-2-3-1005' }
+        Mock Get-AccucutRightHolder { @() }
+        Mock Grant-AccucutBatchLogonRight { throw 'must not grant' }
+        Mock Revoke-AccucutBatchLogonRight { throw 'must not revoke' }
+        { Write-AccucutBatchRightWarning } | Should -Not -Throw
     }
 }

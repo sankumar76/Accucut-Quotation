@@ -10,12 +10,14 @@ export const COVERAGE_INCLUDE: ReadonlyArray<string> = ['src/**/*.{ts,tsx}', 'sc
 
 /**
  * Vitest cannot render a Next.js route or a component, and section 10 allows no logic there, so
- * E2E and axe cover them. `src/worker/main.ts` is the cron entry point, a thin start-up file.
+ * E2E and axe cover them. `src/worker/main.ts` is the cron entry point, a thin start-up file. `src/worker/export-thread.ts` is the entry of the export's `worker_threads` thread (STORY-07.01 AC-5):
+ * code run by `new Worker()` is invisible to the coverage tool, so the file holds no logic and its one function is covered in process (`tests/unit/export/thread.test.ts`, test strategy section 11).
  */
 export const COVERAGE_EXCLUDE: ReadonlyArray<string> = [
   'src/app/**',
   'src/components/**',
   'src/worker/main.ts',
+  'src/worker/export-thread.ts',
   'src/generated/**',
   '**/*.d.ts',
 ];

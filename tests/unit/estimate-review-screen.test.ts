@@ -1,13 +1,13 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
-import { createReviewWorld, REVIEW_ESTIMATE_ID, type ReviewWorldOptions } from '../support/review-world';
+import { createReviewWorld, nodeIdOfRow, REVIEW_ESTIMATE_ID, type ReviewWorldOptions } from '../support/review-world';
 
 import { QUANTITY_CASES } from './quantity/quantity-cases';
 
@@ -16,6 +16,9 @@ import { QUANTITY_CASES } from './quantity/quantity-cases';
  * and for the two states without a figure. The words are written out here from the UX spec and the story, not imported from the product, so a changed sentence fails a test. Layouts at 360, 768 and
  * 1366 px, axe and the keyboard are `tests/e2e/estimate-review.spec.ts`. Every name and number is invented.
  */
+
+// The Recalculate control (STORY-06.04) and the Approve button (STORY-06.06) read the router and the path; a static render has neither, and the draw does not use them.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/estimates/Q-2026-0318' }));
 
 const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as const;
 
@@ -36,8 +39,8 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
   return createReviewWorld(options).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
 }
 
-const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header: HEADER, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
+const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }, header: WorkspaceHeaderView = HEADER): string =>
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -179,8 +182,10 @@ describe('AC-3: "How the total is built"', () => {
 describe('AC-6: not calculated', () => {
   it('says so in an info notice that is a live region, shows "Not calculated" on BL, dashes in the tree and no table, and shows no figure', async () => {
     const html = render(await current({ calculated: false }));
-    expect(html).toContain('The Engineer has not calculated this estimate yet.');
-    expect(html).toContain('Press Calculate to see costs. Approve and lock and the Excel download stay off until then.');
+    // AC-10 (STORY-06.04; ux-spec v0.29 "SCR-06 interim and final words"): exactly two sentences, the second naming the button that now works. The 0.28 third sentence is withdrawn (the two disabled buttons say it).
+    expect(html).toContain('The Engineer has not calculated this estimate yet. Press Calculate to see costs.');
+    expect(html).not.toContain('stay off until then');
+    expect(html).not.toContain('Costs show once it is calculated');
     expect(html).toMatch(/role="status"[^>]*>[\s\S]*The Engineer has not calculated/);
     expect(html).toContain('Not calculated');
     expect(html).not.toContain('How the total is built');
@@ -189,9 +194,12 @@ describe('AC-6: not calculated', () => {
     expect(countOf(html, '>—<')).toBeGreaterThanOrEqual(4);
   });
 
-  it('the primary button is Calculate, and Approve and Download are disabled, each described by its reason', async () => {
+  it('the primary button is Calculate and it works (AC-10: enabled, with no "not available yet" reason), and Approve and Download are disabled, each described by its reason', async () => {
     const html = render(await current({ calculated: false }));
-    for (const id of ['review-calculate', 'review-approve', 'review-download']) {
+    const calculate = html.match(/<button[^>]*id="review-calculate"[^>]*>/)?.[0] ?? '';
+    expect(calculate).not.toContain('disabled=""');
+    expect(calculate).not.toContain('aria-describedby');
+    for (const id of ['review-approve', 'review-download']) {
       const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
       expect(button, id).toContain('disabled=""');
       const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
@@ -201,11 +209,12 @@ describe('AC-6: not calculated', () => {
     expect(html).toContain('>Calculate</button>');
     expect(html).toContain('Calculate first. Approving is available once the figures have been calculated.');
     expect(html).toContain('Calculate or Recalculate first. There is no file until a calculation is current.');
+    expect(html).not.toContain('Calculating from this screen is not available yet.');
     expect(html).not.toContain('Calculated 05 Nov');
   });
 });
 
-describe('the cleared state (drawn here so the page has an answer for it; the story that refines it is STORY-06.04)', () => {
+describe('AC-1, AC-4 and AC-5: the cleared state', () => {
   it('says the total is cleared, shows "Cleared" on BL and in the tree, the count stays, and not one figure of the record is drawn', async () => {
     const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
     expect(html).toContain('The total is cleared because an input changed.');
@@ -218,6 +227,269 @@ describe('the cleared state (drawn here so the page has an answer for it; the st
     expect(html).not.toContain('How the total is built');
     expect(html).toContain('>Recalculate</button>');
     expect(html).toContain('Recalculate first. Approving is available once the figures have been calculated again.');
+  });
+
+  it('AC-5: the notice is a live region with its title and body; the primary Recalculate is enabled; Approve and Download are disabled, each described by its reason', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(html).toMatch(/role="status"[^>]*>[\s\S]*The total is cleared because an input changed\./);
+    const recalculate = html.match(/<button[^>]*id="review-calculate"[^>]*>/)?.[0] ?? '';
+    expect(recalculate).not.toContain('disabled=""');
+    for (const id of ['review-approve', 'review-download']) {
+      const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
+      expect(button, id).toContain('disabled=""');
+      expect(button, id).toMatch(/aria-describedby="[^"]+"/);
+    }
+    expect(html).toContain('Calculate or Recalculate first. There is no file until a calculation is current.');
+    expect(html).not.toContain('Calculating from this screen is not available yet.');
+  });
+
+  it('AC-10: the BL tile carries the cleared line with the button named, and the parts tree line names it too (the final words of ux-spec v0.29)', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(html).toContain('An input changed, so every calculated figure is cleared. Press Recalculate to see them again.');
+    expect(html).toContain('Every calculated figure is cleared because an input changed. Press Recalculate to see them again.');
+    expect(html).not.toContain('once the estimate is calculated again');
+    expect(html).not.toContain('Approving is not available yet');
+  });
+
+  it('AC-1: while the figures are current there is no cleared line and no Recalculate button', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('Press Recalculate');
+    expect(html).not.toContain('id="review-calculate"');
+  });
+});
+
+describe('AC-9: the tiles show a skeleton while a recalculation is under way, with no script', () => {
+  it('each tile figure is drawn with a hidden-while-busy figure and a skeleton that appears when the bar is busy (a CSS rule, so nothing is sent to the browser)', async () => {
+    const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
+    expect(countOf(html, 'data-slot="skeleton"')).toBe(3);
+    expect(html).toContain('group-has-[[aria-busy=true]]/review');
+  });
+});
+
+describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would let the press through', () => {
+  const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
+
+  it('a submitted estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
+    const html = render(await current());
+    const button = approveButton(html);
+    expect(button).not.toContain(' disabled=""');
+    expect(button).toContain('aria-haspopup="dialog"');
+    expect(button).toContain('data-early-intent="review-approve"');
+    expect(html).not.toContain('Approved Quote Price (BO)');
+    expect(html).not.toContain('Enter a price in rupees');
+    expect(html).not.toContain('Approving is not available yet');
+  });
+
+  it.each([
+    ['never calculated', { calculated: false }, 'Calculate first. Approving is available once the figures have been calculated.'],
+    ['cleared by an input change', { inputsRevision: 4 }, 'Recalculate first. Approving is available once the figures have been calculated again.'],
+  ])('%s: the button is off, named by its reason', async (_name, options, reason) => {
+    const html = render(await current(options));
+    expect(approveButton(html)).toContain(' disabled=""');
+    expect(approveButton(html)).toContain('aria-describedby="review-approve-reason"');
+    expect(html).toContain(reason);
+  });
+
+  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words it had', async () => {
+    const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
+    expect(approveButton(html)).toContain(' disabled=""');
+    expect(html).toContain('Approving is not available yet.');
+  });
+});
+
+describe('STORY-06.06 AC-5: the approved state', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+
+  it('the notice names the approver and the time, BO shows the price, and Unlock replaces Approve and lock', async () => {
+    const html = render(await current({ approval: { price: '12600.00', approverName: 'Invented Kiran' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('Approved and locked on 05 Nov 2026, 11:20 IST by Invented Kiran.');
+    expect(html).toContain('Locked. Values stay as approved even if rates change later.');
+    expect(html).toContain('Only the Admin can cancel an approval.');
+    expect(html).toContain('id="review-approved-notice"');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+    expect(countOf(html, 'Not set yet')).toBe(0);
+    expect(html).not.toContain('id="review-approve"');
+    expect(defined(/<button[^>]*id="review-unlock"[^>]*>/.exec(html))[0]).toContain(' disabled=""');
+    expect(html).toContain('Unlocking is not available yet.');
+  });
+
+  it('Download is not affected by the approval: it is the same control with the same reason as before', async () => {
+    const html = render(await current({ approval: { price: '12600.00' } }), undefined, APPROVED_HEADER);
+    expect(html).toMatch(/<button[^>]*id="review-download"/);
+    expect(html).toContain('The Excel download is not available yet.');
+  });
+
+  it('an approved estimate with no approvals row says only that it is approved and locked, and BO stays "Not set yet"', async () => {
+    const html = render(await current(), undefined, APPROVED_HEADER);
+    expect(html).toContain('Approved and locked.');
+    expect(countOf(html, 'Not set yet')).toBe(1);
+  });
+});
+
+describe('STORY-06.07 AC-3 (UX spec SCR-06 "Content"): BO shows the difference from the calculated total and the reason given, or "No reason given."', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+  const LOWER = { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, approverName: 'Invented Kiran' };
+  const REASON = 'Rounded down to a whole hundred for the customer quote.';
+
+  it('a lower price with a reason: "₹ 29.99 lower than the calculated total (₹ 12,629.99)." and "Reason given: …", under the approver line', async () => {
+    const html = render(await current({ approval: { ...LOWER, reason: REASON } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain(`Reason given: ${REASON}`);
+    expect(html).not.toContain('No reason given.');
+    expect(html.indexOf('Approved by Invented Kiran')).toBeLessThan(html.indexOf('lower than the calculated total'));
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+  });
+
+  it('a higher price says "higher"', async () => {
+    const html = render(await current({ approval: { price: '12630.01', calculatedTotal: '12629.99', isOverride: true } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 0.02 higher than the calculated total (₹ 12,629.99).');
+  });
+
+  it('a price of 0 is "₹ 12,629.99 lower than the calculated total (₹ 12,629.99)." (AC-8)', async () => {
+    const html = render(await current({ approval: { price: '0.00', calculatedTotal: '12629.99', isOverride: true } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,629.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain('No reason given.');
+  });
+
+  it('an override with no reason says "No reason given."', async () => {
+    const html = render(await current({ approval: LOWER }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain('No reason given.');
+    expect(html).not.toContain('Reason given:');
+  });
+
+  it('an approval at the calculated total shows neither a difference nor a reason line', async () => {
+    const html = render(await current({ approval: { price: '12629.99', calculatedTotal: '12629.99' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 12,629.99');
+    expect(html).not.toContain('than the calculated total');
+    expect(html).not.toContain('No reason given.');
+    expect(html).not.toContain('Reason given:');
+  });
+
+  it('shows a reason as text: markup and a line break are kept as typed and a long word wraps', async () => {
+    const html = render(await current({ approval: { ...LOWER, reason: '<b>bold</b> =SUM(A1)\nSecond line' } }), undefined, APPROVED_HEADER);
+    expect(html).toContain('Reason given: &lt;b&gt;bold&lt;/b&gt; =SUM(A1)\nSecond line');
+    expect(html).not.toContain('<b>bold</b>');
+    expect(html).toContain('whitespace-pre-line');
+    expect(html).toContain('[overflow-wrap:anywhere]');
+  });
+
+  it('BO keeps the line whatever the state of the figures: it is the approval row\'s, like the price (AC-9)', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { ...LOWER, reason: REASON } });
+    const html = render(await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID), undefined, APPROVED_HEADER);
+    expect(html).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    expect(html).toContain(`Reason given: ${REASON}`);
+  });
+
+  it('before any approval there is no such line', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('than the calculated total');
+    expect(html).not.toContain('No reason given.');
+  });
+});
+
+describe('STORY-06.06 AC-9: BO is the approval row, never the figure state', () => {
+  it('with the figures cleared (an input changed after the approval) BO keeps the approved price and BL is cleared', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { price: '12600.00' } });
+    const costs = await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    const html = render(costs, undefined, { ...HEADER, status: 'APPROVED' });
+    expect(costs.state).toBe('out-of-date');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('Not set yet');
+    // BL is cleared: its tile says so and no calculated figure is on the page; no figure was read at all.
+    expect(html).toContain('An input changed, so every calculated figure is cleared.');
+    expect(world.reads.figures.calls).toEqual([]);
+    expect(world.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
+  });
+
+  it('before any approval BO is the fixed "Not set yet", in every state', async () => {
+    for (const options of [{}, { inputsRevision: 4 }, { calculated: false }]) {
+      expect(countOf(render(await current(options)), 'Not set yet')).toBe(1);
+    }
+  });
+});
+
+describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in view', () => {
+  // CE-1 has a 0 on its item (Sl. No 1): the one warned row. The words are the UX spec's (v0.30, SCR-06 "Warning on this calculation").
+  const WARNED = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+  const NOTICE_WHEN = 'Invented Lead went ahead on 05 Nov 2026, 10:42 IST with 0 in QTY per Assy on 1 row: 1 Invented frame.';
+  const NOTICE_MEANING = 'This row costs 0 in this estimate. Approving is not stopped. Check that the zeros are meant.';
+  const notice = (html: string): string => defined(/<div[^>]*role="status"[^>]*>(?:(?!<\/div><\/div>)[\s\S])*?Quantity warning on this calculation\.[\s\S]*?<\/div><\/div>/.exec(html))[0];
+
+  it('a current calculation with a warning gets a warn notice above the tiles that names who went ahead, when and the rows, in a live region', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Lead' }));
+    expect(html).toContain('Quantity warning on this calculation.');
+    expect(notice(html)).toContain(NOTICE_WHEN);
+    expect(notice(html)).toContain(NOTICE_MEANING);
+    expect(notice(html)).toContain('border-l-accent');
+    expect(html.indexOf('Quantity warning on this calculation.')).toBeLessThan(html.indexOf('aria-label="Totals"'));
+  });
+
+  it('names a Lead who recalculated with that calculation\'s own time (the Lead\'s name comes from the view; the time is the calculation\'s)', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Meera' }));
+    expect(html).toContain('Invented Meera went ahead on 05 Nov 2026, 10:42 IST');
+    expect(html).not.toContain('Invented Lead went ahead');
+  });
+
+  it('each warned row carries the mark "Quantity 0" (icon and words) in the tree and in "How the total is built", and a row that did not go ahead does not', async () => {
+    const html = render(await current({ warnings: WARNED }));
+    // The tree and the table: one mark each, and only on the warned row (the item), not on 1.1 and 1.1.1.
+    expect(countOf(html, 'data-quantity-tag=""')).toBe(2);
+    expect(countOf(html, 'Quantity 0')).toBe(2);
+    const tree = html.slice(html.indexOf('Parts tree'), html.indexOf('How the total is built'));
+    expect(countOf(tree, 'Quantity 0')).toBe(1);
+    expect(tree.indexOf('Quantity 0')).toBeLessThan(tree.indexOf('1.1'));
+  });
+
+  it('a calculation with no warning has no notice and no mark', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it.each([
+    ['cleared by an input change (out-of-date)', { inputsRevision: 4 }],
+    ['never calculated (none)', { calculated: false }],
+  ])('AC-4: %s: no notice and no mark, because the list may be stale and the costs view holds none', async (_name, options) => {
+    const html = render(await current({ warnings: WARNED, ...options }));
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it('AC-4: even a view that carries a warning in a state that is not `current` draws none (the notice checks the state itself)', async () => {
+    const cleared = { ...(await current({ inputsRevision: 4 })), warning: { madeBy: 'Invented Lead', rows: [{ nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }] } };
+    const html = render(cleared);
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('Quantity 0');
+  });
+
+  it('shows the warning on an approved estimate too (the Approved case of AC-3), and no more than once', async () => {
+    const html = render(await current({ warnings: WARNED, approval: { price: '12600.00' } }), undefined, { ...HEADER, status: 'APPROVED' });
+    expect(countOf(html, 'Quantity warning on this calculation.')).toBe(1);
+    expect(html).toContain('Approved and locked');
+  });
+
+  it('says nothing about a rate, a price or a formula in the notice, and names no figure', async () => {
+    const html = render(await current({ warnings: WARNED, madeBy: 'Invented Lead' }));
+    const words = notice(html).replace(/<[^>]*>/g, ' ').toLowerCase();
+    expect(words).not.toMatch(/rate|formula|₹|\$|€/);
+  });
+});
+
+describe('STORY-06.10 AC-5: the approval dialog is told the rows of the warning, and Approve is not stopped', () => {
+  const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
+
+  it('the button is on with a warning exactly as it is without one', async () => {
+    const warned = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+    const html = render(await current({ warnings: warned }));
+    expect(approveButton(html)).not.toContain(' disabled=""');
+    expect(approveButton(html)).toContain('aria-haspopup="dialog"');
+    // The dialog's own line is in the dialog's code, fetched on the first press: the page holds none of it.
+    expect(html).not.toContain('This calculation has a quantity warning.');
   });
 });
 

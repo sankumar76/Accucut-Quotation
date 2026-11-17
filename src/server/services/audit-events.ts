@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
+import { formatRupees } from '../../lib/money';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { RUPEE } from '../../lib/masters/master-rules';
@@ -102,6 +104,34 @@ const nameState = z.strictObject({ name: z.string().min(1) });
 // ---- Shape of the quantity-warning event (SCR-16 "Quantity warning"; STORY-05.12) ---------------------------------------------------
 /** A row that was warned: the code, the part, its Sl. No and its name as typed. Text only: no number from a calculation has a place here. */
 const warnedRow = z.strictObject({ code: z.literal(QTY_ZERO_CODE), nodeId: z.string().min(1), slNo: z.string().min(1), label: z.string() });
+
+// ---- Shape of the approval event (SCR-16 "Approval"; STORY-06.06) ----------------------------------------------------------
+/** A price or a total as decimal text ("12600.00", "12629.9876"); never a JavaScript number (ADR-005). */
+const rupeesText = z.string().regex(/^\d+(\.\d+)?$/);
+/**
+ * What an approval keeps: the price set (BO), the calculated total it was set against (BL), the approver's name at that moment, and (STORY-06.07 AC-2) whether the price is an override. No rate, formula or master
+ * value has a key to sit in (NFR-002). The reason is not here: it is the price-override entry's.
+ */
+const approvedState = z.strictObject({ approvedPrice: rupeesText, calculatedTotal: rupeesText, approver: z.string().min(1), isOverride: z.boolean() });
+
+/**
+ * The two sides of the price-override entry (STORY-06.07 AC-2, AC-3; SCR-16 "Price override"). Before: the calculated total the price was set against. After: the price and the reason the Lead gave for it, the
+ * text they typed (trimmed, at most 500 characters, no control or invisible character, as the column holds it), or `null` when they gave none (UX-31). Nothing else has a key to sit in: no rate, formula or master
+ * value (NFR-002), and no contact data. Who set it and when are the entry's own columns.
+ */
+const overriddenBefore = z.strictObject({ calculatedTotal: rupeesText });
+// The limit counts code points, as the column's CHECK and the rule that wrote the reason do: zod's `max` counts UTF-16 units, so 500 emoji would be refused here after the column had taken them.
+const reasonText = z
+  .string()
+  .min(1)
+  .refine((text) => Array.from(text).length <= MAX_REASON_LENGTH, { message: `Use ${MAX_REASON_LENGTH} characters or fewer.` });
+const overriddenAfter = z.strictObject({ approvedPrice: rupeesText, reason: reasonText.nullable() });
+
+/** "Calculated ₹ 12,629.99 to Approved ₹ 12,600.00. Reason: …", or "… No reason given." (SCR-16). The reason is shown as typed: the screen draws text, never markup. */
+const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.output<typeof overriddenAfter>): AuditChangeText => ({
+  before: `Calculated ${formatRupees(before.calculatedTotal)}`,
+  after: `Approved ${formatRupees(after.approvedPrice)}. ${after.reason === null ? 'No reason given.' : `Reason: ${after.reason}`}`,
+});
 
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
@@ -362,10 +392,33 @@ export const AUDIT_EVENTS = {
     describe: (before, after, objectType) => describeMasterChange(objectType, before, after),
   }),
 
+  // ---- Wired in STORY-06.06: an estimate approved and locked -------------------------------------------------------------------
+  // One entry, in the approval's own transaction (under the estimate's row lock): the price the Lead set, the calculated total (BL) it was set against, the approver's name and whether the price is an
+  // override (STORY-06.07 AC-2). The log is Admin-only (architecture section 5.3), so it may keep the price. The reason is the override entry's, below.
+  'approval.approved': defineEvent({
+    objectType: 'estimate',
+    category: 'approval',
+    status: 'wired',
+    before: z.null(),
+    after: approvedState,
+    describe: (_before, after) => ({
+      before: 'Not approved',
+      after: `Approved at ${formatRupees(after.approvedPrice)}, the calculated total was ${formatRupees(after.calculatedTotal)}, by ${after.approver}`,
+    }),
+  }),
+  // A price that differs from the calculated total (STORY-06.07 AC-2, AC-3; FR-103, D-18): a second entry in the approval's own transaction, so an override cannot be written without its approval and an approval
+  // cannot be an override without this entry. It holds the reason the Lead gave, if any, and it is the one the "Price override" filter finds.
+  'approval.price_overridden': defineEvent({
+    objectType: 'estimate',
+    category: 'price_override',
+    status: 'wired',
+    before: overriddenBefore,
+    after: overriddenAfter,
+    describe: describeOverride,
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
-  'approval.approved': reserved('estimate', 'approval'),
   'approval.unlocked': reserved('estimate', 'unlock'),
-  'approval.price_overridden': reserved('estimate', 'price_override'),
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
   // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and
   // the part's name as typed) and holding no figure: nothing here depends on a master or on a calculated value (NFR-002, architecture sections 4.3 and 8). The actor is the person who pressed.

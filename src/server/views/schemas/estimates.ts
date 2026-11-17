@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PRICE_MESSAGE, PRICE_PATTERN, validateReason } from '../../../lib/estimate/approve-price';
 import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
@@ -52,6 +53,35 @@ const MAX_REVISION = 2_147_483_647;
 export const calculateBodySchema = z
   .strictObject({ acknowledge: z.strictObject({ inputsRevision: z.number().int().min(0).max(MAX_REVISION) }).optional() })
   .optional();
+
+/**
+ * `POST /api/v1/estimates/{id}/approve` (STORY-06.05; architecture section 6 "Approve"): the calculation the Lead was looking at, the price and, optionally, the reason for a price that differs. Strict, so a key that
+ * is not named is refused. `calculationId` is compared with the estimate's current calculation under the lock (409 if it is not), which is how a figure that changed under the Lead cannot be approved.
+ */
+export const approveBodySchema = z.strictObject({
+  calculationId: z.uuid(),
+  price: z.string().regex(PRICE_PATTERN, PRICE_MESSAGE),
+  // The reason for a different price (STORY-06.07 AC-4): the one rule of the dialog, so the sentence is the same on both sides. It is checked whatever the price is; whether it is kept depends on the
+  // price differing from BL, which only the service can know (it reads BL itself), so a reason sent with the calculated total is ignored there (AC-5).
+  reason: z
+    .string()
+    .superRefine((text, context) => {
+      const check = validateReason(text);
+      if (!check.ok) context.addIssue({ code: 'custom', message: check.message });
+    })
+    .optional(),
+});
+
+/**
+ * The answer of a good `POST /api/v1/estimates/{id}/approve` (STORY-06.06 AC-2; NFR-002): the new status, the price as it was stored (rupees with two decimals) and when, as UTC text. A strict schema, so
+ * nothing else can leave: no calculated figure, no master value, rate or formula, and no ID. The price is the one the Lead typed and the screen already shows it as BO.
+ */
+export const approveAnswerSchema = z.strictObject({
+  status: z.literal('APPROVED'),
+  approvedPrice: z.string().regex(/^\d{1,12}\.\d{2}$/),
+  approvedAt: z.iso.datetime(),
+});
+export type ApproveAnswer = z.infer<typeof approveAnswerSchema>;
 
 /**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`

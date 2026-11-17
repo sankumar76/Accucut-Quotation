@@ -249,6 +249,21 @@ export class DatabaseBusyError extends AppError {
   }
 }
 
+/** How long a person is told to wait before asking for the export again (`Retry-After`). */
+export const EXPORT_RETRY_AFTER_SECONDS = 10;
+
+/**
+ * Too many exports are being built at once (STORY-07.01, architecture section 4.6, review QS-01): each runs in its own thread with its own memory, so the number is capped. `withRoute` maps it to
+ * 503 `EXPORT_BUSY` with fixed words and a `Retry-After` header, and the portal's other work is not affected.
+ */
+export class ExportBusyError extends AppError {
+  readonly retryAfterSeconds = EXPORT_RETRY_AFTER_SECONDS;
+
+  constructor() {
+    super('EXPORT_BUSY', 503, 'Other files are being built right now. Try again in a moment.');
+  }
+}
+
 export function isAppError(value: unknown): value is AppError {
   return value instanceof AppError;
 }

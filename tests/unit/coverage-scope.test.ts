@@ -60,6 +60,9 @@ describe('isCoverageScoped', () => {
     ['src/components/features/queue/queue-list.tsx', false],
     ['src/components/ui/button.tsx', false],
     ['src/worker/main.ts', false],
+    // The entry of the export thread (STORY-07.01): code run by `new Worker()` is invisible to the coverage tool, and its one function is measured in process.
+    ['src/worker/export-thread.ts', false],
+    ['src/server/export/thread-protocol.ts', true],
     ['src/generated/prisma/client.ts', false],
     ['src/types/global.d.ts', false],
     // Not in the measured set at all.

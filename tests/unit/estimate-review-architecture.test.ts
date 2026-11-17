@@ -29,18 +29,26 @@ function sourceFiles(directory: string): string[] {
 const ALL = sourceFiles(SRC).map((path) => ({ path: relative(ROOT, path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') }));
 const pathsMatching = (files: ReadonlyArray<{ path: string; text: string }>, pattern: RegExp): string[] => files.filter((file) => pattern.test(file.text)).map((file) => file.path);
 
-const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation)\b/;
+const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation|findRowWorking)\b/;
 const PRISMA_ACCESS = /\.(calculation|calculationRow)\./;
 const REPOSITORY = 'src/server/repositories/calculation-repository.ts';
 const REVIEW_SERVICE = 'src/server/services/estimate-review-service.ts';
+const COST_DETAILS_SERVICE = 'src/server/services/cost-details-service.ts';
 
 describe('AC-7: every read of a figure goes through figure-state', () => {
   it('only the calculation repository names the Prisma accessors of calculations and calculation_rows', () => {
     expect(pathsMatching(ALL, PRISMA_ACCESS)).toEqual([REPOSITORY]);
   });
 
-  it('only the repository (which defines them) and the review service name a method that reads a record\'s figures', () => {
-    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE].sort());
+  it('only the repository (which defines them), the review service and the cost details service name a method that reads a record\'s figures', () => {
+    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE].sort());
+  });
+
+  it('the cost details service (STORY-06.03) imports the figure state and reads the working of a row only through readFiguresWhenCurrent, in one place', () => {
+    const service = ALL.find((file) => file.path === COST_DETAILS_SERVICE)?.text ?? '';
+    expect(service).toMatch(/from '\.\.\/\.\.\/lib\/estimate\/figure-state'/);
+    expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findRowWorking\(/);
+    expect(service.match(/findRowWorking\(/g)).toHaveLength(1);
   });
 
   it('the review service imports the figure state and reads the record only through readFiguresWhenCurrent', () => {
@@ -49,6 +57,16 @@ describe('AC-7: every read of a figure goes through figure-state', () => {
     expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findReviewFigures\(/);
     // The one call of the read is the one inside the wrapper.
     expect(service.match(/findReviewFigures\(/g)).toHaveLength(1);
+  });
+
+  it('STORY-06.10 AC-6 (NFR-002): the stored warnings of a calculation leave the repository by the one read of the figures, so only the review service holds them; the name of who went ahead is named by no one else', () => {
+    // `warnings` and `madeByName` are members of what `findReviewFigures` returns: the repository defines them and the review service passes them into the costs view, behind the Lead's and the Admin's roles.
+    expect(pathsMatching(ALL, /\bmadeByName\b/).sort()).toEqual([REPOSITORY, REVIEW_SERVICE].sort());
+    expect(pathsMatching(ALL, /\bfigures\.warnings\b/)).toEqual([REVIEW_SERVICE]);
+    // No Engineer route, page or component imports the review service or the costs view that carries the list.
+    const engineerReachable = ALL.filter((file) => /^src\/app\/api\/v1\/estimates\/\[id\]\/(calculate|nodes)|^src\/components\/features\/estimate-workspace\//.test(file.path));
+    expect(engineerReachable.length).toBeGreaterThan(10);
+    expect(pathsMatching(engineerReachable, /estimate-review-service|getEstimateReviewService|schemas\/costs/)).toEqual([]);
   });
 
   it('control: a file that reads the figures with no figure-state is found by the scan', () => {
@@ -61,6 +79,10 @@ describe('AC-7: every read of a figure goes through figure-state', () => {
 describe('AC-5: no review code reaches the Engineer', () => {
   const REVIEW_FOLDER = 'src/components/features/estimate-review/';
   const REVIEW_PAGE = 'src/app/(portal)/estimates/[code]/review-page.tsx';
+  const RECALCULATE_BUTTON = 'src/components/features/estimate-recalculate/recalculate-button.tsx';
+  const RECALCULATE_DIALOG = 'src/components/features/estimate-recalculate/recalculate-warning-dialog.tsx';
+  const APPROVE_FOLDER = 'src/components/features/estimate-approve/';
+  const APPROVE_BUTTON = `${APPROVE_FOLDER}approve-button.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -70,8 +92,11 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(reviewFiles.filter((file) => /\buse(State|Effect|Ref|Memo|Callback|Reducer|Transition)\b|\bnext\/dynamic\b|React\.lazy/.test(file.text)).map((file) => file.path)).toEqual([]);
   });
 
-  it('the review folder imports no shared client component (a `use client` file would carry its chunk to the page)', () => {
+  it('the review folder imports no shared client component but the Recalculate button and the Approve button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, STORY-06.06, ADR-016)', () => {
     const clientFiles = new Set(ALL.filter((file) => /^\s*['"]use client['"]/m.test(file.text)).map((file) => file.path));
+    // The two exceptions, named: the Calculate / Recalculate button and the Approve and lock button. Each is imported by the action bar alone and loads its request code (or its dialog) only when first pressed (the next tests).
+    clientFiles.delete(RECALCULATE_BUTTON);
+    clientFiles.delete(APPROVE_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -79,6 +104,54 @@ describe('AC-5: no review code reaches the Engineer', () => {
     };
     const reached = reviewFiles.flatMap((file) => importsOf(file.text).flatMap((specifier) => resolve(file.path, specifier)).filter((path) => clientFiles.has(path)));
     expect(reached).toEqual([]);
+  });
+
+  it('STORY-06.04 AC-7, ADR-016: the Recalculate button is the only client file of its folder, is a client component imported by the action bar alone, imports no figure, schema or service, and fetches its request code on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith('src/components/features/estimate-recalculate/'));
+    // The button, the Lead's quantity-warning dialog it fetches (STORY-06.10), and the one id the button shares with the action bar, in a file of its own (a server file cannot read a value out of a client file).
+    expect(folder.map((file) => file.path).sort()).toEqual([RECALCULATE_BUTTON, 'src/components/features/estimate-recalculate/recalculate-ids.ts', RECALCULATE_DIALOG]);
+    expect(folder.find((file) => file.path.endsWith('recalculate-ids.ts'))?.text ?? '').not.toMatch(/use client/);
+    const button = folder.find((file) => file.path === RECALCULATE_BUTTON)?.text ?? '';
+    expect(button).toMatch(/^\s*['"]use client['"]/m);
+    const code = button.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    // No restricted module: not the costs schema, not the review, not a service or a repository, not the calculation's own code.
+    expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation|row-outputs|product-totals|figure-state/);
+    // The request code is a bare dynamic `import()`, not a static import: the page's first load does not carry it.
+    expect(code).toMatch(/import\('@\/lib\/estimates\/recalculate-client'\)/);
+    expect(code).not.toMatch(/^import .*recalculate-client/m);
+    // STORY-06.10, ADR-016: the dialog is an overlay, so it is a bare dynamic import() behind a type-only import, like the request code and the Approve dialog; the button never imports it, nor the shared view it wraps.
+    expect(code).toMatch(/import\('\.\/recalculate-warning-dialog'\)/);
+    expect(code).toMatch(/^import type \{ RecalculateWarningDialogProps \} from '\.\/recalculate-warning-dialog';/m);
+    expect(code).not.toMatch(/^import (?!type).*(recalculate-warning-dialog|quantity-warning-dialog)/m);
+    // The dialog is a client component and holds no restricted module either: its words and rows are the server's sentences about a 0 that was typed, and no figure (NFR-002).
+    const dialogFile = folder.find((file) => file.path === RECALCULATE_DIALOG)?.text ?? '';
+    expect(dialogFile).toMatch(/^\s*['"]use client['"]/m);
+    expect(dialogFile.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The action bar imports the button; the Approve button imports the one id of the "Calculated ..." line (`recalculate-ids.ts`, constants only) so that focus can go there after "Show the new figures".
+    const importers = ALL.filter((file) => file.path !== RECALCULATE_BUTTON && /estimate-recalculate\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual([APPROVE_BUTTON, 'src/components/features/estimate-review/review-actions.tsx']);
+    expect(ALL.filter((file) => file.path === APPROVE_BUTTON).every((file) => !/estimate-recalculate\/recalculate-button/.test(file.text))).toBe(true);
+  });
+
+  it('STORY-06.06 ADR-016: the Approve button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(APPROVE_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-texts.ts`]);
+    for (const name of ['approve-ids.ts', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
+    expect(button).toMatch(/import\('\.\/approve-dialog'\)/);
+    expect(button).toMatch(/^import type \{ ApproveDialogProps \} from '\.\/approve-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts)/m);
+    expect(button).not.toMatch(/approve-client/);
+    expect(dialog).toMatch(/@\/lib\/estimates\/approve-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(APPROVE_FOLDER) && /estimate-approve\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

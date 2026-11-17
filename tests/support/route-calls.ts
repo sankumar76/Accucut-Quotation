@@ -47,6 +47,9 @@ export interface CallContext {
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
+/** A calculation ID that no estimate has (STORY-06.05): the approval recipe names it, so the guard refuses the call whatever the estimate holds. */
+export const UNKNOWN_CALCULATION_ID = '00000000-0000-4000-8000-00000000ca1c';
+
 /** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
 export const NO_RECIPE_ID = 'invented-id';
 
@@ -76,12 +79,19 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
   return recipe(context);
 }
 
+/** The Sl. No of the canary estimate's one part (the part is first at the top, so it is 1). */
+const CANARY_PART_SL_NO = '1';
+
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
   // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
   '/masters/customers/[id]': () => `/masters/customers/${CUSTOMER_RECIPE_ID}`,
   // SCR-05 (STORY-05.01): the canary task of the signed-in Engineer, who owns it (`estimate-recipe.ts`).
   '/estimates/[code]': (context) => canaryEstimatePageFor(context.ownerId),
+  // SCR-07 (STORY-06.03): the first part of the canary estimate, which every canary estimate holds (its Sl. No is 1). Lead and Admin only: an Engineer is refused whatever the address.
+  '/estimates/[code]/costs/[slNo]': (context) => `${canaryEstimatePageFor(context.ownerId)}/costs/${CANARY_PART_SL_NO}`,
+  // SCR-10 (STORY-07.01): the canary estimate's export page. Lead and Admin only: an Engineer is refused whatever the address.
+  '/estimates/[code]/export': (context) => `${canaryEstimatePageFor(context.ownerId)}/export`,
 };
 
 /**
@@ -181,6 +191,16 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // now takes. It changes nothing: the blank input is refused 422 before any warning is looked at (an acknowledgement cannot pass a blank), and a refused role never has its body read.
     case 'POST /api/v1/estimates/[id]/calculate':
       return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
+    // STORY-06.04: a Lead's and an Admin's Recalculate is the same service as Calculate, so its valid call is the one that cannot change anything: the canary part is never complete, so the press is refused 422
+    // `CALCULATE_BLOCKED` and writes nothing (the status the machine would move is put back by the transaction), at any state of the customer, for the two roles that may call it. A good press, which answers the
+    // costs view, is `recalculate-route.test.ts`'s and `tests/integration/calc/recalculate.test.ts`'s.
+    case 'POST /api/v1/estimates/[id]/recalculate':
+      return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
+    // STORY-06.05: an approval that passes the guard is, until STORY-06.06, the fixed 501 and writes nothing; a call that names a calculation the estimate does not have is refused 409 at every state the canary
+    // estimate can be in (a Draft is "not submitted", a Submitted estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
+    // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
+    case 'POST /api/v1/estimates/[id]/approve':
+      return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
@@ -194,6 +214,17 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // STORY-06.02: the review's figures read nothing that changes, so the call answers 200 at any state for the two roles that may make it. The canary estimate has no calculation, so the answer holds no
     // figure at all (state `none`); the figures of a calculated estimate are `estimate-review-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/costs':
+      return { id, status: 200 };
+    // STORY-06.03: the cost details of a row read nothing that changes, so the call answers 200 at any state for the two roles that may make it. One value fills both IDs, and the canary part's ID is
+    // the estimate's, so the call names a part that really exists; the canary estimate has no calculation, so the answer is the state alone (`none`, `details: null`). The stages of a calculated row are
+    // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
+    case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
+      return { id, status: 200 };
+    // STORY-07.01: the export reads nothing that changes. The two roles that may call it get 200: the summary as JSON and the file as an attachment (a `.xlsx` header row, built in process by the harness).
+    // The canary estimate's header and parts are the harness's own. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press.
+    case 'GET /api/v1/estimates/[id]/export':
+      return { id, file: true, status: 200 };
+    case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
     default:
       return undefined;

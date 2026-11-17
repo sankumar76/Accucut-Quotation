@@ -273,9 +273,19 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).
   { path: '/api/v1/estimates/[id]/calculate', kind: 'api', methods: ['POST'], roles: ['ENGINEER'], status: 'implemented', stage: 'R1' },
+  // STORY-06.04 (SCR-06's Recalculate; architecture section 6 "Recalculate": A L): the Lead's and the Admin's own press, which is the same calculation as the Engineer's Calculate (one service, one path). Only the Lead and the Admin are
+  // listed, so an Engineer is refused 403 before the ID is looked at. The answer is the costs view (`costsSchema`), so it is in no Engineer's list and the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/recalculate', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-06.05 (SCR-06's Approve and lock; architecture section 6 "Approve": A L): the guard of an approval. Only the Lead and the Admin are listed, so an Engineer is refused 403 before the ID is looked at. Until STORY-06.06
+  // writes the approval, a request that passes the guard is the fixed 501 and nothing is written; every refusal is a fixed sentence that names the missing step and holds no figure, so the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/approve', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
   // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-06.03 (SCR-07; architecture section 6 "Cost details": A L). The six stages of one row with each formula, rate and working, for the Lead and the Admin alone: the page and the read. An Engineer
+  // is refused with the fixed 403 (the page: SCR-26 with HTTP 403) before either ID is looked at, and neither row is in any Engineer's list, so the cost scan calls both as routes an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/nodes/[nodeId]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-07' },
   // STORY-02.09 (SCR-15, the Last backup line). The Admin only (BR-004, AC-6): the page and the read. Both are read-only: the page has no control that starts, restores or deletes a
   // backup, and the API has GET and nothing else (the alert switch and the sender, `PUT /settings`, are story 09.02's). The rows it reads are `job_runs` (cost data is never in them), so the
   // cost scan covers both as routes an Engineer is refused.
@@ -294,9 +304,12 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },
 
-  // ---- Planned: Work -----------------------------------------------------------------------------------------------
-  { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-07' },
-  { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'planned', stage: 'R1', screen: 'SCR-10' },
+  // STORY-07.01 (SCR-10; architecture section 6 rows "Export" and "Export summary": A L). The Excel file and what the page shows before it, for the Lead and the Admin alone. An Engineer is refused with
+  // the fixed 403, and no file, before the ID is looked at (the page: SCR-26 with HTTP 403, before anything is read), and none of the three rows is in any Engineer's list, so the cost scan calls
+  // all of them as routes an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/export', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/export-summary', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-10' },
 
   // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
   // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------

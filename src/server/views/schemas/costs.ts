@@ -12,6 +12,10 @@ import { z } from 'zod';
  * **Figures only while `current`** (architecture section 4.8): in the states `none` and `out-of-date` every `figures` is `null` and so is `totals`. The count (H) is an input, so it stays.
  *
  * Every figure is full-precision decimal text, never a JavaScript number (ADR-005); the screen rounds it to two decimals.
+ *
+ * **BO is not a calculated figure** (STORY-06.06 AC-9, SQR-07 of AQP-321): `approval` is read from the estimate's latest `approvals` row that has not been removed, never through the figure state, so it is there
+ * in every state (clearing the calculated figures cannot change it) and `null` only before any approval. `calculationId` is the calculation the figures come from, for the approval's request: it is there only
+ * while the state is `current`, like every figure, and it is the only ID of the answer besides the parts'.
  */
 
 /** A stored decimal as text: digits, an optional point and digits, an optional sign. */
@@ -55,8 +59,40 @@ const lettersSchema = z.strictObject({
   approvedPrice: z.string().min(1),
 });
 
+/**
+ * The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). **Whether it is an override** (STORY-06.07 AC-3,
+ * FR-103): the calculated total (BL) the price was set against, as rupees and paise as the approval kept it, the flag, and the reason the Lead gave (`null` when none; always `null` unless the price is an
+ * override). They are the approval's own record, read from its row and never through the figure state, like the price. This answer is the Lead's and the Admin's: the route refuses an Engineer before it reads
+ * anything, so the reason and the total reach no Engineer (NFR-002, FR-011).
+ */
+const approvalSchema = z
+  .strictObject({
+    price: z.string().regex(/^\d+\.\d{2}$/),
+    approvedAt: z.iso.datetime(),
+    approverName: z.string().min(1),
+    calculatedTotal: z.string().regex(/^\d+\.\d{2}$/),
+    isOverride: z.boolean(),
+    reason: z.string().min(1).nullable(),
+  })
+  .refine((approval) => approval.isOverride || approval.reason === null, { message: 'A reason belongs to an override.', path: ['reason'] });
+
+/**
+ * The quantity warning of the calculation in view (STORY-06.10 AC-3; architecture section 4.3 "What the Lead sees"): who pressed Calculate or Recalculate and went ahead (their name now: the calculation's `created_by`
+ * is the acknowledgement), and each row that had 0 in QTY per Assy, by its part, Sl. No and name **as text at that moment**. No figure and no code. The time is the calculation's own, `calculatedAt`. It is there
+ * only while the state is `current` (AC-4), like every figure: while the figures are cleared the list may be stale, so it is not read at all.
+ */
+const warningSchema = z.strictObject({
+  madeBy: z.string().min(1),
+  rows: z
+    .array(z.strictObject({ nodeId: z.string().min(1), slNo: z.string().min(1), label: z.string() }))
+    .min(1)
+    .readonly(),
+});
+
 export const costsSchema = z.strictObject({
   state: z.enum(FIGURE_STATES),
+  /** The calculation the figures come from, while the state is `current`; `null` otherwise. The approval names it (`POST .../approve`, `calculationId`). */
+  calculationId: z.uuid().nullable(),
   /** When the calculation was made (ISO 8601, UTC); `null` while there is none. */
   calculatedAt: z.iso.datetime().nullable(),
   /** The number of the configuration version the calculation used; `null` while there is none. */
@@ -64,6 +100,10 @@ export const costsSchema = z.strictObject({
   letters: lettersSchema,
   nodes: z.array(costNodeSchema).readonly(),
   totals: totalsSchema.nullable(),
+  /** BO: the approved price and who approved it, or `null` before any approval. */
+  approval: approvalSchema.nullable(),
+  /** The quantity warning on the calculation the figures come from; `null` when there is none, and always `null` unless the state is `current` (AC-4). */
+  warning: warningSchema.nullable(),
 });
 
 export type CostsView = z.infer<typeof costsSchema>;

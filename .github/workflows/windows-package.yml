@@ -2,7 +2,7 @@
 #
 # Builds the Windows release zip on a Windows runner, installs it there with install.ps1, updates it with update.ps1, proves the rollback
 # with a release that is broken on purpose, and runs the Pester tests of the scripts. It is the test of 10.04, 10.05 and 10.11 on the target
-# operating system.
+# operating system. STORY-10.05 adds the weekly backup task, a backup, a clear and the proof that a replaced module is never loaded by the backup scripts.
 #
 # Where it sits (master's ruling DL-211, AC-9):
 #   - It is NOT a required check, and it sits OUTSIDE the fan-in job `Stages 1 to 11` of ci.yml. Branch protection is unchanged. It is
@@ -103,6 +103,34 @@ jobs:
           }
           "ACCUCUT_TOOLS=$directory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      # ---- A throwaway age key pair for this run (STORY-10.05) ----------------------------------------------------------------------
+      # The install is given the PUBLIC key (BACKUP_AGE_RECIPIENT); the private key stays in a file in the runner's temp folder, is masked in the log, is used only to
+      # decrypt the install's own backup in the assertions, and is deleted at the end. Nothing here is a real key and nothing of it is committed.
+      - name: Make a throwaway age key pair for the backups of this run
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $tools = Import-PowerShellDataFile -LiteralPath deploy/windows/tools.psd1
+          $zip = Join-Path $env:ACCUCUT_TOOLS $tools.Age.File
+          $folder = Join-Path $env:RUNNER_TEMP 'accucut-age-test'
+          New-Item -ItemType Directory -Path $folder -Force | Out-Null
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $folder)
+          $keygen = Get-ChildItem -LiteralPath $folder -Recurse -Filter 'age-keygen.exe' | Select-Object -First 1
+          if ($null -eq $keygen) { throw 'The age zip holds no age-keygen.exe.' }
+          $keyFile = Join-Path $env:RUNNER_TEMP 'accucut-age-key.txt'
+          # age-keygen prints a warning and the public key on standard error; Windows PowerShell 5.1 turns that into an error under 'Stop', so it is read as plain output here.
+          $ErrorActionPreference = 'Continue'
+          & $keygen.FullName -o $keyFile 2>$null
+          $keygenCode = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          if ($keygenCode -ne 0) { throw 'age-keygen failed.' }
+          $lines = @(Get-Content -LiteralPath $keyFile)
+          foreach ($line in $lines) { if ($line -like 'AGE-SECRET-KEY-*') { Write-Host "::add-mask::$($line.Trim())" } }
+          $public = ($lines | Where-Object { $_ -like '# public key: *' } | Select-Object -First 1) -replace '^# public key: ', ''
+          if ($public -notmatch '^age1[0-9a-z]{58}$') { throw 'age-keygen did not give a public key.' }
+          "ACCUCUT_AGE_KEY=$keyFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ACCUCUT_AGE_PUBLIC=$public" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       # ---- Package -----------------------------------------------------------------------------------------------------------
       - name: Build the release package (accucut-<tag>-win-x64.zip and its SHA-256)
         run: |
@@ -150,6 +178,7 @@ jobs:
             'ADMIN_EMAIL=ci-admin@example.test',
             "ADMIN_INITIAL_PASSWORD=$admin",
             "PG_SUPERUSER_PASSWORD=$new",
+            "BACKUP_AGE_RECIPIENT=$($env:ACCUCUT_AGE_PUBLIC)",
             'SMTP_AUTH_MODE=none'
           )
           [System.IO.File]::WriteAllText($values, ($lines -join "`r`n") + "`r`n")
@@ -226,6 +255,48 @@ jobs:
           # The step's exit code is the last native exit code (here the expected 1 of install.ps1): reset it.
           $global:LASTEXITCODE = 0
 
+      # The backup keeps 20 % of the disk free (the product rule, ADR-015 Amendment 3: a copy is made only if 20 % of the volume is still free afterwards). The hosted runner's
+      # C: drive is about 150 GB with about 25 GB free, which is below that. The runner's large toolchains that this job never uses are removed, and the job states how much
+      # is free. The rule itself is not changed and has no override for CI.
+      - name: Free space on drive C (remove the unused Android SDK and toolchains) and check that the backup's 20 percent rule can pass
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $drive = [System.IO.DriveInfo]::new('C')
+          Write-Host ("C: before: {0:N1} GB free of {1:N1} GB" -f ($drive.AvailableFreeSpace / 1GB), ($drive.TotalSize / 1GB))
+          $candidates = @('C:\Android', 'C:\Program Files (x86)\Android', $env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, $env:ANDROID_NDK_HOME, $env:ANDROID_NDK_ROOT)
+          foreach ($tool in 'CodeQL', 'Go', 'Ruby', 'PyPy', 'Java_Temurin-Hotspot_jdk') { $candidates += "C:\hostedtoolcache\windows\$tool" }
+          foreach ($folder in ($candidates | Where-Object { $_ } | Sort-Object -Unique)) {
+            if (-not (Test-Path -LiteralPath $folder -PathType Container)) { continue }
+            $item = Get-Item -LiteralPath $folder -Force
+            if ($item.LinkType) { continue }
+            & "$env:SystemRoot\System32\cmd.exe" /c rd /s /q "$folder" 2>&1 | Out-Null
+            Write-Host ("removed {0}: {1}" -f $folder, $(if (Test-Path -LiteralPath $folder) { 'not all of it' } else { 'gone' }))
+          }
+          $drive = [System.IO.DriveInfo]::new('C')
+          $freeGb = $drive.AvailableFreeSpace / 1GB
+          $needGb = ($drive.TotalSize * 0.20 + 4GB) / 1GB
+          Write-Host ("C: after: {0:N1} GB free of {1:N1} GB; the 20 % rule plus a 4 GB margin needs {2:N1} GB" -f $freeGb, ($drive.TotalSize / 1GB), $needGb)
+          if ($freeGb -lt $needGb) { throw ("C: has {0:N1} GB free; the backup's 20 % rule plus a 4 GB margin needs {1:N1} GB. Remove more of the runner's unused toolchains." -f $freeGb, $needGb) }
+          $global:LASTEXITCODE = 0
+
+      # The Task Scheduler operational log is off by default. It is switched on before the install so that a task that does not start leaves its reason (STORY-10.05).
+      - name: Switch on the Task Scheduler operational log (for the weekly backup task)
+        run: |
+          & wevtutil.exe set-log Microsoft-Windows-TaskScheduler/Operational /enabled:true
+          if ($LASTEXITCODE -ne 0) { Write-Host 'The operational log could not be switched on (diagnostics only).' }
+          $global:LASTEXITCODE = 0
+
+      # ADR-015 Amendment 3.2: a read-only export of the user rights BEFORE the install (secedit changes nothing), and the time the install begins. The install must add
+      # AccucutBackup's SID to "Log on as a batch job" and change nothing else; the removal at the end must give the policy back exactly as it was.
+      - name: Export the user rights before the install (secedit, read-only)
+        run: |
+          $before = Join-Path $env:RUNNER_TEMP 'rights-before.inf'
+          & "$env:SystemRoot\System32\secedit.exe" /export /areas USER_RIGHTS /cfg $before | Out-Null
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $before)) { throw 'secedit could not export the user rights.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "ACCUCUT_RIGHTS_BEFORE=$before"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value ('ACCUCUT_INSTALL_STARTED=' + (Get-Date).ToString('o'))
+          $global:LASTEXITCODE = 0
+
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
         run: |
@@ -239,21 +310,33 @@ jobs:
           Write-Host 'PASS  the tampered module next to the zip was never loaded.'
           $global:LASTEXITCODE = 0
 
-      - name: Assert the install (services, health, sign-in, permissions, no secret in a log)
+      - name: Assert the install (services, health, sign-in, permissions, the backup account, task, files and role, no secret in a log)
         run: |
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED -AfterInstall
+
+      # ---- Backup, clear and a replaced module (STORY-10.05; ADR-015 Amendments 2 and 3) ----------------------------------------------
+      # backup.ps1 -Reason release as an administrator (the call update.ps1 makes), more copies, clear-copies.ps1 with its answers on standard input (a wrong date
+      # removes nothing; the right one removes all but the newest 4 and leaves everything that is not provably its own), and a marker-writing module that the
+      # backup scripts must never load.
+      - name: Exercise backup.ps1 and clear-copies.ps1 on the real install (a backup, a clear, a replaced module)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $marker = Join-Path $env:RUNNER_TEMP 'accucut-tampered-backup-marker.txt'
+          & .\deploy\windows\ci\exercise-backup.ps1 -ValuesFile $env:ACCUCUT_VALUES -MarkerFile $marker
+          if (Test-Path -LiteralPath $marker) { throw 'A tampered module was loaded by a backup script.' }
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease $env:ACCUCUT_TAG -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
       # ---- Update and rollback (AC-3, AC-4) ----------------------------------------------------------------------------------
-      # `backup.ps1` is STORY-10.05's. Until it exists the update is run with -NoBackup, which the script warns about; the test of the backup step
-      # itself (a failed or missing backup stops the update before any change) is in update.Tests.ps1.
+      # The update takes a release backup first (backup.ps1 -Reason release, through the checked wrapper); a failed or missing backup stops the update before any
+      # change (update.Tests.ps1). Here the real backup runs.
       - name: Update to the second release (update.ps1)
         run: |
           $zip = (Resolve-Path "dist-u2\accucut-$($env:ACCUCUT_TAG)-u2-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup
+          & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip
           if ($LASTEXITCODE -ne 0) { throw "update.ps1 failed (exit code $LASTEXITCODE)." }
           $ErrorActionPreference = 'Stop'
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
           $releases = @(Get-ChildItem -LiteralPath 'C:\Accucut\releases' -Directory | Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host "Releases kept: $($releases -join ', ')"
           if ($releases.Count -ne 2) { throw "Only the current and the previous release should be kept, found: $($releases -join ', ')" }
@@ -271,7 +354,7 @@ jobs:
           $code = -1
           try {
             $ErrorActionPreference = 'Continue'
-            $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup 2>&1 | Out-String
+            $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip 2>&1 | Out-String
             $code = $LASTEXITCODE
           }
           finally {
@@ -284,19 +367,25 @@ jobs:
           foreach ($name in 'AccucutApp', 'AccucutWorker') {
             if ((Get-Service -Name $name).Status -ne 'Running') { throw "$name is not running." }
           }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
       - name: Update to a broken release, and see it rolled back (update.ps1)
         run: |
           $zip = (Resolve-Path "dist-bad\accucut-$($env:ACCUCUT_TAG)-bad-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -NoBackup -HealthTimeoutSeconds 40 2>&1 | Out-String
+          $output = & powershell.exe -NoProfile -File 'C:\Accucut\current\update.ps1' -ZipPath $zip -HealthTimeoutSeconds 40 2>&1 | Out-String
           $code = $LASTEXITCODE
           Write-Host $output
           $ErrorActionPreference = 'Stop'
           if ($code -eq 0) { throw 'The update to the broken release should have failed, and it did not.' }
           if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
-          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2"
+          & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
+
+      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
+      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. This is last among the steps that need the install.
+      - name: Remove the backup account, and see the policy as it was before the install
+        run: |
+          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
 
       # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
       # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.
@@ -314,6 +403,7 @@ jobs:
       - name: Show the install and update logs and the services' error logs (on failure only)
         if: ${{ failure() }}
         run: |
+          Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List LastRunTime, LastTaskResult
           foreach ($pattern in 'install-*.log', 'update-*.log', '*.err.log', '*.wrapper.log') {
             Get-ChildItem -LiteralPath 'C:\Accucut\logs' -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "===== $($_.Name)"
@@ -321,10 +411,54 @@ jobs:
             }
           }
 
-      - name: Delete the values file
+      # Why a task did not run: the right "Log on as a batch job" of the account, the failed logons (event 4625 names the reason), and the Task Scheduler's own events.
+      # Nothing here prints a secret: the password is held by Task Scheduler only.
+      - name: Why did the weekly backup task not run? (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-ScheduledTask -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List TaskName, State, @{ n = 'User'; e = { $_.Principal.UserId } }, @{ n = 'LogonType'; e = { $_.Principal.LogonType } }, @{ n = 'RunLevel'; e = { $_.Principal.RunLevel } }
+          Get-ScheduledTaskInfo -TaskName 'Accucut weekly backup' -ErrorAction SilentlyContinue | Format-List LastRunTime, LastTaskResult, NextRunTime, NumberOfMissedRuns
+          $user = Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue
+          if ($user) { Write-Host "AccucutBackup: enabled=$($user.Enabled) sid=$($user.SID.Value)" }
+          $rights = Join-Path $env:RUNNER_TEMP 'user-rights.inf'
+          & "$env:SystemRoot\System32\secedit.exe" /export /cfg $rights /areas USER_RIGHTS | Out-Null
+          if (Test-Path -LiteralPath $rights) { Get-Content -LiteralPath $rights | Where-Object { $_ -match 'SeBatchLogonRight|SeDenyBatchLogonRight' } }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625 } -MaxEvents 3 -ErrorAction SilentlyContinue | ForEach-Object { ($_.Message -split "`n" | Where-Object { $_ -match 'Account Name|Failure Reason|Status|Sub Status|Logon Type' }) -join ' | ' }
+          Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational' -MaxEvents 25 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'Accucut' } | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Message -replace '\s+', ' ')" }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          $global:LASTEXITCODE = 0
+
+      # Why a task that ran failed: run the same script as the same account in front of the log, so that its message is seen (the task discards it). The runner is thrown away
+      # after the job; the account gets a new random password here, held in memory only and never printed. Diagnostics only: this step runs on failure and changes nothing else.
+      - name: Why did the weekly backup fail? Run it as AccucutBackup and show what it says (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (-not (Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue)) { Write-Host 'No AccucutBackup account.'; $global:LASTEXITCODE = 0; return }
+          $plain = 'Zz9!' + [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+          $secure = ConvertTo-SecureString -String $plain -AsPlainText -Force
+          $set = @{ Name = 'AccucutBackup'; Password = $secure }
+          Set-LocalUser @set
+          $credential = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\AccucutBackup", $secure)
+          $out = Join-Path $env:RUNNER_TEMP 'backup-as-user.out.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'backup-as-user.err.txt'
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          try {
+            $p = Start-Process -FilePath $ps -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\Accucut\current\backup.ps1', '-Reason', 'weekly') -Credential $credential -WorkingDirectory $env:SystemRoot -RedirectStandardOutput $out -RedirectStandardError $err -Wait -PassThru -WindowStyle Hidden
+            Write-Host "backup.ps1 as AccucutBackup: exit code $($p.ExitCode)"
+          } catch { Write-Host "Start-Process failed: $($_.Exception.Message)" }
+          foreach ($file in $out, $err) { if (Test-Path -LiteralPath $file) { Write-Host "===== $file"; Get-Content -LiteralPath $file -Tail 40 } }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          & .\deploy\windows\ci\diagnose-backup-login.ps1 -ValuesFile $env:ACCUCUT_VALUES
+          foreach ($folder in 'C:\Accucut', 'C:\Accucut\config', 'C:\Accucut\backups', 'C:\Accucut\releases') { & icacls.exe $folder 2>&1 | Out-Host }
+          $global:LASTEXITCODE = 0
+
+      - name: Delete the values file and the throwaway private key
         if: ${{ always() }}
         run: |
           if ($env:ACCUCUT_VALUES -and (Test-Path -LiteralPath $env:ACCUCUT_VALUES)) { Remove-Item -LiteralPath $env:ACCUCUT_VALUES -Force }
+          if ($env:ACCUCUT_AGE_KEY -and (Test-Path -LiteralPath $env:ACCUCUT_AGE_KEY)) { Remove-Item -LiteralPath $env:ACCUCUT_AGE_KEY -Force }
 
       # The zip and its checksum hold code and tools only, no data and no setting (the package script refuses a .env file).
       - name: Keep the release package and the Pester results

@@ -7,7 +7,7 @@ import { createEstimateReviewService } from '@/server/services/estimate-review-s
 import { costsSchema } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
-import { CALCULATION_REVISION, createReviewWorld, REVIEW_CALCULATED_AT, REVIEW_CONFIGURATION_NUMBER, REVIEW_ESTIMATE_ID, REVIEW_FIELDS } from '../support/review-world';
+import { CALCULATION_REVISION, createReviewWorld, INVENTED_CALCULATION_ID, nodeIdOfRow, REVIEW_CALCULATED_AT, REVIEW_CONFIGURATION_NUMBER, REVIEW_ESTIMATE_ID, REVIEW_FIELDS } from '../support/review-world';
 import { seedConfig } from '../support/seed-config';
 
 import { QUANTITY_CASES, type QuantityCase } from './quantity/quantity-cases';
@@ -226,6 +226,105 @@ describe('AC-5: an Engineer is refused before anything is read', () => {
     const world = createReviewWorld({ rows: quantityCase.rows, bl: quantityCase.bl });
     await expect(world.service.getCosts(LEAD, '00000000-0000-4000-8000-00000000dead')).rejects.toBeInstanceOf(NotFoundError);
     expect(world.reads.nodes.calls).toEqual([]);
+    expect(world.reads.figures.calls).toEqual([]);
+  });
+});
+
+describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, never through the figure state', () => {
+  const CE1 = caseOf('CE-1');
+  const approval = { price: '12600.00', approverName: 'Invented Kiran' };
+
+  it('AQP-321 AC-4: with an approval, clearing the calculated figures leaves BO as it was and clears BL', async () => {
+    const approved = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval });
+    const before = await approved.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(before.state).toBe('current');
+    expect(before.totals?.totalPrice).toBe(CE1.bl);
+    // The same estimate with an input changed since: the figures are cleared, the approval is not.
+    const cleared = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval, inputsRevision: CALCULATION_REVISION + 1 });
+    const after = await cleared.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(after.state).toBe('out-of-date');
+    expect(after.totals).toBeNull();
+    expect(after.approval).toEqual(before.approval);
+    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran', calculatedTotal: '12600.00', isOverride: false, reason: null });
+    // BL is cleared, and no calculated figure was read to say so.
+    expect(cleared.reads.figures.calls).toEqual([]);
+    expect(cleared.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
+  });
+
+  it('STORY-06.07 AC-3: an override\'s BO carries the total it was set against, the flag and the reason, in every state of the figures, and the answer still passes the strict schema', async () => {
+    const override = { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' };
+    for (const options of [{}, { inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
+      const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options, approval: override }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+      expect(costs.approval).toMatchObject({ price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' });
+    }
+    const noReason = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: { price: override.price, calculatedTotal: override.calculatedTotal, isOverride: true } }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(noReason.approval).toMatchObject({ isOverride: true, reason: null });
+  });
+
+  it('STORY-06.07 AC-7 (NFR-002, FR-011): an Engineer is refused before the approvals are read, so the reason and the total never reach one', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' } });
+    await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(world.reads.approvals.calls).toEqual([]);
+  });
+
+  it('BO is there when no calculation is linked at all, and is null before any approval, in every state', async () => {
+    const neverCalculated = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, calculated: false, approval });
+    expect((await neverCalculated.service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).approval?.price).toBe('12600.00');
+    for (const options of [{}, { inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
+      expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).approval).toBeNull();
+    }
+  });
+
+  it('the calculation ID is in the answer only while the figures are current', async () => {
+    const current = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(current.calculationId).toBe(INVENTED_CALCULATION_ID);
+    for (const options of [{ inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
+      expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).calculationId).toBeNull();
+    }
+  });
+
+  it('an Engineer is refused before the approvals are read, as before everything else', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval });
+    await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(world.reads.approvals.calls).toEqual([]);
+  });
+});
+
+describe('STORY-06.10 AC-3, AC-4, AC-6: the quantity warning of the calculation in view', () => {
+  // CE-1: rows 1 (H 0), 1.1 (H 6) and 1.1.1 (H 24): the item's own 0 is the one warned row.
+  const CE1 = caseOf('CE-1');
+  const warned = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
+
+  it('AC-3: a current calculation with warnings gives who went ahead and each warned row (part, Sl. No and name as text), and the calculation\'s own time', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, madeBy: 'Invented Priya' }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('current');
+    expect(costs.warning).toEqual({ madeBy: 'Invented Priya', rows: [{ nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }] });
+    expect(costs.calculatedAt).toBe(REVIEW_CALCULATED_AT.toISOString());
+  });
+
+  it('AC-3: the code of a warning is not passed on, and a calculation made without warnings has none', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned }).service.getCosts(ADMIN, REVIEW_ESTIMATE_ID);
+    expect(JSON.stringify(costs.warning)).not.toContain('QTY_ZERO');
+    expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).warning).toBeNull();
+  });
+
+  it('AC-4: while the figures are cleared (`out-of-date`) there is no warning, and the record is not read to say so', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, inputsRevision: CALCULATION_REVISION + 1 });
+    const costs = await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('out-of-date');
+    expect(costs.warning).toBeNull();
+    expect(world.reads.figures.calls).toEqual([]);
+  });
+
+  it('AC-4: while nothing was calculated (`none`) there is no warning either', async () => {
+    const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned, calculated: false }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(costs.state).toBe('none');
+    expect(costs.warning).toBeNull();
+  });
+
+  it('AC-6 (NFR-002): an Engineer is refused before the record, and so its warnings, is read', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, warnings: warned });
+    await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
     expect(world.reads.figures.calls).toEqual([]);
   });
 });

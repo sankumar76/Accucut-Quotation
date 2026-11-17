@@ -123,6 +123,20 @@ export interface FigureBasis {
 export interface ReviewFigures {
   readonly productValues: ProductValues;
   readonly rows: ReadonlyArray<{ readonly nodeId: string; readonly outputs: StoredValues }>;
+  /** The warnings the person acknowledged for this calculation (STORY-06.10), as text; `[]` for none. Read with the figures, so only while the state is `current` (AC-4). */
+  readonly warnings: ReadonlyArray<StoredWarning>;
+  /** The name now of the person who pressed Calculate or Recalculate: with the time, the acknowledgement of the warnings. */
+  readonly madeByName: string;
+}
+
+/**
+ * What the cost details of one row are worked out from (STORY-06.03): the row's own stored inputs and outputs, and the master snapshot of the calculation (the rates, the materials and the exchange rates it
+ * used, with their names then). Nothing of another row, and neither the customer's name nor the product totals are selected.
+ */
+export interface RowWorkingRecord {
+  readonly masterSnapshot: MasterSnapshot;
+  readonly inputs: StoredValues;
+  readonly outputs: StoredValues;
 }
 
 export interface CalculationRepository {
@@ -130,13 +144,35 @@ export interface CalculationRepository {
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
-  /** The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. */
-  findFigureBasis(estimateId: string): Promise<FigureBasis | null>;
+  /**
+   * The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. Pass `tx` to read it in the caller's transaction (STORY-06.05: an approval
+   * reads it under the estimate's row lock, on the one connection it already holds); without it the read is a plain one.
+   */
+  findFigureBasis(estimateId: string, tx?: Transaction): Promise<FigureBasis | null>;
   /**
    * The figures the estimate review shows, of the calculation with this ID: the product's values and every row's outputs, selected column by column (neither the master snapshot nor a row's
    * inputs are read). Null for an unknown ID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
    */
   findReviewFigures(calculationId: string): Promise<ReviewFigures | null>;
+  /**
+   * The stored working of one row of a calculation (STORY-06.03): its inputs and outputs, and the master snapshot, selected column by column. Null for an unknown calculation, a row it does not hold,
+   * or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   */
+  findRowWorking(calculationId: string, nodeId: string): Promise<RowWorkingRecord | null>;
+  /**
+   * The calculated total (BL) of one calculation as decimal text, selected on its own (STORY-06.06: the approval keeps it beside the price and pre-fills nothing else): neither a row nor the snapshot is
+   * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
+   */
+  findCalculatedTotal(calculationId: string, tx?: Transaction): Promise<string | null>;
+}
+
+/**
+ * What an approval reads of the calculation repository: the basis of the figure state and the calculated total (STORY-06.06). A named interface and not a `Pick`, so the audit-transaction check sees a
+ * repository type, declared in this directory, as the receiver of the reads the approval's audit entry follows.
+ */
+export interface CalculationApprovalReads {
+  readonly findFigureBasis: CalculationRepository['findFigureBasis'];
+  readonly findCalculatedTotal: CalculationRepository['findCalculatedTotal'];
 }
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -145,6 +181,9 @@ const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 const ROWS_PER_INSERT = 1_000;
 
 const WARNINGS = z.array(z.unknown());
+
+/** The warnings of a record as the review reads them: the four texts `insertCalculation` keeps, and no other key. A value of another shape is a fault in the data, not a half-drawn notice. */
+const storedWarningsSchema = z.array(z.strictObject({ code: z.string(), nodeId: z.string(), slNo: z.string(), label: z.string() }));
 
 /** Builds the calculation methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createCalculationRepository(db: PrismaClient): CalculationRepository {
@@ -213,10 +252,10 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         };
       }),
 
-    findFigureBasis: (estimateId) =>
+    findFigureBasis: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         if (!isUuid(estimateId)) return null;
-        const found = await db.estimate.findUnique({
+        const found = await clientFor(db, tx).estimate.findUnique({
           where: { id: estimateId },
           select: { inputsRevision: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
         });
@@ -228,12 +267,41 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(calculationId)) return null;
         const found = await db.calculation.findUnique({
           where: { id: calculationId },
-          select: { productValues: true, rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] } },
+          select: {
+            productValues: true,
+            warnings: true,
+            creator: { select: { name: true } },
+            rows: { select: { nodeId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
+          },
         });
         if (found === null) return null;
         return {
           productValues: productValuesSchema.parse(found.productValues),
           rows: found.rows.map((row) => ({ nodeId: row.nodeId, outputs: storedValuesSchema.parse(row.outputs) })),
+          warnings: storedWarningsSchema.parse(found.warnings),
+          madeByName: found.creator.name,
+        };
+      }),
+
+    findCalculatedTotal: (calculationId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await clientFor(db, tx).calculation.findUnique({ where: { id: calculationId }, select: { productValues: true } });
+        return found === null ? null : productValuesSchema.parse(found.productValues).totalPrice;
+      }),
+
+    findRowWorking: (calculationId, nodeId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId) || !isUuid(nodeId)) return null;
+        const found = await db.calculationRow.findUnique({
+          where: { calculationId_nodeId: { calculationId, nodeId } },
+          select: { inputs: true, outputs: true, calculation: { select: { masterSnapshot: true } } },
+        });
+        if (found === null) return null;
+        return {
+          masterSnapshot: masterSnapshotSchema.parse(found.calculation.masterSnapshot),
+          inputs: storedValuesSchema.parse(found.inputs),
+          outputs: storedValuesSchema.parse(found.outputs),
         };
       }),
   };

@@ -53,12 +53,15 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/shared/account-menu-panel.tsx',
       'src/components/features/estimate-workspace/change-customer-dialog.tsx',
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
-      'src/components/features/estimate-workspace/quantity-warning-dialog.tsx',
+      // The quantity-warning dialog (STORY-05.12, STORY-06.10): the one AlertDialog of the Engineer's SCR-05 and the Lead's SCR-06 is the shared view; each page's own file wraps it and is lazy.
+      'src/components/shared/quantity-warning-dialog.tsx',
       'src/components/features/estimate-workspace/parts-tree-drawer.tsx',
       // The multi-select of the surface treatments (STORY-05.06) holds a Popover; it is reached only through part-fields.tsx, which is lazy.
       'src/components/features/estimate-workspace/surface-treatments.tsx',
       // "Leave without saving?" (STORY-05.08): an AlertDialog, reached only through leave-guard.tsx, which is lazy.
       'src/components/features/estimate-workspace/leave-dialog.tsx',
+      // "Approve and lock" (STORY-06.06): a Dialog, fetched on the first press of the Approve button, which imports its props as a type only.
+      'src/components/features/estimate-approve/approve-dialog.tsx',
     ]) {
       expect(holders, name).toContain(name);
     }
@@ -76,6 +79,10 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/calculate-bar.tsx',
       // The warning on leaving holds the AlertDialog of STORY-05.08 with a plain import, so the guard must stay lazy.
       'src/components/features/estimate-workspace/leave-guard.tsx',
+      // The dialog of "Approve and lock" is fetched on the first press (STORY-06.06, ADR-016).
+      'src/components/features/estimate-approve/approve-dialog.tsx',
+      // The Lead's quantity warning is fetched when the server answers a Recalculate with the 409 (STORY-06.10, ADR-016).
+      'src/components/features/estimate-recalculate/recalculate-warning-dialog.tsx',
     ]) {
       expect(lazy, name).toContain(name);
     }

@@ -99,6 +99,26 @@ export function toDisplayForm(internalForm: string, context: ReferenceContext): 
   return rewrite(internalForm, tokens, (reference, token) => displayName(reference, context, token));
 }
 
+/** The multiplication sign a working line prints in place of `*`, so that it reads as the arithmetic a Lead repeats by hand (UX SCR-07). */
+const TIMES = '×';
+
+/**
+ * Internal form to a **working line** (STORY-06.03; FR-058): each operand is replaced by the text `textOf` gives for it (a value, as it was used), and `*` is printed as the
+ * multiplication sign; every other character (brackets, operators, numbers, function names, spaces) is copied unchanged. Throws `FormulaError` if the formula cannot be read. Which value an
+ * operand has, and how it is rounded, is the caller's: this function decides nothing about either.
+ */
+export function toWorkingForm(internalForm: string, textOf: (reference: FormulaReference) => string): string {
+  let result = '';
+  let cursor = 0;
+  for (const token of tokenize(internalForm, { form: 'internal' })) {
+    result += internalForm.slice(cursor, token.start);
+    if (token.kind === 'reference') result += textOf(token.reference);
+    else result += token.kind === 'symbol' && token.symbol === '*' ? TIMES : internalForm.slice(token.start, token.end);
+    cursor = token.end;
+  }
+  return result + internalForm.slice(cursor);
+}
+
 /** Every reference in a stored formula, in order of appearance, repeats included. Throws `FormulaError` if it cannot be read. */
 export function extractReferences(internalForm: string): FormulaReference[] {
   const references: FormulaReference[] = [];

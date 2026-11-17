@@ -13,9 +13,14 @@ import { createMastersService, type MastersService } from '../../src/server/serv
 import type { CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
+import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
+import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
+import { buildWorkbook } from '../../src/server/export/build-workbook';
+import type { ExportRepository } from '../../src/server/repositories/export-repository';
+import { createExportService, type ExportService } from '../../src/server/services/export-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
 
@@ -118,10 +123,18 @@ export interface SessionHarness {
   readonly calculationAudit: AuditSink;
   /** The in-memory calculation records behind `calculationService`, which a test reads (what was stored) and clears (between tests). */
   readonly calculationWorld: FakeCalculationWorld;
+  /** The approval's guard (STORY-06.05) over the same estimates and calculation records (`getApprovalService` in the composition mock). It writes nothing in any case, so a valid call of the recipe is a 409 at every state. */
+  readonly approvalService: ApprovalService;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
-  /** The pieces `estimateReviewService` reads through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
+  readonly costDetailsService: CostDetailsService;
+  /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
+  readonly exportService: ExportService;
+  /** The pieces `exportService` reads through, for a test that spies on what a refused caller causes to be read. */
+  readonly exportReads: ExportRepository & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
   readonly estimateWorld: FakeEstimateWorld;
   /** The attempt counters behind `userService` and `accountService`, which a test can clear between cases. */
@@ -235,21 +248,61 @@ export function createSessionHarness(): SessionHarness {
     storage: { calculations: calculationWorld.repository, estimates: calculationWorld.estimates, transactions: calculationWorld.transactions },
     workflow: { nodes: estimateWorld.nodeRepository, transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // The approval's guard (STORY-06.05) over the same world: the lock of the estimate, the basis of its figure state and the transactions that put a record back when one throws.
+  // From STORY-06.06 it also writes: the estimate's move (`transition` of the estimate service, in the same transaction), the approval row (the fake rolls it back with the transaction) and the audit entry.
+  const approvalService = createApprovalService({
+    estimates: calculationWorld.estimates,
+    calculations: calculationWorld.repository,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
     findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
   const estimateReviewService = createEstimateReviewService({
     calculations: reviewReads,
+    approvals: reviewReads,
     nodes: reviewReads,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
+  // The cost details of a row (STORY-06.03) over the same pieces.
+  const costDetailsService = createCostDetailsService({
+    calculations: reviewReads,
+    nodes: reviewReads,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+  });
+
+  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  const exportReads = {
+    findHeader: (estimateId: string) => {
+      const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
+      if (estimate === undefined) return Promise.resolve(null);
+      const customer = masters.customers.find((candidate) => candidate.id === estimate.customerId);
+      return Promise.resolve({ code: estimate.code, customerName: customer?.name ?? null });
+    },
+    listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
+  };
+  const exportService = createExportService({
+    header: exportReads,
+    nodes: exportReads,
+    configuration: { current: () => Promise.resolve(reviewVersion) },
+    build: buildWorkbook,
+    clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
+  });
+
   return {
     estimateReviewService,
+    costDetailsService,
+    exportService,
+    exportReads,
     reviewReads,
     calculationAudit,
     users,
@@ -262,6 +315,7 @@ export function createSessionHarness(): SessionHarness {
     estimateService,
     calculationService,
     calculationWorld,
+    approvalService,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     jobRuns,

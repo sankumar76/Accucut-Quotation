@@ -51,6 +51,8 @@ const ENGINEER_VIEWS: ReadonlyArray<string> = [
 const REPOSITORIES = {
   allowed: ['user-repository', 'database-errors', 'transaction'],
   blocked: [
+    // STORY-06.06 (NFR-002): the approvals table holds the Approved Quote Price (BO), the calculated total and who approved it. Restricted in full, so no Engineer view may import it.
+    'approval-repository',
     'audit-repository',
     // STORY-03.05 (AC-4, NFR-002): every column of the calculation record is cost data (calculations and calculation_rows are Restricted, architecture section 5.1).
     'calculation-repository',
@@ -59,6 +61,8 @@ const REPOSITORIES = {
     'decimal-text',
     'estimate-node-repository',
     'estimate-repository',
+    // STORY-07.01: the task code and the customer's name of an estimate, for the name of its export file. Nothing an Engineer view has a use for.
+    'export-repository',
     // STORY-02.07: the open estimates that use a customer or a material, read for the delete guard of the Admin's masters. No Engineer view needs it.
     'estimate-use',
     'exchange-rate-repository',
@@ -81,6 +85,8 @@ const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
     'account-service',
+    // STORY-06.05 (NFR-002): the approval's guard reads the calculation basis under the estimate's lock, for the Lead and the Admin only; from STORY-06.06 it also holds the approved price.
+    'approval-service',
     'audit-cursor',
     'audit-events',
     'audit-secrets',
@@ -91,12 +97,16 @@ const SERVICES = {
     'calculation-service',
     'config-read-service',
     'config-service',
+    // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
+    'cost-details-service',
     'customer-service',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
     'estimate-review-service',
     'estimate-service',
+    // STORY-07.01 (AC-3, NFR-002): the Excel export builds the file of the worksheet's layout (its figures from STORY-07.02), for the Lead and the Admin only.
+    'export-service',
     // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
     'image-service',
     'exchange-rate-service',
@@ -117,7 +127,6 @@ const SERVICES = {
 
 /** Files that do not exist yet. The rule refuses them as well, because it lists what is allowed, not what is forbidden. */
 const FUTURE_IMPORTS: ReadonlyArray<string> = [
-  '@/server/repositories/approval-repository',
   '@/server/repositories/customer-rate-repository',
   '../repositories/master-repository',
   '../../server/repositories/calculation-repository',
@@ -145,12 +154,33 @@ const CONTAINER_AND_BARREL_IMPORTS: ReadonlyArray<string> = [
  * The contract of `GET /estimates/{id}/costs` (STORY-06.02 AC-4, AC-5): every figure of an estimate. The lint refuses it to an Engineer view by name (the other schema files are refused only through
  * the barrel), as a static import and as `import()`, in the two spellings a view would use. `lib/estimate/figure-state` holds only counts and stays allowed.
  */
-const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = ['@/server/views/schemas/costs', './schemas/costs', '../views/schemas/costs'];
+const COSTS_SCHEMA_IMPORTS: ReadonlyArray<string> = [
+  '@/server/views/schemas/costs',
+  './schemas/costs',
+  '../views/schemas/costs',
+  // STORY-06.03 (AC-8, NFR-002): the contract of `GET /estimates/{id}/nodes/{nodeId}/costs`, which holds the formulas, rates and calculated costs of a row.
+  '@/server/views/schemas/node-costs',
+  './schemas/node-costs',
+  '../views/schemas/node-costs',
+  // STORY-07.01 (AC-3, NFR-002): the contracts of the Excel file and its summary.
+  '@/server/views/schemas/export',
+  './schemas/export',
+  '../views/schemas/export',
+];
 
 const FORMULA_IMPORTS: ReadonlyArray<string> = ['@/lib/formula', '@/lib/formula/evaluator', '../../lib/formula', '../../lib/formula/plan'];
 
 /** The calculated row outputs and the calculator that makes them (STORY-03.03 AC-7). Other modules of `lib/estimate` hold nothing Restricted. */
-const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = ['@/lib/estimate/row-outputs', '@/lib/estimate/row-calculator', '@/lib/estimate/product-totals', '../../lib/estimate/row-outputs', '../../lib/estimate/product-totals'];
+const ROW_OUTPUT_IMPORTS: ReadonlyArray<string> = [
+  '@/lib/estimate/row-outputs',
+  '@/lib/estimate/row-calculator',
+  '@/lib/estimate/product-totals',
+  '../../lib/estimate/row-outputs',
+  '../../lib/estimate/product-totals',
+  // STORY-06.03 (AC-8, NFR-002): the working of a stored row, with its formulas, rate values and calculated costs.
+  '@/lib/estimate/cost-working',
+  '../../lib/estimate/cost-working',
+];
 
 const PRISMA_IMPORTS: ReadonlyArray<string> = ['@prisma/client', '../../generated/prisma/client'];
 
@@ -288,23 +318,35 @@ describe('every repository and service file is classed, and the lint agrees with
  * classed here instead. A job that reads the database is a service in all but name, so a job is allowed to exist only if it takes no repository, service, the
  * container, the formula engine or the database driver: `log-prune` reads and deletes log files and holds no cost data, and its log lines hold counts only.
  * A new job file fails this test until someone classes it, and a job that needs the data layer has to be classed (and reviewed) as the service it is.
+ *
+ * `backup-watch` (STORY-10.05) reads and writes `job_runs`, which holds the record of the backups and the free space of the disk: Internal data, no cost or rate. It reaches the
+ * database only through a store that the worker gives it as a parameter (`takesItsStoreByInjection`), so the job file itself imports no repository, service or driver, and a test
+ * can fix the clock and stub both the store and `statfs`. What the store may do is decided where it is built (`src/server/repositories/job-run-repository.ts`).
  */
-const JOBS = { holdsNoData: ['log-prune'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch'] } as const;
+const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
 
 describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
   it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
-    expect(filesIn('src/server/jobs').sort()).toEqual([...JOBS.holdsNoData].sort());
+    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS].sort());
   });
 
-  it.each(JOBS.holdsNoData)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
+  it.each(ALL_JOBS)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
     const source = readFileSync(`${ROOT}src/server/jobs/${job}.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
     expect(specifiers.length).toBeGreaterThan(0);
     for (const specifier of specifiers) {
       expect(specifier, `${job} imports ${specifier}`).not.toMatch(/repositories|services|composition|@\/lib\/formula|lib\/formula|@prisma\/client|generated\/prisma|\/views\//);
     }
-    // It never opens a file to read it: only lstat, readdir and unlink.
+    // It never opens a file to read it: only lstat, readdir, unlink and statfs.
     expect(source).not.toMatch(/readFile|createReadStream|open\(/);
+  });
+
+  it('backup-watch takes only Node, node-cron and one plain lib module, and its row holds figures of the disk and nothing about an estimate', () => {
+    const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
+    const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
+    expect(specifiers).toEqual(['../../lib/settings/backup-status', 'node-cron', 'node:fs/promises']);
+    expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });
 

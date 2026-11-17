@@ -1,16 +1,29 @@
+import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
+import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
-import { FigureTiles } from './figure-tiles';
-import { ReviewActions } from './review-actions';
+import { FigureTiles, type ApprovedTileView } from './figure-tiles';
+import { warnedNodeIds } from './quantity-tag';
+import { approveOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
-import { CLEARED_NOTICE_BODY, CLEARED_NOTICE_TITLE, NOT_CALCULATED_NOTICE, REVIEW_CUSTOMER_LABEL, REVIEW_NO_CUSTOMER } from './review-texts';
+import { WarningNotice } from './warning-notice';
+import {
+  APPROVED_NOTICE_BODY,
+  APPROVED_NOTICE_TITLE_PLAIN,
+  approvedNoticeTitle,
+  CLEARED_NOTICE_BODY,
+  CLEARED_NOTICE_TITLE,
+  NOT_CALCULATED_NOTICE,
+  REVIEW_CUSTOMER_LABEL,
+  REVIEW_NO_CUSTOMER,
+} from './review-texts';
 
 /**
  * SCR-06 "Estimate review" (STORY-06.02; UX spec SCR-06), what a Lead or an Admin sees at `/estimates/<code>`: the task's header and customer, the notice of the state, the BL, BN and BO tiles, the parts
@@ -19,20 +32,50 @@ import { CLEARED_NOTICE_BODY, CLEARED_NOTICE_TITLE, NOT_CALCULATED_NOTICE, REVIE
  *
  * **Restricted** (NFR-002): every file in this folder is for the Lead and the Admin. None is a client component, so none is ever sent to the browser as code, and none is imported by the Engineer's
  * page, which loads this folder with a dynamic `import()` only on the Lead's and the Admin's branch (`tests/unit/estimate-review-architecture.test.ts`).
+ *
+ * **The one script is the Calculate or Recalculate button** (STORY-06.04), in its own folder (`estimate-recalculate`) and as small as it can be (NFR-009, ADR-016). It holds no figure, and the root of the review is
+ * the `group/review` that lets the tiles show a skeleton while that button is busy, by CSS alone.
  */
 
 export interface EstimateReviewProps {
   readonly header: WorkspaceHeaderView;
+  /** The estimate's ID, for the Recalculate button's request (STORY-06.04). */
+  readonly estimateId: string;
   readonly customer: { readonly id: string; readonly name: string } | null;
   readonly costs: CostsView;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
 }
 
-export function EstimateReview({ header, customer, costs, calculatedAt }: EstimateReviewProps) {
-  const { state, letters, nodes, totals } = costs;
+/** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
+function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | null }) {
   return (
-    <>
+    <div id={APPROVED_NOTICE_ID} tabIndex={-1} className="rounded-md">
+      <Notice tone="success" title={approval === null ? APPROVED_NOTICE_TITLE_PLAIN : approvedNoticeTitle(approval.approvedAtLabel, approval.approverName)}>
+        {APPROVED_NOTICE_BODY}
+      </Notice>
+    </div>
+  );
+}
+
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt }: EstimateReviewProps) {
+  const { state, letters, nodes, totals } = costs;
+  // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
+  const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
+  // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
+  const approval: ApprovedTileView | null =
+    costs.approval === null
+      ? null
+      : {
+          price: costs.approval.price,
+          approverName: costs.approval.approverName,
+          approvedAtLabel: formatIst(new Date(costs.approval.approvedAt)),
+          calculatedTotal: costs.approval.calculatedTotal,
+          isOverride: costs.approval.isOverride,
+          reason: costs.approval.reason,
+        };
+  return (
+    <div className="group/review contents">
       <WorkspaceHeader view={header} />
       <Card>
         <CardContent>
@@ -52,13 +95,18 @@ export function EstimateReview({ header, customer, costs, calculatedAt }: Estima
           {CLEARED_NOTICE_BODY}
         </Notice>
       ) : null}
-      <FigureTiles state={state} letters={letters} totals={totals} />
-      <ReviewTree state={state} letters={letters} nodes={nodes} />
-      {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} /> : null}
+      {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
+      <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
+      <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
+      <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
+      {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <ReviewActions
+        estimateId={estimateId}
         state={state}
+        status={header.status}
+        approve={approveOffer(header.status, costs)}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />
-    </>
+    </div>
   );
 }

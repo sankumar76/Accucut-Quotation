@@ -9,10 +9,10 @@
     app\        the Next.js standalone server (server.js, its node_modules, .next\static, public) and bootstrap-admin.mjs
     worker\     main.mjs, the worker bundled into one file
     migrate\    prisma\ (schema and migrations), prisma.config.mjs, ensure-seed-version.mjs, and node_modules\ holding only the Prisma CLI and what it needs
-    sql\        create-roles.psql, the one SQL source of the two database roles
+    sql\        create-roles.psql, the one SQL source of the three database roles
     bin\        winsw.exe (WinSW 2.12.0), age.exe, age-keygen.exe, SHA256SUMS.txt, the licences
     services\   the WinSW service files
-    install.ps1, update.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
+    install.ps1, update.ps1, backup.ps1, clear-copies.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
 
   WinSW and age are checked against the SHA-256 pinned in deploy\windows\tools.psd1 before they go in. The script stops if the package would hold a
   .env file or any other settings file.
@@ -184,6 +184,8 @@ function New-AccucutPackage {
     Copy-PackageFolder -Source (Join-Path $repo '.next\static') -Destination (Join-Path $app '.next\static')
     if (Test-Path -LiteralPath (Join-Path $repo 'public')) { Copy-PackageFolder -Source (Join-Path $repo 'public') -Destination (Join-Path $app 'public') }
     New-EsbuildBundle -Entry 'scripts/bootstrap-admin.ts' -OutFile (Join-Path $app 'bootstrap-admin.mjs') -External @('@node-rs/argon2')
+    # The export runs in its own thread, and Next.js does not bundle a thread's entry: the server looks for the file at `.next\export-worker.mjs` under its own folder (ADR-012, STORY-07.01 AC-5).
+    New-EsbuildBundle -Entry 'src/worker/export-thread.ts' -OutFile (Join-Path $app '.next\export-worker.mjs')
 
     # worker
     Write-Host 'Package: worker'
@@ -247,7 +249,7 @@ function New-AccucutPackage {
     # scripts, service files, templates
     Write-Host 'Package: scripts'
     $windows = Join-Path $repo 'deploy\windows'
-    foreach ($file in 'install.ps1', 'update.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
+    foreach ($file in 'install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
         Copy-Item -LiteralPath (Join-Path $windows $file) -Destination (Join-Path $stage $file)
     }
     Copy-PackageFolder -Source (Join-Path $windows 'services') -Destination (Join-Path $stage 'services')
