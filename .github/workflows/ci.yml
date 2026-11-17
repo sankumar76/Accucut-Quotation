@@ -524,7 +524,18 @@ jobs:
         run: |
           # The runner size goes to the log, so the four workers can be checked against it (AQP-199, test strategy 10.5).
           echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
-          npx playwright test --shard="${SHARD_INDEX}/${SHARD_TOTAL}"
+          npx playwright test estimate-picture --repeat-each=6 --workers=4 || true
+
+      # MEASUREMENT ONLY (AQP-340): the picture spec alone, repeated, with the traces of the failed attempts. Not for merge.
+      - name: "Measurement: upload traces"
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: traces-shard-${{ matrix.shard }}
+          path: |
+            test-results/*
+          retention-days: 3
+          if-no-files-found: ignore
 
   # ---- The required check (AQP-208, test strategy sections 10.3 and 10.5) -----------------------------------------
   # The fan-in job. Its name is the required status check on master and must not change (the nightly CI-time step also

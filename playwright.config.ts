@@ -75,7 +75,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${DEV_PORT}`,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
   },
   projects: [
     // Creates the invented E2E users in the database and saves a signed-in Lead's browser state.
