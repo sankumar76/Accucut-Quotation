@@ -94,6 +94,10 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
 
 test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
   test('AC-4: -1, 1.234 and abc are refused under the field with the words of the rule and the typed text is kept; 12.5 is saved as 12.50 and survives a reload; a blank is saved too', async ({ page }, testInfo) => {
+    // One of three tests marked for AQP-340 part 2 (DL-232 M3): the heaviest test of this file by what it does (three refused entries, two saves, two reloads of the form), and it ran out of its 30 s once
+    // (`toBeVisible` on `form[data-part-form]` after the reload, run 44078137874, tablet shard). Measured (CI, Stage 12): tablet 21.7 s and 22.0 s (run 44053813502 attempts 1 and 2), 27.1 s and 30.1 s (failed)
+    // in run 44078137874; desktop 13.9 to 28.8 s and mobile 17.9 to 20.1 s in the same runs. Three times the default, for this test only.
+    test.slow();
     await openForm(page, testInfo);
     const length = control(page, 'J');
     for (const typed of ['-1', '1.234', 'abc']) {
