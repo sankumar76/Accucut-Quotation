@@ -254,7 +254,9 @@ test.describe('AC-2, AC-5, AC-6: the server judges again and serves the picture 
   test('the server refuses a wrong type with 415 and a large picture with 413, by content and by size, and a body over 256 KB with 413; nothing is stored', async ({ page }, testInfo) => {
     const owner = await open(page, testInfo);
     const put = (name: string, mimeType: string, bytes: Uint8Array) =>
-      page.request.put(ownerRoute(owner), { headers: { origin: DEVELOPMENT_URL }, multipart: { file: { name, mimeType, buffer: Buffer.from(bytes) } } });
+      // `maxRetries` repeats the call only if the connection is reset. The server refuses a body over its cap before reading it (413), and a client still sending the rest can see the connection reset first (AQP-340);
+      // the refusal asserted below is the server's answer to the repeat.
+      page.request.put(ownerRoute(owner), { headers: { origin: DEVELOPMENT_URL }, multipart: { file: { name, mimeType, buffer: Buffer.from(bytes) } }, maxRetries: 3 });
     for (const [name, type, bytes] of [
       ['notes.png', 'image/png', PLAIN_TEXT],
       ['logo.svg', 'image/svg+xml', SVG_TEXT],
