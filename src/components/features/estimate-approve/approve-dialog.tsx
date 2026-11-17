@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CALCULATION_CHANGED_CODE, CALCULATION_CHANGED_MESSAGE, TOTALS_OUT_OF_DATE_CODE } from '@/lib/estimate/approval-words';
 import { isPrice, PRICE_MESSAGE, prefillPrice, priceDifference, validateReason } from '@/lib/estimate/approve-price';
 import { approveWarningLine } from '@/lib/estimate/lead-warning-copy';
+import { RATES_CHANGED_TITLE } from '@/lib/estimate/rates-changed-copy';
 import { approveEstimate, canReadFigures } from '@/lib/estimates/approve-client';
 import { formatRupees } from '@/lib/money';
 
@@ -60,6 +61,8 @@ export interface ApproveDialogProps {
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning (STORY-06.10 AC-5): one info line names them when there are any. It never stops the approval and has no box to tick. */
   readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
+  /** What changed in the rates since the calculation, in one sentence of counts by kind (STORY-06.11 AC-2, SCR-08 "Rates changed"); `null` when nothing did. Approving is not stopped. */
+  readonly ratesLine: string | null;
   /** The approval worked: the page is drawn again and shows the approved estimate. */
   readonly onApproved: () => void;
   /** The way on after a 409 that left the page out of date: close, and read the estimate again. */
@@ -209,6 +212,11 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
       </DialogHeader>
       <Alerts phase={phase} />
       {props.warningRows.length === 0 ? null : <Notice tone="info">{approveWarningLine(props.warningRows)}</Notice>}
+      {props.ratesLine === null ? null : (
+        <Notice tone="info" title={RATES_CHANGED_TITLE}>
+          {props.ratesLine}
+        </Notice>
+      )}
       {difference === null ? <Notice tone="info">{PRICE_INFO}</Notice> : <Notice tone="warn">{priceChangedNote(difference.direction, formatRupees(difference.amount))}</Notice>}
       <FormField id="approve-price" label={PRICE_LABEL} tag={<ColumnTag letter={props.approvedLetter} kind="output" />} {...(priceError === null ? {} : { error: priceError })}>
         {(control) => (

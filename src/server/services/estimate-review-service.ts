@@ -1,19 +1,25 @@
 import { assertNever } from '../../lib/assert-never';
-import { ForbiddenError, NotFoundError } from '../../lib/errors';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '../../lib/estimate/calculate-words';
 import { partNameOf, typedText } from '../../lib/estimate/part-name';
 import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
+import { nothingChanged } from '../../lib/estimate/rate-diff';
 import { buildTree } from '../../lib/estimate/tree';
 import { fieldLetter, findFieldByKey, findSystemField } from '../../lib/fields/registry';
 import type { FieldDefinition } from '../../lib/fields/field-schema';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { PRICE_PER_TOOL_COST_KEY, UNIT_PRICE_EUR_KEY, UNIT_PRICE_USD_KEY } from '../../lib/fields/types';
+import { createPlanCache, type PlanCache } from '../../lib/formula';
 import type { ApprovalRepository } from '../repositories/approval-repository';
 import type { CalculationRepository, ReviewFigures, StoredValues } from '../repositories/calculation-repository';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
+import type { EstimateRepository } from '../repositories/estimate-repository';
 import { costsSchema, type CostNode, type CostsView } from '../views/schemas/costs';
 
+import type { CalculationMasters } from './calculation-masters';
 import type { ConfigVersion } from './config-service';
 import type { EstimateViewer } from './estimate-service';
+import { countRateChanges } from './rate-changes';
 
 /**
  * The read side of the estimate review (STORY-06.02; FR-024, FR-025, FR-029, FR-030; architecture sections 4.3, 4.8 and 6 "Cost"): the figures of SCR-06, for the Lead and the Admin.
@@ -27,6 +33,12 @@ import type { EstimateViewer } from './estimate-service';
  *
  * **No rolled-up figure** (architecture section 4.3): a part carries its own row's BG, BJ and BK, and the answer holds no sum except BL, BN and the total Tool Cost, which the calculation stored.
  * The answer is parsed with its strict schema before it leaves.
+ *
+ * **"Rates changed" (STORY-06.11; FR-106; architecture section 4.8)**: while the figures are `current` and the estimate is not APPROVED, `ratesChanged` says how many process rates, material prices and exchange rates
+ * changed since the calculation, **by kind and never a value** (NFR-002), through the one function the unlock preview uses (`rate-changes.ts`, `lib/estimate/rate-diff.ts`: AC-8). It reads the estimate's status, the
+ * calculation's master snapshot and the masters as they are now: three keyed reads of the masters and two of the estimate (AC-7, NFR-010), and none at all in the other states (`none`, `out-of-date`, APPROVED). It is
+ * true as of this read: a rate that changes after the page was drawn is not caught (the story's documented limit). A customer or a material deleted since (or missing) cannot be counted, and Calculate would refuse it in its own
+ * words, so the notice is left out then and the page is drawn.
  */
 
 export interface EstimateReviewService {
@@ -38,7 +50,13 @@ export interface EstimateReviewService {
 }
 
 export interface EstimateReviewDependencies {
-  readonly calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures'>;
+  readonly calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findMasterSnapshot'>;
+  /** The estimate's status, read only while the figures are current (STORY-06.11): an approved estimate's figures stand and have no notice (AC-3). */
+  readonly estimates: Pick<EstimateRepository, 'findEstimateAccess'>;
+  /** The masters as they are now, for the count of what changed since the calculation (STORY-06.11). */
+  readonly masters: CalculationMasters;
+  /** Compiled plans by version, for the rates the calculation's formulas read. A test passes its own; the default is one cache for the service. */
+  readonly plans?: PlanCache;
   /** BO is read here, from the latest approval that has not been removed, and never through the figure state (STORY-06.06 AC-9). */
   readonly approvals: Pick<ApprovalRepository, 'findLatestApproval'>;
   readonly nodes: Pick<EstimateNodeRepository, 'listNodes'>;
@@ -123,7 +141,33 @@ function warningOf(figures: ReviewFigures | null): CostsView['warning'] {
   return { madeBy: figures.madeByName, rows: figures.warnings.map(({ nodeId, slNo, label }) => ({ nodeId, slNo, label })) };
 }
 
-export function createEstimateReviewService({ calculations, approvals, nodes, configuration }: EstimateReviewDependencies): EstimateReviewService {
+/**
+ * The counts of what changed since the calculation in view, or `null` when there is nothing to tell (STORY-06.11 AC-1, AC-3, AC-4, AC-6): the estimate is APPROVED (its figures stand), nothing changed in the
+ * masters the calculation used, or one of them was deleted since. Called only while the state is `current`.
+ */
+async function ratesChangedOf(
+  { calculations, estimates, masters, plans }: Pick<EstimateReviewDependencies, 'calculations' | 'estimates' | 'masters'> & { readonly plans: PlanCache },
+  estimateId: string,
+  calculation: { readonly id: string },
+  version: ConfigVersion,
+): Promise<CostsView['ratesChanged']> {
+  const access = await estimates.findEstimateAccess(estimateId);
+  // An approved estimate keeps the figures it was approved with (NFR-026): no notice, and neither the snapshot nor a master is read. An estimate that is not there any more is the caller's 404, not this notice's.
+  if (access === null || access.status === 'APPROVED') return null;
+  const stored = await calculations.findMasterSnapshot(calculation.id);
+  if (stored === null) throw new Error('The calculation linked to the estimate could not be read.');
+  try {
+    const counts = await countRateChanges({ masters, plans }, stored.masterSnapshot, version);
+    return nothingChanged(counts) ? null : counts;
+  } catch (error) {
+    // A customer or a material that was deleted since (409) or that is not there at all (404) cannot be counted. The notice is a help beside the figures, never a reason to lose them: the page is drawn without it,
+    // and Calculate or Unlock says what is wrong with the master in its own words (architecture section 4.8).
+    if (error instanceof NotFoundError || (error instanceof ConflictError && (error.code === CUSTOMER_DELETED_CODE || error.code === MATERIAL_DELETED_CODE))) return null;
+    throw error;
+  }
+}
+
+export function createEstimateReviewService({ calculations, approvals, nodes, configuration, estimates, masters, plans = createPlanCache() }: EstimateReviewDependencies): EstimateReviewService {
   return {
     async getCosts(viewer, estimateId) {
       // Before any read, and by name: only the Lead and the Admin are let through, an Engineer is refused whatever the ID is (CR-33, NFR-002), and a role added one day fails to compile here
@@ -152,6 +196,9 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
       // A calculation that is current but cannot be read is a fault in the data: say nothing about the figures rather than show dashes as if they were the answer.
       if (state === 'current' && figures === null) throw new Error('The calculation linked to the estimate could not be read.');
 
+      // Only while the figures are current: in the other two states the masters are not read at all (AC-4).
+      const ratesChanged = state === 'current' && calculation !== null ? await ratesChangedOf({ calculations, estimates, masters, plans }, estimateId, calculation, version) : null;
+
       const columns = columnsOf(version.document);
       return costsSchema.parse({
         state,
@@ -179,6 +226,7 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
               },
         // The warning of the calculation in view (STORY-06.10): it comes in with the figures, so it is read only while the state is `current` and is `null` in the other two (AC-4).
         warning: warningOf(figures),
+        ratesChanged,
       });
     },
   };
