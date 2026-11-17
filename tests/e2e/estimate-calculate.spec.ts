@@ -280,6 +280,9 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await openForm(page, testInfo);
     const bar = page.locator('[data-calculate-bar]');
     await expect(bar).toBeInViewport();
+    // The page keeps a focused field clear of the bar with `scroll-padding-bottom: var(--sticky-bottom)`, which a client effect publishes on <html> after the bar is measured (`use-sticky-offsets.ts`). A focus before that
+    // scrolls the field to the edge, behind the bar: the failure of AQP-340's run 44048490092, on both attempts. Like DEF-011, the wait is for the page to be ready, not for time.
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--sticky-bottom') !== '');
     await control(page, 'AJ').focus();
     await expect(bar).toBeInViewport();
     const field = await control(page, 'AJ').boundingBox();
