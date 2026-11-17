@@ -4,6 +4,7 @@ import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } fr
 import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '@/lib/estimate/calculate-words';
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE, UNLOCK_REASON_MAX, UNLOCK_REASON_REQUIRED_MESSAGE, UNLOCK_REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/unlock-words';
+import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
 import { createPlanCache } from '@/lib/formula';
 import type { MasterSnapshot } from '@/server/repositories/calculation-repository';
 import type { CustomerCalculationRecord } from '@/server/repositories/customer-repository';
@@ -156,6 +157,23 @@ describe('the reason is judged by one rule (AC-4)', () => {
   it('counts characters as the database does, so 500 emoji are not judged longer than 500', () => {
     expect(checkUnlockReason('😀'.repeat(UNLOCK_REASON_MAX)).ok).toBe(true);
     expect(checkUnlockReason('😀'.repeat(UNLOCK_REASON_MAX + 1)).ok).toBe(false);
+  });
+
+  it('keeps the line breaks of a reason over several lines (a carriage return is folded into one line feed)', () => {
+    expect(checkUnlockReason('First.\r\nSecond.')).toEqual({ ok: true, reason: 'First.\nSecond.' });
+  });
+
+  // DL-219: typed text refuses every control, format and separator character and a lone surrogate, as the reason of an approval does. Such a character would be invisible in the audit log, and a NUL or a
+  // lone surrogate cannot be stored by PostgreSQL at all (a 500 and not a 422).
+  it.each([
+    ['a zero-width joiner', 'Round\u200Ded'],
+    ['a zero-width space', 'Round\u200Bed'],
+    ['a byte order mark', 'Round\uFEFFed'],
+    ['a bidirectional override', 'Round\u202Eed'],
+    ['a NUL', 'Round\u0000ed'],
+    ['a lone surrogate', 'Round\uD800ed'],
+  ])('refuses %s with the shared sentence', (_name, text) => {
+    expect(checkUnlockReason(text)).toEqual({ ok: false, message: TEXT_CHARACTERS_MESSAGE });
   });
 
   it('says it in the words the screen shows', () => {

@@ -6,7 +6,7 @@ import { Decimal } from '../decimal';
  * and nothing else**. No old or new value leaves it, so a caller cannot pass one on by mistake (NFR-002).
  *
  * **What it compares** is only what that calculation used. Rates are restricted to `referencedRateIds`, the set the formulas of the calculation's configuration version read (`CompiledPlan.referencedRateIds`), so a
- * record of either snapshot shape counts the same: an older record keeps every rate of the customer, and one that no formula reads must not count (architecture section 4.2, #432). Materials are the ones the
+ * record of either snapshot shape counts the same: an older record keeps every rate of the customer, and one that no formula reads must not count (architecture section 4.2, GitHub issue 432). Materials are the ones the
  * calculation stored, and the two exchange rates are always compared. A formula or a configuration change is not a rate and is not compared (A-34).
  *
  * **Changed means a different number**, compared as decimals, so `21.30` and `21.3` are the same and a master that was saved again with the same value counts for nothing. A value that is there now and was not then
