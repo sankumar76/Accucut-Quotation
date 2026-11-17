@@ -29,6 +29,10 @@ export interface NewApproval {
   /** The calculated total (BL) the price was set against, as rupees and paise ("12629.99"): BL rounded by the rule the dialog pre-fills its price with. */
   readonly calculatedTotal: string;
   readonly approvedById: string;
+  /** The price differs from the calculated total at rupees and paise (STORY-06.07, FR-103). Decided by the service from the total it read itself; written once, with the row. */
+  readonly isOverride: boolean;
+  /** The Lead's reason, trimmed, at most 500 characters. `null` unless `isOverride` (the table's CHECK holds the same rule): a reason is optional, and one given with the calculated total is dropped. */
+  readonly overrideReason: string | null;
 }
 
 /** What an approval is, as SCR-06 shows it: the price, who approved it and when. Not the calculation's figures. */
@@ -40,6 +44,11 @@ export interface ApprovalRecord {
   readonly approvedAt: Date;
   /** The approver's name now (a later rename shows). */
   readonly approverName: string;
+  /** The calculated total (BL) the price was set against, as rupees and paise: what SCR-06 says the price is lower or higher than (STORY-06.07 AC-3). */
+  readonly calculatedTotal: string;
+  readonly isOverride: boolean;
+  /** The reason given with the override; `null` when none was given or the price is not an override. */
+  readonly overrideReason: string | null;
 }
 
 export interface ApprovalRepository {
@@ -66,6 +75,8 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
             approvedPrice: approval.approvedPrice,
             calculatedBl: approval.calculatedTotal,
             approvedById: approval.approvedById,
+            isOverride: approval.isOverride,
+            overrideReason: approval.overrideReason,
           },
           select: { id: true, approvedAt: true },
         }),
@@ -76,10 +87,28 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
         const found = await clientFor(db, tx).approval.findFirst({
           where: { estimateId, removedAt: null },
           orderBy: [{ approvedAt: 'desc' }, { id: 'desc' }],
-          select: { id: true, calculationId: true, approvedPrice: true, approvedAt: true, approver: { select: { name: true } } },
+          select: {
+            id: true,
+            calculationId: true,
+            approvedPrice: true,
+            calculatedBl: true,
+            isOverride: true,
+            overrideReason: true,
+            approvedAt: true,
+            approver: { select: { name: true } },
+          },
         });
         if (found === null) return null;
-        return { id: found.id, calculationId: found.calculationId, approvedPrice: found.approvedPrice.toFixed(PRICE_DECIMALS), approvedAt: found.approvedAt, approverName: found.approver.name };
+        return {
+          id: found.id,
+          calculationId: found.calculationId,
+          approvedPrice: found.approvedPrice.toFixed(PRICE_DECIMALS),
+          approvedAt: found.approvedAt,
+          approverName: found.approver.name,
+          calculatedTotal: found.calculatedBl.toFixed(PRICE_DECIMALS),
+          isOverride: found.isOverride,
+          overrideReason: found.overrideReason,
+        };
       }),
   };
 }

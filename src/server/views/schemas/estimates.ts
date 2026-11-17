@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MAX_REASON_LENGTH, PRICE_MESSAGE, PRICE_PATTERN } from '../../../lib/estimate/approve-price';
+import { PRICE_MESSAGE, PRICE_PATTERN, validateReason } from '../../../lib/estimate/approve-price';
 import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
@@ -61,7 +61,15 @@ export const calculateBodySchema = z
 export const approveBodySchema = z.strictObject({
   calculationId: z.uuid(),
   price: z.string().regex(PRICE_PATTERN, PRICE_MESSAGE),
-  reason: z.string().max(MAX_REASON_LENGTH, `Use ${MAX_REASON_LENGTH} characters or fewer.`).optional(),
+  // The reason for a different price (STORY-06.07 AC-4): the one rule of the dialog, so the sentence is the same on both sides. It is checked whatever the price is; whether it is kept depends on the
+  // price differing from BL, which only the service can know (it reads BL itself), so a reason sent with the calculated total is ignored there (AC-5).
+  reason: z
+    .string()
+    .superRefine((text, context) => {
+      const check = validateReason(text);
+      if (!check.ok) context.addIssue({ code: 'custom', message: check.message });
+    })
+    .optional(),
 });
 
 /**

@@ -60,6 +60,11 @@ export interface TextRule {
   readonly multiline: boolean;
   /** The longest text, in characters, from the field's rule. Absent means `MAX_PART_TEXT_LENGTH`. */
   readonly maxLength?: number;
+  /**
+   * Count the length in Unicode code points, as PostgreSQL's `char_length` does, and not in UTF-16 units (the default, which a browser's `maxlength` and `String.length` use). Set for a text whose column has a
+   * length CHECK (the reason for a different price, STORY-06.07), so a text this accepts is never one the column refuses, and an emoji or a combining mark is not counted twice.
+   */
+  readonly countCodePoints?: boolean;
 }
 
 /** One typed text: blank clears, too long or holding a control character is refused. The stored text is trimmed. */
@@ -67,7 +72,9 @@ export function validateTextInput(typed: string, rule: TextRule): InputCheck {
   const text = (rule.multiline ? typed.replace(LINE_BREAKS, '\n') : typed).trim();
   if (text === '') return { ok: true, value: null };
   const maxLength = rule.maxLength ?? MAX_PART_TEXT_LENGTH;
-  if (text.length > maxLength) return { ok: false, message: textTooLongMessage(maxLength) };
+  // A code point is at most two UTF-16 units, so a text of more than twice the limit is too long without being counted (a very long paste is never split into an array).
+  const length = rule.countCodePoints === true && text.length <= maxLength * 2 ? Array.from(text).length : text.length;
+  if (length > maxLength) return { ok: false, message: textTooLongMessage(maxLength) };
   const withoutLineFeeds = rule.multiline ? text.replace(LINE_FEED, '') : text;
   return CONTROL_CHARACTERS.test(withoutLineFeeds) ? { ok: false, message: TEXT_CHARACTERS_MESSAGE } : { ok: true, value: text };
 }

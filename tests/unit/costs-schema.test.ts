@@ -29,14 +29,29 @@ describe('the answer, and exactly what it may hold', () => {
     expect(costsSchema.safeParse(none).success).toBe(true);
   });
 
-  it('STORY-06.06 AC-9: BO is the approval row, which is there whatever the state of the figures (cleared figures, no calculation id), and is the price, the time and the approver only', () => {
-    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead' };
+  it('STORY-06.06 AC-9, STORY-06.07 AC-3: BO is the approval row, which is there whatever the state of the figures (cleared figures, no calculation id), and is the price, the time, the approver, the total it was set against, whether it is an override and the reason, and nothing else', () => {
+    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' };
     const cleared = { ...good, state: 'out-of-date', calculationId: null, totals: null, nodes: [{ ...node, figures: null }] };
     expect(costsSchema.safeParse({ ...cleared, approval }).success).toBe(true);
-    expect(Object.keys(costsSchema.shape.approval.unwrap().shape).sort()).toEqual(['approvedAt', 'approverName', 'price']);
-    // A price is rupees with two decimals as text; a number, a missing name and an extra key (a calculated total, say) are refused.
-    for (const planted of [{ ...approval, price: 12600 }, { ...approval, price: '12600' }, { ...approval, approverName: '' }, { ...approval, calculatedTotal: '12629.99' }]) {
-      expect(costsSchema.safeParse({ ...good, approval: planted }).success).toBe(false);
+    expect(Object.keys(costsSchema.shape.approval.unwrap().shape).sort()).toEqual(['approvedAt', 'approverName', 'calculatedTotal', 'isOverride', 'price', 'reason']);
+    // An override with no reason (the reason is optional) and an approval at the calculated total are both good.
+    expect(costsSchema.safeParse({ ...good, approval: { ...approval, reason: null } }).success).toBe(true);
+    expect(costsSchema.safeParse({ ...good, approval: { ...approval, price: '12629.99', isOverride: false, reason: null } }).success).toBe(true);
+    // A price and a total are rupees with two decimals as text; a number, a missing name, a flag that is not a boolean, an empty reason (none is null), a missing key and an extra key are refused.
+    for (const planted of [
+      { ...approval, price: 12600 },
+      { ...approval, price: '12600' },
+      { ...approval, calculatedTotal: '12629.9876' },
+      { ...approval, calculatedTotal: 12629.99 },
+      { ...approval, approverName: '' },
+      { ...approval, isOverride: 'yes' },
+      { ...approval, reason: '' },
+      { ...approval, reason: 7 },
+      { ...approval, isOverride: false },
+      { price: approval.price, approvedAt: approval.approvedAt, approverName: approval.approverName },
+      { ...approval, rate: '0.37' },
+    ]) {
+      expect(costsSchema.safeParse({ ...good, approval: planted }).success, JSON.stringify(planted)).toBe(false);
     }
   });
 

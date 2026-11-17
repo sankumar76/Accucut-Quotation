@@ -59,12 +59,22 @@ const lettersSchema = z.strictObject({
   approvedPrice: z.string().min(1),
 });
 
-/** The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). */
-const approvalSchema = z.strictObject({
-  price: z.string().regex(/^\d+\.\d{2}$/),
-  approvedAt: z.iso.datetime(),
-  approverName: z.string().min(1),
-});
+/**
+ * The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). **Whether it is an override** (STORY-06.07 AC-3,
+ * FR-103): the calculated total (BL) the price was set against, as rupees and paise as the approval kept it, the flag, and the reason the Lead gave (`null` when none; always `null` unless the price is an
+ * override). They are the approval's own record, read from its row and never through the figure state, like the price. This answer is the Lead's and the Admin's: the route refuses an Engineer before it reads
+ * anything, so the reason and the total reach no Engineer (NFR-002, FR-011).
+ */
+const approvalSchema = z
+  .strictObject({
+    price: z.string().regex(/^\d+\.\d{2}$/),
+    approvedAt: z.iso.datetime(),
+    approverName: z.string().min(1),
+    calculatedTotal: z.string().regex(/^\d+\.\d{2}$/),
+    isOverride: z.boolean(),
+    reason: z.string().min(1).nullable(),
+  })
+  .refine((approval) => approval.isOverride || approval.reason === null, { message: 'A reason belongs to an override.', path: ['reason'] });
 
 /**
  * The quantity warning of the calculation in view (STORY-06.10 AC-3; architecture section 4.3 "What the Lead sees"): who pressed Calculate or Recalculate and went ahead (their name now: the calculation's `created_by`
