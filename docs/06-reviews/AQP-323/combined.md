@@ -152,6 +152,31 @@ None. There are no Major findings, so no `tech-debt` issue is opened. SQR-01 to 
 - **solution-architect:** add `src/components/features/estimate-approve/` to the source tree (§10). State in §5.1 whether the act columns are write-once (SQR-02), and state the precision rule for `calculated_bl` (SQR-03).
 - **orchestrator / scrum-master:** record the release-order condition that 06.07 (AQP-324) merges before G8 (SQR-04). Add the SQR-03 comparison rule to the 06.07 hand-over.
 
+> Addendum 1 copied from the scratchpad on the delivery lead's standing rule, 2026-11-16 (DL-226). Source: scratchpad/AQP-323/combined-addendum-1.md, text unchanged.
+
+## Addendum 1: re-review of 9c530323 to 8207e3e2 (2026-11-16)
+
+(Append to docs/06-reviews/AQP-323/combined.md, before "Worktree created by this review". The direct write to the main checkout was refused: this agent was isolated in its own worktree.)
+
+**Scope:** commit `8207e3e2` only (9 files, +125 / -16). CI run 43923961530: 6 of 6 green (orchestrator's report). **Verdict: APPROVE WITH COMMENTS. No Blocker, Critical or Major is open.** Counts after the addendum: Blocker 0 · Critical 0 · Major 0 · Minor 3 open (SQR-04, SQR-05, SQR-12 new); SQR-01 to SQR-03 fixed · Info 6.
+
+| Finding | Result | Evidence |
+|---|---|---|
+| SQR-01 | **Fixed** | `approval-helpers.ts:87-91` now counts only `pid IN (SELECT pid FROM pg_stat_activity WHERE datname = current_database())`, the scope the four existing helpers use. |
+| SQR-02 | **Fixed**, with one gap (SQR-12) | `forbid_approval_core_change` refuses a change of any of the eight act columns once that column is non-null. It is a BEFORE UPDATE row trigger, so it applies to every role, and the runtime role cannot disable it. Going from NULL to a value is allowed per column, so the first write of 06.08 (unlock), 06.12 (cancel, including after an unlock) and 06.13 (remove) all pass. Writing the same value again is allowed. The new tests in `grants.test.ts:143-198` can fail: without the clause, the runtime role's column UPDATE is granted and would succeed; clearing a `by` or `at` would otherwise be the CHECK's 23514, not the expected 23000 and trigger message; the owner cases fail for the same reasons. |
+| SQR-03 | **Fixed** | `calculated_bl DECIMAL(18,2)` holds `toTwoPlaces(BL)` (`approval-service.ts:145-155`), and the audit entry and pre-fill agree. **No information is lost:** the full-precision BL stays in the immutable `calculations` row the approval points to by FK (runtime DELETE and UPDATE revoked, plus `forbid_immutable_change`). So 06.07 (compare at 2 places) and 07.03 (export from the approved calculation) still have it. The tests can fail: the unit cases `12.34495 → 12.34` and `0.00495 → 0.00` are where rounding twice differs, and the old code inserted the raw text; the integration test now asserts `toBe` exactly. |
+| SQR-04 | Not fixed, by design | The release condition stands: 06.07 (AQP-324) merges before G8. |
+
+**SQR-12 · Minor (new):** the write-once rule is per column, so a reason that was NULL when the act was written (`unlock_reason`, `cancel_reason`) can still be filled in later by any role (`migration.sql:106-118`).
+
+- *Fix:* freeze the whole act once its `_at` is set, comparing the `(by, at, reason)` tuple. Then add a test that sets an act with a NULL reason and fills the reason in afterwards.
+- This is cheap now. It does not block the merge, but if it is not done here it must be done before 06.08 writes unlocks.
+
+**Checks I ran at 8207e3e2:** vitest on `tests/unit/approval/guard.test.ts`, `approve-route.test.ts`, `audit-events.test.ts` and `tests/security/strict-schema.test.ts`: **4 files, 169 passed**. I did not run the integration tests (`grants`, `approve`); for those I rely on CI.
+
+**For the solution-architect:** §5.1 should state that `calculated_bl` is BL rounded to paise, half away from zero, and that the act columns are write-once.
+
+
 ## Worktree created by this review
 
 - `C:\Users\sanku\AppData\Local\Temp\claude\859e50c63dd2e28b\f8facd72-e7cc-4f45-9a83-c1cba182f3b1\scratchpad\wt-aqp323` (detached at 9c530323, with a `node_modules` junction to the main checkout). No developer worktree was touched.
