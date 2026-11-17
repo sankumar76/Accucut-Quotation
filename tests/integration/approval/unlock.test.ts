@@ -327,7 +327,7 @@ describe('AC-1, AC-8: the preview counts what changed since the approval, by kin
     const { estimateId } = await approvedEstimate();
     const before = await storedOf(db, estimateId);
     const preview = await unlocking().preview(lead(), estimateId);
-    expect(preview).toEqual({ engineerName: 'Calculation Engineer', configuration: { approved: 1, current: 1 }, changed: { processRates: 0, materialPrices: 0, exchangeRates: 0 } });
+    expect(preview).toEqual({ engineerName: 'Invented Calculation Engineer', configuration: { approved: 1, current: 1 }, changed: { processRates: 0, materialPrices: 0, exchangeRates: 0 } });
     // A read: it changes and records nothing.
     expect(await storedOf(db, estimateId)).toEqual(before);
   });
@@ -499,7 +499,7 @@ describe('AC-7, AC-12 (AQP-321 AC-4): after the unlock the inputs are editable a
     // Right after the unlock the figures are still the ones from the approval, and BO is the price approved earlier.
     const unlocked = await review.getCosts(lead(), estimateId);
     expect(unlocked.state).toBe('current');
-    expect(unlocked.approval).toMatchObject({ price: '1234.50', unlock: { byName: 'Calculation Lead', reason: REASON, engineerName: 'Calculation Engineer' } });
+    expect(unlocked.approval).toMatchObject({ price: '1234.50', unlock: { byName: 'Invented Calculation Lead', reason: REASON, engineerName: 'Invented Calculation Engineer' } });
 
     // AC-7: the status is DRAFT and the Engineer's save is accepted (an approved estimate refuses it with 409).
     await db.estimateService.saveInputs(engineerOf(db), estimateId, { nodeId: top, revision: await revisionOf(db, top), values: { [idOf('J')]: '95' } });
