@@ -59,11 +59,23 @@ const lettersSchema = z.strictObject({
   approvedPrice: z.string().min(1),
 });
 
-/** The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). */
+/**
+ * The unlock of the latest approval (STORY-06.08 AC-3): who (their name now), when, the reason as the Lead stored it, and the name of the Engineer whose Open queue the task is back in. Text and a time: nothing here is a
+ * cost. Present only once the approval was unlocked, and then BO is the price "approved earlier".
+ */
+const unlockSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  reason: z.string().nullable(),
+  engineerName: z.string().min(1),
+});
+
+/** The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now), and its unlock once it has one. */
 const approvalSchema = z.strictObject({
   price: z.string().regex(/^\d+\.\d{2}$/),
   approvedAt: z.iso.datetime(),
   approverName: z.string().min(1),
+  unlock: unlockSchema.nullable(),
 });
 
 /**

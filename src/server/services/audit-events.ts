@@ -110,6 +110,12 @@ const rupeesText = z.string().regex(/^\d+(\.\d+)?$/);
 /** What an approval keeps: the price set (BO), the calculated total it was set against (BL) and the approver's name at that moment. No rate, formula or master value has a key to sit in (NFR-002). */
 const approvedState = z.strictObject({ approvedPrice: rupeesText, calculatedTotal: rupeesText, approver: z.string().min(1) });
 
+// ---- Shape of the unlock event (SCR-16 "Unlock"; STORY-06.08) --------------------------------------------------------------------
+/** What an unlock keeps before: the price the approval stood at (BO), which stays on record. */
+const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
+const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
+
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
 
@@ -384,8 +390,19 @@ export const AUDIT_EVENTS = {
     }),
   }),
 
+  // ---- Wired in STORY-06.08: an approved estimate unlocked --------------------------------------------------------------------
+  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
+  // replaces it). Who unlocked and when are the entry's own columns. The words follow the "Approval cancelled" entry of SCR-16 ("Approved at ₹ 4,750.00 to Cancelled. Reason: …"; assumption of STORY-06.08).
+  'approval.unlocked': defineEvent({
+    objectType: 'estimate',
+    category: 'unlock',
+    status: 'wired',
+    before: unlockedBeforeState,
+    after: unlockedAfterState,
+    describe: (before, after) => ({ before: `Approved at ${formatRupees(before.approvedPrice)}`, after: `Unlocked. Reason: ${after.reason}` }),
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
-  'approval.unlocked': reserved('estimate', 'unlock'),
   'approval.price_overridden': reserved('estimate', 'price_override'),
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
   // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and

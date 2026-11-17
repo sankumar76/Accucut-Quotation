@@ -245,7 +245,7 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     expect(after.state).toBe('out-of-date');
     expect(after.totals).toBeNull();
     expect(after.approval).toEqual(before.approval);
-    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran' });
+    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran', unlock: null });
     // BL is cleared, and no calculated figure was read to say so.
     expect(cleared.reads.figures.calls).toEqual([]);
     expect(cleared.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
@@ -265,6 +265,22 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     for (const options of [{ inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
       expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).calculationId).toBeNull();
     }
+  });
+
+  it('STORY-06.08 AC-12 (AQP-321 AC-4): after an unlock and an input change, BO is still the price approved earlier, with its unlock, while BL and every calculated figure are cleared', async () => {
+    const unlock = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' };
+    const unlocked = { ...approval, unlock };
+    const before = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: unlocked }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(before.approval?.unlock).toEqual({ at: '2026-11-05T06:35:00.000Z', byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' });
+    // An input changed since the unlock: the figures are cleared, the price approved earlier and its unlock are not.
+    const cleared = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: unlocked, inputsRevision: CALCULATION_REVISION + 1 });
+    const after = await cleared.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(after.state).toBe('out-of-date');
+    expect(after.totals).toBeNull();
+    expect(after.nodes.every((node) => node.figures === null)).toBe(true);
+    expect(after.approval).toEqual(before.approval);
+    expect(after.approval?.price).toBe('12600.00');
+    expect(cleared.reads.figures.calls).toEqual([]);
   });
 
   it('an Engineer is refused before the approvals are read, as before everything else', async () => {

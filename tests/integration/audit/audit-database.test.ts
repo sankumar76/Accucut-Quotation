@@ -206,6 +206,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'calculation.warning_acknowledged': 'tests/integration/calc/warn.test.ts',
     // STORY-06.06: an estimate approved and locked; the one test is the approval's own, against the real estimate row lock.
     'approval.approved': 'tests/integration/approval/approve.test.ts',
+    // STORY-06.08: an approved estimate unlocked; the one test is the unlock's own, against the real estimate row lock.
+    'approval.unlocked': 'tests/integration/approval/unlock.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

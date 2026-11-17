@@ -1,3 +1,4 @@
+import type { UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
@@ -67,7 +68,7 @@ export interface ReviewWorldOptions {
   /** The estimate's input changes so far; the calculation was made at 3. */
   readonly inputsRevision?: number;
   /** An approval row of the estimate (STORY-06.06): the price as stored (two decimals) and who approved it. Absent: none, BO is "Not set yet". */
-  readonly approval?: { readonly price: string; readonly approverName?: string };
+  readonly approval?: { readonly price: string; readonly approverName?: string; readonly unlock?: UnlockRecord };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
   readonly madeBy?: string;
@@ -127,7 +128,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
       return Promise.resolve(
         approval === undefined || id !== REVIEW_ESTIMATE_ID
           ? null
-          : { id: '00000000-0000-4000-8000-0000000a9901', calculationId: INVENTED_CALCULATION_ID, approvedPrice: approval.price, approvedAt: REVIEW_APPROVED_AT, approverName: approval.approverName ?? 'Invented Approver' },
+          : { id: '00000000-0000-4000-8000-0000000a9901', calculationId: INVENTED_CALCULATION_ID, approvedPrice: approval.price, approvedAt: REVIEW_APPROVED_AT, approverName: approval.approverName ?? 'Invented Approver', unlock: approval.unlock ?? null },
       );
     },
   };
