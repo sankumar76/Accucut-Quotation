@@ -14,6 +14,7 @@ import type { CalculationRepository } from '../../src/server/repositories/calcul
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
+import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -125,6 +126,8 @@ export interface SessionHarness {
   readonly calculationWorld: FakeCalculationWorld;
   /** The approval's guard (STORY-06.05) over the same estimates and calculation records (`getApprovalService` in the composition mock). It writes nothing in any case, so a valid call of the recipe is a 409 at every state. */
   readonly approvalService: ApprovalService;
+  /** Unlock and its preview (STORY-06.08) over the same estimates and approval records (`getUnlockService` in the composition mock). The canary estimate is never APPROVED, so a valid call of the recipe is the state machine's 409 and writes nothing. */
+  readonly unlockService: UnlockService;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
@@ -257,6 +260,20 @@ export function createSessionHarness(): SessionHarness {
     transactions: calculationWorld.transactions,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Unlock (STORY-06.08) over the same world. The canary estimate is a Draft at every state a test leaves it in, so the recipe's valid call is refused 409 by the state machine before any master is read: the masters and
+  // the configuration here are the ones that refusal never reaches, and a call that did reach them would fail loudly.
+  const unlockService = createUnlockService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    calculations: calculationWorld.repository,
+    masters,
+    configuration: {
+      current: () => Promise.reject(new Error('The harness does not read a configuration version for an unlock.')),
+      byId: () => Promise.reject(new Error('The harness does not read a configuration version for an unlock.')),
+    },
+    transactions: calculationWorld.transactions,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
@@ -316,6 +333,7 @@ export function createSessionHarness(): SessionHarness {
     calculationService,
     calculationWorld,
     approvalService,
+    unlockService,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     jobRuns,

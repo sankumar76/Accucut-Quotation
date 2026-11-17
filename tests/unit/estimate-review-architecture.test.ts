@@ -83,6 +83,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const RECALCULATE_DIALOG = 'src/components/features/estimate-recalculate/recalculate-warning-dialog.tsx';
   const APPROVE_FOLDER = 'src/components/features/estimate-approve/';
   const APPROVE_BUTTON = `${APPROVE_FOLDER}approve-button.tsx`;
+  const UNLOCK_FOLDER = 'src/components/features/estimate-unlock/';
+  const UNLOCK_BUTTON = `${UNLOCK_FOLDER}unlock-button.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -92,11 +94,12 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(reviewFiles.filter((file) => /\buse(State|Effect|Ref|Memo|Callback|Reducer|Transition)\b|\bnext\/dynamic\b|React\.lazy/.test(file.text)).map((file) => file.path)).toEqual([]);
   });
 
-  it('the review folder imports no shared client component but the Recalculate button and the Approve button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, STORY-06.06, ADR-016)', () => {
+  it('the review folder imports no shared client component but the Recalculate button, the Approve button and the Unlock button (a `use client` file would carry its chunk to the page, so each is accounted for: STORY-06.04, STORY-06.06, STORY-06.08, ADR-016)', () => {
     const clientFiles = new Set(ALL.filter((file) => /^\s*['"]use client['"]/m.test(file.text)).map((file) => file.path));
-    // The two exceptions, named: the Calculate / Recalculate button and the Approve and lock button. Each is imported by the action bar alone and loads its request code (or its dialog) only when first pressed (the next tests).
+    // The three exceptions, named: the Calculate / Recalculate button, the Approve and lock button and the Unlock button. Each is imported by the action bar alone and loads its request code (or its dialog) only when first pressed (the next tests).
     clientFiles.delete(RECALCULATE_BUTTON);
     clientFiles.delete(APPROVE_BUTTON);
+    clientFiles.delete(UNLOCK_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -152,6 +155,27 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(dialog).toMatch(/@\/lib\/estimates\/approve-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(APPROVE_FOLDER) && /estimate-approve\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
+  });
+
+  it('STORY-06.08 ADR-016: the Unlock button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(UNLOCK_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([UNLOCK_BUTTON, `${UNLOCK_FOLDER}unlock-dialog.tsx`, `${UNLOCK_FOLDER}unlock-ids.ts`, `${UNLOCK_FOLDER}unlock-texts.ts`]);
+    for (const name of ['unlock-ids.ts', 'unlock-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === UNLOCK_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('unlock-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === UNLOCK_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('unlock-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
+    expect(button).toMatch(/import\('\.\/unlock-dialog'\)/);
+    expect(button).toMatch(/^import type \{ UnlockDialogProps \} from '\.\/unlock-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*unlock-(dialog|texts)/m);
+    expect(button).not.toMatch(/unlock-client/);
+    expect(dialog).toMatch(/@\/lib\/estimates\/unlock-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(UNLOCK_FOLDER) && /estimate-unlock\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/review-actions.tsx', 'src/components/features/estimate-review/unlocked-notice.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {
