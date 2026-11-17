@@ -111,6 +111,9 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
   });
 
   test('AC-2, AC-3: back to "None" hides them and the server holds 0.00; another word shows them again with what was typed, and saves it', async ({ page }, testInfo) => {
+    // One of two tests that are slow by what they do (AQP-340): seven saves, four reads of the server and a reload, one after the other. Measured: 23.2 s on a mobile shard of a green run (44021154191) and
+    // 22.9 s of actions in the trace of a tablet attempt that ran out of its 30 s on the slowest shard (runs 44025795508, 44045571667). Three times the default, for this test only.
+    test.slow();
     const owner = await openForm(page, testInfo);
     await saveFasteners(page, WITH_FASTENERS);
     for (const [letter, typed] of [
