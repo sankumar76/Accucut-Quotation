@@ -93,3 +93,28 @@ Everything the brief asked to check holds:
 - **Deviations:** `ALERTS_OFF` and the CHECK are acceptable.
 
 After SQR-01 and SQR-02 are fixed (and the branch is updated, SQR-08), a re-review of the new diff only is enough. The two Minors (SQR-03, SQR-04) go to a follow-up issue; SQR-04 is cheapest done in this PR, since the migration is not deployed. SQR-05 and SQR-06 go to the solution-architect, and SQR-07 to the product-owner and the scrum-master for the later EPIC-09 stories.
+
+## Re-review (2026-11-18, head `9ec4d9e6`)
+
+| Item | Value |
+|---|---|
+| New diff reviewed | `bbf1d646..9ec4d9e6`: 11648f9 (the fixes: 5 files, +122 / -21) and 9ec4d9e (a merge of `master` 230bd77, #487) |
+| CI | Run 44365345587 on 9ec4d9e: **all green** ("Stages 1 to 11b", "Stages 1 to 11", E2E shards 1 to 4). "Windows package" 44365344559 on 9ec4d9e: green. GitHub merge state: `CLEAN` |
+| Tests I ran | At 9ec4d9e (read-only worktree `aqp-348`): `npx vitest run tests/unit/jobs/outbox-send.test.ts tests/unit/mail tests/security/mail-confidentiality.test.ts --maxWorkers=1`, **11 files, 141 tests passed**. The worktree stayed clean |
+| **Verdict** | **REQUEST CHANGES**: the merge waits **only on SQR-01** (the delivery lead's `.env.example` line) |
+| Open counts | Blocker 0 · Critical 1 · Major 0 · Minor 1 · Info 5 |
+
+**The merge is clean.** Every file `master` changed (44a51e3 to 230bd77) has the same blob in 9ec4d9e as in 230bd77. Every file the PR changed has the same blob in 9ec4d9e as in 11648f9, except one: `src/server/composition.ts`, which both sides changed. Git auto-merged it, and the result is exactly `master`'s export-service change plus this PR's mail wiring (the imports, `mailService`, `getMailService`). 9ec4d9e against `master` shows the 34 PR files only.
+
+| Finding | Status | Evidence |
+|---|---|---|
+| SQR-01 (Critical): `FEATURE_EMAIL` in `.env.example` (AC-6) | **Not fixed (pending the delivery lead)** | `.env.example` is not in the new diff. The only open item before the merge |
+| SQR-02 (Major): a sent message recorded as `failed` | **Fixed** | `outbox-send.ts`: step 1 (recipients, settings, send) is the only part whose error gives `failed` (`fail(...).catch`, `continue`). A refused send gives `fail(row.id, result.code)`. After the server accepts, `sent += 1`, then `markSent(...).catch(() => false)`. A rejection, or `false` (no row changed), leaves the row `sending`, never `failed`, and counts `notRecorded`. The log line adds `; NOT_RECORDED n (…)` at `error` level. New unit tests: the first row's mark rejects (sent 2, failed 0, notRecorded 1, `markFailed` not called, the second row saved), one row, a mark that changes no row, the exact log line with no id, address or error text, and a failed send whose failed mark rejects (no throw). The tests assert outcomes, not only "no exception" |
+| SQR-03 (Minor): a batch can outlast its lock and `send_before` | **Open, deferred** to #505 and STORY-09.06 as planned | Unchanged. It now also covers `NOT_RECORDED` rows, which stay `sending` like a dead worker's row: 09.06's recovery must treat them as "may have left" and blank their secret bodies |
+| SQR-04 (Minor): `last_error` not held to the codes | **Fixed** | `ck_email_outbox_last_error_code` (the eight codes, NULL allowed) is in the undeployed migration. The integration test accepts every code and NULL, and refuses five bad values (an error message with an IP, one with a planted password, lower case, empty, a trailing space) for both the owner and the runtime role. `tests/unit/mail/codes.test.ts` keeps the migration's list equal to `SEND_FAILURE_CODES` + `SKIP_CODES`. `NOT_RECORDED` is a log-only code and never reaches the column. Note: the unit test reads this one migration file, so a later migration that changes the CHECK must update it |
+| SQR-05 to SQR-07, SQR-09 (Info) | Unchanged | Routed as before (solution-architect; product-owner and scrum-master) |
+| SQR-08 (Info): branch behind `master` | **Closed** | 9ec4d9e merges 230bd77; CI is green on the merged head |
+
+**No new findings** in the new diff. The changed code adds no logging of error text, no new import (only the `SendResult` type from `codes`), and no new database access.
+
+**Next:** the delivery lead appends `FEATURE_EMAIL=off` on the branch, and the developer adds the test that `.env.example` names it. Then a one-line re-check, and the label changes to `review:quality-approved`. Until then the label stays `review:quality-changes-requested`. Follow-up #505 keeps SQR-03 only.
