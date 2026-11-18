@@ -36,6 +36,7 @@ beforeAll(async () => {
   review = createEstimateReviewService({
     calculations: {
       findFigureBasis: (estimateId) => db.calculations.findFigureBasis(estimateId),
+      findMasterSnapshot: (calculationId) => db.calculations.findMasterSnapshot(calculationId),
       findReviewFigures: (calculationId) => {
         reads += 1;
         return db.calculations.findReviewFigures(calculationId);
@@ -43,6 +44,8 @@ beforeAll(async () => {
     },
     approvals: db.approvals,
     nodes: db.nodes,
+    estimates: db.estimates,
+    masters: db.masterRepository,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
   });
 }, 120_000);

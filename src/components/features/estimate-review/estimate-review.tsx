@@ -13,6 +13,7 @@ import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { warnedNodeIds } from './quantity-tag';
+import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
@@ -106,6 +107,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       <UnlockedNotice state={state} unlock={costs.approval === null || costs.approval.cancel !== null ? null : costs.approval.unlock} isDraft={header.status === 'DRAFT'} />
       <CancelledNotice cancel={costs.approval?.cancel ?? null} wasUnlocked={costs.approval !== null && costs.approval.unlock !== null} status={header.status} viewedByAdmin={viewerRole === 'ADMIN'} />
       <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
+      <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
@@ -116,6 +118,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         status={header.status}
         approve={approveOffer(header.status, costs)}
         cancel={cancelOffer(viewerRole, costs.approval)}
+        ratesChanged={costs.ratesChanged !== null}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />
     </div>

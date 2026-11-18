@@ -254,6 +254,9 @@ export function getEstimateReviewService(): EstimateReviewService {
       // BO is read from the approvals row, never through the figure state (STORY-06.06 AC-9).
       approvals: createApprovalRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
+      // The status and the masters now, for the notice of rates that changed since the calculation (STORY-06.11): read only while the figures are current and the estimate is not approved.
+      estimates: createEstimateRepository(runtimeClient()),
+      masters: createMasterRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
     });
   }

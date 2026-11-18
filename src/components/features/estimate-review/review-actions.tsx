@@ -5,6 +5,7 @@ import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/r
 import { UnlockButton } from '@/components/features/estimate-unlock/unlock-button';
 import { Button } from '@/components/ui/button';
 import type { RoleName } from '@/lib/auth/roles';
+import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -35,6 +36,9 @@ import {
  * The action bar of SCR-06 (STORY-06.02 AC-6, STORY-06.04 AC-3, AC-5, STORY-06.06 AC-1, AC-5; UX spec SCR-06 "States"): the line "Calculated <time> · configuration version <n>" (FR-031), the primary **Calculate**
  * (for an estimate that was never calculated) or **Recalculate** (while the figures are cleared, and **on a Draft whatever the state of the figures**, STORY-06.08 AC-11), which works from STORY-06.04, **Approve and lock**, and Download .xlsx.
  *
+ * **A "Rates changed" notice brings the button with it** (STORY-06.11 AC-1, AC-10): its link is to Recalculate, so while the costs view holds that notice the bar shows Recalculate whatever the status (a Submitted
+ * estimate with current figures has none otherwise), and a link never points at a missing button.
+ *
  * **Approve and lock** is on only while the guard of STORY-06.05 would let the press through (the estimate is SUBMITTED, its figures are `current` and the page holds the calculation they come from): it is then the
  * button of the one small script `ApproveButton`, which opens the dialog of SCR-08 (fetched on the first press, not in the first load). In every other state it is **off with a reason**: each disabled button names its
  * reason in visible text and is described by it (`aria-describedby`), so a screen reader hears why. The server decides all the same; the button is a convenience. For an **approved** estimate Approve and lock is gone and
@@ -52,6 +56,8 @@ export interface ApproveOffer {
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning, for the one line of the approval dialog (STORY-06.10 AC-5); empty when it has none. Approving is not stopped either way. */
   readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
+  /** The one line of the dialog when rates changed since the calculation (STORY-06.11 AC-2), counts by kind and no value; `null` when none. Approving is not stopped either way. */
+  readonly ratesLine: string | null;
 }
 
 /**
@@ -73,6 +79,8 @@ export interface ReviewActionsProps {
   readonly approve: ApproveOffer | null;
   /** The Cancel approval button for the Admin, or the line for a Lead, while the latest approval has not been cancelled (see `cancelOffer`). */
   readonly cancel: CancelOffer | null;
+  /** The "Rates changed" notice is drawn (STORY-06.11): the Recalculate button its link points at is on the bar. */
+  readonly ratesChanged: boolean;
 }
 
 interface ReasonProps {
@@ -90,10 +98,16 @@ const Reason = ({ id, text }: ReasonProps) => (
  * Whether Approve and lock is on, and with what: a SUBMITTED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
  * server's guard (`assertApprovable`), which stays the authority: a button that is on for an estimate the server would refuse only earns the refusal's sentence.
  */
-export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning'>): ApproveOffer | null {
+export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning' | 'ratesChanged'>): ApproveOffer | null {
   const total = costs.totals?.totalPrice ?? null;
   if (status !== 'SUBMITTED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
-  return { calculationId: costs.calculationId, calculatedTotal: total, approvedLetter: costs.letters.approvedPrice, warningRows: costs.warning?.rows ?? [] };
+  return {
+    calculationId: costs.calculationId,
+    calculatedTotal: total,
+    approvedLetter: costs.letters.approvedPrice,
+    warningRows: costs.warning?.rows ?? [],
+    ratesLine: costs.ratesChanged === null ? null : approveRatesLine(costs.ratesChanged),
+  };
 }
 
 /**
@@ -127,6 +141,7 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
         calculatedTotal={approve.calculatedTotal}
         approvedLetter={approve.approvedLetter}
         warningRows={approve.warningRows}
+        ratesLine={approve.ratesLine}
       />
     );
   }
@@ -141,10 +156,11 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
   );
 }
 
-export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel }: ReviewActionsProps) {
+export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, ratesChanged }: ReviewActionsProps) {
   // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, submitted
-  // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock.
-  const showRecalculate = state !== 'current' || status === 'DRAFT';
+  // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
+  // is to Recalculate, so the button is there then (STORY-06.11).
+  const showRecalculate = state !== 'current' || status === 'DRAFT' || ratesChanged;
   const downloadReason = state === 'current' ? DOWNLOAD_NOT_YET_REASON : DOWNLOAD_NOT_CALCULATED_REASON;
   return (
     <div role="group" aria-label={ACTIONS_LABEL} className="flex flex-col gap-s-3 rounded-md border border-border bg-surface px-s-4 py-s-3">

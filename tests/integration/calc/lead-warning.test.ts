@@ -31,6 +31,8 @@ beforeAll(async () => {
     calculations: db.calculations,
     approvals: db.approvals,
     nodes: db.nodes,
+    estimates: db.estimates,
+    masters: db.masterRepository,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
   });
 }, 120_000);
