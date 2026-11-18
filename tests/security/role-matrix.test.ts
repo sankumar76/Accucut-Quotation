@@ -103,6 +103,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/audit': 'redirect:/sign-in?callbackUrl=%2Faudit',
   '/settings': 'redirect:/sign-in?callbackUrl=%2Fsettings',
   '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
+  '/about': 'redirect:/sign-in?callbackUrl=%2Fabout',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',

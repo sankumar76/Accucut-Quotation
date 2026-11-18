@@ -62,6 +62,7 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/estimates/[code]/costs/[slNo]': () => import('@/app/(portal)/estimates/[code]/costs/[slNo]/page'),
   '/estimates/[code]/export': () => import('@/app/(portal)/estimates/[code]/export/page'),
   '/design-system': () => import('@/app/(portal)/design-system/page'),
+  '/about': () => import('@/app/(portal)/about/page'),
   '/account': () => import('@/app/(portal)/account/page'),
   '/users': () => import('@/app/(portal)/users/page'),
   '/audit': () => import('@/app/(portal)/audit/page'),
