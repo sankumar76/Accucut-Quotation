@@ -19,11 +19,11 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, checksum]);
 }
 
-/** A 1 x 1 PNG of one grey pixel, whole and well formed. */
-function basePng(extra: Buffer = Buffer.alloc(0)): Buffer {
+/** A PNG of one grey pixel, whole and well formed, whose header says 1 x 1 unless told: nothing decodes it, so the header and the data need not agree. */
+function basePng(extra: Buffer = Buffer.alloc(0), width = 1, height = 1): Buffer {
   const header = Buffer.alloc(13);
-  header.writeUInt32BE(1, 0);
-  header.writeUInt32BE(1, 4);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
   header.writeUInt8(8, 8); // bit depth
   header.writeUInt8(0, 9); // greyscale
   return Buffer.concat([PNG_SIGNATURE, pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(Buffer.from([0x00, 0x80]))), extra, pngChunk('IEND', Buffer.alloc(0))]);
@@ -38,6 +38,14 @@ export function pngOfSize(size: number): Buffer {
 }
 
 export const smallPng = (): Buffer => basePng();
+
+/** A PNG whose header names this size, padded to `size` bytes when one is given (STORY-07.02: a picture of a known shape and, for the timing, of 199 KB). */
+export function pngOfDimensions(width: number, height: number, size?: number): Buffer {
+  const smallest = basePng(Buffer.alloc(0), width, height).length;
+  if (size === undefined || size === smallest) return basePng(Buffer.alloc(0), width, height);
+  if (size < smallest + PNG_CHUNK_OVERHEAD) throw new Error(`The smallest padded PNG is ${String(smallest + PNG_CHUNK_OVERHEAD)} bytes.`);
+  return basePng(pngChunk('prVt', Buffer.alloc(size - smallest - PNG_CHUNK_OVERHEAD, 0x61)), width, height);
+}
 
 const JPEG_START = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
 const JPEG_END = [0xff, 0xd9];
@@ -67,8 +75,29 @@ export function jpegOfSize(size: number): Buffer {
 
 export const smallJpeg = (): Buffer => jpegOfSize(40);
 
+/** A JPEG with a start of frame that names this size: the start, the JFIF header, one frame segment and the end. Nothing decodes it. */
+export function jpegOfDimensions(width: number, height: number): Buffer {
+  const frame = Buffer.alloc(13);
+  frame.writeUInt8(0xff, 0);
+  frame.writeUInt8(0xc0, 1);
+  frame.writeUInt16BE(11, 2); // the length counts itself, the precision, the height, the width, the component count and one component of 3 bytes
+  frame.writeUInt8(8, 4);
+  frame.writeUInt16BE(height, 5);
+  frame.writeUInt16BE(width, 7);
+  frame.writeUInt8(1, 9);
+  return Buffer.concat([Buffer.from(JPEG_START), frame, Buffer.from(JPEG_END)]);
+}
+
 /** A 1 x 1 GIF (the well-known 35 byte one). */
 export const smallGif = (): Buffer => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
+/** A GIF whose screen descriptor names this size (the 1 x 1 file with its two numbers changed). */
+export function gifOfDimensions(width: number, height: number): Buffer {
+  const gif = smallGif();
+  gif.writeUInt16LE(width, 6);
+  gif.writeUInt16LE(height, 8);
+  return gif;
+}
 
 /** A 1 x 1 lossless WebP (34 bytes). */
 export const smallWebp = (): Buffer => Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
