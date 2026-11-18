@@ -13,8 +13,43 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-17 by orchestrator (resume point, pause) |
+| Last updated       | 2026-11-18 by orchestrator (daily update and resume point, 2026-11-18) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update and resume point (2026-11-18, orchestrator)
+
+> This section wins over everything below it, including "Resume point (2026-11-17, pause)". Records branch `docs/AQP-1-records-t` in `.claude/worktrees/records-t`. **The main checkout still belongs to the CR-01 session: do not check it out, stash, reset or write there.**
+
+**Master is green.** Push runs 44292510304 (36b2f16) and 44299541392 (04824cc, after the AQP-347 fix) passed. Later merges (534ff1b, 0feea64): read their push runs on resume.
+
+**Merged today (squash, each on fully green required checks, up to date with `master`):**
+| PR | What | Merge |
+|---|---|---|
+| #479 | AQP-328 06.11 rate-change notice, with the architect's GUARD EDIT ruling (approved-read guard names `rate-changes.ts`) | ac86e20 |
+| #455 | `@lhci/cli` 0.16.1 (DL-230: Lighthouse 44285284224 green; the lockfile was unchanged by the last update) | 36b2f16 |
+| #486 | **AQP-347 / DEF-044** `account.spec.ts:299`: one test split into three, test only, DL-229-conformant (DL-235) | 04824cc |
+| #483 | **AQP-329** 06.12 cancel approval [c]: fixture fault fixed (a second active Admin broke `uq_users_single_active_admin`); combined review APPROVE WITH COMMENTS, 0 Major; SQR-01 → #491 (in AQP-330) | 534ff1b |
+| #492 | AQP-308 10.03 page metadata; the architect accepted the `@one-width` allow-list change (test strategy v0.44) | 0feea64 |
+
+**Jira Done today:** AQP-328, AQP-347, AQP-329, AQP-308.
+
+**Records today (this branch):** DL-235 (AQP-347 takes the lane; **3 developer lanes** and focused local Playwright runs on the 24 GB PC; nightly "CI feedback time" failure 44267833415 logged and frozen under §9 item 4, p95 22 m 23 s, median 16 m 17 s); RISK-023 note; architecture v0.51 and test strategy v0.43 (B0 re-taken on Lighthouse 13 from run 44292597690: `/` LCP 191 ms, TBT 1 ms, `benchmarkIndex` 2594.5; #39 closed); test strategy v0.44; `docs/06-reviews/AQP-329/combined.md`.
+
+**Open PRs and lanes:**
+| Item | State | Next |
+|---|---|---|
+| AQP-332 07.02 export rows [c] (#487) | Developer lane; CI running at last report | Green → combined review (§9 item 2) → merge. Follow-ups #489 (WebP pictures), #490 (abort signal) |
+| AQP-338 08.02 edit a formula [c] (#493, draft) | Developer lane; **behind master** (local merge refused) | Needs the delivery lead's decision below; then `pageMetadata` on the formula page, CI, combined review |
+| AQP-330 06.13 remove cancelled price [c] | Developer lane, started today; includes #491 | Green → combined review → merge |
+| #474–#477 Dependabot | The delivery lead's | Not acted on |
+
+**Decision needed from the delivery lead (one, posted as AQP-1 comment 12172):** developers' local `git merge origin/master` is refused by the permission settings, which blocks updating story branches. Recommended option (a): the orchestrator may use GitHub "update branch" (a merge commit) on story PRs. **Disclosure:** the orchestrator used it once for #492 after the developer's merge had been refused, before seeing that this routes around the refusal; it has stopped.
+
+**Also for the delivery lead:** (1) set the repository variable `LIGHTHOUSE_B0` to `2594.5` (DL-087; the architect's B0); (2) the timing of #485 (no key screen in `KEY_SCREENS`, so NFR-009 LCP and TBT are unmeasured on the five key screens; the architect recommends a small enabler now, but §9 item 4 freezes enablers, so your call); (3) housekeeping: `.claude/worktrees/aqp-347` is an orphan folder (git deregistered it, but deleting the files was refused; its only junctions point inside itself), `agent-a358ec5d24f2e0364` has a `node_modules` junction to the main checkout (agent memory archived to `.claude/agent-memory/_archive-2026-11-18/`; remove the junction first), the scratch `wt-470` as before, the finished `aqp-328` and `aqp-329` worktrees, and a stray untracked file `AppData` in the main checkout root (made by a developer's mistyped redirect; harmless). Note: the aqp-329 worktree's `src/generated` had been a junction into the main checkout, so one `prisma generate` rewrote the main checkout's git-ignored `src/generated` with equivalent content (same schema).
+
+**Worktrees removed today:** aqp-326, aqp-342, aqp-343, agent-ad018d01ac3784f70 (all clean, merged). **Hardening list additions:** #488 (`account.spec.ts:113` tight, same split as #486), #491 (in AQP-330), #484 (`parse-cache-control` exception), SQR-02 of AQP-329 (architecture §6 row; UX 409 sentences), the `estimate-warning.spec.ts:156` [tablet] flake (a held calculate request; not yet a bug).
+
+**Next, in order:** the decision above; AQP-332 review and merge; AQP-330; AQP-338; then AQP-333 (07.03, carries #478 SQR-01), AQP-334, AQP-336, AQP-335, AQP-309, AQP-312, AQP-90.
 
 ## Resume point (2026-11-17, pause)
 
