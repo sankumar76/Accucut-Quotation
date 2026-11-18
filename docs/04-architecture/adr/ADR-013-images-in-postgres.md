@@ -36,6 +36,8 @@ We will store images in a separate `part_images` table with `bytes` as `bytea`, 
 
 Validation is by content: a small signature check for PNG, JPEG, GIF and WebP in `src/lib/images`, with no dependency needed, and under 200 × 1024 bytes (A-06). SVG is not accepted. Images are served with the stored MIME, `nosniff`, and the same ownership check as the estimate, and are never decoded on the server.
 
+**Amendment 1 (2026-11-18, DL-237, OQ-PM-10 ruling on PR #487):** a WebP is still recognised by the signature check, but the server refuses to store one (415 `PICTURE_TYPE_REFUSED`, in `checkPicture`). The portal's page converts a WebP to PNG or JPEG in the browser before it uploads, so what is stored is always PNG, JPEG or GIF, which the export can embed (ADR-012). Nothing is decoded on the server; this decision is otherwise unchanged.
+
 ## Consequences
 - Positive: backup and restore stay single-step. No orphaned file can break an approved estimate.
 - Negative / trade-offs accepted: weekly dumps grow with images, which do not compress, and each is kept 2 years (D-15), so off-host storage is about 105 x one dump. Unreferenced rows are not pruned (TD-03).
