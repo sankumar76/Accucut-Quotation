@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { updateUser, type UserRow } from '@/lib/users/users-client';
 
-import { FAILED_DEACTIVATE_MESSAGE, TRY_AGAIN_BODY } from './texts';
+import { deactivateDescription, FAILED_DEACTIVATE_MESSAGE, TRY_AGAIN_BODY } from './texts';
 
 /**
  * The "Deactivate" confirmation of SCR-14 (STORY-01.04 AC-1, AC-7): an alert dialog, because the action takes something away
@@ -61,7 +61,7 @@ export function DeactivateDialog({ open, user, onClose, onDeactivated, onCloseAu
             <AlertDialogHeader>
               <AlertDialogTitle>Deactivate {user.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                {user.name} can no longer sign in. Their tasks and estimates stay as they are. You can activate them again later.
+                {deactivateDescription(user.name)}
               </AlertDialogDescription>
             </AlertDialogHeader>
             {failed ? (
