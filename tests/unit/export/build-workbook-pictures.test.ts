@@ -15,6 +15,9 @@ import { loadWorkbook, readXlsxParts } from '../../support/xlsx-parts';
  * cell empty. The file is built in process and read back with ExcelJS and, for the media, at the level of its zip. Every picture is a few invented bytes.
  */
 
+/** The ceiling of the timing test under the combined coverage run of CI, which slows the build several times over (the 10 s line is the perf test's). */
+const LOOSE_BOUND_SECONDS = 90;
+
 const COLUMNS = [
   { letter: 'A', header: 'Sl. No', width: 8, numFmt: '@' },
   { letter: 'B', header: 'Name', width: 20, numFmt: '@' },
@@ -161,10 +164,9 @@ describe('AC-8 (NFR-010): 50 parts with 50 pictures of 199 KB', () => {
     const started = performance.now();
     const bytes = await buildWorkbook(model(rows, pictures));
     const seconds = (performance.now() - started) / 1000;
-    process.stdout.write(`STORY-07.02 AC-8: 50 parts with 50 pictures of 199 KB built in ${seconds.toFixed(2)} s, a file of ${(bytes.byteLength / 1_048_576).toFixed(1)} MB.
-`);
+    process.stdout.write(`STORY-07.02 AC-8: 50 parts with 50 pictures of 199 KB built in ${seconds.toFixed(2)} s, a file of ${(bytes.byteLength / 1_048_576).toFixed(1)} MB.\n`);
     expect(mediaOf(bytes)).toHaveLength(50);
-    // The formal gate is STORY-07.05's; this ceiling only catches a build that has become many times slower.
-    expect(seconds).toBeLessThan(10);
-  }, 60_000);
+    // The 10 s line of AC-8 is measured by `tests/perf/export-memory.test.ts` on a quiet machine without coverage, and its formal gate is STORY-07.05's. The combined coverage run of CI slows ExcelJS several times over, so this ceiling only catches a build that has become many times slower.
+    expect(seconds).toBeLessThan(LOOSE_BOUND_SECONDS);
+  }, 120_000);
 });
