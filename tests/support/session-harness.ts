@@ -278,6 +278,8 @@ export function createSessionHarness(): SessionHarness {
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
     findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    findMasterSnapshot: (calculationId: string) => calculationWorld.repository.findMasterSnapshot(calculationId),
+    findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
@@ -287,6 +289,8 @@ export function createSessionHarness(): SessionHarness {
     calculations: reviewReads,
     approvals: reviewReads,
     nodes: reviewReads,
+    estimates: reviewReads,
+    masters,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
