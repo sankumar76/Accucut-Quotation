@@ -4,8 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
-import { createDisposableUser, useFreshAddress } from './support/auth';
-import { engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
+import { createDisposableUser, putPictureOnCanaryPart, useFreshAddress } from './support/auth';
+import { calculateWithoutThePage, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { withExportTurn } from './support/export-slot';
 
@@ -38,7 +38,10 @@ async function openExport(page: Page, code: string): Promise<void> {
 
 test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
   test('the page shows the file card and the rows, and the button downloads a workbook named after the customer, the task and the IST date, with columns A to BO', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    // The file is of the calculation, so the Engineer presses Calculate first (without the pages), then the Lead opens the export. The part has its picture (AC-4).
+    await putPictureOnCanaryPart(owner.id);
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 
@@ -59,10 +62,22 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     expect(sheet?.columnCount).toBe(67);
     expect(sheet?.getCell('A1').value).toBe('Sl. No');
     expect(sheet?.getCell('BO1').value).toBe('Approved Quote Price');
+    // STORY-07.02 AC-1, AC-2: the part's own row below the header, its Sl. No as text, its figures from the record, and a hidden line present as 0 (Fasteners Qty, T).
+    expect(sheet?.actualRowCount).toBe(2);
+    expect(sheet?.getCell('A2').value).toBe('1');
+    expect(sheet?.getCell('BG2').value).toEqual(expect.any(Number));
+    expect(sheet?.getCell('T2').value).toBe(0);
+    // STORY-07.02 AC-4: the part's picture, built by the real thread, is embedded in column C of its own row (zero-based column 2, row 1), over an empty cell.
+    expect(sheet?.getCell('C2').value).toBeNull();
+    const pictures = sheet?.getImages() ?? [];
+    expect(pictures).toHaveLength(1);
+    expect(pictures.map((picture) => [Math.floor(picture.range.tl.col), Math.floor(picture.range.tl.row)])).toEqual([[2, 1]]);
+    expect([...readXlsxParts(bytes).keys()].filter((name) => name.startsWith('xl/media/') && !name.endsWith('/'))).toHaveLength(1);
   });
 
   test('the route answers an attachment of the right type with `no-store`, and an Admin gets the same', async ({ page }, testInfo) => {
     const { owner } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo, 'ADMIN');
     await page.goto('/queue');
     const answer = await withExportTurn(() =>
@@ -79,9 +94,27 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
   });
 });
 
+test.describe('STORY-07.02: no file unless the calculation is current (architecture section 4.6)', () => {
+  test('the file route refuses an estimate that was never calculated with 409 NOT_CALCULATED, fixed words and no file', async ({ page }, testInfo) => {
+    const { owner } = await engineerWithEstimate(testInfo);
+    await signInAsLead(page, testInfo);
+    await page.goto('/queue');
+    const refused = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/v1/estimates/${id}/export`);
+      return { status: response.status, type: response.headers.get('content-type'), disposition: response.headers.get('content-disposition'), body: await response.text() };
+    }, owner.id);
+    expect(refused.status).toBe(409);
+    expect(refused.type).toContain('application/problem+json');
+    expect(refused.disposition).toBeNull();
+    expect(JSON.parse(refused.body)).toMatchObject({ status: 409, code: 'NOT_CALCULATED' });
+    expect(refused.body).not.toMatch(/^PK/);
+  });
+});
+
 test.describe('AC-6: the Building and Error states of the button', () => {
   test('Building: the button is disabled and the line names the parts and pictures while the file is built, and the button is back afterwards', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 

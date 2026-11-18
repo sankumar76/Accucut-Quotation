@@ -1,9 +1,12 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
-import { PLAIN_TEXT, pngOfSize, SVG_TEXT } from '../support/pictures';
+import { PLAIN_TEXT, pngOfSize, SVG_TEXT, smallWebp } from '../support/pictures';
+import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
-import { useFreshAddress } from './support/auth';
+import { connectToTestDatabase, useFreshAddress } from './support/auth';
+import { calculateWithoutThePage, makeCalculable, signInAsLead } from './support/calculated-estimate';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { withExportTurn } from './support/export-slot';
 import { control, expectFormAccessible, isPatchOfInputs, openForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -28,7 +31,7 @@ test.beforeEach(() => {
 });
 
 /** Opens the form as `openForm` does, and waits for the picture field, which arrives after the form (a separate chunk). Answers the person. */
-async function open(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+async function open(page: Page, testInfo: TestInfo): Promise<Awaited<ReturnType<typeof openForm>>> {
   const owner = await openForm(page, testInfo);
   await expect(zone(page)).toBeVisible({ timeout: 45_000 });
   return owner;
@@ -198,6 +201,58 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
     await expect(section(page).getByRole('alert')).toHaveCount(0);
     // And a picture added after a value was saved is accepted: the other way round.
     expect(await choose(page, 'after.png', pngOfSize(300))).toBe(200);
+  });
+});
+
+test.describe('SQR-01 of AQP-332 (DL-237): a WebP is converted in the browser, so the Excel file can hold the picture', () => {
+  test('choosing a WebP stores a JPEG or a PNG under the new name, the form shows that, and the file of a Lead embeds it in column C', async ({ page }, testInfo) => {
+    const owner = await open(page, testInfo);
+    const written = writeOfPicture(page, 'PUT');
+    await chooser(page).setInputFiles(file('invented-front.webp', smallWebp(), 'image/webp'));
+    expect((await written).status()).toBe(200);
+    // The part shows the converted file's name, never the WebP's, and no refusal.
+    await expect(zone(page)).toContainText(/invented-front[.](jpg|png)/);
+    await expect(zone(page)).not.toContainText('.webp');
+    await expect(section(page).getByRole('alert')).toHaveCount(0);
+
+    // What is stored is a JPEG or a PNG, never a WebP (the server refuses one that arrives unconverted).
+    const client = await connectToTestDatabase();
+    try {
+      const { rows } = await client.query<{ mime: string; file_name: string }>("SELECT mime, file_name FROM part_images WHERE estimate_id = $1::uuid AND file_name <> 'canary-part.png'", [owner.id]);
+      expect(rows).toHaveLength(1);
+      expect(['image/jpeg', 'image/png']).toContain(rows[0]?.mime);
+      expect(rows[0]?.file_name).toMatch(/^invented-front[.](jpg|png)$/);
+    } finally {
+      await client.end();
+    }
+
+    // The picture is in the file: the Engineer's Calculate records it, and the Lead's workbook holds it in column C of the part's row.
+    await makeCalculable(owner);
+    await calculateWithoutThePage(page, owner);
+    await signInAsLead(page, testInfo);
+    const answer = await withExportTurn(() => page.request.get(`/api/v1/estimates/${owner.id}/export`));
+    expect(answer.status()).toBe(200);
+    const bytes = new Uint8Array(await answer.body());
+    const sheet = (await loadWorkbook(bytes)).worksheets[0];
+    const pictures = sheet?.getImages() ?? [];
+    expect(pictures).toHaveLength(1);
+    expect(pictures.map((picture) => [Math.floor(picture.range.tl.col), Math.floor(picture.range.tl.row)])).toEqual([[2, 1]]);
+    expect([...readXlsxParts(bytes).keys()].filter((name) => name.startsWith('xl/media/') && /[.](jpeg|png)$/.test(name))).toHaveLength(1);
+  });
+
+  test('a WebP sent straight to the server, as another client would, is refused 415 in the existing words and nothing is stored', async ({ page }, testInfo) => {
+    const owner = await open(page, testInfo);
+    const refused = await page.evaluate(
+      async ({ route, base64 }) => {
+        const form = new FormData();
+        form.append('file', new File([Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))], 'raw.webp', { type: 'image/webp' }));
+        const response = await fetch(route, { method: 'PUT', body: form });
+        return { status: response.status, body: await response.json() };
+      },
+      { route: ownerRoute(owner), base64: Buffer.from(smallWebp()).toString('base64') },
+    );
+    expect(refused.status).toBe(415);
+    expect(refused.body).toMatchObject({ code: 'PICTURE_TYPE_REFUSED', title: WRONG_TYPE });
   });
 });
 

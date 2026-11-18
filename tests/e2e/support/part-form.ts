@@ -7,7 +7,7 @@ import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage } from './auth';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage, type E2eUser } from './auth';
 import { expectNoAxeViolations } from './design-system';
 import { DEVELOPMENT_URL } from './servers';
 
@@ -39,7 +39,7 @@ export function nextSave(page: Page): Promise<number> {
  * A new Engineer who owns a task, signed in without the sign-in screen and the queue (`signInWithoutThePage`): the part-form specs start from the workspace, and the two page loads before it
  * were a quarter of a journey test's 30 s on a loaded runner (AQP-340). The caller goes to the workspace next, as every caller does.
  */
-export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<E2eUser & { readonly id: string }> {
   await page.context().clearCookies();
   const person = await createDisposableUser('scan', testInfo);
   await signInWithoutThePage(page, person.email, E2E_PASSWORD);
@@ -59,7 +59,7 @@ export async function waitForForm(page: Page): Promise<void> {
  * `fromTheQueue` is for a test whose subject is the history (Back from the estimate must land on the queue, as it does for a person who signed in on the page): the workspace is then
  * reached from the queue page, the one page load the other tests save.
  */
-export async function openForm(page: Page, testInfo: TestInfo, options: { readonly fromTheQueue?: boolean } = {}): Promise<{ readonly id: string }> {
+export async function openForm(page: Page, testInfo: TestInfo, options: { readonly fromTheQueue?: boolean } = {}): Promise<E2eUser & { readonly id: string }> {
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
