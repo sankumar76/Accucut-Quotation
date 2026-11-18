@@ -189,7 +189,7 @@ export function FormulaEditor({ field, fields, version }: FormulaEditorProps) {
               <p id={HINT_ID} className="text-label text-ink-3">
                 {FORMULA_HINT}
               </p>
-              {field.note === null ? null : <p className="max-w-prose text-label text-ink-2">{field.note}</p>}
+              {lastValid?.note == null ? null : <p className="max-w-prose text-label text-ink-2">{lastValid.note}</p>}
             </div>
             <div id={CHECK_REGION_ID} aria-live="polite" aria-atomic="true">
               <CheckNotice check={check} />

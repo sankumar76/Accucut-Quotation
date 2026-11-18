@@ -82,12 +82,14 @@ describe('AC-3: nothing runs text as code', () => {
     expect(offenders).toEqual([]);
   });
 
-  it.each(FORBIDDEN)('the whole source tree holds 0 uses of %s', (_name, pattern) => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => codeLines(readFileSync(file, 'utf8')).some((line) => pattern.test(line)))
-      .map((file) => relative(ROOT, file));
-    expect(offenders).toEqual([]);
-  });
+  it('the whole source tree holds 0 uses of each of them', () => {
+    // The tree is read once: it has some 1,500 files, and reading it for each pattern in turn is what makes a loaded machine slow.
+    const tree = sourceFiles(SRC).map((file) => ({ file: relative(ROOT, file), code: codeLines(readFileSync(file, 'utf8')) }));
+    expect(tree.length).toBeGreaterThan(500);
+    for (const [name, pattern] of FORBIDDEN) {
+      expect(tree.filter((entry) => entry.code.some((line) => pattern.test(line))).map((entry) => entry.file), name).toEqual([]);
+    }
+  }, 60_000);
 
   it('searches every file the story added: each exists and is read', () => {
     expect(STORY_FILES.every((file) => readFileSync(join(ROOT, file), 'utf8').length > 0)).toBe(true);

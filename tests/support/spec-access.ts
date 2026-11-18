@@ -17,6 +17,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/masters/customers/[id]': ['ADMIN'], // SCR-12, the edit page
   '/masters/materials': ['ADMIN'],
   '/config/fields': ['ADMIN', 'LEAD'], // Field and formula configuration: Admin edits, Lead views
+  '/config/fields/[id]/formula': ['ADMIN'], // SCR-18, the formula editor: the Admin edits (STORY-08.02, NFR-001)
   '/config/checkpoints': ['ADMIN'], // Insert and delete fields, checkpoints: Admin
   '/users': ['ADMIN'], // Users
   '/settings': ['ADMIN'], // Settings
@@ -33,6 +34,10 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind Fields and formulas (STORY-08.01; architecture section 6 row "Configuration": A L): the Admin and the Lead read the formulas, an Engineer never does (NFR-002, CR-33).
   '/api/v1/config/fields': ['ADMIN', 'LEAD'],
   '/api/v1/config/current': ['ADMIN', 'LEAD'],
+  // The formula editor's three routes (STORY-08.02 AC-7; architecture section 6 rows "Formula check", "Sample rows", "Save formula": A): the Admin alone.
+  '/api/v1/config/formula-check': ['ADMIN'],
+  '/api/v1/config/sample-rows': ['ADMIN'],
+  '/api/v1/config/fields/[id]/formula': ['ADMIN'],
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],

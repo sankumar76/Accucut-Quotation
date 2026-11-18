@@ -40,6 +40,7 @@ export const formulaCheckAnswerSchema = z.strictObject({
   message: z.string().min(1),
   uses: z.array(useSchema),
   feeds: z.array(fedFieldSchema),
+  note: z.string().min(1).nullable(),
   preview: previewSchema.nullable(),
 });
 

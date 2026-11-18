@@ -4,6 +4,7 @@ import { checkFormulaEdit, isFormulaField, MAX_STORED_FORMULA_LENGTH, withFormul
 import { findFieldById } from '@/lib/fields/registry';
 
 import { defined } from '../../support/defined';
+import { CUTTING_COST_FIELD_ID } from '../../support/route-calls';
 import { seedConfig, seedFieldAt, SEED_PROCESS_ITEMS } from '../../support/seed-config';
 
 /**
@@ -114,6 +115,12 @@ describe('AC-3: a valid formula says what it uses and what it feeds', () => {
     if (!result.ok) throw new Error(result.message);
     expect(findFieldById(result.edited, AL.id)).toMatchObject({ formula: result.internalForm });
     expect(findFieldById(seedConfig, AL.id)).not.toMatchObject({ formula: result.internalForm });
+  });
+});
+
+describe('the recipes of the security tests', () => {
+  it('name Cutting Cost by the ID the seed registry gives it', () => {
+    expect(CUTTING_COST_FIELD_ID).toBe(AL.id);
   });
 });
 

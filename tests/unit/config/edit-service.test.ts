@@ -59,7 +59,7 @@ function world(over: Partial<ConfigEditDependencies> = {}, versions: ConfigVersi
   const service = createConfigEditService({
     configurations,
     masters: { listProcessItems: () => Promise.resolve(SEED_PROCESS_ITEMS.map((item) => ({ ...item, defaultValue: '0.00' }))) },
-    calculations: { findLatestCalculation: () => Promise.resolve(null), findCalculation: () => Promise.resolve(null) },
+    calculations: { findRecentLinked: () => Promise.resolve([]), findCalculation: () => Promise.resolve(null) },
     stepUp: { verifyStepUp },
     transactions: auditWorld.transactions,
     audit: createAuditService({ audit: auditWorld.audit }),
@@ -124,8 +124,20 @@ describe('AC-2: the server checks again on save, so a client that skipped the li
         { kind: 'rate', name: 'Cutting-Rate-per-Sec' },
       ],
       feeds: [{ letter: 'AY', label: 'Total Process Cost' }],
+      note: null,
       preview: null,
     });
+  });
+});
+
+describe('AC-6: the estimate total is edited like any other formula, and says what SUM does', () => {
+  it('checks SUM(BG) valid and gives the note of SCR-18, with every letter taken from the registry', async () => {
+    const answer = await world().service.checkFormula(ADMIN, { fieldId: seedFieldAt('BL').id, text: 'SUM(BG)' });
+    expect(answer.note).toBe("SUM(BG) adds the BG of every row. Each row's BG already holds the count for the whole order, so nothing is multiplied by the rows above. BN and BO read from it.");
+  });
+
+  it('gives no note for any other field', async () => {
+    expect((await world().service.checkFormula(ADMIN, { fieldId: AL.id, text: 'P * 2' })).note).toBeNull();
   });
 });
 

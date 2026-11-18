@@ -1,10 +1,12 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConfigVersionChangedError, ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { totalFormulaEditorNote } from '../../lib/config/field-notes';
 import { checkFormulaEdit, isFormulaField, type FedField, type FormulaUse } from '../../lib/config/formula-edit';
 import { previewFormula, type FormulaPreview, type PreviewRow } from '../../lib/config/formula-preview';
 import { NO_FORMULA_FIELD_MESSAGE, savedMessage, UNCHANGED_MESSAGE, versionChangedMessage } from '../../lib/config/formula-words';
+import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
 import { partNameOf } from '../../lib/estimate/part-name';
-import { fieldLetter, findFieldById, referenceContext } from '../../lib/fields/registry';
+import { fieldLetter, findFieldById, findSystemField, referenceContext } from '../../lib/fields/registry';
 import { parseConfigDocument, ConfigDocumentError, type ConfigDocument } from '../../lib/fields/schema';
 import { fixedOperands, toDisplayForm } from '../../lib/formula';
 import type { RoleName } from '../../lib/auth/roles';
@@ -62,6 +64,8 @@ export interface FormulaCheckView {
   readonly message: string;
   readonly uses: ReadonlyArray<FormulaUse>;
   readonly feeds: ReadonlyArray<FedField>;
+  /** The sentence under the formula of the estimate total (AC-6), or `null` for any other field. */
+  readonly note: string | null;
   /** The estimate the preview was made from and the result, or `null` when no estimate was ever calculated. */
   readonly preview: (FormulaPreview & { readonly estimateCode: string }) | null;
 }
@@ -105,7 +109,7 @@ export interface ConfigEditDependencies {
   readonly configurations: ConfigRepository;
   /** The Process Master: its rates are the names a formula may use. */
   readonly masters: Pick<MasterRepository, 'listProcessItems'>;
-  readonly calculations: Pick<CalculationRepository, 'findLatestCalculation' | 'findCalculation'>;
+  readonly calculations: Pick<CalculationRepository, 'findRecentLinked' | 'findCalculation'>;
   readonly stepUp: Pick<StepUpService, 'verifyStepUp'>;
   readonly transactions: TransactionRunner;
   readonly audit: AuditService;
@@ -131,6 +135,9 @@ export const SYSTEM_FIELD_CODE = 'SYSTEM_FIELD';
 
 const LABEL_FIELD = 'text';
 
+/** How many of the newest calculated estimates are looked at for one whose figures are current: the very newest is normally it, and an estimate whose inputs were just changed is passed over. */
+const RECENT_ESTIMATES_LOOKED_AT = 20;
+
 function refused(message: string): FieldValidationError {
   return new FieldValidationError([{ field: LABEL_FIELD, message }]);
 }
@@ -140,6 +147,22 @@ interface SampleCache {
   id: string;
   record: CalculationRecord;
   code: string;
+}
+
+/** The note of the estimate total: the column of each row's price and the columns that read the total, which are the fields that use it and the approved price. A letter is always the registry's. */
+function noteOf(document: ConfigDocument, field: { readonly systemRole: string | null }, feeds: ReadonlyArray<FedField>): string | null {
+  if (field.systemRole !== 'total') return null;
+  const unitPrice = findSystemField(document, 'unit-price');
+  if (unitPrice === undefined) return null;
+  const approved = findSystemField(document, 'approved-price');
+  const readers = new Map<string, number>();
+  for (const fed of feeds) {
+    const reader = document.fields.find((candidate) => fieldLetter(candidate) === fed.letter);
+    if (reader !== undefined) readers.set(fed.letter, reader.position);
+  }
+  if (approved !== undefined) readers.set(fieldLetter(approved), approved.position);
+  const letters = [...readers].sort((a, b) => a[1] - b[1]).map(([letter]) => letter);
+  return totalFormulaEditorNote(fieldLetter(unitPrice), letters);
 }
 
 export function createConfigEditService({ configurations, masters, calculations, stepUp, transactions, audit, cache }: ConfigEditDependencies): ConfigEditService {
@@ -155,14 +178,21 @@ export function createConfigEditService({ configurations, masters, calculations,
     return field;
   }
 
+  /**
+   * The latest calculated estimate whose figures may be read: the newest linked calculation whose figure state is `current` (FR-100: an estimate whose inputs changed since is cleared, and its figures are not
+   * shown, not even to try a formula on). Its record is read only through `readFiguresWhenCurrent`, like every other reader of a figure (architecture section 10).
+   */
   async function latestSample(): Promise<SampleCache | null> {
-    const latest = await calculations.findLatestCalculation();
-    if (latest === null) return null;
-    if (sample?.id === latest.id) return sample;
-    const record = await calculations.findCalculation(latest.id);
-    if (record === null) return null;
-    sample = { id: latest.id, record, code: latest.taskCode };
-    return sample;
+    for (const linked of await calculations.findRecentLinked(RECENT_ESTIMATES_LOOKED_AT)) {
+      const state = figureState({ inputsRevision: linked.inputsRevision, calculationInputsRevision: linked.calculationInputsRevision });
+      if (state !== 'current') continue;
+      if (sample?.id === linked.id) return sample;
+      const record = await readFiguresWhenCurrent(state, () => calculations.findCalculation(linked.id));
+      if (record === null) continue;
+      sample = { id: linked.id, record, code: linked.taskCode };
+      return sample;
+    }
+    return null;
   }
 
   const previewRowOf = (row: CalculationRecord['rows'][number]): PreviewRow => ({ nodeId: row.nodeId, slNo: row.slNo, inputs: row.inputs, outputs: row.outputs });
@@ -194,7 +224,7 @@ export function createConfigEditService({ configurations, masters, calculations,
         });
         preview = { ...tried, estimateCode: found.code };
       }
-      return { valid: true, message: checked.message, uses: checked.uses, feeds: checked.feeds, preview };
+      return { valid: true, message: checked.message, uses: checked.uses, feeds: checked.feeds, note: noteOf(checked.edited, field, checked.feeds), preview };
     },
 
     async listSampleRows(caller) {

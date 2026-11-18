@@ -58,10 +58,13 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       return Promise.resolve({ id, createdAt });
     },
     findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
-    findLatestCalculation: () => {
-      const latest = calculations[calculations.length - 1];
-      return Promise.resolve(latest === undefined ? null : { id: latest.id, taskCode: 'Q-2026-0001' });
-    },
+    findRecentLinked: (limit: number) =>
+      Promise.resolve(
+        estimateWorld.estimates.flatMap((estimate) => {
+          const linked = calculations.find((calculation) => calculation.id === estimate.currentCalculationId);
+          return linked === undefined ? [] : [{ id: linked.id, taskCode: estimate.code, inputsRevision: estimate.inputsRevision, calculationInputsRevision: linked.inputsRevision }];
+        }).slice(0, limit),
+      ),
     findFigureBasis: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id === estimateId);
       if (estimate === undefined) return Promise.resolve(null);

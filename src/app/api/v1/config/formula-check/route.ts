@@ -14,6 +14,6 @@ export const POST = withRoute({
   output: formulaCheckAnswerSchema,
   handler: async ({ user, body, requestId }) => {
     const checked = await getConfigEditService().checkFormula({ user, requestId }, body);
-    return { ...checked, uses: [...checked.uses], feeds: [...checked.feeds], preview: checked.preview === null ? null : { ...checked.preview, operands: [...checked.preview.operands] } };
+    return { ...checked, uses: [...checked.uses], feeds: [...checked.feeds], note: checked.note, preview: checked.preview === null ? null : { ...checked.preview, operands: [...checked.preview.operands] } };
   },
 });

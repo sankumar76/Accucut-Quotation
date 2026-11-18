@@ -34,6 +34,8 @@ export interface FormulaCheckView {
   readonly message: string;
   readonly uses: ReadonlyArray<FormulaUseView>;
   readonly feeds: ReadonlyArray<FedFieldView>;
+  /** The sentence under the formula of the estimate total, or `null`. */
+  readonly note: string | null;
   readonly preview: FormulaPreviewView | null;
 }
 
@@ -101,7 +103,8 @@ function readCheck(body: unknown): FormulaCheckView | null {
   const uses = readList(body['uses'], readUse);
   const feeds = readList(body['feeds'], readFed);
   const preview = readPreview(body['preview']);
-  return uses === null || feeds === null || preview === undefined ? null : { message: body['message'], uses, feeds, preview };
+  const note = textOrNull(body['note']);
+  return uses === null || feeds === null || preview === undefined || note === undefined ? null : { message: body['message'], uses, feeds, note, preview };
 }
 
 function readSampleRow(value: unknown): SampleRowView | null {

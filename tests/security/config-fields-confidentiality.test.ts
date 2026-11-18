@@ -69,11 +69,23 @@ describe('only the Configuration routes, page and composition import the Configu
   const ALLOWED_IMPORTERS: ReadonlyArray<string> = [
     'src/app/(portal)/config/fields/error.tsx',
     'src/app/(portal)/config/fields/page.tsx',
+    // STORY-08.02: the formula editor's page, three routes, screen and service. The page and the routes are the Admin's alone (the manifest), and the service is blocked for every Engineer view.
+    'src/app/(portal)/config/fields/[id]/formula/page.tsx',
     'src/app/api/v1/config/current/route.ts',
     'src/app/api/v1/config/fields/route.ts',
+    'src/app/api/v1/config/fields/[id]/formula/route.ts',
+    'src/app/api/v1/config/formula-check/route.ts',
+    'src/app/api/v1/config/sample-rows/route.ts',
     'src/components/features/config/fields-screen.tsx',
     'src/components/features/config/fields-table.tsx',
+    'src/components/features/config/formula-editor-screen.tsx',
+    'src/components/features/config/formula-editor.tsx',
+    'src/components/features/config/formula-preview.tsx',
+    'src/components/features/config/suggestions.tsx',
+    'src/components/features/config/use-formula-check.ts',
+    'src/components/features/config/use-save-formula.ts',
     'src/server/composition.ts',
+    'src/server/services/config-edit-service.ts',
     'src/server/services/config-read-service.ts',
     // The barrel re-exports every schema file for tests and server code; an `engineer-*` view may not import it (`engineer-import-rule.test.ts`).
     'src/server/views/schemas/index.ts',
