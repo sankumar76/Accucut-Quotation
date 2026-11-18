@@ -275,11 +275,13 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
       withDatabaseErrors(async () => {
         // PostgreSQL would refuse a text that is not a UUID with an error; a task asked for by one is not found.
         if (!isUuid(id)) return null;
-        // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter. The estimate's row first and then the task's, as `lockEstimate` does.
+        // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter. The estimate's row first and then the task's, as `lockEstimate` does. The
+        // Engineer's name is a sub-select and not a join: a save that waited for the lock re-checks the joined rows against the task as the save before it left it, and a join on
+        // `engineer_id` would then drop the row when that save had changed the Engineer (the second of two saves at once would find no task).
         const rows = await clientFor(db, tx).$queryRaw`
-          SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", u.name AS "engineerName", t.deadline_at AS "deadlineAt",
-                 t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status"
-          FROM estimates e JOIN tasks t ON t.id = e.task_id JOIN users u ON u.id = t.engineer_id
+          SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", (SELECT u.name FROM users u WHERE u.id = t.engineer_id) AS "engineerName",
+                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status"
+          FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE t.id = ${id}::uuid
           FOR UPDATE OF e, t`;
         const [row] = LOCKED_ROWS.parse(rows);
