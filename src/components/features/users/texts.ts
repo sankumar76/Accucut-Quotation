@@ -12,6 +12,9 @@ export const PASSWORD_HINT = `${PASSWORD_RULE_HINT} Tell the person in person or
 
 export const RESET_PASSWORD_HINT = `${PASSWORD_RULE_HINT} The old password stops working straight away. The person must change it at their next sign-in.`;
 
+/** The label of the page's button that opens the hand-over dialog (STORY-01.09 AC-1); the dialog's own words are `hand-over-texts.ts`, fetched with it. */
+export const HAND_OVER_OPEN_LABEL = 'Hand over Admin role';
+
 export const FAILED_ADD_MESSAGE = 'We could not add the user.';
 export const FAILED_EDIT_MESSAGE = 'We could not save the changes.';
 /**

@@ -1,5 +1,7 @@
 import { STEP_UP_FAILED_MESSAGE } from '../auth/step-up';
 
+import type { UserRow } from './users-client';
+
 /**
  * The words and codes of the Admin hand-over (STORY-01.09; UX spec SCR-14 "Hand over" and "Hand over: wrong password"; architecture section 6 "Hand over Admin").
  * Written once so the server's refusals and the dialog say the same sentence. Pure, so a page may import it (no zod, no server code).
@@ -28,3 +30,11 @@ export const HAND_OVER_WRONG_PASSWORD_MESSAGE = `${STEP_UP_FAILED_MESSAGE} Try a
  */
 export const ADMIN_CANNOT_BE_REMOVED_CODE = 'ADMIN_CANNOT_BE_REMOVED';
 export const ADMIN_CANNOT_BE_REMOVED_MESSAGE = 'The Admin cannot be demoted or deactivated here. Hand the Admin role over to another person instead.';
+
+/**
+ * The people the hand-over dialog offers (STORY-01.09 AC-1): everyone who is active **except the signed-in Admin**, whatever their role (a Lead or an Engineer; decision D-h), in the order the list has. A deactivated
+ * person is never offered. The ID is compared without regard to letter case, as the server does. The server decides again: this only keeps the choice short and honest.
+ */
+export function handOverCandidates(users: ReadonlyArray<UserRow>, currentUserId: string): ReadonlyArray<UserRow> {
+  return users.filter((person) => person.isActive && person.id.toLowerCase() !== currentUserId.toLowerCase());
+}

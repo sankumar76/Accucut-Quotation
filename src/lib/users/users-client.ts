@@ -135,6 +135,14 @@ export function updateUser(id: string, changes: UserChanges, doFetch: Fetch = fe
   return send(doFetch, `${USERS_PATH}/${encodeURIComponent(id)}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(changes) }, toUserRow);
 }
 
+/**
+ * `POST /api/v1/users/{id}/admin-handover` (STORY-01.09): hand the Admin role to the person in the path, with the Admin's own password, which is sent in this one request and kept nowhere here. The answer is 204. The
+ * caller's session ends with it, so the screen goes to the sign-in page on success.
+ */
+export function handOverAdminRole(id: string, password: string, doFetch: Fetch = fetch): Promise<Outcome<true>> {
+  return send(doFetch, `${USERS_PATH}/${encodeURIComponent(id)}/admin-handover`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ password }) }, NOTHING);
+}
+
 /** `POST /api/v1/users/{id}/password-reset`: a new, temporary password. The answer is 204. */
 export function resetUserPassword(id: string, password: string, doFetch: Fetch = fetch): Promise<Outcome<true>> {
   return send(
