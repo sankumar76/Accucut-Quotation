@@ -489,6 +489,9 @@ function Invoke-AccucutTrustedScript {
 # <<< ACCUCUT TRUST BLOCK v1
 # ---- Outside the trust block. Nothing below loads or runs code except through Import-AccucutTrustedModule and Resolve-AccucutTrustedExecutable.
 
+# Set when the module has been loaded (after the trust checks): only then is Hide-AccucutSecrets there to blank a message. (Not a Get-Command probe: in a JEA session that cmdlet is a constrained proxy.)
+$script:AccucutModuleLoaded = $false
+
 function Get-AccucutScriptInstallRoot {
     # The install root, worked out from where this script is: <Root>\current\<name> or <Root>\releases\<tag>\<name>. Nothing on the command line can change it.
     [CmdletBinding()]
@@ -524,6 +527,57 @@ function Assert-AccucutBackupFolderTrusted {
     if (-not $security.Protected) { throw "'$Directory' inherits its permissions from the folder above it. Refusing to use it." }
 }
 
+function Get-AccucutAdminGroupMemberList {
+    # The members of the local group that the Admin endpoint's virtual account joins, read through ADSI (WinNT), so that no module is imported and there is no load site.
+    # Returns $null when there is no such group (no endpoint was set up), an empty array when it has no member, and throws when the list cannot be read.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$GroupName)
+
+    $exists = $true
+    try { [void]([System.Security.Principal.NTAccount]::new([string]$env:COMPUTERNAME, $GroupName)).Translate([System.Security.Principal.SecurityIdentifier]) } catch { $exists = $false }
+    if (-not $exists) { return $null }
+    $group = [ADSI]"WinNT://$($env:COMPUTERNAME)/$GroupName,group"
+    $list = @($group.Invoke('Members'))
+    return , $list
+}
+
+function Assert-AccucutAdminGroupEmpty {
+    # R1 (ADR-015 Amendment 3.3): the group AccucutAdminRunAs must have NO members: a member could read the restore's database password (restore.pgpass is readable by the group).
+    # Before the first prompt, and with nothing changed, this stops when the group has a member or its members cannot be read. A server with no such group passes.
+    [CmdletBinding()]
+    param()
+
+    $groupName = 'AccucutAdminRunAs'
+    try { $members = Get-AccucutAdminGroupMemberList -GroupName $groupName }
+    catch { throw "The members of the group $groupName could not be read ($($_.Exception.Message)). It must have none: a member could read the restore's database password. Ask your IT person to check it. Nothing was changed." }
+    if ($null -eq $members) { return }
+    if (@($members).Count -gt 0) {
+        throw "The group $groupName has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed."
+    }
+}
+
+function Assert-AccucutRestorePassFileTrusted {
+    # R2 (ADR-015 Amendment 3.3): who may read restore.pgpass, checked before it is used. Rule B lets any account read a file under the root, so the file's own list is checked
+    # exactly: the owner is Administrators, the list is protected, and the only allow entries are Administrators, SYSTEM and, when the Admin endpoint's group exists, that group
+    # with Read (0x120089) and no more. A deny entry, an entry of any other account, a link or an inherited list refuses.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$GroupSid
+    )
+
+    $security = Get-AccucutTrustSecurity -Path $Path
+    if ($security.Reparse -or $security.IsDirectory) { throw "'$Path' is not a real file. Refusing to use it." }
+    if (-not $security.Protected) { throw "'$Path' inherits its permissions from the folder above it. Refusing to use it." }
+    if ($security.Owner -ne 'S-1-5-32-544') { throw "'$Path' is owned by $($security.Owner), not by Administrators. Refusing to use it." }
+    foreach ($ace in $security.Aces) {
+        if (-not $ace.Allow) { throw "'$Path' has a deny entry for $($ace.Sid), which is not expected. Refusing to use it." }
+        if (@('S-1-5-32-544', 'S-1-5-18') -contains $ace.Sid) { continue }
+        if (-not [string]::IsNullOrEmpty($GroupSid) -and $ace.Sid -eq $GroupSid -and ($ace.Mask -band (-bnot [int64]0x120089)) -eq 0) { continue }
+        throw "'$Path' can be read by $($ace.Sid) (mask 0x$('{0:X}' -f $ace.Mask)), who is not Administrators, SYSTEM or the Admin endpoint's group. Its password would not be secret. Refusing to use it."
+    }
+}
+
 function Invoke-AccucutRestoreScript {
     # Steps 1 to 6 of the description. Everything before Import-AccucutTrustedModule is the trust block and the two functions above, and nothing is loaded
     # or run until its path has been checked. The questions and the restore itself are the module's (Invoke-AccucutRestore).
@@ -542,10 +596,13 @@ function Invoke-AccucutRestoreScript {
     Assert-AccucutTrustedPath -Path $release -Root $root -ProtectedRoot
     Assert-AccucutTrustedPath -Path $fromRelease -Root $root -ProtectedRoot
     Import-AccucutTrustedModule -Root $root -Release $release
+    $script:AccucutModuleLoaded = $true
 
     $paths = Get-AccucutPaths -Root $root
+    Assert-AccucutAdminGroupEmpty
     $backupSid = Get-AccucutBackupAccountSid
     foreach ($file in $paths.BackupSettings, $paths.RestorePgpass, $paths.StateFile) { Assert-AccucutTrustedPath -Path $file -Root $root -ProtectedRoot }
+    Assert-AccucutRestorePassFileTrusted -Path $paths.RestorePgpass -GroupSid (Get-AccucutAdminGroupSid)
     $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
     $state = Read-AccucutInstallState -Path $paths.StateFile
     Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid -EndpointSid (Get-AccucutAdminGroupSid)
@@ -566,7 +623,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     }
     catch {
         $message = $_.Exception.Message
-        if (Get-Command -Name Hide-AccucutSecrets -ErrorAction SilentlyContinue) { $message = Hide-AccucutSecrets -Text $message }
+        if ($script:AccucutModuleLoaded) { $message = Hide-AccucutSecrets -Text $message }
         Write-Host "The restore stopped: $message" -ForegroundColor Red
         exit 1
     }

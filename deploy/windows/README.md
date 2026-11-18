@@ -122,9 +122,9 @@ C:\Accucut\
 ```
 
 `C:\Accucut` is closed to ordinary users: only Administrators and SYSTEM can write, and only the two service accounts and `AccucutBackup` can read the
-program files (read and execute: five entries in all, none inherited). `.env` can be read by Administrators and the two service accounts only;
+program files (read and execute: five entries in all, none inherited; **six with an Admin endpoint**: Administrators and SYSTEM full control, then read and execute for the two service accounts, `AccucutBackup` and the endpoint group `AccucutAdminRunAs`). `.env` can be read by Administrators and the two service accounts only;
 `migrate.env` by Administrators only. `backup.pgpass` and `backup-settings.json` by Administrators and `AccucutBackup` only; `restore.pgpass` by Administrators only. With `-AdminAccount` (see "Restore a backup") the root gets a sixth entry, read and execute for one local group,
-and that group may also read the three settings files above. `backups` is protected
+and that group may also read the three settings files above (so `backup.pgpass` and `backup-settings.json` then have four entries, `restore.pgpass` three). **Do not add anyone to `AccucutAdminRunAs`: the Admin is named in the endpoint, not in the group.** A member of the group could read the restore's database password, so `restore.ps1` and `clear-copies.ps1` refuse to start (nothing is changed) while it has a member or its members cannot be read, and the install refuses an existing group that has members. `backups` is protected
 too: Administrators and SYSTEM full control, `AccucutBackup` Modify, and **no entry for the portal's own services**, so a taken-over portal can neither read
 nor delete a backup.
 
@@ -298,6 +298,8 @@ Every stop ends with **"Call your IT person."** What the portal is doing is in t
 | `not enough free disk space for a restore` | A restore needs room for a safety copy and the new database. | Nothing was changed. Clear old copies (see "Disk nearly full") or ask IT for a bigger disk. |
 | `not the date of the copy` | You typed a different date. | Nothing was changed. Run the command again and type the date exactly as shown. |
 | `does not open the copy` | The key is not the one that belongs to this server's backups. | Nothing was changed. Find the right key (two copies are kept apart). |
+| `made by a newer release of the portal than the one installed` | The copy has applied a database change that the installed release does not know (it was made after a newer release was installed). A copy from an **older** release is fine: it is brought up to date as part of the restore. | The restore stops before the swap; the portal is running on the old database. Ask your IT person to install that release, then run the restore again. |
+| `The group AccucutAdminRunAs has members` | Someone was added to the endpoint group, which must stay empty (a member could read the restore's database password). | Nothing was changed. Ask your IT person to remove the member. |
 | `The restore of ... failed ... The portal is running on the old database` | Something failed after the portal was stopped. The old database was put back and the portal started again. | The portal is running as before the restore. The safety copy is in the backups folder. |
 | `... may not be running: look at the services first` | A step failed and the old database could not be put back, or the portal could not be started. | **The portal may be down.** Tell your IT person at once. |
 
@@ -322,7 +324,7 @@ The Admin should not be an administrator (the Admin already sees every cost in t
 - A shortcut **Accucut Admin** is put on the desktop. It runs `Enter-PSSession -ComputerName localhost -ConfigurationName AccucutAdmin`, so Windows Remote Management (WinRM) must be running
   (`Enable-PSRemoting -Force` if it is not; the install does not switch it on).
 - **A restore needs a database role of its own.** The install makes `accucut_restore` (CREATEDB, acts as the owner, **not** a superuser) with its password only in `config\restore.pgpass`.
-  A restore itself replaces the database, so the account that runs it can do what the owner can do; the endpoint is what keeps the Admin from using that directly.
+  A restore itself replaces the database, so the account that runs it can do what the owner can do; the endpoint is what keeps the Admin from using that directly. `restore.ps1` also checks, before it uses `restore.pgpass`, that only Administrators, SYSTEM and the group (Read) can read it.
 
 **If the Admin's account cannot be limited** (Accucut IT declines A-35, or the check in `deploy/windows/manual/AC-8-jea-prompt-check.md` fails on your server), leave `-AdminAccount` off: the scripts are
 the same, `restore.ps1` and `clear-copies.ps1` run as a full administrator from `C:\Accucut\current`, and the Admin's risk (RISK-018) is the full one.

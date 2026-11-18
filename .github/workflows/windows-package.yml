@@ -297,13 +297,21 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value ('ACCUCUT_INSTALL_STARTED=' + (Get-Date).ToString('o'))
           $global:LASTEXITCODE = 0
 
+      # STORY-10.11 (ADR-015 Amendment 3.3): the install is run with -AdminAccount, which registers the JEA endpoint, so Windows Remote Management must be running. The runner is thrown away
+      # after the job. The Admin account of this run is the runner's own account (an administrator, so the install warns that A-35 is not met for it; the endpoint still limits the VIRTUAL account).
+      - name: Make sure PowerShell remoting is on (the install registers the Admin endpoint)
+        run: |
+          if ((Get-Service -Name WinRM).Status -ne 'Running' -or -not (Test-WSMan -ErrorAction SilentlyContinue)) { Enable-PSRemoting -Force -SkipNetworkProfileCheck | Out-Null }
+          Get-Service -Name WinRM | Format-List Name, Status
+          $global:LASTEXITCODE = 0
+
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
         run: |
           $ErrorActionPreference = 'Stop'
           $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes -NodeExe $env:ACCUCUT_NODE
+          & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes -NodeExe $env:ACCUCUT_NODE -AdminAccount "$env:USERDOMAIN\$env:USERNAME"
           if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed (exit code $LASTEXITCODE)." }
           $ErrorActionPreference = 'Stop'
           if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module in the unpacked folder was loaded by the install.' }

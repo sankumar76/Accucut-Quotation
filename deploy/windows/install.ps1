@@ -983,6 +983,8 @@ function Invoke-AccucutInstall {
         # The Admin's account (if given) is looked up before anything is created, so a mistyped name costs nothing.
         if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
             $adminCheck = Resolve-AccucutAdminAccount -Account $AdminAccount
+            # sc.exe sets the service entry of the endpoint group: by full path, checked like every program (ADR-015 Amendment 3.3 R4).
+            $scExe = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($env:SystemRoot, 'System32\sc.exe'))
             if ($adminCheck.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the limited endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $logFile }
         }
         if ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
@@ -1121,7 +1123,7 @@ function Invoke-AccucutInstall {
 
         # The Admin's limited account (STORY-10.11 AC-7), last: the portal and its first backup are already working, so a problem here leaves them in place and says what to do.
         if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
-            [void](Register-AccucutAdminEndpoint -Paths $paths -AdminAccount $AdminAccount -ReleaseDirectory $Release -LogFile $logFile)
+            [void](Register-AccucutAdminEndpoint -Paths $paths -AdminAccount $AdminAccount -ReleaseDirectory $Release -ScPath $scExe -LogFile $logFile)
             New-AccucutAdminShortcut -EndpointName 'AccucutAdmin' -PowerShellPath $powershellExe
             Write-AccucutLog -Message "The Admin can now open the shortcut 'Accucut Admin' on the desktop (as $AdminAccount) and type Restore-AccucutBackup or Clear-AccucutCopies." -LogFile $logFile
         }

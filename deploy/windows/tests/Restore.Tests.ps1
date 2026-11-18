@@ -190,6 +190,8 @@ Describe 'the checks of restore.ps1 come before the module, the questions and th
         Mock Get-AccucutTrustedCurrent { $script:Trace.Add('current'); return 'C:\Accucut\releases\t1' }
         Mock Assert-AccucutTrustedPath { $script:Trace.Add("path:$Path") }
         Mock Import-AccucutTrustedModule { $script:Trace.Add('import') }
+        Mock Assert-AccucutAdminGroupEmpty { $script:Trace.Add('group-empty') }
+        Mock Assert-AccucutRestorePassFileTrusted { $script:Trace.Add("pgpass:$Path|$GroupSid") }
         Mock Get-AccucutBackupAccountSid { $script:Trace.Add('sid'); return $script:BackupSid }
         Mock Get-AccucutAdminGroupSid { $script:Trace.Add('group'); return $script:EndpointSid }
         Mock Read-AccucutBackupSettings { $script:Trace.Add("settings:$Path"); return $script:Settings }
@@ -202,8 +204,9 @@ Describe 'the checks of restore.ps1 come before the module, the questions and th
     It 'checks the root, the release and the script, loads the module, then checks the settings files, the state, the backups folder (the Admin group may write there too) and every program, and only then asks the Admin anything' {
         Invoke-AccucutRestoreScript -ScriptPath 'C:\Accucut\current\restore.ps1'
         $expected = @(
-            'shape:C:\Accucut', 'current', 'path:C:\Accucut\releases\t1', 'path:C:\Accucut\releases\t1\restore.ps1', 'import', 'sid',
+            'shape:C:\Accucut', 'current', 'path:C:\Accucut\releases\t1', 'path:C:\Accucut\releases\t1\restore.ps1', 'import', 'group-empty', 'sid',
             'path:C:\Accucut\config\backup-settings.json', 'path:C:\Accucut\config\restore.pgpass', 'path:C:\Accucut\config\install-state.json',
+            'group', "pgpass:C:\Accucut\config\restore.pgpass|$($script:EndpointSid)",
             'settings:C:\Accucut\config\backup-settings.json', 'state:C:\Accucut\config\install-state.json', 'group',
             "folder:C:\Accucut\backups|$($script:BackupSid)|$($script:EndpointSid)",
             'program:C:\Accucut\releases\t1\bin\age.exe', 'program:C:\Program Files\PostgreSQL\17\bin\pg_dump.exe', 'program:C:\Program Files\PostgreSQL\17\bin\pg_restore.exe',
@@ -279,6 +282,10 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
         Mock Write-Host -ModuleName AccucutOps { $script:Screen.Add(($Object -join ' ')) }
         Mock Read-AccucutHostInput -ModuleName AccucutOps { $script:Prompts.Add($Prompt); return [string]$script:Answers.Dequeue() }
         Mock Read-AccucutKeyInput -ModuleName AccucutOps { $script:Prompts.Add($Prompt); return $script:KeySecure }
+        # The installed release's migrations (R3): the copy under test has applied exactly these two, which are the release's own.
+        foreach ($migration in '20260101000000_first', '20260102000000_second') { New-Item -ItemType Directory -Path (Join-Path $script:Root "releases\t1\migrate\prisma\migrations\$migration") -Force | Out-Null }
+        $script:Applied = "20260101000000_first`n20260102000000_second`n"
+        Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps { return $script:Applied }
     }
 
     AfterEach {
@@ -462,6 +469,34 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
     }
 
     Context 'AC-3, AC-4: a failure after the portal was stopped puts the old database back in service' {
+        It 'R3: a copy from a NEWER release (it has applied a migration that the installed release lacks) stops with newer-release before the swap: the new database is dropped, the services start again, and the message says what to do' {
+            $script:Applied = "20260101000000_first`n20260102000000_second`n20991231000000_from_a_newer_release`n"
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            $stop = Get-StopCode { Invoke-TestRestore }
+            $stop.Code | Should -Be 'restore-failed'
+            $stop.Message | Should -Match 'made by a newer release of the portal than the one installed'
+            $stop.Message | Should -Match 'Ask your IT person to install that release, then run the restore again'
+            $stop.Message | Should -Match 'Call your IT person\.'
+            $steps = (@($script:Trace) -join ' ') -replace 'accucut_(new|old|failed)_\d{14}', 'accucut_$1_T'
+            $steps | Should -Be 'info:accucut_restore stop safety:release|before-restore|accucut_restore|restore.pgpass new:accucut_new_T stop drop:accucut_new_T start'
+            @($script:Trace | Where-Object { $_ -like 'swap:*' -or $_ -eq 'migrate' }).Count | Should -Be 0
+            @($script:Events | Where-Object { $_ -like 'Error|1111|*' }).Count | Should -Be 1
+        }
+
+        It 'R3: an older copy (it has applied fewer migrations than the release has) is accepted and migrated forward; the check reads only finished, not rolled back, migrations of the new database' {
+            $script:Applied = "20260101000000_first`n"
+            $script:Sql = [System.Collections.Generic.List[string]]::new()
+            Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps { $script:Sql.Add("$Database|$Sql"); return $script:Applied }
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            $result = Invoke-TestRestore
+            $result.Restored | Should -BeTrue
+            @($script:Trace | Where-Object { $_ -eq 'migrate' }).Count | Should -Be 1
+            $query = @($script:Sql | Where-Object { $_ -like '*_prisma_migrations*' })
+            $query.Count | Should -Be 1
+            $query[0] | Should -Match '^accucut_new_\d{14}\|'
+            $query[0] | Should -Match 'WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
+        }
+
         It 'pg_restore fails: the new database is dropped, the names are never swapped, the services start again, and it says Call your IT person (Error 1111)' {
             $env:FAKE_RESTORE_EXIT = '1'
             $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
@@ -651,6 +686,122 @@ Describe 'restore.log (AC-6)' {
     }
 }
 
+Describe 'R1: restore.ps1 and clear-copies.ps1 refuse to start when the Admin endpoint group has a member, or its members cannot be read (ADR-015 Amendment 3.3)' {
+    It 'passes when there is no group (no endpoint was set up) and when the group is empty' {
+        Mock Get-AccucutAdminGroupMemberList { return $null }
+        { Assert-AccucutAdminGroupEmpty } | Should -Not -Throw
+        Mock Get-AccucutAdminGroupMemberList { return , @() }
+        { Assert-AccucutAdminGroupEmpty } | Should -Not -Throw
+    }
+
+    It 'stops with the exact message, and says nothing was changed, when the group has a member' {
+        Mock Get-AccucutAdminGroupMemberList { return , @('SOMEONE') }
+        { Assert-AccucutAdminGroupEmpty } | Should -Throw 'The group AccucutAdminRunAs has members. It must have none: a member could read the restore''s database password. Ask your IT person to remove them. Nothing was changed.'
+    }
+
+    It 'stops when the members cannot be read: an unreadable list is never taken for an empty one' {
+        Mock Get-AccucutAdminGroupMemberList { throw 'Access is denied.' }
+        { Assert-AccucutAdminGroupEmpty } | Should -Throw '*members of the group AccucutAdminRunAs could not be read (Access is denied.)*Nothing was changed.'
+    }
+
+    It 'is called after the module is loaded and before the first prompt, in both scripts, and the helper that reads the group is the same text in both' {
+        foreach ($name in 'restore.ps1', 'clear-copies.ps1') {
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:WindowsDirectory $name), [ref]$null, [ref]$null)
+            $calls = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { [pscustomobject]@{ Name = [string]$_.GetCommandName(); Offset = $_.Extent.StartOffset } })
+            $import = @($calls | Where-Object { $_.Name -eq 'Import-AccucutTrustedModule' })[0].Offset
+            $check = @($calls | Where-Object { $_.Name -eq 'Assert-AccucutAdminGroupEmpty' })[0].Offset
+            $prompt = @($calls | Where-Object { $_.Name -in 'Invoke-AccucutRestore', 'Invoke-AccucutClearCopies' })[0].Offset
+            $check | Should -BeGreaterThan $import -Because $name
+            $check | Should -BeLessThan $prompt -Because $name
+        }
+    }
+}
+
+Describe 'R2: the rules of the restore.pgpass check, on invented descriptors (ADR-015 Amendment 3.3)' {
+    BeforeAll {
+        $script:Group = 'S-1-5-21-1111111111-2222222222-3333333333-1010'
+        function New-Descriptor {
+            param([string]$Owner = 'S-1-5-32-544', [bool]$Protected = $true, [bool]$Reparse = $false, [object[]]$Ace)
+            return [pscustomobject]@{ Path = 'x'; Owner = $Owner; Protected = $Protected; Reparse = $Reparse; IsDirectory = $false; Aces = $Ace }
+        }
+        function New-Entry { param([string]$Sid, [int64]$Mask, [bool]$Allow = $true) return [pscustomobject]@{ Sid = $Sid; Allow = $Allow; Mask = $Mask; InheritOnly = $false; Inherited = $false; Flags = 0 } }
+    }
+
+    It 'accepts Administrators, SYSTEM and the group with Read, and nothing else' {
+        Mock Get-AccucutTrustSecurity { New-Descriptor -Ace @((New-Entry 'S-1-5-32-544' 0x1F01FF), (New-Entry 'S-1-5-18' 0x1F01FF), (New-Entry $script:Group 0x120089)) }
+        { Assert-AccucutRestorePassFileTrusted -Path 'C:\Accucut\config\restore.pgpass' -GroupSid $script:Group } | Should -Not -Throw
+        { Assert-AccucutRestorePassFileTrusted -Path 'C:\Accucut\config\restore.pgpass' } | Should -Throw "*can be read by $($script:Group)*"
+    }
+
+    It 'refuses: <Case>' -ForEach @(
+        @{ Case = 'a Users entry'; Owner = 'S-1-5-32-544'; Protected = $true; Extra = @{ Sid = 'S-1-5-32-545'; Mask = 0x120089; Allow = $true }; Message = '*can be read by S-1-5-32-545*' }
+        @{ Case = 'the group with more than Read'; Owner = 'S-1-5-32-544'; Protected = $true; Extra = @{ Sid = 'GROUP'; Mask = 0x1301BF; Allow = $true }; Message = '*can be read by*' }
+        @{ Case = 'AccucutBackup, App or Worker (any other SID)'; Owner = 'S-1-5-32-544'; Protected = $true; Extra = @{ Sid = 'S-1-5-80-1-2-3-4-5'; Mask = 0x120089; Allow = $true }; Message = '*can be read by S-1-5-80*' }
+        @{ Case = 'a deny entry'; Owner = 'S-1-5-32-544'; Protected = $true; Extra = @{ Sid = 'S-1-5-32-545'; Mask = 0x120089; Allow = $false }; Message = '*deny entry*' }
+        @{ Case = 'an owner that is not Administrators'; Owner = 'S-1-5-21-1-2-3-1001'; Protected = $true; Extra = $null; Message = '*is owned by S-1-5-21-1-2-3-1001*' }
+        @{ Case = 'an inherited list'; Owner = 'S-1-5-32-544'; Protected = $false; Extra = $null; Message = '*inherits its permissions*' }
+    ) {
+        $entries = @((New-Entry 'S-1-5-32-544' 0x1F01FF), (New-Entry 'S-1-5-18' 0x1F01FF))
+        if ($null -ne $Extra) {
+            $sid = $Extra.Sid
+            if ($sid -eq 'GROUP') { $sid = $script:Group }
+            $entries += (New-Entry $sid ([int64]$Extra.Mask) ([bool]$Extra.Allow))
+        }
+        $script:Case = New-Descriptor -Owner $Owner -Protected $Protected -Ace $entries
+        Mock Get-AccucutTrustSecurity { $script:Case }
+        { Assert-AccucutRestorePassFileTrusted -Path 'C:\Accucut\config\restore.pgpass' -GroupSid $script:Group } | Should -Throw $Message
+    }
+
+    It 'refuses a link and a folder' {
+        Mock Get-AccucutTrustSecurity { New-Descriptor -Reparse $true -Ace @() }
+        { Assert-AccucutRestorePassFileTrusted -Path 'x' } | Should -Throw '*not a real file*'
+    }
+}
+
+Describe 'R2: who may read restore.pgpass is checked before it is used (ADR-015 Amendment 3.3)' -Skip:(-not $script:IsAdmin) {
+    BeforeAll {
+        $script:StandInGroup = 'S-1-5-32-547'   # Power Users: a stand-in for the endpoint group, a SID that exists on every machine
+        function New-PassFile {
+            param([switch]$GroupRead, [switch]$UsersRead, [switch]$GroupModify, [switch]$Deny, [switch]$Unprotected)
+            $path = Join-Path $TestDrive ('pgpass-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+            [System.IO.File]::WriteAllText($path, '127.0.0.1:5432:*:accucut_restore:FAKEpassword12345')
+            if (-not $Unprotected) {
+                Set-AccucutLockedFileAcl -Path $path
+                if ($GroupRead) { Add-AccucutFileReadAccess -Path $path -Sid $script:StandInGroup }
+                if ($UsersRead) { Add-AccucutFileReadAccess -Path $path -Sid 'S-1-5-32-545' }
+                if ($GroupModify -or $Deny) {
+                    $security = [System.IO.File]::GetAccessControl($path)
+                    if ($GroupModify) { $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($script:StandInGroup), [System.Security.AccessControl.FileSystemRights]::Modify, [System.Security.AccessControl.AccessControlType]::Allow)) }
+                    if ($Deny) { $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Deny)) }
+                    [System.IO.File]::SetAccessControl($path, $security)
+                }
+            }
+            return $path
+        }
+    }
+
+    It 'accepts a file that only Administrators and SYSTEM can read, and one that the endpoint group may also read (Read, no more)' {
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile) } | Should -Not -Throw
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile -GroupRead) -GroupSid $script:StandInGroup } | Should -Not -Throw
+    }
+
+    It 'refuses a file that the Users group can read (a real Read entry), whoever the group is' {
+        $file = New-PassFile -UsersRead
+        { Assert-AccucutRestorePassFileTrusted -Path $file } | Should -Throw '*can be read by S-1-5-32-545*not secret*'
+        { Assert-AccucutRestorePassFileTrusted -Path $file -GroupSid $script:StandInGroup } | Should -Throw '*can be read by S-1-5-32-545*'
+    }
+
+    It 'refuses the endpoint group when no group is named (no endpoint), and refuses it with more than Read' {
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile -GroupRead) } | Should -Throw '*can be read by S-1-5-32-547*'
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile -GroupModify) -GroupSid $script:StandInGroup } | Should -Throw '*can be read by S-1-5-32-547*'
+    }
+
+    It 'refuses a list that is inherited, and a deny entry' {
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile -Unprotected) } | Should -Throw '*inherits its permissions*'
+        { Assert-AccucutRestorePassFileTrusted -Path (New-PassFile -Deny) } | Should -Throw '*deny entry*'
+    }
+}
+
 Describe 'the whole restore on the real install of stage 13 (AC-9: real services, PostgreSQL, age, pg_restore and migrations; only the prompts are mocked)' {
     It 'the install made the restore role and its password file (a job on the real install fails here, it never skips)' -Skip:(-not ($env:CI -eq 'true' -and $env:ACCUCUT_VALUES)) {
         Test-Path -LiteralPath 'C:\Accucut\config\restore.pgpass' | Should -BeTrue
@@ -709,5 +860,70 @@ Describe 'the whole restore on the real install of stage 13 (AC-9: real services
         $hits = Find-TextInFiles -Text $keyLine -Root @($paths.Config, $paths.Logs, $paths.Backups, $paths.Services, [System.IO.Path]::GetTempPath(), $env:RUNNER_TEMP)
         $hits = @($hits | Where-Object { $_ -ne $env:ACCUCUT_AGE_KEY -and $_ -notlike "$($script:AgeFolder)*" })
         $hits.Count | Should -Be 0 -Because "found in: $($hits -join ', ')"
+    }
+
+    It 'R3: restores a copy that is one migration BEHIND the installed release, and migrates it forward as accucut_restore: afterwards the live _prisma_migrations matches the release' -Skip:(-not $script:RealInstall) {
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
+        $state = Read-AccucutInstallState -Path $paths.StateFile
+        $release = [System.IO.Path]::Combine($paths.Releases, (Get-AccucutCurrentRelease -Paths $paths))
+        $program = @{
+            Age       = [System.IO.Path]::Combine($release, 'bin\age.exe')
+            PgDump    = [System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe')
+            PgRestore = [System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_restore.exe')
+            Psql      = [System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe')
+            Node      = $state.NodeExe
+        }
+        $releaseMigrations = [System.IO.Path]::Combine($release, 'migrate\prisma\migrations')
+        $all = @([System.IO.Directory]::GetDirectories($releaseMigrations) | ForEach-Object { [System.IO.Path]::GetFileName($_) } | Sort-Object)
+        $all.Count | Should -BeGreaterThan 1
+        $newest = $all[$all.Count - 1]
+
+        # An older release, made from the installed one: the same migrate folder (the Prisma CLI is linked, not copied) with the newest migration left out.
+        $old = Join-Path $env:RUNNER_TEMP 'accucut-older-release'
+        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+        $oldMigrate = Join-Path $old 'migrate'
+        New-Item -ItemType Directory -Path (Join-Path $oldMigrate 'prisma\migrations') -Force | Out-Null
+        foreach ($name in $all) { if ($name -ne $newest) { Copy-Item -LiteralPath (Join-Path $releaseMigrations $name) -Destination (Join-Path $oldMigrate "prisma\migrations\$name") -Recurse } }
+        foreach ($file in 'prisma\schema.prisma', 'prisma.config.mjs', 'ensure-seed-version.mjs') { Copy-Item -LiteralPath (Join-Path $release "migrate\$file") -Destination (Join-Path $oldMigrate $file) }
+        & "$env:SystemRoot\System32\cmd.exe" /c mklink /J "$oldMigrate\node_modules" "$release\migrate\node_modules" | Out-Null
+        Test-Path -LiteralPath (Join-Path $oldMigrate 'node_modules\prisma\build\index.js') | Should -BeTrue
+
+        # A scratch database migrated to one migration behind, as accucut_restore, and a copy of it in the backups folder (an ordinary weekly copy, the newest one).
+        $scratch = 'accucut_new_20200101000000'
+        $password = Read-AccucutPgpassPassword -Path $paths.RestorePgpass -Role 'accucut_restore'
+        try {
+            New-AccucutRestoreDatabase -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Name $scratch
+            [void](Invoke-AccucutMigration -ReleaseDirectory $old -NodeExe $state.NodeExe -MigrateDatabaseUrl "postgresql://accucut_restore:$([uri]::EscapeDataString($password))@$($settings.PgHost):$($settings.PgPort)/$scratch")
+            $applied = (Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database $scratch -Sql 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL;').Trim()
+            [int]$applied | Should -Be ($all.Count - 1)
+            $scratchSettings = [pscustomobject]@{ AgeRecipient = $settings.AgeRecipient; PgHost = $settings.PgHost; PgPort = $settings.PgPort; Database = $scratch; PgBinDirectory = $settings.PgBinDirectory }
+            $made = Invoke-AccucutBackup -Paths $paths -Settings $scratchSettings -Program @{ PgDump = $program.PgDump; Psql = $program.Psql; Age = $program.Age } -Reason weekly -ReleaseTag 'one-migration-behind' -PassFile $paths.RestorePgpass -DatabaseRole 'accucut_restore'
+        }
+        finally {
+            try { Remove-AccucutRestoreDatabase -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Name $scratch } catch { Write-Host "The scratch database could not be dropped: $($_.Exception.Message)" }
+            if (Test-Path -LiteralPath (Join-Path $oldMigrate 'node_modules')) { [System.IO.Directory]::Delete((Join-Path $oldMigrate 'node_modules'), $false) }
+            Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        # Restore it: the newest copy of the list is the one just made.
+        $first = @(Get-AccucutRestoreChoice -Directory $paths.Backups | Where-Object { $_.Copy.Verified } | Select-Object -First 1)
+        $first[0].Copy.Name | Should -Be $made.Name
+        $keyLine = (Get-Content -LiteralPath $env:ACCUCUT_AGE_KEY | Where-Object { $_ -like 'AGE-SECRET-*' } | Select-Object -First 1).Trim()
+        $script:RealKey = ConvertTo-SecureString -String $keyLine -AsPlainText -Force
+        $script:RealAnswers = [System.Collections.Queue]::new()
+        $script:RealAnswers.Enqueue('1'); $script:RealAnswers.Enqueue($first[0].Copy.CreatedUtc.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture))
+        Mock Read-AccucutHostInput -ModuleName AccucutOps { return [string]$script:RealAnswers.Dequeue() }
+        Mock Read-AccucutKeyInput -ModuleName AccucutOps { return $script:RealKey }
+        $result = Invoke-AccucutRestore -Paths $paths -Settings $settings -Program $program -ReleaseDirectory $release -HealthUrl "http://127.0.0.1:$($state.Port)/api/health" -HealthTimeoutSeconds 240
+
+        $result.Restored | Should -BeTrue
+        foreach ($name in (Get-AccucutServiceNames)) { (Get-Service -Name $name).Status | Should -Be 'Running' }
+        # The live database now has every migration of the release, applied by the forward migration as accucut_restore, and all its tables belong to the owner.
+        $live = @((Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database 'accucut' -Sql 'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1;') -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+        $live | Should -Be $all
+        (Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database 'accucut' -Sql "SELECT count(DISTINCT tableowner) || ':' || min(tableowner) FROM pg_tables WHERE schemaname = 'public';").Trim() | Should -Be '1:accucut_owner'
+        (Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database 'accucut' -Sql "SELECT has_table_privilege('accucut_app', 'public.job_runs', 'INSERT');").Trim() | Should -Be 't'
+        Get-AccucutHttpStatus -Url "http://127.0.0.1:$($state.Port)/api/health" | Should -Be 200
     }
 }

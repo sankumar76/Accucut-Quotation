@@ -857,7 +857,7 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
       expect(assertInstall, part).toContain(part);
     }
     // The root has five entries, the logs folder six inherited-or-explicit ones plus two: seven entries in all.
-    expect(assertInstall).toMatch(/the install folder holds exactly five entries/);
+    expect(assertInstall).toMatch(/the install folder holds exactly six entries/);
     expect(assertInstall).toContain("'S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0'");
   });
 
@@ -1100,7 +1100,7 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(grant).not.toMatch(/\$Paths\.(Logs|Config|EnvFile|MigrateEnvFile)\b/);
     expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Root -Account $GroupSid -Rights ReadAndExecute');
     expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Backups -Account $GroupSid -Rights Modify');
-    expect(functionBody(restoreRegion, 'Grant-AccucutServiceControl')).toContain('(A;;CCLCSWRPWPDTLORC;;;$Sid)');
+    expect(functionBody(restoreRegion, 'Grant-AccucutServiceControl')).toContain('(A;;CCLCSWRPWPLORC;;;$Sid)');
     // backup.ps1, clear-copies.ps1 and restore.ps1 let the endpoint group (and only it) write in backups beside the backup account.
     for (const path of ['deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/restore.ps1']) {
       expect(code(path), path).toContain('-EndpointSid (Get-AccucutAdminGroupSid)');
@@ -1151,6 +1151,81 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
       'full administrator',
     ]) {
       expect(chapter.toLowerCase(), part).toContain(part.toLowerCase());
+    }
+  });
+
+  it('ADR-015 Amendment 3.3 R1: the endpoint group must stay empty: the install refuses a group with members, both scripts check it through ADSI before the first prompt, and stage 13 asserts it', () => {
+    const newGroup = functionBody(restoreRegion, 'New-AccucutAdminGroup');
+    expect(newGroup).toContain('Get-AccucutAdminGroupMember');
+    expect(newGroup).toContain("has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed.");
+    expect(functionBody(restoreRegion, 'Get-AccucutAdminGroupMember')).toContain('WinNT://');
+    for (const path of ['deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(functionBody(text, 'Get-AccucutAdminGroupMemberList'), path).toContain("Invoke('Members')");
+      const assertion = functionBody(text, 'Assert-AccucutAdminGroupEmpty');
+      expect(assertion, path).toContain("The group $groupName has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed.");
+      expect(assertion, path).toContain('could not be read');
+      const body = functionBody(text, path.includes('restore') ? 'Invoke-AccucutRestoreScript' : 'Invoke-AccucutClearScript');
+      expect(body.indexOf('Assert-AccucutAdminGroupEmpty'), path).toBeGreaterThan(body.indexOf('Import-AccucutTrustedModule'));
+    }
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    expect(assertInstall).toContain("'the local group AccucutAdminRunAs exists (the install ran with -AdminAccount)'");
+    expect(assertInstall).toContain('the group AccucutAdminRunAs has no member');
+  });
+
+  it('ADR-015 Amendment 3.3 R2: restore.pgpass is checked at use (owner, protected, only Administrators, SYSTEM and the group with Read), and stage 13 asserts the exact entry counts', () => {
+    const check = functionBody(code('deploy/windows/restore.ps1'), 'Assert-AccucutRestorePassFileTrusted');
+    expect(check).toContain('Get-AccucutTrustSecurity -Path $Path');
+    expect(check).toContain('-bnot [int64]0x120089');
+    expect(check).toContain('deny entry');
+    const body = functionBody(code('deploy/windows/restore.ps1'), 'Invoke-AccucutRestoreScript');
+    expect(body).toContain('Assert-AccucutRestorePassFileTrusted -Path $paths.RestorePgpass -GroupSid (Get-AccucutAdminGroupSid)');
+    expect(body.indexOf('Assert-AccucutRestorePassFileTrusted')).toBeLessThan(body.indexOf('Invoke-AccucutRestore -Paths'));
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    for (const part of ['restore.pgpass holds exactly three entries', 'holds exactly four entries', 'the install folder holds exactly six entries', '"$groupSid|0x120089|False|0|Allow"', '"$groupSid|0x1200A9|False|3|Allow"']) {
+      expect(assertInstall, part).toContain(part);
+    }
+  });
+
+  it('ADR-015 Amendment 3.3 R3: a copy from a newer release stops with newer-release before the migration and the swap; an older one is migrated forward, and stage 13 does it for real', () => {
+    const newer = functionBody(restoreRegion, 'Assert-AccucutRestoreNotNewer');
+    expect(newer).toContain('SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL');
+    expect(newer).toContain("'migrate\\prisma\\migrations'");
+    expect(newer).toContain("-Code 'newer-release'");
+    expect(newer).toContain('This copy was made by a newer release of the portal than the one installed. Nothing was changed. Ask your IT person to install that release, then run the restore again.');
+    const restore = functionBody(restoreRegion, 'Invoke-AccucutRestore');
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeGreaterThan(restore.indexOf('Invoke-AccucutRestorePipe -AgePath'));
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeLessThan(restore.indexOf('Invoke-AccucutMigration'));
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeLessThan(restore.indexOf('Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName'));
+    expect(read('deploy/windows/tests/Restore.Tests.ps1')).toContain('one migration BEHIND the installed release');
+  });
+
+  it('ADR-015 Amendment 3.3 R4: the service entry is query, start and stop (no pause), read back after sdset, set with the sc.exe that the install resolved through the trust check; stage 13 checks it after install, update and rollback', () => {
+    const grant = functionBody(restoreRegion, 'Grant-AccucutServiceControl');
+    expect(grant).toContain('(A;;CCLCSWRPWPLORC;;;$Sid)');
+    expect(grant).not.toMatch(/CCLCSWRPWPDTLORC|System32|\$env:SystemRoot/);
+    expect(grant).toContain('[Parameter(Mandatory)][string]$ScPath');
+    expect(grant.match(/'sdshow'/g)?.length).toBe(2);
+    expect(grant).toContain('is not what was set');
+    const install = code('deploy/windows/install.ps1');
+    expect(install).toContain("$scExe = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($env:SystemRoot, 'System32\\sc.exe'))");
+    expect(install).toContain('-ScPath $scExe');
+    expect(code('deploy/windows/ci/assert-install.ps1')).toContain('(A;;CCLCSWRPWPLORC;;;$groupSid)');
+    // The install of stage 13 runs with -AdminAccount, so every assert-install call (after the install, the update and the rollback) sees the entry.
+    expect(WORKFLOW).toContain('-NodeExe $env:ACCUCUT_NODE -AdminAccount "$env:USERDOMAIN\\$env:USERNAME"');
+    expect(WORKFLOW).toContain('Make sure PowerShell remoting is on');
+  });
+
+  it('ADR-015 Amendment 3.3 R5: no constrained cmdlet by its short name on the session path, and the top-level handlers redact with a flag, not a Get-Command probe', () => {
+    for (const path of ['deploy/windows/AccucutOps.psm1', 'deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(text, path).not.toMatch(/(?<![\w.\\-])(?:Select-Object|Measure-Object|Get-Command|Get-Help|Out-Default|Get-FormatData)\b/);
+    }
+    expect(code('deploy/windows/AccucutOps.psm1')).toContain('Microsoft.PowerShell.Utility\\Select-Object');
+    for (const path of ['deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(text, path).toContain('$script:AccucutModuleLoaded = $false');
+      expect(text, path).toContain('if ($script:AccucutModuleLoaded) { $message = Hide-AccucutSecrets -Text $message }');
     }
   });
 });

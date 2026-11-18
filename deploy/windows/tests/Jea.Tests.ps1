@@ -172,7 +172,7 @@ Describe 'what the endpoint group is given, and nothing more (AC-7; ADR-015 Amen
         $root = Join-Path $TestDrive 'granted-root'
         $paths = Get-AccucutPaths -Root $root
         New-Item -ItemType Directory -Path $paths.Logs -Force | Out-Null
-        Grant-AccucutAdminEndpointAccess -Paths $paths -GroupSid $sid
+        Grant-AccucutAdminEndpointAccess -Paths $paths -GroupSid $sid -ScPath 'C:\checked\sc.exe'
         $expected = @(
             "folder:$($paths.Root)|$sid|ReadAndExecute", "folder:$($paths.Backups)|$sid|Modify",
             "read:$($paths.BackupPgpass)|$sid", "read:$($paths.BackupSettings)|$sid", "read:$($paths.RestorePgpass)|$sid",
@@ -191,7 +191,7 @@ Describe 'what the endpoint group is given, and nothing more (AC-7; ADR-015 Amen
         Mock New-AccucutAdminEndpointFiles -ModuleName AccucutOps { $order.Add("files:$AdminAccount|$GroupName"); return [pscustomobject]@{ RoleFile = 'r'; SessionFile = 's' } }
         Mock Register-AccucutPSSessionConfiguration -ModuleName AccucutOps { $order.Add("register:$Name|$SessionFile") }
         $paths = Get-AccucutPaths -Root 'C:\Accucut'
-        $result = Register-AccucutAdminEndpoint -Paths $paths -AdminAccount 'ACME\admin.user' -ReleaseDirectory 'C:\Accucut\releases\t1'
+        $result = Register-AccucutAdminEndpoint -Paths $paths -AdminAccount 'ACME\admin.user' -ReleaseDirectory 'C:\Accucut\releases\t1' -ScPath 'C:\checked\sc.exe'
         (@($order) -join ' ') | Should -Be 'resolve group grant:S-1-5-21-1-2-3-1010 files:ACME\admin.user|AccucutAdminRunAs register:AccucutAdmin|s'
         $result.GroupSid | Should -Be 'S-1-5-21-1-2-3-1010'
     }
@@ -204,37 +204,112 @@ Describe 'what the endpoint group is given, and nothing more (AC-7; ADR-015 Amen
         Mock Grant-AccucutAdminEndpointAccess -ModuleName AccucutOps { }
         Mock New-AccucutAdminEndpointFiles -ModuleName AccucutOps { [pscustomobject]@{ RoleFile = 'r'; SessionFile = 's' } }
         Mock Register-AccucutPSSessionConfiguration -ModuleName AccucutOps { }
-        [void](Register-AccucutAdminEndpoint -Paths (Get-AccucutPaths -Root 'C:\Accucut') -AdminAccount 'ACME\boss' -ReleaseDirectory 'C:\Accucut\releases\t1')
+        [void](Register-AccucutAdminEndpoint -Paths (Get-AccucutPaths -Root 'C:\Accucut') -AdminAccount 'ACME\boss' -ReleaseDirectory 'C:\Accucut\releases\t1' -ScPath 'C:\checked\sc.exe')
         $script:Warnings.Count | Should -Be 1
         $script:Warnings[0] | Should -Match 'member of Administrators'
         Should -Invoke Register-AccucutPSSessionConfiguration -ModuleName AccucutOps -Times 1 -Exactly
     }
 
-    It 'adds one entry to a service''s security descriptor (start, stop, query: nothing that changes or deletes it), before the audit part, and a second call changes nothing' {
-        $script:Sdset = [System.Collections.Generic.List[string]]::new()
+    It 'R4: adds one entry (query configuration, query status, enumerate dependents, start, stop, interrogate, read control: no pause or continue, nothing that changes or deletes), before the audit part, reads the descriptor back, and uses the sc.exe it is given' {
+        $script:Calls = [System.Collections.Generic.List[string]]::new()
+        $script:Shown = 0
+        $script:Base = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)'
+        $script:Entry = '(A;;CCLCSWRPWPLORC;;;S-1-5-21-1-2-3-1010)'
         Mock Invoke-AccucutNative -ModuleName AccucutOps {
-            if ($ArgumentList[0] -eq 'sdshow') { return [pscustomobject]@{ ExitCode = 0; Output = "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)`r`n" } }
-            $script:Sdset.Add($ArgumentList -join '|')
+            $script:Calls.Add("$FilePath|$($ArgumentList -join '|')")
+            if ($ArgumentList[0] -eq 'sdshow') {
+                $script:Shown++
+                if ($script:Shown -eq 1) { return [pscustomobject]@{ ExitCode = 0; Output = $script:Base + "`r`n" } }
+                return [pscustomobject]@{ ExitCode = 0; Output = $script:Base.Replace(')S:', ')' + $script:Entry + 'S:') + "`r`n" }
+            }
             return [pscustomobject]@{ ExitCode = 0; Output = '' }
         }
-        Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'S-1-5-21-1-2-3-1010'
-        $script:Sdset.Count | Should -Be 1
-        $script:Sdset[0] | Should -Be 'sdset|AccucutApp|D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPWPDTLORC;;;S-1-5-21-1-2-3-1010)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)'
+        Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'S-1-5-21-1-2-3-1010' -ScPath 'C:\checked\sc.exe'
+        @($script:Calls) | Should -Be @(
+            'C:\checked\sc.exe|sdshow|AccucutApp',
+            'C:\checked\sc.exe|sdset|AccucutApp|D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPWPLORC;;;S-1-5-21-1-2-3-1010)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)',
+            'C:\checked\sc.exe|sdshow|AccucutApp'
+        )
+        $script:Entry | Should -Not -Match 'DT|SD|WD|WO|DC'
+    }
+
+    It 'R4: a read-back that differs from the earlier descriptor plus the entry throws, naming the service (<Case>)' -ForEach @(
+        @{ Case = 'the entry is not there'; Back = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)' }
+        @{ Case = 'another entry changed'; Back = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCLCSWRPWPDTLOCRRC;;;BA)(A;;CCLCSWRPWPLORC;;;S-1-5-21-1-2-3-1010)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)' }
+        @{ Case = 'an extra entry appeared'; Back = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPWPLORC;;;S-1-5-21-1-2-3-1010)(A;;GA;;;WD)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)' }
+    ) {
+        $script:Shown = 0
+        $script:BackText = $Back
+        Mock Invoke-AccucutNative -ModuleName AccucutOps {
+            if ($ArgumentList[0] -eq 'sdshow') {
+                $script:Shown++
+                if ($script:Shown -eq 1) { return [pscustomobject]@{ ExitCode = 0; Output = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)' } }
+                return [pscustomobject]@{ ExitCode = 0; Output = $script:BackText }
+            }
+            return [pscustomobject]@{ ExitCode = 0; Output = '' }
+        }
+        { Grant-AccucutServiceControl -Name 'AccucutWorker' -Sid 'S-1-5-21-1-2-3-1010' -ScPath 'C:\checked\sc.exe' } | Should -Throw "*service 'AccucutWorker' is not what was set*"
     }
 
     It 'a service security descriptor that already names the SID is left as it is' {
         $script:Sdset = [System.Collections.Generic.List[string]]::new()
         Mock Invoke-AccucutNative -ModuleName AccucutOps {
-            if ($ArgumentList[0] -eq 'sdshow') { return [pscustomobject]@{ ExitCode = 0; Output = 'D:(A;;CCLCSWRPWPDTLORC;;;S-1-5-21-1-2-3-1010)' } }
+            if ($ArgumentList[0] -eq 'sdshow') { return [pscustomobject]@{ ExitCode = 0; Output = 'D:(A;;CCLCSWRPWPLORC;;;S-1-5-21-1-2-3-1010)' } }
             $script:Sdset.Add('changed'); return [pscustomobject]@{ ExitCode = 0; Output = '' }
         }
-        Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'S-1-5-21-1-2-3-1010'
+        Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'S-1-5-21-1-2-3-1010' -ScPath 'C:\checked\sc.exe'
         $script:Sdset.Count | Should -Be 0
     }
 
     It 'refuses a SID or a service name that is not one' {
-        { Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'not-a-sid' } | Should -Throw
-        { Grant-AccucutServiceControl -Name 'Accucut App; sc delete x' -Sid 'S-1-5-21-1-2-3-1010' } | Should -Throw
+        { Grant-AccucutServiceControl -Name 'AccucutApp' -Sid 'not-a-sid' -ScPath 'C:\checked\sc.exe' } | Should -Throw
+        { Grant-AccucutServiceControl -Name 'Accucut App; sc delete x' -Sid 'S-1-5-21-1-2-3-1010' -ScPath 'C:\checked\sc.exe' } | Should -Throw
+    }
+
+    It 'R1: an existing group with a member is refused when the install would reuse it, and one that cannot be read too; an empty one is reused and a missing one is made' {
+        Mock Get-AccucutAdminGroupSid -ModuleName AccucutOps { 'S-1-5-21-1-2-3-1010' }
+        Mock Get-AccucutAdminGroupMember -ModuleName AccucutOps { return , @('SOMEONE') }
+        { New-AccucutAdminGroup } | Should -Throw 'The group AccucutAdminRunAs has members. It must have none: a member could read the restore''s database password. Ask your IT person to remove them. Nothing was changed.'
+        Mock Get-AccucutAdminGroupMember -ModuleName AccucutOps { throw 'The members of the group AccucutAdminRunAs could not be read (denied). Nothing was changed.' }
+        { New-AccucutAdminGroup } | Should -Throw '*could not be read*'
+        Mock Get-AccucutAdminGroupMember -ModuleName AccucutOps { return , @() }
+        New-AccucutAdminGroup | Should -Be 'S-1-5-21-1-2-3-1010'
+        Mock Get-AccucutAdminGroupSid -ModuleName AccucutOps { $null }
+        Mock New-LocalGroup -ModuleName AccucutOps { [pscustomobject]@{ SID = [pscustomobject]@{ Value = 'S-1-5-21-1-2-3-2020' } } }
+        New-AccucutAdminGroup | Should -Be 'S-1-5-21-1-2-3-2020'
+        Should -Invoke New-LocalGroup -ModuleName AccucutOps -Times 1 -Exactly
+    }
+
+    It 'R1: a member stops the install step before any permission is given' {
+        $order = [System.Collections.Generic.List[string]]::new()
+        Mock Resolve-AccucutAdminAccount -ModuleName AccucutOps { [pscustomobject]@{ Sid = 'S-1-5-21-1-2-3-1001'; IsAdministrator = $false } }
+        Mock New-AccucutAdminGroup -ModuleName AccucutOps { throw 'The group AccucutAdminRunAs has members.' }
+        Mock Grant-AccucutAdminEndpointAccess -ModuleName AccucutOps { $order.Add('grant') }
+        Mock Register-AccucutPSSessionConfiguration -ModuleName AccucutOps { $order.Add('register') }
+        { Register-AccucutAdminEndpoint -Paths (Get-AccucutPaths -Root 'C:\Accucut') -AdminAccount 'ACME\admin.user' -ReleaseDirectory 'C:\Accucut\releases\t1' -ScPath 'C:\checked\sc.exe' } | Should -Throw '*has members*'
+        $order.Count | Should -Be 0
+    }
+}
+
+Describe 'R5: no constrained cmdlet is called by its short name on the session path (ADR-015 Amendment 3.3)' {
+    It 'the module and the two scripts that the endpoint runs call no Select-Object, Measure-Object, Get-Command, Get-Help, Out-Default or Get-FormatData without the module name (<File>)' -ForEach @(
+        @{ File = 'AccucutOps.psm1' }, @{ File = 'restore.ps1' }, @{ File = 'clear-copies.ps1' }
+    ) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:WindowsDirectory $File), [ref]$null, [ref]$null)
+        $names = 'Select-Object', 'Measure-Object', 'Get-Command', 'Get-Help', 'Out-Default', 'Get-FormatData'
+        $found = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { [string]$_.GetCommandName() } | Where-Object { $_ -in $names })
+        $found.Count | Should -Be 0 -Because "unqualified: $($found -join ', ')"
+        # also as an alias or a name in a string argument of Get-Command: none of them is written by short name anywhere in the code (comments excluded)
+        $code = [regex]::Replace([regex]::Replace((Get-Content -LiteralPath (Join-Path $script:WindowsDirectory $File) -Raw), '(?s)<#.*?#>', ''), '(?m)^\s*#.*$', '')
+        $code | Should -Not -Match '(?<![\w\\.-])(select|measure)\b\s+-' -Because 'the aliases select and measure are not used'
+    }
+
+    It 'the top-level handlers of restore.ps1 and clear-copies.ps1 redact with a flag set after the module was loaded, not with a probe of the command table' -ForEach @(@{ File = 'restore.ps1' }, @{ File = 'clear-copies.ps1' }) {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory $File) -Raw
+        $text | Should -Match '\$script:AccucutModuleLoaded = \$false'
+        $text | Should -Match 'Import-AccucutTrustedModule -Root \$root -Release \$release\r?\n\s+\$script:AccucutModuleLoaded = \$true'
+        $text | Should -Match 'if \(\$script:AccucutModuleLoaded\) \{ \$message = Hide-AccucutSecrets -Text \$message \}'
+        ($text -split "`n" | Where-Object { $_.TrimStart() -notlike '#*' }) -join "`n" | Should -Not -Match 'Get-Command'
     }
 }
 
@@ -282,8 +357,8 @@ Describe 'the endpoint on the runner: it registers, shows only the two commands,
         # A session in NoLanguage mode accepts a command and nothing else (no script block with variables, no $using:), so each command is written out.
         function Invoke-EndpointCommand {
             param([string]$Name)
-            if ($Name -eq 'Restore-AccucutBackup') { return @(Invoke-Command -Session $script:Session -ScriptBlock { Restore-AccucutBackup } 2>&1 | ForEach-Object { [string]$_ }) }
-            return @(Invoke-Command -Session $script:Session -ScriptBlock { Clear-AccucutCopies } 2>&1 | ForEach-Object { [string]$_ })
+            if ($Name -eq 'Restore-AccucutBackup') { $job = Invoke-Command -Session $script:Session -ScriptBlock { Restore-AccucutBackup } -AsJob } else { $job = Invoke-Command -Session $script:Session -ScriptBlock { Clear-AccucutCopies } -AsJob }
+            $finished = Wait-Job -Job $job -Timeout 120; $timedOut = ($null -eq $finished); if ($timedOut) { Stop-Job -Job $job }; $out = @(Receive-Job -Job $job -ErrorAction SilentlyContinue 2>&1 | ForEach-Object { [string]$_ }); Remove-Job -Job $job -Force; if ($timedOut) { $out += 'TIMED OUT: the stand-in script waited for something.' }; return $out
         }
         # Windows Remote Management must be on. The runner has it; if it is off, switch it on (the runner is thrown away after the job, and this is the test's own business).
         if ((Get-Service -Name WinRM).Status -ne 'Running' -or -not (Test-WSMan -ErrorAction SilentlyContinue)) {
@@ -314,8 +389,8 @@ Test-Step 'New-Object' { (New-Object System.Text.StringBuilder).Length }
 Test-Step 'pipeline' { (1..4 | Where-Object { $_ -gt 1 } | ForEach-Object { $_ * 2 } | Sort-Object -Descending | Select-Object -First 1) }
 Test-Step 'Join-Path' { Join-Path 'C:\a' 'b' }
 Test-Step 'Write-Host' { Write-Host 'hello' ; 'written' }
-Test-Step 'ReadHost-resolves' { try { Read-Host -Prompt 'x' | Out-Null; 'prompted' } catch { if ($_.Exception.Message -match 'is not recognized') { throw }; 'exists-but-not-interactive' } }
-Test-Step 'ReadHost-secure-resolves' { try { Read-Host -Prompt 'x' -AsSecureString | Out-Null; 'prompted' } catch { if ($_.Exception.Message -match 'is not recognized') { throw }; 'exists-but-not-interactive' } }
+Test-Step 'ReadHost-resolves' { if ($null -eq $ExecutionContext.SessionState.InvokeCommand.GetCommand('Read-Host', 'Cmdlet')) { throw 'Read-Host is not available to the script' }; 'available' }
+Test-Step 'Import-Module-resolves' { if ($null -eq $ExecutionContext.SessionState.InvokeCommand.GetCommand('Import-Module', 'Cmdlet')) { throw 'Import-Module is not available to the script' }; 'available' }
 'DONE'
 '@
         [System.IO.File]::WriteAllText((Join-Path $script:TestRoot 'current\restore.ps1'), $stub)
@@ -404,10 +479,7 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
         }
         $script:RealOutput = @{}
         if ($script:RealReady) {
-            $release = [System.IO.Path]::Combine($script:RealPaths.Releases, (Get-AccucutCurrentRelease -Paths $script:RealPaths))
-            $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-            # What install.ps1 -AdminAccount does, minus the desktop shortcut: the group, the permissions, the two files, the endpoint.
-            $script:RealResult = Register-AccucutAdminEndpoint -Paths $script:RealPaths -AdminAccount $me -ReleaseDirectory $release
+            # The install of stage 13 ran with -AdminAccount (the runner's own account): the group, the permissions, the two files and the endpoint are the install's own work.
             for ($attempt = 1; $attempt -le 6 -and $null -eq $script:RealSession; $attempt++) {
                 try { $script:RealSession = New-PSSession -ComputerName localhost -ConfigurationName 'AccucutAdmin' -ErrorAction Stop }
                 catch { if ($attempt -eq 6) { throw }; Start-Sleep -Seconds 5 }
@@ -417,7 +489,6 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
 
     AfterAll {
         if ($null -ne $script:RealSession) { Remove-PSSession -Session $script:RealSession -ErrorAction SilentlyContinue }
-        if ($script:RealReady) { try { Unregister-AccucutAdminEndpoint } catch { Write-Host "The endpoint could not be removed: $($_.Exception.Message)" } }
     }
 
     It 'the stage 13 install has the restore role''s password file (a job on the real install fails here, it never skips)' {
@@ -427,7 +498,9 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
     It 'made the group, and gave it exactly the entries that Grant-AccucutAdminEndpointAccess says: read and execute on the root (a sixth entry), Modify on backups, read on the three settings files, nothing on logs, .env or migrate.env' {
         $sid = Get-AccucutAdminGroupSid
         $sid | Should -Not -BeNullOrEmpty
-        $script:RealResult.GroupSid | Should -Be $sid
+        # R1: the group has no member.
+        $groupMembers = Get-AccucutAdminGroupMember
+        @($groupMembers).Count | Should -Be 0
         $rule = {
             param($Path, $IsDirectory)
             if ($IsDirectory) { $security = [System.IO.Directory]::GetAccessControl($Path) } else { $security = [System.IO.File]::GetAccessControl($Path) }
@@ -450,7 +523,7 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
         $sid = Get-AccucutAdminGroupSid
         foreach ($name in 'AccucutApp', 'AccucutWorker') {
             $descriptor = (& "$env:SystemRoot\System32\sc.exe" sdshow $name | Out-String).Trim()
-            $descriptor | Should -Match "\(A;;CCLCSWRPWPDTLORC;;;$([regex]::Escape($sid))\)" -Because $name
+            $descriptor | Should -Match "\(A;;CCLCSWRPWPLORC;;;$([regex]::Escape($sid))\)" -Because $name
             [regex]::Matches($descriptor, [regex]::Escape($sid)).Count | Should -Be 1
         }
     }
@@ -499,5 +572,20 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
         $transcripts = @(Get-ChildItem -LiteralPath $script:RealPaths.JeaLogs -File -Recurse -ErrorAction SilentlyContinue)
         $transcripts.Count | Should -BeGreaterThan 0
         foreach ($file in $transcripts) { (Get-Content -LiteralPath $file.FullName -Raw) | Should -Not -Match 'AGE-SECRET' }
+    }
+
+    It 'R1: a member added to the group stops both scripts and the install step (read through ADSI, for real), and removing the member lets them pass again' {
+        $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        Add-LocalGroupMember -Group 'AccucutAdminRunAs' -Member $me
+        try {
+            $members = Get-AccucutAdminGroupMember
+            @($members).Count | Should -Be 1
+            { Assert-AccucutAdminGroupEmpty } | Should -Throw 'The group AccucutAdminRunAs has members. It must have none*Nothing was changed.'
+            { New-AccucutAdminGroup } | Should -Throw '*has members*'
+        }
+        finally { Remove-LocalGroupMember -Group 'AccucutAdminRunAs' -Member $me -ErrorAction SilentlyContinue }
+        { Assert-AccucutAdminGroupEmpty } | Should -Not -Throw
+        $after = Get-AccucutAdminGroupMember
+        @($after).Count | Should -Be 0
     }
 }

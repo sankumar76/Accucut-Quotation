@@ -263,6 +263,17 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         }
     }
 
+    It 'the group check of ADR-015 Amendment 3.3 (R1) is the same text in clear-copies.ps1 and restore.ps1, reads the group through ADSI, and adds no load site' {
+        foreach ($name in 'Get-AccucutAdminGroupMemberList', 'Assert-AccucutAdminGroupEmpty') {
+            $first = (Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name $name).Extent.Text
+            (Get-FunctionAst -Ast $script:Asts['restore.ps1'] -Name $name).Extent.Text | Should -BeExactly $first
+        }
+        $text = (Get-FunctionAst -Ast $script:Asts['restore.ps1'] -Name 'Get-AccucutAdminGroupMemberList').Extent.Text
+        $text | Should -Match 'WinNT://'
+        $text | Should -Match "Invoke\('Members'\)"
+        $text | Should -Not -Match 'Import-Module|Get-LocalGroup|Start-Process|Add-Type'
+    }
+
     It 'in the first half of the install, only the trust block and a few plain functions are called: the module is not loaded and none of its functions is used (required test 2)' {
         $ast = $script:Asts['install.ps1']
         $allowed = $script:BlockFunctionNames + @('Test-AccucutScriptAdministrator', 'Get-AccucutExpectedSha256', 'Write-Host')

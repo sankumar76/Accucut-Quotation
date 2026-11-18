@@ -877,7 +877,11 @@ Describe 'the restore role and the Admin endpoint in the install (STORY-10.11 AC
         [array]::IndexOf($trace, 'admin-account:ACME\admin.user') | Should -BeLessThan ([array]::IndexOf($trace, $firstDatabaseStep))
         [array]::IndexOf($trace, 'endpoint:ACME\admin.user') | Should -BeGreaterThan ([array]::IndexOf($trace, 'first-backup'))
         [array]::IndexOf($trace, "shortcut:AccucutAdmin|$powershell") | Should -BeGreaterThan ([array]::IndexOf($trace, 'endpoint:ACME\admin.user'))
-        Should -Invoke Register-AccucutAdminEndpoint -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*releases?t-admin' }
+        Should -Invoke Register-AccucutAdminEndpoint -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*releases?t-admin' -and $ScPath -like '*System32?sc.exe' }
+        # R4: sc.exe is resolved through the trust check, by its full path, before the endpoint step, and the answer is what the step gets.
+        Should -Invoke Resolve-AccucutTrustedExecutable -Times 1 -Exactly -ParameterFilter { $Path -like '*System32?sc.exe' }
+        $scCheck = @($script:Trace | Where-Object { $_ -like 'admin-account:*' })
+        $scCheck.Count | Should -Be 1
     }
 
     It 'AC-7: an account that Windows does not know stops the install before the database, the roles and the folders are touched' {

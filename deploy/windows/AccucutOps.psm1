@@ -598,7 +598,7 @@ function Expand-AccucutTemplate {
             $unknown.Add($name)
             return $match.Value
         })
-    if ($unknown.Count -gt 0) { throw "The template uses a name that has no value: $(($unknown | Select-Object -Unique) -join ', ')." }
+    if ($unknown.Count -gt 0) { throw "The template uses a name that has no value: $(($unknown | Microsoft.PowerShell.Utility\Select-Object -Unique) -join ', ')." }
     return $result
 }
 
@@ -1809,7 +1809,7 @@ function Get-AccucutBackupKeepSet {
         [int]$Count = 4
     )
 
-    $newest = @($Copy | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name -Descending | Select-Object -First $Count)
+    $newest = @($Copy | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name -Descending | Microsoft.PowerShell.Utility\Select-Object -First $Count)
     return @($newest | ForEach-Object { $_.Name })
 }
 
@@ -2109,7 +2109,7 @@ function Invoke-AccucutBackup {
     try {
         $info = Get-AccucutDatabaseInfo -PsqlPath $Program.Psql -PassFile $PassFile -DatabaseRole $DatabaseRole -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database
         $existing = @(Get-AccucutBackupCopy -Directory $directory)
-        $last = @($existing | Where-Object { $_.Verified } | Select-Object -Last 1)
+        $last = @($existing | Where-Object { $_.Verified } | Microsoft.PowerShell.Utility\Select-Object -Last 1)
         $lastBytes = 0
         if ($last.Count -eq 1) { $lastBytes = $last[0].SizeBytes }
         $space = Get-AccucutVolumeSpace -Path $directory
@@ -2791,6 +2791,33 @@ function Invoke-AccucutRestorePipe {
     if ($null -ne $copyError) { throw (New-AccucutRestoreStop -Code 'pipe-failed' -Message "The decrypted copy could not be passed to pg_restore: $copyError") }
 }
 
+function Assert-AccucutRestoreNotNewer {
+    <#
+    A copy from a NEWER release is refused (ADR-015 Amendment 3.3 R3), an older one is migrated forward. Reads the migrations that the restored database has applied (finished, not rolled back)
+    and stops with the code newer-release if any is not a folder of the installed release's prisma migrations (<release>\migrate\prisma\migrations): the installed release could not run on it.
+    Run on the NEW database, before the forward migration and before the swap, so the failure path puts the old database back in service.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$ReleaseDirectory
+    )
+
+    Assert-AccucutRestoreDatabaseName -Name $Database
+    $folder = [System.IO.Path]::Combine($ReleaseDirectory, 'migrate\prisma\migrations')
+    if (-not [System.IO.Directory]::Exists($folder)) { throw (New-AccucutRestoreStop -Code 'release-migrations-missing' -Message "The installed release has no migrations folder ('$folder'), so the copy cannot be compared with it.") }
+    $known = @([System.IO.Directory]::GetDirectories($folder) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+    $answer = Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database $Database -Sql "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1;`n"
+    $applied = @(([string]$answer -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
+    $newer = @($applied | Where-Object { $known -notcontains $_ })
+    if ($newer.Count -gt 0) {
+        throw (New-AccucutRestoreStop -Code 'newer-release' -Message 'This copy was made by a newer release of the portal than the one installed. Nothing was changed. Ask your IT person to install that release, then run the restore again.')
+    }
+}
+
 function Get-AccucutRestoreChoice {
     <# The copies a restore offers, newest first, numbered from 1. A copy that has no matching manifest is listed but cannot be chosen. #>
     [CmdletBinding()]
@@ -2876,7 +2903,7 @@ function Invoke-AccucutRestore {
         $version = Test-AccucutRestoreVersion -ManifestVersion $manifestVersion -ServerVersion $info.ServerVersion
         if (-not $version.Ok) { throw (New-AccucutRestoreStop -Code 'postgres-version' -Message $version.Message) }
         $space = Get-AccucutVolumeSpace -Path $Paths.Backups
-        $verified = @(Get-AccucutBackupCopy -Directory $Paths.Backups | Where-Object { $_.Verified } | Select-Object -Last 1)
+        $verified = @(Get-AccucutBackupCopy -Directory $Paths.Backups | Where-Object { $_.Verified } | Microsoft.PowerShell.Utility\Select-Object -Last 1)
         $lastBytes = 0
         if ($verified.Count -eq 1) { $lastBytes = $verified[0].SizeBytes }
         $room = Test-AccucutRestoreRoom -FreeBytes $space.FreeBytes -TotalBytes $space.TotalBytes -LastCopyBytes $lastBytes -DatabaseBytes $info.SizeBytes -CopyBytes $copy.SizeBytes
@@ -2926,6 +2953,7 @@ function Invoke-AccucutRestore {
             Write-AccucutRestoreRecord -Paths $Paths -Message "Safety copy made: $safetyName. Restoring $copyName into a new database ($newName)."
             New-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $newName
             Invoke-AccucutRestorePipe -AgePath $Program.Age -PgRestorePath $Program.PgRestore -CopyPath $copy.Path -KeyBytes $keyBytes -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $newName -PassFile $passFile
+            Assert-AccucutRestoreNotNewer -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Database $newName -ReleaseDirectory $ReleaseDirectory
             Write-AccucutRestoreRecord -Paths $Paths -Message 'The copy is restored into the new database. Running the migrations on it, so that it matches this release.'
             $password = Read-AccucutPgpassPassword -Path $passFile -Role $script:RestoreDatabaseRole
             $url = "postgresql://$($script:RestoreDatabaseRole):$([uri]::EscapeDataString($password))@$($Settings.PgHost):$($Settings.PgPort)/$newName"
@@ -3042,14 +3070,37 @@ function Resolve-AccucutAdminAccount {
     return [pscustomobject]@{ Sid = $sid.Value; IsAdministrator = $isAdministrator }
 }
 
+function Get-AccucutAdminGroupMember {
+    <# The names of the members of the endpoint group, read through ADSI (WinNT). Throws when the list cannot be read: a list that cannot be read is never taken for an empty one (R1). #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $group = [ADSI]"WinNT://$($env:COMPUTERNAME)/$($script:AdminGroupName),group"
+        $names = New-Object System.Collections.Generic.List[string]
+        foreach ($member in @($group.Invoke('Members'))) { $names.Add([string]$member.GetType().InvokeMember('Name', 'GetProperty', $null, $member, $null)) }
+        return , $names.ToArray()
+    }
+    catch {
+        throw "The members of the group $($script:AdminGroupName) could not be read ($($_.Exception.Message)). Nothing was changed."
+    }
+}
+
 function New-AccucutAdminGroup {
-    <# The local group of the endpoint's virtual account, with no members. Returns its SID. An existing group of that name is the same group (the install is the only maker). #>
+    <#
+    The local group of the endpoint's virtual account, with no members. Returns its SID. An existing group of that name is reused ONLY if it has no member (ADR-015 Amendment 3.3 R1: a member
+    of the group could read the restore's database password), and an unreadable list is refused too.
+    #>
     [CmdletBinding()]
     param()
 
     $existing = Get-AccucutAdminGroupSid
-    if (-not [string]::IsNullOrEmpty($existing)) { return $existing }
-    $group = New-LocalGroup -Name $script:AdminGroupName -Description 'The Accucut Admin endpoint runs its two commands as a virtual account in this group (STORY-10.11). It has no members.'
+    if (-not [string]::IsNullOrEmpty($existing)) {
+        $members = Get-AccucutAdminGroupMember
+        if (@($members).Count -gt 0) { throw "The group $($script:AdminGroupName) has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed." }
+        return $existing
+    }
+    $group = New-LocalGroup -Name $script:AdminGroupName -Description 'Accucut Admin endpoint group (no members)'
     return $group.SID.Value
 }
 
@@ -3093,26 +3144,33 @@ function New-AccucutAdminFolder {
 
 function Grant-AccucutServiceControl {
     <#
-    Lets one SID query, start and stop a service (its security descriptor, through sc.exe): query configuration, query status, enumerate dependents, start, stop, pause or continue,
-    interrogate, read control. Nothing else (no change of the service, no delete, no write of permissions). The existing entries are kept; a second call changes nothing.
+    Lets one SID query, start and stop a service (its security descriptor, through sc.exe): query configuration, query status, enumerate dependents, start, stop, interrogate, read control
+    (CCLCSWRPWPLORC; no pause or continue, no change of the service, no delete, no write of permissions). The existing entries are kept; a second call changes nothing. After sdset the
+    descriptor is read back, and it must equal the earlier one plus exactly that entry, or this throws naming the service (ADR-015 Amendment 3.3 R4). -ScPath is the full path of
+    sc.exe, checked by the caller (the install) with the trust block: a program is never looked up through PATH.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][string]$Sid
+        [Parameter(Mandatory)][string]$Sid,
+        [Parameter(Mandatory)][string]$ScPath
     )
 
     if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { throw "'$Sid' is not a SID." }
     if ($Name -notmatch '^[A-Za-z0-9_.-]{1,64}$') { throw "'$Name' is not a service name." }
-    $sc = [System.IO.Path]::Combine($env:SystemRoot, 'System32\sc.exe')
-    $current = (Invoke-AccucutNative -FilePath $sc -ArgumentList @('sdshow', $Name)).Output.Trim()
+    $current = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
     if ($current -notmatch '^D:') { throw "The security descriptor of the service '$Name' could not be read." }
     if ($current.Contains(";;;$Sid)")) { return }
-    $entry = "(A;;CCLCSWRPWPDTLORC;;;$Sid)"
+    $entry = "(A;;CCLCSWRPWPLORC;;;$Sid)"
     $split = $current.IndexOf(')S:')
     if ($split -ge 0) { $updated = $current.Substring(0, $split + 1) + $entry + $current.Substring($split + 1) }
     else { $updated = $current + $entry }
-    [void](Invoke-AccucutNative -FilePath $sc -ArgumentList @('sdset', $Name, $updated))
+    [void](Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdset', $Name, $updated))
+    $after = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
+    $index = $after.IndexOf($entry)
+    if ($index -lt 0 -or $after.Remove($index, $entry.Length) -ne $current) {
+        throw "The security descriptor of the service '$Name' is not what was set (it should be the earlier one plus $entry). It is now: $after. Ask your IT person to check it with sc.exe sdshow $Name."
+    }
 }
 
 function Write-AccucutRestoreConfig {
@@ -3155,6 +3213,7 @@ function Grant-AccucutAdminEndpointAccess {
     param(
         [Parameter(Mandatory)][object]$Paths,
         [Parameter(Mandatory)][string]$GroupSid,
+        [Parameter(Mandatory)][string]$ScPath,
         [string]$LogFile
     )
 
@@ -3168,7 +3227,7 @@ function Grant-AccucutAdminEndpointAccess {
         $stream.Dispose()
         Set-AccucutLockedFileAcl -Path $Paths.RestoreLog -ModifySid $GroupSid
     }
-    foreach ($name in (Get-AccucutServiceNames)) { Grant-AccucutServiceControl -Name $name -Sid $GroupSid }
+    foreach ($name in (Get-AccucutServiceNames)) { Grant-AccucutServiceControl -Name $name -Sid $GroupSid -ScPath $ScPath }
     Write-AccucutLog -Message "The Admin endpoint's group may read and execute under '$($Paths.Root)', change '$($Paths.Backups)', '$($Paths.JeaLogs)' and restore.log, read the three settings files, and start and stop the two services. Nothing else." -LogFile $LogFile
 }
 
@@ -3230,13 +3289,14 @@ function Register-AccucutAdminEndpoint {
         [Parameter(Mandatory)][object]$Paths,
         [Parameter(Mandatory)][string]$AdminAccount,
         [Parameter(Mandatory)][string]$ReleaseDirectory,
+        [Parameter(Mandatory)][string]$ScPath,
         [string]$LogFile
     )
 
     $account = Resolve-AccucutAdminAccount -Account $AdminAccount
     if ($account.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $LogFile }
     $groupSid = New-AccucutAdminGroup
-    Grant-AccucutAdminEndpointAccess -Paths $Paths -GroupSid $groupSid -LogFile $LogFile
+    Grant-AccucutAdminEndpointAccess -Paths $Paths -GroupSid $groupSid -ScPath $ScPath -LogFile $LogFile
     $files = New-AccucutAdminEndpointFiles -TemplateDirectory ([System.IO.Path]::Combine($ReleaseDirectory, 'jea')) -Root $Paths.Root -AdminAccount $AdminAccount -GroupName $script:AdminGroupName -TranscriptDirectory $Paths.JeaLogs -OutputDirectory $Paths.JeaConfig
     Register-AccucutPSSessionConfiguration -Name $script:AdminEndpointName -SessionFile $files.SessionFile
     Write-AccucutLog -Message "The endpoint $($script:AdminEndpointName) is registered for '$AdminAccount' (a virtual account in the group $($script:AdminGroupName); transcripts in '$($Paths.JeaLogs)')." -LogFile $LogFile
@@ -3275,7 +3335,7 @@ Export-ModuleMember -Function @(
     'New-AccucutRestoreStop', 'Read-AccucutKeyInput', 'ConvertFrom-AccucutSecureString', 'Read-AccucutPgpassPassword', 'Read-AccucutInstallState', 'Test-AccucutRestoreVersion', 'Test-AccucutRestoreRoom',
     'Write-AccucutRestoreEvent', 'Set-AccucutLockedFileAcl', 'Test-AccucutRestoreLogFile', 'Add-AccucutRestoreLogLine', 'Write-AccucutRestoreRecord', 'Invoke-AccucutRestoreSql', 'Assert-AccucutRestoreDatabaseName',
     'New-AccucutRestoreDatabase', 'Switch-AccucutRestoreDatabase', 'Remove-AccucutRestoreDatabase', 'Set-AccucutConsoleInputNoPreamble', 'Restore-AccucutConsoleInput', 'Test-AccucutBackupKey', 'Invoke-AccucutRestorePipe',
-    'Get-AccucutRestoreChoice', 'Invoke-AccucutRestore',
-    'Get-AccucutAdminGroupSid', 'Resolve-AccucutAdminAccount', 'New-AccucutAdminGroup', 'Add-AccucutFileReadAccess', 'New-AccucutAdminFolder', 'Grant-AccucutServiceControl', 'Write-AccucutRestoreConfig',
+    'Assert-AccucutRestoreNotNewer', 'Get-AccucutRestoreChoice', 'Invoke-AccucutRestore',
+    'Get-AccucutAdminGroupSid', 'Get-AccucutAdminGroupMember', 'Resolve-AccucutAdminAccount', 'New-AccucutAdminGroup', 'Add-AccucutFileReadAccess', 'New-AccucutAdminFolder', 'Grant-AccucutServiceControl', 'Write-AccucutRestoreConfig',
     'Grant-AccucutAdminEndpointAccess', 'New-AccucutAdminEndpointFiles', 'Register-AccucutPSSessionConfiguration', 'Register-AccucutAdminEndpoint', 'Unregister-AccucutAdminEndpoint'
 )
