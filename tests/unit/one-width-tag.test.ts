@@ -93,7 +93,7 @@ const ONE_WIDTH_TESTS: ReadonlyArray<string> = [
   'audit.spec.ts > the log has no write route (AC-6) > PATCH, PUT, DELETE and POST on /api/v1/audit are 405 for the Admin',
   'audit.spec.ts > the filters (AC-6) > a range that ends before it begins is said in words under To, and asks the server nothing',
   'audit.spec.ts > the filters (AC-6) > From and To are whole days in IST: today includes what was just done, tomorrow does not',
-  'audit.spec.ts > the filters (AC-6) > a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back',
+  'audit.spec.ts > the filters (AC-6) > a date window before any entry shows "No entries match", with the way back, and clearing the filters brings the list back',
   'audit.spec.ts > states (AC-8) > error: "We could not load the audit log" with "Try again", which asks again',
   'audit.spec.ts > states (AC-8) > error: a broken answer is an error, never an empty list',
   // AQP-113 PRF-02 and AQP-122 PRF-03 (architect, test strategy v0.25 section 10.5; ruling 2026-11-08; applied in AQP-123): five tests whose subject

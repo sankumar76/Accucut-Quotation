@@ -321,10 +321,33 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     expect(after.approval).toEqual(before.approval);
   });
 
+  it('STORY-06.13 AC-3, AC-6: a price that was removed is no BO: `approval` is null, `priceRemoved` says who and when and holds no price, whatever the state of the figures', async () => {
+    const priceRemoved = { removedAt: new Date('2026-11-05T06:50:00.000Z'), byName: 'Invented Meera' };
+    const before = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, priceRemoved }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(before.approval).toBeNull();
+    expect(before.priceRemoved).toEqual({ at: '2026-11-05T06:50:00.000Z', byName: 'Invented Meera' });
+    expect(JSON.stringify(before)).not.toContain('12600');
+    const after = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, priceRemoved, inputsRevision: CALCULATION_REVISION + 1 }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(after.state).toBe('out-of-date');
+    expect(after.priceRemoved).toEqual(before.priceRemoved);
+  });
+
+  it('STORY-06.13: the removal is read only while no approval stands, so a page with an approval costs no read more, and a page with none says nothing of a removal', async () => {
+    const standing = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval });
+    expect((await standing.service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).priceRemoved).toBeNull();
+    expect(standing.reads.removals.calls).toEqual([]);
+    const never = createReviewWorld({ rows: CE1.rows, bl: CE1.bl });
+    const view = await never.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(view.approval).toBeNull();
+    expect(view.priceRemoved).toBeNull();
+    expect(never.reads.removals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
+  });
+
   it('an Engineer is refused before the approvals are read, as before everything else', async () => {
     const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval });
     await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
     expect(world.reads.approvals.calls).toEqual([]);
+    expect(world.reads.removals.calls).toEqual([]);
   });
 });
 

@@ -16,6 +16,7 @@ import type { EstimateNodeRepository } from '../../src/server/repositories/estim
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
 import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
+import { createRemovePriceService, type RemovePriceService } from '../../src/server/services/remove-price-service';
 import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
@@ -132,6 +133,8 @@ export interface SessionHarness {
   readonly unlockService: UnlockService;
   /** Cancel approval (STORY-06.12) over the same estimates and approval records, with the real step-up check over the fake people (`HARNESS_PASSWORD` is every person's password) (`getCancelApprovalService` in the composition mock). */
   readonly cancelApprovalService: CancelApprovalService;
+  /** Remove price (STORY-06.13) over the same estimates and approval records, with the same real step-up check (`getRemovePriceService` in the composition mock). */
+  readonly removePriceService: RemovePriceService;
   /** The real step-up check (STORY-06.14) over the fake people and throttles, for a test that counts the attempts (`throttles`, `hasher`). */
   readonly stepUpService: StepUpService;
   /** The hasher the step-up and the other password checks use, which counts every check it makes. */
@@ -292,6 +295,14 @@ export function createSessionHarness(): SessionHarness {
     stepUp: stepUpService,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Remove price (STORY-06.13) over the same world and the same step-up check. The canary estimate has no approval, so the recipe's valid call is refused 409 (no price to remove) after the password passes, and writes nothing.
+  const removePriceService = createRemovePriceService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    audit: calculationAudit.service,
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
@@ -300,6 +311,7 @@ export function createSessionHarness(): SessionHarness {
     findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
+    findLatestRemoval: (estimateId: string) => calculationWorld.approvalRepository.findLatestRemoval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
@@ -357,6 +369,7 @@ export function createSessionHarness(): SessionHarness {
     approvalService,
     unlockService,
     cancelApprovalService,
+    removePriceService,
     stepUpService,
     hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.

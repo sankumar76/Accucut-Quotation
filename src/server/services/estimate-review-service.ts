@@ -54,8 +54,8 @@ export interface EstimateReviewDependencies {
   readonly masters: CalculationMasters;
   /** Compiled plans by version, for the rates the calculation's formulas read. A test passes its own; the default is one cache for the service. */
   readonly plans?: PlanCache;
-  /** BO is read here, from the latest approval that has not been removed, and never through the figure state (STORY-06.06 AC-9). */
-  readonly approvals: Pick<ApprovalRepository, 'findLatestApproval'>;
+  /** BO is read here, from the latest approval unless its price was removed (then who and when, never the price: STORY-06.13), and never through the figure state (STORY-06.06 AC-9). */
+  readonly approvals: Pick<ApprovalRepository, 'findLatestApproval' | 'findLatestRemoval'>;
   readonly nodes: Pick<EstimateNodeRepository, 'listNodes'>;
   readonly configuration: {
     /** The version in force now, used while no calculation exists (the letters and the count's field). */
@@ -166,6 +166,8 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
       ]);
       // A calculation that is current but cannot be read is a fault in the data: say nothing about the figures rather than show dashes as if they were the answer.
       if (state === 'current' && figures === null) throw new Error('The calculation linked to the estimate could not be read.');
+      // With no approval standing, the latest one may have had its price removed (STORY-06.13 AC-3): who and when, read without the price (AC-6). Asked only then, so a page with an approval costs no read more.
+      const removal = approval === null ? await approvals.findLatestRemoval(estimateId) : null;
 
       // Only while the figures are current: in the other two states the masters are not read at all (AC-4).
       const ratesChanged = state === 'current' && calculation !== null ? await ratesChangedSince({ calculations, estimates, masters, plans }, estimateId, calculation.id, version) : null;
@@ -201,6 +203,7 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
                     ? null
                     : { at: approval.cancel.cancelledAt.toISOString(), byName: approval.cancel.byName, reason: approval.cancel.reason, engineerName: approval.cancel.engineerName },
               },
+        priceRemoved: removal === null ? null : { at: removal.removedAt.toISOString(), byName: removal.byName },
         // The warning of the calculation in view (STORY-06.10): it comes in with the figures, so it is read only while the state is `current` and is `null` in the other two (AC-4).
         warning: warningOf(figures),
         ratesChanged,
