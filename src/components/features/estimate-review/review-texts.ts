@@ -140,6 +140,15 @@ export function cancelledStatusLine(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED', 
   if (status === 'SUBMITTED' && wasUnlocked) return 'The estimate stays Submitted and its task does not change.';
   return null;
 }
-export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
+/**
+ * Remove price (STORY-06.13; UX spec SCR-06 "Remove price (Admin)" and "Price removed"). The danger button of the Admin, beside the cancelled BO, opens the dialog of `estimate-remove-price` (fetched on the first press);
+ * a Lead sees no button and "Only the Admin can remove it" in the cancelled notice. Once the price is removed, BO reads "Not set yet" and this notice says who removed it and when (IST), in the words of the spec.
+ */
+export const REMOVE_PRICE_LABEL = 'Remove price';
+export const REMOVE_PRICE_FIRST_OPEN_FAILED = 'The remove price window did not open. Check your connection and try again.';
+export const priceRemovedNoticeTitle = (time: string, name: string): string => `The approved price was removed on ${time} by ${name}.`;
+export const PRICE_REMOVED_AUDIT_KEEPS = 'The audit log keeps it.';
+export const PRICE_REMOVED_APPROVE_AGAIN = 'Approve again, after a Recalculate, to set a price.';
+export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. There is no file until a calculation is current.';
 export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

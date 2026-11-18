@@ -1,4 +1,4 @@
-import type { ApprovalRepository, CancelRecord, NewApproval, UnlockRecord } from '../../src/server/repositories/approval-repository';
+import type { ApprovalRepository, CancelRecord, NewApproval, RemovalRecord, UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { CalculationRecord, CalculationRepository, NewCalculation, NewCalculationRow, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { EstimateRepository } from '../../src/server/repositories/estimate-repository';
 import type { Transaction, TransactionRunner } from '../../src/server/repositories/transaction';
@@ -12,7 +12,7 @@ import type { FakeEstimateWorld } from './fake-estimates';
  * `immutability.test.ts`. Every name and number is invented.
  */
 
-/** An approval as the fake keeps it: what was inserted, with the time it was made and whether it was removed (never, until STORY-06.13). */
+/** An approval as the fake keeps it: what was inserted, with the time it was made and whether it was cancelled or its price removed. */
 export interface FakeApproval extends NewApproval {
   readonly id: string;
   readonly approvedAt: Date;
@@ -20,6 +20,8 @@ export interface FakeApproval extends NewApproval {
   unlock?: UnlockRecord;
   /** Set by `markCancelled` (STORY-06.12); a row with one is no longer live. */
   cancel?: CancelRecord;
+  /** Set by `markRemoved` (STORY-06.13); a row with one is no BO. */
+  removal?: RemovalRecord;
 }
 
 export interface FakeCalculationWorld {
@@ -121,7 +123,7 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     findLatestApproval(estimateId) {
       const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
       return Promise.resolve(
-        found === undefined
+        found === undefined || found.removal !== undefined
           ? null
           : {
               id: found.id,
@@ -138,8 +140,12 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
             },
       );
     },
+    findLatestRemoval(estimateId) {
+      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
+      return Promise.resolve(found?.removal ?? null);
+    },
     findLiveApproval(estimateId) {
-      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId && approval.unlock === undefined && approval.cancel === undefined);
+      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId && approval.unlock === undefined && approval.cancel === undefined && approval.removal === undefined);
       return Promise.resolve(found === undefined ? null : { id: found.id, calculationId: found.calculationId, approvedPrice: found.approvedPrice, engineerName: 'Invented Engineer' });
     },
     markUnlocked(unlock) {
@@ -151,14 +157,26 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
     },
     findLatestForCancel(estimateId) {
       const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
-      return Promise.resolve(found === undefined ? null : { id: found.id, approvedPrice: found.approvedPrice, cancelledAt: found.cancel?.cancelledAt ?? null });
+      // The latest row of any kind: one whose price was removed leaves nothing to cancel (STORY-06.13).
+      return Promise.resolve(found === undefined || found.removal !== undefined ? null : { id: found.id, approvedPrice: found.approvedPrice, cancelledAt: found.cancel?.cancelledAt ?? null });
     },
     markCancelled(cancel) {
-      const found = approvals.find((approval) => approval.id === cancel.approvalId && approval.cancel === undefined);
+      const found = approvals.find((approval) => approval.id === cancel.approvalId && approval.cancel === undefined && approval.removal === undefined);
       if (found === undefined) return Promise.resolve(null);
       const cancelledAt = new Date('2026-11-17T06:30:00.000Z');
       found.cancel = { cancelledAt, byName: 'Invented Canceller', reason: cancel.reason, engineerName: 'Invented Engineer' };
       return Promise.resolve(cancelledAt);
+    },
+    findLatestForRemoval(estimateId) {
+      const found = [...approvals].reverse().find((approval) => approval.estimateId === estimateId);
+      return Promise.resolve(found === undefined ? null : { id: found.id, approvedPrice: found.approvedPrice, cancelledAt: found.cancel?.cancelledAt ?? null, removedAt: found.removal?.removedAt ?? null });
+    },
+    markRemoved(removal) {
+      const found = approvals.find((approval) => approval.id === removal.approvalId && approval.cancel !== undefined && approval.removal === undefined);
+      if (found === undefined) return Promise.resolve(null);
+      const removedAt = new Date('2026-11-18T06:30:00.000Z');
+      found.removal = { removedAt, byName: 'Invented Remover' };
+      return Promise.resolve(removedAt);
     },
   };
 
@@ -173,6 +191,8 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
         const keptUnlocks = approvals.map((approval) => approval.unlock);
         // A cancel is stored on a row that was already there too (STORY-06.12).
         const keptCancels = approvals.map((approval) => approval.cancel);
+        // A removal too (STORY-06.13).
+        const keptRemovals = approvals.map((approval) => approval.removal);
         try {
           return await work(tx);
         } catch (error) {
@@ -185,6 +205,9 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
             const cancelBefore = keptCancels[index];
             if (cancelBefore === undefined) delete approval.cancel;
             else approval.cancel = cancelBefore;
+            const removalBefore = keptRemovals[index];
+            if (removalBefore === undefined) delete approval.removal;
+            else approval.removal = removalBefore;
           });
           throw error;
         }

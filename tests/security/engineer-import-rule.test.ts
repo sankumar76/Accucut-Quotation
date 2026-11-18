@@ -119,6 +119,8 @@ const SERVICES = {
     // STORY-06.11 (NFR-002): the count of what changed in the rates since a calculation reads the stored snapshot and the masters now, for the unlock preview and the Lead's notice only.
     'rate-changes',
     'rate-name-rules',
+    // STORY-06.13 (NFR-002): remove price reads the approval's price (it is in the audit entry that keeps it), for the Admin only; no Engineer view imports it.
+    'remove-price-service',
     // STORY-02.09: the Admin's Settings page (the last good backup and the server disk). It holds no cost data, but it is Admin only and no Engineer view imports it.
     'settings-service',
     // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a

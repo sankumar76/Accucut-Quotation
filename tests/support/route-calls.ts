@@ -215,6 +215,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // sentence and no figure, so the scan reads it. The rest of the order (the reason, the password, a deleted customer, a newer approval) is `cancel-approval-route.test.ts`'s, and the row lock is `tests/integration/approval/cancel.test.ts`.
     case 'POST /api/v1/estimates/[id]/approval/cancel':
       return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, reason: 'Invented reason for the canary estimate.', password: HARNESS_PASSWORD }, status: 409 };
+    // STORY-06.13: Admin only. The canary estimate has no approval at any state it can be in, so the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an approval
+    // that is none are refused 409 ("no price to remove") under the estimate's lock, for the one role that may call it, and write nothing (no removal, no audit entry). The refusal holds a fixed sentence and no figure, so the
+    // scan reads it. The rest of the order (the password, a newer approval, an approval not cancelled, a price removed already) is `remove-price-route.test.ts`'s, and the row lock is `tests/integration/approval/remove-price.test.ts`.
+    case 'POST /api/v1/estimates/[id]/approval/remove-price':
+      return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, password: HARNESS_PASSWORD }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
