@@ -21,7 +21,7 @@ function drawn(bitmap: ImageBitmap, scale: number, onWhite: boolean): HTMLCanvas
   if (context === null) throw new Error('The browser gave no drawing surface.');
   // A JPEG has no transparency: the picture is drawn on white, as a printed page would show it.
   if (onWhite) {
-    context.fillStyle = '#ffffff';
+    context.fillStyle = 'white';
     context.fillRect(0, 0, canvas.width, canvas.height);
   }
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);

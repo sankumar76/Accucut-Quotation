@@ -18,7 +18,7 @@ import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../s
 import { completePartInputs } from '../../support/complete-part';
 import { defined } from '../../support/defined';
 import { inProcessBuilder, type InProcessBuilder } from '../../support/in-process-builder';
-import { pngOfDimensions } from '../../support/pictures';
+import { pngOfDimensions, webpOfSize } from '../../support/pictures';
 import { seedConfig } from '../../support/seed-config';
 import { loadWorkbook, readXlsxParts } from '../../support/xlsx-parts';
 
@@ -293,6 +293,27 @@ describe('AC-4, AC-5: the picture is embedded in column C, and is the one the ca
     expect(await repository.readMany(mine, [])).toEqual([]);
     expect(await repository.readMany('not-an-id', [ownId])).toEqual([]);
     expect(() => repository.readMany(mine, Array.from({ length: READ_MANY_LIMIT + 1 }, () => ownId))).toThrow(RangeError);
+  });
+
+  it('finds the stored type of this estimate\'s pictures without their bytes: another estimate\'s ID, an unknown one and a text that is no ID are left out (SQR-09 of the re-review)', async () => {
+    const repository = createImageRepository(db.prisma);
+    const mine = await db.addEstimate({ engineer: true });
+    const other = await db.addEstimate({ engineer: true });
+    const pngId = await storePicture(mine, new Uint8Array(pngOfDimensions(8, 8)));
+    // A WebP row, written as the owner does: the server refuses one at upload, but the table's own check still allows the type (the summary must not count it).
+    const webpBytes = new Uint8Array(webpOfSize(40));
+    const { rows } = await db.owner.query<{ id: string }>(
+      `INSERT INTO part_images (estimate_id, sha256, mime, bytes, size_bytes, file_name) VALUES ($1::uuid, $2, 'image/webp', $3, $4, 'raw.webp') RETURNING id::text`,
+      [mine, createHash('sha256').update(webpBytes).digest('hex'), Buffer.from(webpBytes), webpBytes.byteLength],
+    );
+    const webpId = defined(rows[0]).id;
+    const foreignId = await storePicture(other, new Uint8Array(pngOfDimensions(9, 9)));
+    const found = await repository.findMimes(mine, [pngId, webpId, foreignId, '00000000-0000-4000-8000-00000000dead', 'not-an-id']);
+    expect(found.map((entry) => [entry.id, entry.mime]).sort()).toEqual([[pngId, 'image/png'], [webpId, 'image/webp']].sort());
+    // No bytes in the answer.
+    for (const entry of found) expect(Object.keys(entry).sort()).toEqual(['id', 'mime']);
+    expect(await repository.findMimes(mine, [])).toEqual([]);
+    expect(await repository.findMimes('not-an-id', [pngId])).toEqual([]);
   });
 });
 
