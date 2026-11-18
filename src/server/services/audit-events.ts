@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
+import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { formatRupees } from '../../lib/money';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
@@ -138,6 +139,37 @@ const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.ou
 const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
 /** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
+
+// ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
+/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Submitted estimate: AC-10), so the entry shows that nothing moved. */
+const estimateStatus = z.enum(ESTIMATE_STATUSES);
+/** What a cancel keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate was in. */
+const cancelledBeforeState = z.strictObject({ approvedPrice: rupeesText, status: estimateStatus });
+/** What a cancel keeps after: the Admin's reason, as stored (1 to 500 characters, trimmed), and the status the estimate is in now. Who cancelled and when are the entry's own columns. The password is in no shape here. */
+const cancelledAfterState = z.strictObject({ reason: reasonText, status: estimateStatus });
+
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
+
+/**
+ * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of
+ * STORY-06.12 AC-10: the spec gives the first form only).
+ */
+const describeCancelled = (before: z.output<typeof cancelledBeforeState>, after: z.output<typeof cancelledAfterState>): AuditChangeText => ({
+  before: `Approved at ${formatRupees(before.approvedPrice)}`,
+  after: before.status === after.status ? `Cancelled, the estimate stayed ${STATUS_WORDS[after.status]}. Reason: ${after.reason}` : `Cancelled. Reason: ${after.reason}`,
+});
+
+// ---- Shape of the remove-price event (SCR-16 "Price removed"; STORY-06.13) ---------------------------------------------------------
+/** What a removal keeps before: **the price that was removed**. The portal serves it nowhere else; this entry is the one place it can be read, and only the Admin reads the log (architecture sections 4.10 and 5.3). */
+const removedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** The price is gone from the estimate: nothing is kept after. Who removed it and when are the entry's own columns. The password is in no shape here. */
+const removedAfterState = z.null();
+
+/** "Price ₹ 4,750.00 removed from the estimate. The audit log keeps it" (SCR-16, UX-64), split at the arrow of "Before to after". */
+const describeRemoved = (before: z.output<typeof removedBeforeState>): AuditChangeText => ({
+  before: `Price ${formatRupees(before.approvedPrice)}`,
+  after: 'Removed from the estimate. The audit log keeps it',
+});
 
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
@@ -296,19 +328,8 @@ function describeMasterChange(objectType: string, before: unknown, after: unknow
   return beforeWords === null || afterWords === null ? NO_DETAIL : { before: beforeWords, after: afterWords };
 }
 
-/** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
-const reservedShape = z.json();
-
-function reserved(objectType: string, category: AuditCategoryId) {
-  return defineEvent({
-    objectType,
-    category,
-    status: 'reserved',
-    before: reservedShape,
-    after: reservedShape,
-    describe: () => NO_DETAIL,
-  });
-}
+// With STORY-06.13 no event of Release 1 is left declared and unwired. A story that declares one for a later story adds an entry with `status: 'reserved'`, schemas that accept any JSON (`z.json()`) and
+// `describe: () => NO_DETAIL`, and the story that wires it gives it its own shapes, words and test.
 
 export const AUDIT_EVENTS = {
   // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
@@ -435,6 +456,30 @@ export const AUDIT_EVENTS = {
     describe: (before, after) => ({ before: `Approved at ${formatRupees(before.approvedPrice)}`, after: `Unlocked. Reason: ${after.reason}` }),
   }),
 
+  // ---- Wired in STORY-06.12: an approval cancelled by the Admin ---------------------------------------------------------------
+  // One entry, in the cancel's own transaction (under the estimate's row lock): the price the approval stood at, the Admin's reason and the status before and after (equal for an approval kept through an unlock,
+  // AC-10). The price stays on record even after the Admin removes it from the screens (STORY-06.13). The log is Admin-only (architecture section 5.3).
+  'approval.cancelled': defineEvent({
+    objectType: 'estimate',
+    category: 'approval_cancelled',
+    status: 'wired',
+    before: cancelledBeforeState,
+    after: cancelledAfterState,
+    describe: describeCancelled,
+  }),
+
+  // ---- Wired in STORY-06.13: the price of a cancelled approval removed by the Admin -------------------------------------------
+  // One entry, in the removal's own transaction (under the estimate's row lock): **the price that was removed**, which this entry alone keeps once it is off every screen and out of the file (FR-108; architecture
+  // section 4.10: erasing it here would break NFR-007). The log is Admin-only (architecture section 5.3). Who removed it and when are the entry's own columns.
+  'approval.price_removed': defineEvent({
+    objectType: 'estimate',
+    category: 'price_removed',
+    status: 'wired',
+    before: removedBeforeState,
+    after: removedAfterState,
+    describe: describeRemoved,
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
   // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and
@@ -447,8 +492,6 @@ export const AUDIT_EVENTS = {
     after: z.strictObject({ warnings: z.array(warnedRow).min(1) }),
     describe: (_before, after) => ({ before: 'No warning', after: `Went ahead with QTY per Assy 0 on ${after.warnings.map(describeWarnedRow).join(', ')}` }),
   }),
-  'approval.cancelled': reserved('estimate', 'approval_cancelled'),
-  'approval.price_removed': reserved('estimate', 'price_removed'),
 } as const;
 
 export type AuditEventName = keyof typeof AUDIT_EVENTS;

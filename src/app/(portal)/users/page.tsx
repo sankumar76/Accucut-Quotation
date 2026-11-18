@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
 
 import { UsersScreen } from '@/components/features/users/users-screen';
 import { getUserService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Users', description: 'Manage portal users, roles and passwords.' };
+export const metadata = pageMetadata('Users', 'Manage portal users, roles and passwords.');
 
 /**
  * SCR-14 "Users" (STORY-01.04 AC-1, AC-6, AC-7): the Admin adds, edits, deactivates and re-activates people and resets their

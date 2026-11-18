@@ -26,6 +26,7 @@ import { type AccountService, createAccountService } from './services/account-se
 import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { type CancelApprovalService, createCancelApprovalService } from './services/cancel-approval-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
@@ -34,6 +35,7 @@ import { createEstimateReviewService, type EstimateReviewService } from './servi
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
@@ -63,6 +65,8 @@ let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
 let unlockService: UnlockService | undefined;
+let cancelApprovalService: CancelApprovalService | undefined;
+let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
@@ -295,6 +299,36 @@ export function getUnlockService(): UnlockService {
     });
   }
   return unlockService;
+}
+
+/**
+ * Cancel approval (STORY-06.12): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the customer and the materials read `FOR SHARE` (the check Unlock shares), the
+ * estimate's move (the estimate service's `transition`, in the same transaction), the cancel stored on the approval and the audit entry. Restricted (NFR-002): only the one cancel route asks for it here, for the Admin alone.
+ */
+export function getCancelApprovalService(): CancelApprovalService {
+  cancelApprovalService ??= createCancelApprovalService({
+    estimates: createEstimateRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    stepUp: getStepUpService(),
+    workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+  });
+  return cancelApprovalService;
+}
+
+/**
+ * Remove price (STORY-06.13): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the removal stored on the approval and the audit entry that keeps the price.
+ * Restricted (NFR-002): only the one remove-price route asks for it here, for the Admin alone.
+ */
+export function getRemovePriceService(): RemovePriceService {
+  removePriceService ??= createRemovePriceService({
+    estimates: createEstimateRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    stepUp: getStepUpService(),
+    audit: getAuditService(),
+  });
+  return removePriceService;
 }
 
 /**

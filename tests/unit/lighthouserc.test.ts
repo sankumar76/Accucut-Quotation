@@ -163,14 +163,14 @@ describe('the dependency', () => {
   const manifest = z.object({ devDependencies: z.record(z.string(), z.string()), dependencies: z.record(z.string(), z.string()) }).parse(JSON.parse(readFileSync(`${ROOT}package.json`, 'utf8')));
   const lock = z.object({ packages: z.record(z.string(), z.object({ version: z.string().optional(), hasInstallScript: z.boolean().optional() })) }).parse(JSON.parse(readFileSync(`${ROOT}package-lock.json`, 'utf8')));
 
-  it('is @lhci/cli 0.15.1, exact, and a development dependency only', () => {
-    expect(manifest.devDependencies['@lhci/cli']).toBe('0.15.1');
+  it('is @lhci/cli 0.16.1, exact, and a development dependency only', () => {
+    expect(manifest.devDependencies['@lhci/cli']).toBe('0.16.1');
     expect(manifest.dependencies['@lhci/cli']).toBeUndefined();
-    expect(lock.packages['node_modules/@lhci/cli']?.version).toBe('0.15.1');
+    expect(lock.packages['node_modules/@lhci/cli']?.version).toBe('0.16.1');
   });
 
-  it('runs Lighthouse 12.6.1', () => {
-    expect(lock.packages['node_modules/lighthouse']?.version).toBe('12.6.1');
+  it('runs Lighthouse 13.6.0', () => {
+    expect(lock.packages['node_modules/lighthouse']?.version).toBe('13.6.0');
   });
 
   it('brings no install script, so the allowScripts list stays as it is', () => {

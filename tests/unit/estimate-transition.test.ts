@@ -72,6 +72,8 @@ describe('the transitions of the machine, applied to a stored estimate', () => {
     ['a Lead unlocks (AC-6)', 'APPROVED', 'UNLOCK', lead, 'DRAFT'],
     ['an Admin unlocks', 'APPROVED', 'UNLOCK', admin, 'DRAFT'],
     ['an Admin cancels the approval', 'APPROVED', 'CANCEL', admin, 'DRAFT'],
+    ['an Admin cancels the approval kept through an unlock on a Draft (STORY-06.12 AC-10)', 'DRAFT', 'CANCEL', admin, 'DRAFT'],
+    ['an Admin cancels the approval kept through an unlock on a Submitted estimate (STORY-06.12 AC-10)', 'SUBMITTED', 'CANCEL', admin, 'SUBMITTED'],
     ['a Lead exports an approved estimate', 'APPROVED', 'EXPORT', lead, 'APPROVED'],
   ])('%s', async (_name, status, event, viewer, to) => {
     const { service, stored } = setUp([estimate({ status })]);
@@ -125,7 +127,6 @@ describe('AC-1: a pair the machine refuses is a 409 with a named reason, and lea
   it.each<[EstimateStatus, EstimateEvent, EstimateViewer, keyof typeof TRANSITION_REFUSALS]>([
     ['DRAFT', 'APPROVE', lead, 'NOT_SUBMITTED'],
     ['DRAFT', 'UNLOCK', lead, 'NOT_APPROVED'],
-    ['DRAFT', 'CANCEL', admin, 'NOT_APPROVED'],
     ['DRAFT', 'EXPORT', lead, 'NOT_APPROVED'],
     ['DRAFT', 'EDIT', lead, 'NOT_SUBMITTED'],
     ['SUBMITTED', 'CALCULATE', arjun, 'ALREADY_SUBMITTED'],
@@ -214,9 +215,10 @@ describe('AC-4: two transitions at once are serialised', () => {
     expect(stored().status).toBe('APPROVED');
   });
 
-  it('an unlock and a cancel at once: one wins, the other is 409 NOT_APPROVED, because the status is already DRAFT', async () => {
+  // Since STORY-06.12 AC-10 a CANCEL on a Draft is allowed (the status stays), so the pair that must lose is two events that need APPROVED: two unlocks.
+  it('two unlocks at once: one wins, the other is 409 NOT_APPROVED, because the status is already DRAFT', async () => {
     const { service, stored } = setUp([estimate({ status: 'APPROVED' })]);
-    const results = await Promise.allSettled([service.transition(lead, ESTIMATE, 'UNLOCK'), service.transition(admin, ESTIMATE, 'CANCEL')]);
+    const results = await Promise.allSettled([service.transition(lead, ESTIMATE, 'UNLOCK'), service.transition(admin, ESTIMATE, 'UNLOCK')]);
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
     expect((rejected?.reason as ConflictError).code).toBe('ESTIMATE_NOT_APPROVED');

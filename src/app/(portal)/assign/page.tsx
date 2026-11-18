@@ -1,11 +1,11 @@
-import type { Metadata } from 'next';
 
 import { AssignScreen } from '@/components/features/tasks/assign-screen';
 import { ASSIGN_META_DESCRIPTION } from '@/components/features/tasks/assign-texts';
 import { getTaskService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Assign task', description: ASSIGN_META_DESCRIPTION };
+export const metadata = pageMetadata('Assign task', ASSIGN_META_DESCRIPTION);
 
 /**
  * SCR-04 "Assign task" (STORY-04.01 AC-1, AC-5, AC-7): a Lead or an Admin assigns a task. The page checks the role first, with its own address, before it reads

@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { EstimateExport } from '@/components/features/estimate-export/estimate-export';
@@ -8,9 +7,12 @@ import { getEstimateService, getExportService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 import type { ExportSummaryView } from '@/server/views/schemas/export';
+import { pageMetadata } from '@/lib/page-metadata';
 
 /** No task code and no customer name in the tab title (architecture section 8, FR-089). */
-export const metadata: Metadata = { title: EXPORT_META_TITLE };
+const EXPORT_META_DESCRIPTION = 'Download the estimate as an Excel file in the layout of the quotation sheet.';
+
+export const metadata = pageMetadata(EXPORT_META_TITLE, EXPORT_META_DESCRIPTION);
 
 interface PageProps {
   readonly params: Promise<{ readonly code: string }>;

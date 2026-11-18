@@ -4,7 +4,10 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
+import { pageMetadata } from '@/lib/page-metadata';
 import { authorizePage } from '@/server/http/page-access';
+
+export const metadata = pageMetadata('Home', 'Accucut Lasers quotation portal: assign, prepare, review and approve estimates.');
 
 // Placeholder home page (signed-in only). People land on /queue after sign-in; this page goes when the role-specific homes
 // arrive. It checks the person itself and does not rely on the portal layout (STD-09).

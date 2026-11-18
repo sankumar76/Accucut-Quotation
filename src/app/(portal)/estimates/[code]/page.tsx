@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ESTIMATE_META_DESCRIPTION, ESTIMATE_META_TITLE } from '@/components/features/estimate-workspace/estimate-texts';
@@ -7,9 +6,10 @@ import { assertNever } from '@/lib/assert-never';
 import { formatIst } from '@/lib/time';
 import { getEstimateService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
 /** No task code and no customer name in the tab title (architecture section 8, FR-089). */
-export const metadata: Metadata = { title: ESTIMATE_META_TITLE, description: ESTIMATE_META_DESCRIPTION };
+export const metadata = pageMetadata(ESTIMATE_META_TITLE, ESTIMATE_META_DESCRIPTION);
 
 interface PageProps {
   readonly params: Promise<{ readonly code: string }>;

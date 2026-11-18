@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Browser, type Locator, type Page, type PlaywrightWorkerArgs, type TestInfo } from '@playwright/test';
 
 // `useFreshAddress` is a helper of this suite whose name starts with `use` but is not a React hook; the alias keeps the hooks rule from reading it as one.
-import { createDisposableUser, E2E_PASSWORD, signInThroughThePage, useFreshAddress as setFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_PASSWORD, signInThroughThePage, signInWithoutThePage, useFreshAddress as setFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilAccountMenuIsLive, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
@@ -12,15 +12,16 @@ import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
  * works on a person made for it (kind `password`, or one the Admin adds), so the three screen sizes and the retries never meet on one,
  * and what the change does to sessions and to the attempt count reaches nobody else. The words are the UX spec's (v0.27, "SCR-23 Account:
  * final words"), written out here. One test, the block (AC-6), reads no layout and runs at one width (test strategy section 10.5, architect
- * ruling on AQP-81, DL-191 F9); the other three read layout and run at three.
+ * ruling on AQP-81, DL-191 F9); the others read layout and run at three.
  *
  *   - the change: a wrong current password and a mismatch are named, the right ones change the password, the browser that made the change
  *     stays signed in, another device is signed out, the old password is refused at sign-in and the new one accepted;
  *   - the rule: every part of it is named under New password, with the hint; no sideways scroll, 44 px controls, axe 0 violations,
  *     `autocomplete`, paste, the show and hide toggle, keyboard only;
  *   - the block: five wrong current passwords block the form for 15 minutes and sign-in still works;
- *   - "Set a new password": a person the Admin added or reset is sent there from every page, sees no side menu or profile, and goes
- *     home once the password is set.
+ *   - "Set a new password": a person the Admin added is sent there from every page and sees no side menu or profile; a password that is
+ *     the same or too short keeps them there and one that meets the rule takes them home; a person the Admin resets is signed out and
+ *     sent there again.
  */
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -53,6 +54,12 @@ async function signIn(page: Page, person: Person, password: string): Promise<voi
   await setFreshAddress(page.context());
   await page.goto('/sign-in');
   await signInThroughThePage(page, person.email, password);
+}
+
+/** Signs in with the calls the sign-in screen makes, without loading it: for a test whose subject is not that screen (`signInWithoutThePage`). */
+async function signInByCalls(page: Page, person: Person, password: string): Promise<void> {
+  await setFreshAddress(page.context());
+  await signInWithoutThePage(page, person.email, password);
 }
 
 async function openAccount(page: Page): Promise<void> {
@@ -97,8 +104,8 @@ async function addPerson(admin: APIRequestContext, label: string, testInfo: Test
 async function signedInOnAnotherDevice(browser: Browser, person: Person, password: string): Promise<Page> {
   const context = await browser.newContext({ baseURL: DEVELOPMENT_URL });
   const page = await context.newPage();
-  await signIn(page, person, password);
-  await expect(page).toHaveURL(/\/queue$/);
+  // This device is only ever asked one API question, so it signs in with the calls the screen makes and loads neither the sign-in screen nor the queue.
+  await signInByCalls(page, person, password);
   return page;
 }
 
@@ -295,11 +302,19 @@ test.describe('the block (AC-6)', () => {
   });
 });
 
+/**
+ * "Set a new password" is three tests, one for each thing the portal promises, not one journey. They were one test (AQP-347, DEF-044): add a person, sign in through
+ * the page, scan it, open two pages, change the password the wrong way and the right way, have the Admin reset it, and sign in through the page again. On the
+ * development server that is nine page loads, and on a loaded CI runner it came to 30 s: the sign-in after the reset, or the first request after it, was where the
+ * clock ran out, and it ran out on the try and on the retry. The test timeout is untouched. Each test now sets up what it needs with the calls the screens make
+ * (the Admin's add and reset, the sign-in without the sign-in screen) and spends its budget on the thing it proves.
+ */
 test.describe('"Set a new password" (AC-5, AC-7)', () => {
-  test('a person the Admin adds, and one whose password the Admin resets, is sent to it from every page, sees no side menu or profile, and goes home once the password is set', async ({ page, playwright }, testInfo) => {
+  test('a person the Admin adds is sent to it from every page, and sees no side menu or profile', async ({ page, playwright }, testInfo) => {
     const admin = await adminApi(playwright);
     const person = await addPerson(admin, 'mustchange', testInfo);
 
+    // The one real sign-in of the first half: the person's first sign-in is what sends them here.
     await signIn(page, person, FIRST_PASSWORD);
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Set a new password' })).toBeVisible();
@@ -321,9 +336,17 @@ test.describe('"Set a new password" (AC-5, AC-7)', () => {
     const me = await page.request.get('/api/v1/me');
     expect(me.status()).toBe(403);
     expect(await me.json()).toMatchObject({ code: 'PASSWORD_CHANGE_REQUIRED' });
+    await admin.dispose();
+  });
+
+  test('a password that is the same, or too short, keeps the person there; one that meets the rule takes them to their work, with the menu', async ({ page, playwright }, testInfo) => {
+    const admin = await adminApi(playwright);
+    const person = await addPerson(admin, 'mustchange', testInfo);
+    await signInByCalls(page, person, FIRST_PASSWORD);
+    await openAccount(page);
+    await expect(page.getByRole('heading', { level: 1, name: 'Set a new password' })).toBeVisible();
 
     // QLT-01: typing the temporary password again keeps them here (the page refuses it; so does the server, and the duty stays).
-    await waitUntilHydrated(page, 'form[aria-label="Change password"]', 'onSubmit');
     await fillAndSend(page, { current: FIRST_PASSWORD, next: FIRST_PASSWORD });
     await expect(page.locator('#new-password-error')).toHaveText(SAME_AS_CURRENT);
     await expect(page).toHaveURL(/\/account$/);
@@ -342,6 +365,20 @@ test.describe('"Set a new password" (AC-5, AC-7)', () => {
     await expect(page).toHaveURL(/\/queue$/);
     await expect(page.getByRole('heading', { level: 1, name: 'My tasks' })).toBeVisible();
     await expect(page.locator('aside')).toHaveCount(1);
+    expect((await page.request.get('/api/v1/me')).status()).toBe(200);
+    await admin.dispose();
+  });
+
+  test('a person whose password the Admin resets is signed out, and the temporary password sends them to it again', async ({ page, playwright }, testInfo) => {
+    const admin = await adminApi(playwright);
+    const person = await addPerson(admin, 'mustchange', testInfo);
+    // The person has set their own password, so the reset is what puts the duty back: the same calls the page makes, without its page loads.
+    await signInByCalls(page, person, FIRST_PASSWORD);
+    const changed = await page.request.post('/api/v1/account/password', {
+      headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+      data: { currentPassword: FIRST_PASSWORD, newPassword: NEW_PASSWORD },
+    });
+    expect(changed.status()).toBe(204);
     expect((await page.request.get('/api/v1/me')).status()).toBe(200);
 
     // The Admin resets the password: the person's sessions end, the temporary password signs in, and the page is "Set a new password" again.
