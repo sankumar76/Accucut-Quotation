@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
  *   - **An approved estimate is read from its own record alone.** The services that read an estimate's figures for a screen (`estimate-review-*` and the cost details) import no master repository, no master
  *     service and no code that reads the masters (`calculation-masters` is the one reader of the masters, for Calculate), and name no master table. What they show comes from `calculation_rows`,
  *     `calculations.master_snapshot` and the configuration version the calculation was made with. The three repositories they read through name no master table either.
+ *   - **The one sanctioned path to the masters is `ratesChangedSince`** (`rate-changes.ts`, STORY-06.11): the review service imports that one function and nothing else from `rate-changes`, and it refuses an APPROVED estimate before any read.
  *   - **The permanent regression test stays.** `tests/acceptance/aqp-approved-immutable.test.ts` exists and holds no skip, todo or only (AC-6).
  * Every scan has a control that plants a fault in a copy of the text and sees it found.
  */
@@ -30,7 +31,10 @@ const readSide = (): string[] => [
 ];
 
 /** An import of a master repository, a master service, or the code that reads the masters for a calculation. */
-const MASTER_IMPORT = /from '[^']*\/(master-repository|customer-repository|material-repository|treatment-repository|exchange-rate-repository|master-constraints|masters-service|customer-service|treatment-service|exchange-rate-service|calculation-masters)'/;
+const MASTER_IMPORT = /from '[^']*\/(master-repository|customer-repository|material-repository|treatment-repository|exchange-rate-repository|master-constraints|masters-service|customer-service|treatment-service|exchange-rate-service|calculation-masters|rate-changes)'/;
+/** The one import of `rate-changes` the read side may hold, in `estimate-review-service.ts` only (STORY-06.11). Any other import of that file, `countRateChanges` for one, stays an offender. */
+const SANCTIONED = /import \{ ratesChangedSince, type CalculationMasters \} from '\.\/rate-changes';/;
+const REVIEW_SERVICE = join(SERVICES, 'estimate-review-service.ts');
 /** A master table read in SQL (`FROM customers`, `JOIN materials`) or through its Prisma accessor (`db.material.findMany`). The word alone is not a read: the snapshot's own `materials` list is stored text. */
 const MASTER_TABLE = /\b(FROM|JOIN|INTO|UPDATE)\s+"?(customers|customer_rates|materials|treatments|exchange_rates|process_items)\b|\.(customer|customerRate|material|treatment|exchangeRate|processItem)\.(find|create|update|delete|upsert|count|aggregate)/i;
 
@@ -43,8 +47,21 @@ describe('the read side of an approved estimate reads no master', () => {
   });
 
   it('no file of the read side imports a master repository, a master service or the reader of the masters', () => {
-    const offenders = readSide().filter((path) => MASTER_IMPORT.test(codeOf(textOf(path))));
+    const offenders = readSide().filter((path) => {
+      const code = codeOf(textOf(path));
+      return MASTER_IMPORT.test(path === REVIEW_SERVICE ? code.replace(SANCTIONED, '') : code);
+    });
     expect(offenders).toEqual([]);
+  });
+
+  it('the review service holds the one sanctioned import of rate-changes, and ratesChangedSince refuses an APPROVED estimate before it reads a snapshot or a master', () => {
+    expect(codeOf(textOf(REVIEW_SERVICE))).toMatch(SANCTIONED);
+    const code = codeOf(textOf(join(SERVICES, 'rate-changes.ts')));
+    const body = code.slice(code.indexOf('function ratesChangedSince('));
+    const approved = body.indexOf("status === 'APPROVED'");
+    expect(approved).toBeGreaterThan(-1);
+    expect(approved).toBeLessThan(body.indexOf('findMasterSnapshot('));
+    expect(approved).toBeLessThan(body.indexOf('countRateChanges('));
   });
 
   it('no file of the read side names a master table or a Prisma accessor of one', () => {
@@ -60,6 +77,14 @@ describe('the read side of an approved estimate reads no master', () => {
   it('control: a planted import and a planted table name are found by the same scans', () => {
     expect(MASTER_IMPORT.test("import type { MasterRepository } from '../repositories/master-repository';")).toBe(true);
     expect(MASTER_IMPORT.test("import { readMasters } from './calculation-masters';")).toBe(true);
+    // rate-changes: the sanctioned statement is removed, any other import of it is not.
+    const sanctioned = "import { ratesChangedSince, type CalculationMasters } from './rate-changes';";
+    const direct = "import { countRateChanges } from './rate-changes';";
+    expect(MASTER_IMPORT.test(sanctioned)).toBe(true);
+    expect(MASTER_IMPORT.test(sanctioned.replace(SANCTIONED, ''))).toBe(false);
+    expect(MASTER_IMPORT.test(direct)).toBe(true);
+    expect(MASTER_IMPORT.test(direct.replace(SANCTIONED, ''))).toBe(true);
+    expect(MASTER_IMPORT.test(`${sanctioned}\n${direct}`.replace(SANCTIONED, ''))).toBe(true);
     expect(MASTER_IMPORT.test("import type { CalculationRepository } from '../repositories/calculation-repository';")).toBe(false);
     expect(MASTER_TABLE.test('SELECT c.name FROM customers c JOIN estimates e ON e.customer_id = c.id')).toBe(true);
     expect(MASTER_TABLE.test('await db.material.findMany()')).toBe(true);
