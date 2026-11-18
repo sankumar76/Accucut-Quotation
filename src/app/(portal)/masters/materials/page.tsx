@@ -1,13 +1,9 @@
-import type { Metadata } from 'next';
-
 import { MastersScreen } from '@/components/features/masters/masters-screen';
 import { getMastersService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = {
-  title: 'Materials and lists',
-  description: 'Manage materials, exchange rates and the treatment and colour list used in estimates.',
-};
+export const metadata = pageMetadata('Materials and lists', 'Manage materials, exchange rates and the treatment and colour list used in estimates.');
 
 /**
  * SCR-13 "Materials and lists" (STORY-02.03 AC-1, AC-6, AC-8): the Admin keeps the materials the estimate form offers. The page checks the

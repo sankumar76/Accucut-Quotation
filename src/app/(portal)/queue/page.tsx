@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 
 import { QueueScreen } from '@/components/features/queues/queue-screen';
 import { QUEUE_META_DESCRIPTION } from '@/components/features/queues/queue-texts';
@@ -7,8 +6,9 @@ import { readQueuePage } from '@/lib/tasks/queue-client';
 import { getTaskService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import { queueAnswer } from '@/server/views/task-queue';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Task queue', description: QUEUE_META_DESCRIPTION };
+export const metadata = pageMetadata('Task queue', QUEUE_META_DESCRIPTION);
 
 interface QueuePageProps {
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
