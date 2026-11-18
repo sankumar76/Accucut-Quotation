@@ -256,6 +256,8 @@ export function createFakeEstimateWorld(
       const found = images.find((candidate) => same(candidate.id, imageId));
       return Promise.resolve(found === undefined ? null : { mime: found.mime, bytes: found.bytes });
     },
+    findMimes: (estimateId, imageIds) =>
+      Promise.resolve(images.filter((candidate) => same(candidate.estimateId, estimateId) && imageIds.some((id) => same(id, candidate.id))).map((found) => ({ id: found.id, mime: found.mime }))),
     readMany: (estimateId, imageIds) =>
       Promise.resolve(
         images

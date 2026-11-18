@@ -28,7 +28,7 @@ export interface ExportColumn {
 /** A string is text, always. A number is a figure at full precision. `null` is an empty cell (a divide by zero is an empty cell, ADR-012). */
 export type ExportCell = string | number | null;
 
-/** The kinds of picture a workbook can embed. WebP is accepted by the portal but cannot be embedded (see `image-batches.ts`). */
+/** The kinds of picture a workbook can embed. A WebP cannot be embedded: the browser converts it to a PNG or a JPEG before upload and the server refuses one that arrives unconverted (see `image-batches.ts`). */
 export const PICTURE_EXTENSIONS = ['png', 'jpeg', 'gif'] as const;
 export type PictureExtension = (typeof PICTURE_EXTENSIONS)[number];
 

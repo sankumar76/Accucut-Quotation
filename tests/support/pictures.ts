@@ -102,6 +102,17 @@ export function gifOfDimensions(width: number, height: number): Buffer {
 /** A 1 x 1 lossless WebP (34 bytes). */
 export const smallWebp = (): Buffer => Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
 
+/** A WebP of exactly `size` bytes (an even number of 20 or more): the RIFF header with a size that matches, one `VP8L` chunk of filler, nothing decodes it. For the order of the checks: size first. */
+export function webpOfSize(size: number): Buffer {
+  if (size < 20 || size % 2 !== 0) throw new Error('A padded WebP is an even number of bytes, at least 20.');
+  const bytes = Buffer.alloc(size, 0x61);
+  bytes.write('RIFF', 0, 'ascii');
+  bytes.writeUInt32LE(size - 8, 4);
+  bytes.write('WEBPVP8L', 8, 'ascii');
+  bytes.writeUInt32LE(size - 20, 16);
+  return bytes;
+}
+
 /** The words of a scripted page that no picture holds: appended to a real file, they make a polyglot the check must refuse. */
 export const SCRIPT_TAIL = Buffer.from('<script>alert(1)</script>', 'ascii');
 export const SVG_TEXT = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><script>alert(1)</script></svg>', 'ascii');

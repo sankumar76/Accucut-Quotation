@@ -146,8 +146,14 @@ export function createThreadBuilder({
       taken += 1;
       if (large) takenByLarge += 1;
       let released = false;
+      let built = false;
       return {
-        build: run,
+        // A place is for one build, while it is held (review SQR-02 of AQP-332): a build after the release, or a second one in the same place, would start a thread outside the count.
+        build: (model) => {
+          if (released || built) return Promise.reject(new Error('This place has been released or already used.'));
+          built = true;
+          return run(model);
+        },
         release() {
           if (released) return;
           released = true;

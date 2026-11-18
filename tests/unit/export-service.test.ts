@@ -68,7 +68,7 @@ const basisOf = (over: { inputsRevision?: number; calculationRevision?: number |
   };
 };
 
-function world(overrides: Partial<ExportDependencies> = {}, nodes: ReadonlyArray<NodeRecord> = [], basis = basisOf(), figures: ExportFigures | null = FIGURES) {
+function world(overrides: Partial<ExportDependencies> = {}, nodes: ReadonlyArray<NodeRecord> = [], basis = basisOf(), figures: ExportFigures | null = FIGURES, mimes: Readonly<Record<string, string>> = {}) {
   const findHeader = vi.fn(() => Promise.resolve({ code: 'Q-2026-0701', customerName: 'Acme Tools' as string | null }));
   const listNodes = vi.fn(() => Promise.resolve([...nodes]));
   const current = vi.fn(() => Promise.resolve(VERSION));
@@ -78,18 +78,20 @@ function world(overrides: Partial<ExportDependencies> = {}, nodes: ReadonlyArray
   const readMany = vi.fn((_estimateId: string, ids: ReadonlyArray<string>) =>
     Promise.resolve([storedImage(IMAGE_A), storedImage(IMAGE_B), storedImage(IMAGE_WEBP, 'image/webp', new Uint8Array(smallWebp()))].filter((image) => ids.includes(image.id))),
   );
+  // The stored type of each picture asked for: PNG unless a test names another.
+  const findMimes = vi.fn((_estimateId: string, ids: ReadonlyArray<string>) => Promise.resolve(ids.map((id) => ({ id, mime: (mimes[id] ?? 'image/png') as ExportedImage['mime'] }))));
   const builder = inProcessBuilder();
   const service = createExportService({
     header: { findHeader },
     nodes: { listNodes },
     calculations: { findFigureBasis, findExportFigures },
-    images: { readMany },
+    images: { readMany, findMimes },
     configuration: { current, byId },
     builder,
     clock: createFixedClock(NOON_UTC),
     ...overrides,
   });
-  return { service, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, readMany, builder };
+  return { service, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, readMany, findMimes, builder };
 }
 
 describe('getSummary', () => {
@@ -110,6 +112,28 @@ describe('getSummary', () => {
         { slNo: '2', name: 'Lid', count: '24.50' },
       ],
     });
+  });
+
+  it('counts only the pictures the file can hold: a WebP is on the part but not in the file, so it is not promised (review SQR-01 of AQP-332)', async () => {
+    const { service, findMimes } = world(
+      {},
+      [node('a', null, 0, {}, 'image-png'), node('b', null, 1, {}, 'image-webp'), node('c', null, 2, {}, 'image-jpeg'), node('d', null, 3, {}, 'image-png'), node('e', null, 4)],
+      basisOf(),
+      FIGURES,
+      { 'image-webp': 'image/webp', 'image-jpeg': 'image/jpeg' },
+    );
+    const summary = await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(summary.partCount).toBe(5);
+    expect(summary.pictureCount).toBe(3);
+    // Each distinct picture is asked for once, of this estate's pictures, and no bytes are read.
+    expect(findMimes).toHaveBeenCalledTimes(1);
+    expect(findMimes).toHaveBeenCalledWith(ESTIMATE_ID, ['image-png', 'image-webp', 'image-jpeg']);
+  });
+
+  it('asks for no picture type when no part has a picture, and counts none', async () => {
+    const { service, findMimes } = world({}, [node('a', null, 0)]);
+    expect((await service.getSummary(LEAD, ESTIMATE_ID)).pictureCount).toBe(0);
+    expect(findMimes).not.toHaveBeenCalled();
   });
 
   it('is "Customer" in the name while no customer is chosen', async () => {
@@ -255,7 +279,7 @@ describe('getFile: the place of the build (issue 440)', () => {
       order.push('read pictures');
       return Promise.resolve(ids.map((id) => storedImage(id)));
     });
-    const { service } = world({ builder, images: { readMany } });
+    const { service } = world({ builder, images: { readMany, findMimes: () => Promise.resolve([]) } });
     await service.getFile(LEAD, ESTIMATE_ID);
     expect(order).toEqual(['admit 3', 'read pictures']);
     expect(builder.open()).toBe(0);
@@ -270,7 +294,7 @@ describe('getFile: the place of the build (issue 440)', () => {
 
   it('gives the place back when a picture cannot be read', async () => {
     const builder = inProcessBuilder();
-    const { service } = world({ builder, images: { readMany: () => Promise.reject(new Error('the database is busy')) } });
+    const { service } = world({ builder, images: { readMany: () => Promise.reject(new Error('the database is busy')), findMimes: () => Promise.resolve([]) } });
     await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toThrow('the database is busy');
     expect(builder.open()).toBe(0);
   });

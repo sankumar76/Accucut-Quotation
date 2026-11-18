@@ -44,6 +44,11 @@ export async function engineerWithEstimate(testInfo: TestInfo): Promise<{ readon
   return { owner, code: canaryTaskCodeFor(owner.id) };
 }
 
+/** Gives the one part of the Engineer's canary estimate every input Calculate needs (keeping its picture), with the customer chosen: for a spec whose Engineer filled the form by the screen and now wants a Calculate. */
+export async function makeCalculable(owner: E2eUser & { readonly id: string }): Promise<void> {
+  await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL_ID, ALPHA_CUSTOMER_ID);
+}
+
 /** The Engineer presses Calculate through the portal, and the estimate is Submitted. */
 export async function calculateAsEngineer(page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
   await signInAs(page, owner);

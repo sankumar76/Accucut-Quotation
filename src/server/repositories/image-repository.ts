@@ -69,6 +69,11 @@ export interface ImageRepository {
    * than `READ_MANY_LIMIT` IDs is a mistake of the caller (a `RangeError`), never a larger read. Call it only for a Lead or an Admin who may export the estimate.
    */
   readMany(estimateId: string, imageIds: ReadonlyArray<string>): Promise<ExportedImage[]>;
+  /**
+   * The stored type of each of these pictures **of this estimate**, without their bytes (STORY-07.02: the summary counts the pictures the file can hold). An ID that is not a UUID, that is unknown or that
+   * belongs to another estimate is left out.
+   */
+  findMimes(estimateId: string, imageIds: ReadonlyArray<string>): Promise<Array<{ readonly id: string; readonly mime: ImageMime }>>;
 }
 
 const PICTURE_SELECT = { id: true, fileName: true, sizeBytes: true } as const;
@@ -76,6 +81,7 @@ const PICTURE_ROW = z.strictObject({ id: z.string(), fileName: z.string(), sizeB
 const OWNER_ROWS = z.array(z.strictObject({ estimateId: z.string(), engineerId: z.string() }));
 const IMAGE_ROW = z.strictObject({ mime: z.enum(IMAGE_MIMES), bytes: z.instanceof(Uint8Array) });
 const MANY_ROW = z.strictObject({ id: z.string(), mime: z.enum(IMAGE_MIMES), bytes: z.instanceof(Uint8Array) });
+const MIME_ROW = z.strictObject({ id: z.string(), mime: z.enum(IMAGE_MIMES) });
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -118,6 +124,14 @@ export function createImageRepository(db: PrismaClient): ImageRepository {
         if (!isUuid(imageId)) return null;
         const row = await db.partImage.findUnique({ where: { id: imageId }, select: { mime: true, bytes: true } });
         return row === null ? null : IMAGE_ROW.parse(row);
+      }),
+
+    findMimes: (estimateId, imageIds) =>
+      withDatabaseErrors(async () => {
+        const ids = imageIds.filter(isUuid);
+        if (!isUuid(estimateId) || ids.length === 0) return [];
+        const rows = await db.partImage.findMany({ where: { estimateId, id: { in: ids } }, select: { id: true, mime: true } });
+        return rows.map((row) => MIME_ROW.parse(row));
       }),
 
     readMany: (estimateId, imageIds) => {

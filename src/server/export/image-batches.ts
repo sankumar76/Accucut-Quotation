@@ -7,8 +7,9 @@ import type { ExportPicture, PictureExtension } from './export-model';
  * read holds more than 50 files (each under 200 KB) and the database is never asked for the 2,000 of an estimate in one statement. A picture used by several rows is read once. The reader is a function, so
  * a test sees the batches exactly; in production it is `ImageRepository.readMany` of the estimate being exported, which answers only that estimate's own pictures.
  *
- * **What the workbook can hold:** PNG, JPEG and GIF. The portal also accepts WebP (STORY-05.07), which ExcelJS cannot embed, so a part whose picture is a WebP has an empty picture cell in the file (a
- * documented limit, a follow-up of this story); the picture is still on the part and on the screen.
+ * **What the workbook can hold:** PNG, JPEG and GIF. ExcelJS cannot embed a WebP, so the browser converts one to a PNG or a JPEG before it is uploaded and the server refuses a WebP that arrives
+ * unconverted (review SQR-01 of AQP-332, DL-237, OQ-PM-10): a WebP is never stored, and `'image/webp': null` below is only a defensive path for a row that somehow holds one (it is left out, never a crash). The
+ * summary of SCR-10 counts only the pictures the file can hold (`isEmbeddableMime`), so it can never promise one the file lacks.
  */
 
 /** The size of a batch: the repository's own limit. */
@@ -30,6 +31,9 @@ const EXTENSIONS: Readonly<Record<ExportedImage['mime'], PictureExtension | null
   'image/gif': 'gif',
   'image/webp': null,
 };
+
+/** Can the workbook hold a picture of this stored type? PNG, JPEG and GIF can; a WebP cannot (a WebP is converted in the browser and refused by the server, so none is stored; this is the defensive answer). */
+export const isEmbeddableMime = (mime: ExportedImage['mime']): boolean => EXTENSIONS[mime] !== null;
 
 export async function readPictures(read: PictureReader, imageIds: ReadonlyArray<string>): Promise<ReadPictures> {
   const distinct = [...new Set(imageIds)];

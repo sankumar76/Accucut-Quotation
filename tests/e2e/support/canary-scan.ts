@@ -150,7 +150,11 @@ export class ScanRecorder {
       this.intercepted.delete(`${method} ${url}`);
       return relabelled;
     }
-    const body = bodyIsReadable(answer.status, answer.headers['content-type'] ?? '') ? answer.text : null;
+    const type = answer.headers['content-type'] ?? '';
+    // A workbook that the interceptor did not see cannot be inflated from the text the browser's fetch gave (the zip's bytes are not text), so it is reported as not scanned and the scan's own tests
+    // fail on it, never passed in silence (review SQR-03 of AQP-332).
+    if (isWorkbook(answer.status, type)) this.unreadable.push(`${label}: a workbook that was not intercepted, so it was not scanned.`);
+    const body = bodyIsReadable(answer.status, type) ? answer.text : null;
     const recorded: RecordedResponse = { label, url, status: answer.status, headers: answer.headers, body, carriedSession: this.signedIn };
     this.responses.push(recorded);
     return recorded;

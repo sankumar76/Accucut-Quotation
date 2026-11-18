@@ -9,7 +9,7 @@ import type { ConfigDocument } from '../../lib/fields/schema';
 import type { Clock } from '../../lib/time';
 import { exportColumnsOf, SHEET_NAME } from '../export/export-columns';
 import { XLSX_MIME, type ExportModel } from '../export/export-model';
-import { readPictures } from '../export/image-batches';
+import { isEmbeddableMime, readPictures } from '../export/image-batches';
 import { exportRowsOf } from '../export/rows';
 import type { ExportBuilder } from '../export/thread-runner';
 import type { CalculationRepository } from '../repositories/calculation-repository';
@@ -56,7 +56,7 @@ export interface ExportDependencies {
   /** The state of the figures and the calculation's own rows. The rows are read only through the figure state. */
   readonly calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findExportFigures'>;
   /** The pictures of the estimate, by batch. */
-  readonly images: Pick<ImageRepository, 'readMany'>;
+  readonly images: Pick<ImageRepository, 'readMany' | 'findMimes'>;
   readonly configuration: {
     /** The version in force now, for the summary. */
     readonly current: () => Promise<ConfigVersion>;
@@ -115,11 +115,15 @@ export function createExportService({ header, nodes, calculations, images, confi
       const fileName = await nameOf(estimateId);
       const [version, records] = await Promise.all([configuration.current(), nodes.listNodes(estimateId)]);
       const { document } = version;
+      // A picture is counted only if the file can hold it, so the summary never promises a picture the file lacks (review SQR-01 of AQP-332).
+      const imageIds = [...new Set(records.flatMap((record) => (record.imageId === null ? [] : [record.imageId])))];
+      const types = imageIds.length === 0 ? [] : await images.findMimes(estimateId, imageIds);
+      const embeddable = new Set(types.filter((type) => isEmbeddableMime(type.mime)).map((type) => type.id));
       const count = findSystemField(document, 'quantity');
       return exportSummarySchema.parse({
         fileName,
         partCount: records.length,
-        pictureCount: records.filter((record) => record.imageId !== null).length,
+        pictureCount: records.filter((record) => record.imageId !== null && embeddable.has(record.imageId)).length,
         columns: columnsOf(document),
         rows: buildTree(records).map(({ node, slNo }) => {
           const typedCount = typedText(node.inputs, count);

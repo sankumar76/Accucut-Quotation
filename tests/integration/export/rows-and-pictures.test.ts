@@ -65,6 +65,7 @@ beforeAll(async () => {
         readManyCalls.push(ids.length);
         return images.readMany(estimateId, ids);
       },
+      findMimes: (estimateId, ids) => images.findMimes(estimateId, ids),
     },
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
     builder,

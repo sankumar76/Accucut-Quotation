@@ -204,6 +204,20 @@ describe('the places of the builder: the cap and the one-large-at-a-time gate (Q
     small.release();
   });
 
+  it('is for one build while it is held: a build after the release, or a second build in the same place, is refused and starts no thread (review SQR-02 of AQP-332)', async () => {
+    const started: string[] = [];
+    const places = createThreadBuilder({ entry: 'never-started.mjs', startThread: (entry) => (started.push(entry), new Worker('')) });
+    const released = places.admit(1);
+    released.release();
+    await expect(released.build(model)).rejects.toThrow('released or already used');
+    const once = places.admit(1);
+    // The first build is refused for the missing bundle (no thread is started); it still uses the place up.
+    await expect(once.build(model)).rejects.toMatchObject({ reason: 'missing' });
+    await expect(once.build(model)).rejects.toThrow('released or already used');
+    once.release();
+    expect(started).toEqual([]);
+  });
+
   it('gives a place back once, however many times release is called, so a second release cannot make room that is not there', () => {
     const places = builder({ maxThreads: 1 });
     const only = places.admit(1);
