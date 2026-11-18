@@ -400,6 +400,25 @@ jobs:
           $configuration.TestResult.OutputPath = 'pester-results.xml'
           Invoke-Pester -Configuration $configuration
 
+      # STORY-10.11: what the restore and the Admin endpoint left behind, when a test fails. Diagnostics only; the restore log and the transcripts hold no secret (the key is read
+      # as a secure string and blanked from every message, and the tests assert it).
+      - name: Show the restore record and the Admin endpoint's state (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Service -Name WinRM | Format-List Name, Status
+          Get-PSSessionConfiguration -ErrorAction SilentlyContinue | Format-List Name, Enabled, SessionType, RunAsUser
+          Write-Host '===== restore.log'
+          Get-Content -LiteralPath 'C:\Accucut\logs\restore.log' -Tail 60 -ErrorAction SilentlyContinue
+          Write-Host '===== Admin endpoint transcripts (logs\jea)'
+          Get-ChildItem -LiteralPath 'C:\Accucut\logs\jea' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content -LiteralPath $_.FullName -Tail 40 }
+          Write-Host '===== Accucut events 1100 to 1112'
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.Id -ge 1100 } | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          Write-Host '===== databases and the services'
+          Get-Service -Name AccucutApp, AccucutWorker -ErrorAction SilentlyContinue | Format-Table Name, Status
+          foreach ($name in 'AccucutApp', 'AccucutWorker') { Write-Host "$name : $(& "$env:SystemRoot\System32\sc.exe" sdshow $name)" }
+          $global:LASTEXITCODE = 0
+
       - name: Show the install and update logs and the services' error logs (on failure only)
         if: ${{ failure() }}
         run: |
