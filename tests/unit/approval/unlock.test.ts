@@ -5,12 +5,9 @@ import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '@/lib/estimate/cal
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE, UNLOCK_REASON_MAX, UNLOCK_REASON_REQUIRED_MESSAGE, UNLOCK_REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/unlock-words';
 import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
-import { createPlanCache } from '@/lib/formula';
-import type { MasterSnapshot } from '@/server/repositories/calculation-repository';
-import type { CustomerCalculationRecord } from '@/server/repositories/customer-repository';
-import type { MaterialCalculationRecord } from '@/server/repositories/material-repository';
 import { assertMayUnlock, createUnlockService, type UnlockDependencies } from '@/server/services/unlock-service';
 
+import { FIXTURE_CUSTOMER_ID, FIXTURE_MATERIAL_ID, mastersNow, storedSnapshot } from '../../support/rate-change-fixture';
 import { seedConfig } from '../../support/seed-config';
 
 /**
@@ -20,8 +17,9 @@ import { seedConfig } from '../../support/seed-config';
  */
 
 const ESTIMATE_ID = '00000000-0000-4000-8000-0000000e5701';
-const CUSTOMER_ID = '00000000-0000-4000-8000-0000000c0501';
-const MATERIAL_ID = '00000000-0000-4000-8000-0000000a7e01';
+// The masters and the snapshot are the fixture the Lead's rate notice is tested with as well (STORY-06.11 AC-8): one set of changes, the same counts from both readers.
+const CUSTOMER_ID = FIXTURE_CUSTOMER_ID;
+const MATERIAL_ID = FIXTURE_MATERIAL_ID;
 const APPROVAL_ID = '00000000-0000-4000-8000-0000000a9901';
 const CALCULATION_ID = '00000000-0000-4000-8000-0000000ca1c1';
 const UNLOCKED_AT = new Date('2026-11-16T06:30:00.000Z');
@@ -31,8 +29,6 @@ const engineer = { id: 'engineer-1', role: 'ENGINEER' } as const;
 const audit = { actorId: lead.id, actorLabel: 'Invented Lead', requestId: 'request-1' };
 const REASON = 'The customer asked for a thicker plate.';
 const tx = { kind: 'database-transaction' } as const;
-
-const REFERENCED = createPlanCache().get('seed', seedConfig.fields).referencedRateIds;
 
 interface Options {
   readonly status?: EstimateStatus;
@@ -47,43 +43,14 @@ interface Options {
   readonly currentVersion?: number;
 }
 
-/** The snapshot the approved calculation stored: the first referenced rate, one material, both exchange rates. */
-const stored = (): MasterSnapshot => ({
-  customer: { id: CUSTOMER_ID, name: 'Invented Customer' },
-  rates: REFERENCED.map((id, index) => ({ id, name: `Invented rate ${String(index)}`, value: '10.00' })),
-  materials: [{ id: MATERIAL_ID, materialInDrawing: 'Invented plate', materialConsidered: null, pricePerKg: '80.50', specificGravity: '7.85', scrapRate: '10' }],
-  exchangeRates: { usd: '83.25', eur: '90.10' },
-});
-
 function build(options: Options = {}) {
   const writes: string[] = [];
   const audited: unknown[] = [];
   const marked: unknown[] = [];
   let status: EstimateStatus = options.status ?? 'APPROVED';
   const customerId = options.customerId === undefined ? CUSTOMER_ID : options.customerId;
-  const snapshot = stored();
-  const customerNow: CustomerCalculationRecord = options.customerDeleted
-    ? { deleted: true, id: CUSTOMER_ID, name: 'Invented Customer' }
-    : {
-        deleted: false,
-        customer: {
-          id: CUSTOMER_ID,
-          name: 'Invented Customer',
-          phone: null,
-          email: null,
-          address: null,
-          rates: REFERENCED.map((id, index) => ({ processItemId: id, name: `Invented rate ${String(index)}`, unit: 'per kg', defaultValue: '1.00', value: index === 0 && options.now?.rate !== undefined ? options.now.rate : '10.00' })),
-        },
-      };
-  const materialNow: MaterialCalculationRecord = {
-    id: MATERIAL_ID,
-    materialInDrawing: 'Invented plate',
-    materialConsidered: null,
-    pricePerKg: options.now?.price ?? '80.50',
-    specificGravity: '7.85',
-    scrapRate: '10',
-    deleted: false,
-  };
+  const snapshot = storedSnapshot();
+  const { masters } = mastersNow({ ...options.now, customerDeleted: options.customerDeleted === true });
   const dependencies: UnlockDependencies = {
     estimates: {
       lockEstimate: (id) => {
@@ -109,11 +76,7 @@ function build(options: Options = {}) {
       },
     },
     calculations: { findMasterSnapshot: () => Promise.resolve({ configVersionId: 'version-7', masterSnapshot: snapshot }) },
-    masters: {
-      findCustomerForCalculation: () => Promise.resolve(customerNow),
-      findMaterialsForCalculation: () => Promise.resolve([materialNow]),
-      readExchangeRates: () => Promise.resolve({ usd: options.now?.usd ?? '83.25', eur: '90.10', stamp: null }),
-    },
+    masters,
     configuration: {
       current: () => Promise.resolve({ id: 'version-9', number: options.currentVersion ?? 9, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' }),
       byId: () => Promise.resolve({ id: 'version-7', number: 7, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-10-01T00:00:00.000Z' }),
