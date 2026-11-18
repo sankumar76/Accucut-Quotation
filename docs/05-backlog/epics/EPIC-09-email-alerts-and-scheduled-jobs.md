@@ -28,14 +28,14 @@ Late work reaches people by e-mail (GOAL-05) and a forgotten password can be res
 
 | # | Story ID | Title | Intent (one line) | Splitting pattern | Depends on | Status |
 |---|----------|-------|-------------------|-------------------|------------|--------|
-| 1 | STORY-09.01 | Mail outbox and transport (enabler) | Worker, outbox table, capturing server in test, SMTP and OAuth modes behind `FEATURE_EMAIL`, off until the facts arrive (ADR-011) | Enabler, justified: every mail story needs it | 10.04 | Draft |
-| 2 | STORY-09.02 | Settings: switch, sender, test e-mail | Alerts ON or OFF; sender; test to the Admin's own address; sender refusal message; added to the Settings page built in 02.09 (FR-019) | CRUD (update) | 09.01, 02.09 | Draft; OQ-ARCH-11 |
-| 3 | STORY-09.03 | Assignment e-mail | On assignment, with details, folder path and IST deadline, Cc the assigner, only when ON (FR-081) | Happy path | 09.02, 04.01 | Draft |
-| 4 | STORY-09.04 | Overdue e-mail within 5 minutes | One-minute scan; sent once per overdue event (FR-082) | Workflow step | 09.03, 04.03 | Draft |
-| 5 | STORY-09.05 | Daily digest at 11:00 IST | One per Engineer with overdue tasks, Cc the assigning Leads; none when nothing is overdue; catch-up at start (FR-083) | Data variation | 09.04 | Draft |
-| 6 | STORY-09.06 | No duplicates, logged, retried | Unique key per event; every send and failure logged; 3 retries (FR-084, NFR-014) | Non-functional | 09.03 | Draft |
-| 7 | STORY-09.07 | Reset a password by e-mailed link | Single-use hashed token; a second use refused; new password meets FR-098 (FR-003) | Happy path, then unhappy path | 09.01, 01.05 | Draft |
-| 8 | STORY-09.08 | One real send on the real mailbox | Before alerts go live; recorded at G8 (gate record condition 16) | Verification | 09.02, OQ-ARCH-11 | Draft; waits for IT |
+| 1 | STORY-09.01 | Mail outbox and transport (enabler) | Worker, outbox table, capturing server in test, SMTP and OAuth modes behind `FEATURE_EMAIL`, off until the facts arrive (ADR-011) | Enabler, justified: every mail story needs it | 10.04 | Draft (AQP-348, 2026-11-18, 8 points, critical-review) |
+| 2 | STORY-09.02 | Settings: switch, sender, test e-mail | Alerts ON or OFF; sender; test to the Admin's own address; sender refusal message; added to the Settings page built in 02.09 (FR-019) | CRUD (update) | 09.01, 02.09 | Draft (AQP-349, 2026-11-18, 5 points); OQ-ARCH-11 |
+| 3 | STORY-09.03 | Assignment e-mail | On assignment, with details, folder path and IST deadline, Cc the assigner, only when ON (FR-081) | Happy path | 09.02, 04.01, 04.07 (scheduling: built after 04.07 so the reassign call site exists) | Draft (AQP-350, 2026-11-18, 3 points) |
+| 4 | STORY-09.04 | Overdue e-mail within 5 minutes | One-minute scan; sent once per overdue event (FR-082) | Workflow step | 09.03, 04.03 | Draft (AQP-351, 2026-11-18, 5 points) |
+| 5 | STORY-09.05 | Daily digest at 11:00 IST | One per Engineer with overdue tasks, Cc the assigning Leads; none when nothing is overdue; catch-up at start (FR-083) | Data variation | 09.04 | Draft (AQP-352, 2026-11-18, 5 points) |
+| 6 | STORY-09.06 | No duplicates, logged, retried | Unique key per event; every send and failure logged; 3 retries (FR-084, NFR-014) | Non-functional | 09.03 | Draft (AQP-353, 2026-11-18, 5 points) |
+| 7 | STORY-09.07 | Reset a password by e-mailed link | Single-use hashed token; a second use refused; new password meets FR-098 (FR-003) | Happy path, then unhappy path | 09.01, 01.05 | Draft (AQP-354, 2026-11-18, 8 points, critical-review) |
+| 8 | STORY-09.08 | One real send on the real mailbox | Before alerts go live; recorded at G8 (gate record condition 16) | Verification | 09.02, OQ-ARCH-11 | Draft (AQP-355, 2026-11-18, 1 point, HUMAN STEP, not for a developer); waits for IT |
 
 ## Epic Acceptance Criteria
 - [ ] SPEC 14.11 passes against a capturing mail server with a controlled clock: e-mails only when alerts are ON; the overdue e-mail within 5 minutes; the digest at 11:00 IST and none when nothing is overdue.
