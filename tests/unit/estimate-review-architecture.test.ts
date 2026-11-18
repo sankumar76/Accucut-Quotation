@@ -87,6 +87,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const UNLOCK_BUTTON = `${UNLOCK_FOLDER}unlock-button.tsx`;
   const CANCEL_FOLDER = 'src/components/features/estimate-cancel/';
   const CANCEL_BUTTON = `${CANCEL_FOLDER}cancel-button.tsx`;
+  const REMOVE_FOLDER = 'src/components/features/estimate-remove-price/';
+  const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -103,6 +105,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(APPROVE_BUTTON);
     clientFiles.delete(UNLOCK_BUTTON);
     clientFiles.delete(CANCEL_BUTTON);
+    clientFiles.delete(REMOVE_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -200,6 +203,27 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(dialog).toMatch(/@\/lib\/estimates\/cancel-approval-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(CANCEL_FOLDER) && /estimate-cancel\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/cancelled-notice.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
+  });
+
+  it('STORY-06.13 ADR-016: the Remove price button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(REMOVE_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([REMOVE_BUTTON, `${REMOVE_FOLDER}remove-dialog.tsx`, `${REMOVE_FOLDER}remove-ids.ts`, `${REMOVE_FOLDER}remove-texts.ts`]);
+    for (const name of ['remove-ids.ts', 'remove-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === REMOVE_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('remove-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === REMOVE_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('remove-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
+    expect(button).toMatch(/import\('\.\/remove-dialog'\)/);
+    expect(button).toMatch(/^import type \{ RemoveDialogProps \} from '\.\/remove-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*remove-(dialog|texts)/m);
+    expect(button).not.toMatch(/remove-price-client/);
+    expect(dialog).toMatch(/@\/lib\/estimates\/remove-price-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(REMOVE_FOLDER) && /estimate-remove-price\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/price-removed-notice.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

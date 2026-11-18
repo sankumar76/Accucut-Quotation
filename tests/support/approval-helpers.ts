@@ -56,7 +56,7 @@ export async function approvalCount(db: CalculationDatabase, estimateId: string)
 export async function approvalEntries(
   db: CalculationDatabase,
   estimateId: string,
-  event: 'approval.approved' | 'approval.price_overridden' | 'approval.unlocked' | 'approval.cancelled' = 'approval.approved',
+  event: 'approval.approved' | 'approval.price_overridden' | 'approval.unlocked' | 'approval.cancelled' | 'approval.price_removed' = 'approval.approved',
 ) {
   const { rows } = await db.owner.query<{ event: string; actor_id: string; actor_label: string; object_type: string; object_id: string; object_label: string; before: unknown; after: unknown; request_id: string }>(
     `SELECT event, actor_id::text, actor_label, object_type, object_id::text, object_label, before, after, request_id FROM audit_log WHERE event = $2 AND object_id = $1::uuid ORDER BY created_at, id`,

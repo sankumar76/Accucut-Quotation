@@ -1,5 +1,6 @@
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
 import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
+import { RemoveButton } from '@/components/features/estimate-remove-price/remove-button';
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
 import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/recalculate-ids';
 import { UnlockButton } from '@/components/features/estimate-unlock/unlock-button';
@@ -7,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import type { RoleName } from '@/lib/auth/roles';
 import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_UNLOCK_ID } from './review-ids';
+import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_REMOVE_PRICE_ID, REVIEW_UNLOCK_ID } from './review-ids';
 import {
   ACTIONS_LABEL,
   APPROVE_CLEARED_REASON,
@@ -28,6 +30,8 @@ import {
   DOWNLOAD_NOT_YET_REASON,
   ONLY_ADMIN_CANCELS,
   RECALCULATE_LABEL,
+  REMOVE_PRICE_FIRST_OPEN_FAILED,
+  REMOVE_PRICE_LABEL,
   UNLOCK_FIRST_OPEN_FAILED,
   UNLOCK_LABEL,
 } from './review-texts';
@@ -66,6 +70,15 @@ export interface ApproveOffer {
  */
 export type CancelOffer = { readonly kind: 'admin'; readonly approvalId: string; readonly engineerName: string } | { readonly kind: 'lead' };
 
+/**
+ * What the action bar offers of Remove price (STORY-06.13 AC-1), or `null` when it is not offered: the Admin gets the button, with the cancelled approval it names and the price the dialog repeats (already written as
+ * rupees); a Lead gets none (the cancelled notice tells them "Only the Admin can remove it").
+ */
+export interface RemoveOffer {
+  readonly approvalId: string;
+  readonly priceLabel: string;
+}
+
 export interface ReviewActionsProps {
   /** The estimate's ID, for the request of Calculate or Recalculate and of the approval and the unlock. */
   readonly estimateId: string;
@@ -79,6 +92,8 @@ export interface ReviewActionsProps {
   readonly approve: ApproveOffer | null;
   /** The Cancel approval button for the Admin, or the line for a Lead, while the latest approval has not been cancelled (see `cancelOffer`). */
   readonly cancel: CancelOffer | null;
+  /** The Remove price button for the Admin, while the latest approval is cancelled and its price stands (see `removeOffer`). */
+  readonly remove: RemoveOffer | null;
   /** The "Rates changed" notice is drawn (STORY-06.11): the Recalculate button its link points at is on the bar. */
   readonly ratesChanged: boolean;
 }
@@ -120,6 +135,15 @@ export function cancelOffer(role: RoleName, approval: NonNullable<CostsView['app
 }
 
 /**
+ * Whether Remove price is offered (STORY-06.13 AC-1): only to the Admin, and only on the latest approval (the costs view's BO is that row, so an older approval never has it) once it was cancelled and while its price
+ * stands (a removed price is no BO, so the view carries no approval then). It is not offered before a cancel. The server decides all the same. A Lead and an Engineer are never offered it.
+ */
+export function removeOffer(role: RoleName, approval: NonNullable<CostsView['approval']> | null): RemoveOffer | null {
+  if (role !== 'ADMIN' || approval === null || approval.cancel === null) return null;
+  return { approvalId: approval.id, priceLabel: formatRupees(approval.price) };
+}
+
+/**
  * Why Approve and lock is off, by what the Lead can do about it (UX spec v0.31 SCR-06): never calculated, the figures cleared, or a Draft whose figures are current (an unlocked estimate: the way on is Recalculate).
  * Any other state with the button off is a page the server could not offer a total on; the way on is the same, so it says the same as the cleared state.
  */
@@ -156,7 +180,7 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
   );
 }
 
-export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, ratesChanged }: ReviewActionsProps) {
+export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, remove, ratesChanged }: ReviewActionsProps) {
   // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, submitted
   // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
   // is to Recalculate, so the button is there then (STORY-06.11).
@@ -210,6 +234,18 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
         ) : status === 'APPROVED' ? null : (
           // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Submitted one whose approval was kept through an unlock says it here.
           <Reason id={CANCEL_REASON_ID} text={ONLY_ADMIN_CANCELS} />
+        )}
+        {remove === null ? null : (
+          <div className="flex flex-col gap-s-1">
+            <RemoveButton
+              id={REVIEW_REMOVE_PRICE_ID}
+              label={REMOVE_PRICE_LABEL}
+              failedLine={REMOVE_PRICE_FIRST_OPEN_FAILED}
+              estimateId={estimateId}
+              approvalId={remove.approvalId}
+              priceLabel={remove.priceLabel}
+            />
+          </div>
         )}
       </div>
     </div>

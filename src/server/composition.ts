@@ -35,6 +35,7 @@ import { createEstimateReviewService, type EstimateReviewService } from './servi
 import { createEstimateService, type EstimateService } from './services/estimate-service';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
@@ -65,6 +66,7 @@ let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
 let unlockService: UnlockService | undefined;
 let cancelApprovalService: CancelApprovalService | undefined;
+let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
@@ -312,6 +314,21 @@ export function getCancelApprovalService(): CancelApprovalService {
     workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
   });
   return cancelApprovalService;
+}
+
+/**
+ * Remove price (STORY-06.13): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the removal stored on the approval and the audit entry that keeps the price.
+ * Restricted (NFR-002): only the one remove-price route asks for it here, for the Admin alone.
+ */
+export function getRemovePriceService(): RemovePriceService {
+  removePriceService ??= createRemovePriceService({
+    estimates: createEstimateRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    stepUp: getStepUpService(),
+    audit: getAuditService(),
+  });
+  return removePriceService;
 }
 
 /**

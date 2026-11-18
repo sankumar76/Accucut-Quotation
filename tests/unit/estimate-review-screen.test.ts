@@ -647,6 +647,79 @@ describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "App
   });
 });
 
+describe('STORY-06.13 AC-1, AC-3, AC-6 (UX spec SCR-06 "Approval cancelled (Admin)" and "(Lead)", "Remove price (Admin)", "Price removed")', () => {
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const CANCEL = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+  const REMOVED = { removedAt: new Date('2026-11-05T06:50:00.000Z'), byName: 'Invented Meera' };
+
+  it('AC-1: a cancelled approval gives the Admin a danger button "Remove price" beside the BO tile; it names no dialog text in the first load', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('id="review-remove-price"');
+    expect(countOf(html, '>Remove price</button>')).toBe(1);
+    expect(html).toMatch(/id="review-remove-price"[^>]*class="[^"]*bg-danger|class="[^"]*bg-danger[^"]*"[^>]*id="review-remove-price"/);
+    // The price is still on screen, marked cancelled, and the cancel button is gone.
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('id="review-cancel"');
+    // Nothing of the dialog is in the first load of the page (NFR-009).
+    expect(html).not.toContain('Remove the approved price?');
+    expect(html).not.toContain('Keep the price');
+    expect(html).not.toContain('Your password');
+  });
+
+  it('AC-1: a Lead has no button and sees "Only the Admin can remove it"', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'LEAD');
+    expect(html).not.toContain('id="review-remove-price"');
+    expect(html).not.toContain('>Remove price</button>');
+    expect(countOf(html, 'Only the Admin can remove it.')).toBe(1);
+  });
+
+  it('AC-1: it is not offered before a cancel (an approved estimate, an approval kept through an unlock), nor when there is no approval', async () => {
+    const approved = render(await current({ approval: STANDING }), undefined, { ...HEADER, status: 'APPROVED' }, 'ADMIN');
+    expect(approved).not.toContain('id="review-remove-price"');
+    const kept = render(
+      await current({ approval: { ...STANDING, unlock: { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: null, engineerName: 'Invented Priya' } } }),
+      undefined,
+      DRAFT_HEADER,
+      'ADMIN',
+    );
+    expect(kept).not.toContain('id="review-remove-price"');
+    const none = render(await current(), undefined, HEADER, 'ADMIN');
+    expect(none).not.toContain('id="review-remove-price"');
+  });
+
+  it('AC-3: once the price was removed, BO reads "Not set yet", no price is on the page, and the notice says who, when (IST), that the audit log keeps it and how to set a price again', async () => {
+    for (const role of ['ADMIN', 'LEAD'] as const) {
+      const html = render(await current({ priceRemoved: REMOVED }), undefined, DRAFT_HEADER, role);
+      expect(html).toContain('id="review-price-removed-notice"');
+      expect(html).toContain('tabindex="-1"');
+      expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+      expect(html).toContain('The audit log keeps it.');
+      expect(html).toContain('Approve again, after a Recalculate, to set a price.');
+      expect(html).toContain('Not set yet');
+      expect(html).not.toContain('12,600');
+      expect(html).not.toContain('Approval cancelled');
+      // No button is offered: the price is gone, and nothing is left to cancel or remove.
+      expect(html).not.toContain('id="review-remove-price"');
+      expect(html).not.toContain('id="review-cancel"');
+    }
+  });
+
+  it('AC-3: the notice is not drawn while the price stands, and the same for a never-approved estimate', async () => {
+    for (const options of [{ approval: STANDING }, {}]) {
+      const html = render(await current(options), undefined, DRAFT_HEADER, 'ADMIN');
+      expect(html).not.toContain('id="review-price-removed-notice"');
+      expect(html).not.toContain('The approved price was removed');
+    }
+  });
+
+  it('AC-3: the removed state is the same whatever the state of the figures (cleared figures change nothing)', async () => {
+    const html = render(await current({ inputsRevision: 4, priceRemoved: REMOVED }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+    expect(html).toContain('Not set yet');
+  });
+});
+
 describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in view', () => {
   // CE-1 has a 0 on its item (Sl. No 1): the one warned row. The words are the UX spec's (v0.30, SCR-06 "Warning on this calculation").
   const WARNED = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
