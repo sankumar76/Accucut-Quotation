@@ -19,6 +19,10 @@ import { clientFor, type Transaction } from './transaction';
  *
  * **The Engineer** is read with `FOR SHARE` in the same transaction: a person who is deactivated, or whose role is changed, while the task is being
  * written makes that update wait for the task, and one who is already deactivated is not found (AC-3).
+ *
+ * **A reassign** (STORY-04.07) reads the task with `findTaskForUpdate`, which takes the estimate's row and then the task's row `FOR UPDATE`, the order of the estimate
+ * workflow (`lockEstimate` takes the estimate `FOR UPDATE` and the task `FOR SHARE`), so the two cannot wait for each other. An approval that is being committed makes
+ * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
 export type EstimateStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
@@ -86,6 +90,23 @@ export interface TaskDetailRow extends QueueRow {
   readonly notes: string | null;
 }
 
+/** A task as a reassign reads it, under the task's and the estimate's row locks: what it holds now and the status of its estimate. */
+export interface LockedTask {
+  readonly id: string;
+  readonly code: string;
+  readonly engineer: EngineerRecord;
+  readonly deadlineAt: Date;
+  readonly assignmentRevision: number;
+  readonly status: EstimateStatus;
+}
+
+/** What a reassign writes: the whole assignment, so the service decides every value and the repository stores what it is given. */
+export interface AssignmentState {
+  readonly engineerId: string;
+  readonly deadlineAt: Date;
+  readonly assignmentRevision: number;
+}
+
 export interface QueueRequest {
   readonly tab: QueueTab;
   readonly scope: QueueScope;
@@ -110,6 +131,13 @@ export interface TaskRepository {
    * the same null, so nothing tells a task that exists from one that does not (STORY-04.04 AC-4). The scope is cut in the query, so another Engineer's row is never read.
    */
   findTask(id: string, scope: QueueScope): Promise<TaskDetailRow | null>;
+  /**
+   * The task with this ID and the status of its estimate, **with the estimate's row and the task's row locked until the transaction ends**; null for an ID that is not a
+   * UUID and for an unknown one (STORY-04.07 AC-3, AC-6). The status is read once the locks are granted, so an approval that was committing is already seen.
+   */
+  findTaskForUpdate(id: string, tx: Transaction): Promise<LockedTask | null>;
+  /** Stores the Engineer, the deadline and the assignment revision of a task whose row this transaction holds locked (STORY-04.07 AC-3, AC-5). */
+  setAssignment(id: string, state: AssignmentState, tx: Transaction): Promise<void>;
   /** Up to `limit` tasks of the tab, earliest deadline first and then by code, after `after` when it is given (STORY-04.02 AC-1, AC-2). */
   listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
   /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
@@ -119,6 +147,17 @@ export interface TaskRepository {
 }
 
 const ENGINEER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
+const LOCKED_ROWS = z.array(
+  z.strictObject({
+    id: z.string(),
+    code: z.string(),
+    engineerId: z.string(),
+    engineerName: z.string(),
+    deadlineAt: z.date(),
+    assignmentRevision: z.number().int().positive(),
+    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+  }),
+);
 const NUMBER_ROWS = z.array(z.strictObject({ lastValue: z.number().int().positive() }));
 
 const QUEUE_SELECT = {
@@ -231,6 +270,32 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
       withDatabaseErrors(() =>
         clientFor(db, tx).estimate.create({ data: { taskId }, select: { id: true, taskId: true, customerId: true, status: true } }),
       ),
+
+    findTaskForUpdate: (id, tx) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a task asked for by one is not found.
+        if (!isUuid(id)) return null;
+        // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter. The estimate's row first and then the task's, as `lockEstimate` does.
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", u.name AS "engineerName", t.deadline_at AS "deadlineAt",
+                 t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status"
+          FROM estimates e JOIN tasks t ON t.id = e.task_id JOIN users u ON u.id = t.engineer_id
+          WHERE t.id = ${id}::uuid
+          FOR UPDATE OF e, t`;
+        const [row] = LOCKED_ROWS.parse(rows);
+        if (row === undefined) return null;
+        const { engineerId, engineerName, ...rest } = row;
+        return { ...rest, engineer: { id: engineerId, name: engineerName } };
+      }),
+
+    setAssignment: (id, state, tx) =>
+      withDatabaseErrors(async () => {
+        await clientFor(db, tx).task.update({
+          where: { id },
+          data: { engineerId: state.engineerId, deadlineAt: state.deadlineAt, assignmentRevision: state.assignmentRevision },
+          select: { id: true },
+        });
+      }),
 
     findTask: (id, scope) =>
       withDatabaseErrors(async () => {

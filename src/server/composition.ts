@@ -183,6 +183,8 @@ export function getTaskService(): TaskService {
     tasks: createTaskRepository(runtimeClient()),
     transactions: createTransactionRunner(runtimeClient()),
     clock: systemClock,
+    // A reassign writes its audit entry in its own transaction (STORY-04.07).
+    audit: getAuditService(),
   });
   return taskService;
 }

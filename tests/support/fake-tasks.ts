@@ -2,6 +2,7 @@ import type {
   EngineerRecord,
   EstimateRecord,
   EstimateStatus,
+  LockedTask,
   NewTask,
   QueueRow,
   QueueScope,
@@ -107,6 +108,27 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   };
 
   const repository: TaskRepository = {
+    findTaskForUpdate: (id) => {
+      const task = tasks.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+      const estimate = task === undefined ? undefined : estimates.find((candidate) => candidate.taskId === task.id);
+      if (task === undefined || estimate === undefined) return Promise.resolve(null);
+      const locked: LockedTask = {
+        id: task.id,
+        code: task.code,
+        engineer: { id: task.engineerId, name: nameOf(task.engineerId) },
+        deadlineAt: task.deadlineAt,
+        assignmentRevision: task.assignmentRevision,
+        status: estimate.status,
+      };
+      return Promise.resolve(locked);
+    },
+    setAssignment: (id, state) => {
+      const index = tasks.findIndex((candidate) => candidate.id === id);
+      const held = tasks[index];
+      if (held === undefined) return Promise.reject(new Error('The task to change is not there.'));
+      tasks.splice(index, 1, { ...held, ...state });
+      return Promise.resolve();
+    },
     findTask: (id, scope) => {
       const row = inScope(scope).find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
       const task = row === undefined ? undefined : tasks.find((candidate) => candidate.id === row.id);
@@ -162,11 +184,12 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
 
   const transactions: TransactionRunner = {
     async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-      const before = { tasks: tasks.length, estimates: estimates.length, sequences: new Map(sequences) };
+      const before = { tasks: [...tasks], estimates: estimates.length, sequences: new Map(sequences) };
       try {
         return await work(createTransactionHandle());
       } catch (error) {
-        tasks.length = before.tasks;
+        // A task is replaced (never edited) when its assignment changes, so the records kept are the ones as they were.
+        tasks.splice(0, tasks.length, ...before.tasks);
         estimates.length = before.estimates;
         sequences.clear();
         for (const [year, value] of before.sequences) sequences.set(year, value);

@@ -1,13 +1,16 @@
 import type { RoleName } from '../../lib/auth/roles';
-import { FieldValidationError, type FieldProblem } from '../../lib/errors';
-import { checkAssign, ENGINEER_MESSAGE, type AssignErrors, type AssignInput } from '../../lib/tasks/assign';
+import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { isTaskClosed } from '../../lib/estimate/task-status';
+import { checkAssign, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
+import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInput } from '../../lib/tasks/reassign';
 import { formatTaskCode } from '../../lib/tasks/task-code';
 import { istYearOf, type Clock } from '../../lib/time';
 import type { EngineerRecord, EstimateRecord, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
 import type { TransactionRunner } from '../repositories/transaction';
 
+import type { AuditContext, AuditService } from './audit-service';
 import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor';
 
 /**
@@ -22,7 +25,16 @@ import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor
  *     code is `Q-<year>-<number>`, the year read in IST (FR-041, NFR-015), the number from the locked sequence.
  *   - **The `file:` link is built here**, from the validated UNC path (AC-4); the browser is never asked to build one.
  *
- * There is no audit entry: the audit log of architecture section 8 lists a task change (STORY-04.07), not the assignment.
+ * There is no audit entry for the assignment: the audit log of architecture section 8 lists a task change (STORY-04.07), not the first assignment.
+ *
+ * Reassign or change the deadline (STORY-04.07; FR-040, architecture sections 4.4, 6 and 8): `reassignTask` is the one place an open task's Engineer or deadline changes.
+ *
+ *   - **One transaction under the row locks** (AC-3): the estimate's row and the task's row are locked, the status of the estimate is read once they are held, and the change, its
+ *     revision and its audit entry are written together or not at all (AC-4). An approval that was committing makes the call wait and is then seen (AC-6).
+ *   - **Only what differs is judged** (AC-3, D-3): the same rules as assigning, against the server's clock, but a deadline or an Engineer equal to the stored one is not checked, so
+ *     an overdue task can be given to another Engineer. A save that changes nothing writes no entry and leaves the revision alone.
+ *   - **The revision rises with the Engineer, not with the deadline** (AC-5, A-09): the assignment e-mail (STORY-09.03) is keyed on it, the overdue e-mail on the deadline.
+ *   - **Any Lead or Admin may change any open task** (D-f): who may call is the route's (the manifest); nothing here narrows it to the person who assigned the task.
  *
  * The queue (STORY-04.02; FR-034, architecture sections 4.4 and 6): the Open, Closed and Overdue tabs, each sorted by deadline and then by code.
  *
@@ -66,6 +78,15 @@ export interface QueueTask {
   readonly deadlineAt: Date;
   readonly status: TaskEstimateStatus;
   readonly assignedByName: string;
+}
+
+/** What a reassign did, for the route (the task as the queue shows it) and for what follows a change of Engineer (STORY-09.03 calls its e-mail from here, with the new revision). */
+export interface ReassignResult {
+  readonly task: QueueTask;
+  readonly engineerChanged: boolean;
+  readonly deadlineChanged: boolean;
+  /** The assignment revision after the save: one more than before when the Engineer changed. */
+  readonly assignmentRevision: number;
 }
 
 /** One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's, worded by `taskStatusOf`. */
@@ -114,6 +135,11 @@ export interface TaskService {
    * answer has the same shape for every role and no cost.
    */
   getTask(viewer: QueueViewer, id: string): Promise<TaskDetail | null>;
+  /**
+   * Gives an open task to another Engineer, moves its deadline, or both (STORY-04.07; `PATCH /api/v1/tasks/{id}`). `audit` is who is saving and on which request, from the session
+   * and the request. 404 for an ID that is no task; 409 `TASK_CLOSED` for a task whose estimate is approved; 422 naming each field that is wrong. Nothing is stored then.
+   */
+  reassignTask(audit: AuditContext, id: string, input: ReassignInput): Promise<ReassignResult>;
   /** The bell's count for this person at the server's clock: own overdue (Engineer), overdue they assigned (Lead), all overdue (Admin). STORY-04.03 AC-2. */
   countOverdue(viewer: QueueViewer): Promise<number>;
 }
@@ -122,7 +148,12 @@ export interface TaskDependencies {
   readonly tasks: TaskRepository;
   readonly transactions: TransactionRunner;
   readonly clock: Clock;
+  /** Needed by `reassignTask` alone (its entry is written in its own transaction); a service built without it refuses to reassign. */
+  readonly audit?: AuditService | undefined;
 }
+
+/** Every task, whoever it is assigned to or by: what a reassign reads back for its answer (the caller's right to change it was decided by the route). */
+const EVERY_TASK: QueueScope = { engineerId: null, assignedById: null };
 
 /**
  * An Engineer sees their own tasks; a Lead and an Admin see all (AC-2). `assignedBy: 'me'` narrows that to the tasks the viewer assigned (the Lead's bell, STORY-04.03
@@ -167,11 +198,11 @@ function toQueueTask(row: QueueRow): QueueTask {
   };
 }
 
-function problemsOf(errors: AssignErrors): ReadonlyArray<FieldProblem> {
-  return Object.entries(errors).map(([field, message]) => ({ field, message }));
+function problemsOf(errors: Readonly<Record<string, string | undefined>>): ReadonlyArray<FieldProblem> {
+  return Object.entries(errors).flatMap(([field, message]) => (message === undefined ? [] : [{ field, message }]));
 }
 
-export function createTaskService({ tasks, transactions, clock }: TaskDependencies): TaskService {
+export function createTaskService({ tasks, transactions, clock, audit }: TaskDependencies): TaskService {
   return {
     getAssignContext: async () => ({ engineers: await tasks.listActiveEngineers() }),
 
@@ -230,6 +261,42 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
     async getTask(viewer, id) {
       const row = await tasks.findTask(id, scopeOf(viewer));
       return row === null ? null : { ...toQueueTask(row), notes: row.notes };
+    },
+
+    async reassignTask(context, id, input) {
+      if (audit === undefined) throw new Error('This task service was built without the audit service, so it cannot reassign.');
+      const now = clock.now();
+      const outcome = await transactions.run(async (tx) => {
+        const locked = await tasks.findTaskForUpdate(id, tx);
+        if (locked === null) throw new NotFoundError();
+        // Read under the lock: an approval that was committing has finished, and is seen here (AC-6).
+        if (isTaskClosed(locked.status)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
+        const checked = checkReassign(input, { engineerId: locked.engineer.id, deadlineAt: locked.deadlineAt }, now);
+        if (!checked.ok) throw new FieldValidationError(problemsOf(checked.errors));
+        const { changes } = checked;
+        const engineer = changes.engineerId === null ? locked.engineer : await tasks.findActiveEngineer(changes.engineerId, tx);
+        if (engineer === null) throw new FieldValidationError([{ field: 'engineerId', message: ENGINEER_MESSAGE }]);
+        const engineerChanged = changes.engineerId !== null;
+        const deadlineChanged = changes.deadlineAt !== null;
+        if (!engineerChanged && !deadlineChanged) return { engineerChanged, deadlineChanged, assignmentRevision: locked.assignmentRevision };
+
+        const deadlineAt = changes.deadlineAt ?? locked.deadlineAt;
+        const assignmentRevision = locked.assignmentRevision + (engineerChanged ? 1 : 0);
+        await tasks.setAssignment(locked.id, { engineerId: engineer.id, deadlineAt, assignmentRevision }, tx);
+        // One entry for one save, whichever of the two changed (D-g). A change that cannot be recorded does not happen: the refusal rolls the transaction back.
+        await audit.record(tx, {
+          event: 'task.reassigned',
+          ...context,
+          object: { id: locked.id, label: locked.code },
+          before: { engineer: locked.engineer, deadlineAt: locked.deadlineAt.toISOString() },
+          after: { engineer, deadlineAt: deadlineAt.toISOString() },
+        });
+        return { engineerChanged, deadlineChanged, assignmentRevision };
+      });
+      // The answer is the row as the queue shows it, read once the change is committed.
+      const row = await tasks.findTask(id, EVERY_TASK);
+      if (row === null) throw new Error('A task that was just changed could not be read back.');
+      return { task: toQueueTask(row), ...outcome };
     },
 
     countOverdue: (viewer) => tasks.countOverdue(bellScopeOf(viewer), clock.now()),
