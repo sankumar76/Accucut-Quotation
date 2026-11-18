@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { CostDetails } from '@/components/features/cost-details/cost-details';
@@ -9,9 +8,11 @@ import { getCostDetailsService, getEstimateService } from '@/server/composition'
 import { authorizePage } from '@/server/http/page-access';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
+import { pageMetadata } from '@/lib/page-metadata';
 
-/** No task code and no customer name in the tab title (architecture section 8, FR-089). */
-export const metadata: Metadata = { title: COST_DETAILS_META_TITLE };
+/** No task code and no customer name in the tab title or the description (architecture section 8, FR-089, NFR-002). */
+const COST_DETAILS_META_DESCRIPTION = 'The cost of each stage of one part of an estimate, from the material to the price.';
+export const metadata = pageMetadata(COST_DETAILS_META_TITLE, COST_DETAILS_META_DESCRIPTION);
 
 interface PageProps {
   readonly params: Promise<{ readonly code: string; readonly slNo: string }>;
