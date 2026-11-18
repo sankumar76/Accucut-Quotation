@@ -214,6 +214,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'approval.cancelled': 'tests/integration/approval/cancel.test.ts',
     // STORY-06.13: the price of a cancelled approval removed by the Admin; the one test is the removal's own, against the real estimate row lock.
     'approval.price_removed': 'tests/integration/approval/remove-price.test.ts',
+    // STORY-01.09: the Admin role handed over; the one test is the hand-over's own, which needs the one-Admin index, two people's rows and a second connection to watch the swap.
+    'user.admin_handed_over': 'tests/integration/users/admin-handover.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

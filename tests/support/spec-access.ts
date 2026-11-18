@@ -26,6 +26,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/users': ['ADMIN'],
   '/api/v1/users/[id]': ['ADMIN'],
   '/api/v1/users/[id]/password-reset': ['ADMIN'],
+  '/api/v1/users/[id]/admin-handover': ['ADMIN'], // Hand over Admin (STORY-01.09; architecture section 6 "Hand over Admin": A, step-up)
   // The API behind the Audit log screen (SPEC section 9: the audit log is the Admin's; architecture section 6 row "Audit", CR-33).
   '/api/v1/audit': ['ADMIN'],
   // The API behind Settings (SPEC section 9: Settings is the Admin's; architecture section 6 row "Settings", STORY-02.09 AC-6, CR-33).

@@ -101,6 +101,8 @@ const userRole = z.enum(USER_ROLE_VALUES);
 const roleState = z.strictObject({ role: userRole });
 /** A person's name, which is not a secret and is already the entry's label; the rename event keeps the old and the new one. */
 const nameState = z.strictObject({ name: z.string().min(1) });
+/** Who holds the Admin role, as the hand-over entry keeps it on each side (STORY-01.09 AC-4): the person's ID and their name at that moment. */
+const adminState = z.strictObject({ adminId: z.uuid(), adminName: z.string().min(1) });
 
 // ---- Shape of the quantity-warning event (SCR-16 "Quantity warning"; STORY-05.12) ---------------------------------------------------
 /** A row that was warned: the code, the part, its Sl. No and its name as typed. Text only: no number from a calculation has a place here. */
@@ -383,6 +385,16 @@ export const AUDIT_EVENTS = {
     before: z.strictObject({ mustChangePassword: z.boolean() }),
     after: z.strictObject({ mustChangePassword: z.literal(true) }),
     describe: () => ({ before: 'Earlier password', after: 'Temporary password set' }),
+  }),
+  // STORY-01.09: the Admin role handed to another person. One entry for the one act (decision D-h), not a `user.role_changed` for each person. The entry's actor is the old Admin and its object the new one.
+  // Each side names the Admin: their ID and their name at the time (the names are the entry's only text; no e-mail address, password, hash or token has a key to sit in).
+  'user.admin_handed_over': defineEvent({
+    objectType: 'user',
+    category: 'user_change',
+    status: 'wired',
+    before: adminState,
+    after: adminState,
+    describe: (before, after) => ({ before: `Admin was ${before.adminName}`, after: `Admin is now ${after.adminName}` }),
   }),
 
   // ---- Wired in STORY-02.01: the three events of the Process Master (AC-5) ------------------------------------------------------
