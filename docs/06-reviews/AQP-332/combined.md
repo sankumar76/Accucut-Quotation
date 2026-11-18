@@ -125,3 +125,72 @@
 - **The canary scan:** now sees inside the workbook. The Lead positive control proves it, and the round-trip form neither hides a precision loss nor makes the control trivial.
 
 The one Critical, SQR-01 (AC-4 for WebP pictures, #489), is a gap in the requirements, not a fault in the code. It clears with the delivery lead's logged decision. Under option (c) or (d) the PR can merge once the decision is logged, with no code re-review. The two Minors go to follow-up #496. SQR-04 to SQR-07 are notes.
+
+---
+
+## Re-review (fixes for SQR-01, SQR-02, SQR-03)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `a8a6403b` = fix commit `7b8084b2` + merge of `master` `44a51e30`. Diff reviewed: `git diff 073f2b93..7b8084b2` (28 files, +539 / −35) and the merge |
+| Decisions applied | DL-237 (option A, PRD v0.30 NFR-005); OQ-PM-10 ruled REFUSE (architecture v0.53 §8, ADR-013 Amendment 1) |
+| Reviewer / date | reviewer-quality, 2026-11-18 |
+| **Verdict** | **REQUEST CHANGES, for one Blocker that takes one line to fix (SQR-11):** the required check "Stages 1 to 11b" is red. The design-token test fails on a hex colour in `browser-decoder.ts:24`. The code itself is approved: SQR-01, SQR-02 and SQR-03 are fixed, and there is no Critical or Major finding. When the only change is that line and every check is green (including stages 7 to 11, which did not run), this becomes **APPROVE WITH COMMENTS** with no further code re-review. The two new Minors (SQR-08, SQR-09) can go to follow-up #496 or the hardening window |
+| Counts (open after re-review) | Blocker 1 (SQR-11) · Critical 0 · Major 0 · Minor 2 (SQR-08, SQR-09) · Info 1 (SQR-10). SQR-04 to SQR-07 remain the Info notes of the first review |
+
+### Prior findings
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| SQR-01 | Critical | **Fixed** | **Browser:** every file the person adds goes through `readyToSend` (`part-picture.tsx:75-81`); paste, drop and choose all reach it through `add` (`:151`). `convertWebp` (`lib/images/convert-webp.ts`) converts a WebP with the real decoder in `browser-decoder.ts`. A picture with any transparent pixel becomes a PNG; any other becomes a JPEG drawn on white. The quality is stepped down (0.92 to 0.35), then the size (1 to 0.25), until the file is **strictly** under 204,800 bytes. A decode failure, a `null` blob or a thrown encode is `unreadable` (the 415 words). If nothing is small enough, the result is `too-large` (the 413 words, with the smallest size tried). The decoded bitmap is closed on every path. `problemWith` then judges the converted file again (size, then content), so the server's own rules apply to it. **Server:** `checkPicture` (`picture-rules.ts:86-91`) refuses `mime === 'image/webp'` with the existing 415 `PICTURE_TYPE_REFUSED`, after the size check. Its only caller is `image-service.ts:103`, and `storeImage` has no other caller, so no WebP can be stored. **No bypass:** the check takes only the sanitised name and the bytes, and never sees the declared Content-Type. `detectImageType` requires a file to start *and* end as its kind. For a WebP that means `RIFF`, an exact RIFF size, `WEBP` and a VP8 chunk, so a WebP cannot pass as a PNG, JPEG or GIF. A malformed WebP is `null`, which is also 415. Two tests prove it: `image-routes.test.ts` sends WebP bytes as type `image/png` named `photo.png`, and `signature.test.ts` checks WebP bytes named `front.png`. Both get 415. **ADR-013 holds:** the server only reads signatures and headers, and decodes nothing. **SCR-10:** `pictureCount` counts a picture only when `isEmbeddableMime` is true. `findMimes` selects `id, mime` only, with no bytes. Its query is scoped `WHERE estimate_id = $1 AND id IN (…)`, after the UUIDs are filtered. It is called once, with distinct IDs, after `assertMayExport`, and only by `getSummary`. **Tests not weakened:** the WebP rows of the "stores / serves each kind" tables in `image-service.test.ts` and `image-routes.test.ts` moved into the 415 refusal tables. The integration test `image.test.ts` "four kinds" became "three kinds". The WebP was added to "a refusal stores nothing" (no row; part and estimate unchanged). `signature.test.ts` adds the order 413 before 415 at 204,800 and 204,798 bytes. `convert-webp.test.ts` (21 tests) pins every step, the strict limit, PNG for transparency, the file names, and `close` on every path. The e2e `estimate-picture.spec.ts` runs in real Chromium: a chosen WebP is stored as JPEG or PNG under its new name, the Lead's file embeds it at C2, and a raw WebP `fetch` gets 415 |
+| SQR-02 | Minor | **Fixed** | `thread-runner.ts:149-156`: `build` rejects once the place is `released` or `built`, and `built` is set before `run`. `thread.test.ts` covers it: a build after `release()` rejects, a second build in one place rejects, and no thread is started. The service's single caller is unchanged |
+| SQR-03 | Minor | **Fixed** | `canary-scan.ts:153-157`: a 200 workbook that reaches `recordFetched` was not intercepted (the intercepted path returns earlier, at `:150`), so it adds an `unreadable` entry. `canary-scan-recorder.test.ts` covers three cases: a 200 xlsx is reported and its body is `null`, a text answer is not reported, and a 403 with the xlsx type is not reported |
+
+### The master merge (`7b8084b2` + `44a51e30`)
+
+- `git merge-tree --write-tree 7b8084b2 44a51e30` gives tree `efd628f7`, the same tree as `a8a6403b`. The merge is a clean auto-merge, with no hand resolution.
+- Since the base `ac86e203`, both sides touched five files: `src/server/composition.ts`, `tests/support/fake-calculations.ts`, `route-calls.ts`, `session-harness.ts` and `estimate-review-architecture.test.ts`. Master's changes to them only add things: the AQP-329 and AQP-330 cancel-approval and remove-price services, fakes and recipes. None touches export, pictures or the figure state.
+- **AQP-309 privacy and English-only scans:** I scanned the fix's files. They contain no non-Latin characters and no contact-like values (only UUID fixtures), and they add no locale library or language switcher.
+- **AQP-308 metadata:** no page is added.
+- **AQP-90 About:** no dependency is added. `js-budget.test.ts` changed on master, and the new browser code (about 2 KB) sits in the workspace chunk. CI is the judge (below).
+
+### Tests
+
+- **Run locally** at `7b8084b2` in the read-only `aqp-332` worktree (`npx vitest run … --maxWorkers=1`): `tests/unit/images/*`, `image-service`, `image-routes`, `export-service`, `export-route`, `tests/unit/export/*`, `canary-scan-recorder` and `estimate-review-architecture`. **21 of 21 files and 338 of 338 tests passed** (59 s).
+- **Not run locally:** PostgreSQL integration, Playwright, and master's new scans at the merged head, because the PC is short of memory (§9 item 5).
+- **CI** at `a8a6403b`, run 44341845756:
+  - **E2E shards 1 to 4 passed**, at all three widths. This includes the two new `estimate-picture.spec.ts` journeys: the WebP is converted and embedded at C2, and a raw WebP gets 415.
+  - **"Stages 1 to 11b" failed** at Stage 6 (unit tests over pure code): 337 of 338 files and 7,823 of 7,824 tests passed. The failure is `tests/unit/tokens.test.ts` "AC-1: finds 0 hex colours in src outside globals.css". It reports `src/components/features/estimate-workspace/browser-decoder.ts:24: context.fillStyle = '#ffffff';` (SQR-11).
+  - **Stages 7 to 11 did not run:** build, lint/type-check after Stage 6, PostgreSQL integration with coverage, and master's `js-budget`. So the integration changes (`image.test.ts` WebP refusal, `rows-and-pictures` wiring of `findMimes`) are **not yet proven in CI**.
+  - The fix commit's own run (44341661300 at `7b8084b2`) was cancelled by the branch update. The test file has not changed on master since #71, so the failure comes from the fix commit, not from the merge.
+
+### New findings
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| SQR-08 | Minor | `src/components/features/estimate-workspace/part-picture.tsx:76`; `browser-decoder.ts:42` | **(1)** `readyToSend` reads the whole file (`arrayBuffer()`) to learn whether it is a WebP, *before* the size check. Before this change, a non-WebP file of 200 KB or more was refused by `file.size` alone. Now a 10 MB phone photo is read into memory first and then refused. **(2)** A WebP has no size ceiling before `createImageBitmap`. DL-237 applies the 200 KB limit to the converted file, but a WebP of up to 16,383 × 16,383 pixels decodes to about 1 GB. `LONGEST_SIDE` caps only the canvas, not the decode, so on a low-memory phone the tab can be killed instead of the person being told why. Each encode step also makes a new full-size canvas (up to 35). There is no data or security impact | Read only the 12-byte header to recognise a WebP (`file.slice(0, 12)`: `RIFF`…`WEBP`). If it is not one, call `problemWith(file)` as before, so the size check comes first. Optionally, refuse a WebP input over a generous ceiling (for example 20 MB) with the too-large words, or decode it with `createImageBitmap(file, { resizeWidth, resizeHeight })` once the header gives its size. Reuse one canvas per decode. Test: a unit test of `readyToSend` with a 300 KB non-WebP `File` and a spy on `arrayBuffer`: no read, and the too-large words. **reviewer-performance (final review):** measure the memory of a large WebP on the mobile profile |
+| SQR-09 | Minor | `src/server/repositories/image-repository.ts:129-135`; `tests/e2e/export.spec.ts:50` | **No test checks `findMimes` against PostgreSQL.** The unit tests use a fake. `layout.test.ts` calls `getSummary` with no picture, so `findMimes` is never called there. The export e2e has a picture, so the real query runs, but it asserts only "1 part". If the query or its scoping broke and returned `[]`, SCR-10 would say "0 pictures" for a file that holds one, and no test would fail. The query mirrors `readMany`, which is tested, so this is a test gap, not a known defect | Add `await expect(card).toContainText('1 picture')` in `export.spec.ts`, and/or a `findMimes` integration test next to the `readMany` one. It should cover own, foreign-estimate, unknown and non-UUID IDs, and check that no `bytes` is selected |
+| SQR-11 | **Blocker** | `src/components/features/estimate-workspace/browser-decoder.ts:24` | **A required CI check is red.** `context.fillStyle = '#ffffff';` breaks the design-token rule that no hex colour appears in `src/` outside `globals.css` (`tests/unit/tokens.test.ts:137-139`). Stage 6 fails, so stages 7 to 11 never run and the PR cannot merge (§9 item 1). Under the shared scale, a broken build or failing tests is a Blocker. The cause is that the test was not run before the push: it scans all of `src/`, so the `src/components/**` coverage exclusion does not stop it | Use a CSS colour name, which is exactly what is meant here, and do **not** add an exception to the token test. The white is the JPEG's ground for a picture, not a colour of the UI: `context.fillStyle = 'white'; // A JPEG's ground, not a UI colour: the design tokens do not apply.` Then run `npx vitest run tests/unit/tokens.test.ts` and push, so that every check, including stages 7 to 11, goes green. Test: `tokens.test.ts` itself |
+| SQR-10 | Info | `convert-webp.ts`, `browser-decoder.ts` | **Well built.** The conversion is pure and takes its decoder as a parameter, so its steps are tested exactly. The DOM part is small and runs in a real browser under e2e. The converted file is judged again by the same rules as on the server. The decoded bitmap is closed on every path. Re-encoding drops the WebP's metadata (EXIF, including any location), which helps privacy. Two notes: an unreadable WebP gets the words "Only PNG, JPG, GIF or WebP pictures are accepted", which reads oddly for a WebP, but DL-237 chose the existing words. The e2e test titled "nothing is stored" checks only the 415; the integration test is the one that checks no row is stored | none |
+
+### AC-4 after the fix
+
+| AC | Result |
+|---|---|
+| AC-4 Picture embedded in C; no picture leaves C empty | **Met.** No WebP reaches storage: the browser converts it, and the server refuses an unconverted one. Every stored picture is PNG, JPEG or GIF, and the file embeds all three. The SCR-10 count includes only pictures the file holds. Tests: those listed under SQR-01 above, plus the real-browser e2e (a chosen WebP is embedded at C2) |
+
+All other ACs keep their result from the first review (Met). The fix changes no figure, row, place or scan code beyond what is reviewed above.
+
+### Verdict (re-review)
+
+**REQUEST CHANGES, for the Blocker SQR-11 only.** It is a one-line fix: a hex colour broke a required CI check, and stages 7 to 11 have not run. Once that line is changed and **every** check is green at the new head, this verdict becomes **APPROVE WITH COMMENTS** with no further code re-review. The orchestrator may then switch the label to `review:quality-approved`. If CI shows anything beyond SQR-11, bring the PR back to me.
+
+The code changes themselves are approved:
+
+- **SQR-01 (Critical) is fixed as decided** (DL-237, OQ-PM-10). The browser converts a WebP correctly and safely. The server judges the file by its bytes, the refusal sits on the only storage path, and it cannot be bypassed. ADR-013 holds.
+- **The changed tests became refusal cases.** No assertion was dropped.
+- **`findMimes`** stays inside this estimate, reads no bytes and serves only the summary.
+- **SQR-02 and SQR-03 are fixed and tested.**
+- **The master merge** is a clean auto-merge, and its overlaps with this branch only add code.
+
+The new Minors, SQR-08 and SQR-09, do not block the merge. I suggest adding them to #496.
