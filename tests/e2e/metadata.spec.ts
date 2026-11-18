@@ -52,7 +52,7 @@ test('AC-6 (AC-1 to AC-4) and AC-2: every page of the app, signed in as the Admi
 
   const addresses = [...pageAddresses(taskCode, customer.id), UNKNOWN_PATH];
   // A scan that read nothing would pass for the wrong reason: the manifest holds at least the pages that exist today.
-  expect(addresses.length).toBeGreaterThanOrEqual(17);
+  expect(addresses.length).toBeGreaterThanOrEqual(18);
 
   const problems: Record<string, string[]> = {};
   const statuses: Record<string, number> = {};
