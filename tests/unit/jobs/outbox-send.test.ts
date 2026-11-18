@@ -161,6 +161,56 @@ describe('runOutboxSend: skipped and failed rows (AC-5, AC-7)', () => {
     expect(JSON.stringify(marks)).not.toContain('10.1.2.3');
   });
 
+  // SQR-02 (review of PR #503): a message the mail server accepted is sent, whatever happens to its mark. A `failed` row is one that STORY-09.06 may retry, and a retry would send it twice (NFR-014).
+  describe('the result of a message that was sent (SQR-02, NFR-014)', () => {
+    function withMarkSent(markSent: OutboxSendStore['markSent'], claimed = [row(0), row(1)]) {
+      const base = harness({ claimed });
+      const markFailed = vi.fn<OutboxSendStore['markFailed']>(base.dependencies.store.markFailed);
+      const dependencies: OutboxSendDependencies = { ...base.dependencies, store: { ...base.dependencies.store, markSent, markFailed } };
+      return { ...base, dependencies, markFailed };
+    }
+
+    it('AC-4: if saving `sent` fails after the server accepted the message, the run counts it as sent 1, failed 0, never marks the row failed, and goes on with the next row', async () => {
+      const saved: string[] = [];
+      const { dependencies, markFailed, marks } = withMarkSent((id) => {
+        if (id === IDS[0]) return Promise.reject(new Error('connection to server at "10.1.2.3" failed'));
+        saved.push(id);
+        return Promise.resolve(true);
+      });
+      const summary = await runOutboxSend(dependencies);
+      expect(summary).toMatchObject({ claimed: 2, sent: 2, failed: 0, notRecorded: 1, failures: {} });
+      expect(markFailed).not.toHaveBeenCalled();
+      expect(marks.failed).toEqual([]);
+      expect(saved).toEqual([IDS[1]]);
+    });
+
+    it('with only that row: sent 1, failed 0', async () => {
+      const { dependencies, markFailed } = withMarkSent(() => Promise.reject(new Error('statement timeout')), [row(0)]);
+      expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 1, sent: 1, failed: 0, notRecorded: 1 });
+      expect(markFailed).not.toHaveBeenCalled();
+    });
+
+    it('a mark that changes no row (the row is no longer sending) is also not recorded, and not a failure', async () => {
+      const { dependencies, markFailed } = withMarkSent(() => Promise.resolve(false), [row(0)]);
+      expect(await runOutboxSend(dependencies)).toMatchObject({ sent: 1, failed: 0, notRecorded: 1 });
+      expect(markFailed).not.toHaveBeenCalled();
+    });
+
+    it('the log says NOT_RECORDED at error level, with a count and no id, address or error text', async () => {
+      const { dependencies } = withMarkSent(() => Promise.reject(new Error('connection to server at "10.1.2.3" failed')), [row(0)]);
+      const lines: Array<[string, string | undefined]> = [];
+      await performOutboxSend(dependencies, (message, level) => lines.push([message, level]));
+      expect(lines).toEqual([['outbox-send: claimed 1, sent 1, skipped 0, failed 0; NOT_RECORDED 1 (sent, but the result could not be saved, so the row stays sending)', 'error']]);
+      expect(JSON.stringify(lines)).not.toMatch(/10.1.2.3|example.com|Subject|Body/);
+    });
+
+    it('a send that failed whose `failed` mark also cannot be saved does not throw, and leaves the row sending for 09.06', async () => {
+      const base = harness({ claimed: [row(0)], sendResult: () => ({ ok: false, code: 'CONNECTION' }) });
+      const dependencies: OutboxSendDependencies = { ...base.dependencies, store: { ...base.dependencies.store, markFailed: () => Promise.reject(new Error('db down')) } };
+      await expect(runOutboxSend(dependencies)).resolves.toMatchObject({ claimed: 1, sent: 0, failed: 1, notRecorded: 0 });
+    });
+  });
+
   it('a mailer that throws (it should not) is still a failed row, not a stuck run', async () => {
     const { dependencies, marks } = harness({ claimed: [row(0)], sendResult: () => new Error('boom') });
     expect(await runOutboxSend(dependencies)).toMatchObject({ failed: 1 });
@@ -176,8 +226,8 @@ describe('runOutboxSend: skipped and failed rows (AC-5, AC-7)', () => {
 
 describe('the log (AC-7)', () => {
   it('describes a run with counts and codes only', () => {
-    expect(describeOutboxSend({ claimed: 5, sent: 2, skipped: 1, failed: 2, failures: { AUTH_FAILED: 1, CONNECTION: 1 } })).toBe('outbox-send: claimed 5, sent 2, skipped 1, failed 2 (AUTH_FAILED 1, CONNECTION 1)');
-    expect(describeOutboxSend({ claimed: 1, sent: 1, skipped: 0, failed: 0, failures: {} })).toBe('outbox-send: claimed 1, sent 1, skipped 0, failed 0');
+    expect(describeOutboxSend({ claimed: 5, sent: 2, skipped: 1, failed: 2, failures: { AUTH_FAILED: 1, CONNECTION: 1 }, notRecorded: 0 })).toBe('outbox-send: claimed 5, sent 2, skipped 1, failed 2 (AUTH_FAILED 1, CONNECTION 1)');
+    expect(describeOutboxSend({ claimed: 1, sent: 1, skipped: 0, failed: 0, failures: {}, notRecorded: 0 })).toBe('outbox-send: claimed 1, sent 1, skipped 0, failed 0');
   });
 
   it('AC-7: a run writes counts and codes, and never an address, a subject, a body or an id', async () => {

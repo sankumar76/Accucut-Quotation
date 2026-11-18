@@ -1,6 +1,6 @@
 import { schedule, type ScheduledTask } from 'node-cron';
 
-import type { OutboxErrorCode, SendFailureCode, SkipCode } from '../../lib/mail/codes';
+import type { OutboxErrorCode, SendFailureCode, SendResult, SkipCode } from '../../lib/mail/codes';
 import { type Clock, MILLISECONDS_PER_MINUTE } from '../../lib/time';
 import type { Mailer, MailSender } from '../mail/send';
 
@@ -64,6 +64,8 @@ export interface OutboxSendSummary {
   readonly failed: number;
   /** The failed rows by class code. */
   readonly failures: Readonly<Partial<Record<SendFailureCode, number>>>;
+  /** Messages the mail server accepted (counted in `sent`) whose `sent` mark could not be written: the row stays `sending`, never `failed` (code `NOT_RECORDED` in the log). */
+  readonly notRecorded: number;
 }
 
 export type OutboxLogger = (message: string, level?: 'info' | 'error') => void;
@@ -73,8 +75,8 @@ function sender(settings: { readonly senderName: string; readonly senderMailbox:
 }
 
 /**
- * One run. A problem with one row (a database error while resolving its recipients, say) marks that row `failed` with `UNKNOWN` and the run goes on with the next; it throws only
- * when the claim itself fails, and then no row has been touched.
+ * One run. A problem with one row before or during the send (a database error while resolving its recipients, say) marks that row `failed` with `UNKNOWN` and the run goes on with the
+ * next; a message the mail server accepted is `sent` even if the mark cannot be saved (the row then stays `sending`, never `failed`). It throws only when the claim itself fails, and then no row has been touched.
  */
 export async function runOutboxSend(dependencies: OutboxSendDependencies): Promise<OutboxSendSummary> {
   const { store, mailer, clock } = dependencies;
@@ -84,6 +86,7 @@ export async function runOutboxSend(dependencies: OutboxSendDependencies): Promi
   let sent = 0;
   let skippedAfterClaim = 0;
   let failed = 0;
+  let notRecorded = 0;
   const failures: Partial<Record<SendFailureCode, number>> = {};
   const fail = async (id: string, code: SendFailureCode): Promise<void> => {
     failed += 1;
@@ -92,6 +95,8 @@ export async function runOutboxSend(dependencies: OutboxSendDependencies): Promi
   };
 
   for (const row of claimed) {
+    // Step 1: everything up to and including the send. A failure here means the message did not leave (or we cannot tell what to send), so the row is marked `failed`.
+    let result: SendResult;
     try {
       const recipients = await store.resolveRecipients(row.toUserId, row.ccUserIds);
       if (recipients.to === null) {
@@ -101,31 +106,32 @@ export async function runOutboxSend(dependencies: OutboxSendDependencies): Promi
       }
       // The From is read from `settings` for each message, at send time: a change made while a run is going applies to the next message.
       const from = sender(await store.readMailSettings());
-      const result = await mailer.send({ to: recipients.to, cc: recipients.cc, subject: row.subject, html: row.bodyHtml, text: row.bodyText }, from);
-      if (result.ok) {
-        sent += 1;
-        await store.markSent(row.id, clock.now());
-      } else {
-        await fail(row.id, result.code);
-      }
+      result = await mailer.send({ to: recipients.to, cc: recipients.cc, subject: row.subject, html: row.bodyHtml, text: row.bodyText }, from);
     } catch {
-      // Not logged and not kept: a database error can carry a connection detail. If even the mark fails, the row stays `sending` and 09.06's lock expiry picks it up.
-      try {
-        await fail(row.id, 'UNKNOWN');
-      } catch {
-        // Nothing more can be done for this row in this run.
-      }
+      // Not logged and not kept: a database error can carry a connection detail. If even the mark fails, the row stays `sending` for 09.06's recovery.
+      await fail(row.id, 'UNKNOWN').catch(() => undefined);
+      continue;
     }
+    if (!result.ok) {
+      await fail(row.id, result.code).catch(() => undefined);
+      continue;
+    }
+    // Step 2: the message was accepted by the mail server, so it counts as sent whatever happens to the mark. If the database cannot record it, the row stays `sending` ("may have
+    // left") and is never marked `failed`: a failed row is one that 09.06 may retry, and a retry would send this message twice (NFR-014). The run says so with a count and a code.
+    sent += 1;
+    const recorded = await store.markSent(row.id, clock.now()).catch(() => false);
+    if (!recorded) notRecorded += 1;
   }
 
-  return { claimed: claimed.length, sent, skipped: skipped.length + skippedAfterClaim, failed, failures };
+  return { claimed: claimed.length, sent, skipped: skipped.length + skippedAfterClaim, failed, failures, notRecorded };
 }
 
 /** One line for the worker's log: counts and codes only. */
 export function describeOutboxSend(summary: OutboxSendSummary): string {
   const codes = Object.entries(summary.failures).map(([code, count]) => `${code} ${count}`);
   const failureText = codes.length === 0 ? '' : ` (${codes.join(', ')})`;
-  return `outbox-send: claimed ${summary.claimed}, sent ${summary.sent}, skipped ${summary.skipped}, failed ${summary.failed}${failureText}`;
+  const unrecordedText = summary.notRecorded === 0 ? '' : `; NOT_RECORDED ${summary.notRecorded} (sent, but the result could not be saved, so the row stays sending)`;
+  return `outbox-send: claimed ${summary.claimed}, sent ${summary.sent}, skipped ${summary.skipped}, failed ${summary.failed}${failureText}${unrecordedText}`;
 }
 
 /** One scheduled run, never throwing: the cron callback must survive a database problem. A run that did nothing writes no line. */
@@ -133,7 +139,7 @@ export async function performOutboxSend(dependencies: OutboxSendDependencies, lo
   try {
     const summary = await runOutboxSend(dependencies);
     if (summary.claimed + summary.skipped === 0) return;
-    log(describeOutboxSend(summary), summary.failed > 0 ? 'error' : 'info');
+    log(describeOutboxSend(summary), summary.failed > 0 || summary.notRecorded > 0 ? 'error' : 'info');
   } catch {
     // The reason is not logged: a database error can carry a connection detail.
     log('outbox-send could not read or write the outbox', 'error');

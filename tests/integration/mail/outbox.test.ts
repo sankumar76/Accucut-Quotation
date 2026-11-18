@@ -156,6 +156,17 @@ describe('AC-1: the tables', () => {
     expect(found).toEqual([{ status: 'pending', attempts: 0, cc_user_ids: [], send_before: null, last_error: null, sent_at: null, locked_until: null }]);
   });
 
+  it('AC-7, SQR-04: last_error holds a class code or nothing: text of an error (an address, a host, a secret) is refused by a CHECK, even for the owner and in an UPDATE', async () => {
+    await enqueue();
+    for (const code of [null, 'SENDER_NOT_ALLOWED', 'AUTH_FAILED', 'CONNECTION', 'NO_SENDER', 'UNKNOWN', 'NO_RECIPIENT', 'EXPIRED', 'ALERTS_OFF']) {
+      await db.owner.query('UPDATE email_outbox SET last_error = $1', [code]);
+    }
+    for (const message of ['connection to 10.0.0.1 failed', 'login failed for planted-password', 'auth_failed', '', 'AUTH_FAILED ']) {
+      expect(await failureOf(() => db.owner.query('UPDATE email_outbox SET last_error = $1', [message])), message).toEqual({ code: CHECK_VIOLATION });
+      expect(await failureOf(() => db.runtime.query('UPDATE email_outbox SET last_error = $1', [message])), message).toEqual({ code: CHECK_VIOLATION });
+    }
+  });
+
   it('AC-1: the Cc list cannot be NULL, a blank event or key is refused, and a negative attempts count is refused', async () => {
     const base = ["'k-2'", "'backup-missed'", '$1', "'s'", "'h'", "'t'"];
     const insert = (column: string, value: string) => `INSERT INTO email_outbox (idempotency_key, event, to_user_id, subject, body_html, body_text, ${column}) VALUES (${base.join(', ')}, ${value})`;

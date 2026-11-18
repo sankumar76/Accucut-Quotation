@@ -61,6 +61,9 @@ ALTER TABLE "email_outbox" ADD CONSTRAINT "fk_email_outbox_to_user_id" FOREIGN K
 -- 1. What the table keeps whoever writes to it.
 --    "cc_user_ids" is NOT NULL in effect: Prisma models a list column as nullable with a default, so the rule is a CHECK, which keeps the schema and the migration identical for the drift check.
 ALTER TABLE "email_outbox" ADD CONSTRAINT "ck_email_outbox_status" CHECK ("status" IN ('pending', 'sending', 'sent', 'failed', 'skipped'));
+--    "last_error" is a class code and never a message, and it is the one column a secret could reach, so the database holds it to the list (src/lib/mail/codes.ts; a unit test keeps the
+--    two lists equal). A later story that writes error text there by mistake is refused here.
+ALTER TABLE "email_outbox" ADD CONSTRAINT "ck_email_outbox_last_error_code" CHECK ("last_error" IS NULL OR "last_error" IN ('SENDER_NOT_ALLOWED', 'AUTH_FAILED', 'CONNECTION', 'NO_SENDER', 'UNKNOWN', 'NO_RECIPIENT', 'EXPIRED', 'ALERTS_OFF'));
 ALTER TABLE "email_outbox" ADD CONSTRAINT "ck_email_outbox_event_not_blank" CHECK ("event" ~ '\S');
 ALTER TABLE "email_outbox" ADD CONSTRAINT "ck_email_outbox_idempotency_key_not_blank" CHECK ("idempotency_key" ~ '\S');
 ALTER TABLE "email_outbox" ADD CONSTRAINT "ck_email_outbox_cc_user_ids_not_null" CHECK ("cc_user_ids" IS NOT NULL);
