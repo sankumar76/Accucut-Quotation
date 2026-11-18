@@ -24,7 +24,9 @@ const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.e
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
 /** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked. Registry order puts them before the quantity warning. */
 const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
+/** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the quantity warning. */
+const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION];
 const RESERVED: ReadonlyArray<AuditEventName> = ['approval.cancelled', 'approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
@@ -65,6 +67,8 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
     expect(eventsInCategory('quantity_warning')).toEqual(['calculation.warning_acknowledged']);
+    expect(eventsInCategory('config_change')).toEqual(WIRED_CONFIG);
+    expect(auditCategoryLabel('config_change')).toBe('Configuration change');
     expect(auditCategoryLabel('user_change')).toBe('User change');
     expect(auditCategoryLabel('master_data')).toBe('Master data edit');
     expect(auditCategoryLabel('configuration')).toBeNull();
@@ -80,6 +84,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
       'Quantity warning',
       'Master data edit',
       'User change',
+      'Configuration change',
     ]);
   });
 });
@@ -282,5 +287,27 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       if (before !== null) expect(AUDIT_EVENTS[name].describeStored(withHash(before), after), `${name} before`).toBeNull();
       expect(AUDIT_EVENTS[name].describeStored(before, withHash(after)), `${name} after`).toBeNull();
     }
+  });
+});
+
+describe('STORY-08.02 AC-5: the words and the shapes of the formula change', () => {
+  const event = AUDIT_EVENTS['config.formula_changed'];
+
+  it('is wired, in the "Configuration change" category, about a field', () => {
+    expect(event).toMatchObject({ status: 'wired', category: 'config_change', objectType: 'field' });
+  });
+
+  it('says the old formula and the new one, with the number of the version it made', () => {
+    expect(event.describeStored({ formula: 'P * Cutting-Rate-per-Sec' }, { formula: 'P * Cutting-Rate-per-Sec * 2', version: 10 })).toEqual({
+      before: 'P * Cutting-Rate-per-Sec',
+      after: 'P * Cutting-Rate-per-Sec * 2 (configuration version 10)',
+    });
+  });
+
+  it('refuses an empty formula, a version that is no number, and any other key (a password has no place to go)', () => {
+    expect(event.describeStored({ formula: '' }, { formula: 'P', version: 2 })).toBeNull();
+    expect(event.describeStored({ formula: 'P' }, { formula: 'P', version: 0 })).toBeNull();
+    expect(event.before.safeParse({ formula: 'P', password: 'x' }).success).toBe(false);
+    expect(event.after.safeParse({ formula: 'P', version: 2, password: 'x' }).success).toBe(false);
   });
 });

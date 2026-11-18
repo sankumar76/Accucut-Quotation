@@ -24,6 +24,7 @@ export function createFakeConfigRepository(document: ConfigDocument = seedConfig
   };
   return {
     insertSeedVersionIfNone: () => Promise.resolve(false),
+    insertVersionAfter: () => Promise.resolve(null),
     findLatestRef: () => Promise.resolve({ id: record.id, number: record.number }),
     findById: (id) => Promise.resolve(id === record.id ? record : null),
     readVersionUse: () => Promise.resolve(use),

@@ -31,6 +31,7 @@ vi.mock('@/server/composition', async () => {
     getUserRepository: () => shared.users,
     getUserService: () => shared.userService,
     getConfigReadService: () => shared.configReadService,
+    getConfigEditService: () => shared.configEditService,
   };
 });
 

@@ -210,6 +210,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'approval.price_overridden': 'tests/integration/approval/override.test.ts',
     // STORY-06.08: an approved estimate unlocked; the one test is the unlock's own, against the real estimate row lock.
     'approval.unlocked': 'tests/integration/approval/unlock.test.ts',
+    // STORY-08.02: a formula of the field registry changed; the one test is the save's own, against the real configuration table.
+    'config.formula_changed': 'tests/integration/config/save-formula.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

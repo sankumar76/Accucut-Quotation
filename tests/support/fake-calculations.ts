@@ -58,6 +58,10 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       return Promise.resolve({ id, createdAt });
     },
     findCalculation: (id: string) => Promise.resolve(calculations.find((calculation) => calculation.id === id) ?? null),
+    findLatestCalculation: () => {
+      const latest = calculations[calculations.length - 1];
+      return Promise.resolve(latest === undefined ? null : { id: latest.id, taskCode: 'Q-2026-0001' });
+    },
     findFigureBasis: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id === estimateId);
       if (estimate === undefined) return Promise.resolve(null);

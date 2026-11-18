@@ -145,6 +145,11 @@ export interface CalculationRepository {
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
   /**
+   * The most recent calculation of any estimate, with the code of its task (STORY-08.02: the formula editor tries a formula on a row of it, "Sample rows come from the latest calculated estimate, Q-..."). Null while
+   * nothing was ever calculated. A plain read that decides nothing about whether a figure may be shown: **the one caller is the Admin's formula editor** (ADR-008, NFR-002).
+   */
+  findLatestCalculation(): Promise<{ readonly id: string; readonly taskCode: string } | null>;
+  /**
    * The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. Pass `tx` to read it in the caller's transaction (STORY-06.05: an approval
    * reads it under the estimate's row lock, on the one connection it already holds); without it the read is a plain one.
    */
@@ -255,6 +260,12 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             outputs: storedValuesSchema.parse(row.outputs),
           })),
         };
+      }),
+
+    findLatestCalculation: () =>
+      withDatabaseErrors(async () => {
+        const found = await db.calculation.findFirst({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, estimate: { select: { task: { select: { code: true } } } } } });
+        return found === null ? null : { id: found.id, taskCode: found.estimate.task.code };
       }),
 
     findFigureBasis: (estimateId, tx) =>
