@@ -29,19 +29,31 @@ function sourceFiles(directory: string): string[] {
 const ALL = sourceFiles(SRC).map((path) => ({ path: relative(ROOT, path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') }));
 const pathsMatching = (files: ReadonlyArray<{ path: string; text: string }>, pattern: RegExp): string[] => files.filter((file) => pattern.test(file.text)).map((file) => file.path);
 
-const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation|findRowWorking)\b/;
+const READ_OF_FIGURES = /\b(findReviewFigures|findCalculation|findRowWorking|findExportFigures)\b/;
 const PRISMA_ACCESS = /\.(calculation|calculationRow)\./;
 const REPOSITORY = 'src/server/repositories/calculation-repository.ts';
 const REVIEW_SERVICE = 'src/server/services/estimate-review-service.ts';
 const COST_DETAILS_SERVICE = 'src/server/services/cost-details-service.ts';
+const EXPORT_SERVICE = 'src/server/services/export-service.ts';
 
 describe('AC-7: every read of a figure goes through figure-state', () => {
   it('only the calculation repository names the Prisma accessors of calculations and calculation_rows', () => {
     expect(pathsMatching(ALL, PRISMA_ACCESS)).toEqual([REPOSITORY]);
   });
 
-  it('only the repository (which defines them), the review service and the cost details service name a method that reads a record\'s figures', () => {
-    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE].sort());
+  it('only the repository (which defines them), the review service, the cost details service and the export service name a method that reads a record\'s figures', () => {
+    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE, EXPORT_SERVICE].sort());
+  });
+
+  it('STORY-07.02: nothing under src/server/export reads a calculation or its rows, and the export service reads them only through readFiguresWhenCurrent, in one place', () => {
+    // The file is built from the plain model: no file of the export folder names the tables, their repository or a method that reads figures or their state.
+    const exportFolder = ALL.filter((file) => file.path.startsWith('src/server/export/'));
+    expect(exportFolder.length).toBeGreaterThanOrEqual(7);
+    expect(pathsMatching(exportFolder, /calculation-repository|calculationRow|calculation_rows|\bfindExportFigures\b|\bfindFigureBasis\b/)).toEqual([]);
+    const service = ALL.find((file) => file.path === EXPORT_SERVICE)?.text ?? '';
+    expect(service).toMatch(/from '\.\.\/\.\.\/lib\/estimate\/figure-state'/);
+    expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findExportFigures\(/);
+    expect(service.match(/findExportFigures\(/g)).toHaveLength(1);
   });
 
   it('the cost details service (STORY-06.03) imports the figure state and reads the working of a row only through readFiguresWhenCurrent, in one place', () => {

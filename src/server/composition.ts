@@ -333,8 +333,10 @@ export function getExportService(): ExportService {
     exportService = createExportService({
       header: createExportRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
-      configuration: { current: () => getCurrentVersion(configurations) },
-      build: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      calculations: createCalculationRepository(runtimeClient()),
+      images: createImageRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
       clock: systemClock,
     });
   }

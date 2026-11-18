@@ -85,6 +85,14 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       const found = calculations.find((calculation) => calculation.id === calculationId);
       return Promise.resolve(found === undefined ? null : { configVersionId: found.configVersionId, masterSnapshot: found.masterSnapshot });
     },
+    findExportFigures: (calculationId: string) => {
+      const found = calculations.find((calculation) => calculation.id === calculationId);
+      return Promise.resolve(
+        found === undefined
+          ? null
+          : { rows: found.rows, materials: found.masterSnapshot.materials.map(({ materialInDrawing, pricePerKg }) => ({ materialInDrawing, pricePerKg })) },
+      );
+    },
     findRowWorking: (calculationId: string, nodeId: string) => {
       const found = calculations.find((calculation) => calculation.id === calculationId);
       const row = found?.rows.find((candidate) => candidate.nodeId === nodeId);

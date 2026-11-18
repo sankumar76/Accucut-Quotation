@@ -256,6 +256,12 @@ export function createFakeEstimateWorld(
       const found = images.find((candidate) => same(candidate.id, imageId));
       return Promise.resolve(found === undefined ? null : { mime: found.mime, bytes: found.bytes });
     },
+    readMany: (estimateId, imageIds) =>
+      Promise.resolve(
+        images
+          .filter((candidate) => same(candidate.estimateId, estimateId) && imageIds.some((id) => same(id, candidate.id)))
+          .map((found) => ({ id: found.id, mime: found.mime, bytes: new Uint8Array(found.bytes) })),
+      ),
   };
 
   // The row lock: one transaction at a time, in the order they were opened. A failed one releases it, as a rollback does.
