@@ -4,6 +4,7 @@ import { expect, test, type BrowserContext, type Page, type TestInfo } from '@pl
 import { z } from 'zod';
 
 import { SEED_PROCESS_ITEMS } from '../../prisma/seed/config/seed-ids';
+import { XLSX_MIME } from '../../src/server/export/export-model';
 import { forbiddenCalculated } from '../support/calculated-values';
 import { canaryMasters, forbiddenStrings, NEGATIVE_CONTROL_SENTINEL, PROCESS_CANARY_RATES } from '../support/canary-masters';
 import { CUSTOMER_CANARIES, CUSTOMER_CANARY_PHONE, CUSTOMER_CANARY_VALUES } from '../support/customer-canary';
@@ -48,7 +49,9 @@ import {
   validCall,
   type Plant,
 } from './support/canary-scan';
+import { calculateWithoutThePage } from './support/calculated-estimate';
 import { waitUntilHydrated } from './support/design-system';
+import { withExportTurn } from './support/export-slot';
 import { seedQueueTask, setEstimateStatus, type SeededQueueTask } from './support/queue';
 import { PRODUCTION_URL } from './support/servers';
 
@@ -611,6 +614,36 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   expect(scanResponses(recorder.responses.slice(pressed.mark), watched).map(describeFinding)).toEqual([]);
   expect(cacheControlProblems(recorder.responses, isExempt)).toEqual([]);
   await expectCanaryRatesStillStored();
+});
+
+test('AC-6 (positive control, STORY-07.02, review QS-07 of AQP-331): a Lead downloads the workbook of a calculated estimate, and the scan finds the figures of the record inside the file', async ({ page, context }, testInfo) => {
+  // The control that makes the Engineer's "no file" mean something: the same scan, over the same kind of answer, finds a figure when the figure is there. It fails if the file is empty or was never
+  // looked into (a workbook is a zip, so its text is invisible to a scan of the raw bytes until `workbookText` inflates it).
+  const { engineer } = await prepare(testInfo);
+  await makeCanaryEstimateCalculable(engineer.id, defined(MATERIAL_CANARIES[0]).id, defined(CUSTOMER_CANARIES[0]).id);
+  await useFreshAddress(context);
+  await calculateWithoutThePage(page, engineer, PRODUCTION_URL);
+  const watched = await figuresOfTheRecord(engineer.id);
+
+  const lead = await createDisposableUser('scan', testInfo, 'LEAD');
+  const recorder = new ScanRecorder();
+  await recorder.attach(context);
+  await page.context().clearCookies();
+  await signIn(page, recorder, lead);
+  const file = await withExportTurn(() => callInBrowser(recorder, page, 'GET export (API, Lead)', `/api/v1/estimates/${engineer.id}/export`));
+
+  expect(file.status).toBe(200);
+  expect(file.headers['content-type']).toBe(XLSX_MIME);
+  expect(file.headers['content-disposition']).toMatch(/^attachment; filename="Quotation_/);
+  // The recorded body is the inflated text of the workbook's parts: the sheet is in it, so the scan read the file and not an empty body.
+  expect(file.body ?? '', 'the workbook was inflated and read').toContain('xl/worksheets/sheet1.xml');
+  await recorder.settled();
+  expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
+  // A cell holds a figure as the number a spreadsheet stores (a double), so a stored figure of more digits than that is in the file as its shortest round-trip form: that form is looked for too.
+  const asStored = watched.filter((entry) => /^\d+\.\d+$/.test(entry.text)).map((entry) => ({ text: String(Number(entry.text)), reason: `${entry.reason}, as a cell stores it` }));
+  const findings = scanResponses([file], [...watched, ...asStored]);
+  expect(findings.length, 'a figure of the record, found inside the file').toBeGreaterThan(0);
+  expect(findings.every((finding) => finding.label.includes('GET export (API, Lead)'))).toBe(true);
 });
 
 test('AC-6 (negative control, STORY-05.09): a figure of the calculation planted in the tree\'s answer after the press is found by the same scan', async ({ page, context }, testInfo) => {

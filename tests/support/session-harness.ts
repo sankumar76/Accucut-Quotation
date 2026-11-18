@@ -46,6 +46,7 @@ import { createFakeMasterRepository, type FakeMasterRepository } from './fake-ma
 import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { inProcessBuilder } from './in-process-builder';
 import { CANARY_PICTURE_HASH, smallPng } from './pictures';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
@@ -142,7 +143,7 @@ export interface SessionHarness {
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking' | 'findExportFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
@@ -310,6 +311,7 @@ export function createSessionHarness(): SessionHarness {
     findMasterSnapshot: (calculationId: string) => calculationWorld.repository.findMasterSnapshot(calculationId),
     findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findExportFigures: (calculationId: string) => calculationWorld.repository.findExportFigures(calculationId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
     findLatestRemoval: (estimateId: string) => calculationWorld.approvalRepository.findLatestRemoval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
@@ -331,7 +333,7 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
-  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  // The Excel export (STORY-07.01, STORY-07.02) over the same estimates, parts, calculation records and pictures. The file is built in process: the thread is `thread.test.ts`'s.
   const exportReads = {
     findHeader: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
@@ -344,8 +346,10 @@ export function createSessionHarness(): SessionHarness {
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
-    configuration: { current: () => Promise.resolve(reviewVersion) },
-    build: buildWorkbook,
+    calculations: reviewReads,
+    images: estimateWorld.imageRepository,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
 
