@@ -334,13 +334,14 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Configuration', label: 'Checkpoints', order: 20, icon: 'flag' },
   },
 
-  // ---- Planned: Help (every role) ------------------------------------------------------------------------------------
+  // ---- Help (every role) ---------------------------------------------------------------------------------------------
+  // STORY-01.08 (SCR-24). Every role, Engineer included: the page holds fixed words and no data (NFR-002).
   {
     path: '/about',
     kind: 'page',
     methods: ['GET'],
     roles: ALL_ROLES,
-    status: 'planned',
+    status: 'implemented',
     stage: 'R1',
     screen: 'SCR-24',
     nav: { group: 'Help', label: 'About', order: 10, icon: 'info' },

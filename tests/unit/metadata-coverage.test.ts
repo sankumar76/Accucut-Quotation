@@ -16,7 +16,7 @@ import { metadataProblems, type PageMetadataLike } from '../support/head-tags';
 
 const APP_DIRECTORY = fileURLToPath(new URL('../../src/app/', import.meta.url));
 // The least number of pages the scan must find: a scan that read nothing would pass for the wrong reason. Raise it when a story adds pages; never lower it.
-const LEAST_PAGES = 17;
+const LEAST_PAGES = 18;
 
 const read = (path: string): string => readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
 

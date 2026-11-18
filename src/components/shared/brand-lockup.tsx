@@ -6,6 +6,8 @@ export interface BrandLockupProps {
   /** Where the logo links to. Omit for a lockup that is only shown, not clickable. */
   readonly href?: string;
   readonly className?: string;
+  /** Show "Quotation Portal" at every width, for a card that has room for it (the About page). The top bar leaves it out on a phone. */
+  readonly alwaysShowSubtitle?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface BrandLockupProps {
  * only added its client code, which the bundler then copied into the sign-in page and the not-found page more than once
  * (+18.8 KB on `/sign-in`). The file is already the right size, and `fetchPriority="high"` replaces `priority`.
  */
-export function BrandLockup({ href, className }: BrandLockupProps) {
+export function BrandLockup({ href, className, alwaysShowSubtitle = false }: BrandLockupProps) {
   const content = (
     <>
       <img
@@ -35,7 +37,7 @@ export function BrandLockup({ href, className }: BrandLockupProps) {
         <span className="block font-brand text-body leading-tight font-bold tracking-wider text-primary md:text-sub">
           ACCUCUT LASERS
         </span>
-        <span className="hidden text-label font-semibold text-ink-2 md:block">Quotation Portal</span>
+        <span className={cn('text-label font-semibold text-ink-2', alwaysShowSubtitle ? 'block' : 'hidden md:block')}>Quotation Portal</span>
       </span>
     </>
   );
