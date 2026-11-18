@@ -43,6 +43,7 @@ model User {
   tasksToDo      Task[]          @relation("TaskEngineer")
   tasksAssigned  Task[]          @relation("TaskAssigner")
   calculations   Calculation[]
+  emailOutbox    EmailOutbox[]   @relation("OutboxRecipient")
   approvals      Approval[]      @relation("ApprovalApprover")
   unlocks        Approval[]      @relation("ApprovalUnlocker")
   cancellations  Approval[]      @relation("ApprovalCanceller")
@@ -479,4 +480,49 @@ model JobRun {
 
   @@index([job, finishedAt(sort: Desc)], map: "idx_job_runs_job_finished_at")
   @@map("job_runs")
+}
+
+/// The e-mail outbox and the e-mail log (STORY-09.01, FR-081 to FR-084, FR-003; architecture sections 4.7 and 5.1; ADR-011). A caller writes one row in its own transaction, so a
+/// rolled-back change mails nothing; `idempotency_key` is UNIQUE, so a repeated event never queues twice. The worker's `outbox-send` job claims due rows (`FOR UPDATE SKIP LOCKED`),
+/// sends them and records the result. `to` is an SQL keyword, and recipients are people, so a row names them by user ID (`to_user_id`, `cc_user_ids`) and the address is read from
+/// `users.email` at send time (ruling of 2026-11-18, NFR-028): the outbox holds no address. `last_error` is a class code (`AUTH_FAILED`, `NO_SENDER`...), never a message, so a
+/// secret cannot reach it. A body that holds a secret (the reset link) is emptied once the row is sent, failed or skipped. The CHECK constraints (status, event not blank, attempts)
+/// are hand-written in the migration. The runtime role has SELECT, INSERT and UPDATE and no DELETE. Class Confidential.
+model EmailOutbox {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey String    @map("idempotency_key")
+  event          String
+  toUserId       String    @map("to_user_id") @db.Uuid
+  ccUserIds      String[]  @default([]) @map("cc_user_ids") @db.Uuid
+  subject        String
+  bodyHtml       String    @map("body_html")
+  bodyText       String    @map("body_text")
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lockedUntil    DateTime? @map("locked_until") @db.Timestamptz(6)
+  sendBefore     DateTime? @map("send_before") @db.Timestamptz(6)
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt         DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  toUser User @relation("OutboxRecipient", fields: [toUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_email_outbox_to_user_id")
+
+  @@unique([idempotencyKey], map: "uq_email_outbox_idempotency_key")
+  @@index([status, nextAttemptAt], map: "idx_email_outbox_status_next_attempt_at")
+  @@map("email_outbox")
+}
+
+/// The portal's mail settings: one row, `id = 1` (a CHECK), seeded by the migration (STORY-09.01, FR-019; architecture section 5.1). `alerts_enabled` is the alerts switch
+/// (off until an Admin turns it on, STORY-09.02); `sender_name` and `sender_mailbox` are the From of every message, read when it is sent. No credential of any kind lives here,
+/// in any mail mode: those are environment variables on the host (architecture section 4.7). `sender_mailbox` is the portal's own sending mailbox, not a person's data, and is named
+/// so on purpose (ruling of 2026-11-18). The runtime role has SELECT and UPDATE and cannot insert or delete the row. Class Internal.
+model Setting {
+  id            Int      @id @default(1)
+  alertsEnabled Boolean  @default(false) @map("alerts_enabled")
+  senderName    String   @default("") @map("sender_name")
+  senderMailbox String   @default("") @map("sender_mailbox")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
 }

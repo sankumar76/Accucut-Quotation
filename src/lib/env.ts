@@ -109,6 +109,12 @@ export const appEnvSchema = z.intersection(
   smtpSchema,
 );
 
+/**
+ * The mail feature flag (STORY-09.01 AC-6): `on` schedules the worker's mail jobs, `off` (the default, also when the line is absent or empty) does not. It is read by the worker only; the
+ * Settings test e-mail does not depend on it, because it is how the IT person proves the mailbox before the flag is turned on. It is not a secret, so it is not in `ENV_VARIABLE_NAMES`.
+ */
+export const featureEnvSchema = z.object({ FEATURE_EMAIL: z.enum(['on', 'off']).default('off') });
+
 /** The portal's own origin alone, for the proxy (G6 STD-03): redirects are built from it, never from a request header. */
 export const originEnvSchema = z.object({ APP_ORIGIN: z.string().refine(isOrigin) });
 
@@ -125,6 +131,8 @@ export const adminBootstrapEnvSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
+/** The mail sign-in settings alone, one variant per `SMTP_AUTH_MODE` (the part of `AppEnv` that `src/server/mail/transport.ts` reads). */
+export type SmtpEnv = z.infer<typeof smtpSchema>;
 export type OriginEnv = z.infer<typeof originEnvSchema>;
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type MigrateEnv = z.infer<typeof migrateEnvSchema>;
@@ -175,6 +183,11 @@ export function parseEnv<Schema extends z.ZodType>(schema: Schema, source: EnvSo
 
 export function loadAppEnv(source: EnvSource = process.env): AppEnv {
   return parseEnv(appEnvSchema, source);
+}
+
+/** True when `FEATURE_EMAIL=on`. A value other than `on` or `off` stops the process at start-up, like any other invalid setting. */
+export function loadEmailFeature(source: EnvSource = process.env): boolean {
+  return parseEnv(featureEnvSchema, source).FEATURE_EMAIL === 'on';
 }
 
 export function loadOriginEnv(source: EnvSource = process.env): OriginEnv {

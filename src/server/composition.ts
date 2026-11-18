@@ -16,6 +16,7 @@ import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
+import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -33,6 +34,9 @@ import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createMailService, type MailService } from './mail/mail-service';
+import { createMailer } from './mail/send';
+import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
@@ -70,6 +74,7 @@ let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
+let mailService: MailService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -391,4 +396,17 @@ export function getAuthOptions(): NextAuthOptions {
     });
   }
   return authOptions;
+}
+
+/**
+ * The mail outbox and the direct send (STORY-09.01): `enqueue(tx, message)` for the alerts and the reset link, `sendNow(message)` for the Settings test e-mail. The transport is built
+ * from `SMTP_AUTH_MODE` and its variables when first used, never at import. The worker builds its own pair in `src/worker/main.ts`; nothing else in `app` sends.
+ */
+export function getMailService(): MailService {
+  mailService ??= createMailService({
+    outbox: createEmailOutboxRepository(runtimeClient()),
+    mailer: createMailer(createMailTransport(loadAppEnv(), { clock: systemClock })),
+    clock: systemClock,
+  });
+  return mailService;
 }
