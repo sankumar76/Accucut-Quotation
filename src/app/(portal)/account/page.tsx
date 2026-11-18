@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
 
 import { AccountScreen } from '@/components/features/account/account-screen';
 import { roleLabel } from '@/lib/auth/roles';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Your account', description: 'View your account details and change your password.' };
+export const metadata = pageMetadata('Your account', 'View your account details and change your password.');
 
 /**
  * SCR-23 "Account" (STORY-01.05 AC-3, AC-5, AC-7): every signed-in role. It is the one page open to a person who has to set a new password
