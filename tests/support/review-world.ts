@@ -1,4 +1,4 @@
-import type { UnlockRecord } from '../../src/server/repositories/approval-repository';
+import type { CancelRecord, UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
@@ -73,6 +73,8 @@ export interface ReviewWorldOptions {
   readonly approval?: {
     readonly price: string;
     readonly approverName?: string;
+    /** The Engineer whose task it is. Absent: Invented Priya. */
+    readonly engineerName?: string;
     /** The total the price was set against, rupees and paise; absent: the price itself (an approval at the calculated total). */
     readonly calculatedTotal?: string;
     /** Absent: not an override. */
@@ -80,6 +82,8 @@ export interface ReviewWorldOptions {
     /** The reason given with an override; absent: none. */
     readonly reason?: string;
     readonly unlock?: UnlockRecord;
+    /** The cancel of the approval (STORY-06.12). Absent: not cancelled. */
+    readonly cancel?: CancelRecord;
   };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
@@ -160,10 +164,12 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
               approvedPrice: approval.price,
               approvedAt: REVIEW_APPROVED_AT,
               approverName: approval.approverName ?? 'Invented Approver',
+              engineerName: approval.engineerName ?? 'Invented Priya',
               calculatedTotal: approval.calculatedTotal ?? approval.price,
               isOverride: approval.isOverride ?? false,
               overrideReason: approval.reason ?? null,
               unlock: approval.unlock ?? null,
+              cancel: approval.cancel ?? null,
             },
       );
     },

@@ -11,7 +11,7 @@ import { clientFor, type Transaction } from './transaction';
  * so it is refused, and `tests/security/engineer-import-rule.test.ts` lints a planted import of it from every Engineer view.
  *
  * **The approved values are written once.** There is no update of the price here and none can be added by mistake: the runtime role holds no table-wide UPDATE and a trigger refuses a change of any
- * approve column for every role (the migration). The unlock, cancel and remove columns are the later stories' (06.08, 06.12, 06.13).
+ * approve column for every role (the migration). The unlock and cancel columns are written by 06.08 and 06.12 (`markUnlocked`, `markCancelled`), the remove columns by 06.13.
  *
  * **Every write takes the caller's `Transaction`, as required**, so the approval, the estimate's new status and the audit entry are one commit or none, under the estimate's row lock
  * (`estimate-repository.ts` `lockEstimate`; architecture section 4.8).
@@ -50,6 +50,19 @@ export interface UnlockRecord {
   readonly engineerName: string;
 }
 
+/**
+ * The cancel of an approval, as SCR-06 shows it after the Admin cancelled it (STORY-06.12 AC-6): who, when, why, and whose Open queue the task is back in (the sentence is true only when the cancel moved an approved estimate to
+ * Draft: the screen knows that from the approval having no unlock). The reason is the Admin's own text, kept as it was stored. Present only on a row whose cancel was stored; the price of that row is then marked "Approval cancelled".
+ */
+export interface CancelRecord {
+  readonly cancelledAt: Date;
+  /** The name of the person who cancelled, now (a later rename shows). */
+  readonly byName: string;
+  readonly reason: string | null;
+  /** The name of the Engineer whose task it is, now. */
+  readonly engineerName: string;
+}
+
 /** What an approval is, as SCR-06 shows it: the price, who approved it and when. Not the calculation's figures. */
 export interface ApprovalRecord {
   readonly id: string;
@@ -59,6 +72,8 @@ export interface ApprovalRecord {
   readonly approvedAt: Date;
   /** The approver's name now (a later rename shows). */
   readonly approverName: string;
+  /** The name now of the Engineer whose task it is: the Admin's Cancel approval dialog says the task returns to their Open queue (STORY-06.12). */
+  readonly engineerName: string;
   /** The calculated total (BL) the price was set against, as rupees and paise: what SCR-06 says the price is lower or higher than (STORY-06.07 AC-3). */
   readonly calculatedTotal: string;
   readonly isOverride: boolean;
@@ -66,6 +81,8 @@ export interface ApprovalRecord {
   readonly overrideReason: string | null;
   /** `null` while the approval stands; the unlock once one was stored (the price is then "approved earlier"). */
   readonly unlock: UnlockRecord | null;
+  /** `null` while the approval stands or was only unlocked; the cancel once one was stored (STORY-06.12). The price is then "Approval cancelled" until the Admin removes it (STORY-06.13) or a new approval replaces it. */
+  readonly cancel: CancelRecord | null;
 }
 
 /** The approval a Lead or an Admin may still unlock: the one that is not yet unlocked, cancelled or removed. Only what the unlock needs: no figure but the price that is written to the audit entry. */
@@ -85,6 +102,22 @@ export interface NewUnlock {
   readonly reason: string;
 }
 
+/** The latest approval of an estimate that has not been removed, as the cancel needs it (STORY-06.12 AC-3, AC-5, AC-10): which row it is, its price for the audit entry, and whether it was cancelled already. */
+export interface CancellableApproval {
+  readonly id: string;
+  /** The price as decimal text with two decimals. */
+  readonly approvedPrice: string;
+  /** `null` while the approval has not been cancelled. */
+  readonly cancelledAt: Date | null;
+}
+
+export interface NewCancel {
+  readonly approvalId: string;
+  readonly cancelledById: string;
+  /** Already trimmed and checked (1 to 500 characters) by the service; the column has no length rule of its own. */
+  readonly reason: string;
+}
+
 export interface ApprovalRepository {
   /** Adds the approval in the caller's transaction and returns its ID and time. */
   insertApproval(approval: NewApproval, tx: Transaction): Promise<{ readonly id: string; readonly approvedAt: Date }>;
@@ -98,6 +131,16 @@ export interface ApprovalRepository {
    * cancelled or removed), which the caller treats as a fault because it holds the estimate's lock. **It never touches an approve column**: the runtime role has no grant on one (migration `approvals`).
    */
   markUnlocked(unlock: NewUnlock, tx: Transaction): Promise<Date | null>;
+  /**
+   * The estimate's latest approval that has not been removed, cancelled or not (STORY-06.12): the row an Admin may cancel while it is not cancelled, whatever the status of the estimate (an approval kept through an unlock is the
+   * latest one too). Ordered as `findLatestApproval` orders (BO is this row). Call it under the estimate's row lock, in the transaction that is about to cancel it (pass `tx`).
+   */
+  findLatestForCancel(estimateId: string, tx: Transaction): Promise<CancellableApproval | null>;
+  /**
+   * Stores the cancel of an approval, whole and once: who, when (the database's clock) and why, in the caller's transaction. Returns the time, or `null` when the row was already cancelled or removed, which the caller treats as
+   * a fault because it holds the estimate's lock. **It never touches an approve column**: the runtime role has no grant on one (migration `approvals`).
+   */
+  markCancelled(cancel: NewCancel, tx: Transaction): Promise<Date | null>;
   /** The latest approval of the estimate that has not been removed (BO), or null when there is none. A plain read, **not through the figure state** (AC-9). Pass `tx` to read in the caller's transaction. */
   findLatestApproval(estimateId: string, tx?: Transaction): Promise<ApprovalRecord | null>;
 }
@@ -113,8 +156,16 @@ export interface ApprovalUnlocking {
   readonly markUnlocked: ApprovalRepository['markUnlocked'];
 }
 
+/** What the cancel needs of the approvals (STORY-06.12), a named interface for the same reason as `ApprovalWrites`. */
+export interface ApprovalCancelling {
+  readonly findLatestForCancel: ApprovalRepository['findLatestForCancel'];
+  readonly markCancelled: ApprovalRepository['markCancelled'];
+}
+
 const LIVE_ROWS = z.array(z.strictObject({ id: z.string(), calculationId: z.string(), approvedPrice: z.string(), engineerName: z.string() }));
 const UNLOCKED_ROWS = z.array(z.strictObject({ unlockedAt: z.date() }));
+const CANCELLABLE_ROWS = z.array(z.strictObject({ id: z.string(), approvedPrice: z.string(), cancelledAt: z.date().nullable() }));
+const CANCELLED_ROWS = z.array(z.strictObject({ cancelledAt: z.date() }));
 
 /** Builds the approval methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
@@ -159,6 +210,28 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
         return UNLOCKED_ROWS.parse(rows)[0]?.unlockedAt ?? null;
       }),
 
+    findLatestForCancel: (estimateId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!z.uuid().safeParse(estimateId).success) return null;
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", approved_price::text AS "approvedPrice", cancelled_at AS "cancelledAt"
+          FROM approvals
+          WHERE estimate_id = ${estimateId}::uuid AND removed_at IS NULL
+          ORDER BY approved_at DESC, id DESC
+          LIMIT 1`;
+        return CANCELLABLE_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    markCancelled: (cancel, tx) =>
+      withDatabaseErrors(async () => {
+        // Raw, for the database's own clock and a single statement. The WHERE is the row's own "not yet" test, so a second cancel of the same row changes nothing and returns no row.
+        const rows = await clientFor(db, tx).$queryRaw`
+          UPDATE approvals SET cancelled_by = ${cancel.cancelledById}::uuid, cancelled_at = now(), cancel_reason = ${cancel.reason}
+          WHERE id = ${cancel.approvalId}::uuid AND cancelled_at IS NULL AND removed_at IS NULL
+          RETURNING cancelled_at AS "cancelledAt"`;
+        return CANCELLED_ROWS.parse(rows)[0]?.cancelledAt ?? null;
+      }),
+
     findLatestApproval: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         const found = await clientFor(db, tx).approval.findFirst({
@@ -176,6 +249,9 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
             unlockedAt: true,
             unlockReason: true,
             unlocker: { select: { name: true } },
+            cancelledAt: true,
+            cancelReason: true,
+            canceller: { select: { name: true } },
             estimate: { select: { task: { select: { engineer: { select: { name: true } } } } } },
           },
         });
@@ -186,6 +262,7 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
           approvedPrice: found.approvedPrice.toFixed(PRICE_DECIMALS),
           approvedAt: found.approvedAt,
           approverName: found.approver.name,
+          engineerName: found.estimate.task.engineer.name,
           calculatedTotal: found.calculatedBl.toFixed(PRICE_DECIMALS),
           isOverride: found.isOverride,
           overrideReason: found.overrideReason,
@@ -194,6 +271,11 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
             found.unlockedAt === null || found.unlocker === null
               ? null
               : { unlockedAt: found.unlockedAt, byName: found.unlocker.name, reason: found.unlockReason, engineerName: found.estimate.task.engineer.name },
+          // The same for the cancel: its three columns are set together (CHECK `ck_approvals_cancel_by_and_at_together`).
+          cancel:
+            found.cancelledAt === null || found.canceller === null
+              ? null
+              : { cancelledAt: found.cancelledAt, byName: found.canceller.name, reason: found.cancelReason, engineerName: found.estimate.task.engineer.name },
         };
       }),
   };

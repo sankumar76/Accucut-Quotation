@@ -38,6 +38,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/estimates/[id]/approve': () => import('@/app/api/v1/estimates/[id]/approve/route'),
   '/api/v1/estimates/[id]/unlock': () => import('@/app/api/v1/estimates/[id]/unlock/route'),
   '/api/v1/estimates/[id]/unlock-preview': () => import('@/app/api/v1/estimates/[id]/unlock-preview/route'),
+  '/api/v1/estimates/[id]/approval/cancel': () => import('@/app/api/v1/estimates/[id]/approval/cancel/route'),
   '/api/v1/estimates/[id]/costs': () => import('@/app/api/v1/estimates/[id]/costs/route'),
   '/api/v1/estimates/[id]/nodes/[nodeId]/costs': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/costs/route'),
   '/api/v1/estimates/[id]/export': () => import('@/app/api/v1/estimates/[id]/export/route'),

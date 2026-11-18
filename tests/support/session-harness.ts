@@ -15,6 +15,8 @@ import type { ConfigRepository } from '../../src/server/repositories/config-repo
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
+import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
+import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -128,6 +130,12 @@ export interface SessionHarness {
   readonly approvalService: ApprovalService;
   /** Unlock and its preview (STORY-06.08) over the same estimates and approval records (`getUnlockService` in the composition mock). The canary estimate is never APPROVED, so a valid call of the recipe is the state machine's 409 and writes nothing. */
   readonly unlockService: UnlockService;
+  /** Cancel approval (STORY-06.12) over the same estimates and approval records, with the real step-up check over the fake people (`HARNESS_PASSWORD` is every person's password) (`getCancelApprovalService` in the composition mock). */
+  readonly cancelApprovalService: CancelApprovalService;
+  /** The real step-up check (STORY-06.14) over the fake people and throttles, for a test that counts the attempts (`throttles`, `hasher`). */
+  readonly stepUpService: StepUpService;
+  /** The hasher the step-up and the other password checks use, which counts every check it makes. */
+  readonly hasher: ReturnType<typeof createCountingHasher>;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
@@ -274,6 +282,16 @@ export function createSessionHarness(): SessionHarness {
     transactions: calculationWorld.transactions,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Cancel approval (STORY-06.12) over the same world, with the real step-up check over the fake people. The canary estimate has no approval at any state a test leaves it in, so the recipe's valid call is refused 409
+    // (no approval) after the password and the reason pass, and writes nothing.
+  const stepUpService = createStepUpService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL });
+  const cancelApprovalService = createCancelApprovalService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
@@ -338,6 +356,9 @@ export function createSessionHarness(): SessionHarness {
     calculationWorld,
     approvalService,
     unlockService,
+    cancelApprovalService,
+    stepUpService,
+    hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
     jobRuns,

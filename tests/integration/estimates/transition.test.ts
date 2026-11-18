@@ -172,9 +172,10 @@ describe('AC-4: two transitions at once are serialised by the estimate row lock'
     expect((await stored()).status).toBe('APPROVED');
   });
 
-  it('an unlock and a cancel at once: one wins, the other is 409 because the status is already DRAFT', async () => {
+  // Since STORY-06.12 AC-10 a CANCEL on a Draft is allowed (the status stays), so the pair that must lose is two events that need APPROVED: two unlocks.
+  it('two unlocks at once: one wins, the other is 409 because the status is already DRAFT', async () => {
     await setUpEstimate('APPROVED');
-    const results = await Promise.allSettled([service.transition(lead(), estimateId, 'UNLOCK'), service.transition(admin(), estimateId, 'CANCEL')]);
+    const results = await Promise.allSettled([service.transition(lead(), estimateId, 'UNLOCK'), service.transition(admin(), estimateId, 'UNLOCK')]);
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     expect((await stored()).status).toBe('DRAFT');
   });

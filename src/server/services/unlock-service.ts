@@ -1,6 +1,5 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
-import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '../../lib/estimate/calculate-words';
 import type { RateChangeCounts } from '../../lib/estimate/rate-diff';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE } from '../../lib/estimate/unlock-words';
@@ -13,6 +12,7 @@ import type { TransactionRunner } from '../repositories/transaction';
 import type { CalculationMasters, DeletedWords } from './calculation-masters';
 import type { AuditContext, AuditService } from './audit-service';
 import type { ConfigVersion } from './config-service';
+import { assertCustomerAndMaterialsExist } from './deleted-masters';
 import type { EstimateService, EstimateViewer } from './estimate-service';
 import { countRateChanges } from './rate-changes';
 
@@ -131,14 +131,8 @@ export function createUnlockService({ estimates, approvals, calculations, master
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
         assertUnlockable(viewer, estimate.status);
-        // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-10). A customer or a material that was deleted after the approval is the 409 in the unlock's
-        // words, and nothing has been written. An estimate with no customer is not affected.
-        if (estimate.customerId !== null && (await estimates.findActiveCustomer(estimate.customerId, tx)) === null) {
-          throw new ConflictError(UNLOCK_CUSTOMER_DELETED_MESSAGE, { code: CUSTOMER_DELETED_CODE });
-        }
-        if ((await estimates.lockMaterialsInUse(estimate.id, tx)).some((material) => material.deleted)) {
-          throw new ConflictError(UNLOCK_MATERIAL_DELETED_MESSAGE, { code: MATERIAL_DELETED_CODE });
-        }
+        // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-10): the check Cancel approval shares (`deleted-masters.ts`), in the unlock's words.
+        await assertCustomerAndMaterialsExist(estimates, estimate, tx, UNLOCK_WORDS);
         // An approved estimate has a live approval: the approval that approved it. Anything else is a fault in the data (a plain `Error`, a 500 with fixed words), never a guess.
         const live = await approvals.findLiveApproval(estimate.id, tx);
         if (live === null) throw new Error('The approved estimate has no live approval to unlock.');

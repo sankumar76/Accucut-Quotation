@@ -70,6 +70,17 @@ const unlockSchema = z.strictObject({
   engineerName: z.string().min(1),
 });
 
+/**
+ * The cancel of the latest approval (STORY-06.12 AC-6): who (their name now), when, the reason as the Admin stored it, and the name of the Engineer whose task it is. Text and a time: nothing here is a cost. Present only
+ * once the approval was cancelled, and then BO is the price marked "Approval cancelled". Whether the cancel moved the estimate is read from the approval having no unlock: an approval that was never unlocked was cancelled
+ * while the estimate was APPROVED, so the cancel took it to Draft and reopened the task.
+ */
+const cancelSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  reason: z.string().nullable(),
+  engineerName: z.string().min(1),
+});
 
 /**
  * The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now), and its unlock once it has one (STORY-06.08 AC-3).
@@ -80,13 +91,18 @@ const unlockSchema = z.strictObject({
  */
 const approvalSchema = z
   .strictObject({
+    /** The approval's ID, which the Admin's Cancel approval request names so a newer approval is never cancelled unseen (STORY-06.12 AC-5, `APPROVAL_CHANGED`). */
+    id: z.uuid(),
     price: z.string().regex(/^\d+\.\d{2}$/),
     approvedAt: z.iso.datetime(),
     approverName: z.string().min(1),
+    /** The Engineer whose task it is (their name now): the Cancel approval dialog says whose Open queue the task returns to (STORY-06.12). A person's name, not a cost. */
+    engineerName: z.string().min(1),
     calculatedTotal: z.string().regex(/^\d+\.\d{2}$/),
     isOverride: z.boolean(),
     reason: z.string().min(1).nullable(),
     unlock: unlockSchema.nullable(),
+    cancel: cancelSchema.nullable(),
   })
   .refine((approval) => approval.isOverride || approval.reason === null, { message: 'A reason belongs to an override.', path: ['reason'] });
 

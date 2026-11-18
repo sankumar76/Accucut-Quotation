@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import { z } from 'zod';
 
-import { connectToTestDatabase, createDisposableUser, type E2eUser } from './auth';
+import { connectToTestDatabase, createDisposableUser, E2E_ADMIN, E2E_PASSWORD, type E2eUser } from './auth';
 import { engineerWithEstimate, signInAs } from './calculated-estimate';
 import { DEVELOPMENT_URL } from './servers';
 
@@ -45,6 +45,85 @@ export async function approvedEstimate(page: Page, testInfo: TestInfo): Promise<
 /** The Lead's unlock through the API, as another window would send it. */
 export async function unlockThroughTheApi(page: Page, estimateId: string, reason: string): Promise<number> {
   return (await page.request.post(`/api/v1/estimates/${estimateId}/unlock`, { headers: JSON_HEADERS, data: { reason } })).status();
+}
+
+/**
+ * The one Admin of the database (the E2E Admin of the set-up project), signed in, with the ID the audit rows will name. Cancel approval is the Admin's alone (STORY-06.12), and the portal allows one active Admin
+ * (`uq_users_single_active_admin`), so an Admin cannot be made for a test: the specs of the other Admin actions sign in as this one, on an address of their own, in parallel. The entries it makes are
+ * all of an estimate of the test's own, so no test reads another's; the audit screen's tests that filter on Who = E2E Admin pick an event no spec writes.
+ */
+export async function signInAsTheAdmin(page: Page): Promise<E2eUser & { readonly id: string }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ id: string }>("SELECT id::text FROM users WHERE email = $1 AND role = 'ADMIN' AND is_active", [E2E_ADMIN.email]);
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The E2E Admin does not exist yet: the set-up project makes it.');
+    const admin = { ...E2E_ADMIN, id };
+    await signInAs(page, admin);
+    return admin;
+  } finally {
+    await client.end();
+  }
+}
+
+/** The latest approval of the estimate, which is what the page names when the Admin presses Cancel approval. */
+export async function latestApprovalIdOf(estimateId: string): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ id: string }>('SELECT id::text FROM approvals WHERE estimate_id = $1::uuid AND removed_at IS NULL ORDER BY approved_at DESC, id DESC LIMIT 1', [estimateId]);
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The estimate has no approval.');
+    return id;
+  } finally {
+    await client.end();
+  }
+}
+
+/** The Admin's cancel through the API, as another window would send it (the password is the shared invented one). Returns the status of the answer. */
+export async function cancelThroughTheApi(page: Page, estimateId: string, reason: string): Promise<number> {
+  const approvalId = await latestApprovalIdOf(estimateId);
+  return (await page.request.post(`/api/v1/estimates/${estimateId}/approval/cancel`, { headers: JSON_HEADERS, data: { approvalId, reason, password: E2E_PASSWORD } })).status();
+}
+
+export interface StoredCancel {
+  /** The approval's price, which a cancel never changes. */
+  readonly approvedPrice: string;
+  readonly cancelledBy: string | null;
+  readonly reason: string | null;
+  /** Whether the approval had been unlocked (AC-10: an approval kept through an unlock). */
+  readonly unlocked: boolean;
+  /** How many audit entries `approval.cancelled` the estimate has. */
+  readonly entries: number;
+  /** Whether the password the test sent is in any audit row of the estimate (AC-7). Always false. */
+  readonly passwordInAudit: boolean;
+}
+
+/** What the estimate's latest approval and its cancel entries hold, read from the throwaway database as its owner; `null` when it has no approval. */
+export async function readCancel(estimateId: string): Promise<StoredCancel | null> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ approved_price: string; cancelled_by: string | null; cancel_reason: string | null; unlocked: boolean }>(
+      'SELECT approved_price::text, cancelled_by::text, cancel_reason, unlocked_at IS NOT NULL AS unlocked FROM approvals WHERE estimate_id = $1::uuid ORDER BY approved_at DESC, id DESC LIMIT 1',
+      [estimateId],
+    );
+    const row = rows[0];
+    if (row === undefined) return null;
+    const entries = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE event = 'approval.cancelled' AND object_id = $1::uuid", [estimateId]);
+    const named = await client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM audit_log WHERE object_id = $1::uuid AND (coalesce(before::text, '') || coalesce(after::text, '')) LIKE '%' || $2 || '%'",
+      [estimateId, E2E_PASSWORD],
+    );
+    return {
+      approvedPrice: row.approved_price,
+      cancelledBy: row.cancelled_by,
+      reason: row.cancel_reason,
+      unlocked: row.unlocked,
+      entries: entries.rows[0]?.n ?? 0,
+      passwordInAudit: (named.rows[0]?.n ?? 0) > 0,
+    };
+  } finally {
+    await client.end();
+  }
 }
 
 export interface StoredUnlock {
