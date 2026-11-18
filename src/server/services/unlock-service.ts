@@ -1,7 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '../../lib/estimate/calculate-words';
-import { diffRates, type RateChangeCounts } from '../../lib/estimate/rate-diff';
+import type { RateChangeCounts } from '../../lib/estimate/rate-diff';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE } from '../../lib/estimate/unlock-words';
 import { createPlanCache, type PlanCache } from '../../lib/formula';
@@ -10,10 +10,11 @@ import type { CalculationRepository } from '../repositories/calculation-reposito
 import type { EstimateUnlocking } from '../repositories/estimate-repository';
 import type { TransactionRunner } from '../repositories/transaction';
 
-import { readMasters, type CalculationMasters, type DeletedWords } from './calculation-masters';
+import type { CalculationMasters, DeletedWords } from './calculation-masters';
 import type { AuditContext, AuditService } from './audit-service';
 import type { ConfigVersion } from './config-service';
 import type { EstimateService, EstimateViewer } from './estimate-service';
+import { countRateChanges } from './rate-changes';
 
 /**
  * Unlock (STORY-06.08; FR-063, FR-064, FR-038; BR-011; D-29; NFR-001, NFR-007, NFR-026; architecture sections 4.4, 4.8 "Unlock and the earlier price", 4.10 and 6 "Unlock preview" and "Unlock"): a Lead or an Admin
@@ -167,22 +168,10 @@ export function createUnlockService({ estimates, approvals, calculations, master
       const stored = await calculations.findMasterSnapshot(live.calculationId);
       if (stored === null) throw new Error('The calculation of the approval could not be read.');
       const [approved, current] = await Promise.all([configuration.byId(stored.configVersionId), configuration.current()]);
-      const plan = plans.get(approved.id, approved.document.fields);
       // The masters as they are now, for the very customer and materials the approved calculation used and the rates its formulas read: the same read Calculate makes, so a master that was deleted is the same 409,
-      // in the unlock's words.
-      const now = await readMasters(
-        masters,
-        stored.masterSnapshot.customer.id,
-        stored.masterSnapshot.materials.map((material) => material.id),
-        plan.referencedRateIds,
-        undefined,
-        UNLOCK_WORDS,
-      );
-      return {
-        engineerName: live.engineerName,
-        configuration: { approved: approved.number, current: current.number },
-        changed: diffRates(stored.masterSnapshot, now.snapshot, plan.referencedRateIds),
-      };
+      // in the unlock's words. The count is the one the Lead's "Rates changed" notice makes (STORY-06.11 AC-8): one function, `countRateChanges`.
+      const changed = await countRateChanges({ masters, plans }, stored.masterSnapshot, approved, UNLOCK_WORDS);
+      return { engineerName: live.engineerName, configuration: { approved: approved.number, current: current.number }, changed };
     },
   };
 }

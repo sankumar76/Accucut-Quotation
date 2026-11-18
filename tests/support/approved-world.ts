@@ -44,7 +44,7 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
   const adminId = await insertPersonAsOwner(db, 'Approval Admin', 'ADMIN');
   return {
     db,
-    review: createEstimateReviewService({ calculations: db.calculations, approvals: db.approvals, nodes: db.nodes, configuration }),
+    review: createEstimateReviewService({ calculations: db.calculations, approvals: db.approvals, nodes: db.nodes, estimates: db.estimates, masters: db.masterRepository, configuration }),
     details: createCostDetailsService({ calculations: db.calculations, nodes: db.nodes, configuration }),
     unlock: createUnlockService({
       estimates: db.estimates,

@@ -11,6 +11,7 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace
 import { BuildTable } from './build-table';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { warnedNodeIds } from './quantity-tag';
+import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
@@ -100,6 +101,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
       <UnlockedNotice state={state} unlock={costs.approval?.unlock ?? null} isDraft={header.status === 'DRAFT'} />
       <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
+      <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
@@ -109,6 +111,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         state={state}
         status={header.status}
         approve={approveOffer(header.status, costs)}
+        ratesChanged={costs.ratesChanged !== null}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />
     </div>

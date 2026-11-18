@@ -103,6 +103,20 @@ const warningSchema = z.strictObject({
     .readonly(),
 });
 
+/**
+ * What changed in the masters since the calculation in view (STORY-06.11 AC-7; FR-106; architecture section 4.8 "Rates changed since the last calculation"): **three counts by kind and nothing else** (NFR-002):
+ * the customer's process rates the formulas read, the materials' prices, and the exchange rates. No old value, no new value and no ID, so the notice can say how many and never how much. It is there only while the
+ * state is `current` and the estimate is not APPROVED, and only when something changed (a master that was saved again with the same number changed nothing); otherwise it is `null` and the screen draws no notice.
+ * It is as true as the page load: a rate that changes while the page is open is not caught (the limit of STORY-06.11).
+ */
+const ratesChangedSchema = z
+  .strictObject({
+    processRates: z.number().int().nonnegative(),
+    materialPrices: z.number().int().nonnegative(),
+    exchangeRates: z.number().int().nonnegative(),
+  })
+  .refine((counts) => counts.processRates + counts.materialPrices + counts.exchangeRates > 0, { message: 'A notice needs a change to tell.' });
+
 export const costsSchema = z.strictObject({
   state: z.enum(FIGURE_STATES),
   /** The calculation the figures come from, while the state is `current`; `null` otherwise. The approval names it (`POST .../approve`, `calculationId`). */
@@ -118,6 +132,8 @@ export const costsSchema = z.strictObject({
   approval: approvalSchema.nullable(),
   /** The quantity warning on the calculation the figures come from; `null` when there is none, and always `null` unless the state is `current` (AC-4). */
   warning: warningSchema.nullable(),
+  /** What changed in the masters since this calculation, by kind (STORY-06.11); `null` unless the state is `current`, the estimate is not APPROVED and something changed. */
+  ratesChanged: ratesChangedSchema.nullable(),
 });
 
 export type CostsView = z.infer<typeof costsSchema>;

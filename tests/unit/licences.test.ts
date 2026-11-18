@@ -14,7 +14,8 @@ import {
 /** AC-4 stage 8: licence allow-list with the named exceptions of architecture section 11. */
 
 const lockSchema = z.object({ packages: z.record(z.string(), z.object({ license: z.string().optional() })) });
-const LOCKFILE = fileURLToPath(new URL('../../package-lock.json', import.meta.url));
+const devSchema = z.object({ packages: z.record(z.string(), z.object({ dev: z.boolean().optional() })) });
+const LOCKFILE =fileURLToPath(new URL('../../package-lock.json', import.meta.url));
 
 const lockOf = (entries: Record<string, string | undefined>): PackageLock => ({
   packages: {
@@ -82,5 +83,20 @@ describe('findLicenceViolations (AC-4 stage 8)', () => {
   it('passes on the committed lockfile', () => {
     const lock = lockSchema.parse(JSON.parse(readFileSync(LOCKFILE, 'utf8')));
     expect(findLicenceViolations(lock)).toEqual([]);
+  });
+
+  it('PSF-2.0 is an allowed licence (the PSF part of Python-2.0), and FSL-1.1-Apache-2.0 is not an allowed type', () => {
+    expect(findLicenceViolations(lockOf({ argparse: 'PSF-2.0' }))).toEqual([]);
+    expect(findLicenceViolations(lockOf({ 'another-package': 'FSL-1.1-Apache-2.0' }))).toEqual([{ name: 'another-package', licence: 'FSL-1.1-Apache-2.0' }]);
+  });
+
+  it('AQP-1 12089: the `sentry` exception is by exact name, and holds only while it is a development-only package in the lockfile (it must never ship)', () => {
+    const exception = LICENCE_EXCEPTIONS.find(({ name }) => name === 'sentry');
+    expect(exception?.reason).toContain('FSL-1.1-Apache-2.0');
+    expect(findLicenceViolations(lockOf({ sentry: 'FSL-1.1-Apache-2.0' }))).toEqual([]);
+    expect(findLicenceViolations(lockOf({ 'sentry-extra': 'FSL-1.1-Apache-2.0' }))).toHaveLength(1);
+    const entries = Object.entries(devSchema.parse(JSON.parse(readFileSync(LOCKFILE, 'utf8'))).packages).filter(([path]) => path === 'node_modules/sentry' || path.endsWith('/node_modules/sentry'));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [path, entry] of entries) expect(entry.dev, `${path} is a development dependency only`).toBe(true);
   });
 });
