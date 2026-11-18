@@ -212,6 +212,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'approval.unlocked': 'tests/integration/approval/unlock.test.ts',
     // STORY-06.12: an approval cancelled by the Admin; the one test is the cancel's own, against the real estimate row lock.
     'approval.cancelled': 'tests/integration/approval/cancel.test.ts',
+    // STORY-06.13: the price of a cancelled approval removed by the Admin; the one test is the removal's own, against the real estimate row lock.
+    'approval.price_removed': 'tests/integration/approval/remove-price.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

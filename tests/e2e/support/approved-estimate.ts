@@ -126,6 +126,52 @@ export async function readCancel(estimateId: string): Promise<StoredCancel | nul
   }
 }
 
+/** The Admin's removal of the price through the API, as another window would send it (the password is the shared invented one). Returns the status of the answer. */
+export async function removePriceThroughTheApi(page: Page, estimateId: string): Promise<number> {
+  const approvalId = await latestApprovalIdOf(estimateId);
+  return (await page.request.post(`/api/v1/estimates/${estimateId}/approval/remove-price`, { headers: JSON_HEADERS, data: { approvalId, password: E2E_PASSWORD } })).status();
+}
+
+export interface StoredRemoval {
+  /** The approval's price, which a removal never changes: the row keeps it. */
+  readonly approvedPrice: string;
+  readonly cancelled: boolean;
+  readonly removedBy: string | null;
+  /** How many audit entries `approval.price_removed` the estimate has, and the price the first one keeps (AC-3, AC-6). */
+  readonly entries: number;
+  readonly entryKeeps: string | null;
+  /** Whether the password the test sent is in any audit row of the estimate (AC-7). Always false. */
+  readonly passwordInAudit: boolean;
+}
+
+/** What the estimate's latest approval and its removal entries hold, read from the throwaway database as its owner; `null` when it has no approval. */
+export async function readRemoval(estimateId: string): Promise<StoredRemoval | null> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ approved_price: string; cancelled: boolean; removed_by: string | null }>(
+      'SELECT approved_price::text, cancelled_at IS NOT NULL AS cancelled, removed_by::text FROM approvals WHERE estimate_id = $1::uuid ORDER BY approved_at DESC, id DESC LIMIT 1',
+      [estimateId],
+    );
+    const row = rows[0];
+    if (row === undefined) return null;
+    const entries = await client.query<{ kept: string | null }>("SELECT before->>'approvedPrice' AS kept FROM audit_log WHERE event = 'approval.price_removed' AND object_id = $1::uuid ORDER BY created_at, id", [estimateId]);
+    const named = await client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM audit_log WHERE object_id = $1::uuid AND (coalesce(before::text, '') || coalesce(after::text, '')) LIKE '%' || $2 || '%'",
+      [estimateId, E2E_PASSWORD],
+    );
+    return {
+      approvedPrice: row.approved_price,
+      cancelled: row.cancelled,
+      removedBy: row.removed_by,
+      entries: entries.rows.length,
+      entryKeeps: entries.rows[0]?.kept ?? null,
+      passwordInAudit: (named.rows[0]?.n ?? 0) > 0,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
 export interface StoredUnlock {
   /** The approval row: its price, and who unlocked it, why (`null` while it stands). */
   readonly approvedPrice: string;

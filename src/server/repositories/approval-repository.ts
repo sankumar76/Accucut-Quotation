@@ -11,13 +11,14 @@ import { clientFor, type Transaction } from './transaction';
  * so it is refused, and `tests/security/engineer-import-rule.test.ts` lints a planted import of it from every Engineer view.
  *
  * **The approved values are written once.** There is no update of the price here and none can be added by mistake: the runtime role holds no table-wide UPDATE and a trigger refuses a change of any
- * approve column for every role (the migration). The unlock and cancel columns are written by 06.08 and 06.12 (`markUnlocked`, `markCancelled`), the remove columns by 06.13.
+ * approve column for every role (the migration). The unlock, cancel and remove columns are written by 06.08, 06.12 and 06.13 (`markUnlocked`, `markCancelled`, `markRemoved`).
  *
  * **Every write takes the caller's `Transaction`, as required**, so the approval, the estimate's new status and the audit entry are one commit or none, under the estimate's row lock
  * (`estimate-repository.ts` `lockEstimate`; architecture section 4.8).
  *
- * **BO is read here and nowhere else** (AC-9, SQR-07 of AQP-321): `findLatestApproval` reads the latest row of an estimate that has not been removed, and never asks the figure state, so clearing the calculated
- * figures cannot change the price.
+ * **BO is read here and nowhere else** (AC-9, SQR-07 of AQP-321): `findLatestApproval` reads the estimate's **latest** row and never asks the figure state, so clearing the calculated figures cannot change the price.
+ * **A latest row whose price was removed is no BO** (STORY-06.13 AC-3, AC-6): BO is then "Not set yet", and an earlier row of an earlier cycle does not come back in its place (a later approval replaced its price, and it is
+ * shown nowhere). **No read that serves a screen selects the price of a removed row**: `findLatestApproval` returns `null` for it, and `findLatestRemoval` selects who and when only.
  */
 
 /** The decimals the price column stores: rupees and paise. The calculated total column stores the same: the service hands it over already rounded by `toTwoPlaces`, the rule the dialog pre-fills with. */
@@ -111,6 +112,35 @@ export interface CancellableApproval {
   readonly cancelledAt: Date | null;
 }
 
+/**
+ * The estimate's latest approval of any kind, as the removal of its price needs it (STORY-06.13 AC-3, AC-5): which row it is, its price for the audit entry (the entry keeps it; nothing else reads it), and whether it
+ * was cancelled and whether its price was removed already. Read only under the estimate's row lock, by the one service that writes the removal; **it is never part of an answer** (AC-6).
+ */
+export interface RemovableApproval {
+  readonly id: string;
+  /** The price as decimal text with two decimals. */
+  readonly approvedPrice: string;
+  /** `null` while the approval has not been cancelled. */
+  readonly cancelledAt: Date | null;
+  /** `null` while the price has not been removed. */
+  readonly removedAt: Date | null;
+}
+
+export interface NewRemoval {
+  readonly approvalId: string;
+  readonly removedById: string;
+}
+
+/**
+ * The removal of the latest approval's price, as SCR-06 shows it after the Admin removed it (STORY-06.13 AC-3): who and when. **No price**: the row of a removed price is read for these two facts alone, so no route
+ * can serve the price (AC-6).
+ */
+export interface RemovalRecord {
+  readonly removedAt: Date;
+  /** The name of the person who removed the price, now (a later rename shows). */
+  readonly byName: string;
+}
+
 export interface NewCancel {
   readonly approvalId: string;
   readonly cancelledById: string;
@@ -141,7 +171,22 @@ export interface ApprovalRepository {
    * a fault because it holds the estimate's lock. **It never touches an approve column**: the runtime role has no grant on one (migration `approvals`).
    */
   markCancelled(cancel: NewCancel, tx: Transaction): Promise<Date | null>;
-  /** The latest approval of the estimate that has not been removed (BO), or null when there is none. A plain read, **not through the figure state** (AC-9). Pass `tx` to read in the caller's transaction. */
+  /**
+   * The estimate's latest approval of any kind, cancelled or removed or not (STORY-06.13): the row an Admin may remove the price of, once it is cancelled and while it is not removed. Ordered as `findLatestApproval`
+   * orders (BO is this row). It selects the price, which only the audit entry of the removal takes. Call it under the estimate's row lock, in the transaction that is about to remove it (pass `tx`).
+   */
+  findLatestForRemoval(estimateId: string, tx: Transaction): Promise<RemovableApproval | null>;
+  /**
+   * Stores the removal of a cancelled approval's price, whole and once: who and when (the database's clock), in the caller's transaction. Returns the time, or `null` when the row is not cancelled or was removed already,
+   * which the caller treats as a fault because it holds the estimate's lock. **It never touches an approve column** (the runtime role has no grant on one), so the price stays in its row and in the audit entry.
+   */
+  markRemoved(removal: NewRemoval, tx: Transaction): Promise<Date | null>;
+  /** The removal of the estimate's latest approval when that row's price was removed: who and when, never the price. `null` when the latest row stands or there is none. A plain read (the page's notice). */
+  findLatestRemoval(estimateId: string): Promise<RemovalRecord | null>;
+  /**
+   * The estimate's **latest** approval, or `null` when there is none **or when its price was removed** (BO reads "Not set yet": an earlier row does not come back in its place). A plain read, **not through the figure
+   * state** (AC-9). Pass `tx` to read in the caller's transaction.
+   */
   findLatestApproval(estimateId: string, tx?: Transaction): Promise<ApprovalRecord | null>;
 }
 
@@ -162,10 +207,19 @@ export interface ApprovalCancelling {
   readonly markCancelled: ApprovalRepository['markCancelled'];
 }
 
+/** What the removal of a price needs of the approvals (STORY-06.13), a named interface for the same reason as `ApprovalWrites`. */
+export interface ApprovalRemoving {
+  readonly findLatestForRemoval: ApprovalRepository['findLatestForRemoval'];
+  readonly markRemoved: ApprovalRepository['markRemoved'];
+}
+
 const LIVE_ROWS = z.array(z.strictObject({ id: z.string(), calculationId: z.string(), approvedPrice: z.string(), engineerName: z.string() }));
 const UNLOCKED_ROWS = z.array(z.strictObject({ unlockedAt: z.date() }));
 const CANCELLABLE_ROWS = z.array(z.strictObject({ id: z.string(), approvedPrice: z.string(), cancelledAt: z.date().nullable() }));
 const CANCELLED_ROWS = z.array(z.strictObject({ cancelledAt: z.date() }));
+const REMOVABLE_ROWS = z.array(z.strictObject({ id: z.string(), approvedPrice: z.string(), cancelledAt: z.date().nullable(), removedAt: z.date().nullable() }));
+const REMOVED_ROWS = z.array(z.strictObject({ removedAt: z.date() }));
+const REMOVAL_ROWS = z.array(z.strictObject({ removedAt: z.date().nullable(), byName: z.string().nullable() }));
 
 /** Builds the approval methods over a Prisma client. Every method turns a pool or statement timeout into `DatabaseBusyError`. */
 export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
@@ -213,12 +267,16 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
     findLatestForCancel: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         if (!z.uuid().safeParse(estimateId).success) return null;
+        // The latest row of any kind, and then the removed test: a latest row whose price was removed leaves the estimate with no approval to cancel, and an earlier row must not stand in for it (STORY-06.13).
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT id::text AS "id", approved_price::text AS "approvedPrice", cancelled_at AS "cancelledAt"
-          FROM approvals
-          WHERE estimate_id = ${estimateId}::uuid AND removed_at IS NULL
-          ORDER BY approved_at DESC, id DESC
-          LIMIT 1`;
+          FROM (
+            SELECT id, approved_price, cancelled_at, removed_at FROM approvals
+            WHERE estimate_id = ${estimateId}::uuid
+            ORDER BY approved_at DESC, id DESC
+            LIMIT 1
+          ) latest
+          WHERE removed_at IS NULL`;
         return CANCELLABLE_ROWS.parse(rows)[0] ?? null;
       }),
 
@@ -232,12 +290,54 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
         return CANCELLED_ROWS.parse(rows)[0]?.cancelledAt ?? null;
       }),
 
+    findLatestForRemoval: (estimateId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!z.uuid().safeParse(estimateId).success) return null;
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", approved_price::text AS "approvedPrice", cancelled_at AS "cancelledAt", removed_at AS "removedAt"
+          FROM approvals
+          WHERE estimate_id = ${estimateId}::uuid
+          ORDER BY approved_at DESC, id DESC
+          LIMIT 1`;
+        return REMOVABLE_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    markRemoved: (removal, tx) =>
+      withDatabaseErrors(async () => {
+        // Raw, for the database's own clock and a single statement. The WHERE is the row's own "cancelled and not yet removed" test, so a second removal, and the removal of an approval that was never cancelled, change nothing and return no row.
+        const rows = await clientFor(db, tx).$queryRaw`
+          UPDATE approvals SET removed_by = ${removal.removedById}::uuid, removed_at = now()
+          WHERE id = ${removal.approvalId}::uuid AND cancelled_at IS NOT NULL AND removed_at IS NULL
+          RETURNING removed_at AS "removedAt"`;
+        return REMOVED_ROWS.parse(rows)[0]?.removedAt ?? null;
+      }),
+
+    findLatestRemoval: (estimateId) =>
+      withDatabaseErrors(async () => {
+        if (!z.uuid().safeParse(estimateId).success) return null;
+        // Who and when only: no statement that serves a screen selects the price of a removed row (AC-6).
+        const rows = await db.$queryRaw`
+          SELECT latest.removed_at AS "removedAt", u.name AS "byName"
+          FROM (
+            SELECT removed_at, removed_by FROM approvals
+            WHERE estimate_id = ${estimateId}::uuid
+            ORDER BY approved_at DESC, id DESC
+            LIMIT 1
+          ) latest
+          LEFT JOIN users u ON u.id = latest.removed_by
+          WHERE latest.removed_at IS NOT NULL`;
+        const found = REMOVAL_ROWS.parse(rows)[0];
+        // The two columns are set together (CHECK `ck_approvals_remove_by_and_at_together`) and the person cannot be deleted (no cascade), so a row with a time has a name.
+        return found === undefined || found.removedAt === null || found.byName === null ? null : { removedAt: found.removedAt, byName: found.byName };
+      }),
+
     findLatestApproval: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         const found = await clientFor(db, tx).approval.findFirst({
-          where: { estimateId, removedAt: null },
+          where: { estimateId },
           orderBy: [{ approvedAt: 'desc' }, { id: 'desc' }],
           select: {
+            removedAt: true,
             id: true,
             calculationId: true,
             approvedPrice: true,
@@ -255,7 +355,8 @@ export function createApprovalRepository(db: PrismaClient): ApprovalRepository {
             estimate: { select: { task: { select: { engineer: { select: { name: true } } } } } },
           },
         });
-        if (found === null) return null;
+        // A latest row whose price was removed is no BO: "Not set yet", and no earlier row comes back (STORY-06.13). The price of that row is not put in any answer.
+        if (found === null || found.removedAt !== null) return null;
         return {
           id: found.id,
           calculationId: found.calculationId,

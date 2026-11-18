@@ -21,7 +21,7 @@ export interface CancelledNoticeProps {
   /** Whether the approval was unlocked before it was cancelled: then the cancel did not move the estimate (STORY-06.12 AC-10). */
   readonly wasUnlocked: boolean;
   readonly status: EstimateStatus;
-  /** The Admin has the Remove price button (STORY-06.13); a Lead is told only the Admin can remove it. */
+  /** The Admin has the Remove price button (STORY-06.13, beside the BO tile); a Lead is told only the Admin can remove it. */
   readonly viewedByAdmin: boolean;
 }
 

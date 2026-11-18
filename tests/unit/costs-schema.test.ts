@@ -20,6 +20,7 @@ const good = {
   nodes: [node],
   totals: { totalPrice: '30', pricePerToolCost: null, toolCostTotal: '0' },
   approval: null,
+  priceRemoved: null,
   warning: null,
   ratesChanged: null,
 };
@@ -27,7 +28,7 @@ const good = {
 describe('the answer, and exactly what it may hold', () => {
   it('accepts a good answer, and an answer of a state with no figure at all', () => {
     expect(costsSchema.safeParse(good).success).toBe(true);
-    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null, warning: null, ratesChanged: null };
+    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null, priceRemoved: null, warning: null, ratesChanged: null };
     expect(costsSchema.safeParse(none).success).toBe(true);
   });
 
@@ -111,6 +112,16 @@ describe('the answer, and exactly what it may hold', () => {
     expect(costsSchema.safeParse({ ...good, state: 'cleared' }).success).toBe(false);
   });
 
+  it('STORY-06.13 AC-3, AC-6 (NFR-002): "price removed" is who and when and nothing else: no price, no ID, and the key is always there', () => {
+    const priceRemoved = { at: '2026-11-05T06:50:00.000Z', byName: 'Invented Meera' };
+    expect(costsSchema.safeParse({ ...good, priceRemoved }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.priceRemoved.unwrap().shape).sort()).toEqual(['at', 'byName']);
+    for (const planted of [{ ...priceRemoved, price: '12600.00' }, { ...priceRemoved, id: APPROVAL_ID }, { at: priceRemoved.at }, { byName: priceRemoved.byName }, { ...priceRemoved, at: 'yesterday' }, { ...priceRemoved, byName: '' }]) {
+      expect(costsSchema.safeParse({ ...good, priceRemoved: planted }).success, JSON.stringify(planted)).toBe(false);
+    }
+    expect(costsSchema.safeParse({ ...good, priceRemoved: undefined }).success).toBe(false);
+  });
+
   it('STORY-06.11 AC-7 (NFR-002): "rates changed" is three whole counts by kind and nothing else: no value, no ID, no empty notice, and the key is always there', () => {
     const ratesChanged = { processRates: 1, materialPrices: 1, exchangeRates: 1 };
     expect(costsSchema.safeParse({ ...good, ratesChanged }).success).toBe(true);
@@ -131,7 +142,7 @@ describe('the answer, and exactly what it may hold', () => {
   });
 
   it('holds these keys and no others, at every level: the only sums are totalPrice (BL), pricePerToolCost (BN) and toolCostTotal', () => {
-    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'ratesChanged', 'state', 'totals', 'warning']);
+    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'priceRemoved', 'ratesChanged', 'state', 'totals', 'warning']);
     expect(Object.keys(costsSchema.shape.letters.shape).sort()).toEqual(['approvedPrice', 'count', 'pricePerToolCost', 'totalPrice', 'unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     const nodeShape = costsSchema.shape.nodes.unwrap().element.shape;
     expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'parentId', 'slNo']);
