@@ -198,8 +198,9 @@ test.describe('the filters (AC-6)', () => {
     await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
     await page.getByLabel('From', { exact: true }).fill('2020-01-01');
     await page.getByLabel('To', { exact: true }).fill('2036-01-01');
-    // "Approval cancelled", not "Approval" or "Unlock": the approval is raised since STORY-06.06, the unlock since STORY-06.08, and the cancel is STORY-06.12's.
-    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Approval cancelled' });
+    // "Price removed", not "Approval", "Unlock" or "Approval cancelled": the approval is raised since STORY-06.06, the unlock since STORY-06.08, the cancel since STORY-06.12 (the Admin of these tests is the
+    // one who cancels, so Who = E2E Admin holds those entries), and the removal of a price is STORY-06.13's.
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Price removed' });
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
     // Neither empty state shows the count line (ux-spec v0.16).

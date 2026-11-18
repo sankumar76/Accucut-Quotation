@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import { z } from 'zod';
 
-import { connectToTestDatabase, createDisposableUser, E2E_PASSWORD, type E2eUser } from './auth';
+import { connectToTestDatabase, createDisposableUser, E2E_ADMIN, E2E_PASSWORD, type E2eUser } from './auth';
 import { engineerWithEstimate, signInAs } from './calculated-estimate';
 import { DEVELOPMENT_URL } from './servers';
 
@@ -47,11 +47,23 @@ export async function unlockThroughTheApi(page: Page, estimateId: string, reason
   return (await page.request.post(`/api/v1/estimates/${estimateId}/unlock`, { headers: JSON_HEADERS, data: { reason } })).status();
 }
 
-/** An Admin of the test's own, signed in. Cancel approval is the Admin's alone (STORY-06.12); the shared E2E Admin is not used, so the audit screen's first test (Who = E2E Admin) never sees these entries. */
-export async function adminOfItsOwn(page: Page, testInfo: TestInfo): Promise<E2eUser & { readonly id: string }> {
-  const admin = await createDisposableUser('axe', testInfo, 'ADMIN');
-  await signInAs(page, admin);
-  return admin;
+/**
+ * The one Admin of the database (the E2E Admin of the set-up project), signed in, with the ID the audit rows will name. Cancel approval is the Admin's alone (STORY-06.12), and the portal allows one active Admin
+ * (`uq_users_single_active_admin`), so an Admin cannot be made for a test: the specs of the other Admin actions sign in as this one, on an address of their own, in parallel. The entries it makes are
+ * all of an estimate of the test's own, so no test reads another's; the audit screen's tests that filter on Who = E2E Admin pick an event no spec writes.
+ */
+export async function signInAsTheAdmin(page: Page): Promise<E2eUser & { readonly id: string }> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ id: string }>("SELECT id::text FROM users WHERE email = $1 AND role = 'ADMIN' AND is_active", [E2E_ADMIN.email]);
+    const id = rows[0]?.id;
+    if (id === undefined) throw new Error('The E2E Admin does not exist yet: the set-up project makes it.');
+    const admin = { ...E2E_ADMIN, id };
+    await signInAs(page, admin);
+    return admin;
+  } finally {
+    await client.end();
+  }
 }
 
 /** The latest approval of the estimate, which is what the page names when the Admin presses Cancel approval. */

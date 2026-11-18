@@ -2,14 +2,14 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { E2E_PASSWORD, readEstimateState, useFreshAddress } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
-import { adminOfItsOwn, APPROVED_PRICE, approvedEstimate, cancelThroughTheApi, latestApprovalIdOf, readCancel, unlockThroughTheApi } from './support/approved-estimate';
+import { APPROVED_PRICE, approvedEstimate, cancelThroughTheApi, latestApprovalIdOf, readCancel, signInAsTheAdmin, unlockThroughTheApi } from './support/approved-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-06.12 (AC-1 to AC-10; FR-107, NFR-002, NFR-004, NFR-007, NFR-016 to NFR-018): Cancel approval, SCR-06 and its dialog, for the Admin at `/estimates/<code>`, at 360x800, 768x1024 and 1366x768. Each test makes an
- * Engineer of its own with an estimate and has it calculated and approved **through the API** (`support/approved-estimate.ts`), so the 30 s of a test are spent on the subject. The cancels are made by Admins of the tests'
- * own (`adminOfItsOwn`), never by the shared E2E Admin, so the audit screen's first test (Who = E2E Admin) is not touched. What it checks: the Admin has a danger button beside Unlock and a Lead has none and is told who
+ * Engineer of its own with an estimate and has it calculated and approved **through the API** (`support/approved-estimate.ts`), so the 30 s of a test are spent on the subject. The cancels are made by the one Admin of the database
+ * (`signInAsTheAdmin`: the portal allows one active Admin, so a test cannot make an Admin of its own), on an estimate of the test's own; the audit screen's tests that filter on Who = E2E Admin use an event no spec writes. What it checks: the Admin has a danger button beside Unlock and a Lead has none and is told who
  * can (and a Lead's direct request is the 403); the dialog opens with focus on the safe choice, asks for a reason and the password with the spec's hints, keeps focus inside, has no sideways scroll and no axe violation,
  * and Escape sends nothing; a good cancel shows "Cancelling", then the notice (who, when, why, the Draft and the queue), BO marked "Approval cancelled", and a Lead sees the same with no button; the Engineer sees no price;
  * a wrong password is 422 under the password field with the field emptied and focused, and the same session cancels with the right one; an approval kept through an unlock is cancelled with the Draft staying a Draft;
@@ -45,7 +45,7 @@ const noticeOf = (page: Page) => page.locator('#review-cancelled-notice');
 async function openedAsAdmin(page: Page, testInfo: Parameters<typeof approvedEstimate>[1], beforeOpening?: (approved: Awaited<ReturnType<typeof approvedEstimate>>) => Promise<void>) {
   const approved = await approvedEstimate(page, testInfo);
   if (beforeOpening !== undefined) await beforeOpening(approved);
-  const admin = await adminOfItsOwn(page, testInfo);
+  const admin = await signInAsTheAdmin(page);
   const response = await page.goto(`/estimates/${approved.code}`);
   expect(response?.status()).toBe(200);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(approved.code);
@@ -80,7 +80,7 @@ test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
     expect(await readEstimateState(approved.owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
 
     // The Admin: a danger button beside Unlock.
-    await adminOfItsOwn(page, testInfo);
+    await signInAsTheAdmin(page);
     await page.reload();
     await expect(cancelButton(page)).toBeEnabled();
     await expect(page.locator('#review-unlock')).toBeVisible();
