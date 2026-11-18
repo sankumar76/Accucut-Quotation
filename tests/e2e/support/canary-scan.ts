@@ -1,9 +1,11 @@
 import { expect, type BrowserContext, type Page, type Response as PlaywrightResponse, type Route } from '@playwright/test';
 
+import { XLSX_MIME } from '../../../src/server/export/export-model';
 import { allowsRole, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '../../../src/server/http/route-manifest';
 import { recipeProblem, validCallFor, validPageAddress } from '../../support/route-calls';
 import { decodeFlightPayload, staticFileUrls, type RecordedResponse } from '../../support/scanner';
 import { nonEmpty } from '../../support/security-loops';
+import { workbookText } from '../../support/xlsx-parts';
 
 /**
  * The browser side of the cost-confidentiality scan (STORY-01.03 T2 and T6; test strategy section 6). `tests/e2e/canary-scan.spec.ts`
@@ -39,6 +41,13 @@ const withoutQuery = (url: string): string => {
 function bodyIsReadable(status: number, contentType: string): boolean {
   return TEXT_CONTENT_TYPE.test(contentType) && status >= 200 && status !== 204 && !(status >= REDIRECT_FIRST && status <= REDIRECT_LAST);
 }
+
+/**
+ * A workbook is a zip: its text is compressed, so a value inside it is invisible to a scan of the raw bytes (review QS-07 of AQP-331). A body that starts with `PK` and whose type is the workbook's is
+ * **inflated**, and the text of every XML part (the sheet, the shared strings, the styles, the drawing) is what is scanned. The pictures are binary and skipped. A workbook that cannot be read is not
+ * scanned for nothing: it is reported as unreadable by the caller, so a file that was not looked into cannot pass the scan.
+ */
+const isWorkbook = (status: number, contentType: string): boolean => status === 200 && contentType.split(';')[0]?.trim() === XLSX_MIME;
 
 export interface BrowserRequest {
   readonly method: string;
@@ -112,8 +121,11 @@ export class ScanRecorder {
     try {
       const response = await route.fetch();
       const headers = response.headers();
-      const original = bodyIsReadable(response.status(), headers['content-type'] ?? '') ? await response.text() : null;
-      const body = original === null || this.plant === undefined ? original : this.plant({ url: request.url(), method: request.method() }, original);
+      const type = headers['content-type'] ?? '';
+      const workbook = isWorkbook(response.status(), type);
+      const original = bodyIsReadable(response.status(), type) ? await response.text() : workbook ? workbookText(await response.body()) : null;
+      // A planted value goes into text, never into a zip: the controls plant into the answers they name, and a workbook is passed on as it came.
+      const body = original === null || workbook || this.plant === undefined ? original : this.plant({ url: request.url(), method: request.method() }, original);
       this.intercepted.set(`${request.method()} ${request.url()}`, this.responses.length);
       this.responses.push({ label, url: request.url(), status: response.status(), headers, body, carriedSession: this.signedIn });
       await (body !== null && body !== original ? route.fulfill({ response, body }) : route.fulfill({ response }));

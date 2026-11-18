@@ -16,6 +16,7 @@ import {
   signInWithoutThePage,
   type E2eUser,
 } from './auth';
+import { DEVELOPMENT_URL } from './servers';
 
 /**
  * A calculated estimate for the specs of the Lead's screens (STORY-06.03): an Engineer of the test's own with the canary estimate made ready, who presses Calculate through the portal (the same
@@ -57,4 +58,16 @@ export async function signInAsLead(page: Page, testInfo: TestInfo, role: 'LEAD' 
   // There is one active Admin in the database (the E2E Admin of the setup project), so an Admin is not made for the test.
   const person = role === 'ADMIN' ? E2E_ADMIN : await createDisposableUser('axe', testInfo, role);
   await signInAs(page, person);
+}
+
+/**
+ * The Engineer presses Calculate with the request the button sends, **without loading a page first** (AQP-340: a page load of the estimate costs the development server seconds on a loaded runner). The
+ * person is signed in without the sign-in screen, and the call carries the portal's own `Origin`, as a call from a page does. For the specs whose subject is what a Lead sees after the press, not the press:
+ * `calculateAsEngineer` is for those whose subject is the Engineer's own page. The estimate is Submitted afterwards, as the helper above checks.
+ */
+export async function calculateWithoutThePage(page: Page, owner: E2eUser & { readonly id: string }, origin: string = DEVELOPMENT_URL): Promise<void> {
+  await signInAs(page, owner);
+  const answer = await page.request.post(`/api/v1/estimates/${owner.id}/calculate`, { headers: { origin } });
+  expect(answer.status(), 'the Calculate of the Engineer').toBe(200);
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
 }
