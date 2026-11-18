@@ -639,7 +639,9 @@ test('AC-6 (positive control, STORY-07.02, review QS-07 of AQP-331): a Lead down
   expect(file.body ?? '', 'the workbook was inflated and read').toContain('xl/worksheets/sheet1.xml');
   await recorder.settled();
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
-  const findings = scanResponses([file], watched);
+  // A cell holds a figure as the number a spreadsheet stores (a double), so a stored figure of more digits than that is in the file as its shortest round-trip form: that form is looked for too.
+  const asStored = watched.filter((entry) => /^\d+\.\d+$/.test(entry.text)).map((entry) => ({ text: String(Number(entry.text)), reason: `${entry.reason}, as a cell stores it` }));
+  const findings = scanResponses([file], [...watched, ...asStored]);
   expect(findings.length, 'a figure of the record, found inside the file').toBeGreaterThan(0);
   expect(findings.every((finding) => finding.label.includes('GET export (API, Lead)'))).toBe(true);
 });

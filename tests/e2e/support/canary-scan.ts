@@ -38,16 +38,18 @@ const withoutQuery = (url: string): string => {
   return `${parsed.origin}${parsed.pathname}`;
 };
 
-function bodyIsReadable(status: number, contentType: string): boolean {
-  return TEXT_CONTENT_TYPE.test(contentType) && status >= 200 && status !== 204 && !(status >= REDIRECT_FIRST && status <= REDIRECT_LAST);
-}
-
 /**
- * A workbook is a zip: its text is compressed, so a value inside it is invisible to a scan of the raw bytes (review QS-07 of AQP-331). A body that starts with `PK` and whose type is the workbook's is
+ * A workbook is a zip: its text is compressed, so a value inside it is invisible to a scan of the raw bytes (review QS-07 of AQP-331). A body whose type is the workbook's is
  * **inflated**, and the text of every XML part (the sheet, the shared strings, the styles, the drawing) is what is scanned. The pictures are binary and skipped. A workbook that cannot be read is not
- * scanned for nothing: it is reported as unreadable by the caller, so a file that was not looked into cannot pass the scan.
+ * scanned for nothing: it is reported as unreadable by the caller, so a file that was not looked into cannot pass the scan. Its type holds the word "xml", so the text rule below would take it for
+ * text and record the zip's bytes as if they were words: that is why it is told apart first.
  */
-const isWorkbook = (status: number, contentType: string): boolean => status === 200 && contentType.split(';')[0]?.trim() === XLSX_MIME;
+const isWorkbookType = (contentType: string): boolean => contentType.split(';')[0]?.trim() === XLSX_MIME;
+const isWorkbook = (status: number, contentType: string): boolean => status === 200 && isWorkbookType(contentType);
+
+function bodyIsReadable(status: number, contentType: string): boolean {
+  return !isWorkbookType(contentType) && TEXT_CONTENT_TYPE.test(contentType) && status >= 200 && status !== 204 && !(status >= REDIRECT_FIRST && status <= REDIRECT_LAST);
+}
 
 export interface BrowserRequest {
   readonly method: string;
