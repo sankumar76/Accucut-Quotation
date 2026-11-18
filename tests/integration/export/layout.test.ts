@@ -35,6 +35,7 @@ beforeAll(async () => {
     header: createExportRepository(db.prisma),
     nodes: db.nodes,
     calculations: db.calculations,
+    approvals: db.approvals,
     images: createImageRepository(db.prisma),
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
     builder: inProcessBuilder(buildWorkbook),

@@ -616,6 +616,9 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   await expectCanaryRatesStillStored();
 });
 
+/** The product's own figures of a calculation record, as `calculations.product_values` holds them. */
+const PRODUCT_VALUES = z.object({ totalPrice: z.string().nullable(), pricePerToolCost: z.string().nullable(), toolCostTotal: z.string().nullable() });
+
 test('AC-6 (positive control, STORY-07.02, review QS-07 of AQP-331): a Lead downloads the workbook of a calculated estimate, and the scan finds the figures of the record inside the file', async ({ page, context }, testInfo) => {
   // The control that makes the Engineer's "no file" mean something: the same scan, over the same kind of answer, finds a figure when the figure is there. It fails if the file is empty or was never
   // looked into (a workbook is a zip, so its text is invisible to a scan of the raw bytes until `workbookText` inflates it).
@@ -644,6 +647,20 @@ test('AC-6 (positive control, STORY-07.02, review QS-07 of AQP-331): a Lead down
   const findings = scanResponses([file], [...watched, ...asStored]);
   expect(findings.length, 'a figure of the record, found inside the file').toBeGreaterThan(0);
   expect(findings.every((finding) => finding.label.includes('GET export (API, Lead)'))).toBe(true);
+
+  // STORY-07.03: the totals are in the file too, and the control sees them. The product's own figures of the record (BL, BN and the total Tool Cost, which the scan above also watches) are read from the
+  // inflated sheet at the cells that hold them: BL2 and BN2 in row 2, and the total Tool Cost in the footer, two rows below the one part. A file whose totals were left out would pass the scan of the Engineer's
+  // answers for the wrong reason, so the control must fail for it.
+  const product = PRODUCT_VALUES.parse(defined((await readCalculatedValues(engineer.id)).calculated[0]));
+  const sheetText = file.body ?? '';
+  const cellHolds = (address: string, figure: string): boolean => new RegExp(`<c r="${address}"[^>]*><v>${String(Number(figure)).replace('.', '\\.')}</v></c>`).test(sheetText);
+  expect(product.totalPrice, 'the record holds a total').not.toBeNull();
+  expect(cellHolds('BL2', defined(product.totalPrice)), 'BL2 holds the total of the record').toBe(true);
+  // BN2 is empty when there is no Tool Cost (a division by zero), and holds the stored BL / Tool Cost when there is.
+  if (product.pricePerToolCost === null) expect(sheetText).not.toMatch(/<c r="BN2"[^>]*><v>/);
+  else expect(cellHolds('BN2', product.pricePerToolCost), 'BN2 holds BL per Tool Cost of the record').toBe(true);
+  expect(cellHolds('BM4', product.toolCostTotal ?? '0'), 'the footer holds the total Tool Cost of the record').toBe(true);
+  expect(sheetText, 'the footer\'s label is in the file').toContain('Total Tool Cost');
 });
 
 test('AC-6 (negative control, STORY-05.09): a figure of the calculation planted in the tree\'s answer after the press is found by the same scan', async ({ page, context }, testInfo) => {

@@ -60,6 +60,7 @@ beforeAll(async () => {
         return db.calculations.findExportFigures(calculationId);
       },
     },
+    approvals: db.approvals,
     images: {
       readMany: (estimateId, ids) => {
         readManyCalls.push(ids.length);

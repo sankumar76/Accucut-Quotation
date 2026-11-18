@@ -96,6 +96,23 @@ function embedPictures(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet, mod
   });
 }
 
+/**
+ * The footer row of the total Tool Cost (STORY-07.03 AC-3): only the cells the footer holds are written, each as a value of its own, in its column's format (a label is text, so `@`) and centred. The row number is the
+ * model's own (`product-cells.ts` puts it two below the last part), and the model's schema refuses one on a node row.
+ */
+function writeFooter(sheet: ExcelJS.Worksheet, model: ExportModel): void {
+  const { footer } = model;
+  if (footer === undefined) return;
+  for (const column of model.columns) {
+    const value = writable(footer.cells[column.letter] ?? null, `${column.letter}${footer.row}`);
+    if (value === null) continue;
+    const cell = sheet.getCell(footer.row, columnLetterToIndex(column.letter));
+    cell.value = value;
+    cell.numFmt = typeof value === 'string' ? TEXT_FORMAT : column.numFmt;
+    cell.alignment = CENTRED;
+  }
+}
+
 export async function buildWorkbook(model: ExportModel): Promise<Uint8Array<ArrayBuffer>> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(model.sheetName);
@@ -121,6 +138,7 @@ export async function buildWorkbook(model: ExportModel): Promise<Uint8Array<Arra
     }
   });
 
+  writeFooter(sheet, model);
   embedPictures(workbook, sheet, model);
 
   // `writeBuffer` answers a Node `Buffer`, which may sit on a pooled `ArrayBuffer`; a copy is a plain `Uint8Array` that owns its bytes, so it can be handed over a thread boundary and sent as it is.
