@@ -43,6 +43,7 @@ vi.mock('@/server/composition', async () => {
     getCalculationService: () => shared.calculationService,
     getApprovalService: () => shared.approvalService,
     getUnlockService: () => shared.unlockService,
+    getCancelApprovalService: () => shared.cancelApprovalService,
   };
 });
 

@@ -1,13 +1,15 @@
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
+import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
 import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/recalculate-ids';
 import { UnlockButton } from '@/components/features/estimate-unlock/unlock-button';
 import { Button } from '@/components/ui/button';
+import type { RoleName } from '@/lib/auth/roles';
 import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_DOWNLOAD_ID, REVIEW_UNLOCK_ID } from './review-ids';
+import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_UNLOCK_ID } from './review-ids';
 import {
   ACTIONS_LABEL,
   APPROVE_CLEARED_REASON,
@@ -17,11 +19,14 @@ import {
   APPROVE_NOT_CALCULATED_REASON,
   CALCULATE_FAILED,
   CALCULATE_LABEL,
+  CANCEL_APPROVAL_LABEL,
+  CANCEL_FIRST_OPEN_FAILED,
   calculatedLine,
   CALCULATING_LINE,
   DOWNLOAD_LABEL,
   DOWNLOAD_NOT_CALCULATED_REASON,
   DOWNLOAD_NOT_YET_REASON,
+  ONLY_ADMIN_CANCELS,
   RECALCULATE_LABEL,
   UNLOCK_FIRST_OPEN_FAILED,
   UNLOCK_LABEL,
@@ -42,6 +47,7 @@ import {
 
 const APPROVE_REASON_ID = 'review-approve-reason';
 const DOWNLOAD_REASON_ID = 'review-download-reason';
+const CANCEL_REASON_ID = 'review-cancel-reason';
 
 /** What the Approve button needs to open its dialog, or `null` while approving cannot be offered. All of it comes from the server's costs view of this one render. */
 export interface ApproveOffer {
@@ -54,6 +60,12 @@ export interface ApproveOffer {
   readonly ratesLine: string | null;
 }
 
+/**
+ * What the action bar offers of Cancel approval (STORY-06.12 AC-1, AC-10), or `null` while there is no approval to cancel (never approved, or already cancelled). The Admin gets the button, with the approval it names; a Lead
+ * gets none, and the line that says who can.
+ */
+export type CancelOffer = { readonly kind: 'admin'; readonly approvalId: string; readonly engineerName: string } | { readonly kind: 'lead' };
+
 export interface ReviewActionsProps {
   /** The estimate's ID, for the request of Calculate or Recalculate and of the approval and the unlock. */
   readonly estimateId: string;
@@ -65,6 +77,8 @@ export interface ReviewActionsProps {
   readonly calculated: { readonly at: string; readonly configurationNumber: number } | null;
   /** Present only for a SUBMITTED estimate whose figures are current (see `approveOffer`): the Approve button is then on. */
   readonly approve: ApproveOffer | null;
+  /** The Cancel approval button for the Admin, or the line for a Lead, while the latest approval has not been cancelled (see `cancelOffer`). */
+  readonly cancel: CancelOffer | null;
   /** The "Rates changed" notice is drawn (STORY-06.11): the Recalculate button its link points at is on the bar. */
   readonly ratesChanged: boolean;
 }
@@ -94,6 +108,15 @@ export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'sta
     warningRows: costs.warning?.rows ?? [],
     ratesLine: costs.ratesChanged === null ? null : approveRatesLine(costs.ratesChanged),
   };
+}
+
+/**
+ * Whether Cancel approval is offered, and to whom (STORY-06.12 AC-1, AC-10): the latest approval has not been cancelled, whatever the status of the estimate (an approval kept through an unlock is the latest one too). Only the
+ * Admin gets the button (the server decides all the same); a Lead is told who can. An Engineer never reaches this page.
+ */
+export function cancelOffer(role: RoleName, approval: NonNullable<CostsView['approval']> | null): CancelOffer | null {
+  if (approval === null || approval.cancel !== null) return null;
+  return role === 'ADMIN' ? { kind: 'admin', approvalId: approval.id, engineerName: approval.engineerName } : { kind: 'lead' };
 }
 
 /**
@@ -133,7 +156,7 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
   );
 }
 
-export function ReviewActions({ estimateId, code, state, status, calculated, approve, ratesChanged }: ReviewActionsProps) {
+export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, ratesChanged }: ReviewActionsProps) {
   // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, submitted
   // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
   // is to Recalculate, so the button is there then (STORY-06.11).
@@ -171,6 +194,23 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
             <ApproveControl estimateId={estimateId} state={state} status={status} approve={approve} />
           )}
         </div>
+        {cancel === null ? null : cancel.kind === 'admin' ? (
+          <div className="flex flex-col gap-s-1">
+            <CancelButton
+              id={REVIEW_CANCEL_ID}
+              label={CANCEL_APPROVAL_LABEL}
+              failedLine={CANCEL_FIRST_OPEN_FAILED}
+              estimateId={estimateId}
+              code={code}
+              approvalId={cancel.approvalId}
+              status={status}
+              engineerName={cancel.engineerName}
+            />
+          </div>
+        ) : status === 'APPROVED' ? null : (
+          // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Submitted one whose approval was kept through an unlock says it here.
+          <Reason id={CANCEL_REASON_ID} text={ONLY_ADMIN_CANCELS} />
+        )}
       </div>
     </div>
   );

@@ -95,11 +95,15 @@ const SERVICES = {
     // STORY-05.09: the masters one calculation reads (the customer's rates, every material's price and the exchange rates), in the caller's transaction. Restricted in full, like the service that reads it.
     'calculation-masters',
     'calculation-service',
+    // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
+    'cancel-approval-service',
     'config-read-service',
     'config-service',
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
     'cost-details-service',
     'customer-service',
+    // STORY-06.08 and STORY-06.12: the check of a customer or a material deleted after the approval, shared by unlock and cancel approval. It reads the estimate's customer and materials, for the Lead's and the Admin's services only.
+    'deleted-masters',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.

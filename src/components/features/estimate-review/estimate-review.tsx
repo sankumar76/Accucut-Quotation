@@ -2,6 +2,7 @@ import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/appro
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent } from '@/components/ui/card';
+import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
@@ -9,10 +10,11 @@ import type { CostsView } from '@/server/views/schemas/costs';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
+import { CancelledNotice } from './cancelled-notice';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { warnedNodeIds } from './quantity-tag';
 import { RatesChangedNotice } from './rates-changed-notice';
-import { approveOffer, ReviewActions } from './review-actions';
+import { approveOffer, cancelOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
 import { WarningNotice } from './warning-notice';
@@ -47,6 +49,8 @@ export interface EstimateReviewProps {
   readonly costs: CostsView;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
+  /** Who is looking: the Admin alone has the Cancel approval button (STORY-06.12 AC-1). A Lead sees the state and the line that says who can. */
+  readonly viewerRole: RoleName;
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -60,7 +64,7 @@ function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | nu
   );
 }
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
@@ -76,6 +80,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           isOverride: costs.approval.isOverride,
           reason: costs.approval.reason,
           unlocked: costs.approval.unlock !== null,
+          cancelled: costs.approval.cancel !== null,
         };
   return (
     <div className="group/review contents">
@@ -99,7 +104,8 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         </Notice>
       ) : null}
       {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
-      <UnlockedNotice state={state} unlock={costs.approval?.unlock ?? null} isDraft={header.status === 'DRAFT'} />
+      <UnlockedNotice state={state} unlock={costs.approval === null || costs.approval.cancel !== null ? null : costs.approval.unlock} isDraft={header.status === 'DRAFT'} />
+      <CancelledNotice cancel={costs.approval?.cancel ?? null} wasUnlocked={costs.approval !== null && costs.approval.unlock !== null} status={header.status} viewedByAdmin={viewerRole === 'ADMIN'} />
       <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
       <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
@@ -111,6 +117,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         state={state}
         status={header.status}
         approve={approveOffer(header.status, costs)}
+        cancel={cancelOffer(viewerRole, costs.approval)}
         ratesChanged={costs.ratesChanged !== null}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />

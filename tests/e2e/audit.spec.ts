@@ -198,8 +198,9 @@ test.describe('the filters (AC-6)', () => {
     await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
     await page.getByLabel('From', { exact: true }).fill('2020-01-01');
     await page.getByLabel('To', { exact: true }).fill('2036-01-01');
-    // "Approval cancelled", not "Approval" or "Unlock": the approval is raised since STORY-06.06, the unlock since STORY-06.08, and the cancel is STORY-06.12's.
-    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Approval cancelled' });
+    // "Price removed", not "Approval", "Unlock" or "Approval cancelled": the approval is raised since STORY-06.06, the unlock since STORY-06.08, the cancel since STORY-06.12 (the Admin of these tests is the
+    // one who cancels, so Who = E2E Admin holds those entries), and the removal of a price is STORY-06.13's.
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Price removed' });
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
     // Neither empty state shows the count line (ux-spec v0.16).
@@ -343,10 +344,10 @@ test.describe('by keyboard (AC-9)', () => {
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
     // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
-    // first, "Approval" second, "Unlock" third, "Price override" fourth and "Approval cancelled" fifth; typing the letters instead depends on the pause between keys, which a busy machine stretches.
-    // "Approval", "Unlock" and "Price override" hold entries since STORY-06.06, STORY-06.08 and STORY-06.07 (the tests of the same run write them), so the empty result is the one of "Approval cancelled",
-    // whose event is declared and not yet written: STORY-06.12.)
-    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled']) {
+    // first, "Approval" second, "Unlock" third, "Price override" fourth, "Approval cancelled" fifth and "Price removed" sixth; typing the letters instead depends on the pause between keys, which a busy machine stretches.
+    // "Approval", "Unlock", "Price override" and "Approval cancelled" hold entries since STORY-06.06, STORY-06.08, STORY-06.07 and STORY-06.12 (the tests of the same run write them), so the empty result is the one of
+    // "Price removed", whose event is declared and not yet written: STORY-06.13.)
+    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled', 'price_removed']) {
       await page.keyboard.press('ArrowDown');
       await expect(event).toHaveValue(value);
     }
