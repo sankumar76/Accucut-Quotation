@@ -111,6 +111,9 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
   });
 
   test('AC-2, AC-3: back to "None" hides them and the server holds 0.00; another word shows them again with what was typed, and saves it', async ({ page }, testInfo) => {
+    // One of two tests that are slow by what they do (AQP-340): seven saves, four reads of the server and a reload, one after the other. Measured: 23.2 s on a mobile shard of a green run (44021154191) and
+    // 22.9 s of actions in the trace of a tablet attempt that ran out of its 30 s on the slowest shard (runs 44025795508, 44045571667). Three times the default, for this test only.
+    test.slow();
     const owner = await openForm(page, testInfo);
     await saveFasteners(page, WITH_FASTENERS);
     for (const [letter, typed] of [
@@ -144,6 +147,10 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
   });
 
   test('AC-3: after "None" and a reload, Qty and Cost are hidden, and showing them again offers what the server holds: 0.00', async ({ page }, testInfo) => {
+    // One of three tests marked for AQP-340 part 2 (DL-232 M3): it ran to within 0.4 s of the 30 s default on a loaded runner. On the desktop shard it is one of the first eight tests after the set-up project, which
+    // does not warm the estimate workspace, so it waits for the development server's first compile of that page. Measured (CI, Stage 12): desktop 29.6 s (run 44053813502 attempt 1), 17.5 s (attempt 2) and
+    // 28.9 s (run 44078137874); mobile 13.1 to 16.8 s and tablet 14.7 to 19.5 s in the same runs. Three times the default, for this test only.
+    test.slow();
     const owner = await openForm(page, testInfo);
     await saveFasteners(page, WITH_FASTENERS);
     const savedQty = nextSave(page);
@@ -189,6 +196,10 @@ test.describe('AC-6: the screen at 360, 768 and 1366 px', () => {
   });
 
   test('AC-6: with Qty and Cost shown there is no sideways scroll, axe finds nothing, and each is 44 px high', async ({ page }, testInfo) => {
+    // One of three tests marked for AQP-340 part 2 (DL-232 M3): three axe scans, two saves and the form's first load, and it ran out of its 30 s once (`page.evaluate` inside `AxeBuilder.analyze`, run
+    // 44078137874, desktop shard). Each scan is kept whole: no rule is dropped and no region is left out. Measured (CI, Stage 12): desktop 29.7 s (run 44053813502 attempt 1), 17.8 s (attempt 2), 24.6 s and
+    // 30.2 s (failed) in run 44078137874; mobile 13.9 to 21.1 s and tablet 19.5 to 23.1 s in the same runs. Three times the default, for this test only.
+    test.slow();
     await openForm(page, testInfo);
     await expectFormAccessible(page);
     await saveFasteners(page, WITH_FASTENERS);

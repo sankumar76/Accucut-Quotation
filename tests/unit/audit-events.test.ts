@@ -22,17 +22,17 @@ const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
-/** STORY-06.06: an estimate approved and locked. Registry order puts it before the quantity warning. */
-const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved'];
+/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked. Registry order puts them before the quantity warning. */
+const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
-const RESERVED: ReadonlyArray<AuditEventName> = ['approval.unlocked', 'approval.price_overridden', 'approval.cancelled', 'approval.price_removed'];
+const RESERVED: ReadonlyArray<AuditEventName> = ['approval.cancelled', 'approval.price_removed'];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval, the price override and the unlock, and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: unlock, price override, cancel, remove price', () => {
+  it('declares the events of the later stories and wires none of them: cancel, remove price', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -61,6 +61,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
   it('puts the six user events under "User change" and the others each under their own', () => {
     expect(eventsInCategory('user_change')).toEqual(WIRED_USER);
     expect(eventsInCategory('master_data')).toEqual(WIRED_MASTER);
+    expect(eventsInCategory('price_override')).toEqual(['approval.price_overridden']);
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
     expect(eventsInCategory('quantity_warning')).toEqual(['calculation.warning_acknowledged']);
@@ -151,9 +152,9 @@ describe('STORY-05.12 AC-3: the quantity warning event names the rows and holds 
   });
 });
 
-describe('STORY-06.06 AC-2: the approval event keeps the price, the calculated total and the approver, and nothing else', () => {
+describe('STORY-06.06 AC-2, STORY-06.07 AC-2: the approval event keeps the price, the calculated total, the approver and whether it is an override, and nothing else', () => {
   const event = AUDIT_EVENTS['approval.approved'];
-  const after = { approvedPrice: '12600.00', calculatedTotal: '12629.9876', approver: 'Invented Lead' };
+  const after = { approvedPrice: '12600.00', calculatedTotal: '12629.9876', approver: 'Invented Lead', isOverride: false };
 
   it('is wired, about the estimate, under the "Approval" filter', () => {
     expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'approval' });
@@ -168,11 +169,98 @@ describe('STORY-06.06 AC-2: the approval event keeps the price, the calculated t
     ['an extra key (a rate has no place here)', null, { ...after, rate: '0.37' }],
     ['a price as a number', null, { ...after, approvedPrice: 12600 }],
     ['a negative price', null, { ...after, approvedPrice: '-1.00' }],
-    ['no approver', null, { approvedPrice: after.approvedPrice, calculatedTotal: after.calculatedTotal }],
+    ['no approver', null, { approvedPrice: after.approvedPrice, calculatedTotal: after.calculatedTotal, isOverride: false }],
+    ['no flag', null, { approvedPrice: after.approvedPrice, calculatedTotal: after.calculatedTotal, approver: after.approver }],
+    ['a flag that is not a boolean', null, { ...after, isOverride: 'yes' }],
+    ['the reason (it belongs to the override entry)', null, { ...after, isOverride: true, reason: 'Rounded.' }],
     ['an empty approver', null, { ...after, approver: '' }],
     ['a before that is not null', { approvedPrice: '1.00' }, after],
   ])('refuses %s', (_name, before, stored) => {
     expect(event.describeStored(before, stored)).toBeNull();
+  });
+
+  it('says the same words whether or not the price is an override: the override has its own entry', () => {
+    expect(event.describeStored(null, { ...after, isOverride: true })).toEqual({ before: 'Not approved', after: 'Approved at ₹ 12,600.00, the calculated total was ₹ 12,629.99, by Invented Lead' });
+  });
+});
+
+describe('STORY-06.07 AC-2, AC-3 (SCR-16): the price-override event keeps the calculated total, the price and the reason, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.price_overridden'];
+  const before = { calculatedTotal: '12629.99' };
+  const after = { approvedPrice: '12600.00', reason: 'Rounded down to a whole hundred for the customer quote.' };
+
+  it('is wired, about the estimate, under the "Price override" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'price_override' });
+    expect(auditCategoryLabel('price_override')).toBe('Price override');
+  });
+
+  it('reads as the spec gives it: "Calculated ₹ 12,629.99 to Approved ₹ 12,600.00. Reason: …"', () => {
+    expect(event.describeStored(before, after)).toEqual({
+      before: 'Calculated ₹ 12,629.99',
+      after: 'Approved ₹ 12,600.00. Reason: Rounded down to a whole hundred for the customer quote.',
+    });
+  });
+
+  it('says "No reason given." when the Lead gave none (UX-31)', () => {
+    expect(event.describeStored(before, { ...after, reason: null })).toEqual({ before: 'Calculated ₹ 12,629.99', after: 'Approved ₹ 12,600.00. No reason given.' });
+  });
+
+  it('shows a reason as typed, markup and spreadsheet signs included: the screen draws text', () => {
+    expect(event.describeStored(before, { ...after, reason: '<b>=SUM(A1)</b>' })?.after).toBe('Approved ₹ 12,600.00. Reason: <b>=SUM(A1)</b>');
+  });
+
+  it('keeps a reason of exactly 500 characters, counted as the column counts them: 500 emoji are 500 characters, 501 are not', () => {
+    expect(event.describeStored(before, { ...after, reason: 'x'.repeat(500) })).not.toBeNull();
+    expect(event.describeStored(before, { ...after, reason: '😀'.repeat(500) })).not.toBeNull();
+    expect(event.describeStored(before, { ...after, reason: '😀'.repeat(501) })).toBeNull();
+  });
+
+  it.each([
+    ['an extra key (a rate has no place here)', before, { ...after, rate: '0.37' }],
+    ['an extra key in the before', { ...before, approver: 'Invented Lead' }, after],
+    ['no reason key (null is how none is said)', before, { approvedPrice: after.approvedPrice }],
+    ['an empty reason (none is null)', before, { ...after, reason: '' }],
+    ['a reason over 500 characters', before, { ...after, reason: 'x'.repeat(501) }],
+    ['a reason that is not text', before, { ...after, reason: 12 }],
+    ['a price as a number', before, { ...after, approvedPrice: 12600 }],
+    ['a negative price', before, { ...after, approvedPrice: '-1.00' }],
+    ['no calculated total', {}, after],
+    ['a before that is null', null, after],
+  ])('refuses %s', (_name, stored, storedAfter) => {
+    expect(event.describeStored(stored, storedAfter)).toBeNull();
+  });
+});
+
+describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the reason, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.unlocked'];
+  const before = { approvedPrice: '12600.00' };
+  const after = { reason: 'The customer asked for a thicker plate.' };
+
+  it('is wired, about the estimate, under the "Unlock" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'unlock' });
+    expect(eventsInCategory('unlock')).toEqual(['approval.unlocked']);
+  });
+
+  it('says what the approval stood at and why it was unlocked', () => {
+    expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it.each([
+    ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
+    ['an extra key in the after', before, { ...after, rate: '0.37' }],
+    ['a price as a number', { approvedPrice: 12600 }, after],
+    ['a negative price', { approvedPrice: '-1.00' }, after],
+    ['no reason', before, {}],
+    ['an empty reason', before, { reason: '' }],
+    ['a reason over 500 characters', before, { reason: 'x'.repeat(501) }],
+    ['a before that is null', null, after],
+    ['an after that is null', before, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+
+  it('accepts a reason of exactly 500 characters', () => {
+    expect(event.describeStored(before, { reason: 'x'.repeat(500) })).not.toBeNull();
   });
 });
 

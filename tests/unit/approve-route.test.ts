@@ -2,7 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { z } from 'zod';
 
 import { CALCULATION_CHANGED_CODE, NOT_CALCULATED_CODE, NOT_CALCULATED_MESSAGE, TOTALS_OUT_OF_DATE_CODE, TOTALS_OUT_OF_DATE_MESSAGE } from '@/lib/estimate/approval-words';
+import { PRICE_MESSAGE, REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/approve-price';
 import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
+import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
 import { toTwoPlaces } from '@/lib/money';
 import { approveAnswerSchema } from '@/server/views/schemas/estimates';
 
@@ -40,6 +42,7 @@ vi.mock('@/server/composition', async () => {
     getEstimateService: () => shared.estimateService,
     getCalculationService: () => shared.calculationService,
     getApprovalService: () => shared.approvalService,
+    getUnlockService: () => shared.unlockService,
   };
 });
 
@@ -254,10 +257,11 @@ describe('STORY-06.06 AC-2: an approval that passes the guard is written, in one
     const paise = toTwoPlaces(defined(calculatedTotal));
     expect(harness.calculationWorld.approvals).toHaveLength(1);
     expect(row).toMatchObject({ estimateId: owned(), calculationId, approvedPrice: PRICE, calculatedTotal: paise, approvedById: harness.idOf.LEAD });
-    // One entry, `approval.approved`, with the price, the calculated total and the approver (the person's name now).
-    expect(harness.calculationAudit.rows).toHaveLength(entries + 1);
-    expect(harness.calculationAudit.rows.at(-1)).toMatchObject({ event: 'approval.approved', actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: null });
-    expect(harness.calculationAudit.rows.at(-1)?.after).toEqual({ approvedPrice: PRICE, calculatedTotal: paise, approver: 'Invented Lead' });
+    // The entry `approval.approved`, with the price, the calculated total and the approver (the person's name now). PRICE is not the calculated total, so it is an override: the flag is on it, and the
+    // override's own entry follows (06.07 AC-2).
+    expect(harness.calculationAudit.rows).toHaveLength(entries + 2);
+    expect(auditOf('approval.approved')).toMatchObject({ event: 'approval.approved', actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: null });
+    expect(auditOf('approval.approved').after).toEqual({ approvedPrice: PRICE, calculatedTotal: paise, approver: 'Invented Lead', isOverride: true });
   });
 
   it('an Admin passes it too, and a price in whole rupees is kept as rupees and paise', async () => {
@@ -267,13 +271,6 @@ describe('STORY-06.06 AC-2: an approval that passes the guard is written, in one
     expect(response.status).toBe(200);
     expect(await bodyOf(response)).toMatchObject({ status: 'APPROVED', approvedPrice: '12600.00' });
     expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '12600.00', approvedById: harness.idOf.ADMIN });
-  });
-
-  it('a price that is not the calculated total is still approved (the override flag and its reason are STORY-06.07\'s), and the reason sent is not kept', async () => {
-    await calculated();
-    expect((await approve(currentCalculation(), { price: '1.00', reason: 'Rounded for the customer.' })).status).toBe(200);
-    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '1.00' });
-    expect(JSON.stringify(harness.calculationWorld.approvals)).not.toContain('Rounded for the customer.');
   });
 
   it('a failed insert takes the status back: nothing is half written (the transition ran first in the same transaction)', async () => {
@@ -338,6 +335,212 @@ describe('AC-8 (NFR-007): a refusal writes no audit entry', () => {
     estimate().inputsRevision += 1;
     expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TOTALS_OUT_OF_DATE_CODE });
     expect(harness.calculationAudit.rows.length).toBe(entries);
+  });
+});
+
+/** The calculated total (BL) of the estimate's current calculation, as rupees and paise: what the dialog pre-fills and what the approval keeps. */
+const calculatedPaise = (): string => {
+  const calculationId = currentCalculation();
+  return defined(toTwoPlaces(defined(defined(harness.calculationWorld.calculations.find((record) => record.id === calculationId)).productValues.totalPrice)));
+};
+/** The newest audit entry of an event. */
+const auditOf = (event: string) => defined(harness.calculationAudit.rows.filter((row) => row.event === event).at(-1));
+const auditCount = (event: string): number => harness.calculationAudit.rows.filter((row) => row.event === event).length;
+const errorsOf = (body: Record<string, unknown>): unknown => body['errors'];
+const REASON = 'Rounded down to a whole hundred for the customer quote.';
+
+describe('STORY-06.07 AC-2 (D-18): a different price is an override, with or without a reason', () => {
+  it('a different price and no reason: accepted, `is_override` true and `override_reason` null; the approval entry carries the flag, BL and the price, and the override entry has no reason', async () => {
+    await calculated();
+    const response = await approve(currentCalculation(), { price: '1.00' });
+    expect(response.status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '1.00', calculatedTotal: calculatedPaise(), isOverride: true, overrideReason: null });
+    expect(auditOf('approval.approved').after).toEqual({ approvedPrice: '1.00', calculatedTotal: calculatedPaise(), approver: 'Invented Lead', isOverride: true });
+    expect(auditOf('approval.price_overridden')).toMatchObject({ actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: { calculatedTotal: calculatedPaise() }, after: { approvedPrice: '1.00', reason: null } });
+  });
+
+  it('a reason of spaces and line breaks only is no reason: the override is recorded with `override_reason` null', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '1.00', reason: '  \n \t ' })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ isOverride: true, overrideReason: null });
+    expect(auditOf('approval.price_overridden').after).toEqual({ approvedPrice: '1.00', reason: null });
+  });
+
+  it('a price of 0 is an override (AC-8): rupees 0.00, with the flag', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '0' })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '0.00', isOverride: true, overrideReason: null });
+  });
+
+  it('a price above BL is an override too', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '999999999999.99' })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: '999999999999.99', isOverride: true });
+  });
+});
+
+describe('STORY-06.07 AC-3: the reason is kept, trimmed, with the approval and in the audit entry', () => {
+  it('stored trimmed on the row and copied to the audit row, and the answer still holds only the status, the price and the time', async () => {
+    await calculated();
+    const response = await approve(currentCalculation(), { price: '1.00', reason: `  ${REASON}  ` });
+    expect(response.status).toBe(200);
+    expect(Object.keys(await bodyOf(response)).sort()).toEqual(['approvedAt', 'approvedPrice', 'status']);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ isOverride: true, overrideReason: REASON });
+    // The reason is copied to the override's audit entry, and only to it: the approval's own entry has no key for it.
+    expect(auditOf('approval.price_overridden')).toMatchObject({ before: { calculatedTotal: calculatedPaise() }, after: { approvedPrice: '1.00', reason: REASON } });
+    expect(JSON.stringify(auditOf('approval.approved'))).not.toContain(REASON);
+    expect(auditCount('approval.approved')).toBe(1);
+    expect(auditCount('approval.price_overridden')).toBe(1);
+  });
+
+  it('a reason over several lines keeps its line feeds (a carriage return is folded into one)', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '1.00', reason: 'First.\r\nSecond.' })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ overrideReason: 'First.\nSecond.' });
+  });
+
+  it('the entries are the approval\'s, in its transaction: a failed write of the first takes the override and its reason back', async () => {
+    await calculated();
+    const before = snapshot();
+    vi.spyOn(harness.calculationAudit.service, 'record').mockRejectedValueOnce(new Error('Invented audit failure.'));
+    expect((await approve(currentCalculation(), { price: '1.00', reason: REASON })).status).toBe(500);
+    expect(snapshot()).toEqual(before);
+    expect(JSON.stringify(harness.calculationWorld.approvals)).not.toContain(REASON);
+  });
+
+  it('a failed write of the override\'s own entry, after the approval\'s, takes the approval, its status and the first entry back too', async () => {
+    await calculated();
+    const before = snapshot();
+    const record = harness.calculationAudit.service.record.bind(harness.calculationAudit.service);
+    vi.spyOn(harness.calculationAudit.service, 'record').mockImplementation((tx, entry) =>
+      entry.event === 'approval.price_overridden' ? Promise.reject(new Error('Invented audit failure.')) : record(tx, entry),
+    );
+    expect((await approve(currentCalculation(), { price: '1.00', reason: REASON })).status).toBe(500);
+    // The fake sink keeps every row that was appended, rolled back or not (the caller's fake rolls back its own state), so the audit count is the one thing not compared.
+    expect({ ...snapshot(), audit: before.audit }).toEqual(before);
+    expect(estimate().status).toBe('SUBMITTED');
+    expect(harness.calculationWorld.approvals).toHaveLength(0);
+  });
+});
+
+describe('STORY-06.07 AC-4: a reason of 501 characters is a 422 under `reason`, and nothing is written', () => {
+  it('501 characters: "Use 500 characters or fewer." under the reason field; 500 is accepted', async () => {
+    await calculated();
+    const before = snapshot();
+    const refused = await approve(currentCalculation(), { price: '1.00', reason: 'x'.repeat(501) });
+    expect(refused.status).toBe(422);
+    expect(errorsOf(await bodyOf(refused))).toEqual([{ field: 'reason', message: REASON_TOO_LONG_MESSAGE }]);
+    expect(snapshot()).toEqual(before);
+    expect((await approve(currentCalculation(), { price: '1.00', reason: 'x'.repeat(500) })).status).toBe(200);
+  });
+
+  it('the length is counted in characters, not UTF-16 units: 500 emoji are accepted, 501 are refused', async () => {
+    await calculated();
+    const refused = await approve(currentCalculation(), { price: '1.00', reason: '😀'.repeat(501) });
+    expect(refused.status).toBe(422);
+    expect(errorsOf(await bodyOf(refused))).toEqual([{ field: 'reason', message: REASON_TOO_LONG_MESSAGE }]);
+    expect((await approve(currentCalculation(), { price: '1.00', reason: '😀'.repeat(500) })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ overrideReason: '😀'.repeat(500) });
+  });
+
+  it('the length is judged after the trim: spaces round a reason of 500 do not count', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: '1.00', reason: ` ${'x'.repeat(500)} ` })).status).toBe(200);
+  });
+
+  it('a reason over the limit is refused even when the price is the calculated total: the shape of the body is checked first, whatever the price', async () => {
+    await calculated();
+    const refused = await approve(currentCalculation(), { price: calculatedPaise(), reason: 'x'.repeat(501) });
+    expect(refused.status).toBe(422);
+    expect(harness.calculationWorld.approvals).toHaveLength(0);
+  });
+});
+
+describe('DL-219: the reason refuses an invisible character, as the shared validation does', () => {
+  it.each([
+    ['a zero-width joiner', 'Round‍ed'],
+    ['a zero-width non-joiner', 'Round‌ed'],
+    ['a zero-width space', 'Round​ed'],
+    ['a byte order mark', 'Round﻿ed'],
+    ['a bidirectional override', 'Round‮ed'],
+    ['a NUL', 'Round\u0000ed'],
+    ['a lone surrogate', 'Round\uD800ed'],
+  ])('%s is a 422 under `reason` with the shared sentence, and nothing is written', async (_name, reason) => {
+    await calculated();
+    const before = snapshot();
+    const refused = await approve(currentCalculation(), { price: '1.00', reason });
+    expect(refused.status).toBe(422);
+    expect(errorsOf(await bodyOf(refused))).toEqual([{ field: 'reason', message: TEXT_CHARACTERS_MESSAGE }]);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it('a reason that is not text (a number, null, an object) is a 422 too', async () => {
+    await calculated();
+    for (const reason of [12, null, { text: REASON }, [REASON]]) {
+      expect((await approve(currentCalculation(), { price: '1.00', reason })).status, JSON.stringify(reason)).toBe(422);
+    }
+    expect(harness.calculationWorld.approvals).toHaveLength(0);
+  });
+});
+
+describe('STORY-06.07 AC-5 (UX-31): a price equal to BL is not an override, and a reason sent with it is ignored and not stored', () => {
+  it('the pre-filled price (BL in rupees and paise): `is_override` false, no reason on the row, none in the audit entry, and the words appear nowhere in what was written', async () => {
+    await calculated();
+    expect((await approve(currentCalculation(), { price: calculatedPaise(), reason: REASON })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: calculatedPaise(), calculatedTotal: calculatedPaise(), isOverride: false, overrideReason: null });
+    expect(auditOf('approval.approved').after).toEqual({ approvedPrice: calculatedPaise(), calculatedTotal: calculatedPaise(), approver: 'Invented Lead', isOverride: false });
+    // No override, so no override entry at all.
+    expect(auditCount('approval.price_overridden')).toBe(0);
+    expect(JSON.stringify(harness.calculationWorld.approvals)).not.toContain(REASON);
+    expect(JSON.stringify(harness.calculationAudit.rows)).not.toContain(REASON);
+  });
+
+  it('the same price written with other zeros or spaces is the same price, so still not an override', async () => {
+    await calculated();
+    const total = calculatedPaise();
+    const [whole = '', paise = ''] = total.split('.');
+    expect((await approve(currentCalculation(), { price: `0${whole}.${paise}` })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ approvedPrice: total, isOverride: false, overrideReason: null });
+  });
+
+  it('a price one paisa from BL is an override', async () => {
+    await calculated();
+    const [whole = '', paise = ''] = calculatedPaise().split('.');
+    const other = paise === '99' ? '98' : '99';
+    expect((await approve(currentCalculation(), { price: `${whole}.${other}` })).status).toBe(200);
+    expect(harness.calculationWorld.approvals[0]).toMatchObject({ isOverride: true });
+  });
+});
+
+describe('STORY-06.07 AC-6: a price that is not rupees with up to 2 decimals is a 422 under `price`', () => {
+  it.each([
+    ['negative', '-1'],
+    ['three decimals', '1.234'],
+    ['text', 'abc'],
+    ['empty', ''],
+    ['with a rupee sign', '₹ 12600'],
+    ['with a thousands separator', '12,600.00'],
+    ['in exponent form', '1e3'],
+    ['full-width digits', '１２６００'],
+    ['thirteen whole digits (it would not fit the column)', '1234567890123'],
+  ])('%s is refused with the spec\'s sentence, and writes nothing', async (_name, price) => {
+    await calculated();
+    const before = snapshot();
+    const refused = await approve(currentCalculation(), { price, reason: REASON });
+    expect(refused.status).toBe(422);
+    expect(errorsOf(await bodyOf(refused))).toEqual([{ field: 'price', message: PRICE_MESSAGE }]);
+    expect(snapshot()).toEqual(before);
+  });
+});
+
+describe('STORY-06.07 AC-7 (FR-011, NFR-002): the reason reaches no answer of the route', () => {
+  it('neither the good answer nor a refusal holds the reason, and an Engineer, refused before anything is read, never sees it', async () => {
+    await calculated();
+    const answers = [await approve(UNKNOWN_CALCULATION_ID, { price: '1.00', reason: REASON }), await approve(currentCalculation(), { price: '1.00', reason: REASON })];
+    harness.signInAs('ENGINEER');
+    answers.push(await approve(currentCalculation(), { price: '1.00', reason: REASON }));
+    expect(answers.map((answer) => answer.status)).toEqual([409, 200, 403]);
+    for (const answer of answers) expect(await answer.text()).not.toContain(REASON);
   });
 });
 

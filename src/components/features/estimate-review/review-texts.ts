@@ -72,12 +72,14 @@ export const CALCULATING_LINE = 'Calculating. This takes a moment.';
 export const CALCULATE_FAILED = 'We could not calculate this estimate. Nothing was changed. Try again.';
 export const APPROVE_NOT_CALCULATED_REASON = 'Calculate first. Approving is available once the figures have been calculated.';
 export const APPROVE_CLEARED_REASON = 'Recalculate first. Approving is available once the figures have been calculated again.';
-export const APPROVE_NOT_YET_REASON = 'Approving is not available yet.';
+/** A Draft with current figures (an estimate that was unlocked, STORY-06.08): the third of the reasons Approve and lock is off, ruled in ux-spec v0.31 (SCR-06, SCR-08 and SCR-16 words, ruling 3). The way on is Recalculate. */
+export const APPROVE_DRAFT_REASON = 'Recalculate first. Approving is available once this Draft has been calculated again.';
 /** The line under the button when the dialog's code did not arrive (the shared first-open failure line; the wording follows "The parts tree did not open." of SCR-05, assumption A-4 of STORY-06.06). */
 export const APPROVE_FIRST_OPEN_FAILED = 'The approval window did not open. Check your connection and try again.';
-/** Unlock replaces Approve once an estimate is approved (STORY-06.06 AC-5); what it does is STORY-06.08's, so it is off with a reason until then (assumption A-3 of STORY-06.06). */
+/** Unlock replaces Approve once an estimate is approved (STORY-06.06 AC-5); it opens the dialog of SCR-09 (STORY-06.08). */
 export const UNLOCK_LABEL = 'Unlock';
-export const UNLOCK_NOT_YET_REASON = 'Unlocking is not available yet.';
+/** The line under the button when the dialog's code did not arrive (the shared first-open failure line, as the approval window's; assumption of STORY-06.08). */
+export const UNLOCK_FIRST_OPEN_FAILED = 'The unlock window did not open. Check your connection and try again.';
 
 /**
  * The Approved state of SCR-06 (STORY-06.06 AC-5; UX spec SCR-06 "Approved (Lead)" and the G3 screen): the notice with the approver and the time, and the two sentences the spec gives for what approval means.
@@ -88,6 +90,32 @@ export const APPROVED_NOTICE_TITLE_PLAIN = 'Approved and locked.';
 export const APPROVED_NOTICE_BODY = 'Locked. Values stay as approved even if rates change later. Only the Admin can cancel an approval.';
 /** The line under BO once approved: "Approved by Kiran Bose, 05 Nov 2026, 11:20 IST." (the tile adds "File cell BO2." itself). */
 export const approvedByLine = (name: string, time: string): string => `Approved by ${name}, ${time}.`;
+/**
+ * The two lines BO adds for a price that differs from the calculated total (STORY-06.07 AC-3; UX spec SCR-06 "Content"): "₹ 29.99 lower than the calculated total (₹ 12,629.99)." and then "Reason given: …", or
+ * "No reason given." when the Lead left it empty (UX-31). `amount` and `calculatedTotal` are figures already written as rupees ("₹ 29.99"), so this file stays free of imports; the sentence is written once
+ * here, and the figures come from the approval row.
+ */
+export const overrideLine = (direction: 'lower' | 'higher', amount: string, calculatedTotal: string): string => `${amount} ${direction} than the calculated total (${calculatedTotal}).`;
+export const reasonGivenLine = (reason: string): string => `Reason given: ${reason}`;
+export const NO_REASON_GIVEN = 'No reason given.';
+
+/**
+ * An estimate that was unlocked (STORY-06.08 AC-3, AC-12; UX spec SCR-06 "Draft after unlock", UX-59, the SCR-09 mock-up): BO is the price approved earlier, labelled so, until a new approval replaces it. It is the approvals row's
+ * price whatever the state of the figures, so clearing them never changes it.
+ */
+export const APPROVED_EARLIER_LABEL = 'Approved earlier';
+export const APPROVED_EARLIER_STAYS = 'It stays until a new approval replaces it.';
+
+/**
+ * The notice of an unlocked Draft (STORY-06.08 AC-3; UX spec SCR-06 states "Draft after unlock" and "Unlocked and changed"): who, when and why, what the figures are, the price approved earlier, and whose queue the task is back in.
+ * `time` is written in IST (`formatIst`). The words of the figures follow the state: current (nothing changed since), or cleared (an input has changed since). The reason is the Lead's own text.
+ */
+export const unlockedNoticeTitle = (time: string, name: string): string => `Unlocked on ${time} by ${name}.`;
+export const unlockedReasonLine = (reason: string): string => `Reason: ${reason}`;
+export const UNLOCKED_FIGURES_CURRENT = 'The figures below are still the ones from the approval. As soon as you change an input every calculated figure is cleared. Recalculate to bring them up to date.';
+export const UNLOCKED_FIGURES_CLEARED = 'An input has changed since, so every calculated figure is cleared. Recalculate to bring them up to date.';
+export const UNLOCKED_PRICE_STAYS = 'The price approved earlier stays until a new approval replaces it.';
+export const unlockedQueueLine = (engineerName: string): string => `The task is back in ${engineerName}'s Open queue.`;
 export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

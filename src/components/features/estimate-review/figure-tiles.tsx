@@ -1,12 +1,17 @@
 import type { ReactNode } from 'react';
 
+import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
+import { priceDifference } from '@/lib/estimate/approve-price';
 import { formatFigure, formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import {
+  APPROVED_EARLIER_LABEL,
+  APPROVED_EARLIER_STAYS,
   APPROVED_NOT_SET,
   APPROVED_NOT_SET_CLEARED_HINT,
   APPROVED_NOT_SET_HINT,
@@ -19,8 +24,11 @@ import {
   BO_NAME,
   CLEARED,
   fileCell,
+  NO_REASON_GIVEN,
   NOT_CALCULATED,
   noToolCost,
+  overrideLine,
+  reasonGivenLine,
   TILES_LABEL,
 } from './review-texts';
 
@@ -64,11 +72,38 @@ function Tile({ name, letter, children, note, fileCellLine = true }: TileProps) 
 
 const word = (text: string): ReactNode => <span className="italic">{text}</span>;
 
-/** The approval BO shows (STORY-06.06 AC-5, AC-9): the price as stored, who approved it and when (IST), read from the `approvals` row, never through the figure state. */
+/**
+ * The approval BO shows (STORY-06.06 AC-5, AC-9): the price as stored, who approved it and when (IST), read from the `approvals` row, never through the figure state. For a price that differs from the
+ * calculated total (STORY-06.07 AC-3) it also holds the total the price was set against and the reason given, so BO can say how far it is from it and why, or that no reason was given.
+ */
 export interface ApprovedTileView {
   readonly price: string;
   readonly approverName: string;
   readonly approvedAtLabel: string;
+  /** The calculated total (BL) the price was set against, rupees and paise. */
+  readonly calculatedTotal: string;
+  readonly isOverride: boolean;
+  /** The reason given with the override, or `null` when none was given. */
+  readonly reason: string | null;
+  /** The approval was unlocked (STORY-06.08 AC-3, AC-12): the price is the one "approved earlier", and the figures it was set against are no longer the estimate's (SQR-05 of the AQP-324 review). */
+  readonly unlocked: boolean;
+}
+
+/** What BO adds under the approver line for an override: the difference from the calculated total, and the reason or "No reason given." Nothing for an approval at the calculated total. */
+function OverrideLines({ approval }: { readonly approval: ApprovedTileView }) {
+  // After an unlock the old price is no longer set against the figures on screen: they may be the same ones, or cleared, or new after a Recalculate. Comparing the old price with the old total under them would say
+  // something the screen cannot show, so the tile keeps only who approved and when, and the label (AQP-324 review SQR-05; ux-spec SCR-08 "After an unlock").
+  if (approval.unlocked || !approval.isOverride) return null;
+  const difference = priceDifference(approval.price, approval.calculatedTotal);
+  // An override is a price that differs at rupees and paise, so there is a difference; if the record ever said otherwise, nothing is claimed.
+  if (difference === null) return null;
+  return (
+    <>
+      <span className="mt-s-1 block">{overrideLine(difference.direction, formatRupees(difference.amount), formatRupees(approval.calculatedTotal))}</span>
+      {/* Typed text, drawn as text: the line breaks the Lead typed are kept, and a long word wraps. */}
+      <span className={cn('block whitespace-pre-line', BREAK_LONG_NAMES)}>{approval.reason === null ? NO_REASON_GIVEN : reasonGivenLine(approval.reason)}</span>
+    </>
+  );
 }
 
 export interface FigureTilesProps {
@@ -102,7 +137,18 @@ export function FigureTiles({ state, letters, totals, approval = null }: FigureT
           {APPROVED_NOT_SET}
         </Tile>
       ) : (
-        <Tile name={BO_NAME} letter={letters.approvedPrice} note={approvedByLine(approval.approverName, approval.approvedAtLabel)}>
+        <Tile
+          name={BO_NAME}
+          letter={letters.approvedPrice}
+          note={
+            <>
+              {approval.unlocked ? <strong className="block text-ink">{APPROVED_EARLIER_LABEL}</strong> : null}
+              {approvedByLine(approval.approverName, approval.approvedAtLabel)}
+              {approval.unlocked ? <span className="block">{APPROVED_EARLIER_STAYS}</span> : null}
+              <OverrideLines approval={approval} />
+            </>
+          }
+        >
           {formatRupees(approval.price)}
         </Tile>
       )}

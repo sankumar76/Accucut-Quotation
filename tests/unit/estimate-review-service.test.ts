@@ -245,10 +245,26 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     expect(after.state).toBe('out-of-date');
     expect(after.totals).toBeNull();
     expect(after.approval).toEqual(before.approval);
-    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran' });
+    expect(after.approval).toEqual({ price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Kiran', calculatedTotal: '12600.00', isOverride: false, reason: null, unlock: null });
     // BL is cleared, and no calculated figure was read to say so.
     expect(cleared.reads.figures.calls).toEqual([]);
     expect(cleared.reads.approvals.calls).toEqual([[REVIEW_ESTIMATE_ID]]);
+  });
+
+  it('STORY-06.07 AC-3: an override\'s BO carries the total it was set against, the flag and the reason, in every state of the figures, and the answer still passes the strict schema', async () => {
+    const override = { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' };
+    for (const options of [{}, { inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
+      const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options, approval: override }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+      expect(costs.approval).toMatchObject({ price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' });
+    }
+    const noReason = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: { price: override.price, calculatedTotal: override.calculatedTotal, isOverride: true } }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(noReason.approval).toMatchObject({ isOverride: true, reason: null });
+  });
+
+  it('STORY-06.07 AC-7 (NFR-002, FR-011): an Engineer is refused before the approvals are read, so the reason and the total never reach one', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' } });
+    await expect(world.service.getCosts(ENGINEER, REVIEW_ESTIMATE_ID)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(world.reads.approvals.calls).toEqual([]);
   });
 
   it('BO is there when no calculation is linked at all, and is null before any approval, in every state', async () => {
@@ -265,6 +281,22 @@ describe('STORY-06.06 AC-9 (AQP-321 AC-4): BO is read from the approvals row, ne
     for (const options of [{ inputsRevision: CALCULATION_REVISION + 1 }, { calculated: false }]) {
       expect((await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, ...options }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).calculationId).toBeNull();
     }
+  });
+
+  it('STORY-06.08 AC-12 (AQP-321 AC-4): after an unlock and an input change, BO is still the price approved earlier, with its unlock, while BL and every calculated figure are cleared', async () => {
+    const unlock = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' };
+    const unlocked = { ...approval, unlock };
+    const before = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: unlocked }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(before.approval?.unlock).toEqual({ at: '2026-11-05T06:35:00.000Z', byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' });
+    // An input changed since the unlock: the figures are cleared, the price approved earlier and its unlock are not.
+    const cleared = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, approval: unlocked, inputsRevision: CALCULATION_REVISION + 1 });
+    const after = await cleared.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    expect(after.state).toBe('out-of-date');
+    expect(after.totals).toBeNull();
+    expect(after.nodes.every((node) => node.figures === null)).toBe(true);
+    expect(after.approval).toEqual(before.approval);
+    expect(after.approval?.price).toBe('12600.00');
+    expect(cleared.reads.figures.calls).toEqual([]);
   });
 
   it('an Engineer is refused before the approvals are read, as before everything else', async () => {

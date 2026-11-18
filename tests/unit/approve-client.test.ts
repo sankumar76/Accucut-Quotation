@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { isPrice, MAX_REASON_LENGTH, PRICE_MESSAGE, prefillPrice } from '@/lib/estimate/approve-price';
+import { isPrice, MAX_REASON_LENGTH, PRICE_MESSAGE, prefillPrice, REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/approve-price';
 import { approveEstimate, canReadFigures } from '@/lib/estimates/approve-client';
 
 /**
@@ -89,6 +89,28 @@ describe('approveEstimate', () => {
     const body = { type: 'about:blank', title: 'Check the price.', status: 422, code: 'VALIDATION_FAILED', errors: [{ field: 'price', message: PRICE_MESSAGE }] };
     const outcome = await approveEstimate(ESTIMATE, { calculationId: CALCULATION, price: '1.234' }, fetching(answer(body, 422)));
     expect(outcome).toMatchObject({ status: 'refused', httpStatus: 422, fields: { price: PRICE_MESSAGE } });
+  });
+
+  it('STORY-06.07 AC-4: a 422 under `reason` reaches the dialog as the reason\'s own message, so it is shown under that field and the typed text is kept', async () => {
+    const body = { type: 'about:blank', title: 'Use 500 characters or fewer.', status: 422, code: 'VALIDATION_FAILED', errors: [{ field: 'reason', message: REASON_TOO_LONG_MESSAGE }] };
+    const outcome = await approveEstimate(ESTIMATE, { calculationId: CALCULATION, price: '1.00', reason: 'x'.repeat(501) }, fetching(answer(body, 422)));
+    expect(outcome).toMatchObject({ status: 'refused', httpStatus: 422, fields: { reason: 'Use 500 characters or fewer.' } });
+  });
+});
+
+describe('STORY-06.07: the reason travels with the request only when there is one', () => {
+  const approved = () => fetching(answer({ status: 'APPROVED' }));
+
+  it('is in the body, as typed, when the dialog sends one', async () => {
+    const doFetch = approved();
+    await approveEstimate(ESTIMATE, { calculationId: CALCULATION, price: '12600.00', reason: '  Rounded for the quote.  ' }, doFetch);
+    expect(JSON.parse(String(doFetch.mock.calls[0]?.[1]?.body))).toEqual({ calculationId: CALCULATION, price: '12600.00', reason: '  Rounded for the quote.  ' });
+  });
+
+  it('is left out of the body, with no key at all, when the price is the calculated total (the request names the calculation and the price only)', async () => {
+    const doFetch = approved();
+    await approveEstimate(ESTIMATE, { calculationId: CALCULATION, price: '12629.99' }, doFetch);
+    expect(Object.keys(JSON.parse(String(doFetch.mock.calls[0]?.[1]?.body)) as object).sort()).toEqual(['calculationId', 'price']);
   });
 });
 

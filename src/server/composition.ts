@@ -37,6 +37,7 @@ import { createMastersService, type MastersService } from './services/masters-se
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
 import { createTaskService, type TaskService } from './services/task-service';
+import { createUnlockService, type UnlockService } from './services/unlock-service';
 import { createUserService, type UserService } from './services/user-service';
 
 /**
@@ -61,6 +62,7 @@ let configReadService: ConfigReadService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
+let unlockService: UnlockService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
@@ -270,6 +272,26 @@ export function getApprovalService(): ApprovalService {
     workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
   });
   return approvalService;
+}
+
+/**
+ * Unlock and its preview (STORY-06.08): under the estimate's row lock in one transaction, the customer and the materials read `FOR SHARE`, the estimate's move to DRAFT (the estimate service's `transition`, in the same
+ * transaction), the unlock stored on the approval and the audit entry; and the read of what changed since the approval, as counts. Restricted (NFR-002): only the two unlock routes ask for it here, for the Lead and the Admin alone.
+ */
+export function getUnlockService(): UnlockService {
+  if (unlockService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    unlockService = createUnlockService({
+      estimates: createEstimateRepository(runtimeClient()),
+      approvals: createApprovalRepository(runtimeClient()),
+      calculations: createCalculationRepository(runtimeClient()),
+      masters: createMasterRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      transactions: createTransactionRunner(runtimeClient()),
+      workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+    });
+  }
+  return unlockService;
 }
 
 /**

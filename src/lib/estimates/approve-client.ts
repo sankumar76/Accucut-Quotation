@@ -10,10 +10,14 @@ import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome
 const approvePath = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}/approve`;
 const costsPath = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}/costs`;
 
-/** What the browser sends: the calculation the page showed and the price typed. The reason for a different price is STORY-06.07's. */
+/**
+ * What the browser sends: the calculation the page showed and the price typed, and (STORY-06.07) the reason typed for a different price. The dialog sends a reason only while it shows the field, which is only
+ * while the price differs from the calculated total; whether the price is an override, and whether the reason is kept, is the server's to decide (it reads the total itself), so no flag is sent.
+ */
 export interface ApproveRequest {
   readonly calculationId: string;
   readonly price: string;
+  readonly reason?: string;
 }
 
 /** `true` when the answer says the estimate is APPROVED; `null` for anything else (a failure, never a crash). */
@@ -21,7 +25,8 @@ const toApproved = (body: unknown): true | null => (isRecord(body) && body['stat
 
 /** `POST /api/v1/estimates/{id}/approve`. */
 export function approveEstimate(estimateId: string, request: ApproveRequest, doFetch: Fetch = fetch): Promise<Outcome<true>> {
-  return sendJson(doFetch, approvePath(estimateId), { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ calculationId: request.calculationId, price: request.price }) }, toApproved);
+  const body = { calculationId: request.calculationId, price: request.price, ...(request.reason === undefined ? {} : { reason: request.reason }) };
+  return sendJson(doFetch, approvePath(estimateId), { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }, toApproved);
 }
 
 /**

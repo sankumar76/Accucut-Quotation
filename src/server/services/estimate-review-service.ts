@@ -162,7 +162,21 @@ export function createEstimateReviewService({ calculations, approvals, nodes, co
         letters: lettersOf(columns),
         nodes: nodesOf(records, version.document, columns, figures),
         totals: figures === null ? null : figures.productValues,
-        approval: approval === null ? null : { price: approval.approvedPrice, approvedAt: approval.approvedAt.toISOString(), approverName: approval.approverName },
+        approval:
+          approval === null
+            ? null
+            : {
+                price: approval.approvedPrice,
+                approvedAt: approval.approvedAt.toISOString(),
+                approverName: approval.approverName,
+                calculatedTotal: approval.calculatedTotal,
+                isOverride: approval.isOverride,
+                reason: approval.overrideReason,
+                unlock:
+                  approval.unlock === null
+                    ? null
+                    : { at: approval.unlock.unlockedAt.toISOString(), byName: approval.unlock.byName, reason: approval.unlock.reason, engineerName: approval.unlock.engineerName },
+              },
         // The warning of the calculation in view (STORY-06.10): it comes in with the figures, so it is read only while the state is `current` and is `null` in the other two (AC-4).
         warning: warningOf(figures),
       });

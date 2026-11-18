@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ConflictError, ForbiddenError } from '@/lib/errors';
+import { ConflictError, FieldValidationError, ForbiddenError } from '@/lib/errors';
 import {
   CALCULATION_CHANGED_CODE,
   NOT_CALCULATED_CODE,
@@ -8,7 +8,8 @@ import {
   TOTALS_OUT_OF_DATE_CODE,
   TOTALS_OUT_OF_DATE_MESSAGE,
 } from '@/lib/estimate/approval-words';
-import { prefillPrice } from '@/lib/estimate/approve-price';
+import { prefillPrice, REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/approve-price';
+import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { FigureBasis } from '@/server/repositories/calculation-repository';
 import { assertApprovable, assertMayApprove, createApprovalService } from '@/server/services/approval-service';
@@ -160,7 +161,7 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
   /** A service whose storage holds a submitted estimate with current figures, and counts every write. */
   function serviceWith(total: string | null) {
     const writes: string[] = [];
-    const inserted: Array<{ readonly calculatedTotal: string; readonly approvedPrice: string }> = [];
+    const inserted: Array<{ readonly calculatedTotal: string; readonly approvedPrice: string; readonly isOverride: boolean; readonly overrideReason: string | null }> = [];
     const audited: unknown[] = [];
     const tx = { kind: 'database-transaction' } as const;
     const service = createApprovalService({
@@ -169,7 +170,7 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
       approvals: {
         insertApproval: (approval) => {
           writes.push('insert');
-          inserted.push({ calculatedTotal: approval.calculatedTotal, approvedPrice: approval.approvedPrice });
+          inserted.push({ calculatedTotal: approval.calculatedTotal, approvedPrice: approval.approvedPrice, isOverride: approval.isOverride, overrideReason: approval.overrideReason });
           return Promise.resolve({ id: 'approval-1', approvedAt: new Date('2026-11-16T06:00:00.000Z') });
         },
       },
@@ -192,14 +193,20 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
     return { service, writes, inserted, audited };
   }
 
-  it('writes the status, the approval and the audit entry, in that order, in the one transaction, and answers the price in rupees and paise', async () => {
+  it('writes the status, the approval and the audit entry, in that order, in the one transaction, and answers the price in rupees and paise (a price that is the calculated total is no override: no second entry)', async () => {
     const { service, writes } = serviceWith('12629.9876');
-    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', audit })).resolves.toEqual({
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12629.99', audit })).resolves.toEqual({
       status: 'APPROVED',
-      approvedPrice: '12600.00',
+      approvedPrice: '12629.99',
       approvedAt: '2026-11-16T06:00:00.000Z',
     });
     expect(writes).toEqual(['transition', 'insert', 'audit']);
+  });
+
+  it('an override writes the status, the approval and then the two audit entries, in that order, in the one transaction', async () => {
+    const { service, writes } = serviceWith('12629.9876');
+    await expect(service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', audit })).resolves.toMatchObject({ status: 'APPROVED', approvedPrice: '12600.00' });
+    expect(writes).toEqual(['transition', 'insert', 'audit', 'audit']);
   });
 
   it.each([
@@ -213,9 +220,64 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
   ])('the total kept for %s is %s: the one rule the dialog pre-fills its price with, so the two always agree', async (total, expected) => {
     const { service, inserted, audited } = serviceWith(total);
     await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit });
-    expect(inserted).toEqual([{ calculatedTotal: expected, approvedPrice: '1.00' }]);
+    expect(inserted).toEqual([{ calculatedTotal: expected, approvedPrice: '1.00', isOverride: true, overrideReason: null }]);
     expect(prefillPrice(total)).toBe(expected);
-    expect(audited).toEqual([{ approvedPrice: '1.00', calculatedTotal: expected, approver: 'Invented Lead' }]);
+    expect(audited).toEqual([
+      { approvedPrice: '1.00', calculatedTotal: expected, approver: 'Invented Lead', isOverride: true },
+      { approvedPrice: '1.00', reason: null },
+    ]);
+  });
+
+  it.each([
+    // SQR-03 of the review of AQP-323, for 06.07: the pre-filled price is never an override, wherever rounding the full total once and rounding it twice would disagree.
+    ['100.00495', '100.00'],
+    ['12.34495', '12.34'],
+    ['12.344999', '12.34'],
+    ['12.345', '12.35'],
+    ['0.00495', '0.00'],
+    ['12629.9876', '12629.99'],
+    ['30', '30.00'],
+    ['12629.9900', '12629.99'],
+  ])('the price pre-filled for a total of %s (%s) is not an override: the flag is false, no reason is kept, and there is one entry', async (total, prefilled) => {
+    const { service, inserted, audited, writes } = serviceWith(total);
+    expect(prefillPrice(total)).toBe(prefilled);
+    await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: prefilled, reason: 'Sent but not kept.', audit });
+    expect(inserted).toEqual([{ calculatedTotal: prefilled, approvedPrice: prefilled, isOverride: false, overrideReason: null }]);
+    expect(audited).toEqual([{ approvedPrice: prefilled, calculatedTotal: prefilled, approver: 'Invented Lead', isOverride: false }]);
+    expect(writes).toEqual(['transition', 'insert', 'audit']);
+  });
+
+  it.each([
+    ['100.00495', '100.01'],
+    ['12.34495', '12.35'],
+    ['12629.9876', '12630.00'],
+    ['12629.9876', '12629.98'],
+  ])('one paisa from the rounded total of %s, at %s, is an override', async (total, price) => {
+    const { service, inserted } = serviceWith(total);
+    await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price, audit });
+    expect(inserted[0]).toMatchObject({ approvedPrice: price, isOverride: true });
+  });
+
+  it('the reason is trimmed, kept with an override and copied to the override entry, and an empty one is kept as nothing', async () => {
+    const withReason = serviceWith('12629.99');
+    await withReason.service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', reason: '  Rounded for the quote.  ', audit });
+    expect(withReason.inserted[0]).toMatchObject({ isOverride: true, overrideReason: 'Rounded for the quote.' });
+    expect(withReason.audited[1]).toEqual({ approvedPrice: '12600.00', reason: 'Rounded for the quote.' });
+    const withoutReason = serviceWith('12629.99');
+    await withoutReason.service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', reason: '   ', audit });
+    expect(withoutReason.inserted[0]).toMatchObject({ isOverride: true, overrideReason: null });
+  });
+
+  it.each([
+    ['over 500 characters', 'x'.repeat(501), REASON_TOO_LONG_MESSAGE],
+    ['holding a zero-width joiner', 'a‍b', TEXT_CHARACTERS_MESSAGE],
+    ['holding a control character', 'a\u0007b', TEXT_CHARACTERS_MESSAGE],
+  ])('a reason %s is refused before anything is read or written, even when called without the route (the second guard)', async (_name, reason, message) => {
+    const { service, writes } = serviceWith('12629.99');
+    const refusal = await service.approve(lead, 'estimate-1', { calculationId: CURRENT_ID, price: '12600', reason, audit }).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(FieldValidationError);
+    expect((refusal as FieldValidationError).fields).toEqual([{ field: 'reason', message }]);
+    expect(writes).toEqual([]);
   });
 
   it('a current calculation with no total is a fault in the data (a plain error, a 500), and nothing is written', async () => {

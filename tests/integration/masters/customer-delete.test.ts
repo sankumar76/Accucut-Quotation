@@ -243,9 +243,11 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     // The delete has either finished (nothing made it wait) or is waiting for the lock the choice holds on the customer. Only then is the choice let go.
     await expect.poll(async () => deleteDone || (await someoneIsWaitingForALock()), { message: 'the delete waits for the customer\'s lock, or has finished' }).toBe(true);
     expect(deleteDone, 'the delete did not wait for the choice').toBe(false);
+    // The delete is refused as soon as the choice lets go, so its refusal is handled before the release (DEF-039: held back, it is an unhandled rejection).
+    const refused = expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
     release();
     await choice;
-    await expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
+    await refused;
 
     expect(await stored(alpha.id)).toEqual({ deleted: false, rates: 15 });
     const { rows } = await db.owner.query<{ customer_id: string | null }>('SELECT customer_id::text FROM estimates WHERE id = $1::uuid', [estimateId]);
@@ -274,9 +276,11 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     });
     await expect.poll(async () => choiceDone || (await someoneIsWaitingForALock()), { message: 'the choice waits for the customer\'s lock, or has finished' }).toBe(true);
     expect(choiceDone, 'the choice did not wait for the delete').toBe(false);
+    // The choice is refused as soon as the delete lets go, so its refusal is handled before the release (DEF-039: held back, it is an unhandled rejection).
+    const refused = expect(choice).rejects.toBeInstanceOf(FieldValidationError);
     release();
     await deletion;
-    await expect(choice).rejects.toBeInstanceOf(FieldValidationError);
+    await refused;
 
     expect((await stored(alpha.id)).deleted).toBe(true);
     const { rows } = await db.owner.query<{ customer_id: string | null }>('SELECT customer_id::text FROM estimates WHERE id = $1::uuid', [estimateId]);

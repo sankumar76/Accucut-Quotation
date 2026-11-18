@@ -45,6 +45,7 @@ vi.mock('@/server/composition', async () => {
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
     getApprovalService: () => shared.approvalService,
+    getUnlockService: () => shared.unlockService,
     getCostDetailsService: () => shared.costDetailsService,
     getExportService: () => shared.exportService,
     getAccountService: () => shared.accountService,

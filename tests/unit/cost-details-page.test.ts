@@ -16,7 +16,8 @@ vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/
 vi.mock('next/headers', async () => ({ headers: (await import('../support/session-harness')).harness.headers }));
 vi.mock('next/navigation', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound, usePathname: () => '/estimates/invented' };
+  // `useRouter` is the Recalculate button's: a Draft with current figures shows it since STORY-06.08 AC-11, and the page of a Draft is rendered here.
+  return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound, usePathname: () => '/estimates/invented', useRouter: () => ({ refresh: () => undefined }) };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
