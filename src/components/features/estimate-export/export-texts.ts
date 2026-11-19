@@ -88,3 +88,10 @@ export const boSetAgainst = (price: string, calculatedTotal: string): string => 
 export const boReasonGiven = (reason: string): string => `Reason given: ${reason}`;
 export const BO_NO_REASON = 'No reason given.';
 export const BO_REASON_NOT_IN_FILE = 'The reason is shown here, on the estimate and in the audit log. It is not written into the file, because the file follows the worksheet layout.';
+
+/**
+ * STORY-07.06 AC-1, AC-2 (UX spec SCR-10 "Quantity warning on this calculation", UX-47; A-24): the warning is on this page and never in the file. The notice itself (its title, who went ahead, when and the rows) is the
+ * shared one of SCR-06 (`lead-warning-copy.ts`), so the two screens say the same words; these are the two sentences only SCR-10 says. The letters are the registry's, passed in by the page.
+ */
+export const noWarningInFile = (count: string, price: string): string => `The file holds no warning: it keeps the rows as they are, with ${count} 0 and ${price} 0.`;
+export const HOLDS_NO_WARNING_CELL = 'No warning cell';

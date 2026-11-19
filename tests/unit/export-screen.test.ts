@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateExport } from '@/components/features/estimate-export/estimate-export';
 import { BUILDING_LINE, COLUMNS_RANGE, PARTS, PICTURES, REFERENCE_LINE } from '@/components/features/estimate-export/export-texts';
-import type { ExportFiguresView, ExportSummaryView } from '@/server/views/schemas/export';
+import { exportSummarySchema, type ExportFiguresView, type ExportSummaryView } from '@/server/views/schemas/export';
 
 /**
  * STORY-07.01 AC-6 without a browser: what SCR-10 draws from the strict answer of `GET /export-summary`: the file card, the rows of the file, and the Empty state. The words are written out here from the
@@ -28,6 +28,7 @@ const summary = (overrides: Partial<ExportSummaryView> = {}): ExportSummaryView 
   ],
   state: 'none',
   figures: null,
+  warning: null,
   ...overrides,
 });
 
@@ -258,5 +259,118 @@ describe('AC-9: a long reason wraps, so the page never scrolls sideways', () => 
     );
     expect(html).not.toContain('<img');
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
+});
+
+/**
+ * STORY-07.06 (UX spec SCR-10 "Quantity warning on this calculation", UX-47; A-24): the notice above the tables, the mark "Quantity 0" on each warned row, the sentence that the file holds no warning and the
+ * checklist line "No warning cell". The words are written out here from the UX spec, not imported. The names and rows are invented.
+ */
+const WARNING = {
+  madeBy: 'Invented Engineer',
+  at: '2026-11-05T05:20:00.000Z',
+  rows: [
+    { slNo: '1.1', label: 'Support arm' },
+    { slNo: '2', label: '' },
+  ],
+} as const;
+
+const warned = (state: ExportSummaryView['state'] = 'current'): ExportSummaryView => summary({ state, figures: state === 'current' ? figures() : null, warning: state === 'current' ? WARNING : null });
+
+/** The cells of each table row, as markup. */
+const tableRows = (html: string): string[] => [...html.matchAll(/<tr[^>]*>(.*?)<\/tr>/gs)].map((match) => match[1] ?? '');
+
+describe('STORY-07.06 AC-1: the notice above the tables', () => {
+  it('is a status region with the title, who went ahead, when (IST) and the rows, and says the zeros may be meant and approving is not stopped', () => {
+    const html = render(warned());
+    expect(html).toMatch(/role="status"(?:(?!<\/div>).)*Quantity warning on this calculation\./s);
+    expect(html).toContain('Invented Engineer went ahead on 05 Nov 2026, 10:50 IST with 0 in QTY per Assy on 2 rows: 1.1 Support arm and 2.');
+    expect(html).toContain('Each of these rows costs 0 in this estimate. Approving is not stopped. Check that the zeros are meant.');
+  });
+
+  it('says that the file holds no warning and keeps the rows as they are, with H 0 and BG 0 (A-24), the letters from the registry', () => {
+    expect(render(warned())).toContain('The file holds no warning: it keeps the rows as they are, with H 0 and BG 0.');
+    const moved = summary({ state: 'current', figures: figures({ letters: { count: 'K', bg: 'BX', toolCost: 'BM' } }), warning: WARNING });
+    expect(render(moved)).toContain('The file holds no warning: it keeps the rows as they are, with K 0 and BX 0.');
+  });
+
+  it('is above the tables: it comes before "The rows in the file" and before "How BL2 is made"', () => {
+    const html = render(warned());
+    const notice = html.indexOf('Quantity warning on this calculation.');
+    expect(notice).toBeGreaterThan(-1);
+    expect(notice).toBeLessThan(html.indexOf('<table'));
+    expect(notice).toBeLessThan(html.indexOf('How BL2 is made'));
+  });
+
+  it('puts the mark "Quantity 0" (an icon and the words) on each warned row of "The rows in the file", and on no other', () => {
+    const html = render(warned());
+    expect(html.match(/data-quantity-tag=""/g)).toHaveLength(2);
+    const tagged = tableRows(html).filter((row) => row.includes('data-quantity-tag'));
+    expect(tagged.map((row) => /<td[^>]*>([^<]+)<\/td>/.exec(row)?.[1])).toEqual(['1.1', '2']);
+    for (const row of tagged) {
+      expect(row).toContain('Quantity 0');
+      expect(row).toContain('<svg');
+    }
+  });
+
+  it('keeps a warned row\'s name beside its mark, and "No name yet" for a part with none', () => {
+    expect(render(warned())).toMatch(/<td[^>]*>No name yet <span data-quantity-tag/);
+  });
+
+  it('names a single row in the singular', () => {
+    const html = render(summary({ state: 'current', figures: figures(), warning: { madeBy: 'Invented Lead', at: WARNING.at, rows: [{ slNo: '1.1', label: 'Support arm' }] } }));
+    expect(html).toContain('Invented Lead went ahead on 05 Nov 2026, 10:50 IST with 0 in QTY per Assy on 1 row: 1.1 Support arm.');
+    expect(html).toContain('This row costs 0 in this estimate.');
+    expect(html.match(/data-quantity-tag=""/g)).toHaveLength(1);
+  });
+
+  it('shows a name or a row label that looks like markup as text, and wraps a long one', () => {
+    const html = render(summary({ state: 'current', figures: figures(), warning: { madeBy: '<img src=x onerror=alert(1)>', at: WARNING.at, rows: [{ slNo: '1.1', label: 'L'.repeat(300) }] } }));
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('L'.repeat(300));
+    expect(html.slice(html.indexOf('Quantity warning on this calculation.') - 400)).toContain('[overflow-wrap:anywhere]');
+  });
+});
+
+describe('STORY-07.06 AC-2: the checklist says there is no warning cell', () => {
+  it('"What the file holds" lists "No warning cell", with or without a warning on the calculation', () => {
+    expect(render(warned())).toContain('<li>No warning cell</li>');
+    expect(render(current())).toContain('<li>No warning cell</li>');
+  });
+
+  it('and the rows still show H and BG as the file holds them: a row with H 0 shows 0 and BG 0.00', () => {
+    const zero = summary({
+      state: 'current',
+      figures: figures({ rows: [{ slNo: '1.1', count: '0', bg: '0', toolCost: '0' }] }),
+      rows: [{ slNo: '1.1', name: 'Support arm', count: '0' }],
+      warning: { madeBy: 'Invented Engineer', at: WARNING.at, rows: [{ slNo: '1.1', label: 'Support arm' }] },
+    });
+    const row = tableRows(render(zero)).find((candidate) => candidate.includes('data-quantity-tag')) ?? '';
+    expect(row).toContain('>0</td>');
+    expect(row).toContain('>0.00</td>');
+  });
+});
+
+describe('STORY-07.06 AC-3: no notice and no mark unless the calculation is current', () => {
+  it.each(['none', 'out-of-date'] as const)('%s: no notice, no mark, no word of the warning', (state) => {
+    const html = render(warned(state));
+    for (const text of ['Quantity warning on this calculation.', 'data-quantity-tag', 'Quantity 0', 'went ahead', 'The file holds no warning', 'No warning cell']) expect(html, text).not.toContain(text);
+  });
+
+  it('a current calculation with no warning has no notice and no mark either', () => {
+    const html = render(current());
+    expect(html).not.toContain('Quantity warning on this calculation.');
+    expect(html).not.toContain('data-quantity-tag');
+  });
+});
+
+describe('STORY-07.06 AC-4: the summary schema carries a warning only while the state is current', () => {
+  it('refuses a warning on a state that is not current, and any key that is not named', () => {
+    expect(exportSummarySchema.safeParse(warned()).success).toBe(true);
+    expect(exportSummarySchema.safeParse({ ...warned(), state: 'out-of-date', figures: null }).success).toBe(false);
+    expect(exportSummarySchema.safeParse({ ...warned(), warning: { ...WARNING, code: 'QTY_ZERO' } }).success).toBe(false);
+    expect(exportSummarySchema.safeParse({ ...warned(), warning: { ...WARNING, rows: [{ slNo: '1.1', label: 'x', nodeId: 'n' }] } }).success).toBe(false);
+    expect(exportSummarySchema.safeParse({ ...warned(), warning: { ...WARNING, rows: [] } }).success).toBe(false);
   });
 });

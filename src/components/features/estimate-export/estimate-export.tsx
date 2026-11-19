@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
+import { QuantityTag, warnedSlNos } from '@/components/shared/quantity-tag';
+import { WarningNotice } from '@/components/shared/warning-notice';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,6 +42,7 @@ import {
   HEAD_PART,
   HEAD_SL_NO,
   HOLDS_EMPTY_CELL,
+  HOLDS_NO_WARNING_CELL,
   HOLDS_ONCE,
   HOLDS_OWN_TOOL_COST,
   HOLDS_TITLE,
@@ -48,6 +51,7 @@ import {
   HOW_TITLE,
   LINES_AS_SHOWN,
   NO_FIGURE_CELL,
+  noWarningInFile,
   PART_NAME_FALLBACK,
   PARTS,
   ROUNDING_SENTENCE,
@@ -71,6 +75,9 @@ import {
  * **The figures (STORY-07.03 AC-9)** are drawn from `summary.figures`, which is `null` unless the calculation is current: then the rows table keeps its three columns and holds no figure; with figures it adds
  * the file's own BG and Tool Cost per row, the BG column added up against BL2 and the Total Tool Cost, and the page adds the cards "How BL2 is made" and "What the file holds" (BL2, BN2, BO2 and the Total Tool Cost).
  * Every letter and cell address in the words is read from the summary (the registry), never written here.
+ *
+ * **The quantity warning (STORY-07.06 AC-1 to AC-3; UX-47; A-24)** is drawn from `summary.warning`, which is `null` unless the calculation is current: the shared notice of SCR-06 above the file card, the mark
+ * "Quantity 0" on each warned row, the sentence that the file holds no warning, and the checklist line "No warning cell". The file holds none: the page says what it keeps, and the warning is on this page alone.
  *
  * **Restricted** (NFR-002): every file in this folder is for the Lead and the Admin. The folder is loaded by `export/page.tsx` alone, whose manifest row lists no Engineer, and nothing outside it imports it.
  * The only script is `DownloadButton`. The table scrolls inside its own focusable, named region and the button stacks full width at 360 px (AC-7).
@@ -152,6 +159,8 @@ const rowOf = (address: string): string => address.replace(/^[A-Z]+/, '');
 function FigureRowsCard({ summary, figures }: { readonly summary: ExportSummaryView; readonly figures: ExportFiguresView }) {
   const { letters, cells, reconciliation } = figures;
   const names = new Map(summary.rows.map((row) => [row.slNo, row.name]));
+  // The rows of the calculation's quantity warning, which the summary holds only while the figures are current (STORY-07.06 AC-1, AC-3): each is marked, and the file's cells are not.
+  const warned = warnedSlNos(summary.warning);
   return (
     <Card className="min-w-0">
       <CardContent className="flex min-w-0 flex-col gap-s-3">
@@ -173,7 +182,15 @@ function FigureRowsCard({ summary, figures }: { readonly summary: ExportSummaryV
               return (
                 <TableRow key={row.slNo}>
                   <TableCell className="tabular-nums">{row.slNo}</TableCell>
-                  <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>{name === '' ? PART_NAME_FALLBACK : name}</TableCell>
+                  <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>
+                    {name === '' ? PART_NAME_FALLBACK : name}
+                    {warned.has(row.slNo) ? (
+                      <>
+                        {' '}
+                        <QuantityTag />
+                      </>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{formatCount(row.count)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatFigure(row.bg)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatFigure(row.toolCost)}</TableCell>
@@ -259,6 +276,7 @@ function HoldsCard({ figures }: { readonly figures: ExportFiguresView }) {
           <li>{HOLDS_ONCE(cells.bl, cells.bn, cells.bo)}</li>
           <li>{HOLDS_OWN_TOOL_COST}</li>
           <li>{HOLDS_EMPTY_CELL}</li>
+          <li>{HOLDS_NO_WARNING_CELL}</li>
         </ul>
         <dl className="grid gap-s-3 sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-s-4">
           <dt className="text-label font-semibold text-ink-2">{cells.bl}</dt>
@@ -284,6 +302,20 @@ function HoldsCard({ figures }: { readonly figures: ExportFiguresView }) {
   );
 }
 
+/**
+ * "Quantity warning on this calculation" (STORY-07.06 AC-1, AC-3; UX-47): the notice of SCR-06 (the shared component, the same words) above the file card and the tables, so it is read before the file leaves,
+ * and the sentence that **the file holds no warning** (A-24). It is drawn only while the figures are current, which is the only state in which the summary holds a warning; there is nothing to say in the others.
+ */
+function QuantityWarning({ summary }: { readonly summary: ExportSummaryView }) {
+  const { figures, warning, state } = summary;
+  if (figures === null || warning === null) return null;
+  return (
+    <WarningNotice state={state} warning={warning} at={formatIst(new Date(warning.at))}>
+      <p>{noWarningInFile(figures.letters.count, figures.letters.bg)}</p>
+    </WarningNotice>
+  );
+}
+
 export function EstimateExport({ summary, estimateId, code }: EstimateExportProps) {
   return (
     <>
@@ -294,6 +326,7 @@ export function EstimateExport({ summary, estimateId, code }: EstimateExportProp
         </Notice>
       ) : (
         <div className="flex flex-col gap-s-4">
+          <QuantityWarning summary={summary} />
           <FileCard summary={summary} estimateId={estimateId} />
           <RowsCard summary={summary} />
           {summary.figures === null ? null : <HowCard figures={summary.figures} />}
