@@ -88,7 +88,7 @@ const LOCK_WAIT_LIMIT_MILLISECONDS = 5_000;
  * Resolves once some session waits for a lock it was not granted (read on the owner's connection, apart from the pool under test); throws when none does within the limit. A holder that returned at once could
  * commit before the call under test asked for the lock, and the test would then pass with or without the lock (SQR-02 of the reviews of AQP-321 and AQP-322).
  */
-export async function untilALockWaits(db: CalculationDatabase): Promise<void> {
+export async function untilALockWaits(db: Pick<CalculationDatabase, 'owner'>): Promise<void> {
   const deadline = Date.now() + LOCK_WAIT_LIMIT_MILLISECONDS;
   while (Date.now() < deadline) {
     // Only a session of this test file's own database counts: `pg_locks` is cluster-wide, and another file's wait must not end this poll early (SQR-01 of the review of AQP-323).

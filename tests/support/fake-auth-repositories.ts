@@ -144,6 +144,23 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       Object.assign(found, next);
       return Promise.resolve(summaryOf(found));
     },
+    // The same two statements as the real repository, in the same order: the Admin steps down, then the other person steps up (and the one-Admin rule is checked on each).
+    handOverAdmin({ fromAdminId, toUserId }) {
+      const from = records.find((record) => sameUuid(record.id, fromAdminId));
+      const to = records.find((record) => sameUuid(record.id, toUserId));
+      if (from === undefined || from.role !== 'ADMIN' || !from.isActive) return Promise.resolve(false);
+      from.role = 'LEAD';
+      from.sessionVersion += 1;
+      if (to === undefined || to.role === 'ADMIN' || !to.isActive) return Promise.resolve(false);
+      try {
+        refuseIfRepeated({ id: to.id, email: to.email, role: 'ADMIN', isActive: true });
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      to.role = 'ADMIN';
+      to.sessionVersion += 1;
+      return Promise.resolve(true);
+    },
     setPassword(id, passwordHash) {
       const found = records.find((record) => sameUuid(record.id, id));
       if (found === undefined) return Promise.resolve(null);
