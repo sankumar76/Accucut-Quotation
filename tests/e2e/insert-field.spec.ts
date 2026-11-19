@@ -37,7 +37,7 @@ async function openWizard(page: Page, address = AFTER_AX): Promise<void> {
 async function toDetails(page: Page, kind: 'Input' | 'Output' | 'Input and its cost column'): Promise<void> {
   await openWizard(page);
   await page.getByRole('radio', { name: kind, exact: true }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(step(page, '2 · Details')).toBeVisible();
 }
 
@@ -84,7 +84,7 @@ test.describe('the Admin', () => {
     for (const kind of ['Input', 'Output', 'Input and its cost column']) await expect(page.getByRole('radio', { name: kind, exact: true })).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Input', exact: true })).toBeChecked();
     await expect(page.getByRole('list', { name: 'Steps' }).getByRole('listitem').filter({ hasText: 'What to add' })).toHaveAttribute('aria-current', 'step');
-    expect((await page.getByRole('button', { name: 'Next' }).boundingBox() ?? { height: 0 }).height).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect((await page.getByRole('button', { name: 'Next', exact: true }).boundingBox() ?? { height: 0 }).height).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
@@ -179,7 +179,7 @@ test.describe('the Admin', () => {
 
     await page.getByRole('button', { name: 'Back' }).click();
     await page.getByRole('radio', { name: 'Output', exact: true }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await control(page, 'output-label').fill('Invented Loop');
     await control(page, 'output-stageId').selectOption({ index: 3 });
     await control(page, 'output-formula').fill('AY * 2');
@@ -194,10 +194,13 @@ test.describe('the Admin', () => {
     await page.getByRole('radio', { name: 'Input', exact: true }).focus();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
+    // The arrows move to the third card; Space chooses it (a no-op when the move already did).
+    await expect(page.getByRole('radio', { name: 'Input and its cost column' })).toBeFocused();
+    await page.keyboard.press('Space');
     await expect(page.getByRole('radio', { name: 'Input and its cost column' })).toBeChecked();
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('button', { name: 'Next' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(step(page, '2 · Details')).toBeFocused();
     await expect(status(page)).toHaveText('Step 2 of 3: Details');
@@ -278,7 +281,7 @@ test.describe('the Admin', () => {
 
   test('AC-1: an address with no column, or one that is no UUID, opens the wizard with no column chosen and the server\'s words when Preview is pressed', async ({ page }) => {
     await openWizard(page, '/config/fields/new?after=not-a-uuid');
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(control(page, 'afterFieldId')).toHaveValue('');
     await expect(page.getByRole('region', { name: 'Letters after this insert, scrollable' })).toContainText('Choose the column to insert after to see the new letters.');
     await page.getByRole('button', { name: 'Preview' }).click();
