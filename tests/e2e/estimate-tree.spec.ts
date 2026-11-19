@@ -251,8 +251,9 @@ async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<
     expect(added.ok(), `part ${slNo} is added`).toBe(true);
   }
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+  // Hydrated, so a click is not lost (DEF-011). The customer field is not waited for to be enabled, as `openTree` does: its list of customers is a read that these tests do not
+  // use, and waiting for it was 2 to 2.6 s of a test (phases measured on CI, run 44574122579).
   await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-  await expect(customerField(page)).toBeEnabled();
   await showTree(page);
   await expect(part(page, '1')).toBeVisible();
   await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
