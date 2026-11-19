@@ -135,6 +135,20 @@ function describeFailure(error: unknown): { readonly errorName: string; readonly
   return error instanceof ResponseSchemaError ? { ...base, schemaPaths: error.paths } : base;
 }
 
+/**
+ * Who the request is, for the log line of a failure (STORY-10.09a AC-1, NFR-024). `run` sets `userId` the moment `requireUser()` answers, and `handle` reads it in its `catch`: the
+ * user is a local of `run`, which the `catch` cannot see. It is the user's ID and nothing else (never a name or an e-mail address, NFR-028), and it stays absent for a request that
+ * never got a user (signed out, session ended, a refused origin).
+ */
+interface RequestWho {
+  userId?: string;
+}
+
+/** The field of a failure log line that names the user, present only when the person was signed in. */
+function whoFields(who: RequestWho): { readonly userId?: string } {
+  return who.userId === undefined ? {} : { userId: who.userId };
+}
+
 /** The headers of an answer: `no-store`, the request ID and any cookies the handler set. */
 function answerHeaders(requestId: string, cookies: ReadonlyArray<string>): Headers {
   const headers = new Headers({ 'Cache-Control': NO_STORE, [REQUEST_ID_HEADER]: requestId });
@@ -196,11 +210,12 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
   if (row.roles === 'public') throw new Error(`withRoute: ${options.route} is public; this wrapper is for routes that need a session.`);
   const allowed = row;
 
-  async function run(request: Request, context: NextRouteContext | undefined, requestId: string): Promise<Response> {
+  async function run(request: Request, context: NextRouteContext | undefined, requestId: string, who: RequestWho): Promise<Response> {
     if ((isStateChanging(request.method) || isStateChanging(options.method)) && !isSameOriginRequest(request.headers, loadOriginEnv().APP_ORIGIN)) {
       return problemResponse(originRefusedProblem(requestId));
     }
     const user = await requireUser();
+    who.userId = user.id;
     if (user.mustChangePassword && allowed.mustChangeAllowed !== true) {
       throw new ForbiddenError('Set a new password to continue.', { code: PASSWORD_CHANGE_REQUIRED_CODE });
     }
@@ -238,20 +253,21 @@ export function withRoute(options: RouteOptions<z.ZodType, z.ZodType, z.ZodType,
 
   async function handle(request: Request, context?: NextRouteContext): Promise<Response> {
     const requestId = newRequestId();
+    const who: RequestWho = {};
     try {
-      return await run(request, context, requestId);
+      return await run(request, context, requestId, who);
     } catch (error) {
       if (error instanceof InputRefused) return error.response;
       if (error instanceof AppError) {
         const body = problemFromAppError(error, requestId);
-        if (body.status >= 500) logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed');
+        if (body.status >= 500) logger.error({ requestId, route: options.route, method: options.method, ...whoFields(who), ...describeFailure(error) }, 'route failed');
         else if (body.status === UNAUTHORIZED_STATUS) logger.debug({ requestId, route: options.route, method: options.method }, 'signed-out request');
         else logger.warn({ requestId, route: options.route, method: options.method, status: body.status, code: body.code }, 'route refused');
         return problemResponse(body, error instanceof ExportBusyError ? { 'Retry-After': String(error.retryAfterSeconds) } : {});
       }
       // The log gets the kind of failure and the request ID, and the body only what went wrong in general. Neither carries the
       // message, the stack or the cause: they can hold an e-mail address, a value from a query or a rate (coding standards section 4).
-      logger.error({ requestId, route: options.route, method: options.method, ...describeFailure(error) }, 'route failed unexpectedly');
+      logger.error({ requestId, route: options.route, method: options.method, ...whoFields(who), ...describeFailure(error) }, 'route failed unexpectedly');
       return problemResponse(internalProblem(requestId));
     }
   }
