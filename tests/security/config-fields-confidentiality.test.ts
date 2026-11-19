@@ -97,7 +97,8 @@ describe('only the Configuration routes, page and composition import the Configu
   });
 
   it('lists exactly the files that are allowed to', () => {
-    expect(importers).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)));
+    // Both sides are sorted: the order `readdirSync` gives differs between Windows and Linux (a `[id]` folder comes last on one and first on the other), and the rule is about the set.
+    expect([...importers].sort()).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)).sort());
     expect(importers.filter((file) => !ALLOWED_IMPORTERS.includes(file))).toEqual([]);
   });
 
