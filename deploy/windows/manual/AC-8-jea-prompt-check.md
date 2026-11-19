@@ -14,6 +14,7 @@ RISK-018 applies in full). That decision is the delivery lead's.
 ## What it changes, and what it removes
 
 It makes: the folder `C:\Ac8Check`, one local group `Ac8CheckGroup` (no members), and one endpoint `Ac8Check`. At the end (`-Phase Finish`, or `-Phase Cleanup` if you stop half way) it removes all three.
+**Optional (assumption A-35):** if you add `-StandardAccount` to Prepare, it also makes one throwaway **standard** local account, `Ac8Standard` (a member of the built-in Users group only, never an administrator; its password is made up, shown once on the screen and stored nowhere). `-Phase Finish` and `-Phase Cleanup` remove that account too, and its profile folder if one appeared.
 It starts or stops no service, makes no scheduled task and no event source, changes no Windows setting and touches no database. It shapes the endpoint like the real one: a restricted session, a virtual account
 in one group (never an administrator), one command that runs a script file, which imports a module by its path, asks a question, asks for a secure paste, and writes a result file.
 
@@ -33,6 +34,7 @@ in one group (never an administrator), one command that runs a script file, whic
    ```
 
    It prints a **made-up paste value** that starts with `FAKE-KEY-`, and what to type next. Leave the window open.
+   (To also do the optional step 5b, add `-StandardAccount` at the end of that command. It then also prints the name and the made-up password of the throwaway standard account.)
 3. In the **same window** run:
 
    ```powershell
@@ -45,13 +47,25 @@ in one group (never an administrator), one command that runs a script file, whic
    - It asks **Paste the FAKE value ... (nothing is shown)**: **right-click** to paste the `FAKE-KEY-...` value from step 2, then Enter. **Nothing appears on the screen while you paste: that is the normal behaviour of a secure prompt.**
    - It prints `Done.`
 5. Type **`Exit-PSSession`** and press Enter. The prompt is back to `PS C:\...>`.
+
+   **Optional step 5b: a standard account (checks assumption A-35). Only if you added `-StandardAccount` in step 2.** In the same window run (the exact line is also printed by Prepare):
+
+   ```powershell
+   Enter-PSSession -ComputerName localhost -ConfigurationName Ac8Check -Credential "$env:COMPUTERNAME\Ac8Standard"
+   ```
+
+   A sign-in box asks for the password: type the made-up one that Prepare printed. The prompt changes to `[localhost]: PS>`. Type **`Test-Ac8Prompt`** and press Enter. It asks
+   **Type the word PINEAPPLE and press Enter**. This step goes no further: **press Enter without typing anything** (whatever is typed, the session stops there). It prints `Stopped at the first question.` Then type **`Exit-PSSession`**.
+   `Test-Ac8Prompt` stands in for `Restore-AccucutBackup`, whose first question also lets you press Enter to stop. This never opens the real endpoint `AccucutAdmin`: the real restore, through
+   the "Accucut Admin" shortcut, is tried separately, in the rehearsal before go-live.
+   If the sign-in is refused ("Access is denied"), check the password once and try again. If it is refused again, or `Test-Ac8Prompt` does not start, go on to step 6 (it reports and cleans up).
 6. Run:
 
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File C:\Temp\AC8-check.ps1 -Phase Finish
    ```
 
-   It prints one line per check, then **`AC-8 RESULT: PASS`** or **`AC-8 RESULT: FAIL`**, and removes everything it made.
+   It prints one line per check, then **`AC-8 RESULT: PASS`** or **`AC-8 RESULT: FAIL`**, and removes everything it made. If you did step 5b, it then prints one more line, **`OPTIONAL A-35 CHECK`**, and also removes the throwaway standard account.
 
 If something goes wrong half way (an error, a closed window), run `-Phase Cleanup` and start again from step 2.
 
@@ -69,11 +83,21 @@ PASS  the transcript of the session exists and does not contain the pasted value
 AC-8 RESULT: PASS
 ```
 
+If you did the optional step 5b, one more line follows. **It is reported separately and never changes `AC-8 RESULT`** (a FAIL here does not turn the AC-8 result to FAIL, a PASS here does not turn it to PASS):
+
+```
+OPTIONAL A-35 CHECK: PASS  a standard (non-administrator) account opened the endpoint, and its command ran as the limited virtual account and reached its first question
+```
+
+A PASS shows only that a standard account can use a JEA endpoint built like `AccucutAdmin`, up to the first question. The real endpoint and the "Accucut Admin" shortcut are tested only in the rehearsal before go-live.
+
+It can also read `OPTIONAL A-35 CHECK: NOT RUN` (you did not add `-StandardAccount`). **If it reads `OPTIONAL A-35 CHECK: FAIL`, stop and report it to the delivery lead.** Do not try to fix it. The delivery lead decides what happens next.
+
 ## What to report back
 
 Add a comment on **AQP-312** with:
 
-1. `AC-8 RESULT: PASS` or `FAIL`, and the whole table of lines above it.
+1. `AC-8 RESULT: PASS` or `FAIL`, and the whole table of lines above it, and the `OPTIONAL A-35 CHECK` line if there is one.
 2. The server: run `(Get-CimInstance Win32_OperatingSystem).Caption` and `$PSVersionTable.PSVersion` and paste both.
 3. For a FAIL: the **complete text** that the script printed (every line, including the red ones), and which step you were at. Do not change anything and try again: report it, as the story says.
 4. Who ran it, and on what date.
@@ -87,17 +111,20 @@ Add a comment on **AQP-312** with:
   AC-8 check of STORY-10.11 (AQP-312): do the prompts, including a secure-string paste, work inside a JEA session?
   Run on a Windows Server TEST machine, in Windows PowerShell 5.1 as administrator. Phases: Prepare, then the interactive steps in AC-8-jea-prompt-check.md, then Finish.
   It makes C:\Ac8Check, the local group Ac8CheckGroup and the endpoint Ac8Check, and removes them in Finish (or Cleanup). It uses a made-up value, never the real backup key.
+  With -StandardAccount, Prepare also makes the throwaway standard account Ac8Standard (optional step 5b, assumption A-35); Finish or Cleanup removes it. That check is reported on its own line and never changes the AC-8 result.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('Prepare', 'Finish', 'Cleanup')][string]$Phase,
-    [ValidatePattern('^[A-Za-z]:\\[A-Za-z0-9 _.\\-]{1,200}$')][string]$Root = 'C:\Ac8Check'
+    [ValidatePattern('^[A-Za-z]:\\[A-Za-z0-9 _.\\-]{1,200}$')][string]$Root = 'C:\Ac8Check',
+    [switch]$StandardAccount
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $EndpointName = 'Ac8Check'
 $GroupName = 'Ac8CheckGroup'
+$StandardName = 'Ac8Standard'
 
 function Test-Elevated {
     $principal = New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())
@@ -115,6 +142,14 @@ function Remove-Ac8Check {
     try { if (Get-PSSessionConfiguration -Name $EndpointName -ErrorAction SilentlyContinue) { Unregister-PSSessionConfiguration -Name $EndpointName -Force } } catch { Write-Warning "The endpoint could not be removed: $($_.Exception.Message)" }
     try { if (Get-LocalGroup -Name $GroupName -ErrorAction SilentlyContinue) { Remove-LocalGroup -Name $GroupName } } catch { Write-Warning "The group could not be removed: $($_.Exception.Message)" }
     try { if (Test-Path -LiteralPath $Root) { Remove-Item -LiteralPath $Root -Recurse -Force } } catch { Write-Warning "The folder $Root could not be removed: $($_.Exception.Message)" }
+    try {
+        $standardUser = Get-LocalUser -Name $StandardName -ErrorAction SilentlyContinue
+        if ($standardUser) {
+            $standardSid = $standardUser.SID.Value
+            Remove-LocalUser -Name $StandardName
+            Get-CimInstance -ClassName Win32_UserProfile -Filter "SID='$standardSid'" | Remove-CimInstance
+        }
+    } catch { Write-Warning "The account $StandardName or its profile folder could not be removed: $($_.Exception.Message)" }
 }
 
 function Add-Ac8Modify {
@@ -132,11 +167,23 @@ if ($Phase -eq 'Prepare') {
     $winrm = Get-Service -Name WinRM
     if ($winrm.Status -ne 'Running') { throw 'Windows Remote Management (WinRM) is not running. Run Enable-PSRemoting -Force in this window, then start again.' }
     if (Test-Path -LiteralPath $Root) { throw "$Root already exists. Run -Phase Cleanup first." }
+    if ($StandardAccount -and (Get-LocalUser -Name $StandardName -ErrorAction SilentlyContinue)) { throw "The account $StandardName already exists. Run -Phase Cleanup first." }
     $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     foreach ($folder in 'current', 'out', 'config', 'transcripts') { New-Item -ItemType Directory -Path (Join-Path $Root $folder) -Force | Out-Null }
     $groupSid = (New-LocalGroup -Name $GroupName -Description 'AC-8 check of the Accucut Admin endpoint (throwaway, no members)').SID.Value
     Add-Ac8Modify -Path (Join-Path $Root 'out') -Sid $groupSid
     Add-Ac8Modify -Path (Join-Path $Root 'transcripts') -Sid $groupSid
+
+    # Optional (A-35): a throwaway STANDARD account (built-in Users only), so that the endpoint is opened by an account that is not an administrator. The password is made up here (20 random characters, then three fixed ones so that every kind of character is present), shown once and never stored.
+    $standardIdentity = $null
+    $standardPassword = $null
+    if ($StandardAccount) {
+        $pool = (48..57) + (65..90) + (97..122)
+        $standardPassword = (-join (1..20 | ForEach-Object { [char](Get-Random -InputObject $pool) })) + 'aZ9'
+        [void](New-LocalUser -Name $StandardName -Password (ConvertTo-SecureString -String $standardPassword -AsPlainText -Force) -PasswordNeverExpires -UserMayNotChangePassword -Description 'AC-8 check of the Accucut Admin endpoint (throwaway standard account)')
+        Add-LocalGroupMember -SID ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-545') -Member $StandardName
+        $standardIdentity = "$env:COMPUTERNAME\$StandardName"
+    }
 
     # A made-up value to paste: 74 characters, like a real key, but nothing else. Only its hash is stored.
     $characters = (48..57) + (65..90)
@@ -152,17 +199,36 @@ $root = '__ROOT__'
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $groups = @()
 foreach ($group in $identity.Groups) { try { $groups += $group.Translate([System.Security.Principal.NTAccount]).Value } catch { $groups += $group.Value } }
+# Who connected. The throwaway standard account (optional A-35 step) only ever goes as far as the first question.
+$sender = ''
+try { if ($null -ne $PSSenderInfo) { $sender = [string]$PSSenderInfo.ConnectedUser } } catch { $sender = '' }
+$isStandard = ($sender -like '*\Ac8Standard')
 $result = [ordered]@{ ran = $true; identity = $identity.Name; groups = $groups; import = $false; text = $false; secure = $false; secureLength = 0; errors = @() }
 try {
     Microsoft.PowerShell.Core\Import-Module -Name (Join-Path $root 'Ac8Module.psm1') -Force -DisableNameChecking
     $result.import = ((Get-Ac8Word) -eq 'ac8-module-ok')
 }
 catch { $result.errors += "import: $($_.Exception.Message)" }
+$promptReached = $false
 try {
     $typed = Read-Host -Prompt 'Type the word PINEAPPLE and press Enter'
+    $promptReached = $true
     $result.text = ($typed.Trim().ToUpperInvariant() -eq 'PINEAPPLE')
 }
 catch { $result.errors += "text prompt: $($_.Exception.Message)" }
+# The standard account stops here whatever it typed, and never writes the result file (that is the administrator's AC-8 result). Its note is written only now,
+# after the first question has returned, which is what the optional A-35 line of Finish reads.
+if ($isStandard) {
+    if ($promptReached) {
+        try {
+            $note = [ordered]@{ sender = $sender; identity = $identity.Name; groups = $groups }
+            $note | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root ('out\started-' + [guid]::NewGuid().ToString('N') + '.json'))
+        }
+        catch { Write-Warning "start note: $($_.Exception.Message)" }
+    }
+    'Stopped at the first question. Now type Exit-PSSession and press Enter.'
+    return
+}
 try {
     $secure = Read-Host -Prompt 'Paste the FAKE value that Prepare printed (nothing is shown) and press Enter' -AsSecureString
     $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
@@ -180,7 +246,9 @@ $result | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root 'o
 
     $role = "@{`r`n    GUID = '3f1d9a52-6b0e-4c7a-8d21-5e9c0a7b4f13'`r`n    ModulesToImport = @('Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Management')`r`n    VisibleFunctions = @('Test-Ac8Prompt')`r`n    FunctionDefinitions = @(@{ Name = 'Test-Ac8Prompt'; ScriptBlock = { & '$Root\current\ac8.ps1' } })`r`n}`r`n"
     [System.IO.File]::WriteAllText((Join-Path $Root 'config\Ac8.psrc'), $role)
-    $session = "@{`r`n    SchemaVersion = '2.0.0.0'`r`n    GUID = '9a4c2e17-0d63-4b85-a1f7-6c3e8b2d5a90'`r`n    SessionType = 'RestrictedRemoteServer'`r`n    RunAsVirtualAccount = `$true`r`n    RunAsVirtualAccountGroups = @('$GroupName')`r`n    TranscriptDirectory = '$Root\transcripts'`r`n    ExecutionPolicy = 'Bypass'`r`n    RoleDefinitions = @{ '$me' = @{ RoleCapabilityFiles = '$Root\config\Ac8.psrc' } }`r`n}`r`n"
+    $roleDefinitions = "'$me' = @{ RoleCapabilityFiles = '$Root\config\Ac8.psrc' }"
+    if ($StandardAccount) { $roleDefinitions += "; '$standardIdentity' = @{ RoleCapabilityFiles = '$Root\config\Ac8.psrc' }" }
+    $session = "@{`r`n    SchemaVersion = '2.0.0.0'`r`n    GUID = '9a4c2e17-0d63-4b85-a1f7-6c3e8b2d5a90'`r`n    SessionType = 'RestrictedRemoteServer'`r`n    RunAsVirtualAccount = `$true`r`n    RunAsVirtualAccountGroups = @('$GroupName')`r`n    TranscriptDirectory = '$Root\transcripts'`r`n    ExecutionPolicy = 'Bypass'`r`n    RoleDefinitions = @{ $roleDefinitions }`r`n}`r`n"
     [System.IO.File]::WriteAllText((Join-Path $Root 'config\Ac8.pssc'), $session)
 
     if (-not (Test-PSSessionConfigurationFile -Path (Join-Path $Root 'config\Ac8.pssc'))) { throw 'The session configuration file is not valid.' }
@@ -195,6 +263,13 @@ $result | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root 'o
     Write-Host ''
     Write-Host 'The made-up value to paste (select it, copy it, then right-click in the session to paste):' -ForegroundColor Cyan
     Write-Host $fake
+    if ($StandardAccount) {
+        Write-Host ''
+        Write-Host "Optional step 5b (a standard account): after step 5, run   Enter-PSSession -ComputerName localhost -ConfigurationName Ac8Check -Credential $standardIdentity" -ForegroundColor Cyan
+        Write-Host 'The sign-in box asks for this made-up password (shown once; it is removed with the account):' -ForegroundColor Cyan
+        Write-Host $standardPassword
+        Write-Host 'Then type Test-Ac8Prompt, and at the first question just press Enter. Then Exit-PSSession.'
+    }
     return
 }
 
@@ -229,9 +304,29 @@ foreach ($file in $transcripts) {
     foreach ($word in ($text -split '\s+')) { if ($word -like 'FAKE-KEY-*' -and (Get-Sha256Hex -Text $word) -eq $fakeHash) { $leak = $true } }
 }
 Write-Check ($transcripts.Count -gt 0 -and -not $leak) 'the transcript of the session exists and does not contain the pasted value'
+
+# The optional A-35 line (only when Prepare made the standard account). It is reported on its own and has no say in the AC-8 result below.
+$standardLine = 'OPTIONAL A-35 CHECK: NOT RUN (Prepare was not run with -StandardAccount)'
+$standardColor = 'Yellow'
+try {
+    if ($null -ne (Get-LocalUser -Name $StandardName -ErrorAction SilentlyContinue)) {
+        $started = @(Get-ChildItem -LiteralPath (Join-Path $Root 'out') -Filter 'started-*.json' -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json } | Where-Object { [string]$_.sender -like "*\$StandardName" })
+        $standardOk = $false
+        if ($started.Count -ge 1) {
+            $startGroups = @($started[0].groups)
+            $isAdmin = @(Get-LocalGroupMember -SID ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-544') -Member $StandardName -ErrorAction SilentlyContinue).Count -gt 0
+            $standardOk = (-not $isAdmin) -and @($startGroups | Where-Object { $_ -like "*\$GroupName" }).Count -eq 1 -and $startGroups -notcontains 'BUILTIN\Administrators' -and [string]$started[0].identity -match 'Virtual'
+        }
+        if ($standardOk) { $standardLine = 'OPTIONAL A-35 CHECK: PASS  a standard (non-administrator) account opened the endpoint, and its command ran as the limited virtual account and reached its first question'; $standardColor = 'Green' }
+        else { $standardLine = 'OPTIONAL A-35 CHECK: FAIL  the standard account did not open the endpoint and reach the first question of its command, or the session did not run as the limited virtual account. STOP: report this to the delivery lead and do not try to fix it.'; $standardColor = 'Red' }
+    }
+}
+catch { $standardLine = "OPTIONAL A-35 CHECK: FAIL  it could not be checked ($($_.Exception.Message)). STOP: report this to the delivery lead and do not try to fix it."; $standardColor = 'Red' }
 Remove-Ac8Check
 Write-Host ''
-if ($failed -eq 0 -and $passed -ge 6) { Write-Host 'AC-8 RESULT: PASS' -ForegroundColor Green; exit 0 }
-Write-Host 'AC-8 RESULT: FAIL' -ForegroundColor Red
+$ac8Passed = ($failed -eq 0 -and $passed -ge 6)
+if ($ac8Passed) { Write-Host 'AC-8 RESULT: PASS' -ForegroundColor Green } else { Write-Host 'AC-8 RESULT: FAIL' -ForegroundColor Red }
+Write-Host $standardLine -ForegroundColor $standardColor
+if ($ac8Passed) { exit 0 }
 exit 1
 ```
