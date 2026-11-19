@@ -20,6 +20,15 @@
 
 > This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
 
+**Latest (end of the run, overrides the tables below where they differ):**
+- **Merged later in the day:** #508 **AQP-356** 01.09 [c] (8b51872), #503 **AQP-348** 09.01 [c] (abd0947, one R5 re-run), #493 **AQP-338** 08.02 [c] (714f3c5; combined review APPROVE WITH COMMENTS, SQR-01 Minor in #524), #521 **AQP-368** 05.11 (487b4b1). **Total merged today: 8.** Jira Done: AQP-363, 344, 312, 356, 348, 338, 368.
+- **`master`:** 0898563 was **red** (run 44487090650: `masters-table-actions.spec.ts:315` [desktop] time-out on both attempts; not re-run; the orchestrator read it late). That run became DEF-047 and rule R5. 8b51872, abd0947 and 714f3c5 are green. Nightly "CI feedback time" fails every night: a frozen measurement job (§9 item 4), not a product failure.
+- **More decisions:** DL-252 (H-OBS built now as AQP-375 in the third lane), DL-253 (AC-8 kit gets an optional standard-account step; #519 GO after one NO-GO), DL-254 (DEF-046, rule R4), DL-255 (DEF-047, rule R5; RISK-031 reopened at 9).
+- **Defects today:** DEF-045 (AQP-373, fix #518), DEF-046 (AQP-374, fix #520), DEF-047 (AQP-376, fix not yet started; it takes the next free slot); follow-ups #523 (`pg` warning), #524 (AQP-338 SQR-01 and SQR-04).
+- **Lanes now:** 09.02 AQP-349 (EPIC-09 chain) and 08.03 AQP-358 (EPIC-08 chain) **both started on 19 Nov**, which meets the 20 Nov slip watch. The third lane runs H-OBS AQP-375.
+- **Merge queue:** #518 and #520 are being updated (flake fixes), then #519 (AC-8 kit, GO), then #510 (AQP-336, green, behind).
+- **Worktrees (6 registered):** records-t, ac8-kit, aqp-336, aqp-349, aqp-358, aqp-373, plus aqp-375 being created. There is an **orphan folder `aqp-338/.next`**, left by `git worktree remove`, probably holding Turbopack junctions; it was not deleted (no recursive delete through links) and is for the main session.
+
 **Merged (squash, each on fully green CI with the head up to date with `master`):** #512 **AQP-363** 10.06 drawing region (e4cf444); #514 **AQP-344** DEF-041 test-only fix (6f275ad; DL-240 F1 to F5 met, master ruling DL-246; qa closed AQP-344 and #473; rule R2 has ended); #501 **AQP-312** 10.11 Windows restore [c] (0898563; combined review APPROVE WITH COMMENTS, SQR-01 Major fixed, SQR-02 to 04 in #516; AC-8 pending a manual check by Accucut IT, DL-243, G8 condition G8-C-AC8; one R3 re-run). **Jira Done:** AQP-363, AQP-344, AQP-312.
 
 **`master`:** e4cf444 red on attempt 1 (DEF-045, `image.test.ts` timeout), green on the one R3 re-run (DL-245); 6f275ad green (run 44482838527, also the F5 proof for AQP-344); 0898563 run in progress at writing.
