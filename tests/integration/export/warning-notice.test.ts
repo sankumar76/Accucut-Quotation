@@ -48,6 +48,7 @@ beforeAll(async () => {
     calculations: db.calculations,
     approvals: db.approvals,
     images: createImageRepository(db.prisma),
+    transactions: db.transactions,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
     builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
