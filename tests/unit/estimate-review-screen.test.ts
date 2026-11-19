@@ -39,8 +39,13 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
   return createReviewWorld(options).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
 }
 
-const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }, header: WorkspaceHeaderView = HEADER): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
+const render = (
+  costs: CostsView,
+  customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' },
+  header: WorkspaceHeaderView = HEADER,
+  viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
+): string =>
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -527,6 +532,191 @@ describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlo
     const html = render(await current({ approval: { price: '12600.00', unlock: UNLOCK } }), undefined, DRAFT_HEADER);
     expect(html).not.toContain('id="review-unlock"');
     expect(html).not.toContain('Keep it locked');
+  });
+});
+
+describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate")', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const UNLOCK = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer changed the quantity.', engineerName: 'Invented Priya' };
+  const CANCEL = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+
+  it('AC-1: an approved estimate gives the Admin a danger button "Cancel approval", and a Lead no button (the notice says who can)', async () => {
+    const admin = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER, 'ADMIN');
+    expect(admin).toContain('id="review-cancel"');
+    expect(admin).toContain('>Cancel approval</button>');
+    expect(admin).toContain('bg-danger');
+    // Unlock is still there, beside it.
+    expect(admin).toContain('id="review-unlock"');
+    const lead = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER, 'LEAD');
+    expect(lead).not.toContain('id="review-cancel"');
+    expect(lead).not.toContain('Cancel approval');
+    expect(lead).toContain('Only the Admin can cancel an approval.');
+    // Nothing of the dialog is in the first load of the page.
+    for (const html of [admin, lead]) {
+      expect(html).not.toContain('Keep the approval');
+      expect(html).not.toContain('Your password');
+    }
+  });
+
+  it('AC-10: the Admin has the same button on a Draft or a Submitted estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
+    for (const header of [DRAFT_HEADER, HEADER]) {
+      const admin = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'ADMIN');
+      expect(admin).toContain('id="review-cancel"');
+      expect(countOf(admin, '>Cancel approval</button>')).toBe(1);
+      const lead = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'LEAD');
+      expect(lead).not.toContain('id="review-cancel"');
+      expect(countOf(lead, 'Only the Admin can cancel an approval.')).toBe(1);
+    }
+  });
+
+  it('no approval, no button and no line: BO is "Not set yet"', async () => {
+    for (const role of ['ADMIN', 'LEAD'] as const) {
+      const html = render(await current(), undefined, HEADER, role);
+      expect(html).not.toContain('id="review-cancel"');
+      expect(html).not.toContain('Only the Admin can cancel an approval.');
+    }
+  });
+
+  it('AC-6: a cancelled approval from an approved estimate (now a Draft): the notice names who, when (IST), the reason, the Draft and the queue, the price stays marked "Approval cancelled", and there is no button', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('id="review-cancelled-notice"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).toContain('Reason: The wrong customer was priced.');
+    expect(html).toContain('The estimate is a Draft and the task is back in Invented Priya&#x27;s Open queue.');
+    expect(html).toContain('The price stays on screen, marked &quot;Approval cancelled&quot;, and is not in the Excel file.');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('Not set yet');
+    expect(html).not.toContain('id="review-cancel"');
+    // The admin's version has no "Only the Admin can remove it": the Remove price button is the story that follows.
+    expect(html).not.toContain('Only the Admin can remove it.');
+    expect(html).not.toContain('review-unlocked-notice');
+  });
+
+  it('AC-6: BO is labelled "Approval cancelled" once, with its approver, and the file cell once; "Approved earlier" is gone', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    // Once in the tile and once in the notice's sentence about the price (with its quotes) and its title: count the label alone, in bold.
+    expect(countOf(html, '<strong class="block text-ink">Approval cancelled</strong>')).toBe(1);
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+    expect(html).not.toContain('Approved earlier');
+    expect(html).not.toContain('It stays until a new approval replaces it.');
+  });
+
+  it('AC-6: a Lead sees the same, with no button and "Only the Admin can remove it."', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'LEAD');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).toContain('Only the Admin can remove it.');
+    expect(html).not.toContain('id="review-cancel"');
+    expect(html).not.toContain('Only the Admin can cancel an approval.');
+  });
+
+  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Submitted, and the task does not change', async () => {
+    const draft = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(draft).toContain('The estimate stays a Draft and its task does not change.');
+    expect(draft).not.toContain('Open queue');
+    const submitted = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(submitted).toContain('The estimate stays Submitted and its task does not change.');
+    // The unlocked notice gives way to the cancelled one.
+    expect(draft).not.toContain('review-unlocked-notice');
+    expect(draft).not.toContain('Unlocked on');
+    expect(countOf(draft, 'Approval cancelled</strong>')).toBe(1);
+  });
+
+  it('a Submitted estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).not.toContain('The estimate is a Draft');
+    expect(html).not.toContain('Open queue');
+  });
+
+  it('a reason that was not kept draws no reason line; the reason is drawn as text, markup and all', async () => {
+    const none = render(await current({ approval: { ...STANDING, cancel: { ...CANCEL, reason: null } } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(none).not.toContain('Reason:');
+    const markup = render(await current({ approval: { ...STANDING, cancel: { ...CANCEL, reason: '<b>bold</b>' } } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(markup).toContain('Reason: &lt;b&gt;bold&lt;/b&gt;');
+    expect(markup).not.toContain('<b>bold</b>');
+  });
+
+  it('the cancelled price stays whatever the state of the figures: cleared figures change nothing about BO or the notice', async () => {
+    const html = render(await current({ inputsRevision: 4, approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+  });
+});
+
+describe('STORY-06.13 AC-1, AC-3, AC-6 (UX spec SCR-06 "Approval cancelled (Admin)" and "(Lead)", "Remove price (Admin)", "Price removed")', () => {
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const CANCEL = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+  const REMOVED = { removedAt: new Date('2026-11-05T06:50:00.000Z'), byName: 'Invented Meera' };
+
+  it('AC-1: a cancelled approval gives the Admin a danger button "Remove price" beside the BO tile; it names no dialog text in the first load', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('id="review-remove-price"');
+    expect(countOf(html, '>Remove price</button>')).toBe(1);
+    expect(html).toMatch(/id="review-remove-price"[^>]*class="[^"]*bg-danger|class="[^"]*bg-danger[^"]*"[^>]*id="review-remove-price"/);
+    // The price is still on screen, marked cancelled, and the cancel button is gone.
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('id="review-cancel"');
+    // Nothing of the dialog is in the first load of the page (NFR-009).
+    expect(html).not.toContain('Remove the approved price?');
+    expect(html).not.toContain('Keep the price');
+    expect(html).not.toContain('Your password');
+  });
+
+  it('AC-1: a Lead has no button and sees "Only the Admin can remove it"', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'LEAD');
+    expect(html).not.toContain('id="review-remove-price"');
+    expect(html).not.toContain('>Remove price</button>');
+    expect(countOf(html, 'Only the Admin can remove it.')).toBe(1);
+  });
+
+  it('AC-1: it is not offered before a cancel (an approved estimate, an approval kept through an unlock), nor when there is no approval', async () => {
+    const approved = render(await current({ approval: STANDING }), undefined, { ...HEADER, status: 'APPROVED' }, 'ADMIN');
+    expect(approved).not.toContain('id="review-remove-price"');
+    const kept = render(
+      await current({ approval: { ...STANDING, unlock: { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: null, engineerName: 'Invented Priya' } } }),
+      undefined,
+      DRAFT_HEADER,
+      'ADMIN',
+    );
+    expect(kept).not.toContain('id="review-remove-price"');
+    const none = render(await current(), undefined, HEADER, 'ADMIN');
+    expect(none).not.toContain('id="review-remove-price"');
+  });
+
+  it('AC-3: once the price was removed, BO reads "Not set yet", no price is on the page, and the notice says who, when (IST), that the audit log keeps it and how to set a price again', async () => {
+    for (const role of ['ADMIN', 'LEAD'] as const) {
+      const html = render(await current({ priceRemoved: REMOVED }), undefined, DRAFT_HEADER, role);
+      expect(html).toContain('id="review-price-removed-notice"');
+      expect(html).toContain('tabindex="-1"');
+      expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+      expect(html).toContain('The audit log keeps it.');
+      expect(html).toContain('Approve again, after a Recalculate, to set a price.');
+      expect(html).toContain('Not set yet');
+      expect(html).not.toContain('12,600');
+      expect(html).not.toContain('Approval cancelled');
+      // No button is offered: the price is gone, and nothing is left to cancel or remove.
+      expect(html).not.toContain('id="review-remove-price"');
+      expect(html).not.toContain('id="review-cancel"');
+    }
+  });
+
+  it('AC-3: the notice is not drawn while the price stands, and the same for a never-approved estimate', async () => {
+    for (const options of [{ approval: STANDING }, {}]) {
+      const html = render(await current(options), undefined, DRAFT_HEADER, 'ADMIN');
+      expect(html).not.toContain('id="review-price-removed-notice"');
+      expect(html).not.toContain('The approved price was removed');
+    }
+  });
+
+  it('AC-3: the removed state is the same whatever the state of the figures (cleared figures change nothing)', async () => {
+    const html = render(await current({ inputsRevision: 4, priceRemoved: REMOVED }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+    expect(html).toContain('Not set yet');
   });
 });
 

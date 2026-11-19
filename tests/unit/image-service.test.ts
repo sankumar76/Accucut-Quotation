@@ -97,7 +97,6 @@ describe('AC-1, AC-4: a picture is added, replaced and removed', () => {
     ['PNG', smallPng(), 'image/png'],
     ['JPEG', smallJpeg(), 'image/jpeg'],
     ['GIF', smallGif(), 'image/gif'],
-    ['WebP', smallWebp(), 'image/webp'],
   ] as const)('stores a %s with the type its content has', async (_name, bytes, mime) => {
     const setup = setUp();
     await setup.put(bytes, 'whatever.bin');
@@ -202,6 +201,7 @@ describe('AC-2: a file is judged by its content and its size, and nothing is sto
     ['a file of 0 bytes', Buffer.alloc(0)],
     ['a PNG with a script after it', Buffer.concat([smallPng(), SCRIPT_TAIL])],
     ['a cut-short PNG', smallPng().subarray(0, 30)],
+    ['a WebP that the browser did not convert (DL-237, OQ-PM-10)', smallWebp()],
   ])('refuses %s as the wrong type (415) in the words of SCR-05', async (_name, bytes) => {
     const setup = setUp();
     const error = await refusal(setup.put(bytes, 'cabinet-photo.png'));

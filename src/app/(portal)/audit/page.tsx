@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 
 import { AuditScreen } from '@/components/features/audit/audit-screen';
 import { AUDIT_META_DESCRIPTION } from '@/components/features/audit/texts';
@@ -6,8 +5,9 @@ import { AUDIT_DEFAULT_LIMIT } from '@/lib/audit/categories';
 import { getAuditService, getUserService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import { auditPeople } from '@/server/views/audit-people';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Audit log', description: AUDIT_META_DESCRIPTION };
+export const metadata = pageMetadata('Audit log', AUDIT_META_DESCRIPTION);
 
 /**
  * SCR-16 "Audit log" (STORY-01.07 AC-6, AC-7, AC-8): the Admin reads the record of changes and filters it. The page checks the

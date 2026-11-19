@@ -11,6 +11,8 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 import { fixedForbiddenProblem, scanResponse } from '../support/scanner';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
+import { seedFieldAt } from '../support/seed-config';
+import { storedRowOf } from '../support/stored-row';
 import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
 /**
@@ -47,6 +49,27 @@ const UNKNOWN_ID = '00000000-0000-4000-8000-00000000dead';
 const DOWNLOAD_DATE = '2026-11-14';
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
+const part = () => defined(harness.estimateWorld.nodes[0]);
+const CALCULATION_ID = '00000000-0000-4000-8000-0000000ca1ca';
+
+/** A calculation of the harness estimate's one part, linked to it and made at the estimate's revision of the moment, holding the stored row of the invented oracle row: the estimate's figures are current. */
+function plantCalculation(): ReturnType<typeof storedRowOf> {
+  const stored = storedRowOf();
+  harness.calculationWorld.calculations.push({
+    id: CALCULATION_ID,
+    estimateId: estimate().id,
+    configVersionId: '00000000-0000-4000-8000-0aaa00000001',
+    inputsRevision: estimate().inputsRevision,
+    masterSnapshot: stored.snapshot,
+    productValues: { totalPrice: '451.398096', pricePerToolCost: null, toolCostTotal: '0' },
+    createdById: harness.idOf.ENGINEER,
+    warnings: [],
+    createdAt: new Date('2026-11-05T05:12:00.000Z'),
+    rows: [{ id: '00000000-0000-4000-8000-0000000ca1d1', nodeId: part().id, parentId: null, sortIndex: 0, slNo: '1', inputs: stored.inputs, imageId: null, outputs: stored.outputs }],
+  });
+  estimate().currentCalculationId = CALCULATION_ID;
+  return stored;
+}
 const request = (): Request => new Request(`${ORIGIN}/api/v1/estimates/x/export`);
 const getFile = (id: string) => fileRoute.GET(request(), { params: Promise.resolve({ id }) });
 const getSummary = (id: string) => summaryRoute.GET(request(), { params: Promise.resolve({ id }) });
@@ -63,10 +86,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   estimate().customerId = null;
+  estimate().inputsRevision = 0;
+  estimate().currentCalculationId = null;
+  harness.calculationWorld.calculations.length = 0;
 });
 
 describe('AC-2, AC-4: the file', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('as %s: 200, an attachment of the right MIME type and name, `no-store`, a request ID, and a workbook of columns A to BO', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s: 200, an attachment of the right MIME type and name, `no-store`, a request ID, and a workbook of columns A to BO and the row of the part', async (role) => {
+    const stored = plantCalculation();
     harness.signInAs(role);
     const response = await getFile(estimate().id);
     expect(response.status).toBe(200);
@@ -80,10 +107,14 @@ describe('AC-2, AC-4: the file', () => {
     const sheet = defined((await loadWorkbook(bytes)).getWorksheet('Quotation'));
     expect(sheet.columnCount).toBe(67);
     expect(sheet.getCell('A1').value).toBe('Sl. No');
+    // The row of the part below the header: its Sl. No as text and its unit price, the stored figure (AC-1).
+    expect(sheet.getCell('A2').value).toBe('1');
+    expect(sheet.getCell('BG2').value).toBe(Number(defined(stored.outputs[seedFieldAt('BG').id])));
     expect(readXlsxParts(bytes).has('xl/workbook.xml')).toBe(true);
   });
 
   it('names the file after the customer: spaces become underscores and every other character outside A-Z a-z 0-9 _ - is removed', async () => {
+    plantCalculation();
     const customer = defined(harness.masters.customers[0]);
     const original = customer.name;
     customer.name = 'Acme Tools & Dies, "Ltd"\r\n';
@@ -118,6 +149,24 @@ describe('AC-2, AC-4: the file', () => {
     expect(fixed).toEqual({ type: 'about:blank', title: 'Something went wrong on our side.', status: 500, code: 'EXPORT_THREAD_TIMEOUT' });
   });
 
+  it('an estimate that was never calculated is 409 NOT_CALCULATED with fixed words and no file (architecture section 4.6)', async () => {
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(record.parse(await response.json())).toMatchObject({ status: 409, code: 'NOT_CALCULATED', title: 'The estimate has not been calculated yet, so there is no file to download.' });
+  });
+
+  it('an estimate whose inputs changed after Calculate is 409 EXPORT_OUT_OF_DATE with its own words and no file, and the stale figures are not read', async () => {
+    plantCalculation();
+    estimate().inputsRevision += 1;
+    const read = vi.spyOn(harness.reviewReads, 'findExportFigures');
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(record.parse(await response.json())).toMatchObject({ code: 'EXPORT_OUT_OF_DATE' });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('an estimate that does not exist and an ID that is no UUID are the same 404, with no file', async () => {
     const answers = await Promise.all(
       [UNKNOWN_ID, 'not-an-id'].map(async (id) => {
@@ -133,7 +182,7 @@ describe('AC-2, AC-4: the file', () => {
 });
 
 describe('AC-6: the summary', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure while the estimate is not calculated', async (role) => {
     harness.signInAs(role);
     const response = await getSummary(estimate().id);
     expect(response.status).toBe(200);
@@ -145,6 +194,9 @@ describe('AC-6: the summary', () => {
       pictureCount: 0,
       columns: { first: 'A', last: 'BO', count: 67 },
       rows: [{ slNo: '1', name: '', count: null }],
+      // Never calculated: the state says so and no figure of any kind is in the answer (STORY-07.03 AC-8).
+      state: 'none',
+      figures: null,
     });
   });
 

@@ -55,3 +55,16 @@ export function readXlsxParts(bytes: Uint8Array): ReadonlyMap<string, string> {
   }
   return parts;
 }
+
+/**
+ * The text of every XML part of a workbook, one after the other, for a scan that looks for a value inside the file (review QS-07 of AQP-331: the text of a workbook is compressed, so a value in it is
+ * invisible to a scan of the raw bytes). The pictures are binary and are left out. Throws for bytes that do not start with the `PK` of a zip, so a body that was not a workbook is never scanned as empty.
+ */
+export function workbookText(bytes: Uint8Array): string {
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new XlsxFormatError('The bytes do not start with PK: not a workbook.');
+  return [...readXlsxParts(bytes)]
+    .filter(([name]) => !name.startsWith('xl/media/'))
+    .map(([name, text]) => `<!-- ${name} -->\n${text}`)
+    .join('\n');
+}
+

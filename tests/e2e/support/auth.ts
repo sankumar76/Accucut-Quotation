@@ -591,3 +591,16 @@ export async function expectOnQueue(page: Page, title: string): Promise<void> {
   await expect(page).toHaveURL(/\/queue$/);
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
 }
+
+/**
+ * Gives the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` its picture (STORY-07.02 AC-4): the estimate's own invented picture, which `insertCanaryEstimate` stores
+ * with the same ID (a 1 x 1 PNG). Do it before Calculate, which records the part's picture in its own row; the picture a part gets afterwards is not in a file of that calculation (ADR-013). Repeatable.
+ */
+export async function putPictureOnCanaryPart(ownerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE estimate_nodes SET image_id = $1::uuid WHERE id = $1::uuid', [ownerId]);
+  } finally {
+    await client.end();
+  }
+}

@@ -4,6 +4,9 @@ import { SignInAgainAction } from '@/components/features/system-pages/sign-in-ag
 import { SystemPageCard } from '@/components/features/system-pages/system-page';
 import { SystemPageFrame } from '@/components/features/system-pages/system-page-frame';
 import { RETURN_PATH_HEADER, SIGN_IN_PATH, signInPathFor } from '@/lib/auth/return-path';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata('Session ended', 'Your session ended. Sign in again to continue.');
 
 /**
  * SCR-26 "Session ended" (STORY-01.06 AC-3). Next.js renders it, with status 401, when a page asks who is signed in and finds a

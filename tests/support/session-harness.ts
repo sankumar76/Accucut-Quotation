@@ -15,6 +15,9 @@ import type { ConfigRepository } from '../../src/server/repositories/config-repo
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
+import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
+import { createRemovePriceService, type RemovePriceService } from '../../src/server/services/remove-price-service';
+import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -43,6 +46,7 @@ import { createFakeMasterRepository, type FakeMasterRepository } from './fake-ma
 import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { inProcessBuilder } from './in-process-builder';
 import { CANARY_PICTURE_HASH, smallPng } from './pictures';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
@@ -116,6 +120,8 @@ export interface SessionHarness {
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
   readonly taskWorld: FakeTaskWorld;
+  /** The audit entries written by `taskService` (a task reassigned, STORY-04.07): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
@@ -128,10 +134,18 @@ export interface SessionHarness {
   readonly approvalService: ApprovalService;
   /** Unlock and its preview (STORY-06.08) over the same estimates and approval records (`getUnlockService` in the composition mock). The canary estimate is never APPROVED, so a valid call of the recipe is the state machine's 409 and writes nothing. */
   readonly unlockService: UnlockService;
+  /** Cancel approval (STORY-06.12) over the same estimates and approval records, with the real step-up check over the fake people (`HARNESS_PASSWORD` is every person's password) (`getCancelApprovalService` in the composition mock). */
+  readonly cancelApprovalService: CancelApprovalService;
+  /** Remove price (STORY-06.13) over the same estimates and approval records, with the same real step-up check (`getRemovePriceService` in the composition mock). */
+  readonly removePriceService: RemovePriceService;
+  /** The real step-up check (STORY-06.14) over the fake people and throttles, for a test that counts the attempts (`throttles`, `hasher`). */
+  readonly stepUpService: StepUpService;
+  /** The hasher the step-up and the other password checks use, which counts every check it makes. */
+  readonly hasher: ReturnType<typeof createCountingHasher>;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking' | 'findExportFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
@@ -198,6 +212,8 @@ export function createSessionHarness(): SessionHarness {
     { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
   ]);
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
+  const taskAudit = createAuditSink();
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
     id: targetId,
@@ -274,6 +290,24 @@ export function createSessionHarness(): SessionHarness {
     transactions: calculationWorld.transactions,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Cancel approval (STORY-06.12) over the same world, with the real step-up check over the fake people. The canary estimate has no approval at any state a test leaves it in, so the recipe's valid call is refused 409
+    // (no approval) after the password and the reason pass, and writes nothing.
+  const stepUpService = createStepUpService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL });
+  const cancelApprovalService = createCancelApprovalService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
+  // Remove price (STORY-06.13) over the same world and the same step-up check. The canary estimate has no approval, so the recipe's valid call is refused 409 (no price to remove) after the password passes, and writes nothing.
+  const removePriceService = createRemovePriceService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    audit: calculationAudit.service,
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
@@ -281,7 +315,9 @@ export function createSessionHarness(): SessionHarness {
     findMasterSnapshot: (calculationId: string) => calculationWorld.repository.findMasterSnapshot(calculationId),
     findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findExportFigures: (calculationId: string) => calculationWorld.repository.findExportFigures(calculationId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
+    findLatestRemoval: (estimateId: string) => calculationWorld.approvalRepository.findLatestRemoval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
@@ -301,7 +337,7 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
-  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  // The Excel export (STORY-07.01, STORY-07.02) over the same estimates, parts, calculation records and pictures. The file is built in process: the thread is `thread.test.ts`'s.
   const exportReads = {
     findHeader: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
@@ -314,8 +350,11 @@ export function createSessionHarness(): SessionHarness {
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
-    configuration: { current: () => Promise.resolve(reviewVersion) },
-    build: buildWorkbook,
+    calculations: reviewReads,
+    approvals: reviewReads,
+    images: estimateWorld.imageRepository,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
 
@@ -338,8 +377,13 @@ export function createSessionHarness(): SessionHarness {
     calculationWorld,
     approvalService,
     unlockService,
+    cancelApprovalService,
+    removePriceService,
+    stepUpService,
+    hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
-    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
+    taskAudit,
     jobRuns,
     settingsService: createSettingsService({ jobRuns, clock: systemClock }),
     configRepository,

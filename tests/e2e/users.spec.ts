@@ -333,7 +333,7 @@ test.describe('deactivate and activate (AC-1, AC-2, AC-7)', () => {
     await pressWithKeyboard(opener);
     const alert = page.getByRole('alertdialog', { name: `Deactivate ${person.name}?` });
     await expect(alert).toBeVisible();
-    await expect(alert).toContainText(`${person.name} can no longer sign in. Their tasks and estimates stay as they are. You can activate them again later.`);
+    await expect(alert).toContainText(`${person.name} can no longer sign in. Their tasks and estimates stay as they are. You can reassign their open tasks. You can activate them again later.`);
     await expect(alert.getByRole('button', { name: 'Keep active' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(alert).toBeHidden();

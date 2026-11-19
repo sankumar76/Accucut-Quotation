@@ -116,6 +116,39 @@ export const UNLOCKED_FIGURES_CURRENT = 'The figures below are still the ones fr
 export const UNLOCKED_FIGURES_CLEARED = 'An input has changed since, so every calculated figure is cleared. Recalculate to bring them up to date.';
 export const UNLOCKED_PRICE_STAYS = 'The price approved earlier stays until a new approval replaces it.';
 export const unlockedQueueLine = (engineerName: string): string => `The task is back in ${engineerName}'s Open queue.`;
-export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
+/**
+ * Cancel approval (STORY-06.12; UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate"). The danger button of the Admin opens the dialog of
+ * `estimate-cancel` (fetched on the first press); a Lead sees no button and the line that says who can.
+ */
+export const CANCEL_APPROVAL_LABEL = 'Cancel approval';
+export const CANCEL_FIRST_OPEN_FAILED = 'The cancel window did not open. Check your connection and try again.';
+export const ONLY_ADMIN_CANCELS = 'Only the Admin can cancel an approval.';
+/** BO's label once the approval was cancelled, in place of "Approved earlier": the price stays on screen until the Admin removes it (STORY-06.13) or a new approval replaces it. */
+export const APPROVAL_CANCELLED_LABEL = 'Approval cancelled';
+export const cancelledNoticeTitle = (time: string, name: string): string => `Approval cancelled on ${time} by ${name}.`;
+export const cancelledReasonLine = (reason: string): string => `Reason: ${reason}`;
+export const CANCELLED_PRICE_STAYS = 'The price stays on screen, marked "Approval cancelled", and is not in the Excel file.';
+export const CANCELLED_ONLY_ADMIN_REMOVES = 'Only the Admin can remove it.';
+
+/**
+ * The sentence about the estimate in the notice of a cancelled approval (ux-spec v0.31): an approved estimate that was cancelled went to Draft ("The estimate is a Draft and the task is back in ... Open queue."); a Draft or a
+ * Submitted estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
+ * first one would be false for a Submitted estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
+ */
+export function cancelledStatusLine(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
+  if (status === 'DRAFT') return wasUnlocked ? 'The estimate stays a Draft and its task does not change.' : `The estimate is a Draft and the task is back in ${engineerName}'s Open queue.`;
+  if (status === 'SUBMITTED' && wasUnlocked) return 'The estimate stays Submitted and its task does not change.';
+  return null;
+}
+/**
+ * Remove price (STORY-06.13; UX spec SCR-06 "Remove price (Admin)" and "Price removed"). The danger button of the Admin, beside the cancelled BO, opens the dialog of `estimate-remove-price` (fetched on the first press);
+ * a Lead sees no button and "Only the Admin can remove it" in the cancelled notice. Once the price is removed, BO reads "Not set yet" and this notice says who removed it and when (IST), in the words of the spec.
+ */
+export const REMOVE_PRICE_LABEL = 'Remove price';
+export const REMOVE_PRICE_FIRST_OPEN_FAILED = 'The remove price window did not open. Check your connection and try again.';
+export const priceRemovedNoticeTitle = (time: string, name: string): string => `The approved price was removed on ${time} by ${name}.`;
+export const PRICE_REMOVED_AUDIT_KEEPS = 'The audit log keeps it.';
+export const PRICE_REMOVED_APPROVE_AGAIN = 'Approve again, after a Recalculate, to set a price.';
+export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. There is no file until a calculation is current.';
 export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { CustomerEditScreen } from '@/components/features/masters/customer-edit-screen';
@@ -6,9 +5,10 @@ import { CUSTOMERS_META_DESCRIPTION } from '@/components/features/masters/custom
 import { NotFoundError } from '@/lib/errors';
 import { getMastersService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
 /** No customer name in the tab title (architecture section 8, FR-089: no customer name may enter any `<title>` or tag). */
-export const metadata: Metadata = { title: 'Customer', description: CUSTOMERS_META_DESCRIPTION };
+export const metadata = pageMetadata('Customer', CUSTOMERS_META_DESCRIPTION);
 
 interface PageProps {
   readonly params: Promise<{ readonly id: string }>;

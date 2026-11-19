@@ -1,6 +1,9 @@
 import { SystemPageCard } from '@/components/features/system-pages/system-page';
 import { HomeAction } from '@/components/features/system-pages/home-action';
+import { pageMetadata } from '@/lib/page-metadata';
 import { readViewerRole } from '@/server/auth/viewer-role';
+
+export const metadata = pageMetadata('No access', 'Your role does not include this page.');
 
 /**
  * SCR-26 "no access" inside the portal frame (STORY-01.02 AC-4 and AC-8). Next.js renders it, with status 403, when a page

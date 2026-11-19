@@ -9,8 +9,8 @@ import { nodeParamsSchema, partPictureSchema } from '@/server/views/schemas';
  *
  * The upload is **one multipart file** under the name `file`, read with a hard cap on the bytes that arrive (`MAX_UPLOAD_BODY_BYTES`, 256 KB, before anything is parsed; 413 over it).
  * The order of the refusals is: 401, 403 (the role, before the body is read), 400 (not one file in a multipart form), 413 (the body is over the cap), 404 (the estimate, then the part,
- * the same for one that is not theirs and one that does not exist), 409 (not editable by this person), then by content: 413 (200 x 1024 bytes or more) and 415 (not a PNG, JPEG, GIF
- * or WebP: judged by the bytes, never the name or the declared type). Nothing is stored on a refusal. A real change raises the part's revision and the estimate's `inputs_revision` in
+ * the same for one that is not theirs and one that does not exist), 409 (not editable by this person), then by content: 413 (200 x 1024 bytes or more) and 415 (not a PNG, JPEG or GIF: judged
+ * by the bytes, never the name or the declared type; a WebP is 415 too, because the browser converts it before it is sent, DL-237). Nothing is stored on a refusal. A real change raises the part's revision and the estimate's `inputs_revision` in
  * one transaction. The answer is the part's new revision and its picture (ID, sanitised name, size), never the bytes.
  */
 

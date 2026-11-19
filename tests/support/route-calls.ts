@@ -49,6 +49,8 @@ const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
 /** A calculation ID that no estimate has (STORY-06.05): the approval recipe names it, so the guard refuses the call whatever the estimate holds. */
 export const UNKNOWN_CALCULATION_ID = '00000000-0000-4000-8000-00000000ca1c';
+/** An approval that is none, for the recipe of Cancel approval (STORY-06.12). */
+export const UNKNOWN_APPROVAL_ID = '00000000-0000-4000-8000-00000000a9a9';
 
 /** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
 export const NO_RECIPE_ID = 'invented-id';
@@ -147,6 +149,9 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
     case 'GET /api/v1/tasks/[id]':
       return { id: context.targetId, status: 200 };
+    // STORY-04.07: the same canary task. An empty body changes nothing (no entry, no revision), so the call answers 200 at any state, however often the matrix and the scan repeat it.
+    case 'PATCH /api/v1/tasks/[id]':
+      return { id: context.targetId, body: {}, status: 200 };
     default:
       return undefined;
   }
@@ -208,6 +213,16 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 409 };
     case 'POST /api/v1/estimates/[id]/unlock':
       return { id, body: { reason: 'Invented reason for the canary estimate.' }, status: 409 };
+    // STORY-06.12: Admin only. The canary estimate has no approval at any state it can be in, so a good reason, the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an
+    // approval that is none are refused 409 ("no approval to cancel") under the estimate's lock, for the one role that may call it, and write nothing (no cancel, no status move, no audit entry). The refusal holds a fixed
+    // sentence and no figure, so the scan reads it. The rest of the order (the reason, the password, a deleted customer, a newer approval) is `cancel-approval-route.test.ts`'s, and the row lock is `tests/integration/approval/cancel.test.ts`.
+    case 'POST /api/v1/estimates/[id]/approval/cancel':
+      return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, reason: 'Invented reason for the canary estimate.', password: HARNESS_PASSWORD }, status: 409 };
+    // STORY-06.13: Admin only. The canary estimate has no approval at any state it can be in, so the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an approval
+    // that is none are refused 409 ("no price to remove") under the estimate's lock, for the one role that may call it, and write nothing (no removal, no audit entry). The refusal holds a fixed sentence and no figure, so the
+    // scan reads it. The rest of the order (the password, a newer approval, an approval not cancelled, a price removed already) is `remove-price-route.test.ts`'s, and the row lock is `tests/integration/approval/remove-price.test.ts`.
+    case 'POST /api/v1/estimates/[id]/approval/remove-price':
+      return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, password: HARNESS_PASSWORD }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
@@ -227,10 +242,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
       return { id, status: 200 };
-    // STORY-07.01: the export reads nothing that changes. The two roles that may call it get 200: the summary as JSON and the file as an attachment (a `.xlsx` header row, built in process by the harness).
-    // The canary estimate's header and parts are the harness's own. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press.
+    // STORY-07.01, STORY-07.02: the export reads nothing that changes. The summary answers the two roles that may call it 200 as JSON. The file is refused 409 `NOT_CALCULATED` at every state the canary estimate
+    // can be in, because it has no calculation (no file is built until the figures are current, so a refusal holds a fixed sentence and no figure, and the scan reads it); the file of a calculated estimate is
+    // `export-route.test.ts`'s and `tests/integration/export`'s. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press, and as a Lead (the file itself).
     case 'GET /api/v1/estimates/[id]/export':
-      return { id, file: true, status: 200 };
+      return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
     default:
