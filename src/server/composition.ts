@@ -373,6 +373,7 @@ export function getExportService(): ExportService {
       approvals: createApprovalRepository(runtimeClient()),
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      transactions: createTransactionRunner(runtimeClient()),
       builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
       clock: systemClock,
     });

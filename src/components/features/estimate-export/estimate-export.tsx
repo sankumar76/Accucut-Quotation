@@ -22,6 +22,10 @@ import {
   boDifference,
   boReasonGiven,
   boSetAgainst,
+  CALCULATE_FIRST_BODY,
+  CALCULATE_FIRST_TITLE,
+  CLEARED_LEAD,
+  CLEARED_REST,
   COLUMN_MISMATCH,
   COLUMN_SUM_DIFFERS,
   COLUMN_SUM_LABEL,
@@ -33,6 +37,8 @@ import {
   FILE_COLUMNS_LABEL,
   FILE_NAME_LABEL,
   FILE_ROWS_LABEL,
+  GO_TO_ESTIMATE_TO_CALCULATE,
+  GO_TO_ESTIMATE_TO_RECALCULATE,
   HEAD_COUNT,
   HEAD_COUNT_WHOLE_ORDER,
   HEAD_IN_FILE_PRICE,
@@ -48,8 +54,12 @@ import {
   HOW_TITLE,
   LINES_AS_SHOWN,
   NO_FIGURE_CELL,
+  NOT_CALCULATED_LEAD,
+  NOT_CALCULATED_REST,
   PART_NAME_FALLBACK,
   PARTS,
+  RECALCULATE_FIRST_BODY,
+  RECALCULATE_FIRST_TITLE,
   ROUNDING_SENTENCE,
   ROWS_CAPTION,
   ROWS_CAPTION_FIGURES,
@@ -67,6 +77,10 @@ import {
  * SCR-10 "Excel export" (STORY-07.01 AC-6; UX spec SCR-10), what a Lead or an Admin sees at `/estimates/<code>/export`: the file card (name, rows, the columns A to BO, **Download .xlsx**) and the card
  * "The rows in the file". It is drawn from one `ExportSummaryView`, the strict answer of `GET /api/v1/estimates/{id}/export-summary`, which holds **no figure**, so this file has nowhere to read one from.
  * An estimate with no parts shows the Empty state (`role="status"`) and no file card.
+ *
+ * **No file until a calculation is current (STORY-07.04 AC-5; D-28, D-37)**: while the figures are not `current` (never calculated, or cleared by an input change) the page draws **no file card and no table**:
+ * a `role="status"` empty state with the 409's own words and a link to the estimate, "Go to the estimate to Calculate" or "to Recalculate". There is no out-of-date file, no marker for one and no confirmation.
+ * It is drawn from the `state` of the summary alone, which the server read in the same snapshot as everything else; the file route refuses all the same.
  *
  * **The figures (STORY-07.03 AC-9)** are drawn from `summary.figures`, which is `null` unless the calculation is current: then the rows table keeps its three columns and holds no figure; with figures it adds
  * the file's own BG and Tool Cost per row, the BG column added up against BL2 and the Total Tool Cost, and the page adds the cards "How BL2 is made" and "What the file holds" (BL2, BN2, BO2 and the Total Tool Cost).
@@ -284,6 +298,29 @@ function HoldsCard({ figures }: { readonly figures: ExportFiguresView }) {
   );
 }
 
+/** The two refused states of SCR-10 (UX spec "No file until a calculation is current"): the notice with the refusal's words, and an empty state with the one way on, a link to the estimate. Nothing here is a script. */
+function RefusedState({ state, code }: { readonly state: 'none' | 'out-of-date'; readonly code: string }) {
+  const never = state === 'none';
+  return (
+    <div role="status" className="flex flex-col gap-s-4">
+      <Notice tone="warn" title={never ? NOT_CALCULATED_LEAD : CLEARED_LEAD}>
+        {never ? NOT_CALCULATED_REST : CLEARED_REST}
+      </Notice>
+      <Card>
+        <CardContent className="flex flex-col items-start gap-s-3">
+          <h2 className="text-body font-semibold text-ink">{never ? CALCULATE_FIRST_TITLE : RECALCULATE_FIRST_TITLE}</h2>
+          <p className="text-body text-ink-2">{never ? CALCULATE_FIRST_BODY : RECALCULATE_FIRST_BODY}</p>
+          <Button asChild>
+            <Link href={`/estimates/${encodeURIComponent(code)}`} prefetch={false}>
+              {never ? GO_TO_ESTIMATE_TO_CALCULATE : GO_TO_ESTIMATE_TO_RECALCULATE}
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function EstimateExport({ summary, estimateId, code }: EstimateExportProps) {
   return (
     <>
@@ -292,6 +329,8 @@ export function EstimateExport({ summary, estimateId, code }: EstimateExportProp
         <Notice tone="info" role="status" title={EMPTY_TITLE}>
           {EMPTY_BODY}
         </Notice>
+      ) : summary.state !== 'current' ? (
+        <RefusedState state={summary.state} code={code} />
       ) : (
         <div className="flex flex-col gap-s-4">
           <FileCard summary={summary} estimateId={estimateId} />

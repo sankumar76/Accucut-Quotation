@@ -141,7 +141,9 @@ test.describe('AC-6: the Building and Error states of the button', () => {
   });
 
   test('Error: a failed build shows the notice with the reference of the answer, and the button can be pressed again', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    // The page draws the button only while a calculation is current (STORY-07.04 AC-5).
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 
@@ -208,7 +210,8 @@ test.describe('AC-3 (NFR-002): an Engineer gets nothing', () => {
 
 test.describe('AC-7: layout and accessibility', () => {
   test('no sideways scroll, the rows table scrolls inside its own focusable, named region, the button stacks full width on a phone, and axe finds nothing', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 
