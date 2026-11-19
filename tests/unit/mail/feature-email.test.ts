@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { EnvValidationError, loadEmailFeature } from '@/lib/env';
@@ -31,5 +34,14 @@ describe('loadEmailFeature (AC-6)', () => {
     expect(caught).toBeInstanceOf(EnvValidationError);
     expect(caught instanceof Error ? caught.message : '').toContain('FEATURE_EMAIL (invalid)');
     expect(caught instanceof Error ? caught.message : '').not.toContain(`(${value})`);
+  });
+});
+
+describe('.env.example (AC-6, SQR-01)', () => {
+  it('AC-6: names FEATURE_EMAIL and ships it off, so a new install does not schedule mail jobs by default', () => {
+    const text = readFileSync(fileURLToPath(new URL('../../../.env.example', import.meta.url)), 'utf8');
+    const line = text.split(/\r?\n/).find((candidate) => candidate.startsWith('FEATURE_EMAIL='));
+    expect(line, 'FEATURE_EMAIL line is missing from .env.example').toBeDefined();
+    expect(line).toBe('FEATURE_EMAIL=off');
   });
 });
