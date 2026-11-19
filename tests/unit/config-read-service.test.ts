@@ -31,6 +31,7 @@ function fakeConfigurations(records: ReadonlyArray<ConfigVersionRecord>, use: Co
   return {
     uses,
     insertSeedVersionIfNone: () => Promise.resolve(false),
+    insertVersionAfter: () => Promise.resolve(null),
     findLatestRef() {
       const latest = records.reduce<ConfigVersionRecord | undefined>((best, row) => (best === undefined || row.number > best.number ? row : best), undefined);
       return Promise.resolve(latest === undefined ? null : { id: latest.id, number: latest.number });

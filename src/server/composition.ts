@@ -31,6 +31,7 @@ import { type AuditService, createAuditService } from './services/audit-service'
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CancelApprovalService, createCancelApprovalService } from './services/cancel-approval-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
+import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
@@ -62,6 +63,7 @@ let userService: UserService | undefined;
 let accountService: AccountService | undefined;
 let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
+let configEditService: ConfigEditService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
@@ -225,6 +227,22 @@ export function getEstimateService(): EstimateService {
 export function getConfigReadService(): ConfigReadService {
   configReadService ??= createConfigReadService({ configurations: createConfigRepository(runtimeClient()), masters: createMasterRepository(runtimeClient()) });
   return configReadService;
+}
+
+/**
+ * The formula editor (STORY-08.02): the live check, the sample rows and the save of a formula with the Admin's password. Restricted (ADR-008): the routes that call it are in the manifest for the Admin alone. It shares the
+ * runtime-role client, the step-up check (its attempts are counted on the `stepup` key) and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigEditService(): ConfigEditService {
+  configEditService ??= createConfigEditService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    calculations: createCalculationRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configEditService;
 }
 
 /**

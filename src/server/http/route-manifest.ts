@@ -261,7 +261,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/images/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-08.01 (SCR-17). The Admin and the Lead (architecture section 6, "Configuration": A L): the list of every field with its letter, kind and formula. A Lead reads it and has no action
   // (the page is told the role and offers none), and the side menu marks it "View only". The two API routes are for the same two roles and are in no Engineer's list, so a formula and a rate
-  // name never reach an Engineer (NFR-002); the cost scan covers them as routes an Engineer is refused. The edit routes (`PUT /config/fields/{id}/formula` and the rest) are stories 08.02 onward.
+  // name never reach an Engineer (NFR-002); the cost scan covers them as routes an Engineer is refused. The edit routes follow below (STORY-08.02: the formula; insert, delete and revert are stories 08.03 onward).
   {
     path: '/config/fields',
     kind: 'page',
@@ -274,6 +274,13 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/config/fields', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
   { path: '/api/v1/config/current', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
+  // STORY-08.02 (SCR-18, the formula editor; architecture section 6 "Formula check", "Sample rows" and "Save formula": A, and the save with the Admin's password). The Admin alone (NFR-001): a Lead and an Engineer are refused
+  // 403 and a signed-out caller 401, before anything is looked up. The answers hold formulas, rate names and the figures of a stored calculation, so none is in any Engineer's list and the cost scan calls all four as
+  // routes an Engineer is refused (NFR-002). The page is opened from SCR-17 and is no menu entry.
+  { path: '/api/v1/config/formula-check', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/sample-rows', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/fields/[id]/formula', kind: 'api', methods: ['PUT'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/config/fields/[id]/formula', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2', screen: 'SCR-18' },
   // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).

@@ -7,6 +7,7 @@ import { type AccountService, createAccountService } from '../../src/server/serv
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
 import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
+import { createConfigEditService, type ConfigEditService } from '../../src/server/services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
@@ -112,6 +113,8 @@ export interface SessionHarness {
   readonly masters: FakeMasterRepository;
   /** The read side of the field registry over the seed registry and the 15 seed rates, for the routes and the page of STORY-08.01 (`getConfigReadService` in the composition mock). */
   readonly configReadService: ConfigReadService;
+  /** The formula editor (STORY-08.02) over the same in-memory versions, the 15 seed rates, the fake calculation store, the real step-up check over the harness's people and throttles, and the audit world (`getConfigEditService` in the composition mock). */
+  readonly configEditService: ConfigEditService;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
   /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
@@ -404,6 +407,15 @@ export function createSessionHarness(): SessionHarness {
     settingsService: createSettingsService(settingsWorld),
     configRepository,
     configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
+    configEditService: createConfigEditService({
+      configurations: configRepository,
+      masters,
+      calculations: calculationWorld.repository,
+      stepUp: stepUpService,
+      transactions: auditWorld.transactions,
+      audit: auditService,
+      cache: createConfigVersionCache(),
+    }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

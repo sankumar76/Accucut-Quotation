@@ -11,6 +11,7 @@ import { bodyOfRecipe } from '../support/request-body';
 import { validCallFor, type UploadRecipe, type ValidCall } from '../support/route-calls';
 import { API_LOADERS, PAGE_LOADERS } from '../support/route-loaders';
 import { expectEveryCallRan, refusedRoleCalls, SAME_403_LOOP } from '../support/security-loops';
+import { seedFieldAt } from '../support/seed-config';
 import { SPEC_ACCESS } from '../support/spec-access';
 import { harness, holdSessionClock, releaseSessionClock, SESSION_NOW, FORBIDDEN_SIGNAL, NOT_FOUND_SIGNAL, REDIRECT_PREFIX } from '../support/session-harness';
 
@@ -46,6 +47,7 @@ vi.mock('@/server/composition', async () => {
     getTaskService: () => shared.taskService,
     getEstimateService: () => shared.estimateService,
     getConfigReadService: () => shared.configReadService,
+    getConfigEditService: () => shared.configEditService,
     getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
@@ -106,6 +108,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/settings': 'redirect:/sign-in?callbackUrl=%2Fsettings',
   '/config/fields': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields',
   '/about': 'redirect:/sign-in?callbackUrl=%2Fabout',
+  '/config/fields/[id]/formula': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields%2F%5Bid%5D%2Fformula',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
@@ -121,6 +124,8 @@ const REAL_PAGE_ID: Readonly<Record<string, SegmentValues>> = {
   '/estimates/[code]/costs/[slNo]': { code: canaryTaskCodeFor(harness.targetId), slNo: '1' },
   // SCR-10 (STORY-07.01): the canary estimate's code. An invented code is SCR-26 "not found" for the two roles that may open it.
   '/estimates/[code]/export': canaryTaskCodeFor(harness.targetId),
+  // SCR-18 (STORY-08.02): a field ID is a UUID; an invented one is SCR-26 "not found" even for the Admin.
+  '/config/fields/[id]/formula': seedFieldAt('AL').id,
 };
 const pageIdFor = (row: RouteRow): SegmentValues => REAL_PAGE_ID[row.path] ?? 'invented-id';
 

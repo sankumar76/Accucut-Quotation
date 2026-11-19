@@ -1,10 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
+import { columnLetterToIndex } from '../../src/lib/columns';
+import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
 
-import { useFreshAddress } from './support/auth';
+import { makeCanaryEstimateCalculable, useFreshAddress } from './support/auth';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, NUMBER_RULE, nextSave, openForm, partForm } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-05.04 T7 (AC-1 to AC-8): the other sections of the part form of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server: cards 03 to 08 with their
@@ -20,6 +24,8 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
+const REMARKS_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AJ'));
+const ALPHA_CUSTOMER_ID = defined(CUSTOMER_CANARIES[0]).id;
 const COST_HINT = 'Enter 0 if there is none.';
 const FASTENERS_HINT = 'Type "None" if the part has no fasteners.';
 const REMARKS_HINT = 'Write "None" if there is nothing to add.';
@@ -382,5 +388,95 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await page.keyboard.press('Tab');
     await expect(control(page, 'B')).toBeFocused();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+});
+
+const progressLine = (page: Page) => partForm(page).locator('[data-part-progress]');
+
+test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree icon and the polite status', () => {
+  test('AC-1, AC-8: "n of m inputs complete" for the part, with a named progress bar that follows what is typed; Fasteners shows and hides its two fields in the count', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
+    // Fasteners shows its default "None", which counts; Part Model and the surface treatments are in no count (21 fields to fill, 1 of them showing a value).
+    await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
+    const bar = partForm(page).getByRole('progressbar', { name: 'Inputs complete for part 1' });
+    await expect(bar).toBeVisible();
+    await expect(bar).toHaveAttribute('aria-valuenow', '1');
+    await expect(bar).toHaveAttribute('aria-valuemax', '21');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+
+    // A wrong number is not a value; a right one counts; 0 is a value.
+    await control(page, 'P').fill('-1');
+    await control(page, 'P').blur();
+    await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
+    const saved = nextSave(page);
+    await control(page, 'P').fill('0');
+    await control(page, 'P').blur();
+    expect(await saved).toBe(200);
+    await expect(progressLine(page)).toContainText('2 of 21 inputs complete');
+    await expect(bar).toHaveAttribute('aria-valuenow', '2');
+    // Clearing a value takes it off the count again.
+    await control(page, 'P').fill('');
+    await control(page, 'P').blur();
+    await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
+
+    // A field the registry hides for what is typed is not counted: another word in Fasteners shows Qty and Cost, which are two more to fill.
+    const fasteners = nextSave(page);
+    await control(page, 'S').fill('Invented bolts');
+    await control(page, 'S').blur();
+    expect(await fasteners).toBe(200);
+    await expect(progressLine(page)).toContainText('1 of 23 inputs complete');
+    await expectFormAccessible(page);
+  });
+
+  test('AC-4, AC-8: the save that completes a part changes its icon in the tree with no reload, and says "Part 1 is complete." once, politely', async ({ page }, testInfo) => {
+    const owner = await openForm(page, testInfo);
+    // The part is complete in the database except for Remarks, and the page is read again as the database has it.
+    await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL.id, ALPHA_CUSTOMER_ID);
+    const held = await page.request.get(`/api/v1/estimates/${owner.id}/nodes/${owner.id}`);
+    const revision = ((await held.json()) as { revision: number }).revision;
+    const cleared = await page.request.patch(`/api/v1/estimates/${owner.id}/nodes/${owner.id}/inputs`, {
+      headers: { origin: DEVELOPMENT_URL, 'content-type': 'application/json' },
+      data: { revision, values: { [REMARKS_ID]: '' } },
+    });
+    expect(cleared.status()).toBe(200);
+    expect(((await cleared.json()) as { completeness: string }).completeness).toBe('PARTIAL');
+    await page.reload();
+    await waitForForm(page);
+    await expect(progressLine(page)).toContainText('20 of 21 inputs complete');
+    // On a phone the tree is a drawer over the form, so it is opened once the typing is done.
+    if (!isPhone(page)) {
+      await showTree(page);
+      const before = tree(page).getByRole('treeitem').first();
+      await expect(before).toContainText('Some inputs entered');
+      await expect(before.locator('[data-completeness="PARTIAL"]')).toHaveCount(1);
+    }
+    // The polite status says nothing while the part is not complete, and nothing on a save that leaves it so.
+    const status = page.getByRole('status').filter({ hasText: 'Part 1 is complete.' });
+    await expect(status).toHaveCount(0);
+
+    const saved = nextSave(page);
+    await control(page, 'AJ').fill('Invented remark');
+    await control(page, 'AJ').blur();
+    expect(await saved).toBe(200);
+    await expect(progressLine(page)).toContainText('21 of 21 inputs complete');
+    await expect(status).toHaveText('Part 1 is complete.');
+    await showTree(page);
+    const item = tree(page).getByRole('treeitem').first();
+    await expect(item).toContainText('All inputs entered');
+    await expect(item.locator('[data-completeness="COMPLETE"]')).toHaveCount(1);
+    // The icons are decoration: the words carry the state.
+    await expect(item.locator('svg[data-completeness]')).toHaveAttribute('aria-hidden', 'true');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectFormAccessible(page);
+  });
+
+  test('AC-2: a part with every input and no picture is complete (Part Model is optional)', async ({ page }, testInfo) => {
+    const owner = await openForm(page, testInfo);
+    await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL.id, ALPHA_CUSTOMER_ID);
+    await page.reload();
+    await waitForForm(page);
+    await expect(progressLine(page)).toContainText('21 of 21 inputs complete');
+    await showTree(page);
+    await expect(tree(page).getByRole('treeitem').first()).toContainText('All inputs entered');
   });
 });

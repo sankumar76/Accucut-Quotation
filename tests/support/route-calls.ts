@@ -1,4 +1,6 @@
+import { columnLetterToIndex } from '../../src/lib/columns';
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
+import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
 
 import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary';
 import { canaryEstimatePageFor } from './estimate-recipe';
@@ -43,6 +45,12 @@ export interface CallContext {
   /** The ID of a person who is not the caller, for a route that changes someone. */
   readonly targetId: string;
 }
+
+/**
+ * The ID of Cutting Cost (AL), a seed field every registry holds (STORY-08.02: the formula editor's recipes name it). Made from the seed's own rule and not read from the seed registry, because the Playwright
+ * process lists these recipes too and cannot load the formula engine behind the registry; `tests/unit/config/formula-edit.test.ts` holds it equal to the registry's.
+ */
+export const CUTTING_COST_FIELD_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AL'));
 
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
@@ -96,6 +104,8 @@ const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string
   '/estimates/[code]/costs/[slNo]': (context) => `${canaryEstimatePageFor(context.ownerId)}/costs/${CANARY_PART_SL_NO}`,
   // SCR-10 (STORY-07.01): the canary estimate's export page. Lead and Admin only: an Engineer is refused whatever the address.
   '/estimates/[code]/export': (context) => `${canaryEstimatePageFor(context.ownerId)}/export`,
+  // SCR-18 (STORY-08.02): the editor of Cutting Cost, a field every registry holds (its ID is a seed ID). The Admin only: a Lead and an Engineer are refused whatever the address.
+  '/config/fields/[id]/formula': () => `/config/fields/${CUTTING_COST_FIELD_ID}/formula`,
 };
 
 /**
@@ -251,6 +261,15 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
+    // STORY-08.02: the formula editor. The valid call of the Admin is the check of a formula and the read of the sample rows (they store nothing), and the save of the formula Cutting Cost already has,
+    // which is the decision on "edit to its own text": 200, no new version, no audit entry and no password asked for, so the call repeats at any state of the harness. A save that really writes, the
+    // password step and the 409 are `config-edit-routes.test.ts`'s and `tests/integration/config/save-formula.test.ts`'s. The answers hold formulas and rate names: Admin only, and the scan reads the refusals.
+    case 'POST /api/v1/config/formula-check':
+      return { id, body: { fieldId: CUTTING_COST_FIELD_ID, text: 'P * Cutting-Rate-per-Sec' }, status: 200 };
+    case 'GET /api/v1/config/sample-rows':
+      return { id, status: 200 };
+    case 'PUT /api/v1/config/fields/[id]/formula':
+      return { id: CUTTING_COST_FIELD_ID, body: { text: 'P * Cutting-Rate-per-Sec', password: HARNESS_PASSWORD, baseVersion: 1 }, status: 200 };
     default:
       return undefined;
   }
