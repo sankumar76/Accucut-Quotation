@@ -3,7 +3,7 @@
  * its dialog is still loading (UX spec 7.3.1 rule 11). Types and one lookup; nothing here is a component.
  */
 
-export type DialogKind = 'add' | 'edit' | 'reset' | 'deactivate';
+export type DialogKind = 'add' | 'edit' | 'reset' | 'deactivate' | 'handover';
 
 export interface Opener {
   /** The person whose row the button is in, or null for "Add user". */
