@@ -11,6 +11,7 @@ import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/ex
 import { RUPEE } from '../../lib/masters/master-rules';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
 import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '../../lib/masters/process-items';
+import { formatIst } from '../../lib/time';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 import type { JsonValue } from '../repositories/audit-repository';
 
@@ -175,6 +176,27 @@ const describeRemoved = (before: z.output<typeof removedBeforeState>): AuditChan
 
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
+
+// ---- Shape of the task-change event (SCR-16 "Task change"; STORY-04.07) -------------------------------------------------------
+/**
+ * The assignment of a task as it stood: the Engineer (ID and name at that moment) and the deadline as a UTC instant. Nothing else about the task has a key to sit in: no folder path, notes, title,
+ * customer or cost (NFR-002), and no e-mail address (data minimisation). The object of the entry is the task code.
+ */
+const assignmentState = z.strictObject({ engineer: z.strictObject({ id: z.string().min(1), name: z.string().min(1) }), deadlineAt: z.iso.datetime() });
+
+/**
+ * "Arjun Rao to Meera Nair" for an Engineer and "03 Nov 2026, 17:00 IST to 04 Nov 2026, 12:00 IST" for a deadline (SCR-16, AC-4), split at the arrow of "Before to after". A change of both gives both on each side,
+ * the Engineer first: one entry for one save (decision D-g). An entry whose two sides are equal (a save that changed nothing writes none) shows both, so the words are never empty.
+ */
+function describeReassigned(before: z.output<typeof assignmentState>, after: z.output<typeof assignmentState>): AuditChangeText {
+  const engineerChanged = before.engineer.id !== after.engineer.id;
+  const deadlineChanged = before.deadlineAt !== after.deadlineAt;
+  const neither = !engineerChanged && !deadlineChanged;
+  const sides: Array<readonly [string, string]> = [];
+  if (engineerChanged || neither) sides.push([before.engineer.name, after.engineer.name]);
+  if (deadlineChanged || neither) sides.push([formatIst(new Date(before.deadlineAt)), formatIst(new Date(after.deadlineAt))]);
+  return { before: sides.map(([old]) => old).join(', '), after: sides.map(([, current]) => current).join(', ') };
+}
 
 // ---- Shape of the Process Master events (SCR-16 "Master data edit") ------------------------------------------------------------
 /** A rate as the log keeps it: its name, unit and default value as decimal text ("0.37"). The ID and the name label the entry. */
@@ -503,6 +525,18 @@ export const AUDIT_EVENTS = {
     before: z.null(),
     after: z.strictObject({ warnings: z.array(warnedRow).min(1) }),
     describe: (_before, after) => ({ before: 'No warning', after: `Went ahead with QTY per Assy 0 on ${after.warnings.map(describeWarnedRow).join(', ')}` }),
+  }),
+
+  // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------
+  // One entry for one save (decision D-g), in the change's own transaction under the task's and the estimate's row locks: the Engineer (ID and name) and the deadline before and after. The actor is the Lead or
+  // the Admin who saved; the object is the task code. A save that changed nothing writes no entry.
+  'task.reassigned': defineEvent({
+    objectType: 'task',
+    category: 'task_change',
+    status: 'wired',
+    before: assignmentState,
+    after: assignmentState,
+    describe: describeReassigned,
   }),
 } as const;
 

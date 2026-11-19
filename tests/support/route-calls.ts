@@ -151,6 +151,9 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
     case 'GET /api/v1/tasks/[id]':
       return { id: context.targetId, status: 200 };
+    // STORY-04.07: the same canary task. An empty body changes nothing (no entry, no revision), so the call answers 200 at any state, however often the matrix and the scan repeat it.
+    case 'PATCH /api/v1/tasks/[id]':
+      return { id: context.targetId, body: {}, status: 200 };
     default:
       return undefined;
   }

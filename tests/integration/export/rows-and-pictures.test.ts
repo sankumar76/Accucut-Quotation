@@ -54,10 +54,10 @@ beforeAll(async () => {
     header: createExportRepository(db.prisma),
     nodes: db.nodes,
     calculations: {
-      findFigureBasis: (estimateId) => db.calculations.findFigureBasis(estimateId),
-      findExportFigures: (calculationId) => {
+      findFigureBasis: (estimateId, tx) => db.calculations.findFigureBasis(estimateId, tx),
+      findExportFigures: (calculationId, tx) => {
         exportFigureReads();
-        return db.calculations.findExportFigures(calculationId);
+        return db.calculations.findExportFigures(calculationId, tx);
       },
     },
     approvals: db.approvals,
@@ -69,6 +69,7 @@ beforeAll(async () => {
       findMimes: (estimateId, ids) => images.findMimes(estimateId, ids),
     },
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
+    transactions: db.transactions,
     builder,
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });

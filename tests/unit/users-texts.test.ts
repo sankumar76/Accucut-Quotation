@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  deactivateDescription,
   dialogFailureTitle,
   FAILED_DIALOGS_MESSAGE,
   OWN_PASSWORD_LINE,
@@ -35,5 +36,13 @@ describe('the notice when a dialog did not open', () => {
 
   it('uses the shared sentence', () => {
     expect(FAILED_DIALOGS_MESSAGE).toBe('Check your connection and try again.');
+  });
+});
+
+describe('STORY-04.07 AC-9 (UX-21): the Deactivate dialog says the open tasks can be reassigned, now that it is true', () => {
+  it('adds "You can reassign their open tasks." after the sentence about their tasks, and keeps the rest as it was', () => {
+    expect(deactivateDescription('Invented Arjun')).toBe(
+      'Invented Arjun can no longer sign in. Their tasks and estimates stay as they are. You can reassign their open tasks. You can activate them again later.',
+    );
   });
 });

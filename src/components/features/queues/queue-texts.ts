@@ -30,6 +30,13 @@ export const CARD_DEADLINE_LABEL = 'Due';
 export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by', actions: 'Actions' } as const;
 /** What a Lead and an Admin read in the action column of a closed task in place of the row actions (UX-20; STORY-04.05 AC-5). It is not a status badge. */
 export const CLOSED_ROW_WORD = 'Closed';
+/** The action of an open row for a Lead and an Admin (STORY-04.07 AC-1, UX spec SCR-03 "Interactions"). It opens SCR-04 in edit mode. */
+export const REASSIGN_ACTION = 'Reassign or change deadline';
+
+/** The action's accessible name: its visible words first (WCAG 2.5.3), then the task, so the same action on every row is told apart by a screen reader. */
+export function reassignActionLabel(code: string): string {
+  return `${REASSIGN_ACTION}, ${code}`;
+}
 
 export const LOADING_LABEL = 'Loading tasks';
 export const ERROR_TITLE = 'We could not load the tasks';

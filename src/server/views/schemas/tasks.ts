@@ -32,6 +32,16 @@ export const assignTaskBodySchema = z.strictObject({
   notes: text,
 });
 
+/**
+ * `PATCH /api/v1/tasks/{id}` (STORY-04.07 AC-3): the new Engineer's ID and/or the new deadline as an ISO 8601 instant in UTC. Both are optional, and a body with neither (or with the stored values)
+ * changes nothing. As for the assignment, the body only bounds the size of each text: what is *wrong* with a value is the task service's to say, with the words of the UX spec under the field it
+ * names (`lib/tasks/reassign.ts`). The assigner, the revision, the folder, the title and the notes have no key here, so a client cannot set them.
+ */
+export const reassignTaskBodySchema = z.strictObject({
+  engineerId: z.string().max(MAX_TEXT_LENGTH).optional(),
+  deadlineAt: z.string().max(MAX_TEXT_LENGTH).optional(),
+});
+
 const engineerSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1) });
 
 /** The task as it was stored, with the `file:` link the server built from its path (AC-4), and its empty estimate (AC-1). */
@@ -107,6 +117,12 @@ const queueTaskSchema = z.strictObject({
   status: z.enum(ESTIMATE_STATUSES),
   assignedByName: z.string().min(1),
 });
+
+/**
+ * `PATCH /api/v1/tasks/{id}` (STORY-04.07 AC-3; architecture section 6, "Change task"): the answer is the task as the queue shows it, the same strict row, so no cost, rate, price or
+ * formula value can leave with it (NFR-002).
+ */
+export const reassignedTaskSchema = queueTaskSchema;
 
 /** The path parameter of `/api/v1/tasks/{id}`: it only bounds the size of the text. Whether it names a task, and whose, is the service's to say, always as a 404. */
 export const taskIdParamsSchema = z.strictObject({ id: z.string().max(MAX_ID_LENGTH) });

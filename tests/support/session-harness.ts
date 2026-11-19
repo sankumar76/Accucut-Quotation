@@ -121,6 +121,8 @@ export interface SessionHarness {
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
   readonly taskWorld: FakeTaskWorld;
+  /** The audit entries written by `taskService` (a task reassigned, STORY-04.07): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
@@ -213,6 +215,8 @@ export function createSessionHarness(): SessionHarness {
     { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
   ]);
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
+  const taskAudit = createAuditSink();
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
     id: targetId,
@@ -356,6 +360,7 @@ export function createSessionHarness(): SessionHarness {
     approvals: reviewReads,
     images: estimateWorld.imageRepository,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    transactions: calculationWorld.transactions,
     builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
@@ -385,7 +390,8 @@ export function createSessionHarness(): SessionHarness {
     adminHandoverService,
     hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
-    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
+    taskAudit,
     jobRuns,
     settingsService: createSettingsService({ jobRuns, clock: systemClock }),
     configRepository,
