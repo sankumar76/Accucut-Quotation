@@ -6,6 +6,7 @@ import { defined } from '../support/defined';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-05.02 T7 (AC-1 to AC-3, AC-6, AC-9): the parts tree of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in
@@ -23,6 +24,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 const ALPHA = defined(CUSTOMER_CANARIES[0]).name;
+const ALPHA_ID = defined(CUSTOMER_CANARIES[0]).id;
 const PHONE_MAX = 767;
 
 const customerField = (page: Page): Locator => page.locator('#estimate-customer');
@@ -231,6 +233,31 @@ async function showTree(page: Page): Promise<void> {
   await expect(tree(page)).toBeVisible();
 }
 
+/**
+ * A tree of part 1 with two sub-parts, for the two delete tests (DEF-048, AQP-377). The customer is chosen and the two sub-parts are added with the calls that the drop-down and the
+ * Sub-part button make (`PUT .../customer`, `POST .../nodes`), before the page is opened, so the page opens on the tree. Done through the buttons they were 6 s of a test that took
+ * 17 to 23 s on CI (run 44567048767), and the delete is the subject of these tests, not adding: the buttons are judged by the AC-1, AC-2 and AC-9 tests below, the drop-down by
+ * `estimate-customer.spec.ts`. The tree is checked on screen below, as the tests that built it with the buttons did.
+ */
+async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<void> {
+  await ensureCanaryCustomers();
+  const owner = await signInAsNewEngineer(page, testInfo);
+  const headers = { origin: DEVELOPMENT_URL };
+  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers, data: { customerId: ALPHA_ID } });
+  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  // One after the other, as the buttons are pressed: both are added under part 1, which is the person's one part and has the person's ID.
+  for (const slNo of ['1.1', '1.2']) {
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers, data: { kind: 'sub-part', nodeId: owner.id } });
+    expect(added.ok(), `part ${slNo} is added`).toBe(true);
+  }
+  await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+  await waitUntilHydrated(page, '#estimate-customer', 'onChange');
+  await expect(customerField(page)).toBeEnabled();
+  await showTree(page);
+  await expect(part(page, '1')).toBeVisible();
+  await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+}
+
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
   test('AC-1, AC-2: New item, Sub-part and Part beside add parts and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
     // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
@@ -310,15 +337,9 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
 });
 
 test.describe('AC-3: delete asks first and names the count', () => {
-  test('AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing; confirming deletes all three', async ({ page }, testInfo) => {
-    await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
-    await expect(part(page, '1.1')).toBeVisible();
-    // The new part is the selected one, so choose part 1 again for its second sub-part.
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
-    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  // DEF-048 (AQP-377): one test of 17 to 23 s on CI (run 44567048767) before; now two, each with the tree made by `openTreeWithTwoSubParts` and none of its checks left out.
+  test('AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing', async ({ page }, testInfo) => {
+    await openTreeWithTwoSubParts(page, testInfo);
 
     await part(page, '1').click();
     await action(page, 'Delete').click();
@@ -332,8 +353,15 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);
     expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  });
 
+  test('AC-3: a part with 2 sub-parts: confirming deletes all three', async ({ page }, testInfo) => {
+    await openTreeWithTwoSubParts(page, testInfo);
+
+    await part(page, '1').click();
     await action(page, 'Delete').click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByText('3 parts deleted')).toHaveCount(1);
