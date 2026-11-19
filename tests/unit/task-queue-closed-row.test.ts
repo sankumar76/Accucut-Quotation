@@ -11,7 +11,7 @@ import type { QueueRowData } from '@/lib/tasks/queue-client';
  * STORY-04.05 (AC-2, AC-5, AC-6; UX-20, SCR-03 "Differences by role"): what a Closed row draws, rendered to markup with no browser. A Lead and an Admin read the word
  * "Closed" in the action column of a closed task in place of the row actions (an approved task cannot be reassigned, A-14), and on the phone's card. An Engineer's row
  * has no action column at all and says only the status badge "Approved" (one badge per status: "Closed" is the tab's name, not a badge; STORY-04.04 AC-1). A list that
- * holds no closed row draws no action column (nothing is drawn for an action that does not exist yet, UX spec 6.0). The words are written out here and not imported.
+ * holds no closed row says no "Closed"; since STORY-04.07 its action column holds the open rows' "Reassign or change deadline" (`tests/unit/tasks/queue-row-action.test.ts`). The words are written out here and not imported.
  * Every name, path and date is invented.
  */
 
@@ -56,10 +56,11 @@ describe('AC-5: a Closed row shows the word "Closed" in place of the row actions
     expect(occurrences(cardsOf(html), 'data-closed-action')).toBe(2);
   });
 
-  it('draws no Actions column and no "Closed" for a list with no closed row (nothing is drawn for an action that does not exist yet)', () => {
+  it('draws no "Closed" for a list with no closed row; its Actions column holds the open rows\' action instead (STORY-04.07 AC-1)', () => {
     const html = list('LEAD', [row({ status: 'DRAFT' }), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'SUBMITTED' })]);
-    expect(html).not.toContain('Actions');
+    expect(html).toContain('Actions');
     expect(html).not.toContain('Closed');
+    expect(occurrences(tableOf(html), 'data-reassign-action')).toBe(2);
   });
 
   it('offers no reassign or other action on a closed row', () => {

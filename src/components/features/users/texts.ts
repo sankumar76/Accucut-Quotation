@@ -41,3 +41,11 @@ export const TRY_AGAIN_BODY = 'Check your connection and try again. Nothing was 
 export function dialogFailureTitle(kind: DialogKind | null): string {
   return kind === 'deactivate' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE;
 }
+
+/**
+ * What the Deactivate dialog says (UX spec SCR-14, UX-21): the person can no longer sign in, their tasks and estimates stay as they are, **they can be reassigned** (STORY-04.07 AC-9, true
+ * now that "Reassign or change deadline" exists), and the person can be activated again. The sentence about reassigning follows the one about the tasks it is about.
+ */
+export function deactivateDescription(name: string): string {
+  return `${name} can no longer sign in. Their tasks and estimates stay as they are. You can reassign their open tasks. You can activate them again later.`;
+}
