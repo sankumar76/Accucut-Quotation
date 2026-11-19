@@ -69,7 +69,7 @@ type TypedField = FormFieldView & { readonly rule: Exclude<FormRule, { readonly 
 const isTyped = (field: FormFieldView): field is TypedField => field.rule.type !== 'derived' && field.rule.type !== 'picture';
 
 /** One field of the form as one part holds it: its value read by its rule (`null`: none, or refused). */
-interface FieldValue {
+export interface FieldValue {
   readonly field: TypedField;
   readonly value: string | null;
 }
@@ -113,12 +113,45 @@ function nameOf(document: ConfigDocument, read: ReadonlyArray<FieldValue>): stri
 }
 
 /** Every field of the form, as one part holds it, and the IDs of the registry's inputs that the registry hides for it (`visibleWhen`, through `isFieldShown`, the one copy of the rule). */
-function readPart(part: PartToCheck, document: ConfigDocument, fields: ReadonlyArray<TypedField>) {
-  const read: FieldValue[] = fields.map((field) => ({ field, value: readField(field, part.inputs[field.id]) }));
+function readPart(inputs: Readonly<Record<string, unknown>>, document: ConfigDocument, fields: ReadonlyArray<TypedField>) {
+  const read: FieldValue[] = fields.map((field) => ({ field, value: readField(field, inputs[field.id]) }));
   const watched = new Map(read.map(({ field, value }) => [field.id, value]));
   const hidden = hiddenFieldIds(document, (fieldId) => watched.get(fieldId) ?? undefined);
   return { read, hidden };
 }
+
+/** What the check found in one part: every field read, the hidden ones, the needed fields that show no value, and the material (`null` when there is none). */
+export interface PartReading {
+  readonly read: ReadonlyArray<FieldValue>;
+  readonly hidden: ReadonlySet<string>;
+  readonly missing: ReadonlyArray<MissingField>;
+  readonly material: string | null;
+}
+
+/**
+ * The one rule of "what is needed and missing" (STORY-05.11 AC-3): the form's fields are worked out once for a configuration, and each part is read against them. Calculate (`validateForCalculate`) and the completeness of
+ * a part (`part-completeness.ts`: the tree, a save, a picture change) both use it, so a part Calculate names is never `COMPLETE` and a part the tree calls `COMPLETE` is never named.
+ */
+export function createPartReader(document: ConfigDocument) {
+  const fields = typedFieldsOf(document);
+  const materialId = findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id;
+  return {
+    /** The ID of every field of the form that a person types or chooses. */
+    fieldIds: fields.map((field) => field.id),
+    read(inputs: Readonly<Record<string, unknown>>): PartReading {
+      const { read, hidden } = readPart(inputs, document, fields);
+      const missing = read.filter(({ field, value }) => field.required && !hidden.has(field.id) && value === null).map(({ field }) => ({ fieldId: field.id, label: field.label }));
+      const materialField = read.find(({ field }) => field.id === materialId);
+      const material = materialField?.value ?? null;
+      // A calculation needs a material whether or not the registry marks the field mandatory: a blank one is named, so the person has a field to go to (review SQR-04 of AQP-317).
+      if (materialField !== undefined && material === null && !missing.some(({ fieldId }) => fieldId === materialField.field.id)) {
+        missing.unshift({ fieldId: materialField.field.id, label: materialField.field.label });
+      }
+      return { read, hidden, missing, material };
+    },
+  };
+}
+
 
 /** The typed numbers: a shown one as read, a hidden one as 0, and the flags, which are read as numbers (an absent one is its default, 0). */
 function numbersOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyArray<FieldValue>, hidden: ReadonlySet<string>): Record<string, string> {
@@ -150,19 +183,11 @@ function textsOf(read: ReadonlyArray<FieldValue>): Record<string, string> {
  * nothing named (fail closed: a calculation needs a material).
  */
 export function validateForCalculate(parts: ReadonlyArray<PartToCheck>, document: ConfigDocument): CalculateCheck {
-  const fields = typedFieldsOf(document);
-  const materialId = findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id;
+  const reader = createPartReader(document);
   const blocked: BlockedPart[] = [];
   const checked: CheckedPart[] = [];
   for (const part of parts) {
-    const { read, hidden } = readPart(part, document, fields);
-    const missing = read.filter(({ field, value }) => field.required && !hidden.has(field.id) && value === null).map(({ field }) => ({ fieldId: field.id, label: field.label }));
-    const materialField = read.find(({ field }) => field.id === materialId);
-    const material = materialField?.value ?? null;
-    // A calculation needs a material whether or not the registry marks the field mandatory: a blank one is named, so the person has a field to go to (review SQR-04 of AQP-317).
-    if (materialField !== undefined && material === null && !missing.some(({ fieldId }) => fieldId === materialField.field.id)) {
-      missing.unshift({ fieldId: materialField.field.id, label: materialField.field.label });
-    }
+    const { read, hidden, missing, material } = reader.read(part.inputs);
     if (missing.length > 0 || material === null) {
       blocked.push({ nodeId: part.id, slNo: part.slNo, name: nameOf(document, read), fields: missing });
     } else {
@@ -171,4 +196,3 @@ export function validateForCalculate(parts: ReadonlyArray<PartToCheck>, document
   }
   return blocked.length > 0 ? { ok: false, parts: blocked } : { ok: true, parts: checked };
 }
-

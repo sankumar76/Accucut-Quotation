@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 
 import { ConflictError, NotFoundError, PayloadTooLargeError, UnsupportedMediaTypeError } from '../../lib/errors';
-import { completenessOf, type Completeness } from '../../lib/estimate/part-view';
+import { createCompletenessReader, type CompletenessReader } from '../../lib/estimate/part-completeness';
+import type { Completeness } from '../../lib/estimate/part-view';
+import type { ConfigDocument } from '../../lib/fields/schema';
 import { checkPicture, PICTURE_TOO_LARGE_CODE, sanitiseFileName } from '../../lib/images/picture-rules';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
 import type { ImageRepository, PictureRecord, StoredImage } from '../repositories/image-repository';
@@ -55,6 +57,8 @@ export interface ImageServiceDependencies {
   readonly nodes: EstimateNodeRepository;
   readonly images: ImageRepository;
   readonly transactions: TransactionRunner;
+  /** The field registry the completeness of a part is read against (the current version, cached per version): the same rule as the tree's and the form's save (STORY-05.11). */
+  readonly currentConfiguration: () => Promise<ConfigDocument>;
   /** Locks the estimate for a change: 404, or 409 when this person may no longer change its inputs. Returns the estimate's ID. */
   readonly lockForChange: (viewer: EstimateViewer, estimateId: string, tx: Transaction) => Promise<string>;
   /** Raises the estimate's `inputs_revision` by one, in the caller's transaction. */
@@ -71,16 +75,19 @@ function refusal(check: { readonly status: 413 | 415; readonly code: string; rea
   return check.status === 413 ? new PayloadTooLargeError(check.message, { code: PICTURE_TOO_LARGE_CODE }) : new UnsupportedMediaTypeError(check.message, { code: check.code });
 }
 
-export function createImageService({ nodes, images, transactions, lockForChange, bumpInputsRevision, mayOpen }: ImageServiceDependencies): ImageService {
-  const unchanged = (part: NodeRecord, picture: PictureRecord | null): PartPicture => ({ id: part.id, revision: part.revision, completeness: completenessOf(part.inputs), picture });
+export function createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision, mayOpen }: ImageServiceDependencies): ImageService {
+  const unchanged = (part: NodeRecord, picture: PictureRecord | null, completenessOf: CompletenessReader): PartPicture => ({ id: part.id, revision: part.revision, completeness: completenessOf(part.inputs), picture });
+
+  /** The rule for the registry as it is now, read before the transaction opens (a version never changes), so it holds no connection and no lock while it is read. */
+  const completenessReader = async (): Promise<CompletenessReader> => createCompletenessReader(await currentConfiguration());
 
   /** Points the part at `picture` (or none) as it was read, raises both revisions in this transaction, and answers the part as it is now. */
-  async function point(estimateId: string, part: NodeRecord, picture: PictureRecord | null, tx: Transaction): Promise<PartPicture> {
+  async function point(estimateId: string, part: NodeRecord, picture: PictureRecord | null, completenessOf: CompletenessReader, tx: Transaction): Promise<PartPicture> {
     // The write is conditional on the revision that was read, so a writer that skipped the estimate's lock is a 409 here and not a lost update (as the form's save).
     const saved = await nodes.setImage(estimateId, part.id, part.revision, picture?.id ?? null, tx);
     if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
     await bumpInputsRevision(estimateId, tx);
-    return unchanged(saved, picture);
+    return unchanged(saved, picture, completenessOf);
   }
 
   /** The part in the estimate, locked for a change: 404 for one that is not there. */
@@ -95,7 +102,8 @@ export function createImageService({ nodes, images, transactions, lockForChange,
     imageId === null ? Promise.resolve(null) : images.findPicture(estimateId, imageId, tx);
 
   return {
-    putPicture(viewer, estimateId, nodeId, upload) {
+    async putPicture(viewer, estimateId, nodeId, upload) {
+      const completenessOf = await completenessReader();
       return transactions.run(async (tx) => {
         const { id, part } = await lockedPart(viewer, estimateId, nodeId, tx);
         // The name is display text and is made safe before anything else reads it, the refusals' words included.
@@ -104,16 +112,17 @@ export function createImageService({ nodes, images, transactions, lockForChange,
         if (!check.ok) throw refusal(check);
         const stored = await images.storeImage(id, { sha256: sha256Of(upload.bytes), mime: check.mime, fileName, bytes: upload.bytes }, tx);
         // The same picture again (the same bytes for the same part) is no change: no write and no new revision, so a repeated request cannot clear a total (section 4.8).
-        if (part.imageId === stored.id) return unchanged(part, stored);
-        return point(id, part, stored, tx);
+        if (part.imageId === stored.id) return unchanged(part, stored, completenessOf);
+        return point(id, part, stored, completenessOf, tx);
       });
     },
 
-    removePicture(viewer, estimateId, nodeId) {
+    async removePicture(viewer, estimateId, nodeId) {
+      const completenessOf = await completenessReader();
       return transactions.run(async (tx) => {
         const { id, part } = await lockedPart(viewer, estimateId, nodeId, tx);
-        if (part.imageId === null) return unchanged(part, null);
-        return point(id, part, null, tx);
+        if (part.imageId === null) return unchanged(part, null, completenessOf);
+        return point(id, part, null, completenessOf, tx);
       });
     },
 
