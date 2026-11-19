@@ -8,6 +8,7 @@ import { type AuditService, createAuditService } from '../../src/server/services
 import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
 import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
 import { createConfigEditService, type ConfigEditService } from '../../src/server/services/config-edit-service';
+import { createConfigStructureService, type ConfigStructureService } from '../../src/server/services/config-structure-service';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
@@ -114,6 +115,8 @@ export interface SessionHarness {
   readonly configReadService: ConfigReadService;
   /** The formula editor (STORY-08.02) over the same in-memory versions, the 15 seed rates, the fake calculation store, the real step-up check over the harness's people and throttles, and the audit world (`getConfigEditService` in the composition mock). */
   readonly configEditService: ConfigEditService;
+  /** The insert wizard (STORY-08.03) over the same in-memory versions, the 15 seed rates and the audit world; it asks for no password (`getConfigStructureService` in the composition mock). */
+  readonly configStructureService: ConfigStructureService;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
   /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
@@ -408,6 +411,7 @@ export function createSessionHarness(): SessionHarness {
       audit: auditService,
       cache: createConfigVersionCache(),
     }),
+    configStructureService: createConfigStructureService({ configurations: configRepository, masters, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

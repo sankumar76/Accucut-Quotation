@@ -94,6 +94,19 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
 /** The Sl. No of the canary estimate's one part (the part is first at the top, so it is 1). */
 const CANARY_PART_SL_NO = '1';
 
+/** A version number no harness reaches: a save on it is the 409 of a stale base, which stores nothing. */
+const STALE_BASE_VERSION = 9_999;
+
+/**
+ * An insert after AX (STORY-08.03), as the preview's "letters only" call and the save's stale call read it. Made from the seed's own ID rule like `CUTTING_COST_FIELD_ID`, because the Playwright process lists these
+ * recipes too and cannot load the registry. The details are empty on purpose: the letters-only preview reads the places alone, and a stale save is refused before the details are read.
+ */
+const INSERT_AFTER_AX = {
+  kind: 'input',
+  afterFieldId: seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AX')),
+  input: { label: '', dataType: 'number', defaultValue: '', sectionId: '', unit: '', hint: '', width: 12, numFmt: '0.00', watchFieldId: null },
+} as const;
+
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
   // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
@@ -270,6 +283,15 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 200 };
     case 'PUT /api/v1/config/fields/[id]/formula':
       return { id: CUTTING_COST_FIELD_ID, body: { text: 'P * Cutting-Rate-per-Sec', password: HARNESS_PASSWORD, baseVersion: 1 }, status: 200 };
+    // STORY-08.03: the insert wizard. Options and preview store nothing, so they answer 200 at any state. The save's valid call is the one that stores nothing too: a base version that is not the latest is 409
+    // `CONFIG_VERSION_CHANGED` for the one role that may call it, at every state of the harness. A save that really writes, the 422 and the audit rollback are `config-structure-routes.test.ts`'s and
+    // `tests/integration/config/insert-field.test.ts`'s. The answers name formulas and column labels: Admin only, and the scan reads the refusals.
+    case 'GET /api/v1/config/insert-options':
+      return { id, status: 200 };
+    case 'POST /api/v1/config/fields/preview':
+      return { id, body: { spec: INSERT_AFTER_AX, lettersOnly: true }, status: 200 };
+    case 'POST /api/v1/config/fields':
+      return { id, body: { spec: INSERT_AFTER_AX, baseVersion: STALE_BASE_VERSION }, status: 409 };
     default:
       return undefined;
   }

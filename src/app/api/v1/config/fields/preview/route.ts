@@ -16,7 +16,8 @@ export const POST = withRoute({
     const preview = await getConfigStructureService().previewInsert({ user, requestId }, body);
     return {
       baseVersion: preview.baseVersion,
-      inserted: [...preview.inserted],
+      // The new fields as the Admin reads them; the internal ID of a field that does not exist yet is not part of the answer (the schema is strict).
+      inserted: preview.inserted.map(({ letter, label, kind, followsLetter }) => ({ letter, label, kind, followsLetter })),
       moved: preview.moved.map(({ label, from, to }) => ({ label, from, to })),
       productCells: [...preview.productCells],
       formulas: [...preview.formulas],

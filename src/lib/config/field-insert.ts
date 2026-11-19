@@ -16,7 +16,7 @@ import { checkFormulaEdit } from './formula-edit';
  * save**, so the letters the Admin is shown are the letters stored (AC-3, AC-5).
  *
  * **Re-lettering is positions, nothing else** (BR-035): the new fields take their places in the list, every position is renumbered 1 to N in list order, and a letter is derived from it. No stored formula is
- * rewritten, because a formula holds `{{f:<id>}}` and every field keeps its ID. The product's cells (BL2, BN2, BO2) move with their columns because nothing finds them by letter.
+ * rewritten, because a formula holds the stable ID of each field it reads, not a letter, and every field keeps its ID. The product's cells (BL2, BN2, BO2) move with their columns because nothing finds them by letter.
  *
  * **Formula letters (decision D-1):** the formula of a new output is typed in the letters the worksheet will have **after** the insert, as in Excel where the column is inserted first. So the document with the
  * new fields in place is built first, and the typed text is read against it. That is what lets the pair's cost formula name the new input, which has no letter today.

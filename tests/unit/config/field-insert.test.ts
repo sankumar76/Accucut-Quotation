@@ -90,7 +90,7 @@ describe('AC-3 (SPEC section 14 item 6): an input after AX is AY, and AY to BO b
 
   it('is the same answer for the preview as for the save', () => {
     const preview = previewInsert({ document: seedConfig, rates: RATES, spec: { kind: 'input', afterFieldId: after('AX'), input: input() }, newId });
-    const withoutIds = (changes: LetterChanges) => ({ ...changes, inserted: changes.inserted.map(({ id: _id, ...rest }) => rest) });
+    const withoutIds = (changes: LetterChanges) => ({ ...changes, inserted: changes.inserted.map(({ label, kind, letter, followsLetter }) => ({ label, kind, letter, followsLetter })) });
     expect(preview.ok && withoutIds(preview.changes)).toEqual(withoutIds(result.changes));
   });
 });
@@ -172,9 +172,7 @@ describe('AC-5 (BR-035): re-lettering keeps every result, at every insert positi
           const kept = document.fields.filter((field) => seedConfig.fields.some((old) => old.id === field.id));
           expect(kept.map((field) => field.id)).toEqual(seedConfig.fields.map((field) => field.id));
           kept.forEach((field, place) => {
-            const { position: _position, ...rest } = field;
-            const { position: _oldPosition, ...original } = defined(seedConfig.fields[place]);
-            expect(rest, `${field.key} after ${index + 1}`).toEqual(original);
+            expect({ ...field, position: 0 }, `${field.key} after ${index + 1}`).toEqual({ ...defined(seedConfig.fields[place]), position: 0 });
           });
           // The new fields sit right after the column they were put after (the cost column right after the input).
           const place = document.fields.findIndex((field) => field.id === placed.id);

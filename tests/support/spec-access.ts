@@ -18,6 +18,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/masters/materials': ['ADMIN'],
   '/config/fields': ['ADMIN', 'LEAD'], // Field and formula configuration: Admin edits, Lead views
   '/config/fields/[id]/formula': ['ADMIN'], // SCR-18, the formula editor: the Admin edits (STORY-08.02, NFR-001)
+  '/config/fields/new': ['ADMIN'], // SCR-19, insert a field: the Admin alone (STORY-08.03 AC-1, NFR-001)
   '/config/checkpoints': ['ADMIN'], // Insert and delete fields, checkpoints: Admin
   '/users': ['ADMIN'], // Users
   '/settings': ['ADMIN'], // Settings
@@ -33,12 +34,17 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind Settings (SPEC section 9: Settings is the Admin's; architecture section 6 row "Settings", STORY-02.09 AC-6, CR-33).
   '/api/v1/settings': ['ADMIN'],
   // The API behind Fields and formulas (STORY-08.01; architecture section 6 row "Configuration": A L): the Admin and the Lead read the formulas, an Engineer never does (NFR-002, CR-33).
-  '/api/v1/config/fields': ['ADMIN', 'LEAD'],
+  // Two rows, one per method, because the roles differ (STORY-08.03): the read is the Admin's and the Lead's, the insert is the Admin's alone.
+  'GET /api/v1/config/fields': ['ADMIN', 'LEAD'],
+  'POST /api/v1/config/fields': ['ADMIN'],
   '/api/v1/config/current': ['ADMIN', 'LEAD'],
   // The formula editor's three routes (STORY-08.02 AC-7; architecture section 6 rows "Formula check", "Sample rows", "Save formula": A): the Admin alone.
   '/api/v1/config/formula-check': ['ADMIN'],
   '/api/v1/config/sample-rows': ['ADMIN'],
   '/api/v1/config/fields/[id]/formula': ['ADMIN'],
+  // The insert wizard's routes (STORY-08.03 AC-1; architecture section 6 rows "Insert preview" and "Insert field": A): the Admin alone. `insert-options` is the third route (a deviation recorded in the PR).
+  '/api/v1/config/fields/preview': ['ADMIN'],
+  '/api/v1/config/insert-options': ['ADMIN'],
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],

@@ -105,6 +105,8 @@ const SERVICES = {
     'config-edit-service',
     'config-read-service',
     'config-service',
+    // STORY-08.03 (NFR-002): the insert wizard's options, preview and save read formulas, rate names and column labels, for the Admin only; no Engineer view imports it.
+    'config-structure-service',
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
     'cost-details-service',
     'customer-service',
