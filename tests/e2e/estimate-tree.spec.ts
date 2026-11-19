@@ -239,39 +239,23 @@ async function showTree(page: Page): Promise<void> {
  * 17 to 23 s on CI (run 44567048767), and the delete is the subject of these tests, not adding: the buttons are judged by the AC-1, AC-2 and AC-9 tests below, the drop-down by
  * `estimate-customer.spec.ts`. The tree is checked on screen below, as the tests that built it with the buttons did.
  */
-let t0 = 0;
-const mk = (label: string): void => {
-  const now = Date.now();
-  if (label === 'begin') t0 = now;
-  process.stdout.write(`[DEF048] ${label} +${now - t0}ms
-`);
-};
 async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<void> {
-  mk('begin');
   await ensureCanaryCustomers();
   const owner = await signInAsNewEngineer(page, testInfo);
-  mk('signed in');
   const headers = { origin: DEVELOPMENT_URL };
   const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers, data: { customerId: ALPHA_ID } });
   expect(chosen.status(), 'the customer is chosen').toBe(200);
-  mk('customer put');
   // One after the other, as the buttons are pressed: both are added under part 1, which is the person's one part and has the person's ID.
   for (const slNo of ['1.1', '1.2']) {
     const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers, data: { kind: 'sub-part', nodeId: owner.id } });
     expect(added.ok(), `part ${slNo} is added`).toBe(true);
   }
-  mk('sub-parts posted');
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-  mk('goto returned');
   await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-  mk('hydrated');
   await expect(customerField(page)).toBeEnabled();
-  mk('customer enabled');
   await showTree(page);
-  mk('tree shown');
   await expect(part(page, '1')).toBeVisible();
   await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
-  mk('tree checked');
 }
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
@@ -378,20 +362,14 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await action(page, 'Delete').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
     await expect(dialog).toBeVisible();
-    mk('dialog visible (confirm test)');
     await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
     await expect(dialog).toHaveCount(0);
-    mk('dialog gone');
     await expect(page.getByText('3 parts deleted')).toHaveCount(1);
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
-    mk('words before reload');
     await page.reload();
-    mk('reload returned');
     // With no part there is no tree element, only the words; on a phone they are in the drawer.
     if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
-    mk('drawer pressed');
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
-    mk('words after reload');
   });
 
   test('AC-3: a part with no sub-parts is a plain confirm, and Escape closes the dialog with nothing sent', async ({ page }, testInfo) => {
