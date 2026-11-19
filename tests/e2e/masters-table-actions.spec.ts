@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_ADMIN } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, waitForAnimationsToFinish, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './support/treatments';
 
@@ -108,6 +108,11 @@ async function findPerson(page: Page, name: string): Promise<{ readonly id: stri
   throw new Error('the person made for the test is not in the Users list');
 }
 
+/** AQP-376 diagnostic: phase marks of one Users case, printed as one line. */
+const DIAG: { t0: number; marks: Array<string> } = { t0: 0, marks: [] };
+const diagStart = (): void => { DIAG.t0 = Date.now(); DIAG.marks = []; };
+const diagMark = (label: string): void => { DIAG.marks.push(label + '=' + String(Date.now() - DIAG.t0)); };
+
 const SCREENS: ReadonlyArray<Screen> = [
   {
     label: 'SCR-11 Process master',
@@ -163,9 +168,14 @@ const SCREENS: ReadonlyArray<Screen> = [
     users: true,
     // The long name, then fillers only while the list holds fewer than six: each person costs one argon2id hash (QLT-04).
     make: async (page, name) => {
+      diagMark('make0');
       await addPerson(page, name);
-      const missing = USERS_MINIMUM - (await countPeople(page));
+      diagMark('post1');
+      const people = await countPeople(page);
+      diagMark('list=' + String(people));
+      const missing = USERS_MINIMUM - people;
       for (let index = 0; index < missing; index += 1) await addPerson(page, `E2E 245 filler ${randomBytes(3).toString('hex')}`);
+      diagMark('fillers=' + String(Math.max(missing, 0)));
     },
   },
 ];
@@ -313,14 +323,22 @@ for (const screen of SCREENS) {
       // The Users titles name the acceptance criteria of AQP-245 they check; the two masters titles are unchanged.
       const criteria = screen.users ? 'AC-1, AC-2, AC-3, AC-5: ' : '';
       test(`${criteria}at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
+        diagStart();
+        try {
         const length = nameLengthOf(screen);
         const name = longName(testInfo, length);
         expect(name).toHaveLength(length);
         await screen.make(page, name);
         await page.setViewportSize({ width, height: HEIGHT });
-        await page.goto(screen.path);
+        diagMark('made');
+        const nav = await page.goto(screen.path);
+        diagMark('goto');
+        const timing = nav?.request().timing();
+        DIAG.marks.push('ttfb=' + String(Math.round(timing?.responseStart ?? -1)) + ',resEnd=' + String(Math.round(timing?.responseEnd ?? -1)));
         await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
+        diagMark('h1');
         await waitUntilHydrated(page, 'main button[data-action="add"]');
+        diagMark('hydrated');
         await screen.open?.(page);
 
         const region = page.getByRole('region', { name: screen.region });
@@ -328,6 +346,7 @@ for (const screen of SCREENS) {
         const row =page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
         await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
         await expect(row).toBeVisible();
+        diagMark('rows=' + String(await page.locator(rowSelectorOf(screen)).count()));
 
         // 1. As drawn (part 3, the fit): the headings and names wrap, so the table needs no scrolling. `scrollWidth - clientWidth` is the proof:
         //    a table that overflows its region has more width than it shows, and the sticky Actions column hides that from every position check.
@@ -342,6 +361,7 @@ for (const screen of SCREENS) {
           await expectThreeButtonColumn(region, 'as drawn');
         }
 
+        diagMark('asDrawn');
         // 2. Forced to scroll (part 2, the guarantee): the table is made wider than the region, at its start. Only the sticky column keeps the
         //    actions inside the region's box.
         const regionWidth = (await region.boundingBox())?.width ?? 0;
@@ -352,6 +372,7 @@ for (const screen of SCREENS) {
         await expectActionsInside(page, region, screen, 'forced to scroll, at its start');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
+        diagMark('forced');
         // 3. A Tab from the region goes to the first row action, which is not under the sticky column and does not move the page sideways.
         await region.focus();
         await page.keyboard.press('Tab');
@@ -359,9 +380,16 @@ for (const screen of SCREENS) {
         await expectActionsInside(page, region, screen, 'forced to scroll, after Tab');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         if (screen.users) {
+          diagMark('tab1');
           await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
           expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-          if (AXE_WIDTHS.includes(width)) await expectNoAxeViolations(page);
+          diagMark('tabRow');
+          if (AXE_WIDTHS.includes(width)) {
+            await waitForAnimationsToFinish(page);
+            diagMark('anim');
+            await expectNoAxeViolations(page);
+            diagMark('axe');
+          }
         }
 
         // 4. Scrolled to its far end.
@@ -369,6 +397,10 @@ for (const screen of SCREENS) {
         expect(await region.evaluate((element) => element.scrollLeft), 'the forced table scrolled').toBeGreaterThan(0);
         await expectActionsInside(page, region, screen, 'forced to scroll, at its end');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+        diagMark('end');
+        } finally {
+          console.log('AQP376 ' + screen.label.slice(0, 7) + ' w=' + String(width) + ' ' + DIAG.marks.join(' ') + ' total=' + String(Date.now() - DIAG.t0));
+        }
       });
     }
   });
