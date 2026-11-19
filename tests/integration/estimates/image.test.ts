@@ -384,7 +384,12 @@ describe('ADR-013, FR-065: the table is immutable', () => {
     pictureId = defined((await put(made.estimateId, made.first, smallPng(), 'immutable.png')).picture).id;
   });
 
-  const snapshot = async (): Promise<unknown> => (await db.owner.query('SELECT * FROM part_images ORDER BY id')).rows;
+  /**
+   * Every row of the table, as its id and an md5 over the whole row's text. The row's text carries every column, `bytes` included (hex), so a refused statement that changed any
+   * column of any row, added a row or removed one makes this differ: the ids, the count and the digests are all compared. The digest is computed in PostgreSQL on purpose. Reading
+   * every picture back and comparing the Buffers with `toEqual` took seconds per test once earlier tests had stored the 199 KB and 204,799-byte pictures (DEF-045, AQP-373).
+   */
+  const snapshot = async (): Promise<unknown> => (await db.owner.query('SELECT p.id::text AS id, md5(p::text) AS digest FROM part_images p ORDER BY p.id')).rows;
 
   it('grants the runtime role SELECT and INSERT and nothing else, on the table and on every column', async () => {
     const { rows } = await db.owner.query<{ privilege: string; granted: boolean }>(
