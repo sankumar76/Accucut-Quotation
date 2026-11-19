@@ -149,6 +149,9 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
     case 'GET /api/v1/tasks/[id]':
       return { id: context.targetId, status: 200 };
+    // STORY-04.07: the same canary task. An empty body changes nothing (no entry, no revision), so the call answers 200 at any state, however often the matrix and the scan repeat it.
+    case 'PATCH /api/v1/tasks/[id]':
+      return { id: context.targetId, body: {}, status: 200 };
     default:
       return undefined;
   }
@@ -239,10 +242,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
       return { id, status: 200 };
-    // STORY-07.01: the export reads nothing that changes. The two roles that may call it get 200: the summary as JSON and the file as an attachment (a `.xlsx` header row, built in process by the harness).
-    // The canary estimate's header and parts are the harness's own. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press.
+    // STORY-07.01, STORY-07.02: the export reads nothing that changes. The summary answers the two roles that may call it 200 as JSON. The file is refused 409 `NOT_CALCULATED` at every state the canary estimate
+    // can be in, because it has no calculation (no file is built until the figures are current, so a refusal holds a fixed sentence and no figure, and the scan reads it); the file of a calculated estimate is
+    // `export-route.test.ts`'s and `tests/integration/export`'s. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press, and as a Lead (the file itself).
     case 'GET /api/v1/estimates/[id]/export':
-      return { id, file: true, status: 200 };
+      return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
     default:

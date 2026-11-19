@@ -138,13 +138,12 @@ describe('AC-1, AC-4: a picture is stored whole and the part points at it', () =
     expect(await node(second)).toEqual({ image_id: null, revision: 1 });
   });
 
-  it('stores each of the four kinds with the type its content has', async () => {
+  it('stores each of the three kinds the server takes with the type its content has (a WebP is converted in the browser and refused here)', async () => {
     const { estimateId, first } = await setUpEstimate();
     for (const [bytes, mime] of [
       [smallPng(), 'image/png'],
       [jpegOfSize(300), 'image/jpeg'],
       [smallGif(), 'image/gif'],
-      [smallWebp(), 'image/webp'],
     ] as const) {
       const answer = await put(estimateId, first, bytes, 'whatever.bin');
       const { rows } = await db.owner.query<{ mime: string }>('SELECT mime FROM part_images WHERE id = $1::uuid', [defined(answer.picture).id]);
@@ -241,6 +240,7 @@ describe('AC-2: a refusal stores nothing', () => {
     ['a text file renamed .png', () => PLAIN_TEXT, UnsupportedMediaTypeError],
     ['an SVG', () => SVG_TEXT, UnsupportedMediaTypeError],
     ['a file of 0 bytes', () => Buffer.alloc(0), UnsupportedMediaTypeError],
+    ['a WebP that the browser did not convert (DL-237, OQ-PM-10)', () => smallWebp(), UnsupportedMediaTypeError],
   ])('%s: refused, no row, the part and the estimate unchanged', async (_name, bytes, kind) => {
     const { estimateId, first } = await setUpEstimate();
     const revision = await inputsRevision(estimateId);

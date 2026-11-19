@@ -48,6 +48,8 @@
   --drawer-w: 288px;
   /* The parts tree beside the form from 1024 px (UX spec SCR-05 "Layout rules": 288 px). */
   --tree-w: 288px;
+  /* The reserved drawing region after the form of SCR-05 (STORY-10.06, FR-087, UD-4): 0px now, 340px when a drawing viewer is added. The one place its width is set; nothing in the product overrides it. */
+  --drawing-region-width: 0px;
   --page-max: 1320px;
   --menu-w: 264px;
   --switch-w: 52px;

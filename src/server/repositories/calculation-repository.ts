@@ -139,6 +139,17 @@ export interface RowWorkingRecord {
   readonly outputs: StoredValues;
 }
 
+/**
+ * What the Excel export is built from (STORY-07.02; architecture section 4.6): every node of one calculation, with its typed values, its stored figures and its picture, and the words and price of
+ * each material in the calculation's own snapshot, and the product's figures (BL, BN and the total Tool Cost: STORY-07.03). Nothing else of the snapshot (no customer, no rate, no exchange rate) is read.
+ */
+export interface ExportFigures {
+  readonly rows: ReadonlyArray<CalculationRowRecord>;
+  /** The stored figures of the product, as the review shows them: the file's BL2, BN2 and footer are these, so they equal SCR-06's to the paisa. */
+  readonly productValues: ProductValues;
+  readonly materials: ReadonlyArray<{ readonly materialInDrawing: string; readonly pricePerKg: string }>;
+}
+
 export interface CalculationRepository {
   /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` is the acknowledged list, or the default `[]` when there is none. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
@@ -159,6 +170,12 @@ export interface CalculationRepository {
    * or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
    */
   findRowWorking(calculationId: string, nodeId: string): Promise<RowWorkingRecord | null>;
+  /**
+   * The nodes of one calculation and its materials' words and prices, for the Excel file (STORY-07.02): the rows in a fixed order, and from the master snapshot only `materials` (selected as one column, the
+   * rest of it dropped before it leaves). Null for an unknown calculation or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   * Pass `tx` to read in the caller's transaction (STORY-07.04: the export reads the state and these rows in one repeatable-read snapshot).
+   */
+  findExportFigures(calculationId: string, tx?: Transaction): Promise<ExportFigures | null>;
   /**
    * The calculated total (BL) of one calculation as decimal text, selected on its own (STORY-06.06: the approval keeps it beside the price and pre-fills nothing else): neither a row nor the snapshot is
    * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
@@ -300,6 +317,34 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(calculationId)) return null;
         const found = await db.calculation.findUnique({ where: { id: calculationId }, select: { configVersionId: true, masterSnapshot: true } });
         return found === null ? null : { configVersionId: found.configVersionId, masterSnapshot: masterSnapshotSchema.parse(found.masterSnapshot) };
+      }),
+
+    findExportFigures: (calculationId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await clientFor(db, tx).calculation.findUnique({
+          where: { id: calculationId },
+          select: {
+            masterSnapshot: true,
+            productValues: true,
+            rows: { select: { id: true, nodeId: true, parentId: true, sortIndex: true, slNo: true, inputs: true, imageId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
+          },
+        });
+        if (found === null) return null;
+        return {
+          productValues: productValuesSchema.parse(found.productValues),
+          rows: found.rows.map((row) => ({
+            id: row.id,
+            nodeId: row.nodeId,
+            parentId: row.parentId,
+            sortIndex: row.sortIndex,
+            slNo: row.slNo,
+            inputs: storedValuesSchema.parse(row.inputs),
+            imageId: row.imageId,
+            outputs: storedValuesSchema.parse(row.outputs),
+          })),
+          materials: masterSnapshotSchema.parse(found.masterSnapshot).materials.map(({ materialInDrawing, pricePerKg }) => ({ materialInDrawing, pricePerKg })),
+        };
       }),
 
     findRowWorking: (calculationId, nodeId) =>

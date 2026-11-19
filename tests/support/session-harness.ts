@@ -46,6 +46,7 @@ import { createFakeMasterRepository, type FakeMasterRepository } from './fake-ma
 import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { inProcessBuilder } from './in-process-builder';
 import { CANARY_PICTURE_HASH, smallPng } from './pictures';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
@@ -119,6 +120,8 @@ export interface SessionHarness {
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
   readonly taskWorld: FakeTaskWorld;
+  /** The audit entries written by `taskService` (a task reassigned, STORY-04.07): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
@@ -142,7 +145,7 @@ export interface SessionHarness {
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking' | 'findExportFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
@@ -209,6 +212,8 @@ export function createSessionHarness(): SessionHarness {
     { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
   ]);
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
+  const taskAudit = createAuditSink();
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
     id: targetId,
@@ -310,6 +315,7 @@ export function createSessionHarness(): SessionHarness {
     findMasterSnapshot: (calculationId: string) => calculationWorld.repository.findMasterSnapshot(calculationId),
     findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findExportFigures: (calculationId: string) => calculationWorld.repository.findExportFigures(calculationId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
     findLatestRemoval: (estimateId: string) => calculationWorld.approvalRepository.findLatestRemoval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
@@ -331,7 +337,7 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
-  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  // The Excel export (STORY-07.01, STORY-07.02) over the same estimates, parts, calculation records and pictures. The file is built in process: the thread is `thread.test.ts`'s.
   const exportReads = {
     findHeader: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
@@ -344,8 +350,12 @@ export function createSessionHarness(): SessionHarness {
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
-    configuration: { current: () => Promise.resolve(reviewVersion) },
-    build: buildWorkbook,
+    calculations: reviewReads,
+    approvals: reviewReads,
+    images: estimateWorld.imageRepository,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    transactions: calculationWorld.transactions,
+    builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
 
@@ -373,7 +383,8 @@ export function createSessionHarness(): SessionHarness {
     stepUpService,
     hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
-    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
+    taskAudit,
     jobRuns,
     settingsService: createSettingsService({ jobRuns, clock: systemClock }),
     configRepository,

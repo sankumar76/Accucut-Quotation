@@ -190,3 +190,44 @@ describe('the largest estimate (RISK-010, DL-217: 2,000 parts)', () => {
     expect(seconds).toBeLessThan(60);
   }, 120_000);
 });
+
+describe('the footer of the total Tool Cost (STORY-07.03 AC-3, AC-6)', () => {
+  const rows = [{ cells: { A: '1', B: 'Frame', C: 12629.987654321 } }, { cells: { A: '2', B: 'Lid', C: 0.5 } }];
+
+  it('writes the label and the number in their own cells of the footer row, one empty row below the last part, and nothing else in that row or the one above it', async () => {
+    const model: ExportModel = { sheetName: SHEET_NAME, columns: smallColumns, rows, footer: { row: 5, cells: { B: 'Total Tool Cost', C: 5 } } };
+    const sheet = await read(await buildWorkbook(model));
+    expect(sheet.getCell('B5').value).toBe('Total Tool Cost');
+    expect(sheet.getCell('B5').type).toBe(ExcelJS.ValueType.String);
+    expect(sheet.getCell('C5').value).toBe(5);
+    for (const address of ['A5', 'D5', 'E5', 'A4', 'B4', 'C4', 'D4', 'E4']) expect(sheet.getCell(address).value, address).toBeNull();
+    // Row 2 and 3 are the parts, untouched.
+    expect(sheet.getCell('C2').value).toBe(12629.987654321);
+    expect(sheet.getCell('C3').value).toBe(0.5);
+  });
+
+  it('keeps the column\'s own number format on the number and the text format on the label, so Excel shows 5.00 and never reads the label as anything but text', async () => {
+    const model: ExportModel = { sheetName: SHEET_NAME, columns: smallColumns, rows, footer: { row: 5, cells: { B: 'Total Tool Cost', C: 5 } } };
+    const sheet = await read(await buildWorkbook(model));
+    expect(sheet.getCell('C5').numFmt).toBe(INR_FORMAT);
+    expect(sheet.getCell('B5').numFmt).toBe('@');
+    expect(sheet.getCell('C5').alignment).toMatchObject({ horizontal: 'center', vertical: 'middle' });
+  });
+
+  it('writes a footer label that starts like a formula as the text it is', async () => {
+    const model: ExportModel = { sheetName: SHEET_NAME, columns: smallColumns, rows, footer: { row: 5, cells: { B: '=1+1', C: 5 } } };
+    const bytes = await buildWorkbook(model);
+    expect((await read(bytes)).getCell('B5').value).toBe('=1+1');
+    expect(readXlsxParts(bytes).get('xl/worksheets/sheet1.xml') ?? '').not.toContain('<f>');
+  });
+
+  it('refuses a footer number that is not finite rather than write a corrupt file', async () => {
+    const model: ExportModel = { sheetName: SHEET_NAME, columns: smallColumns, rows, footer: { row: 5, cells: { C: Number.POSITIVE_INFINITY } } };
+    await expect(buildWorkbook(model)).rejects.toThrow('not a finite number');
+  });
+
+  it('is no row at all when the model has no footer', async () => {
+    const sheet = await read(await buildWorkbook({ sheetName: SHEET_NAME, columns: smallColumns, rows }));
+    expect(sheet.actualRowCount).toBe(3);
+  });
+});
