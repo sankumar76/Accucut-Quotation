@@ -4,7 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
+import { connectToTestDatabase, createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -233,23 +233,29 @@ async function showTree(page: Page): Promise<void> {
   await expect(tree(page)).toBeVisible();
 }
 
+/** Two sub-parts under the person's one part (it has the person's ID, like its estimate), as two rows, the way `tests/support/calculation-database.ts` adds a part: sort index 0 and 1 under it. */
+async function insertTwoSubParts(ownerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) VALUES ($1::uuid, $1::uuid, 0), ($1::uuid, $1::uuid, 1)', [ownerId]);
+  } finally {
+    await client.end();
+  }
+}
+
 /**
- * A tree of part 1 with two sub-parts, for the two delete tests (DEF-048, AQP-377). The customer is chosen and the two sub-parts are added with the calls that the drop-down and the
- * Sub-part button make (`PUT .../customer`, `POST .../nodes`), before the page is opened, so the page opens on the tree. Done through the buttons they were 6 s of a test that took
- * 17 to 23 s on CI (run 44567048767), and the delete is the subject of these tests, not adding: the buttons are judged by the AC-1, AC-2 and AC-9 tests below, the drop-down by
- * `estimate-customer.spec.ts`. The tree is checked on screen below, as the tests that built it with the buttons did.
+ * A tree of part 1 with two sub-parts, for the two delete tests (DEF-048, AQP-377). The customer is chosen with the call the drop-down makes (`PUT .../customer`) and the two sub-parts
+ * are inserted as rows, both before the page is opened, so the page opens on the tree. Done through the drop-down and the Sub-part button they were 6 s of a test that took 17 to 23 s on
+ * CI (run 44567048767; the two `POST .../nodes` calls alone took 1.7 to 3.8 s on a busy runner, run 44574122579), and the delete is the subject of these tests, not adding: the buttons
+ * are judged by the AC-1, AC-2 and AC-9 tests below, the drop-down by `estimate-customer.spec.ts`, the add route by the integration tests of the tree. The tree is checked on screen
+ * below, as the tests that built it with the buttons did.
  */
 async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<void> {
   await ensureCanaryCustomers();
   const owner = await signInAsNewEngineer(page, testInfo);
-  const headers = { origin: DEVELOPMENT_URL };
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers, data: { customerId: ALPHA_ID } });
+  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_ID } });
   expect(chosen.status(), 'the customer is chosen').toBe(200);
-  // One after the other, as the buttons are pressed: both are added under part 1, which is the person's one part and has the person's ID.
-  for (const slNo of ['1.1', '1.2']) {
-    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers, data: { kind: 'sub-part', nodeId: owner.id } });
-    expect(added.ok(), `part ${slNo} is added`).toBe(true);
-  }
+  await insertTwoSubParts(owner.id);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
   // Hydrated, so a click is not lost (DEF-011). The customer field is not waited for to be enabled, as `openTree` does: its list of customers is a read that these tests do not
   // use, and waiting for it was 2 to 2.6 s of a test (phases measured on CI, run 44574122579).
