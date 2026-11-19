@@ -106,6 +106,15 @@ export interface UserRepository {
    */
   update(id: string, changes: UserChanges, tx?: Transaction): Promise<UserSummary | null>;
   /**
+   * Moves the Admin role from the active Admin to another active person, in the caller's transaction (STORY-01.09 AC-3). The Admin becomes a Lead **first** and the
+   * other person becomes the Admin **second**, so `uq_users_single_active_admin` is never broken inside the transaction, and both people's `session_version` is
+   * raised in the same statements (the old Admin is signed out; the new one signs in again to hold the role). Each statement matches only the state the caller
+   * locked and read (`FROM` an active Admin, `TO` an active person who is not an Admin), so a row that changed meanwhile is never overwritten. Returns false, having
+   * changed nothing the caller should keep, when either statement matched no row: the caller rolls the transaction back. Throws `UserConstraintError` for a second
+   * active Admin. The caller holds both rows locked (`findAccountForUpdate`) and writes the audit entry in the same transaction.
+   */
+  handOverAdmin(handOver: { readonly fromAdminId: string; readonly toUserId: string }, tx: Transaction): Promise<boolean>;
+  /**
    * Sets the password hash, sets `must_change_password` and raises `session_version` (which ends the person's sessions),
    * in one statement. Returns the person's e-mail address, or null if there is no such user. With `tx` it runs in the caller's
    * transaction.
@@ -265,6 +274,25 @@ export function createUserRepository(db: PrismaClient): UserRepository {
             if (isRecordNotFound(error)) return null;
             throw error;
           }
+        }),
+      );
+    },
+
+    handOverAdmin({ fromAdminId, toUserId }, tx) {
+      return withDatabaseErrors(() =>
+        enforcingConstraints(async () => {
+          const client = clientFor(db, tx);
+          // The order is the point: the Admin steps down before the other person steps up, so the partial unique index never sees two active Admins.
+          const stepsDown = await client.user.updateMany({
+            where: { id: fromAdminId, role: 'ADMIN', isActive: true },
+            data: { role: 'LEAD', sessionVersion: { increment: 1 } },
+          });
+          if (stepsDown.count !== 1) return false;
+          const stepsUp = await client.user.updateMany({
+            where: { id: toUserId, role: { not: 'ADMIN' }, isActive: true },
+            data: { role: 'ADMIN', sessionVersion: { increment: 1 } },
+          });
+          return stepsUp.count === 1;
         }),
       );
     },

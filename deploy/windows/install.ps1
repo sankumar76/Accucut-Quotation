@@ -75,6 +75,10 @@
   Only for a server in a domain whose Group Policy results cannot be read (RSoP logging is off). The install gives the local user AccucutBackup the right "Log on as a batch
   job"; a Group Policy that sets that right would remove it at its next refresh, so the install reads the policy first and stops if one does. With this switch you say that you
   have checked by hand that no policy sets the right, or that the policy lists <SERVER>\AccucutBackup. It skips only that read, and it is logged as a warning.
+.PARAMETER AdminAccount
+  The Admin's own Windows account (DOMAIN\user or user), which should NOT be an administrator (A-35). With it the install also sets up the JEA endpoint AccucutAdmin (STORY-10.11):
+  the only account that may open it is this one, it shows exactly two commands (Restore-AccucutBackup and Clear-AccucutCopies), and a shortcut "Accucut Admin" is put on the
+  desktop. Without it the restore is still there (restore.ps1, run as an administrator); only the limited account is missing.
 .PARAMETER VerifiedRelease
   Used by the script itself, never by you: the release folder under C:\Accucut\releases that the second half runs from.
 #>
@@ -97,6 +101,7 @@ param(
     [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
     [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
     [switch]$BatchRightPolicyConfirmed,
+    [ValidatePattern('^(?:[A-Za-z0-9.][A-Za-z0-9._-]{0,63}\\)?[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$')][string]$AdminAccount,
     [string]$VerifiedRelease
 )
 
@@ -763,6 +768,9 @@ function Get-AccucutInstallSettings {
     # The password of the backup role is invented here and goes only into config\backup.pgpass (it is never asked for and never in .env).
     $backupPassword = New-AccucutSecret -Length 32
     Register-AccucutSecret -Value $backupPassword
+    # The password of the restore role (STORY-10.11) is invented the same way and goes only into config\restore.pgpass.
+    $restorePassword = New-AccucutSecret -Length 32
+    Register-AccucutSecret -Value $restorePassword
     if ($supplied.Contains('DB_OWNER_PASSWORD')) { $ownerPassword = [string]$supplied['DB_OWNER_PASSWORD'] }
     if ($supplied.Contains('DB_APP_PASSWORD')) { $appPassword = [string]$supplied['DB_APP_PASSWORD'] }
     if ([string]::IsNullOrEmpty($ownerPassword)) { $ownerPassword = New-AccucutSecret -Length 32 }
@@ -818,7 +826,7 @@ function Get-AccucutInstallSettings {
     Register-AccucutSecret -Value $values['MIGRATE_DATABASE_URL']
 
     $superuserPassword = Get-AccucutInstallValue -Name 'PG_SUPERUSER_PASSWORD' -Prompt 'The password of the PostgreSQL administrator (set when PostgreSQL was installed)' -Supplied $supplied -Secret -Required -NonInteractive:$ni
-    return [pscustomobject]@{ Values = $values; PgSuperuserPassword = $superuserPassword; OwnerPassword = $ownerPassword; AppPassword = $appPassword; BackupPassword = $backupPassword; AgeRecipient = $recipient }
+    return [pscustomobject]@{ Values = $values; PgSuperuserPassword = $superuserPassword; OwnerPassword = $ownerPassword; AppPassword = $appPassword; BackupPassword = $backupPassword; RestorePassword = $restorePassword; AgeRecipient = $recipient }
 }
 
 function Set-AccucutDefenderExclusion {
@@ -878,15 +886,34 @@ function Undo-AccucutInstallDatabase {
             [void](Invoke-AccucutPsql -PsqlPath $PsqlPath -Connection $Connection -Database 'postgres' -Command "DROP DATABASE IF EXISTS `"$DatabaseName`" WITH (FORCE)")
         }
         if ($Created.Roles) {
-            [void](Invoke-AccucutPsql -PsqlPath $PsqlPath -Connection $Connection -Database 'postgres' -Command 'DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;')
+            [void](Invoke-AccucutPsql -PsqlPath $PsqlPath -Connection $Connection -Database 'postgres' -Command 'DROP ROLE IF EXISTS accucut_restore; DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;')
         }
         Write-AccucutLog -Message 'The database and roles that this run created were dropped again, so the install can be run again.' -Level Warning -LogFile $LogFile
     }
     catch {
-        Write-AccucutLog -Message "The database and roles that this run created could not be dropped: $($_.Exception.Message). Drop database '$DatabaseName' and roles accucut_app, accucut_owner and accucut_backup by hand before running the install again." -Level Error -LogFile $LogFile
+        Write-AccucutLog -Message "The database and roles that this run created could not be dropped: $($_.Exception.Message). Drop database '$DatabaseName' and roles accucut_app, accucut_owner, accucut_backup and accucut_restore by hand before running the install again." -Level Error -LogFile $LogFile
     }
 }
 
+
+function New-AccucutAdminShortcut {
+    # The desktop shortcut, for every user of the server, that opens the Admin's endpoint (STORY-10.11 AC-7): the Admin double-clicks it and types one command. It starts the
+    # checked powershell.exe by its full path and nothing else. Registered by the install only when -AdminAccount is given; Unregister-AccucutAdminEndpoint takes it away.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$EndpointName,
+        [Parameter(Mandatory)][string]$PowerShellPath,
+        [string]$Folder = [Environment]::GetFolderPath('CommonDesktopDirectory')
+    )
+
+    if ($EndpointName -notmatch '^[A-Za-z0-9]{1,64}$') { throw "'$EndpointName' is not an endpoint name." }
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut([System.IO.Path]::Combine($Folder, 'Accucut Admin.lnk'))
+    $link.TargetPath = $PowerShellPath
+    $link.Arguments = "-NoLogo -NoExit -Command `"Enter-PSSession -ComputerName localhost -ConfigurationName $EndpointName`""
+    $link.Description = 'Opens the Accucut Admin session: Restore-AccucutBackup and Clear-AccucutCopies.'
+    $link.Save()
+}
 
 function Invoke-AccucutFirstBackup {
     # Runs the weekly task once and waits up to 5 minutes (ADR-015 Amendment 3 point 2). Exit-code 0 and a job_runs row with job 'backup' and status ok are both needed.
@@ -929,6 +956,7 @@ function Invoke-AccucutInstall {
         [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
         [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
         [switch]$BatchRightPolicyConfirmed,
+        [string]$AdminAccount,
         [Parameter(Mandatory)][string]$Release
     )
 
@@ -952,6 +980,13 @@ function Invoke-AccucutInstall {
         $psql = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($postgres.BinDirectory, 'psql.exe'))
         $psqlCheck = Test-AccucutPostgresVersion -VersionText (Invoke-AccucutNative -FilePath $psql -ArgumentList @('--version')).Output
         if (-not $psqlCheck.Ok) { throw $psqlCheck.Message }
+        # The Admin's account (if given) is looked up before anything is created, so a mistyped name costs nothing.
+        if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
+            $adminCheck = Resolve-AccucutAdminAccount -Account $AdminAccount
+            # sc.exe sets the service entry of the endpoint group: by full path, checked like every program (ADR-015 Amendment 3.3 R4).
+            $scExe = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($env:SystemRoot, 'System32\sc.exe'))
+            if ($adminCheck.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the limited endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $logFile }
+        }
         if ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
             throw 'The services of an Accucut install already exist on this server. To install a new release, run update.ps1. Nothing was changed.'
         }
@@ -995,8 +1030,8 @@ function Invoke-AccucutInstall {
         # The database: refuse an existing one, create it and the two roles.
         $existing = Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database 'postgres' -Command "SELECT count(*) FROM pg_database WHERE datname = '$($script:DatabaseName)'"
         if ($existing -ne '0') { throw "A database named '$($script:DatabaseName)' already exists in this PostgreSQL. This script never touches existing data. If it is an empty leftover of an earlier try, drop it and the roles accucut_app and accucut_owner, then run this again." }
-        $roleCount = Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database 'postgres' -Command "SELECT count(*) FROM pg_roles WHERE rolname IN ('accucut_app', 'accucut_owner', 'accucut_backup')"
-        if ($roleCount -ne '0') { throw 'The database roles accucut_app, accucut_owner or accucut_backup already exist in this PostgreSQL. This script never touches existing roles. Remove them if they are leftovers, then run this again.' }
+        $roleCount = Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database 'postgres' -Command "SELECT count(*) FROM pg_roles WHERE rolname IN ('accucut_app', 'accucut_owner', 'accucut_backup', 'accucut_restore')"
+        if ($roleCount -ne '0') { throw 'The database roles accucut_app, accucut_owner, accucut_backup or accucut_restore already exist in this PostgreSQL. This script never touches existing roles. Remove them if they are leftovers, then run this again.' }
         $serverCheck = Test-AccucutPostgresVersion -VersionText (Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database 'postgres' -Command 'SHOW server_version_num')
         if (-not $serverCheck.Ok) { throw "The PostgreSQL server is not version 17. $($serverCheck.Message)" }
         [void](Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database 'postgres' -Command "CREATE DATABASE `"$($script:DatabaseName)`" ENCODING 'UTF8' TEMPLATE template0")
@@ -1008,7 +1043,11 @@ function Invoke-AccucutInstall {
                 DB_BACKUP_PASSWORD = $settings.BackupPassword
                 POSTGRES_DB       = $script:DatabaseName
             })
-        Write-AccucutLog -Message "Database '$($script:DatabaseName)' and the roles accucut_owner, accucut_app and accucut_backup created." -LogFile $logFile
+        # The role of the guided restore (STORY-10.11): CREATEDB, acts as the owner, no superuser. Its password goes only to the SQL through the environment and later to config\restore.pgpass.
+        [void](Invoke-AccucutPsql -PsqlPath $psql -Connection $connection -Database $script:DatabaseName -File ([System.IO.Path]::Combine($Release, 'sql\create-restore-role.psql')) -ExtraEnvironment @{
+                DB_RESTORE_PASSWORD = $settings.RestorePassword
+            })
+        Write-AccucutLog -Message "Database '$($script:DatabaseName)' and the roles accucut_owner, accucut_app, accucut_backup and accucut_restore created." -LogFile $logFile
 
         # Migrations as the owner role, ensure-seed-version, then the first Admin as the runtime role.
         $migration = Invoke-AccucutMigration -ReleaseDirectory $Release -NodeExe $nodeExe -MigrateDatabaseUrl $settings.Values['MIGRATE_DATABASE_URL']
@@ -1033,6 +1072,8 @@ function Invoke-AccucutInstall {
         Grant-AccucutBackupRootAccess -Paths $paths -BackupSid $backupSid
         New-AccucutBackupFolder -Path $paths.Backups -BackupSid $backupSid
         Write-AccucutBackupConfig -Paths $paths -BackupSid $backupSid -BackupPassword $settings.BackupPassword -AgeRecipient $settings.AgeRecipient -PgHost $PgHost -PgPort $PgPort -Database $script:DatabaseName -PgBinDirectory $postgres.BinDirectory
+        Write-AccucutRestoreConfig -Paths $paths -RestorePassword $settings.RestorePassword -PgHost $PgHost -PgPort $PgPort
+        Write-AccucutLog -Message "Restore: the database role accucut_restore (CREATEDB, acts as the owner; no superuser) and config\restore.pgpass are set up for restore.ps1 (STORY-10.11)." -LogFile $logFile
         Write-AccucutLog -Message "Weekly backup: the local user AccucutBackup and the task 'Accucut weekly backup' (Sunday 02:00) are set up; the copies go to '$($paths.Backups)', encrypted to the public key you gave. The private key is never on this server." -LogFile $logFile
         if ([System.TimeZoneInfo]::Local.Id -ne 'India Standard Time') {
             Write-AccucutLog -Message 'The backup runs at 02:00 server time; this server is not set to India Standard Time.' -Level Warning -LogFile $logFile
@@ -1079,6 +1120,13 @@ function Invoke-AccucutInstall {
         # The first backup, made by the task itself (ADR-015 Amendment 3): it proves that AccucutBackup can log on, that the role, the files and the folder work, and gives
         # a copy to restore from at once. From here the portal is running, so a failure stops the script with exit code 1 and leaves everything in place.
         Invoke-AccucutFirstBackup -PsqlPath $psql -Connection $connection -LogFile $logFile
+
+        # The Admin's limited account (STORY-10.11 AC-7), last: the portal and its first backup are already working, so a problem here leaves them in place and says what to do.
+        if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
+            [void](Register-AccucutAdminEndpoint -Paths $paths -AdminAccount $AdminAccount -ReleaseDirectory $Release -ScPath $scExe -LogFile $logFile)
+            New-AccucutAdminShortcut -EndpointName 'AccucutAdmin' -PowerShellPath $powershellExe
+            Write-AccucutLog -Message "The Admin can now open the shortcut 'Accucut Admin' on the desktop (as $AdminAccount) and type Restore-AccucutBackup or Clear-AccucutCopies." -LogFile $logFile
+        }
     }
     catch {
         Write-AccucutLog -Message "INSTALL FAILED: $($_.Exception.Message)" -Level Error -LogFile $logFile
@@ -1155,7 +1203,7 @@ function Get-AccucutInstallChildArgument {
     param([Parameter(Mandatory)][hashtable]$Bound)
 
     $arguments = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in 'Root', 'Port', 'ListenAddress', 'NodeExe', 'PgHost', 'PgPort', 'PgSuperuser', 'PgBinDirectory', 'PgDataDirectory', 'DefenderExclusion', 'HealthTimeoutSeconds', 'ValuesFile') {
+    foreach ($name in 'Root', 'Port', 'ListenAddress', 'NodeExe', 'PgHost', 'PgPort', 'PgSuperuser', 'PgBinDirectory', 'PgDataDirectory', 'DefenderExclusion', 'HealthTimeoutSeconds', 'ValuesFile', 'AdminAccount') {
         if ($Bound.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace([string]$Bound[$name])) { $arguments.Add("-$name"); $arguments.Add([string]$Bound[$name]) }
     }
     foreach ($name in 'NonInteractive', 'WithProxy', 'BatchRightPolicyConfirmed') { if ($Bound.ContainsKey($name) -and [bool]$Bound[$name]) { $arguments.Add("-$name") } }
@@ -1166,7 +1214,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     try {
         if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
             $installParameter = @{ NonInteractive = $NonInteractive; WithProxy = $WithProxy; BatchRightPolicyConfirmed = $BatchRightPolicyConfirmed; Port = $Port; PgHost = $PgHost; PgPort = $PgPort; PgSuperuser = $PgSuperuser; DefenderExclusion = $DefenderExclusion; HealthTimeoutSeconds = $HealthTimeoutSeconds }
-            foreach ($pair in @{ ValuesFile = $ValuesFile; ListenAddress = $ListenAddress; NodeExe = $NodeExe; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory }.GetEnumerator()) {
+            foreach ($pair in @{ ValuesFile = $ValuesFile; ListenAddress = $ListenAddress; NodeExe = $NodeExe; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory; AdminAccount = $AdminAccount }.GetEnumerator()) {
                 if (-not [string]::IsNullOrWhiteSpace([string]$pair.Value)) { $installParameter[$pair.Key] = $pair.Value }
             }
             Invoke-AccucutInstallSecondHalf -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $PSCommandPath -InstallParameter $installParameter

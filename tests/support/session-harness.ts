@@ -18,6 +18,7 @@ import { createUnlockService, type UnlockService } from '../../src/server/servic
 import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
 import { createRemovePriceService, type RemovePriceService } from '../../src/server/services/remove-price-service';
 import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
+import { createAdminHandoverService, type AdminHandoverService } from '../../src/server/services/admin-handover-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -140,6 +141,8 @@ export interface SessionHarness {
   readonly removePriceService: RemovePriceService;
   /** The real step-up check (STORY-06.14) over the fake people and throttles, for a test that counts the attempts (`throttles`, `hasher`). */
   readonly stepUpService: StepUpService;
+  /** The Admin hand-over (STORY-01.09) over the fake people and their audit log, with the real step-up check (`getAdminHandoverService` in the composition mock). The recipe's valid call names a person that does not exist, so it writes nothing. */
+  readonly adminHandoverService: AdminHandoverService;
   /** The hasher the step-up and the other password checks use, which counts every check it makes. */
   readonly hasher: ReturnType<typeof createCountingHasher>;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
@@ -293,6 +296,9 @@ export function createSessionHarness(): SessionHarness {
   // Cancel approval (STORY-06.12) over the same world, with the real step-up check over the fake people. The canary estimate has no approval at any state a test leaves it in, so the recipe's valid call is refused 409
     // (no approval) after the password and the reason pass, and writes nothing.
   const stepUpService = createStepUpService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL });
+  // The Admin hand-over (STORY-01.09) over the fake people and their audit log, with the same real step-up check. The recipe's valid call names a person that does not exist, so it is refused 404 after the password
+  // passes and writes nothing: the harness Admin stays the Admin for every other call.
+  const adminHandoverService = createAdminHandoverService({ users, transactions: auditWorld.transactions, audit: auditService, stepUp: stepUpService });
   const cancelApprovalService = createCancelApprovalService({
     estimates: calculationWorld.estimates,
     approvals: calculationWorld.approvalRepository,
@@ -381,6 +387,7 @@ export function createSessionHarness(): SessionHarness {
     cancelApprovalService,
     removePriceService,
     stepUpService,
+    adminHandoverService,
     hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
