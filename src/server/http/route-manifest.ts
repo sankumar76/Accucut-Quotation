@@ -281,6 +281,13 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/config/sample-rows', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   { path: '/api/v1/config/fields/[id]/formula', kind: 'api', methods: ['PUT'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   { path: '/config/fields/[id]/formula', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2', screen: 'SCR-18' },
+  // STORY-08.03 (SCR-19, the insert wizard; architecture section 6 "Insert preview" and "Insert field": A, no password step, FR-080). The Admin alone (NFR-001): a Lead and an Engineer are refused 403 and a signed-out caller 401, before anything
+  // is looked up. `POST /config/fields` is a row of its own because `GET` of the same file is for the Admin and the Lead. The answers hold formulas and column labels, so none is in any Engineer's list and the cost scan calls all
+  // of them as routes an Engineer is refused (NFR-002). The page is opened from SCR-17 ("Insert after") and is no menu entry.
+  { path: '/api/v1/config/fields', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/fields/preview', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/insert-options', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/config/fields/new', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2', screen: 'SCR-19' },
   // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).

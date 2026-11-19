@@ -32,6 +32,7 @@ import { type CancelApprovalService, createCancelApprovalService } from './servi
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
+import { createConfigStructureService, type ConfigStructureService } from './services/config-structure-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
@@ -69,6 +70,7 @@ let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
+let configStructureService: ConfigStructureService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
@@ -242,6 +244,20 @@ export function getConfigEditService(): ConfigEditService {
     audit: getAuditService(),
   });
   return configEditService;
+}
+
+/**
+ * The insert wizard (STORY-08.03): the options SCR-19 offers, the preview of the letter changes and the insert of a field or a pair, with no password step (FR-080). Restricted (ADR-008): the routes that call it are in the
+ * manifest for the Admin alone. It shares the runtime-role client and the audit service, so the new version and its entry are one transaction. STORY-08.04 adds delete to it.
+ */
+export function getConfigStructureService(): ConfigStructureService {
+  configStructureService ??= createConfigStructureService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configStructureService;
 }
 
 /**
