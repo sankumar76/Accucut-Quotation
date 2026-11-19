@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { LimitEntry } from '../../scripts/lib/js-budget';
 import type { RouteRow } from '../../scripts/lib/js-budget-check';
+import { FORMULA_PAGE_PATH } from '../../scripts/lib/js-budget-records';
 import { runBudgetCheck } from '../../scripts/lib/js-budget-run';
 import {
   STUB_EMAIL,
@@ -53,6 +54,7 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/settings': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/config/fields': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  [FORMULA_PAGE_PATH]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -236,15 +238,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/fields', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 19 rows are within their limit');
+    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/fields', '/config/fields/[id]/formula', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 20 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 19 rows failed');
+    expect(overrun.output).toContain('1 of 20 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -267,7 +269,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.output).toContain('/estimates/[code]');
     expect(noRecords.output).toContain('/estimates/[code]/costs/[slNo]');
     expect(noRecords.output).toContain('/estimates/[code]/export');
+    expect(noRecords.output).toContain('/config/fields/[id]/formula');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('4 of 19 rows failed');
+    expect(noRecords.output).toContain('5 of 20 rows failed');
   });
 });

@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { Check, Circle, Contrast, TriangleAlert, type LucideIcon } from 'lucide-react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Icon } from '@/components/shared/icon';
@@ -11,6 +11,12 @@ import { TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, T
 const LEVEL_INDENT = ['pl-s-2', 'pl-s-4', 'pl-s-5', 'pl-s-6', 'pl-s-7'] as const;
 
 const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, COMPLETE: TREE_ALL_INPUTS } as const;
+
+/**
+ * The icon of each word (STORY-05.11 AC-4; UX spec SCR-05 "Content": check, half circle, empty circle): a different shape for each, so the state is never told by colour alone. The icons are decorative
+ * (lucide hides one that has no name from assistive technology); the words stay beside them for a screen reader.
+ */
+const COMPLETENESS_ICON: Record<keyof typeof COMPLETENESS_TEXT, LucideIcon> = { EMPTY: Circle, PARTIAL: Contrast, COMPLETE: Check };
 
 export interface TreeNodeProps {
   readonly row: PartRow;
@@ -47,6 +53,7 @@ export function TreeNode({ row, selected, missing = false, onFocusPart }: TreeNo
     >
       <span className="shrink-0 tabular-nums">{part.slNo}</span>
       <span className="min-w-0">{part.label === '' ? TREE_PART_NAME : part.label}</span>
+      <Icon icon={COMPLETENESS_ICON[part.completeness]} size="small" data-completeness={part.completeness} className={cn('shrink-0', part.completeness === 'COMPLETE' ? 'text-success' : 'text-ink-3')} />
       {missing ? (
         <>
           <Icon icon={TriangleAlert} size="small" className="shrink-0 text-danger" />

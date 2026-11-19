@@ -23,6 +23,13 @@ export const ESTIMATE_PAGE_ROUTE = '/estimates/[code]';
 export const COSTS_PAGE_ROUTE = '/estimates/[code]/costs/[slNo]';
 /** The route pattern of the Excel export page (STORY-07.01), as the route manifest spells it. */
 export const EXPORT_PAGE_ROUTE = '/estimates/[code]/export';
+/** The route pattern of the formula editor (STORY-08.02), as the route manifest spells it. */
+export const FORMULA_PAGE_ROUTE = '/config/fields/[id]/formula';
+/**
+ * The address the formula editor is measured at. The page asks the portal for nothing before it is drawn (it checks the role, then the shape of the ID, and the screen reads its field after it has opened), so
+ * no record is made for it: an invented ID of the right shape serves, and the editor's own "no formula to edit" state is what the measured page draws behind it.
+ */
+export const FORMULA_PAGE_PATH = '/config/fields/00000000-0000-4000-8000-0000000b0001/formula';
 /** The Sl. No of the first part added to an estimate: the part at the top of its tree. */
 const FIRST_PART_SL_NO = '1';
 const CUSTOMERS_API_PATH = '/api/v1/customers';
@@ -118,7 +125,7 @@ export async function makeRecordPaths(options: RecordOptions): Promise<Readonly<
   try {
     admin = await signedInAdmin(options);
   } catch (error: unknown) {
-    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, COSTS_PAGE_ROUTE, EXPORT_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
+    for (const route of [CUSTOMER_PAGE_ROUTE, ESTIMATE_PAGE_ROUTE, COSTS_PAGE_ROUTE, EXPORT_PAGE_ROUTE, FORMULA_PAGE_ROUTE]) warn(`JS budget: no record was made for ${route}: ${describe(error)}`);
     return {};
   }
   if (admin === undefined) return {};
@@ -130,6 +137,7 @@ export async function makeRecordPaths(options: RecordOptions): Promise<Readonly<
     [ESTIMATE_PAGE_ROUTE, async (call) => estimatePathOf(await estimateOf(call))],
     [COSTS_PAGE_ROUTE, async (call) => makeCostsPath(call, await estimateOf(call))],
     [EXPORT_PAGE_ROUTE, async (call) => `${estimatePathOf(await estimateOf(call))}/export`],
+    [FORMULA_PAGE_ROUTE, () => Promise.resolve(FORMULA_PAGE_PATH)],
   ];
   const paths: Record<string, string> = {};
   for (const [route, make] of makers) {

@@ -38,7 +38,7 @@ import {
  * SCR-17 "Fields and formulas" (STORY-08.01 AC-1, AC-4, AC-7): every field in column order with its kind and formula, a search by letter, name or formula, and a filter by kind.
  * The page has checked the role and sent nothing but the role's reading of it (`viewOnly`); the screen asks `GET /api/v1/config/fields` itself, so its Loading and Error states are real:
  * the skeleton after 300 ms, and "We could not load the fields and formulas" with "Try again". It decides nothing: the letters, the kinds and the formulas are the server's.
- * A Lead sees the same table under the banner "View only", and neither role has an action here yet (08.02 onward adds the Admin's).
+ * A Lead sees the same table under the banner "View only" and has no action; the Admin's "Edit formula" (STORY-08.02) opens SCR-18 on a field that has a formula.
  *
  * The list state is the shared `useMasterList` (latest read wins, the skeleton delay, the filter), the one hook that a screen which lists rows read from the server composes (DL-150 (5)).
  * There is deliberately no `loading.tsx` beside the page (it would turn the 403 of a refused role into a streamed 200, QLT-72), so the page itself holds no data.
@@ -151,7 +151,7 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
       {viewOnly ? <ViewOnlyBanner /> : null}
       <Card aria-busy={list.status === 'loading' || undefined}>
         <SearchBar query={list.query} kind={kind} onQuery={list.setQuery} onKind={setKind} inputRef={search} />
-        <FieldsResults list={list} onClear={clearFilters} />
+        <FieldsResults list={list} onClear={clearFilters} canEdit={!viewOnly} />
       </Card>
     </>
   );
@@ -160,7 +160,7 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
 type FieldsListState = ReturnType<typeof useMasterList<ConfigFieldRow, null>>;
 
 /** What the card shows below the search: the error with "Try again", the skeleton, "No field matches", or the rows. */
-function FieldsResults({ list, onClear }: { readonly list: FieldsListState; readonly onClear: () => void }) {
+function FieldsResults({ list, onClear, canEdit }: { readonly list: FieldsListState; readonly onClear: () => void; readonly canEdit: boolean }) {
   if (list.status === 'error' && list.items === null) {
     return (
       <ErrorState
@@ -177,5 +177,5 @@ function FieldsResults({ list, onClear }: { readonly list: FieldsListState; read
   }
   if (list.items === null) return <SkeletonBlock rows={SKELETON_ROWS} label={LOADING_LABEL} />;
   if (list.shown === null || list.shown.length === 0) return <NoMatch query={list.query} onClear={onClear} />;
-  return <FieldsList rows={list.shown} />;
+  return <FieldsList rows={list.shown} canEdit={canEdit} />;
 }

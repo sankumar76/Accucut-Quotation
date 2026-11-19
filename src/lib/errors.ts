@@ -121,6 +121,22 @@ export class StepUpLocked extends AppError {
   }
 }
 
+/** The `code` of the 409 of a configuration edit made from a version that is no longer the latest (STORY-08.02 AC-9). */
+export const CONFIG_VERSION_CHANGED_CODE = 'CONFIG_VERSION_CHANGED';
+
+/**
+ * Another save made a newer configuration version after this edit began (STORY-08.02 AC-9): nothing was stored and nothing was overwritten. `currentVersion` is the number of the version that is the latest now,
+ * so the screen can say so. It is a number, not a formula and not a rate, so it may sit in the problem body.
+ */
+export class ConfigVersionChangedError extends ConflictError {
+  constructor(
+    readonly currentVersion: number,
+    message: string,
+  ) {
+    super(message, { code: CONFIG_VERSION_CHANGED_CODE });
+  }
+}
+
 /** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
 export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';
 

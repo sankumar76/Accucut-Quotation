@@ -16,6 +16,9 @@ export const SEARCH_LABEL = 'Search';
 export const SEARCH_PLACEHOLDER = 'Letter, name or formula';
 export const KIND_FILTER_LABEL = 'Show';
 
+/** The Admin's action on a field that has a formula (STORY-08.02): it opens SCR-18. The field's letter and name follow it for a screen reader. */
+export const EDIT_FORMULA = 'Edit formula';
+
 export const SYSTEM_TAG = 'System';
 export const SYSTEM_TAG_HINT = 'A System field cannot be deleted: the portal depends on it.';
 export const NO_FORMULA = 'No formula';

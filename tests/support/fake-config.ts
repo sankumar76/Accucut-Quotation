@@ -22,10 +22,27 @@ export function createFakeConfigRepository(document: ConfigDocument = seedConfig
     reason: 'Invented seed reason',
     createdAt: FAKE_CONFIG_SAVED_AT,
   };
+  // The versions a test saved after the first, as the table keeps them: appended, never changed.
+  const versions: ConfigVersionRecord[] = [record];
+  const latest = (): ConfigVersionRecord => versions.reduce((best, each) => (each.number > best.number ? each : best));
   return {
     insertSeedVersionIfNone: () => Promise.resolve(false),
-    findLatestRef: () => Promise.resolve({ id: record.id, number: record.number }),
-    findById: (id) => Promise.resolve(id === record.id ? record : null),
+    // As the real statement does (STORY-08.02): the next number is stored only if the base is still the highest.
+    insertVersionAfter(version) {
+      if (latest().number !== version.baseNumber) return Promise.resolve(null);
+      const stored: ConfigVersionRecord = {
+        id: `${FAKE_CONFIG_VERSION_ID.slice(0, -2)}${String(version.baseNumber + 1).padStart(2, '0')}`,
+        number: version.baseNumber + 1,
+        snapshot: version.snapshot,
+        createdBy: version.createdBy,
+        reason: version.reason,
+        createdAt: FAKE_CONFIG_SAVED_AT,
+      };
+      versions.push(stored);
+      return Promise.resolve({ id: stored.id, number: stored.number });
+    },
+    findLatestRef: () => Promise.resolve({ id: latest().id, number: latest().number }),
+    findById: (id) => Promise.resolve(versions.find((each) => each.id === id) ?? null),
     readVersionUse: () => Promise.resolve(use),
   };
 }
