@@ -59,6 +59,8 @@ const REPOSITORIES = {
     'config-repository',
     'customer-repository',
     'decimal-text',
+    // STORY-09.01 (TB-4): the e-mail outbox holds names and task details in bodies, and the settings row of the mail sender. Confidential; no Engineer view reads or writes it.
+    'email-outbox-repository',
     'estimate-node-repository',
     'estimate-repository',
     // STORY-07.01: the task code and the customer's name of an estimate, for the name of its export file. Nothing an Engineer view has a use for.
@@ -334,8 +336,11 @@ describe('every repository and service file is classed, and the lint agrees with
  * `backup-watch` (STORY-10.05) reads and writes `job_runs`, which holds the record of the backups and the free space of the disk: Internal data, no cost or rate. It reaches the
  * database only through a store that the worker gives it as a parameter (`takesItsStoreByInjection`), so the job file itself imports no repository, service or driver, and a test
  * can fix the clock and stub both the store and `statfs`. What the store may do is decided where it is built (`src/server/repositories/job-run-repository.ts`).
+ *
+ * `outbox-send` (STORY-09.01) reads and writes `email_outbox` and `settings`: Confidential, names and task details, never a cost or a rate. It takes the same route: its store, its mailer
+ * and its clock are parameters, and the only mail modules it names are types. `tests/security/mail-confidentiality.test.ts` checks its imports (and those of `src/server/mail`) against an exact list (AC-10).
  */
-const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'outbox-send'] } as const;
 const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
 
 describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
