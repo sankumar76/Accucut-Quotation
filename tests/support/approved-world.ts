@@ -1,10 +1,15 @@
 import { Decimal } from '../../src/lib/decimal';
+import { buildWorkbook } from '../../src/server/export/build-workbook';
+import { SHEET_NAME } from '../../src/server/export/export-columns';
 import type { CostsView } from '../../src/server/views/schemas/costs';
 import type { NodeCostsView } from '../../src/server/views/schemas/node-costs';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
+import { createExportRepository } from '../../src/server/repositories/export-repository';
+import { createImageRepository } from '../../src/server/repositories/image-repository';
 import type { AuditContext } from '../../src/server/services/audit-service';
 import { createConfigVersionCache, getCurrentVersion, getVersionById } from '../../src/server/services/config-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
+import { createExportService, type ExportService } from '../../src/server/services/export-service';
 import type { EstimateViewer } from '../../src/server/services/estimate-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
@@ -14,14 +19,17 @@ import { currentCalculationOf, engineerOf, leadOf, PRICE, requestFor } from './a
 import { type CalculationDatabase, idOf, openCalculationDatabase } from './calculation-database';
 import { completePartInputs } from './complete-part';
 import { defined } from './defined';
+import { inProcessBuilder } from './in-process-builder';
+import { loadWorkbook } from './xlsx-parts';
 
 /**
  * What the tests of STORY-06.09 share (FR-065, NFR-026; ADR-007): a throwaway database as the **runtime role**, the review and the cost details services over it as the composition builds
  * them, an Admin who changes the masters **through the real master services**, and an estimate that is calculated and approved. `approvedValuesOf` gathers everything an approved estimate shows
  * and stores in one place, so a test compares the whole of it before and after with one deep equality. Every name, ID and number is invented.
  *
- * **The hook for the export (STORY-07.03).** `exportCellsOf` is where the cells of the exported file will be read. The export holds no figure yet (STORY-07.01 is the header row alone), so it answers
- * `null`; STORY-07.03 replaces it with the cells of the real file and the one test that names it (`aqp-approved-immutable.test.ts`, "EXPORT HOOK") then asserts them. Nothing here is skipped.
+ * **The file (STORY-07.03; review SQR-01 of AQP-326, #478).** `exportCellsOf` builds the **real file** of the estimate: the export service over this database's own repositories, the workbook built in process by the
+ * same function the thread runs, read back with ExcelJS, every cell of the sheet. So `approvedValuesOf` holds the file's cells with everything else an approved estimate shows and stores, and the one deep equality that
+ * compares it before and after a change of the masters fails if a cell of the file moves. It is a hook that can fail: it reads what the export writes, not a constant.
  */
 
 export interface ApprovedWorld {
@@ -30,6 +38,8 @@ export interface ApprovedWorld {
   readonly details: CostDetailsService;
   /** The unlock service over the real repositories, as the composition builds it (STORY-06.08). */
   readonly unlock: UnlockService;
+  /** The export over the same repositories, the file built in process (STORY-07.03). */
+  readonly exporter: ExportService;
   /** The Lead who reads the screens and approves. */
   readonly lead: EstimateViewer;
   /** Who changes the masters, as the master services are called: an Admin's audit context. */
@@ -44,6 +54,16 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
   const adminId = await insertPersonAsOwner(db, 'Approval Admin', 'ADMIN');
   return {
     db,
+    exporter: createExportService({
+      header: createExportRepository(db.prisma),
+      nodes: db.nodes,
+      calculations: db.calculations,
+      approvals: db.approvals,
+      images: createImageRepository(db.prisma),
+      configuration,
+      builder: inProcessBuilder(buildWorkbook),
+      clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
+    }),
     review: createEstimateReviewService({ calculations: db.calculations, approvals: db.approvals, nodes: db.nodes, estimates: db.estimates, masters: db.masterRepository, configuration }),
     details: createCostDetailsService({ calculations: db.calculations, nodes: db.nodes, configuration }),
     unlock: createUnlockService({
@@ -125,9 +145,24 @@ export async function approvedEstimateOf(world: ApprovedWorld, price: string = P
   return { ...calculated, calculationId };
 }
 
-/** The cells of the exported file of an estimate. STORY-07.03 fills this in (see the header); until then the export holds no figure. */
-export function exportCellsOf(): Promise<null> {
-  return Promise.resolve(null);
+/** Every cell of the exported file's one sheet, by row number then column number (1-based; a cell with no value is `null`): the header row, the part rows, BL2, BN2, BO2 and the footer. */
+export interface ExportedCells {
+  readonly sheetName: string;
+  readonly rows: ReadonlyArray<ReadonlyArray<unknown>>;
+}
+
+/**
+ * The cells of the file the Lead would download now, read back from the workbook: **the file name is not among them** (it carries the customer's current name and the date of the download, which the header of
+ * `aqp-approved-immutable.test.ts` documents), but every cell is.
+ */
+export async function exportCellsOf(world: ApprovedWorld, estimateId: string): Promise<ExportedCells> {
+  const { bytes } = await world.exporter.getFile(world.lead, estimateId);
+  const sheet = defined((await loadWorkbook(bytes)).getWorksheet(SHEET_NAME));
+  const rows: unknown[][] = [];
+  for (let row = 1; row <= sheet.rowCount; row += 1) {
+    rows.push(Array.from({ length: sheet.columnCount }, (_, index) => sheet.getCell(row, index + 1).value));
+  }
+  return { sheetName: sheet.name, rows };
 }
 
 /** Everything an approved estimate shows (the review and the cost details of every part) and stores (the record, its rows and the approval), as the owner reads it. */
@@ -135,7 +170,7 @@ export interface ApprovedValues {
   readonly costs: CostsView;
   readonly nodeCosts: ReadonlyArray<NodeCostsView>;
   readonly records: { readonly calculations: ReadonlyArray<unknown>; readonly rows: ReadonlyArray<unknown>; readonly approvals: ReadonlyArray<unknown> };
-  readonly exportCells: null;
+  readonly exportCells: ExportedCells;
 }
 
 export async function approvedValuesOf(world: ApprovedWorld, estimateId: string): Promise<ApprovedValues> {
@@ -151,7 +186,7 @@ export async function approvedValuesOf(world: ApprovedWorld, estimateId: string)
     costs,
     nodeCosts,
     records: { calculations: calculations.rows, rows: rows.rows, approvals: approvals.rows },
-    exportCells: await exportCellsOf(),
+    exportCells: await exportCellsOf(world, estimateId),
   };
 }
 

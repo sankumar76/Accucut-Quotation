@@ -182,7 +182,7 @@ describe('AC-2, AC-4: the file', () => {
 });
 
 describe('AC-6: the summary', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure while the estimate is not calculated', async (role) => {
     harness.signInAs(role);
     const response = await getSummary(estimate().id);
     expect(response.status).toBe(200);
@@ -194,6 +194,9 @@ describe('AC-6: the summary', () => {
       pictureCount: 0,
       columns: { first: 'A', last: 'BO', count: 67 },
       rows: [{ slNo: '1', name: '', count: null }],
+      // Never calculated: the state says so and no figure of any kind is in the answer (STORY-07.03 AC-8).
+      state: 'none',
+      figures: null,
     });
   });
 

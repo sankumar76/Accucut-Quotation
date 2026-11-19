@@ -20,7 +20,7 @@ import type { ExportCell, ExportRow } from './export-model';
  * **Text is text.** A word a person typed goes into the model as a string and the model has no formula cell, so a value that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed is
  * stored as the string it is (AC-7, NFR-027, GitHub issue 394).
  *
- * **What is not a node row's:** the product-level columns (BL, BN and BO, `rowScope` `product`) are left empty here: row 2 and the footer are STORY-07.03's. The picture column is left empty too: the picture
+ * **What is not a node row's:** the product-level columns (BL, BN and BO, `rowScope` `product`) are left empty here: `product-cells.ts` fills row 2 and the footer (STORY-07.03). The picture column is left empty too: the picture
  * is embedded over the cell by `build-workbook.ts`, so the row only says which picture (`picture`).
  */
 
@@ -55,7 +55,7 @@ export interface NodeRowsInput {
 const DECIMAL_TEXT = /^-?\d+(\.\d+)?$/;
 
 /** A decimal text as the JavaScript number Excel stores (a double): the stored text keeps its digits, the cell holds what a spreadsheet can. */
-function numberOf(text: string, fault: string): number {
+export function numberOf(text: string, fault: string): number {
   if (!DECIMAL_TEXT.test(text)) throw new Error(fault);
   return Number(text);
 }
