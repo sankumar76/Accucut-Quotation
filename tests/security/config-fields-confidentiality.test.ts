@@ -69,11 +69,23 @@ describe('only the Configuration routes, page and composition import the Configu
   const ALLOWED_IMPORTERS: ReadonlyArray<string> = [
     'src/app/(portal)/config/fields/error.tsx',
     'src/app/(portal)/config/fields/page.tsx',
+    // STORY-08.02: the formula editor's page, three routes, screen and service. The page and the routes are the Admin's alone (the manifest), and the service is blocked for every Engineer view.
+    'src/app/(portal)/config/fields/[id]/formula/page.tsx',
     'src/app/api/v1/config/current/route.ts',
     'src/app/api/v1/config/fields/route.ts',
+    'src/app/api/v1/config/fields/[id]/formula/route.ts',
+    'src/app/api/v1/config/formula-check/route.ts',
+    'src/app/api/v1/config/sample-rows/route.ts',
     'src/components/features/config/fields-screen.tsx',
     'src/components/features/config/fields-table.tsx',
+    'src/components/features/config/formula-editor-screen.tsx',
+    'src/components/features/config/formula-editor.tsx',
+    'src/components/features/config/formula-preview.tsx',
+    'src/components/features/config/suggestions.tsx',
+    'src/components/features/config/use-formula-check.ts',
+    'src/components/features/config/use-save-formula.ts',
     'src/server/composition.ts',
+    'src/server/services/config-edit-service.ts',
     'src/server/services/config-read-service.ts',
     // The barrel re-exports every schema file for tests and server code; an `engineer-*` view may not import it (`engineer-import-rule.test.ts`).
     'src/server/views/schemas/index.ts',
@@ -85,7 +97,8 @@ describe('only the Configuration routes, page and composition import the Configu
   });
 
   it('lists exactly the files that are allowed to', () => {
-    expect(importers).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)));
+    // Both sides are sorted: the order `readdirSync` gives differs between Windows and Linux (a `[id]` folder comes last on one and first on the other), and the rule is about the set.
+    expect([...importers].sort()).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)).sort());
     expect(importers.filter((file) => !ALLOWED_IMPORTERS.includes(file))).toEqual([]);
   });
 

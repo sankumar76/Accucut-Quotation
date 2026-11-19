@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
@@ -38,6 +40,18 @@ export interface ConfigVersionUse {
   readonly estimatesInUse: number;
 }
 
+/** What an edit stores as the next version (STORY-08.02). */
+export interface NewConfigVersion {
+  /** The number of the version the edit was made from. The new version is stored only if it is still the latest. */
+  readonly baseNumber: number;
+  /** The whole edited document, already validated by the service. */
+  readonly snapshot: unknown;
+  readonly reason: string;
+  readonly createdBy: string;
+}
+
+const INSERTED_ROWS = z.array(z.strictObject({ id: z.uuid(), number: z.number().int() }));
+
 export interface ConfigRepository {
   /**
    * Inserts the seed as version 1 only if the table holds no version at all, in one statement. Returns
@@ -45,6 +59,12 @@ export interface ConfigRepository {
    * unique number settles it.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
+  /**
+   * Stores the next version, `baseNumber + 1`, **only if `baseNumber` is still the highest number**, in one statement, inside the caller's transaction (so the audit entry commits with it, STORY-08.02 AC-5).
+   * Returns the new version's ID and number, or `null` when another version was stored since the edit began (AC-9: nothing is overwritten and nothing is stored). Two saves from the same base cannot both
+   * insert: the unique number settles it, and the loser's insert does nothing.
+   */
+  insertVersionAfter(version: NewConfigVersion, tx: Transaction): Promise<ConfigVersionRef | null>;
   /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. Pass `tx` to read inside the caller's transaction (STORY-05.09: Calculate holds a connection and must not take a second). */
   findLatestRef(tx?: Transaction): Promise<ConfigVersionRef | null>;
   /** One version with its snapshot, or null if no version has this ID. `tx` as above. */
@@ -69,6 +89,19 @@ export function createConfigRepository(db: PrismaClient): ConfigRepository {
           WHERE NOT EXISTS (SELECT 1 FROM config_versions)
           ON CONFLICT (number) DO NOTHING`;
         return inserted === 1;
+      });
+    },
+
+    insertVersionAfter({ baseNumber, snapshot, reason, createdBy }, tx) {
+      return withDatabaseErrors(async () => {
+        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer. `ON CONFLICT DO NOTHING` covers two saves that both saw the same latest number.
+        const rows = await clientFor(db, tx).$queryRaw`
+          INSERT INTO config_versions (number, snapshot, created_by, reason)
+          SELECT ${baseNumber + 1}::integer, ${JSON.stringify(snapshot)}::jsonb, ${createdBy}::uuid, ${reason}::text
+          WHERE (SELECT max(number) FROM config_versions) = ${baseNumber}::integer
+          ON CONFLICT (number) DO NOTHING
+          RETURNING id::text AS "id", number AS "number"`;
+        return INSERTED_ROWS.parse(rows)[0] ?? null;
       });
     },
 
