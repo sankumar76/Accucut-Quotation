@@ -389,12 +389,6 @@ jobs:
           if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
           & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
-      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
-      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. This is last among the steps that need the install.
-      - name: Remove the backup account, and see the policy as it was before the install
-        run: |
-          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
-
       # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
       # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.
       - name: Pester tests of the scripts (deploy/windows/tests)
@@ -407,6 +401,12 @@ jobs:
           $configuration.TestResult.Enabled = $true
           $configuration.TestResult.OutputPath = 'pester-results.xml'
           Invoke-Pester -Configuration $configuration
+
+      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
+      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. It runs AFTER the Pester tests: the tests run the Admin endpoint's two commands as the limited account on the real install, and those need the account AccucutBackup (Get-AccucutBackupAccountSid).
+      - name: Remove the backup account, and see the policy as it was before the install
+        run: |
+          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
 
       # STORY-10.11: what the restore and the Admin endpoint left behind, when a test fails. Diagnostics only; the restore log and the transcripts hold no secret (the key is read
       # as a secure string and blanked from every message, and the tests assert it).

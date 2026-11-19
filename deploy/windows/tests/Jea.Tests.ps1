@@ -386,7 +386,7 @@ Test-Step 'Get-Content' { @(Get-Content -LiteralPath 'C:\AccucutJeaTest\current\
 Test-Step 'ConvertFrom-Json' { (('{"a":1}' | ConvertFrom-Json).a) }
 Test-Step 'Get-Date' { (Get-Date).Year -gt 2000 }
 Test-Step 'New-Object' { (New-Object System.Text.StringBuilder).Length }
-Test-Step 'pipeline' { (1..4 | Where-Object { $_ -gt 1 } | ForEach-Object { $_ * 2 } | Sort-Object -Descending | Select-Object -First 1) }
+Test-Step 'pipeline' { (1..4 | Where-Object { $_ -gt 1 } | ForEach-Object { $_ * 2 } | Sort-Object -Descending | Microsoft.PowerShell.Utility\Select-Object -First 1) }
 Test-Step 'Join-Path' { Join-Path 'C:\a' 'b' }
 Test-Step 'Write-Host' { Write-Host 'hello' ; 'written' }
 Test-Step 'ReadHost-resolves' { if ($null -eq $ExecutionContext.SessionState.InvokeCommand.GetCommand('Read-Host', 'Cmdlet')) { throw 'Read-Host is not available to the script' }; 'available' }
@@ -417,7 +417,7 @@ Test-Step 'Import-Module-resolves' { if ($null -eq $ExecutionContext.SessionStat
     It 'shows exactly Restore-AccucutBackup and Clear-AccucutCopies as functions, and nothing of Windows beyond the seven commands that every restricted session has' {
         $listed = @(Invoke-Command -Session $script:Session -ScriptBlock { Get-Command })
         $functions = @($listed | Where-Object { [string]$_.CommandType -eq 'Function' } | ForEach-Object { $_.Name } | Sort-Object)
-        $functions | Should -Be @('Clear-AccucutCopies', 'Restore-AccucutBackup')
+        @($functions | Where-Object { $_ -in @('Clear-AccucutCopies', 'Restore-AccucutBackup') }) | Should -Be @('Clear-AccucutCopies', 'Restore-AccucutBackup')
         $baseline = @('Clear-Host', 'Exit-PSSession', 'Get-Command', 'Get-FormatData', 'Get-Help', 'Measure-Object', 'Out-Default', 'Select-Object', 'Prompt', 'TabExpansion2')
         $others = @($listed | Where-Object { [string]$_.CommandType -ne 'Function' -or $_.Name -notin @('Clear-AccucutCopies', 'Restore-AccucutBackup') } | Where-Object { $_.Name -notin $baseline } | ForEach-Object { "$($_.Name) ($($_.CommandType))" })
         $others.Count | Should -Be 0 -Because "the session also shows: $($others -join ', ')"
@@ -435,7 +435,7 @@ Test-Step 'Import-Module-resolves' { if ($null -eq $ExecutionContext.SessionStat
         $identity = ($lines | Where-Object { $_ -like 'IDENTITY|*' } | Select-Object -First 1)
         $identity | Should -Match 'Virtual'
         $groups = @($lines | Where-Object { $_ -like 'GROUP|*' } | ForEach-Object { $_.Substring(6) })
-        ($groups | Where-Object { $_ -like "*\$($script:TestGroup)" }).Count | Should -Be 1 -Because "the virtual account joins the group; its groups: $($groups -join '; ')"
+        @($groups | Where-Object { $_ -like "*\$($script:TestGroup)" }).Count | Should -Be 1 -Because "the virtual account joins the group; its groups: $($groups -join '; ')"
         $groups | Should -Not -Contain 'BUILTIN\Administrators'
     }
 
@@ -544,7 +544,11 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
         (Get-PSSessionConfiguration -Name 'AccucutAdmin').Name | Should -Be 'AccucutAdmin'
         $script:RealSession | Should -Not -BeNullOrEmpty
         $listed = @(Invoke-Command -Session $script:RealSession -ScriptBlock { Get-Command })
-        @($listed | Where-Object { [string]$_.CommandType -eq 'Function' } | ForEach-Object { $_.Name } | Sort-Object) | Should -Be @('Clear-AccucutCopies', 'Restore-AccucutBackup')
+        $ours = @($listed | Where-Object { [string]$_.CommandType -eq 'Function' } | ForEach-Object { $_.Name } | Where-Object { $_ -in @('Clear-AccucutCopies', 'Restore-AccucutBackup') } | Sort-Object)
+        $ours | Should -Be @('Clear-AccucutCopies', 'Restore-AccucutBackup')
+        # Besides the two, a restricted session shows only its own proxies (Clear-Host, Exit-PSSession, Get-Command, Get-FormatData, Get-Help, Measure-Object, Out-Default, Select-Object): nothing of ours or Windows' beyond those.
+        $baseline = @('Clear-Host', 'Exit-PSSession', 'Get-Command', 'Get-FormatData', 'Get-Help', 'Measure-Object', 'Out-Default', 'Select-Object', 'Prompt', 'TabExpansion2')
+        @($listed | ForEach-Object { $_.Name } | Where-Object { $_ -notin $baseline -and $_ -notin @('Clear-AccucutCopies', 'Restore-AccucutBackup') }).Count | Should -Be 0
     }
 
     It 'Clear-AccucutCopies runs clear-copies.ps1 as the limited account: every trust check passes, the module loads, the copies are listed, and it stops at the first prompt (a session with no one at the keyboard cannot answer it), having changed nothing' {

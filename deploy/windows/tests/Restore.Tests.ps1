@@ -654,10 +654,12 @@ Describe 'restore.log (AC-6)' {
         $security = [System.IO.File]::GetAccessControl($log)
         $security.AreAccessRulesProtected | Should -BeTrue
         $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value | Should -Be 'S-1-5-32-544'
-        @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object) | Should -Be @('S-1-5-18', 'S-1-5-32-544')
+        # The endpoint group (when the install made one) may also hold an entry on the file: it is the one extra SID that is allowed.
+        $allowed = @('S-1-5-18', 'S-1-5-32-544'); $groupSid = Get-AccucutAdminGroupSid; if (-not [string]::IsNullOrEmpty($groupSid)) { $allowed += $groupSid }
+        @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object) | Should -Be @($allowed | Sort-Object)
     }
 
-    It 'is never written to when it was swapped for a file that is not the restore log''s own (a file of someone else): the line goes to a new restore-<time>-<random>.log, and the other file is left as it was' -Skip:(-not $script:IsAdmin) {
+    It 'is never written to when it was swapped for a file that is not the restore log''s own (a file of someone else): the line goes to a new restore-DATE-RANDOM.log file, and the other file is left as it was' -Skip:(-not $script:IsAdmin) {
         $folder = Join-Path $TestDrive 'logs-b'
         New-Item -ItemType Directory -Path $folder | Out-Null
         $log = Join-Path $folder 'restore.log'
@@ -787,7 +789,7 @@ Describe 'R2: who may read restore.pgpass is checked before it is used (ADR-015 
 
     It 'refuses a file that the Users group can read (a real Read entry), whoever the group is' {
         $file = New-PassFile -UsersRead
-        { Assert-AccucutRestorePassFileTrusted -Path $file } | Should -Throw '*can be read by S-1-5-32-545*not secret*'
+        { Assert-AccucutRestorePassFileTrusted -Path $file } | Should -Throw '*can be read by S-1-5-32-545*would not be secret*'
         { Assert-AccucutRestorePassFileTrusted -Path $file -GroupSid $script:StandInGroup } | Should -Throw '*can be read by S-1-5-32-545*'
     }
 
