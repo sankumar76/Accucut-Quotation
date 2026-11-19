@@ -1,7 +1,10 @@
 import { HomeAction } from '@/components/features/system-pages/home-action';
 import { SystemPageCard } from '@/components/features/system-pages/system-page';
 import { SystemPageFrame } from '@/components/features/system-pages/system-page-frame';
+import { pageMetadata } from '@/lib/page-metadata';
 import { readViewerRole } from '@/server/auth/viewer-role';
+
+export const metadata = pageMetadata('Page not found', 'The page you asked for could not be found.');
 
 /**
  * SCR-26 "not found" for an address no route serves (STORY-01.02 AC-8), HTTP 404. The page is the same whatever address was

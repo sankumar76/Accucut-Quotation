@@ -11,6 +11,8 @@ import type { RoleName } from '../auth/roles';
  *   SUBMITTED  --APPROVE (Lead, Admin)-->                             APPROVED
  *   APPROVED   --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT
  *   APPROVED   --EXPORT (Lead, Admin)-->                              APPROVED
+ *   DRAFT      --CANCEL (Admin only)-->                               DRAFT      (STORY-06.12 AC-10: an approval kept through an unlock is cancelled; the status stays)
+ *   SUBMITTED  --CANCEL (Admin only)-->                               SUBMITTED  (the same)
  *
  * Every other (status, event) pair is refused, with a named reason. The two `switch` statements are exhaustive (`assertNever`), so a new status or a new event
  * does not type-check until each pair is decided. This file holds no cost figure and no person's data: an Engineer's page may import it (NFR-002).
@@ -82,8 +84,10 @@ function followOn(status: EstimateStatus, event: EstimateEvent): TransitionDecis
         case 'EDIT':
         case 'APPROVE':
           return refuse('NOT_SUBMITTED');
-        case 'UNLOCK':
         case 'CANCEL':
+          // An approval kept through an unlock (architecture sections 4.8 and 4.10): the Admin may cancel it and the status does not change. Admin only: `EVENT_ROLES` refuses every other role first.
+          return allow('DRAFT', 'DRAFT');
+        case 'UNLOCK':
         case 'EXPORT':
           return refuse('NOT_APPROVED');
         default:
@@ -98,8 +102,9 @@ function followOn(status: EstimateStatus, event: EstimateEvent): TransitionDecis
           return allow('SUBMITTED', 'SUBMITTED');
         case 'APPROVE':
           return allow('SUBMITTED', 'APPROVED');
-        case 'UNLOCK':
         case 'CANCEL':
+          return allow('SUBMITTED', 'SUBMITTED');
+        case 'UNLOCK':
         case 'EXPORT':
           return refuse('NOT_APPROVED');
         default:

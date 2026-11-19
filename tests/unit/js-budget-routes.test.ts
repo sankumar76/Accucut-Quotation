@@ -99,6 +99,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
     expect(problems).toEqual([]);
     expect(routes).toEqual([
       { pattern: '/', roles: ['ADMIN'] },
+      { pattern: '/about', roles: ['ADMIN'] },
       { pattern: '/account', roles: ['ADMIN'] },
       { pattern: '/assign', roles: ['ADMIN'] },
       { pattern: '/audit', roles: ['ADMIN'] },
@@ -121,7 +122,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
   it('with the real manifest and no sign-in at all, every signed-in page is a problem and none is dropped', () => {
     const { routes, problems } = pageRoutesFromManifest(ROUTE_MANIFEST, () => false);
     expect(routes.map((route) => route.pattern)).toEqual(['/sign-in']);
-    expect(problems).toHaveLength(16);
+    expect(problems).toHaveLength(17);
   });
 });
 

@@ -51,6 +51,7 @@ const render = (costs: CostsView, status: EstimateStatus): string =>
       customer: { id: 'c1', name: 'Invented Customer' },
       costs,
       calculatedAt: costs.calculatedAt === null ? null : AT,
+      viewerRole: 'LEAD',
     }),
   );
 

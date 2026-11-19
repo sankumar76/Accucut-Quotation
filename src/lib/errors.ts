@@ -78,7 +78,7 @@ export class PayloadTooLargeError extends AppError {
   }
 }
 
-/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG, GIF or WebP by its content): 415. */
+/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG or GIF by its content, a WebP included, which the browser converts before it is sent, DL-237): 415. */
 export class UnsupportedMediaTypeError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {
     super(options.code ?? 'UNSUPPORTED_MEDIA_TYPE', 415, message, options.cause);

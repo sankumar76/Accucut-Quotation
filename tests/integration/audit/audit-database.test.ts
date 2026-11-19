@@ -210,6 +210,12 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'approval.price_overridden': 'tests/integration/approval/override.test.ts',
     // STORY-06.08: an approved estimate unlocked; the one test is the unlock's own, against the real estimate row lock.
     'approval.unlocked': 'tests/integration/approval/unlock.test.ts',
+    // STORY-06.12: an approval cancelled by the Admin; the one test is the cancel's own, against the real estimate row lock.
+    'approval.cancelled': 'tests/integration/approval/cancel.test.ts',
+    // STORY-06.13: the price of a cancelled approval removed by the Admin; the one test is the removal's own, against the real estimate row lock.
+    'approval.price_removed': 'tests/integration/approval/remove-price.test.ts',
+    // STORY-04.07: a task given to another Engineer, a new deadline, or both; the one test is the reassign's own, against the real estimate and task row locks.
+    'task.reassigned': 'tests/integration/tasks/reassign.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

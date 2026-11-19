@@ -38,6 +38,8 @@ describe('AC-7: the projection', () => {
     expect(engineer.navigation).toEqual([
       { group: 'Work', label: 'My tasks', href: '/queue' },
       { group: 'Work', label: 'Home', href: '/' },
+      // About (STORY-01.08) is every role's, in Help.
+      { group: 'Help', label: 'About', href: '/about' },
     ]);
     expect(buildMe(person('ADMIN'), { includeHiddenInProduction: false, overdueCount: 0 }).navigation[0]).toEqual({ group: 'Work', label: 'Task queue', href: '/queue' });
   });

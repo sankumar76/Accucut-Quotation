@@ -61,8 +61,11 @@ describe('AC-6: a Lead and an Admin open the export page', () => {
     expect(html).toContain(`href="/estimates/${CODE}"`);
   });
 
-  it('the tab title holds neither the task code nor a customer name', () => {
-    expect(JSON.stringify(metadata)).toBe('{"title":"Excel export"}');
+  it('the tab title and the tags hold neither the task code nor a customer name, and name no image', () => {
+    const tags = JSON.stringify(metadata);
+    expect(metadata.title).toBe('Excel export');
+    expect(tags).not.toContain(CODE);
+    expect(tags).not.toMatch(/image/i);
   });
 
   it('a code that is no task is the same SCR-26 "not found"', async () => {

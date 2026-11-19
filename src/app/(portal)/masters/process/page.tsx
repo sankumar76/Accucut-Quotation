@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
 
 import { ProcessScreen } from '@/components/features/masters/process-screen';
 import { getMastersService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: 'Process master', description: 'Manage the default process rates used in every cost calculation.' };
+export const metadata = pageMetadata('Process master', 'Manage the default process rates used in every cost calculation.');
 
 /**
  * SCR-11 "Process master" (STORY-02.01 AC-1, AC-6, AC-8): the Admin adds, changes and deletes the named rates the calculation

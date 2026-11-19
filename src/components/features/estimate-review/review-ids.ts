@@ -6,3 +6,5 @@ export const REVIEW_CALCULATE_ID = 'review-calculate';
 export const REVIEW_APPROVE_ID = 'review-approve';
 export const REVIEW_DOWNLOAD_ID = 'review-download';
 export const REVIEW_UNLOCK_ID = 'review-unlock';
+export const REVIEW_CANCEL_ID = 'review-cancel';
+export const REVIEW_REMOVE_PRICE_ID = 'review-remove-price';

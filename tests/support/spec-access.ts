@@ -60,6 +60,10 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // STORY-06.08 (SCR-09's Unlock; architecture section 6 rows "Unlock preview" and "Unlock": A L): the Admin-only action is cancel (STORY-06.12), not unlock. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
   'GET /api/v1/estimates/[id]/unlock-preview': ['ADMIN', 'LEAD'],
   'POST /api/v1/estimates/[id]/unlock': ['ADMIN', 'LEAD'],
+  // STORY-06.12 (SCR-06's Cancel approval; architecture section 6 row "Cancel approval": A only, step-up): the Admin alone. A Lead and an Engineer are refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
+  'POST /api/v1/estimates/[id]/approval/cancel': ['ADMIN'],
+  // STORY-06.13 (SCR-06's Remove price; architecture section 6 row "Remove price": A only, step-up): the Admin alone, the same refusals before the ID is looked at (NFR-002, CR-33).
+  'POST /api/v1/estimates/[id]/approval/remove-price': ['ADMIN'],
   // STORY-06.02 (SCR-06; architecture section 6 row "Cost": A L): the figures of the estimate review. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
   '/api/v1/estimates/[id]/costs': ['ADMIN', 'LEAD'],
   // STORY-06.03 (SCR-07; architecture section 6 row "Cost details": A L): the six stages of one row with each formula. An Engineer is refused with the fixed 403 before either ID is looked at (NFR-002, CR-33).
@@ -73,7 +77,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/estimates/[id]/nodes': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes/[nodeId]': ['ADMIN', 'LEAD', 'ENGINEER'],
   // STORY-04.04 (architecture section 6, "Task detail": A L; E own): one task and the status of its estimate, every role, an Engineer their own only.
-  '/api/v1/tasks/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-04.07 (architecture section 6, "Change task": A L): the change of Engineer or deadline is its own row for a Lead and an Admin; an Engineer is refused (BR-004, CR-33).
+  'GET /api/v1/tasks/[id]': ['ADMIN', 'LEAD', 'ENGINEER'],
+  'PATCH /api/v1/tasks/[id]': ['ADMIN', 'LEAD'],
   // STORY-05.03 (architecture section 6 "Estimate form", "Save inputs": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/form': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/nodes/[nodeId]/inputs': ['ADMIN', 'LEAD', 'ENGINEER'],

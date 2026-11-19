@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { SignInForm } from '@/components/features/auth/sign-in-form';
@@ -9,9 +8,10 @@ import { SkipLink } from '@/components/shared/skip-link';
 import { RETURN_PARAMETER, safeReturnPath } from '@/lib/auth/return-path';
 import { REASON_PARAMETER, SESSION_ENDED_NOTICE, SESSION_ENDED_REASON } from '@/lib/auth/session-ended';
 import { getCurrentUser } from '@/server/auth/session';
+import { pageMetadata } from '@/lib/page-metadata';
 
 // The layout's description and robots rules apply; the "do not index" tags for this page are story 10.03's.
-export const metadata: Metadata = { title: 'Sign in' };
+export const metadata = pageMetadata('Sign in', 'Sign in to the Accucut Lasers quotation portal.');
 
 interface SignInPageProps {
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;

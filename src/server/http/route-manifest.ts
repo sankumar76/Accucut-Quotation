@@ -213,7 +213,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/customers/[id]/reset-rates', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/options/customers', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-04.01 (SCR-04). A Lead and an Admin assign (BR-004); an Engineer is refused on all three, with 403 for the routes and SCR-26 for the page (AC-5). The
-  // options route is for the same two roles, so it is in no Engineer's list and the cost scan never calls it as an Engineer. Reassign (`PATCH /tasks/{id}`) is story 04.07's.
+  // options route is for the same two roles, so it is in no Engineer's list and the cost scan never calls it as an Engineer. Reassign (`PATCH /tasks/{id}`) is story 04.07's, below.
   {
     path: '/assign',
     kind: 'page',
@@ -230,9 +230,11 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // The answer is cut to the caller's own tasks by the service, from the session, and parsed with a strict schema that names no cost.
   { path: '/api/v1/tasks', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
   // STORY-04.04. One task and the status of its estimate: every role, because an Engineer's own task is the same call (architecture section 6, "Task detail": A L, E own).
-  // One route, one schema: a Lead and an Admin are answered with the same shape, and an Engineer's other-person task is the same 404 as a task that does not exist. `PATCH`
-  // (reassign) is story 04.07's and will be its own row, for the Lead and the Admin only.
+  // One route, one schema: a Lead and an Admin are answered with the same shape, and an Engineer's other-person task is the same 404 as a task that does not exist.
   { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  // STORY-04.07. Reassign or change the deadline (architecture section 6 "Change task": A L): its own row, for the Lead and the Admin only, so an Engineer's PATCH is the fixed 403 before the
+  // task is read or the body is parsed. Any Lead or Admin may change any open task, not only one they assigned (decision D-f); the page is `/assign` with the task chosen by `?task=`.
+  { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
   // for any other, a Lead and an Admin the estimate review SCR-06 (STORY-06.02, loaded only for them). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
@@ -283,6 +285,12 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // is refused 403 before the ID is looked at. The preview answers two version numbers and counts, the unlock a status and a time; neither is in any Engineer's list, so the cost scan calls both as routes an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/unlock-preview', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/unlock', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // STORY-06.12 (SCR-06's Cancel approval; architecture sections 4.10 and 6 "Cancel approval": A only, step-up): the Admin cancels an approval with a reason and their password, which the route checks in the same request
+  // (`verifyStepUp`, STORY-06.14). Only the Admin is listed, so a Lead and an Engineer are refused 403 before the ID is looked at. The answer is a status and a time, with no price and no ID, so the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/approval/cancel', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-06.13 (SCR-06's Remove price; architecture sections 4.10 and 6 "Remove price": A only, step-up): the Admin removes the price of a cancelled approval with their password, which the route checks in the same request
+  // (`verifyStepUp`, STORY-06.14). Only the Admin is listed, so a Lead and an Engineer are refused 403 before the ID is looked at. The answer is a time, with no price and no ID, so the cost scan calls it as a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/estimates/[id]/approval/remove-price', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   // STORY-06.02 (SCR-06; architecture section 6 "Cost": A L). The figures of the estimate review, for the Lead and the Admin alone. An Engineer is refused with the fixed 403 before the ID is
   // looked at, and this route is in no Engineer's list, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
@@ -328,13 +336,14 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Configuration', label: 'Checkpoints', order: 20, icon: 'flag' },
   },
 
-  // ---- Planned: Help (every role) ------------------------------------------------------------------------------------
+  // ---- Help (every role) ---------------------------------------------------------------------------------------------
+  // STORY-01.08 (SCR-24). Every role, Engineer included: the page holds fixed words and no data (NFR-002).
   {
     path: '/about',
     kind: 'page',
     methods: ['GET'],
     roles: ALL_ROLES,
-    status: 'planned',
+    status: 'implemented',
     stage: 'R1',
     screen: 'SCR-24',
     nav: { group: 'Help', label: 'About', order: 10, icon: 'info' },
