@@ -24,7 +24,9 @@ const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.e
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
 /** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked; STORY-06.12: an approval cancelled; STORY-06.13: the price of a cancelled approval removed. Registry order puts them before the quantity warning. */
 const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
+/** STORY-04.07: a task given to another Engineer, a new deadline, or both. */
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['task.reassigned'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION, ...WIRED_TASK];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
 
@@ -66,6 +68,8 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
     expect(eventsInCategory('quantity_warning')).toEqual(['calculation.warning_acknowledged']);
+    expect(eventsInCategory('task_change')).toEqual(WIRED_TASK);
+    expect(auditCategoryLabel('task_change')).toBe('Task change');
     expect(auditCategoryLabel('user_change')).toBe('User change');
     expect(auditCategoryLabel('master_data')).toBe('Master data edit');
     expect(auditCategoryLabel('configuration')).toBeNull();
@@ -81,6 +85,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
       'Quantity warning',
       'Master data edit',
       'User change',
+      'Task change',
     ]);
   });
 });
@@ -350,5 +355,51 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       if (before !== null) expect(AUDIT_EVENTS[name].describeStored(withHash(before), after), `${name} before`).toBeNull();
       expect(AUDIT_EVENTS[name].describeStored(before, withHash(after)), `${name} after`).toBeNull();
     }
+  });
+});
+
+describe('STORY-04.07 AC-4 (SCR-16 "Task change"): the reassign event keeps the Engineer and the deadline, and nothing else', () => {
+  const event = AUDIT_EVENTS['task.reassigned'];
+  const ARJUN = { id: '00000000-0000-4000-8000-0000000000e1', name: 'Arjun Rao' };
+  const MEERA = { id: '00000000-0000-4000-8000-0000000000e2', name: 'Meera Nair' };
+  /** 17:00 IST on 03 November, and 12:00 IST on 04 November. */
+  const FIRST = '2026-11-03T11:30:00.000Z';
+  const SECOND = '2026-11-04T06:30:00.000Z';
+
+  it('is wired, about the task, under the "Task change" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'task', category: 'task_change' });
+  });
+
+  it('says the two times in IST for a new deadline, as the spec gives them', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: ARJUN, deadlineAt: SECOND })).toEqual({
+      before: '03 Nov 2026, 17:00 IST',
+      after: '04 Nov 2026, 12:00 IST',
+    });
+  });
+
+  it('says the two names for a new Engineer, as the spec gives them', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: FIRST })).toEqual({ before: 'Arjun Rao', after: 'Meera Nair' });
+  });
+
+  it('says both for a change of both, the Engineer and then the deadline on each side', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: SECOND })).toEqual({
+      before: 'Arjun Rao, 03 Nov 2026, 17:00 IST',
+      after: 'Meera Nair, 04 Nov 2026, 12:00 IST',
+    });
+  });
+
+  it('writes a 23:30 IST deadline as 23:30 on that IST day, not as the next UTC day', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: ARJUN, deadlineAt: '2026-11-09T18:00:00.000Z' })?.after).toBe('09 Nov 2026, 23:30 IST');
+  });
+
+  it.each([
+    ['an extra key (an e-mail address has no place here)', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: { ...MEERA, email: 'a@b.test' }, deadlineAt: FIRST }],
+    ['an extra key on the state (a folder path has no place here)', { engineer: ARJUN, deadlineAt: FIRST, folderPath: 'invented-path' }, { engineer: MEERA, deadlineAt: FIRST }],
+    ['a deadline that is not an instant', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: 'tomorrow' }],
+    ['an Engineer with no name', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: { id: MEERA.id, name: '' }, deadlineAt: FIRST }],
+    ['a before that is null', null, { engineer: MEERA, deadlineAt: FIRST }],
+    ['an after that is null', { engineer: ARJUN, deadlineAt: FIRST }, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
   });
 });

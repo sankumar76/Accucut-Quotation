@@ -346,7 +346,7 @@ test.describe('by keyboard (AC-9)', () => {
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
     // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is first, then Approval, Unlock, Price override, Approval cancelled, Price removed, Quantity
-    // warning, Master data edit and User change; typing the letters instead depends on the pause between keys, which a busy machine stretches.) The result must follow the choice, and it must not depend on which of
+    // warning, Master data edit, User change and Task change; typing the letters instead depends on the pause between keys, which a busy machine stretches.) The result must follow the choice, and it must not depend on which of
     // these kinds the other tests of the run have written (GitHub #491: no kind is left that no story writes): the person this test added is a "User change" entry, so it is on the list under "All events" and under
     // "User change" and under none of the others.
     await expect(entryOf(page, person.name)).toHaveCount(1);
@@ -357,6 +357,13 @@ test.describe('by keyboard (AC-9)', () => {
       await expect(entryOf(page, person.name)).toHaveCount(0);
     }
     await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('user_change');
+    await expect(entryOf(page, person.name)).toHaveCount(1);
+    // "Task change" (STORY-04.07) is the last kind: this person's entry is not one, so the list answers with none, and ArrowUp comes back to "User change".
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('task_change');
+    await expect(entryOf(page, person.name)).toHaveCount(0);
+    await page.keyboard.press('ArrowUp');
     await expect(event).toHaveValue('user_change');
     await expect(entryOf(page, person.name)).toHaveCount(1);
 
