@@ -48,14 +48,14 @@ in one group (never an administrator), one command that runs a script file, whic
    - It prints `Done.`
 5. Type **`Exit-PSSession`** and press Enter. The prompt is back to `PS C:\...>`.
 
-   **Optional step 5b: a standard account (proves assumption A-35). Only if you added `-StandardAccount` in step 2.** In the same window run (the exact line is also printed by Prepare):
+   **Optional step 5b: a standard account (checks assumption A-35). Only if you added `-StandardAccount` in step 2.** In the same window run (the exact line is also printed by Prepare):
 
    ```powershell
    Enter-PSSession -ComputerName localhost -ConfigurationName Ac8Check -Credential "$env:COMPUTERNAME\Ac8Standard"
    ```
 
    A sign-in box asks for the password: type the made-up one that Prepare printed. The prompt changes to `[localhost]: PS>`. Type **`Test-Ac8Prompt`** and press Enter. It asks
-   **Type the word PINEAPPLE and press Enter**. This step goes no further: **press Enter without typing anything**. It prints `Stopped at the first question.` Then type **`Exit-PSSession`**.
+   **Type the word PINEAPPLE and press Enter**. This step goes no further: **press Enter without typing anything** (whatever is typed, the session stops there). It prints `Stopped at the first question.` Then type **`Exit-PSSession`**.
    `Test-Ac8Prompt` stands in for `Restore-AccucutBackup`, whose first question also lets you press Enter to stop. This never opens the real endpoint `AccucutAdmin`: the real restore, through
    the "Accucut Admin" shortcut, is tried separately, in the rehearsal before go-live.
    If the sign-in is refused ("Access is denied"), check the password once and try again. If it is refused again, or `Test-Ac8Prompt` does not start, go on to step 6 (it reports and cleans up).
@@ -88,6 +88,8 @@ If you did the optional step 5b, one more line follows. **It is reported separat
 ```
 OPTIONAL A-35 CHECK: PASS  a standard (non-administrator) account opened the endpoint, and its command ran as the limited virtual account and reached its first question
 ```
+
+A PASS shows only that a standard account can use a JEA endpoint built like `AccucutAdmin`, up to the first question. The real endpoint and the "Accucut Admin" shortcut are tested only in the rehearsal before go-live.
 
 It can also read `OPTIONAL A-35 CHECK: NOT RUN` (you did not add `-StandardAccount`). **If it reads `OPTIONAL A-35 CHECK: FAIL`, stop and report it to the delivery lead.** Do not try to fix it. The delivery lead decides what happens next.
 
@@ -197,28 +199,36 @@ $root = '__ROOT__'
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $groups = @()
 foreach ($group in $identity.Groups) { try { $groups += $group.Translate([System.Security.Principal.NTAccount]).Value } catch { $groups += $group.Value } }
-# A note, written before the first question, of who connected and what the session ran as (the optional A-35 line of Finish reads it).
-try {
-    $sender = ''
-    if ($null -ne $PSSenderInfo) { $sender = [string]$PSSenderInfo.ConnectedUser }
-    $note = [ordered]@{ sender = $sender; identity = $identity.Name; groups = $groups }
-    $note | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root ('out\started-' + [guid]::NewGuid().ToString('N') + '.json'))
-}
-catch { Write-Warning "start note: $($_.Exception.Message)" }
+# Who connected. The throwaway standard account (optional A-35 step) only ever goes as far as the first question.
+$sender = ''
+try { if ($null -ne $PSSenderInfo) { $sender = [string]$PSSenderInfo.ConnectedUser } } catch { $sender = '' }
+$isStandard = ($sender -like '*\Ac8Standard')
 $result = [ordered]@{ ran = $true; identity = $identity.Name; groups = $groups; import = $false; text = $false; secure = $false; secureLength = 0; errors = @() }
 try {
     Microsoft.PowerShell.Core\Import-Module -Name (Join-Path $root 'Ac8Module.psm1') -Force -DisableNameChecking
     $result.import = ((Get-Ac8Word) -eq 'ac8-module-ok')
 }
 catch { $result.errors += "import: $($_.Exception.Message)" }
-$typed = $null
+$promptReached = $false
 try {
     $typed = Read-Host -Prompt 'Type the word PINEAPPLE and press Enter'
+    $promptReached = $true
     $result.text = ($typed.Trim().ToUpperInvariant() -eq 'PINEAPPLE')
 }
 catch { $result.errors += "text prompt: $($_.Exception.Message)" }
-# Nothing typed: stop here, as the real command does at its first question (the optional A-35 step ends this way).
-if ($result.errors.Count -eq 0 -and [string]::IsNullOrWhiteSpace($typed)) { 'Stopped at the first question. Now type Exit-PSSession and press Enter.'; return }
+# The standard account stops here whatever it typed, and never writes the result file (that is the administrator's AC-8 result). Its note is written only now,
+# after the first question has returned, which is what the optional A-35 line of Finish reads.
+if ($isStandard) {
+    if ($promptReached) {
+        try {
+            $note = [ordered]@{ sender = $sender; identity = $identity.Name; groups = $groups }
+            $note | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root ('out\started-' + [guid]::NewGuid().ToString('N') + '.json'))
+        }
+        catch { Write-Warning "start note: $($_.Exception.Message)" }
+    }
+    'Stopped at the first question. Now type Exit-PSSession and press Enter.'
+    return
+}
 try {
     $secure = Read-Host -Prompt 'Paste the FAKE value that Prepare printed (nothing is shown) and press Enter' -AsSecureString
     $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)

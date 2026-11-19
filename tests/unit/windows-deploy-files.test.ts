@@ -1147,7 +1147,7 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     // The prose: optional, listed under what it changes, its own line, stop and report to the delivery lead.
     const changes = kit.slice(kit.indexOf('## What it changes, and what it removes'), kit.indexOf('## Before you start'));
     for (const part of ['Optional', '-StandardAccount', '`Ac8Standard`', 'standard', 'never an administrator', 'remove that account too']) expect(changes, part).toContain(part);
-    for (const part of ['Optional step 5b', 'OPTIONAL A-35 CHECK: PASS', 'OPTIONAL A-35 CHECK: FAIL', 'OPTIONAL A-35 CHECK: NOT RUN', 'never changes `AC-8 RESULT`', 'stop and report it to the delivery lead', 'press Enter without typing anything', 'Restore-AccucutBackup']) expect(kit, part).toContain(part);
+    for (const part of ['Optional step 5b', 'OPTIONAL A-35 CHECK: PASS', 'OPTIONAL A-35 CHECK: FAIL', 'OPTIONAL A-35 CHECK: NOT RUN', 'never changes `AC-8 RESULT`', 'stop and report it to the delivery lead', 'press Enter without typing anything', 'Restore-AccucutBackup', 'only in the rehearsal before go-live']) expect(kit, part).toContain(part);
     // The script: the account is made only on request, is in the built-in Users group and never in Administrators, and is removed by the one routine that Finish and Cleanup both run.
     expect(script).toContain('[switch]$StandardAccount');
     expect(script).toContain("$StandardName = 'Ac8Standard'");
@@ -1170,10 +1170,25 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(finish.indexOf("Write-Host 'AC-8 RESULT: PASS'")).toBeLessThan(finish.indexOf('Write-Host $standardLine'));
     expect(finish).toContain('if ($ac8Passed) { exit 0 }');
     expect(finish.slice(finish.indexOf('$ac8Passed ='))).not.toContain('$standardOk');
-    // The session script writes its note before the first question and stops there when nothing is typed.
+    // The session script: the standard account (told apart by its connected name) stops after the first question WHATEVER it types, writes its note only AFTER that question has
+    // returned, and can never write result.json (the administrator's AC-8 result), which is written further down, after this block has returned.
     const session = script.slice(script.indexOf("$script = @'"), script.indexOf("'@\n"));
-    expect(session.indexOf('started-')).toBeLessThan(session.indexOf('Read-Host'));
-    expect(session).toContain('IsNullOrWhiteSpace($typed)');
+    expect(session).toContain("$isStandard = ($sender -like '*\\Ac8Standard')");
+    const firstQuestion = session.indexOf("Read-Host -Prompt 'Type the word PINEAPPLE");
+    const standardBlock = session.slice(session.indexOf('if ($isStandard) {'));
+    const standardEnd = standardBlock.indexOf('\n}\n') + 3;
+    const standardOnly = standardBlock.slice(0, standardEnd);
+    expect(firstQuestion).toBeGreaterThan(0);
+    expect(session.indexOf('if ($isStandard) {')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeLessThan(session.indexOf('Read-Host -Prompt \'Paste the FAKE'));
+    expect(standardOnly).toContain('if ($promptReached) {');
+    expect(standardOnly).toContain('started-');
+    expect(standardOnly).toMatch(/\n    return\n\}\n$/);
+    expect(standardOnly).not.toContain('result.json');
+    expect(session.match(/result\.json/g)).toHaveLength(1);
+    expect(session.indexOf('result.json')).toBeGreaterThan(session.indexOf('if ($isStandard) {') + standardOnly.length);
+    expect(session.slice(0, session.indexOf('if ($isStandard) {'))).not.toContain('started-');
   });
 
   it('AC-10: the README has a restore chapter for a person who is not a system administrator, with the typed-date step and what to say to IT', () => {
