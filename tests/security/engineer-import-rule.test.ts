@@ -339,15 +339,27 @@ describe('every repository and service file is classed, and the lint agrees with
  * database only through a store that the worker gives it as a parameter (`takesItsStoreByInjection`), so the job file itself imports no repository, service or driver, and a test
  * can fix the clock and stub both the store and `statfs`. What the store may do is decided where it is built (`src/server/repositories/job-run-repository.ts`).
  *
+ * `heartbeat` (STORY-10.09a) writes its one `job_runs` row a minute and calls the prune function through a store the worker gives it, the same way, and it uses the one wrapper.
+ * `run-job` (STORY-10.09a) is that wrapper: it holds no data and imports nothing at all (the worker gives it the logger, the clock and the way to write a failed row), so a job's
+ * log lines and its failed row cannot reach the data layer through it. A new file fails the list test below until someone classes it.
+ *
  * `outbox-send` (STORY-09.01) reads and writes `email_outbox` and `settings`: Confidential, names and task details, never a cost or a rate. It takes the same route: its store, its mailer
  * and its clock are parameters, and the only mail modules it names are types. `tests/security/mail-confidentiality.test.ts` checks its imports (and those of `src/server/mail`) against an exact list (AC-10).
  */
-const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'outbox-send'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'heartbeat', 'outbox-send'] } as const;
 const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
+/** Not a job: the wrapper every job runs through. It imports nothing. */
+const JOB_WRAPPER = 'run-job';
 
 describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
   it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
-    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS].sort());
+    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS, JOB_WRAPPER].sort());
+  });
+
+  it('the job wrapper imports nothing at all, so no job can reach the data layer through it', () => {
+    const source = readFileSync(`${ROOT}src/server/jobs/${JOB_WRAPPER}.ts`, 'utf8');
+    expect([...source.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)].map((match) => match[1])).toEqual([]);
+    expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 
   it.each(ALL_JOBS)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
@@ -364,7 +376,7 @@ describe('every worker job is classed and takes nothing from the data layer (NFR
   it('backup-watch takes only Node, node-cron and one plain lib module, and its row holds figures of the disk and nothing about an estimate', () => {
     const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
-    expect(specifiers).toEqual(['../../lib/settings/backup-status', 'node-cron', 'node:fs/promises']);
+    expect(specifiers).toEqual(['../../lib/settings/backup-status', './run-job', 'node-cron', 'node:fs/promises']);
     expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });

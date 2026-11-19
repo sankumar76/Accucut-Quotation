@@ -237,7 +237,7 @@ describe('scheduleLogPrune', () => {
     expect(log).toHaveBeenNthCalledWith(2, 'log-prune is off: LOG_DIRECTORY is not an absolute path');
   });
 
-  it('a run prunes the folder and logs a count, and a skipped run logs the reason (the folder is checked again at every run)', async () => {
+  it('a run prunes the folder and logs a count, and a skipped run logs the reason, as the outcome line of the job wrapper (the folder is checked again at every run)', async () => {
     cron.schedule.mockReturnValue({ stop: vi.fn() });
     const log = vi.fn();
     const old = makeFile('AccucutApp.wrapper.log', 1);
@@ -248,10 +248,10 @@ describe('scheduleLogPrune', () => {
     utimesSync(old, longAgo, longAgo);
     await run();
     expect(existsSync(old)).toBe(false);
-    expect(log).toHaveBeenLastCalledWith('log-prune removed 1 file(s)');
+    expect(log).toHaveBeenLastCalledWith(expect.stringMatching(/^log-prune finished in \d+ ms$/), 'info', { job: 'log-prune', durationMs: expect.any(Number), summary: 'log-prune removed 1 file(s)' });
     rmSync(folder, { recursive: true, force: true });
     await run();
-    expect(log).toHaveBeenLastCalledWith('log-prune skipped: LOG_DIRECTORY cannot be read');
+    expect(log).toHaveBeenLastCalledWith(expect.stringMatching(/^log-prune finished in \d+ ms$/), 'info', { job: 'log-prune', durationMs: expect.any(Number), summary: 'log-prune skipped: LOG_DIRECTORY cannot be read' });
     mkdirSync(folder);
   });
 });
