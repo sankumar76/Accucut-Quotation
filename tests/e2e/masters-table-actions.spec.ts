@@ -2,8 +2,10 @@ import { randomBytes } from 'node:crypto';
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
+import AxeBuilder from '@axe-core/playwright';
+
 import { E2E_ADMIN } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, waitForAnimationsToFinish, waitUntilHydrated } from './support/design-system';
+import { AXE_TAGS, expectNoAxeViolations, horizontalOverflow, waitForAnimationsToFinish, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './support/treatments';
 
@@ -110,7 +112,12 @@ async function findPerson(page: Page, name: string): Promise<{ readonly id: stri
 
 /** AQP-376 diagnostic: phase marks of one Users case, printed as one line. */
 const DIAG: { t0: number; marks: Array<string> } = { t0: 0, marks: [] };
-const diagStart = (): void => { DIAG.t0 = Date.now(); DIAG.marks = []; };
+const ACC: Record<string, number> = {};
+const diagStart = (): void => { DIAG.t0 = Date.now(); DIAG.marks = []; for (const key of Object.keys(ACC)) delete ACC[key]; };
+async function tm<T>(name: string, run: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  try { return await run(); } finally { ACC[name] = (ACC[name] ?? 0) + Date.now() - started; }
+}
 const diagMark = (label: string): void => { DIAG.marks.push(label + '=' + String(Date.now() - DIAG.t0)); };
 
 const SCREENS: ReadonlyArray<Screen> = [
@@ -289,25 +296,27 @@ const USERS_TAB_ORDER = ['edit', 'reset', 'deactivate'] as const;
  */
 async function expectTabThroughRow(page: Page, region: Locator, screen: Screen, row: Locator, mode: string): Promise<void> {
   const buttons = row.locator('button[data-action]');
-  await expect(buttons, `${mode}: three buttons in the long-name row`).toHaveCount(USERS_TAB_ORDER.length);
-  await expect(row.locator('button[data-action]:not([disabled])'), `${mode}: all three are enabled`).toHaveCount(USERS_TAB_ORDER.length);
-  await row.scrollIntoViewIfNeeded();
+  await tm('rowCounts', async () => {
+    await expect(buttons, `${mode}: three buttons in the long-name row`).toHaveCount(USERS_TAB_ORDER.length);
+    await expect(row.locator('button[data-action]:not([disabled])'), `${mode}: all three are enabled`).toHaveCount(USERS_TAB_ORDER.length);
+  });
+  await tm('scrollInto', () => row.scrollIntoViewIfNeeded());
   // Enter the row by keyboard: from its Edit button back one stop, then forward again.
-  await buttons.first().focus();
-  await page.keyboard.press('Shift+Tab');
+  await tm('focusFirst', () => buttons.first().focus());
+  await tm('shiftTab', () => page.keyboard.press('Shift+Tab'));
   for (const [index, action] of USERS_TAB_ORDER.entries()) {
-    await page.keyboard.press('Tab');
+    await tm('press', () => page.keyboard.press('Tab'));
     const focused = buttons.nth(index);
-    await expect(focused, `${mode}: Tab ${index + 1} reaches ${action}`).toBeFocused();
-    await expect(focused, `${mode}: Tab ${index + 1} is ${action}`).toHaveAttribute('data-action', action);
-    await expect(page.locator('button[data-action]:focus-visible'), `${mode}: Tab ${index + 1} shows a focus ring`).toHaveCount(1);
-    const covered = await focused.evaluate((button) => {
+    await tm('focusedExpect', () => expect(focused, `${mode}: Tab ${index + 1} reaches ${action}`).toBeFocused());
+    await tm('attrExpect', () => expect(focused, `${mode}: Tab ${index + 1} is ${action}`).toHaveAttribute('data-action', action));
+    await tm('ringExpect', () => expect(page.locator('button[data-action]:focus-visible'), `${mode}: Tab ${index + 1} shows a focus ring`).toHaveCount(1));
+    const covered = await tm('coveredEval', () => focused.evaluate((button) => {
       const box = button.getBoundingClientRect();
       const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return top === null || !button.contains(top);
-    });
+    }));
     expect(covered, `${mode}: Tab ${index + 1}: the focused ${action} button is not covered`).toBe(false);
-    await expectActionsInside(page, region, screen, `${mode}, Tab ${index + 1}`);
+    await tm('insideTab', () => expectActionsInside(page, region, screen, `${mode}, Tab ${index + 1}`));
   }
 }
 
@@ -323,6 +332,7 @@ for (const screen of SCREENS) {
       // The Users titles name the acceptance criteria of AQP-245 they check; the two masters titles are unchanged.
       const criteria = screen.users ? 'AC-1, AC-2, AC-3, AC-5: ' : '';
       test(`${criteria}at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
+        test.setTimeout(240_000);
         diagStart();
         try {
         const length = nameLengthOf(screen);
@@ -352,13 +362,13 @@ for (const screen of SCREENS) {
         //    a table that overflows its region has more width than it shows, and the sticky Actions column hides that from every position check.
         expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
         expect(await region.evaluate((element) => element.scrollWidth - element.clientWidth), 'as drawn: the table needs no scrolling (the fit)').toBeLessThanOrEqual(0);
-        await expectActionsInside(page, region, screen, 'as drawn');
-        await expectActionGaps(row, 'as drawn');
+        await tm('inside', () => expectActionsInside(page, region, screen, 'as drawn'));
+        await tm('gaps', () => expectActionGaps(row, 'as drawn'));
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         if (screen.users) {
-          await expectButtonsPerRow(page, screen, 3, 'as drawn');
-          await expectOwnRowIntact(page, region, 'as drawn');
-          await expectThreeButtonColumn(region, 'as drawn');
+          await tm('perRow', () => expectButtonsPerRow(page, screen, 3, 'as drawn'));
+          await tm('own', () => expectOwnRowIntact(page, region, 'as drawn'));
+          await tm('threeCol', () => expectThreeButtonColumn(region, 'as drawn'));
         }
 
         diagMark('asDrawn');
@@ -369,7 +379,7 @@ for (const screen of SCREENS) {
         await region.locator('table').evaluate((table, minWidth) => { table.style.minWidth = `${minWidth}px`; }, forcedWidth);
         expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
         expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
-        await expectActionsInside(page, region, screen, 'forced to scroll, at its start');
+        await tm('inside', () => expectActionsInside(page, region, screen, 'forced to scroll, at its start'));
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
         diagMark('forced');
@@ -377,7 +387,7 @@ for (const screen of SCREENS) {
         await region.focus();
         await page.keyboard.press('Tab');
         await expect(page.locator(':focus')).toHaveAttribute('data-action', firstActionOf(screen));
-        await expectActionsInside(page, region, screen, 'forced to scroll, after Tab');
+        await tm('inside', () => expectActionsInside(page, region, screen, 'forced to scroll, after Tab'));
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         if (screen.users) {
           diagMark('tab1');
@@ -388,6 +398,27 @@ for (const screen of SCREENS) {
             await waitForAnimationsToFinish(page);
             diagMark('anim');
             await expectNoAxeViolations(page);
+            diagMark('axe0');
+            // Micro: the same read of all buttons through Playwright's :visible engine and through one in-page pass.
+            const m0 = Date.now();
+            await edgesOf(page.locator('[data-user-id]:visible button[data-action]'));
+            const m1 = Date.now();
+            await page.locator('[data-user-id] button[data-action]').evaluateAll((buttons) => buttons.filter((button) => button.checkVisibility()).map((button) => { const box = button.getBoundingClientRect(); return { left: box.left, right: box.right }; }));
+            const m2 = Date.now();
+            await row.locator('button[data-action]').count();
+            const m3 = Date.now();
+            DIAG.marks.push('visibleEngine=' + String(m1 - m0) + ',inPage=' + String(m2 - m1) + ',rowCount=' + String(m3 - m2));
+            // Axe variants, same rules, whole page: default, then resultTypes violations, default again, violations again.
+            const axeRun = async (name: string, limited: boolean): Promise<void> => {
+              const started = Date.now();
+              const builder = new AxeBuilder({ page }).withTags(AXE_TAGS);
+              const results = await (limited ? builder.options({ resultTypes: ['violations'] }) : builder).analyze();
+              DIAG.marks.push(name + '=' + String(Date.now() - started) + '(v' + String(results.violations.length) + ',p' + String(results.passes.length) + ')');
+            };
+            await axeRun('axeA', false);
+            await axeRun('axeV', true);
+            await axeRun('axeA2', false);
+            await axeRun('axeV2', true);
             diagMark('axe');
           }
         }
@@ -395,12 +426,12 @@ for (const screen of SCREENS) {
         // 4. Scrolled to its far end.
         await region.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
         expect(await region.evaluate((element) => element.scrollLeft), 'the forced table scrolled').toBeGreaterThan(0);
-        await expectActionsInside(page, region, screen, 'forced to scroll, at its end');
+        await tm('inside', () => expectActionsInside(page, region, screen, 'forced to scroll, at its end'));
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         diagMark('end');
         } finally {
           // eslint-disable-next-line no-console -- temporary AQP-376 diagnostic, reverted before the fix
-          console.log('AQP376 ' + screen.label.slice(0, 7) + ' w=' + String(width) + ' ' + DIAG.marks.join(' ') + ' total=' + String(Date.now() - DIAG.t0));
+          console.log('AQP376 ' + screen.label.slice(0, 7) + ' w=' + String(width) + ' ' + DIAG.marks.join(' ') + ' total=' + String(Date.now() - DIAG.t0) + ' ACC ' + Object.entries(ACC).map(([key, value]) => key + '=' + String(value)).join(' '));
         }
       });
     }
