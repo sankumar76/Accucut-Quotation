@@ -211,6 +211,19 @@ AQP-199 re-validated on revision 7: READY, 17 of 17 (comment 11015). AQP-208: NO
 
 AQP-74 re-validated on the changed AC-3: READY, 17 of 17 (comment 11085); AC-4 covers the rename entry (its Given is "a user event"). AQP-216: READY, 17 of 17 on revision 2 (comment 11086). Counts after 2026-11-06: Critical 0. Major open 0. Minor open 14 (the 11 before and CR-48, CR-49, CR-50). **After the AQP-74 re-validation on AC-1, AC-5, AC-6 and AC-8 (comment 11093, READY 17 of 17): Critical 0. Major open 0. Minor open 13 (CR-48 closed, CR-49 narrowed, CR-51 added).**
 
+### 9.7 Issues first raised on 2026-11-19 (AQP-365 to AQP-372, light DoR, fast track)
+
+| ID | Rating | Issue | Owner | Status now |
+|----|--------|-------|-------|------------|
+| CR-52 | Major | AQP-365 (02.08), a critical-review story: AC-9 as drafted kept no customer rate value and no list of customers, and A-2 wrote no audit entry for the equal customers that moved, while the page notice says "The change is in the audit log". A bulk rewrite of customer rates could not be traced afterwards; Reset to Defaults (architecture section 8 "Customers") already keeps old and new rates. Also AC-3 sent no shown value, so "changed since you looked" (AC-4) could not be decided by the server | product-owner (AC); solution-architect (OQ-2: the shape) | **AC part closed 2026-11-19:** AC-3 and AC-4 carry `shownValue`; AC-9 and A-2 require the log to say which customers moved, from what to what, for both steps. **Open (not blocking the start):** OQ-2, one entry with lists or one `master.edited` per customer |
+| CR-53 | Minor | SPEC section 8.3 lists the group "none" for an inserted field; AQP-358 AC-2 and AC-7 require a section for every input, and AQP-372 (08.08) does not offer "none" (OQ-2 decided by the product-owner: a mandatory Engineer input with no section has no place on the form) | product-manager (SPEC wording point; delivery lead only if "none" was meant for something else, for example an output) | Open. Not before Ready; before G8 |
+| CR-54 | Minor | AQP-372 is 5 points; AQP-358 D-2 and the release plan carry "about 3". The Admin half (SCR-19 choice list and new section) is about 2 points | product-manager (release plan figure) | Open. Accepted by the product-owner |
+| CR-55 | Minor | The `heartbeat` worker job (architecture 4.7, R1) had no owner in any story or epic; AQP-348 says "not this story's". Placed in STORY-10.09 (AC-7, A-2); EPIC-10's 10.09 row and checks 6 and 7 now read it there. 10.09 and AQP-348 both edit `src/worker/main.ts` | orchestrator (order: 10.09 after AQP-348); solution-architect (OQ-2: `job_runs` growth and the index) | Placement accepted 2026-11-19. Order and OQ-2 open, not blocking |
+| CR-56 | Minor | AQP-370 (10.08) adds a separate Playwright config and a non-required nightly job. CLAUDE.md section 9 item 4 freezes "new CI-speed or tooling enabler stories"; the product-owner reads 10.08 as a PRD requirement story (NFR-016, 018, 019, SPEC 14.13), consistent with test strategy 4, 9 and 10 (nightly full matrix), and DL-244 names it after the freeze | master and orchestrator (the ruling); solution-architect (placement) | Open; before the 10.08 build, not before Ready |
+| CR-57 | Minor | Two new ACs named `npm test` (AQP-369 AC-6, AQP-370 AC-3); the sprint plan rule 2 uses direct commands | product-owner | **Closed 2026-11-19:** both now name `npx vitest run tests/unit` |
+
+Eight stories validated READY, light DoR (comments on each story; AQP-1 hand-off). Counts after 2026-11-19: Critical 0. Major open 0 (CR-52's acceptance-criteria part is closed; its shape question OQ-2 is Minor in effect and does not block). Minor open: the 13 before, plus CR-53 to CR-56.
+
 ## 10. Open inputs and what they gate
 
 | Input | Reference | Gates | Fallback |
