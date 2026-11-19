@@ -45,6 +45,18 @@ const loadChangeDialog = () => import('./change-customer-dialog').then((module) 
 const loadGuard = () => import('./leave-guard').then((module) => module.LeaveGuard);
 const stay = (): void => undefined;
 
+/**
+ * The reserved drawing region (STORY-10.06, FR-087, NFR-023, UD-4): the third track of the form area, after the tree and the form, for a drawing viewer that a later release docks here (FR-093 is
+ * "Won't" now, so it is empty, hidden from assistive technology, not a landmark and not focusable). Its width is the one token `--drawing-region-width` (0px now, 340px when a viewer exists); the
+ * browser test sets it and no component or setting does. Below 1024 px it is `hidden`: no box, no accessibility tree.
+ * Two traps are handled here and nowhere else, so the form and the tree stay as they were:
+ * 1. A zero-width flex item still takes the row's gap, so the margin `min(0, width - gap)` gives the gap back while the region is narrower than one gap and is 0 from one gap of width.
+ * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card and the
+ *    two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
+ * The Tailwind spacing scale is replaced (`globals.css`), so the sums are written with the tokens as arbitrary values (`_` is a space).
+ */
+const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
+
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
   readonly estimateId: string;
@@ -162,6 +174,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           ) : (
             <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_AREA_LOCKED}</p>
           )}
+          <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
         </CardContent>
       </Card>
       {status === 'APPROVED' ? null : Bar !== null ? (
