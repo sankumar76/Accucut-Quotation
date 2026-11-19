@@ -179,8 +179,9 @@ export interface CalculationRepository {
   /**
    * The nodes of one calculation and its materials' words and prices, for the Excel file (STORY-07.02): the rows in a fixed order, and from the master snapshot only `materials` (selected as one column, the
    * rest of it dropped before it leaves). Null for an unknown calculation or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   * Pass `tx` to read in the caller's transaction (STORY-07.04: the export reads the state and these rows in one repeatable-read snapshot).
    */
-  findExportFigures(calculationId: string): Promise<ExportFigures | null>;
+  findExportFigures(calculationId: string, tx?: Transaction): Promise<ExportFigures | null>;
   /**
    * The calculated total (BL) of one calculation as decimal text, selected on its own (STORY-06.06: the approval keeps it beside the price and pre-fills nothing else): neither a row nor the snapshot is
    * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
@@ -324,10 +325,10 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         return found === null ? null : { configVersionId: found.configVersionId, masterSnapshot: masterSnapshotSchema.parse(found.masterSnapshot) };
       }),
 
-    findExportFigures: (calculationId) =>
+    findExportFigures: (calculationId, tx) =>
       withDatabaseErrors(async () => {
         if (!isUuid(calculationId)) return null;
-        const found = await db.calculation.findUnique({
+        const found = await clientFor(db, tx).calculation.findUnique({
           where: { id: calculationId },
           select: {
             masterSnapshot: true,

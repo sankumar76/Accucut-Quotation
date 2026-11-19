@@ -49,6 +49,17 @@ const failSaves = async (page: Page): Promise<void> => {
 };
 const allowSaves = (page: Page): Promise<void> => page.unroute(SAVE_ROUTE);
 
+/**
+ * Waits until the page itself shows that nothing is unsaved (DEF-041, AQP-344). The status of a save's response is not that: the page's own bookkeeping finishes a few steps after the browser has the
+ * response (`mark(..., false)` at the leaving of the field, then `inFlight.delete` in `track()`, `src/lib/estimates/save-gate.ts`), and until then `isDirty()` is true and a close or a link is answered
+ * with the browser's prompt or the leave dialog. "Draft saved at ..." is drawn only after `saveDraft` has awaited `gate.settle()` (no save in flight, no field marked), so when it shows, `isDirty()` is
+ * false. It is not an extra check of the saves: a value still not saved answers the alert instead, and the wait fails. A press sends nothing when the field already holds what it shows (AC-2).
+ */
+async function waitUntilNothingIsUnsaved(page: Page): Promise<void> {
+  await saveDraftButton(page).click();
+  await expect(draftStatus(page)).toHaveText(DRAFT_SAVED);
+}
+
 /** Types 7 into Length and leaves the field while every save fails: the field shows a value the server does not hold, and says so. */
 async function typeAValueThatCannotBeSaved(page: Page): Promise<void> {
   await expect(saveDraftButton(page)).toBeVisible();
@@ -120,6 +131,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await control(page, 'J').fill('5');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
+    await waitUntilNothingIsUnsaved(page);
     await brandLink(page).click();
     await expect(leaveDialog(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/\/estimates\//);
@@ -256,6 +268,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     const saved = nextSave(page);
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
+    await waitUntilNothingIsUnsaved(page);
     const closed = page.waitForEvent('close');
     await page.close({ runBeforeUnload: true });
     await closed;

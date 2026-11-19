@@ -1,3 +1,5 @@
+import { NOT_CALCULATED_REFUSAL, OUT_OF_DATE_REFUSAL } from '@/lib/export/refusal-words';
+
 /**
  * The words of SCR-10 "Excel export" (STORY-07.01 AC-6; UX spec SCR-10). Kept in one file so a test and the page read the same sentences.
  */
@@ -95,3 +97,19 @@ export const BO_REASON_NOT_IN_FILE = 'The reason is shown here, on the estimate 
  */
 export const noWarningInFile = (count: string, price: string): string => `The file holds no warning: it keeps the rows as they are, with ${count} 0 and ${price} 0.`;
 export const HOLDS_NO_WARNING_CELL = 'No warning cell';
+
+/**
+ * STORY-07.04 AC-5 (UX spec SCR-10 "No file until a calculation is current"): the two refused states, which show no file card and no table. The bold line and the sentence under it are the 409's own words
+ * (`lib/export/refusal-words.ts`), so a person who presses a stale button reads the same sentences as one who opens the page.
+ */
+export const NOT_CALCULATED_LEAD = NOT_CALCULATED_REFUSAL.lead;
+export const NOT_CALCULATED_REST = NOT_CALCULATED_REFUSAL.rest;
+export const CALCULATE_FIRST_TITLE = 'Calculate first';
+export const CALCULATE_FIRST_BODY = 'The file holds the rows and the totals of a calculation. There is none yet.';
+export const GO_TO_ESTIMATE_TO_CALCULATE = 'Go to the estimate to Calculate';
+
+export const CLEARED_LEAD = OUT_OF_DATE_REFUSAL.lead;
+export const CLEARED_REST = OUT_OF_DATE_REFUSAL.rest;
+export const RECALCULATE_FIRST_TITLE = 'Recalculate first';
+export const RECALCULATE_FIRST_BODY = 'The file would hold figures that no longer match the inputs, so the portal does not build one. After Recalculate the download comes back.';
+export const GO_TO_ESTIMATE_TO_RECALCULATE = 'Go to the estimate to Recalculate';

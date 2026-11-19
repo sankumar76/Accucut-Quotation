@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { ExportBusyError } from '@/lib/errors';
 import { createFixedClock } from '@/lib/time';
 import type { ExportModel } from '@/server/export/export-model';
-import type { ApprovalRecord } from '@/server/repositories/approval-repository';
-import type { ExportFigures } from '@/server/repositories/calculation-repository';
-import type { NodeRecord } from '@/server/repositories/estimate-node-repository';
+import type { ApprovalRecord, ApprovalRepository } from '@/server/repositories/approval-repository';
+import type { CalculationRepository, ExportFigures } from '@/server/repositories/calculation-repository';
+import type { EstimateNodeRepository, NodeRecord } from '@/server/repositories/estimate-node-repository';
 import type { ExportedImage } from '@/server/repositories/image-repository';
+import { createTransactionHandle, type Transaction, type TransactionOptions, type TransactionRunner } from '@/server/repositories/transaction';
 import { createExportService, type ExportDependencies } from '@/server/services/export-service';
 
 import { inProcessBuilder } from '../support/in-process-builder';
@@ -99,19 +100,33 @@ function world(
   approval: ApprovalRecord | null = null,
 ) {
   const findHeader = vi.fn(() => Promise.resolve({ code: 'Q-2026-0701', customerName: 'Acme Tools' as string | null }));
-  const listNodes = vi.fn(() => Promise.resolve([...nodes]));
+  const listNodes = vi.fn<EstimateNodeRepository['listNodes']>(() => Promise.resolve([...nodes]));
   const current = vi.fn(() => Promise.resolve(VERSION));
   const byId = vi.fn(() => Promise.resolve(OLD_VERSION));
-  const findFigureBasis = vi.fn(() => Promise.resolve(basis));
-  const findExportFigures = vi.fn(() => Promise.resolve(figures));
+  const findFigureBasis = vi.fn<CalculationRepository['findFigureBasis']>(() => Promise.resolve(basis));
+  const findExportFigures = vi.fn<CalculationRepository['findExportFigures']>(() => Promise.resolve(figures));
   // Answers only for this estimate: a read for any other ID would find no approval, so a read of the wrong estimate shows.
-  const findLatestApproval = vi.fn((estimateId: string) => Promise.resolve(estimateId === ESTIMATE_ID ? approval : null));
+  const findLatestApproval = vi.fn<ApprovalRepository['findLatestApproval']>((estimateId) => Promise.resolve(estimateId === ESTIMATE_ID ? approval : null));
   const readMany = vi.fn((_estimateId: string, ids: ReadonlyArray<string>) =>
     Promise.resolve([storedImage(IMAGE_A), storedImage(IMAGE_B), storedImage(IMAGE_WEBP, 'image/webp', new Uint8Array(smallWebp()))].filter((image) => ids.includes(image.id))),
   );
   // The stored type of each picture asked for: PNG unless a test names another.
   const findMimes = vi.fn((_estimateId: string, ids: ReadonlyArray<string>) => Promise.resolve(ids.map((id) => ({ id, mime: (mimes[id] ?? 'image/png') as ExportedImage['mime'] }))));
   const builder = inProcessBuilder();
+  // The one transaction the reads share (STORY-07.04 AC-4): what it was asked for, the handle it gave, and whether it is open now, so a test can tell a read inside it from a read after it.
+  const transaction = { runs: [] as Array<{ readonly options: TransactionOptions | undefined; readonly tx: Transaction }>, open: false };
+  const transactions: TransactionRunner = {
+    async run(work, options) {
+      const tx = createTransactionHandle();
+      transaction.runs.push({ options, tx });
+      transaction.open = true;
+      try {
+        return await work(tx);
+      } finally {
+        transaction.open = false;
+      }
+    },
+  };
   const service = createExportService({
     header: { findHeader },
     nodes: { listNodes },
@@ -119,11 +134,12 @@ function world(
     approvals: { findLatestApproval },
     images: { readMany, findMimes },
     configuration: { current, byId },
+    transactions,
     builder,
     clock: createFixedClock(NOON_UTC),
     ...overrides,
   });
-  return { service, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, findLatestApproval, readMany, findMimes, builder };
+  return { service, transaction, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, findLatestApproval, readMany, findMimes, builder };
 }
 
 describe('getSummary', () => {
@@ -231,7 +247,7 @@ describe('getSummary: the figures of SCR-10 only while the state is current (STO
     await service.getSummary(LEAD, ESTIMATE_ID);
     expect(byId).toHaveBeenCalledWith(OLD_VERSION.id);
     expect(findExportFigures).toHaveBeenCalledTimes(1);
-    expect(findExportFigures).toHaveBeenCalledWith(CALCULATION_ID);
+    expect(findExportFigures).toHaveBeenCalledWith(CALCULATION_ID, expect.anything());
   });
 
   it('adds the BG column up against BL2: 100.5 + 200.5 + 300.5 is 601.5, the same, and says when the lines as shown differ by a few hundredths', async () => {
@@ -252,7 +268,7 @@ describe('getSummary: the figures of SCR-10 only while the state is current (STO
     const { service, findLatestApproval } = world({}, [], basisOf(), FIGURES, {}, approvalOf());
     const { figures } = await service.getSummary(LEAD, ESTIMATE_ID);
     expect(findLatestApproval).toHaveBeenCalledTimes(1);
-    expect(findLatestApproval).toHaveBeenCalledWith(ESTIMATE_ID);
+    expect(findLatestApproval).toHaveBeenCalledWith(ESTIMATE_ID, expect.anything());
     expect(figures?.totals.bo).toBe('600');
     expect(figures?.approval).toEqual({
       price: '600.00',
@@ -448,7 +464,7 @@ describe('getFile: BL2, BN2 and BO2 in row 2 and the total Tool Cost in the foot
     const { service, builder, findLatestApproval } = world({}, [], basisOf(), FIGURES, {}, approvalOf());
     await service.getFile(LEAD, ESTIMATE_ID);
     expect(findLatestApproval).toHaveBeenCalledTimes(1);
-    expect(findLatestApproval).toHaveBeenCalledWith(ESTIMATE_ID);
+    expect(findLatestApproval).toHaveBeenCalledWith(ESTIMATE_ID, expect.anything());
     expect(defined(builder.built[0]).rows[0]?.cells['BO']).toBe(600);
   });
 
@@ -505,8 +521,8 @@ describe('getFile: no figure is read unless the state is current (the ordering c
   it('says in plain words what is wrong, and the two refusals are told apart', async () => {
     const none = await world({}, [], basisOf({ calculationRevision: null })).service.getFile(LEAD, ESTIMATE_ID).catch((error: unknown) => error);
     const stale = await world({}, [], basisOf({ inputsRevision: 6, calculationRevision: 5 })).service.getFile(LEAD, ESTIMATE_ID).catch((error: unknown) => error);
-    expect((none as Error).message).toBe('The estimate has not been calculated yet, so there is no file to download.');
-    expect((stale as Error).message).toBe('The estimate changed after it was last calculated, so there is no file to download until it is calculated again.');
+    expect((none as Error).message).toBe('There is no file to download yet. This estimate has not been calculated. The download stays off until a calculation is current.');
+    expect((stale as Error).message).toBe('The total is cleared because an input changed. There is no file to download until you press Recalculate.');
   });
 
   it('a calculation that is somehow ahead of its estimate counts as out of date, never as current', async () => {
@@ -518,6 +534,104 @@ describe('getFile: no figure is read unless the state is current (the ordering c
   it('is a 404 when the estimate has no figure basis at all, and a fault (not an empty file) when a current calculation cannot be read', async () => {
     await expect(world({}, [], null as never).service.getFile(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 404 });
     await expect(world({}, [], basisOf(), null).service.getFile(LEAD, ESTIMATE_ID)).rejects.toThrow('The calculation linked to the estimate could not be read.');
+  });
+});
+
+describe('STORY-07.04 AC-1, AC-2: the refusals, in the words of SCR-10, for a Lead and an Admin', () => {
+  const NOT_CALCULATED = 'There is no file to download yet. This estimate has not been calculated. The download stays off until a calculation is current.';
+  const CLEARED = 'The total is cleared because an input changed. There is no file to download until you press Recalculate.';
+
+  it.each([LEAD, ADMIN])('AC-1: $role, never calculated: 409 NOT_CALCULATED with the screen\'s words, no file, nothing read', async (viewer) => {
+    const { service, findExportFigures, findLatestApproval, readMany, byId, builder } = world({}, [], basisOf({ calculationRevision: null }));
+    await expect(service.getFile(viewer, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 409, code: 'NOT_CALCULATED', message: NOT_CALCULATED });
+    for (const spy of [findExportFigures, findLatestApproval, readMany, byId]) expect(spy).not.toHaveBeenCalled();
+    expect(builder.admitted).toEqual([]);
+    expect(builder.built).toEqual([]);
+  });
+
+  it.each([LEAD, ADMIN])('AC-2: $role, an input changed after the last calculation: 409 EXPORT_OUT_OF_DATE with the screen\'s words, no file, nothing read', async (viewer) => {
+    const { service, findExportFigures, findLatestApproval, readMany, byId, builder } = world({}, [], basisOf({ inputsRevision: 6, calculationRevision: 5 }));
+    await expect(service.getFile(viewer, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 409, code: 'EXPORT_OUT_OF_DATE', message: CLEARED });
+    for (const spy of [findExportFigures, findLatestApproval, readMany, byId]) expect(spy).not.toHaveBeenCalled();
+    expect(builder.admitted).toEqual([]);
+    expect(builder.built).toEqual([]);
+  });
+
+  it('AC-1, AC-2: the summary says the state and holds no figure and no cell of a calculation when it is not current, so the screen can refuse', async () => {
+    for (const [basis, state] of [
+      [basisOf({ calculationRevision: null }), 'none'],
+      [basisOf({ inputsRevision: 6, calculationRevision: 5 }), 'out-of-date'],
+    ] as const) {
+      const { service, findExportFigures, findLatestApproval } = world({}, [node('a', null, 0)], basis);
+      expect(await service.getSummary(LEAD, ESTIMATE_ID)).toMatchObject({ state, figures: null });
+      expect(findExportFigures).not.toHaveBeenCalled();
+      expect(findLatestApproval).not.toHaveBeenCalled();
+    }
+  });
+
+  it('AC-3: once a calculation is current the same estimate gets its file, for a Lead and an Admin', async () => {
+    for (const viewer of [LEAD, ADMIN]) {
+      const { service } = world({}, [], basisOf({ inputsRevision: 6, calculationRevision: 6 }));
+      expect((await service.getFile(viewer, ESTIMATE_ID)).bytes.byteLength).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('STORY-07.04 AC-4 (race): the state and the figures are read in one repeatable-read transaction, never from an earlier summary', () => {
+  it('getFile reads the basis, the rows and BO2 through the transaction it opened, asked to be repeatable-read, and builds only after it ended', async () => {
+    // Whether the transaction was open when the place was taken: the build's place is asked for after the snapshot, never inside it.
+    const openWhenPlaceTaken: boolean[] = [];
+    let isOpen = (): boolean => true;
+    const builder = inProcessBuilder(undefined, () => {
+      openWhenPlaceTaken.push(isOpen());
+      return null;
+    });
+    const { service, transaction, findFigureBasis, findExportFigures, findLatestApproval, readMany, byId } = world({ builder }, [], basisOf(), FIGURES, {}, approvalOf());
+    isOpen = () => transaction.open;
+    await service.getFile(LEAD, ESTIMATE_ID);
+    expect(transaction.runs).toHaveLength(1);
+    const run = defined(transaction.runs[0]);
+    expect(run.options).toEqual({ isolation: 'repeatable-read' });
+    expect(findFigureBasis).toHaveBeenCalledWith(ESTIMATE_ID, run.tx);
+    expect(findExportFigures).toHaveBeenCalledWith(CALCULATION_ID, run.tx);
+    expect(findLatestApproval).toHaveBeenCalledWith(ESTIMATE_ID, run.tx);
+    // The build is not inside the snapshot: the pictures, the registry version and the place come after it (a build may take far longer than a transaction may).
+    expect(openWhenPlaceTaken).toEqual([false]);
+    for (const spy of [readMany, byId]) expect(spy).toHaveBeenCalled();
+    expect(transaction.open).toBe(false);
+  });
+
+  it('getSummary reads the basis, the parts, the rows and BO2 through one repeatable-read transaction too', async () => {
+    const { service, transaction, findFigureBasis, listNodes, findExportFigures, findLatestApproval } = world({}, [node('a', null, 0)], basisOf(), FIGURES, {}, approvalOf());
+    await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(transaction.runs).toHaveLength(1);
+    const run = defined(transaction.runs[0]);
+    expect(run.options).toEqual({ isolation: 'repeatable-read' });
+    for (const spy of [findFigureBasis, listNodes, findLatestApproval]) expect(spy).toHaveBeenCalledWith(ESTIMATE_ID, run.tx);
+    expect(findExportFigures).toHaveBeenCalledWith(CALCULATION_ID, run.tx);
+  });
+
+  it('a refusal ends the transaction (nothing was written) and is the error the caller gets, unchanged', async () => {
+    const { service, transaction } = world({}, [], basisOf({ inputsRevision: 6, calculationRevision: 5 }));
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 409, code: 'EXPORT_OUT_OF_DATE' });
+    expect(transaction.runs).toHaveLength(1);
+    expect(transaction.open).toBe(false);
+  });
+
+  it('the state is read again for the download, so a change after the summary is refused: a summary that said current does not let a file out once the inputs changed', async () => {
+    const { service, findFigureBasis, builder } = world({}, [node('a', null, 0)], basisOf());
+    expect(await service.getSummary(LEAD, ESTIMATE_ID)).toMatchObject({ state: 'current' });
+    // Someone changes an input between the page being drawn and the button being pressed.
+    findFigureBasis.mockResolvedValue(basisOf({ inputsRevision: 6, calculationRevision: 5 }));
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 409, code: 'EXPORT_OUT_OF_DATE' });
+    expect(builder.admitted).toEqual([]);
+  });
+
+  it('the other way: a summary that said the figures were cleared does not keep the file refused once a Recalculate made them current', async () => {
+    const { service, findFigureBasis } = world({}, [node('a', null, 0)], basisOf({ inputsRevision: 6, calculationRevision: 5 }));
+    expect(await service.getSummary(LEAD, ESTIMATE_ID)).toMatchObject({ state: 'out-of-date', figures: null });
+    findFigureBasis.mockResolvedValue(basisOf({ inputsRevision: 6, calculationRevision: 6 }));
+    expect((await service.getFile(LEAD, ESTIMATE_ID)).fileName).toMatch(/\.xlsx$/);
   });
 });
 

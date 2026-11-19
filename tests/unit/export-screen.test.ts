@@ -26,7 +26,7 @@ const summary = (overrides: Partial<ExportSummaryView> = {}): ExportSummaryView 
     { slNo: '1.1', name: '', count: null },
     { slNo: '2', name: 'Lid', count: '24.50' },
   ],
-  state: 'none',
+  state: 'current',
   figures: null,
   warning: null,
   ...overrides,

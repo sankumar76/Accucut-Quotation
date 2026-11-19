@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
+import { clearPlantedCalculation, plantCalculation } from '../support/plant-calculation';
 import { defined } from '../support/defined';
 import { FORBIDDEN_SIGNAL, harness, holdSessionClock, NOT_FOUND_SIGNAL, REDIRECT_PREFIX, releaseSessionClock } from '../support/session-harness';
 
@@ -45,11 +46,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   estimate().customerId = null;
+  clearPlantedCalculation();
 });
 
 describe('AC-6: a Lead and an Admin open the export page', () => {
   it.each(['LEAD', 'ADMIN'] as const)('as %s: the file card with its name, the rows and the columns A to BO, the Download button and the rows of the file', async (role) => {
     harness.signInAs(role);
+    // The page draws the file card only while a calculation is current (STORY-07.04 AC-5).
+    plantCalculation();
     const html = await open(CODE);
     expect(html).toContain('Excel export');
     expect(html).toContain('The file');
@@ -59,6 +63,24 @@ describe('AC-6: a Lead and an Admin open the export page', () => {
     expect(html).toContain('Download .xlsx');
     expect(html).toContain('The rows in the file');
     expect(html).toContain(`href="/estimates/${CODE}"`);
+  });
+
+  it.each(['LEAD', 'ADMIN'] as const)('STORY-07.04 AC-5, as %s: an estimate never calculated shows the refusal and a link to Calculate, with no file card and no table', async (role) => {
+    harness.signInAs(role);
+    const html = await open(CODE);
+    expect(html).toContain('There is no file to download yet.');
+    expect(html).toContain('Go to the estimate to Calculate');
+    for (const absent of ['The file<', 'Download .xlsx', '<table', 'The rows in the file', 'A to BO']) expect(html, absent).not.toContain(absent);
+  });
+
+  it.each(['LEAD', 'ADMIN'] as const)('STORY-07.04 AC-5, as %s: an estimate whose inputs changed shows the refusal and a link to Recalculate, with no file card, no table and no figure', async (role) => {
+    harness.signInAs(role);
+    plantCalculation();
+    estimate().inputsRevision += 1;
+    const html = await open(CODE);
+    expect(html).toContain('The total is cleared because an input changed.');
+    expect(html).toContain('Go to the estimate to Recalculate');
+    for (const absent of ['The file<', 'Download .xlsx', '<table', 'The rows in the file', 'A to BO', '₹']) expect(html, absent).not.toContain(absent);
   });
 
   it('the tab title and the tags hold neither the task code nor a customer name, and name no image', () => {
