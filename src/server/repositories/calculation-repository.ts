@@ -148,6 +148,12 @@ export interface ExportFigures {
   /** The stored figures of the product, as the review shows them: the file's BL2, BN2 and footer are these, so they equal SCR-06's to the paisa. */
   readonly productValues: ProductValues;
   readonly materials: ReadonlyArray<{ readonly materialInDrawing: string; readonly pricePerKg: string }>;
+  /**
+   * The warnings the person acknowledged for this calculation (STORY-07.06; architecture section 4.3 "What the Lead sees"), as text, and the name now of the person who pressed Calculate or Recalculate: with the
+   * time, the acknowledgement. They are for SCR-10's notice and **never reach the file** (A-24): the cells are made of `rows`, `materials` and `productValues` alone.
+   */
+  readonly warnings: ReadonlyArray<StoredWarning>;
+  readonly madeByName: string;
 }
 
 export interface CalculationRepository {
@@ -326,12 +332,16 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
           select: {
             masterSnapshot: true,
             productValues: true,
+            warnings: true,
+            creator: { select: { name: true } },
             rows: { select: { id: true, nodeId: true, parentId: true, sortIndex: true, slNo: true, inputs: true, imageId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
           },
         });
         if (found === null) return null;
         return {
           productValues: productValuesSchema.parse(found.productValues),
+          warnings: storedWarningsSchema.parse(found.warnings),
+          madeByName: found.creator.name,
           rows: found.rows.map((row) => ({
             id: row.id,
             nodeId: row.nodeId,

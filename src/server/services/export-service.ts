@@ -37,6 +37,10 @@ import type { EstimateViewer } from './estimate-service';
  * SCR-06's to the paisa. **BO2 is read through `findLatestApproval`** (architecture section 4.10, the ruling on AQP-330) and by no query of this file's own: it is the latest approval row, and none once its price was
  * removed; a cancelled approval leaves the file. The summary's figures are read back from the cells of that same model (`summary-figures.ts`). The refusal screen, its words and its tests are STORY-07.04's.
  *
+ * **The quantity warning (STORY-07.06; architecture section 4.3 "What the Lead sees", A-24)**: the summary also carries who went ahead past a 0 in QTY per Assy, when, and on which rows, read with the same figures and
+ * so only while the state is `current`, for SCR-10's notice. **It is never given to the file**: `cellsOf` makes every cell from the rows, the materials and the product's figures, and the warning is in no cell and
+ * no sheet. The two are tested against each other (`tests/integration/export/warning-notice.test.ts`).
+ *
  * **Figures only while they are current** (architecture sections 4.6 and 10; the ordering condition of AQP-332): the calculation's rows are read **only through `readFiguresWhenCurrent`** of
  * `lib/estimate/figure-state.ts`, from the one calculation the estimate is linked to, and the file is built from the registry version **that calculation was made with**. In any other state nothing is read
  * and the answer is a 409 with fixed words (`NOT_CALCULATED`, `EXPORT_OUT_OF_DATE`), so a file can never carry out-of-date figures, whether or not STORY-07.04 has been merged. STORY-07.04 adds its own
@@ -109,6 +113,15 @@ function columnsOf(document: ConfigDocument): ExportSummaryView['columns'] {
   return { first: first.letter, last: last.letter, count: columns.length };
 }
 
+/**
+ * Who went ahead past a 0 in QTY per Assy, when, and on which rows (STORY-07.06 AC-4), or `null` when the calculation had no warning. It is read with the figures, so only while the state is `current`, and
+ * it is for SCR-10's notice alone: **it is never given to the file** (A-24), whose cells `cellsOf` makes from the rows, the materials and the product's figures. Built key by key from the record, so no code and no node ID goes on.
+ */
+function warningOf(figures: ExportFigures, calculatedAt: Date): ExportSummaryView['warning'] {
+  if (figures.warnings.length === 0) return null;
+  return { madeBy: figures.madeByName, at: calculatedAt.toISOString(), rows: figures.warnings.map(({ slNo, label }) => ({ slNo, label })) };
+}
+
 /** The figures of the product that the file's own cells are made of: the calculation's stored values and BO as the file holds it. */
 function productFiguresOf(figures: ExportFigures, approval: SummaryApproval | null): ProductFigures {
   return { ...figures.productValues, approvedPrice: approvedPriceOf(approval) };
@@ -165,6 +178,7 @@ export function createExportService({ header, nodes, calculations, approvals, im
         }),
         state,
         figures: shown === null ? null : summaryFiguresOf({ document, ...shown, approval }),
+        warning: figures === null || calculation === null ? null : warningOf(figures, calculation.createdAt),
       });
     },
 

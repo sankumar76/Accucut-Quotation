@@ -59,6 +59,8 @@ const FIGURES: ExportFigures = {
   materials: [STEEL],
   // BG 100.5 + 200.5 + 300.5 = 601.5; the total Tool Cost 5 and BN = 601.5 / 5 (stored at full precision).
   productValues: { totalPrice: '601.5', pricePerToolCost: '120.3', toolCostTotal: '5' },
+  warnings: [],
+  madeByName: 'Invented Engineer',
 };
 
 /** What `findLatestApproval` answers for an approval that stands (the record is the repository's; the file reads its price and its cancel). */
@@ -147,6 +149,7 @@ describe('getSummary', () => {
       ],
       state: 'none',
       figures: null,
+      warning: null,
     });
   });
 
@@ -284,6 +287,74 @@ describe('getSummary: the figures of SCR-10 only while the state is current (STO
 
   it('is a fault, not an empty page, when a current calculation cannot be read', async () => {
     await expect(world({}, [], basisOf(), null).service.getSummary(LEAD, ESTIMATE_ID)).rejects.toThrow('The calculation linked to the estimate could not be read.');
+  });
+});
+
+describe('getSummary: the quantity warning, only while the state is current (STORY-07.06 AC-1, AC-4, AC-5)', () => {
+  /** The calculation of the fixture, made at this time by this person, with a 0 in QTY per Assy on two rows. */
+  const CALCULATED_AT = '2026-11-10T00:00:00.000Z';
+  const WARNED: ExportFigures = {
+    ...FIGURES,
+    warnings: [
+      { code: 'QTY_ZERO', nodeId: '00000000-0000-4000-8000-0000000008aa', slNo: '1.1', label: 'Support arm' },
+      { code: 'QTY_ZERO', nodeId: '00000000-0000-4000-8000-0000000008bb', slNo: '2', label: '' },
+    ],
+    madeByName: 'Invented Engineer',
+  };
+
+  it('AC-4: current: who went ahead, when (the calculation\'s own time) and each warned row by its Sl. No and its name, and nothing else of the record (no code, no node ID)', async () => {
+    const { service } = world({}, [node('a', null, 0)], basisOf(), WARNED);
+    const { warning, state } = await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(state).toBe('current');
+    expect(warning).toEqual({
+      madeBy: 'Invented Engineer',
+      at: CALCULATED_AT,
+      rows: [
+        { slNo: '1.1', label: 'Support arm' },
+        { slNo: '2', label: '' },
+      ],
+    });
+    expect(JSON.stringify(warning)).not.toMatch(/QTY_ZERO|00000000-0000-4000-8000-0000000008/);
+  });
+
+  it('AC-4: a calculation with no warning has none in its summary, and so does the Admin\'s', async () => {
+    const { service } = world();
+    expect((await service.getSummary(ADMIN, ESTIMATE_ID)).warning).toBeNull();
+  });
+
+  it('AC-4: the warning is read with the figures, once: the same single read of the calculation, through the figure state', async () => {
+    const { service, findExportFigures } = world({}, [node('a', null, 0)], basisOf(), WARNED);
+    await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(findExportFigures).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['never calculated', basisOf({ calculationRevision: null }), 'none'],
+    ['out of date', basisOf({ inputsRevision: 6, calculationRevision: 5 }), 'out-of-date'],
+  ] as const)('AC-3, AC-4: %s: no warning, and the list of a stale calculation is not read at all', async (_label, basis, expected) => {
+    const { service, findExportFigures } = world({}, [node('a', null, 0)], basis, WARNED);
+    const summary = await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(summary.state).toBe(expected);
+    expect(summary.warning).toBeNull();
+    expect(findExportFigures).not.toHaveBeenCalled();
+    expect(JSON.stringify(summary)).not.toContain('Support arm');
+    expect(JSON.stringify(summary)).not.toContain('Invented Engineer');
+  });
+
+  it('AC-5 (NFR-002): an Engineer is refused before the warning, or anything else, is read', async () => {
+    const { service, findExportFigures, findFigureBasis } = world({}, [node('a', null, 0)], basisOf(), WARNED);
+    await expect(service.getSummary(ENGINEER, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 403 });
+    expect(findExportFigures).not.toHaveBeenCalled();
+    expect(findFigureBasis).not.toHaveBeenCalled();
+  });
+
+  it('A-24: the file holds no warning: the model sent to the build is the same for a warned calculation and for one with none, and no word of the warning is in it', async () => {
+    const plain = world({}, [node('a', null, 0)], basisOf(), FIGURES);
+    const warned = world({}, [node('a', null, 0)], basisOf(), WARNED);
+    await plain.service.getFile(LEAD, ESTIMATE_ID);
+    await warned.service.getFile(LEAD, ESTIMATE_ID);
+    expect(warned.builder.built[0]).toEqual(plain.builder.built[0]);
+    expect(JSON.stringify(warned.builder.built[0])).not.toMatch(/QTY_ZERO|Support arm|Invented Engineer|warning/i);
   });
 });
 
