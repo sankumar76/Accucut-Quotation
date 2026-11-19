@@ -509,15 +509,19 @@ function Get-AccucutScriptInstallRoot {
 
 function Assert-AccucutBackupFolderTrusted {
     # The backups folder before anything is written to it or deleted from it (ADR-015 Amendment 3 point 4): the chain to it passes Rule B with the backup account as
-    # the only writer (up to Modify); it is a real folder (no link), its owner is Administrators, and its list is protected.
+    # the only writer (up to Modify), or one of two when the install made the Admin endpoint (-EndpointSid, the local group of its virtual account: STORY-10.11, ADR-015 Amendment 3
+    # point 4); it is a real folder (no link), its owner is Administrators, and its list is protected.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Root,
         [Parameter(Mandatory)][string]$Directory,
-        [Parameter(Mandatory)][string]$BackupSid
+        [Parameter(Mandatory)][string]$BackupSid,
+        [string]$EndpointSid
     )
 
-    Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer @($BackupSid)
+    $writers = @($BackupSid)
+    if (-not [string]::IsNullOrEmpty($EndpointSid)) { $writers += $EndpointSid }
+    Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer $writers
     $security = Get-AccucutTrustSecurity -Path $Directory
     if ($security.Reparse -or -not $security.IsDirectory) { throw "'$Directory' is not a real folder. Refusing to use it." }
     if ($security.Owner -ne 'S-1-5-32-544') { throw "'$Directory' is owned by $($security.Owner), not by Administrators. Refusing to use it." }
@@ -572,7 +576,7 @@ function Invoke-AccucutBackupScript {
         $backupSid = Get-AccucutBackupAccountSid
         foreach ($file in $paths.BackupSettings, $paths.BackupPgpass) { Assert-AccucutTrustedPath -Path $file -Root $root -ProtectedRoot }
         $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
-        Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid
+        Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid -EndpointSid (Get-AccucutAdminGroupSid)
         $program = @{
             Age    = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($release, 'bin\age.exe'))
             PgDump = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe'))

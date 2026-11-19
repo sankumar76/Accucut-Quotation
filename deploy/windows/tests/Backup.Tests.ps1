@@ -443,6 +443,28 @@ Describe 'the backup run: a temporary name, the manifest, the final name, prunin
         $script:Rows[0].Result.pruned | Should -Be 2
     }
 
+    It 'with -SkipPrune (the safety copy of a restore) removes nothing: a copy past 2 years that the new copy pushes out of the newest 4 is still there with its manifest, and the row says pruned 0 (SQR-01)' {
+        $chosen = '20200105-020000'
+        New-FakeCopy -Directory $script:Paths.Backups -Stamp $chosen
+        foreach ($i in 1..3) { New-FakeCopy -Directory $script:Paths.Backups -Stamp ([datetime]::UtcNow.AddDays(-7 * $i).ToString('yyyyMMdd-HHmmss')) }
+        $made = Invoke-AccucutBackup -Paths $script:Paths -Settings $script:Settings -Program $script:Program -Reason 'release' -ReleaseTag 'before-restore' -SkipPrune
+        Test-Path -LiteralPath (Join-Path $script:Paths.Backups "accucut-$chosen-weekly.age") | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $script:Paths.Backups "accucut-$chosen-weekly.manifest.json") | Should -BeTrue
+        (Get-AccucutBackupCopy -Directory $script:Paths.Backups | Where-Object { $_.Name -eq "accucut-$chosen-weekly.age" }).Verified | Should -BeTrue
+        $made.Pruned | Should -Be 0
+        $script:Rows[0].Result.status | Should -Be 'ok'
+        $script:Rows[0].Result.pruned | Should -Be 0
+    }
+
+    It 'without -SkipPrune the same copy, in the same place, is pruned by the backup (the exposure that -SkipPrune closes for the restore)' {
+        $chosen = '20200105-020000'
+        New-FakeCopy -Directory $script:Paths.Backups -Stamp $chosen
+        foreach ($i in 1..3) { New-FakeCopy -Directory $script:Paths.Backups -Stamp ([datetime]::UtcNow.AddDays(-7 * $i).ToString('yyyyMMdd-HHmmss')) }
+        $made = Invoke-AccucutBackup -Paths $script:Paths -Settings $script:Settings -Program $script:Program -Reason 'release' -ReleaseTag 't1'
+        Test-Path -LiteralPath (Join-Path $script:Paths.Backups "accucut-$chosen-weekly.age") | Should -BeFalse
+        $made.Pruned | Should -Be 1
+    }
+
     It 'never prunes one of the newest 4 copies, even when all of them are older than 2 years' {
         $stamps = '20200105-020000', '20200112-020000', '20200119-020000'
         foreach ($stamp in $stamps) { New-FakeCopy -Directory $script:Paths.Backups -Stamp $stamp }
