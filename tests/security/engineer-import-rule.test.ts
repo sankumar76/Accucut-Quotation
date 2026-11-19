@@ -101,6 +101,8 @@ const SERVICES = {
     'calculation-service',
     // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
     'cancel-approval-service',
+    // STORY-08.02 (NFR-002): the formula editor reads formulas, rate names and a stored calculation, and saves a version with the Admin's password. Admin only; no Engineer view imports it.
+    'config-edit-service',
     'config-read-service',
     'config-service',
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
