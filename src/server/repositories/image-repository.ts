@@ -43,6 +43,14 @@ export interface StoredImage {
   readonly bytes: Uint8Array;
 }
 
+/** A picture read for the export: its ID too, because the rows are matched to the files by it. */
+export interface ExportedImage extends StoredImage {
+  readonly id: string;
+}
+
+/** The most pictures one `readMany` takes: the export reads its pictures in batches of this many (STORY-07.02 AC-4, NFR-005), so no read holds more than 50 files of up to 200 KB at once. */
+export const READ_MANY_LIMIT = 50;
+
 export interface ImageRepository {
   /**
    * Stores the picture for the estimate, in the caller's transaction, or finds the one this estimate already has with the same bytes (`sha256`): the same file added again is not stored
@@ -55,12 +63,25 @@ export interface ImageRepository {
   findOwner(imageId: string): Promise<ImageOwner | null>;
   /** The stored type and bytes of a picture, or null (unknown, or not an ID). Call it only after `findOwner` said the caller may see it. */
   readImage(imageId: string): Promise<StoredImage | null>;
+  /**
+   * The stored type and bytes of up to `READ_MANY_LIMIT` pictures **of this estimate** (STORY-07.02 AC-4), in one read. An ID that is not a UUID, that is unknown or that belongs to another estimate is left out
+   * of the answer, so a picture is never read through an estimate that does not own it. Each file's bytes are copied into a buffer of their own, which the export can hand to its thread by transfer. More
+   * than `READ_MANY_LIMIT` IDs is a mistake of the caller (a `RangeError`), never a larger read. Call it only for a Lead or an Admin who may export the estimate.
+   */
+  readMany(estimateId: string, imageIds: ReadonlyArray<string>): Promise<ExportedImage[]>;
+  /**
+   * The stored type of each of these pictures **of this estimate**, without their bytes (STORY-07.02: the summary counts the pictures the file can hold). An ID that is not a UUID, that is unknown or that
+   * belongs to another estimate is left out.
+   */
+  findMimes(estimateId: string, imageIds: ReadonlyArray<string>): Promise<Array<{ readonly id: string; readonly mime: ImageMime }>>;
 }
 
 const PICTURE_SELECT = { id: true, fileName: true, sizeBytes: true } as const;
 const PICTURE_ROW = z.strictObject({ id: z.string(), fileName: z.string(), sizeBytes: z.number().int() });
 const OWNER_ROWS = z.array(z.strictObject({ estimateId: z.string(), engineerId: z.string() }));
 const IMAGE_ROW = z.strictObject({ mime: z.enum(IMAGE_MIMES), bytes: z.instanceof(Uint8Array) });
+const MANY_ROW = z.strictObject({ id: z.string(), mime: z.enum(IMAGE_MIMES), bytes: z.instanceof(Uint8Array) });
+const MIME_ROW = z.strictObject({ id: z.string(), mime: z.enum(IMAGE_MIMES) });
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -104,5 +125,26 @@ export function createImageRepository(db: PrismaClient): ImageRepository {
         const row = await db.partImage.findUnique({ where: { id: imageId }, select: { mime: true, bytes: true } });
         return row === null ? null : IMAGE_ROW.parse(row);
       }),
+
+    findMimes: (estimateId, imageIds) =>
+      withDatabaseErrors(async () => {
+        const ids = imageIds.filter(isUuid);
+        if (!isUuid(estimateId) || ids.length === 0) return [];
+        const rows = await db.partImage.findMany({ where: { estimateId, id: { in: ids } }, select: { id: true, mime: true } });
+        return rows.map((row) => MIME_ROW.parse(row));
+      }),
+
+    readMany: (estimateId, imageIds) => {
+      if (imageIds.length > READ_MANY_LIMIT) throw new RangeError(`At most ${String(READ_MANY_LIMIT)} pictures are read at once.`);
+      return withDatabaseErrors(async () => {
+        const ids = imageIds.filter(isUuid);
+        if (!isUuid(estimateId) || ids.length === 0) return [];
+        const rows = await db.partImage.findMany({ where: { estimateId, id: { in: ids } }, select: { id: true, mime: true, bytes: true } });
+        return rows.map((row) => {
+          const parsed = MANY_ROW.parse(row);
+          return { id: parsed.id, mime: parsed.mime, bytes: new Uint8Array(parsed.bytes) };
+        });
+      });
+    },
   };
 }

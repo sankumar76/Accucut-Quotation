@@ -95,6 +95,8 @@ const SERVICES = {
     // STORY-05.09: the masters one calculation reads (the customer's rates, every material's price and the exchange rates), in the caller's transaction. Restricted in full, like the service that reads it.
     'calculation-masters',
     'calculation-service',
+    // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
+    'cancel-approval-service',
     // STORY-08.02 (NFR-002): the formula editor reads formulas, rate names and a stored calculation, and saves a version with the Admin's password. Admin only; no Engineer view imports it.
     'config-edit-service',
     'config-read-service',
@@ -102,6 +104,8 @@ const SERVICES = {
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
     'cost-details-service',
     'customer-service',
+    // STORY-06.08 and STORY-06.12: the check of a customer or a material deleted after the approval, shared by unlock and cancel approval. It reads the estimate's customer and materials, for the Lead's and the Admin's services only.
+    'deleted-masters',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
@@ -117,6 +121,8 @@ const SERVICES = {
     // STORY-06.11 (NFR-002): the count of what changed in the rates since a calculation reads the stored snapshot and the masters now, for the unlock preview and the Lead's notice only.
     'rate-changes',
     'rate-name-rules',
+    // STORY-06.13 (NFR-002): remove price reads the approval's price (it is in the audit entry that keeps it), for the Admin only; no Engineer view imports it.
+    'remove-price-service',
     // STORY-02.09: the Admin's Settings page (the last good backup and the server disk). It holds no cost data, but it is Admin only and no Engineer view imports it.
     'settings-service',
     // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a

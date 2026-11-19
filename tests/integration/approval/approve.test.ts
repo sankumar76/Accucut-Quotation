@@ -319,7 +319,9 @@ describe('AC-9 (AQP-321 AC-4): BO is the approvals row, so clearing the calculat
     expect((await review.getCosts(lead(), estimateId)).approval).toBeNull();
   });
 
-  it('BO is the latest approval that has not been removed: an earlier one stays on record and a removed one is not shown', async () => {
+  // STORY-06.13 AC-3 changed this rule: BO is the LATEST approval, and when its price was removed BO is "Not set yet". Before, the latest row that had not been removed was BO, so removing the latest price would have
+  // brought an earlier, replaced price back on every screen.
+  it('BO is the latest approval: an earlier one stays on record, and when the latest one is removed BO is "Not set yet" and the earlier one does not come back', async () => {
     const { estimateId, calculationId } = await approvedEstimate('500.00');
     // A later cycle, as a new approval after an unlock would make (06.08 sets the unlock columns of the first; here the owner stands in for it).
     await db.owner.query("UPDATE approvals SET unlocked_by = $2::uuid, unlocked_at = now(), unlock_reason = 'Invented reason' WHERE estimate_id = $1::uuid", [estimateId, db.personId]);
@@ -330,7 +332,10 @@ describe('AC-9 (AQP-321 AC-4): BO is the approvals row, so clearing the calculat
     ]);
     expect((await review.getCosts(lead(), estimateId)).approval?.price).toBe('600.00');
     await db.owner.query("UPDATE approvals SET removed_by = $2::uuid, removed_at = now() WHERE estimate_id = $1::uuid AND approved_price = 600", [estimateId, db.personId]);
-    expect((await review.getCosts(lead(), estimateId)).approval?.price).toBe('500.00');
+    const view = await review.getCosts(lead(), estimateId);
+    expect(view.approval).toBeNull();
+    expect(view.priceRemoved).toMatchObject({ byName: expect.any(String) });
+    expect(JSON.stringify(view.priceRemoved)).not.toContain('600');
     expect(await approvalCount(db, estimateId)).toBe(2);
   });
 });

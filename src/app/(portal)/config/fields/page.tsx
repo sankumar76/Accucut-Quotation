@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
 
 import { FieldsScreen } from '@/components/features/config/fields-screen';
 import { FIELDS_META_DESCRIPTION, FIELDS_TITLE } from '@/components/features/config/fields-texts';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: FIELDS_TITLE, description: FIELDS_META_DESCRIPTION };
+export const metadata = pageMetadata(FIELDS_TITLE, FIELDS_META_DESCRIPTION);
 
 /**
  * SCR-17 "Fields and formulas" (STORY-08.01 AC-1, AC-4, AC-5): the Admin and the Lead read every field with its kind and formula. The page checks the role first, with its

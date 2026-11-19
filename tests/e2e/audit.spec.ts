@@ -192,15 +192,18 @@ test.describe('the filters (AC-6)', () => {
     await expect(page.locator('[data-entry-id]:visible')).toHaveCount(0);
   });
 
-  test('a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back', { tag: '@one-width' }, async ({ page }) => {
+  test('a date window before any entry shows "No entries match", with the way back, and clearing the filters brings the list back', { tag: '@one-width' }, async ({ page }) => {
     const person = await addPerson(page, 'empty');
     await openAudit(page);
+    // Who and Event are on a kind the Admin of these tests writes (every person added is a "User change" entry of E2E Admin), so the list is not empty by them: it is empty because the window ends years before the first
+    // entry the portal could have made. That holds whichever stories write which events, now and later (GitHub #491, SQR-01 of the AQP-329 review).
     await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
+    await expect(entryOf(page, person.name)).toHaveCount(1);
     await page.getByLabel('From', { exact: true }).fill('2020-01-01');
-    await page.getByLabel('To', { exact: true }).fill('2036-01-01');
-    // "Approval cancelled", not "Approval" or "Unlock": the approval is raised since STORY-06.06, the unlock since STORY-06.08, and the cancel is STORY-06.12's.
-    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Approval cancelled' });
+    await page.getByLabel('To', { exact: true }).fill('2020-01-02');
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
+    await expect(entryOf(page, person.name)).toHaveCount(0);
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
     // Neither empty state shows the count line (ux-spec v0.16).
     await expect(page.getByText(/Showing \d+ of \d+ entr/)).toHaveCount(0);
@@ -342,21 +345,42 @@ test.describe('by keyboard (AC-9)', () => {
     await openAudit(page);
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
-    // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
-    // first, "Approval" second, "Unlock" third, "Price override" fourth and "Approval cancelled" fifth; typing the letters instead depends on the pause between keys, which a busy machine stretches.
-    // "Approval", "Unlock" and "Price override" hold entries since STORY-06.06, STORY-06.08 and STORY-06.07 (the tests of the same run write them), so the empty result is the one of "Approval cancelled",
-    // whose event is declared and not yet written: STORY-06.12.)
-    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled']) {
+    // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is first, then Approval, Unlock, Price override, Approval cancelled, Price removed, Quantity
+    // warning, Master data edit, User change, Task change and Configuration change; typing the letters instead depends on the pause between keys, which a busy machine stretches.) The result must follow the choice, and it must not depend on which of
+    // these kinds the other tests of the run have written (GitHub #491: no kind is left that no story writes): the person this test added is a "User change" entry, so it is on the list under "All events" and under
+    // "User change" and under none of the others.
+    await expect(entryOf(page, person.name)).toHaveCount(1);
+    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled', 'price_removed', 'quantity_warning', 'master_data']) {
       await page.keyboard.press('ArrowDown');
       await expect(event).toHaveValue(value);
+      // The list has answered when it no longer shows this person: either another kind's entries or the empty state.
+      await expect(entryOf(page, person.name)).toHaveCount(0);
     }
-    await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('user_change');
+    await expect(entryOf(page, person.name)).toHaveCount(1);
+    // "Task change" (STORY-04.07) and "Configuration change" (STORY-08.02) are the last kinds: this person's entry is neither, so the list answers with none for each, and two ArrowUp come back to "User change".
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('task_change');
+    await expect(entryOf(page, person.name)).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('config_change');
+    await expect(entryOf(page, person.name)).toHaveCount(0);
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(event).toHaveValue('user_change');
+    await expect(entryOf(page, person.name)).toHaveCount(1);
 
+    // The way back by keyboard: a date field typed to a window before any entry reaches the empty state, and Clear filters brings the list back.
+    const to = page.getByLabel('To', { exact: true });
+    await to.fill('2020-01-02');
+    await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     const clear = page.getByRole('button', { name: 'Clear filters' });
     await clear.focus();
     await clear.press('Enter');
     await expect(entryOf(page, person.name)).toHaveCount(1);
     await expect(event).toHaveValue('');
+    await expect(to).toHaveValue('');
   });
 
   test('Tab runs from Who to Event to From; a date field is three parts (day, month, year) to the keyboard, then comes To', async ({ page }) => {

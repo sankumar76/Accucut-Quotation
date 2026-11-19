@@ -8,6 +8,14 @@
 
 export const PLACEHOLDER_NUMBER_PATTERN = /^\d+\.37$/;
 
+/**
+ * The invented phone number (NFR-028, NFR-006; STORY-10.12 AC-1). Every phone number in a fixture, a seed placeholder or a
+ * document is written as `+99 555 01nn`: country code 99 is not assigned to any country, and 555 01nn is the block the North
+ * American numbering plan reserves for fiction. It is the form the existing fixtures already use (`+99 555 0142`), so no real
+ * person's number can match it. One pattern, as with the numbers above: a second one would be a second thing to keep honest.
+ */
+export const PLACEHOLDER_PHONE_PATTERN = /^\+99 555 01\d{2}$/;
+
 /** A string that is a number once any sign and thousands separators are removed, such as "12.50". */
 const NUMERIC_STRING = /^-?\d[\d,]*(\.\d+)?$/;
 

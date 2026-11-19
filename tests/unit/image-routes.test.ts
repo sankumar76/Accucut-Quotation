@@ -142,8 +142,8 @@ describe('AC-2: what is refused, and nothing is stored', () => {
     }
   });
 
-  it('refuses a text file renamed .png, an SVG and an empty file with 415 and the SCR-05 words', async () => {
-    for (const bytes of [PLAIN_TEXT, SVG_TEXT, Buffer.alloc(0)]) {
+  it('refuses a text file renamed .png, an SVG, an empty file and a WebP the browser did not convert with 415 and the SCR-05 words', async () => {
+    for (const bytes of [PLAIN_TEXT, SVG_TEXT, Buffer.alloc(0), smallWebp()]) {
       const response = await send(bytes, 'photo.png');
       expect(response.status).toBe(415);
       expect(record.parse(await response.json())).toMatchObject({ status: 415, code: 'PICTURE_TYPE_REFUSED', title: 'Only PNG, JPG, GIF or WebP pictures are accepted.' });
@@ -284,7 +284,6 @@ describe('AC-5: GET /images/{id}', () => {
     ['PNG', fresh(), 'image/png'],
     ['JPEG', smallJpeg(), 'image/jpeg'],
     ['GIF', smallGif(), 'image/gif'],
-    ['WebP', smallWebp(), 'image/webp'],
   ] as const)('serves a %s with its own type', async (_name, bytes, mime) => {
     const id = await addedPicture(bytes, 'file.bin');
     expect((await fetchImage(id)).headers.get('content-type')).toBe(mime);

@@ -4,18 +4,20 @@ import { createConfigRepository } from '@/server/repositories/config-repository'
 import { buildWorkbook } from '@/server/export/build-workbook';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createExportService, type ExportService } from '@/server/services/export-service';
-import { createConfigVersionCache, getCurrentVersion } from '@/server/services/config-service';
+import { createImageRepository } from '@/server/repositories/image-repository';
+import { createConfigVersionCache, getCurrentVersion, getVersionById } from '@/server/services/config-service';
 import { exportFileSchema, exportSummarySchema } from '@/server/views/schemas/export';
 
-import { completePartInputs } from '../../support/complete-part';
 import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
+import { inProcessBuilder } from '../../support/in-process-builder';
 import { loadWorkbook } from '../../support/xlsx-parts';
 
 /**
  * STORY-07.01 AC-1, AC-2, AC-3 and AC-6 (FR-066, FR-071; NFR-002; architecture section 4.6) against real PostgreSQL in a throwaway database, as the **runtime role**: the export repository reads the task
- * code and the customer's name of an estimate, and the export service builds the workbook of the registry's columns from the version in force, which is read back with ExcelJS (header row, widths,
- * centring, number formats from the registry, nothing below the header). An Engineer is refused before anything is read. Every name and number is invented.
+ * code and the customer's name of an estimate, and the export service builds the workbook of the registry's columns from the version the estimate's calculation was made with, which is read back with
+ * ExcelJS (header row, widths, centring, number formats from the registry). Since STORY-07.02 the file holds a row for each part below the header, so the estimate is calculated first. An Engineer is
+ * refused before anything is read. Every name and number is invented.
  */
 
 let db: CalculationDatabase;
@@ -32,8 +34,12 @@ beforeAll(async () => {
   exporter = createExportService({
     header: createExportRepository(db.prisma),
     nodes: db.nodes,
-    configuration: { current: () => getCurrentVersion(configurations, cache) },
-    build: buildWorkbook,
+    calculations: db.calculations,
+    approvals: db.approvals,
+    images: createImageRepository(db.prisma),
+    configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
+    transactions: db.transactions,
+    builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
 }, 120_000);
@@ -69,9 +75,9 @@ describe('the export repository, as the runtime role', () => {
 });
 
 describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a Lead and an Admin', () => {
-  it('builds the registry\'s 67 columns in row 1 with its widths and formats, centred, and nothing below, named after the task and the IST date', async () => {
-    const estimateId = await db.addEstimate({ engineer: true, withCustomer: true });
-    await db.addPart(estimateId, { inputs: { ...completePartInputs(), [idOf('D')]: 'Invented part' } });
+  it('builds the registry\'s 67 columns in row 1 with its widths and formats, centred, a row below for the part, named after the task and the IST date', async () => {
+    const estimateId = await db.addCompleteEstimate();
+    await db.service.calculate(engineer(), estimateId);
     const header = await headerAsStored(estimateId);
     const configurations = createConfigRepository(db.prisma);
     const { document } = await getCurrentVersion(configurations, createConfigVersionCache());
@@ -81,7 +87,8 @@ describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a L
       expect(file.fileName).toMatch(new RegExp(`^Quotation_[A-Za-z0-9_-]+_${header.code}_2026-11-14\\.xlsx$`));
       const sheet = defined((await loadWorkbook(file.bytes)).getWorksheet('Quotation'));
       expect(sheet.columnCount).toBe(document.fields.length);
-      expect(sheet.actualRowCount).toBe(1);
+      // The header, the one part, and the footer of the total Tool Cost two rows below it (row 4 is empty): 3 rows with values (STORY-07.03).
+      expect(sheet.actualRowCount).toBe(3);
       for (const field of [...document.fields].sort((a, b) => a.position - b.position)) {
         const column = sheet.getColumn(field.position);
         expect(column.width, field.key).toBe(field.width);

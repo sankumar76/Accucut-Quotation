@@ -99,6 +99,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
     expect(problems).toEqual([]);
     expect(routes).toEqual([
       { pattern: '/', roles: ['ADMIN'] },
+      { pattern: '/about', roles: ['ADMIN'] },
       { pattern: '/account', roles: ['ADMIN'] },
       { pattern: '/assign', roles: ['ADMIN'] },
       { pattern: '/audit', roles: ['ADMIN'] },

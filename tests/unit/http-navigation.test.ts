@@ -27,11 +27,12 @@ describe('the menu of each role, from the manifest as it is now', () => {
     // Fields and formulas (STORY-08.01) is in Configuration, after the masters: the Admin's with that label, and a Lead's, marked as view only (AC-4). An Engineer is never shown it.
     const formulas = role === 'LEAD' ? ['Fields and formulas (view only)'] : [];
     const assign = role === 'ENGINEER' ? [] : ['Assign task'];
-    expect(labels(role)).toEqual([role === 'ENGINEER' ? 'My tasks' : 'Task queue', ...assign, 'Home', ...admin, ...formulas, 'Design system']);
+    // About (STORY-01.08) is every role's, in Help, which comes after Administration and before the Review group.
+    expect(labels(role)).toEqual([role === 'ENGINEER' ? 'My tasks' : 'Task queue', ...assign, 'Home', ...admin, ...formulas, 'About', 'Design system']);
   });
 
   it('a production build does not list the design-system page', () => {
-    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Assign task', 'Home', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Users', 'Settings', 'Audit log']);
+    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Assign task', 'Home', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Users', 'Settings', 'Audit log', 'About']);
   });
 
   it('every entry has a fixed address, a label and an icon, and an address that is a page of the manifest', () => {

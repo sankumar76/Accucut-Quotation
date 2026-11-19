@@ -34,7 +34,7 @@ export const pictureUrl = (imageId: string): string => `/api/v1/images/${encodeU
 
 /**
  * `PUT /api/v1/estimates/{id}/nodes/{nodeId}/image`: one file as a multipart form under the name `file`. The browser sets the content type and its boundary, and its own `Origin`.
- * A refusal carries the server's words (`title`): 413 for a picture that is too large, 415 for one that is not a PNG, JPEG, GIF or WebP by its content.
+ * A refusal carries the server's words (`title`): 413 for a picture that is too large, 415 for one that is not a PNG, JPEG or GIF by its content (a WebP the browser did not convert, sent by another client, included).
  */
 export function sendPicture(estimateId: string, nodeId: string, file: File, doFetch: Fetch = fetch): Promise<Outcome<PartPictureAnswer>> {
   const form = new FormData();

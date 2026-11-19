@@ -11,6 +11,8 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 import { fixedForbiddenProblem, scanResponse } from '../support/scanner';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
+import { seedFieldAt } from '../support/seed-config';
+import { plantCalculation, clearPlantedCalculation } from '../support/plant-calculation';
 import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
 /**
@@ -63,10 +65,12 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   estimate().customerId = null;
+  clearPlantedCalculation();
 });
 
 describe('AC-2, AC-4: the file', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('as %s: 200, an attachment of the right MIME type and name, `no-store`, a request ID, and a workbook of columns A to BO', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s: 200, an attachment of the right MIME type and name, `no-store`, a request ID, and a workbook of columns A to BO and the row of the part', async (role) => {
+    const stored = plantCalculation();
     harness.signInAs(role);
     const response = await getFile(estimate().id);
     expect(response.status).toBe(200);
@@ -80,10 +84,14 @@ describe('AC-2, AC-4: the file', () => {
     const sheet = defined((await loadWorkbook(bytes)).getWorksheet('Quotation'));
     expect(sheet.columnCount).toBe(67);
     expect(sheet.getCell('A1').value).toBe('Sl. No');
+    // The row of the part below the header: its Sl. No as text and its unit price, the stored figure (AC-1).
+    expect(sheet.getCell('A2').value).toBe('1');
+    expect(sheet.getCell('BG2').value).toBe(Number(defined(stored.outputs[seedFieldAt('BG').id])));
     expect(readXlsxParts(bytes).has('xl/workbook.xml')).toBe(true);
   });
 
   it('names the file after the customer: spaces become underscores and every other character outside A-Z a-z 0-9 _ - is removed', async () => {
+    plantCalculation();
     const customer = defined(harness.masters.customers[0]);
     const original = customer.name;
     customer.name = 'Acme Tools & Dies, "Ltd"\r\n';
@@ -118,6 +126,24 @@ describe('AC-2, AC-4: the file', () => {
     expect(fixed).toEqual({ type: 'about:blank', title: 'Something went wrong on our side.', status: 500, code: 'EXPORT_THREAD_TIMEOUT' });
   });
 
+  it('AC-1: an estimate that was never calculated is 409 NOT_CALCULATED with fixed words and no file (architecture section 4.6)', async () => {
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(record.parse(await response.json())).toMatchObject({ status: 409, code: 'NOT_CALCULATED', title: 'There is no file to download yet. This estimate has not been calculated. The download stays off until a calculation is current.' });
+  });
+
+  it('AC-2: an estimate whose inputs changed after Calculate is 409 EXPORT_OUT_OF_DATE with its own words and no file, and the stale figures are not read', async () => {
+    plantCalculation();
+    estimate().inputsRevision += 1;
+    const read = vi.spyOn(harness.reviewReads, 'findExportFigures');
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(record.parse(await response.json())).toMatchObject({ status: 409, code: 'EXPORT_OUT_OF_DATE', title: 'The total is cleared because an input changed. There is no file to download until you press Recalculate.' });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('an estimate that does not exist and an ID that is no UUID are the same 404, with no file', async () => {
     const answers = await Promise.all(
       [UNKNOWN_ID, 'not-an-id'].map(async (id) => {
@@ -133,7 +159,7 @@ describe('AC-2, AC-4: the file', () => {
 });
 
 describe('AC-6: the summary', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s: the name, the counts, the first and last column and the rows, through the strict schema, with no figure while the estimate is not calculated', async (role) => {
     harness.signInAs(role);
     const response = await getSummary(estimate().id);
     expect(response.status).toBe(200);
@@ -145,6 +171,9 @@ describe('AC-6: the summary', () => {
       pictureCount: 0,
       columns: { first: 'A', last: 'BO', count: 67 },
       rows: [{ slNo: '1', name: '', count: null }],
+      // Never calculated: the state says so and no figure of any kind is in the answer (STORY-07.03 AC-8).
+      state: 'none',
+      figures: null,
     });
   });
 
@@ -182,6 +211,18 @@ describe('AC-3 (NFR-002): an Engineer and a signed-out caller get nothing', () =
     const spy = vi.spyOn(harness.exportReads, 'findHeader');
     expect((await call(estimate().id)).status).toBe(401);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('nobody signed in is 401 and not a 409, so the state of an estimate is not told to a stranger (AC-1, AC-2)', async () => {
+    harness.signInAs(null);
+    const never = await getFile(estimate().id);
+    expect(never.status).toBe(401);
+    expect(JSON.stringify(await never.json())).not.toMatch(/NOT_CALCULATED|EXPORT_OUT_OF_DATE|no file to download/);
+    plantCalculation();
+    estimate().inputsRevision += 1;
+    const stale = await getFile(estimate().id);
+    expect(stale.status).toBe(401);
+    expect(JSON.stringify(await stale.json())).not.toMatch(/NOT_CALCULATED|EXPORT_OUT_OF_DATE|no file to download/);
   });
 
   it('the service refuses an Engineer by itself, so a caller that skipped the route still reads nothing and builds nothing', async () => {

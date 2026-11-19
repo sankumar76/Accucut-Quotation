@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { BrandSection } from '@/components/features/design-system/brand-section';
@@ -10,14 +9,11 @@ import { SpacingSection, TypeSection } from '@/components/features/design-system
 import { PageHeader } from '@/components/shared/page-header';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
 const DESCRIPTION = 'Design tokens, brand, components and states used on every screen of the Accucut Quotation Portal.';
 
-export const metadata: Metadata = {
-  title: 'Design system',
-  description: DESCRIPTION,
-  openGraph: { title: 'Design system · Accucut Quotation Portal', description: DESCRIPTION },
-};
+export const metadata = pageMetadata('Design system', DESCRIPTION);
 
 /**
  * SCR-00, the single reference for tokens, brand, components and state patterns (FR-085, FR-086, FR-088).

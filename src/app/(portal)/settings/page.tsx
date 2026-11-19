@@ -1,11 +1,11 @@
-import type { Metadata } from 'next';
 
 import { SettingsScreen } from '@/components/features/settings/settings-screen';
 import { SETTINGS_META_DESCRIPTION, SETTINGS_TITLE } from '@/components/features/settings/texts';
 import { getSettingsService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = { title: SETTINGS_TITLE, description: SETTINGS_META_DESCRIPTION };
+export const metadata = pageMetadata(SETTINGS_TITLE, SETTINGS_META_DESCRIPTION);
 
 /**
  * SCR-15 "Settings", the Last backup line (STORY-02.09 AC-1 to AC-6): the Admin sees the last good backup and the server disk, read-only. The page checks the role first, with its own

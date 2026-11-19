@@ -1,4 +1,4 @@
-import type { UnlockRecord } from '../../src/server/repositories/approval-repository';
+import type { CancelRecord, UnlockRecord } from '../../src/server/repositories/approval-repository';
 import type { NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CalculationRepository, FigureBasis, ReviewFigures, StoredValues, StoredWarning } from '../../src/server/repositories/calculation-repository';
 import type { ConfigVersion } from '../../src/server/services/config-service';
@@ -73,6 +73,8 @@ export interface ReviewWorldOptions {
   readonly approval?: {
     readonly price: string;
     readonly approverName?: string;
+    /** The Engineer whose task it is. Absent: Invented Priya. */
+    readonly engineerName?: string;
     /** The total the price was set against, rupees and paise; absent: the price itself (an approval at the calculated total). */
     readonly calculatedTotal?: string;
     /** Absent: not an override. */
@@ -80,7 +82,11 @@ export interface ReviewWorldOptions {
     /** The reason given with an override; absent: none. */
     readonly reason?: string;
     readonly unlock?: UnlockRecord;
+    /** The cancel of the approval (STORY-06.12). Absent: not cancelled. */
+    readonly cancel?: CancelRecord;
   };
+  /** The price of the latest approval was removed (STORY-06.13): who and when, and no price. It reads only while there is no approval standing. Absent: not removed. */
+  readonly priceRemoved?: { readonly removedAt: Date; readonly byName: string };
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
   readonly madeBy?: string;
@@ -97,7 +103,7 @@ export interface ReviewWorld {
   readonly service: EstimateReviewService;
   readonly dependencies: EstimateReviewDependencies;
   readonly nodes: NodeRecord[];
-  readonly reads: { readonly basis: ReadLog; readonly figures: ReadLog; readonly nodes: ReadLog; readonly approvals: ReadLog; readonly access: ReadLog; readonly snapshot: ReadLog };
+  readonly reads: { readonly basis: ReadLog; readonly figures: ReadLog; readonly nodes: ReadLog; readonly approvals: ReadLog; readonly removals: ReadLog; readonly access: ReadLog; readonly snapshot: ReadLog };
   /** The masters the notice reads, with how many reads of each were made (STORY-06.11 AC-7). */
   readonly masters: FixtureMasters;
 }
@@ -131,7 +137,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
     inputsRevision,
     calculation: calculated ? { id: INVENTED_CALCULATION_ID, inputsRevision: CALCULATION_REVISION, configVersionId: INVENTED_VERSION_ID, createdAt: REVIEW_CALCULATED_AT } : null,
   };
-  const reads = { basis: readLog(), figures: readLog(), nodes: readLog(), approvals: readLog(), access: readLog(), snapshot: readLog() };
+  const reads = { basis: readLog(), figures: readLog(), nodes: readLog(), approvals: readLog(), removals: readLog(), access: readLog(), snapshot: readLog() };
   const masters = mastersNow(options.mastersNow);
   const calculations: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findMasterSnapshot'> = {
     findFigureBasis: (id) => {
@@ -148,6 +154,10 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
     },
   };
   const approvals: EstimateReviewDependencies['approvals'] = {
+    findLatestRemoval: (id) => {
+      reads.removals.record(id);
+      return Promise.resolve(options.priceRemoved === undefined || id !== REVIEW_ESTIMATE_ID ? null : options.priceRemoved);
+    },
     findLatestApproval: (id) => {
       reads.approvals.record(id);
       const { approval } = options;
@@ -160,10 +170,12 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
               approvedPrice: approval.price,
               approvedAt: REVIEW_APPROVED_AT,
               approverName: approval.approverName ?? 'Invented Approver',
+              engineerName: approval.engineerName ?? 'Invented Priya',
               calculatedTotal: approval.calculatedTotal ?? approval.price,
               isOverride: approval.isOverride ?? false,
               overrideReason: approval.reason ?? null,
               unlock: approval.unlock ?? null,
+              cancel: approval.cancel ?? null,
             },
       );
     },
