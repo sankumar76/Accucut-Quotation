@@ -16,6 +16,7 @@ import {
   type BackupWatchStore,
   type StatfsFigures,
 } from '@/server/jobs/backup-watch';
+import { runJob, type FailedJobRun, type JobLogFields, type JobLogLevel } from '@/server/jobs/run-job';
 
 const cron = vi.hoisted(() => ({ schedule: vi.fn() }));
 vi.mock('node-cron', () => ({ schedule: cron.schedule }));
@@ -52,9 +53,9 @@ function harness(volumes: Record<string, StatfsFigures>, latestGoodBackup: Date 
     latestGoodBackupAt(): Promise<Date | null> {
       return this.failLookup ? Promise.reject(new Error('connection to server at "10.1.2.3" failed')) : Promise.resolve(this.latest);
     },
-    recordRun(run: BackupWatchRun): Promise<void> {
+    recordRun(run: BackupWatchRun | FailedJobRun): Promise<void> {
       if (this.failWrite) return Promise.reject(new Error('permission denied for table job_runs'));
-      recorded.push(run);
+      recorded.push(run as BackupWatchRun);
       return Promise.resolve();
     },
   };
@@ -202,49 +203,49 @@ describe('runBackupWatch: the row (AC-5, AC-9)', () => {
   });
 });
 
-describe('performBackupWatch: one scheduled run never throws, and says what matters (AC-5)', () => {
-  it('writes its own row and logs the free percentage at info when all is well', async () => {
+describe('performBackupWatch: one scheduled run says what matters to the wrapper, and throws when the database fails (AC-5; STORY-10.09a AC-3)', () => {
+  it('writes its own row and reports the free percentage at info when all is well', async () => {
     const test = harness({ 'C:/': volume(42) });
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
     expect(test.recorded).toHaveLength(1);
-    expect(lines).toEqual([['backup-watch: 42 % of the disk is free', 'info']]);
+    expect(outcome).toEqual({ summary: 'backup-watch: 42 % of the disk is free', level: 'info' });
   });
 
-  it('logs at error, and still writes the row, when there has been no good backup for more than 8 days', async () => {
+  it('reports at error, and still writes the row, when there has been no good backup for more than 8 days', async () => {
     const test = harness({ 'C:/': volume(42) }, new Date(NOW.getTime() - 9 * DAY));
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch: 42 % of the disk is free; NO GOOD BACKUP in the last 8 days', 'error']]);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch: 42 % of the disk is free; NO GOOD BACKUP in the last 8 days', level: 'error' });
     expect(test.recorded[0]?.result.backupLate).toBe(true);
   });
 
-  it('logs a failed reading at error and writes the failed row', async () => {
+  it('reports a failed reading at error and writes the failed row', async () => {
     const test = harness({});
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch failed: the free space of the backup volume could not be read', 'error']]);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch failed: the free space of the backup volume could not be read', level: 'error' });
     expect(test.recorded[0]?.result.status).toBe('failed');
   });
 
   it('says it is skipped, and writes nothing, when no volume is configured', async () => {
     const test = harness({});
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({}, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch skipped: neither PG_DATA_VOLUME nor BACKUP_VOLUME is set', undefined]]);
+    const outcome = await performBackupWatch({}, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch skipped: neither PG_DATA_VOLUME nor BACKUP_VOLUME is set' });
     expect(test.recorded).toHaveLength(0);
   });
 
-  it('does not throw, and does not repeat the database error, when the database cannot be read or written', async () => {
+  it('throws when the database cannot be read or written, and through the wrapper logs the class of the error only, never the database error', async () => {
     const readFails = harness({ 'C:/': volume(42) });
     readFails.store.failLookup = true;
     const writeFails = harness({ 'C:/': volume(42) });
     writeFails.store.failWrite = true;
     for (const test of [readFails, writeFails]) {
-      const lines: string[] = [];
-      await expect(performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message) => lines.push(message))).resolves.toBeUndefined();
-      expect(lines.at(-1)).toBe('backup-watch could not read or write the job record');
-      expect(lines.join('\n')).not.toMatch(/10\.1\.2\.3|permission denied|job_runs/);
+      await expect(performBackupWatch({ backupVolume: 'C:/' }, test.dependencies)).rejects.toThrow();
+      const lines: Array<[string, JobLogLevel | undefined, JobLogFields | undefined]> = [];
+      const log = (message: string, level?: JobLogLevel, fields?: JobLogFields): void => void lines.push([message, level, fields]);
+      await expect(
+        runJob({ name: 'backup-watch', log, now: () => NOW, recordFailure: (run) => test.store.recordRun(run) }, () => performBackupWatch({ backupVolume: 'C:/' }, test.dependencies)),
+      ).resolves.toBeUndefined();
+      expect(lines.filter(([, level]) => level === 'error').map(([message]) => message)).toContain('backup-watch failed after 0 ms');
+      expect(JSON.stringify(lines)).not.toMatch(/10\.1\.2\.3|permission denied|job_runs/);
     }
   });
 });
@@ -281,7 +282,7 @@ describe('scheduleBackupWatch: daily at 09:00 IST, only when a volume is named (
     cron.schedule.mockReturnValue({ stop: vi.fn() });
     fsMock.statfs.mockResolvedValue({ bsize: 4096n, blocks: 1000n, bavail: 400n });
     const recorded: BackupWatchRun[] = [];
-    const recordingStore: BackupWatchStore = { latestGoodBackupAt: () => Promise.resolve(new Date(NOW.getTime() - DAY)), recordRun: (run) => Promise.resolve(void recorded.push(run)) };
+    const recordingStore: BackupWatchStore = { latestGoodBackupAt: () => Promise.resolve(new Date(NOW.getTime() - DAY)), recordRun: (run) => Promise.resolve(void recorded.push(run as BackupWatchRun)) };
     scheduleBackupWatch({ backupVolume: 'c:\\' }, recordingStore, () => undefined, () => NOW);
     const callback = cron.schedule.mock.calls[0]?.[1] as () => Promise<void>;
     await callback();

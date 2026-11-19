@@ -15,7 +15,7 @@ import { createEstimateNodeRepository } from './repositories/estimate-node-repos
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
-import { createJobRunRepository } from './repositories/job-run-repository';
+import { createHeartbeatRepository, createJobRunRepository, type HeartbeatRepository } from './repositories/job-run-repository';
 import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
@@ -79,6 +79,7 @@ let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
 let mailService: MailService | undefined;
+let heartbeatRepository: HeartbeatRepository | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -88,6 +89,12 @@ function runtimeClient() {
 export function getUserRepository(): UserRepository {
   userRepository ??= createUserRepository(runtimeClient());
   return userRepository;
+}
+
+/** The worker's heartbeat, as `GET /api/health` reads it (STORY-10.09a AC-6). The web process only reads it: the worker writes the rows and prunes them. */
+export function getHeartbeatRepository(): HeartbeatRepository {
+  heartbeatRepository ??= createHeartbeatRepository(runtimeClient());
+  return heartbeatRepository;
 }
 
 export function getAuthService(): AuthService {
