@@ -141,10 +141,12 @@ export interface RowWorkingRecord {
 
 /**
  * What the Excel export is built from (STORY-07.02; architecture section 4.6): every node of one calculation, with its typed values, its stored figures and its picture, and the words and price of
- * each material in the calculation's own snapshot. Nothing else of the snapshot (no customer, no rate, no exchange rate) is read, and nothing of the product's figures (STORY-07.03).
+ * each material in the calculation's own snapshot, and the product's figures (BL, BN and the total Tool Cost: STORY-07.03). Nothing else of the snapshot (no customer, no rate, no exchange rate) is read.
  */
 export interface ExportFigures {
   readonly rows: ReadonlyArray<CalculationRowRecord>;
+  /** The stored figures of the product, as the review shows them: the file's BL2, BN2 and footer are these, so they equal SCR-06's to the paisa. */
+  readonly productValues: ProductValues;
   readonly materials: ReadonlyArray<{ readonly materialInDrawing: string; readonly pricePerKg: string }>;
 }
 
@@ -323,11 +325,13 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
           where: { id: calculationId },
           select: {
             masterSnapshot: true,
+            productValues: true,
             rows: { select: { id: true, nodeId: true, parentId: true, sortIndex: true, slNo: true, inputs: true, imageId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
           },
         });
         if (found === null) return null;
         return {
+          productValues: productValuesSchema.parse(found.productValues),
           rows: found.rows.map((row) => ({
             id: row.id,
             nodeId: row.nodeId,

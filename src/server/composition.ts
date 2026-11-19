@@ -370,6 +370,7 @@ export function getExportService(): ExportService {
       header: createExportRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
       calculations: createCalculationRepository(runtimeClient()),
+      approvals: createApprovalRepository(runtimeClient()),
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
       builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),

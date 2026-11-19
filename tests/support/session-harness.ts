@@ -351,6 +351,7 @@ export function createSessionHarness(): SessionHarness {
     header: exportReads,
     nodes: exportReads,
     calculations: reviewReads,
+    approvals: reviewReads,
     images: estimateWorld.imageRepository,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
     builder: inProcessBuilder(buildWorkbook),
