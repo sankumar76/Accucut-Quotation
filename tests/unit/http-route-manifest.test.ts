@@ -13,9 +13,10 @@ describe('the shape of the manifest', () => {
     const calls = ROUTE_MANIFEST.flatMap((row) => row.methods.map((method) => `${row.kind} ${method} ${row.path}`));
     expect(new Set(calls).size).toBe(calls.length);
     for (const row of ROUTE_MANIFEST) expect(row.methods.length).toBeGreaterThan(0);
-    // The only path with two rows is the task queue (STORY-04.02): the read is for every role, the assignment for a Lead and an Admin.
+    // The only paths with two rows are the task queue (STORY-04.02: the read is for every role, the assignment for a Lead and an Admin) and one task (STORY-04.07: the read is for every
+    // role, the change of Engineer or deadline for a Lead and an Admin).
     const paths = ROUTE_MANIFEST.map((row) => `${row.kind} ${row.path}`);
-    expect(paths.filter((path, index) => paths.indexOf(path) !== index)).toEqual(['api /api/v1/tasks']);
+    expect(paths.filter((path, index) => paths.indexOf(path) !== index)).toEqual(['api /api/v1/tasks', 'api /api/v1/tasks/[id]']);
   });
 
   it('writes a path the way Next.js does: a leading slash, no route group, no trailing slash', () => {

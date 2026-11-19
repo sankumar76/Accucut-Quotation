@@ -37,7 +37,7 @@ const errorOf = (message: string | undefined): { readonly error?: string } => (m
 
 const optionalTag = <span className="font-normal text-ink-3">{` ${OPTIONAL_TAG}`}</span>;
 
-function EngineerField({ values, errors, engineers, onChange }: AssignFieldsProps) {
+export function EngineerField({ values, errors, engineers, onChange }: AssignFieldsProps) {
   return (
     <FormField
       id={ASSIGN_FIELD_IDS.engineerId}
@@ -78,7 +78,7 @@ function PathField({ values, errors, onChange }: AssignFieldsProps) {
   );
 }
 
-function DeadlineFields({ values, errors, onChange }: AssignFieldsProps) {
+export function DeadlineFields({ values, errors, onChange }: AssignFieldsProps) {
   const error = errors.deadline;
   return (
     <div className="grid gap-s-4 sm:grid-cols-2">
