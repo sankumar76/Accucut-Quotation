@@ -1120,14 +1120,75 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     for (const part of ['-Phase Prepare', '-Phase Finish', '-Phase Cleanup', 'Enter-PSSession -ComputerName localhost -ConfigurationName Ac8Check', 'Test-Ac8Prompt', 'AC-8 RESULT: PASS', 'What to report back', 'stop and report', 'never uses the real backup key', 'Read-Host -AsSecureString', 'full-administrator path', 'AQP-312']) {
       expect(kit, part).toContain(part);
     }
+    // The six PASS lines of AC-8 stay exactly as they were, in this order, before the result line.
+    const expectedLines = [
+      'PASS  the session opened and the command ran its script file',
+      'PASS  the script imported a module by its path inside the session',
+      'PASS  the typed answer (a question with Read-Host) reached the script',
+      'PASS  the pasted value (Read-Host -AsSecureString) reached the script intact (74 characters)',
+      'PASS  the session ran as a virtual account in the check group, and not as an administrator',
+      'PASS  the transcript of the session exists and does not contain the pasted value',
+      'AC-8 RESULT: PASS',
+    ].join('\n');
+    expect(kit).toContain('```\n' + expectedLines + '\n```');
     const script = kit.slice(kit.indexOf('```powershell\n<#'), kit.lastIndexOf('```'));
     expect(script.length).toBeGreaterThan(5000);
-    expect(script).not.toMatch(/C:\\Accucut|AccucutApp|AccucutWorker|postgres|Register-ScheduledTask|New-Service|Set-Service|Stop-Service|Start-Service|New-EventLog|CreateEventSource|Set-ItemProperty|reg add|sc\.exe|Add-LocalGroupMember/i);
+    expect(script).not.toMatch(/C:\\Accucut|AccucutApp|AccucutWorker|postgres|Register-ScheduledTask|New-Service|Set-Service|Stop-Service|Start-Service|New-EventLog|CreateEventSource|Set-ItemProperty|reg add|sc\.exe/i);
     expect(script).toContain("$EndpointName = 'Ac8Check'");
     expect(script).toContain("$GroupName = 'Ac8CheckGroup'");
     expect(script).toContain("RunAsVirtualAccountGroups = @('$GroupName')");
     expect(script).toContain('Unregister-PSSessionConfiguration -Name $EndpointName -Force');
     expect(script).not.toMatch(/AGE-SECRET/);
+  });
+
+  it('AC-8 optional A-35 step (DL-253): a throwaway standard account, listed in the kit and removed by Finish and Cleanup, reported on its own line that cannot change the AC-8 result, with no password in the file', () => {
+    const kit = read('deploy/windows/manual/AC-8-jea-prompt-check.md');
+    const script = kit.slice(kit.indexOf('```powershell\n<#'), kit.lastIndexOf('```'));
+    // The prose: optional, listed under what it changes, its own line, stop and report to the delivery lead.
+    const changes = kit.slice(kit.indexOf('## What it changes, and what it removes'), kit.indexOf('## Before you start'));
+    for (const part of ['Optional', '-StandardAccount', '`Ac8Standard`', 'standard', 'never an administrator', 'remove that account too']) expect(changes, part).toContain(part);
+    for (const part of ['Optional step 5b', 'OPTIONAL A-35 CHECK: PASS', 'OPTIONAL A-35 CHECK: FAIL', 'OPTIONAL A-35 CHECK: NOT RUN', 'never changes `AC-8 RESULT`', 'stop and report it to the delivery lead', 'press Enter without typing anything', 'Restore-AccucutBackup', 'only in the rehearsal before go-live']) expect(kit, part).toContain(part);
+    // The script: the account is made only on request, is in the built-in Users group and never in Administrators, and is removed by the one routine that Finish and Cleanup both run.
+    expect(script).toContain('[switch]$StandardAccount');
+    expect(script).toContain("$StandardName = 'Ac8Standard'");
+    const adds = script.match(/Add-LocalGroupMember[^\n]*/g) ?? [];
+    expect(adds).toHaveLength(1);
+    expect(adds[0]).toContain("'S-1-5-32-545'");
+    const removal = functionBody(script, 'Remove-Ac8Check');
+    expect(removal).toContain('Remove-LocalUser -Name $StandardName');
+    expect(removal).toContain('Win32_UserProfile');
+    expect(script).toContain("if ($Phase -eq 'Cleanup') { Remove-Ac8Check;");
+    const finish = script.slice(script.indexOf('# ---- Finish'));
+    expect(finish).toContain('Remove-Ac8Check');
+    // No password in the file: it is made up when Prepare runs and only printed. Nothing is hard-coded, and nothing reads one from a file or an argument.
+    expect(script).toContain('Get-Random -InputObject $pool');
+    expect(script).not.toMatch(/-Password\s+['"]/);
+    expect(script).not.toMatch(/\[string\]\$(?:Password|StandardPassword)|Read-Host[^\n]*(?:Password|Credential)/i);
+    // The optional line is separate: it is printed after the AC-8 result line, and only the AC-8 verdict decides the exit code.
+    expect(finish).toContain('OPTIONAL A-35 CHECK: PASS  a standard (non-administrator) account opened the endpoint, and its command ran as the limited virtual account and reached its first question');
+    expect(finish).toContain('$ac8Passed = ($failed -eq 0 -and $passed -ge 6)');
+    expect(finish.indexOf("Write-Host 'AC-8 RESULT: PASS'")).toBeLessThan(finish.indexOf('Write-Host $standardLine'));
+    expect(finish).toContain('if ($ac8Passed) { exit 0 }');
+    expect(finish.slice(finish.indexOf('$ac8Passed ='))).not.toContain('$standardOk');
+    // The session script: the standard account (told apart by its connected name) stops after the first question WHATEVER it types, writes its note only AFTER that question has
+    // returned, and can never write result.json (the administrator's AC-8 result), which is written further down, after this block has returned.
+    const session = script.slice(script.indexOf("$script = @'"), script.indexOf("'@\n"));
+    expect(session).toContain("$isStandard = ($sender -like '*\\Ac8Standard')");
+    const firstQuestion = session.indexOf("Read-Host -Prompt 'Type the word PINEAPPLE");
+    const standardBlock = session.slice(session.indexOf('if ($isStandard) {'));
+    const standardEnd = standardBlock.indexOf('\n}\n') + 3;
+    const standardOnly = standardBlock.slice(0, standardEnd);
+    expect(firstQuestion).toBeGreaterThan(0);
+    expect(session.indexOf('if ($isStandard) {')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeLessThan(session.indexOf('Read-Host -Prompt \'Paste the FAKE'));
+    expect(standardOnly).toContain('if ($promptReached) {');
+    expect(standardOnly).toContain('started-');
+    expect(standardOnly).toMatch(/\n    return\n\}\n$/);
+    expect(standardOnly).not.toContain('result.json');
+    expect(session.match(/result\.json/g)).toHaveLength(1);
+    expect(session.indexOf('result.json')).toBeGreaterThan(session.indexOf('if ($isStandard) {') + standardOnly.length);
+    expect(session.slice(0, session.indexOf('if ($isStandard) {'))).not.toContain('started-');
   });
 
   it('AC-10: the README has a restore chapter for a person who is not a system administrator, with the typed-date step and what to say to IT', () => {
