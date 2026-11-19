@@ -5,7 +5,7 @@ import { createConfigRepository } from '@/server/repositories/config-repository'
 import { createConfigVersionCache, getCurrentVersion } from '@/server/services/config-service';
 
 import { auditOf, currentCalculationOf } from '../support/approval-helpers';
-import { approvedEstimateOf, approvedValuesOf, changeTheMasters, openApprovedWorld, totalOfANewCalculation, type ApprovedWorld } from '../support/approved-world';
+import { approvedEstimateOf, approvedValuesOf, changeTheMasters, exportCellsOf, openApprovedWorld, totalOfANewCalculation, type ApprovedWorld } from '../support/approved-world';
 import { idOf } from '../support/calculation-database';
 import { defined } from '../support/defined';
 import { seedConfig, seedFieldAt } from '../support/seed-config';
@@ -24,8 +24,9 @@ import { seedConfig, seedFieldAt } from '../support/seed-config';
  * **The words (AC-2).** The material's and the treatment's words are in the record: `calculation_rows.inputs` holds the resolved text of E and F and the treatment's words under G, and the snapshot holds
  * the material's words then. The cost details find the row's material in the snapshot **by those words**, so a read that used the current name of a renamed or deleted material would fail or differ here.
  *
- * **The export (AC-1, last words).** The export holds no figure yet (STORY-07.01 is the header row). STORY-07.03 fills `exportCellsOf` in `tests/support/approved-world.ts` and replaces the expectation of
- * the test named "EXPORT HOOK"; the screen data above are compared by the same function, so the file's cells join the same equality. Nothing in this file is skipped.
+ * **The export (AC-1, last words; STORY-07.03 AC-7; review SQR-01 of AQP-326, #478).** The cells of the real file (`exportCellsOf` in `tests/support/approved-world.ts`: the export service over this database,
+ * the workbook built and read back) are part of `approvedValuesOf`, so every equality below compares the file with the screens and the records, and a cell of the file that moved would fail it. The test named
+ * "EXPORT" shows the file is not empty (it holds the header, the parts, BL2, BN2, BO2 and the footer), so the equality cannot pass on a constant. Nothing in this file is skipped.
  */
 
 let world: ApprovedWorld;
@@ -64,9 +65,22 @@ describe('AC-1 (NFR-026): changing the masters changes nothing an approved estim
     expect(stored.rows).toEqual([{ approved_price: '4321.50' }]);
   });
 
-  it('EXPORT HOOK (STORY-07.03): the exported file holds no figure yet, so there is nothing to compare; 07.03 replaces exportCellsOf and this expectation with the cells of the file', async () => {
-    const approved = await approvedEstimateOf(world);
-    expect((await approvedValuesOf(world, approved.estimateId)).exportCells).toBeNull();
+  it('EXPORT (STORY-07.03 AC-7): the file of an approved estimate holds its header, its parts, BL2, BN2, BO2 and the footer, and its cells are identical after the masters change', async () => {
+    const approved = await approvedEstimateOf(world, '4321.50');
+    const before = await exportCellsOf(world, approved.estimateId);
+    const total = defined((await world.review.getCosts(world.lead, approved.estimateId)).totals);
+    // Not a constant: a header, two parts, one empty row and the footer, with the product's figures in row 2 and the approved price in BO2.
+    expect(before.rows).toHaveLength(5);
+    expect(before.rows[0]?.[0]).toBe('Sl. No');
+    expect(before.rows[1]?.[seedFieldAt('BL').position - 1]).toBe(Number(defined(total.totalPrice)));
+    expect(before.rows[1]?.[seedFieldAt('BO').position - 1]).toBe(4321.5);
+    expect(before.rows[4]?.[seedFieldAt('BM').position - 2]).toBe('Total Tool Cost');
+    expect(before.rows[4]?.[seedFieldAt('BM').position - 1]).toBe(Number(defined(total.toolCostTotal)));
+
+    await changeTheMasters(world, approved.materialId);
+    expect(await totalOfANewCalculation(world, approved.materialId)).not.toBe(total.totalPrice);
+
+    expect(await exportCellsOf(world, approved.estimateId)).toEqual(before);
   });
 });
 

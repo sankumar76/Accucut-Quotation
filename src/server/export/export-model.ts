@@ -45,12 +45,23 @@ export interface ExportRow {
   readonly picture?: number | null | undefined;
 }
 
+/**
+ * The one row below the parts that is not a part (STORY-07.03 AC-3; D-05): the total Tool Cost, with its label. `row` is the sheet's own row number (13 for 10 parts), decided by `product-cells.ts`, so the
+ * writer does no arithmetic of its own; a cell is a string or a number like any other, never a formula.
+ */
+export interface ExportFooter {
+  readonly row: number;
+  readonly cells: Readonly<Record<string, ExportCell>>;
+}
+
 export interface ExportModel {
   /** The name of the one sheet. */
   readonly sheetName: string;
   readonly columns: ReadonlyArray<ExportColumn>;
   /** The rows below the header row, from row 2: one per node in depth-first order (STORY-07.02). Empty for a file of the header alone. */
   readonly rows: ReadonlyArray<ExportRow>;
+  /** The footer row of the total Tool Cost (STORY-07.03). Absent is none. */
+  readonly footer?: ExportFooter | undefined;
   /** The distinct pictures of the rows. Absent is none. */
   readonly pictures?: ReadonlyArray<ExportPicture> | undefined;
   /** The letter of the column the pictures are embedded in (the registry's `image` field). Required when a row has a picture. */
@@ -71,10 +82,15 @@ export const exportModelSchema = z
     sheetName: z.string().min(1).max(31).regex(/^[^\\/?*[\]:]+$/),
     columns: z.array(z.strictObject({ letter: columnLetterSchema, header: z.string(), width: z.number().positive().max(255), numFmt: z.string().min(1) })).min(1),
     rows: z.array(z.strictObject({ cells: z.record(z.string(), cellSchema), picture: z.number().int().min(0).nullable().optional() })),
+    footer: z.strictObject({ row: z.number().int().min(2), cells: z.record(z.string(), cellSchema) }).optional(),
     pictures: z.array(pictureSchema).optional(),
     pictureColumn: columnLetterSchema.optional(),
   })
   .superRefine((model, context) => {
+    // The footer must sit below the last node row: a footer on a node row would write over a part.
+    if (model.footer !== undefined && model.footer.row <= model.rows.length + 1) {
+      context.addIssue({ code: 'custom', path: ['footer', 'row'], message: 'The footer is not below the last row.' });
+    }
     // A row's picture must be one the model holds and must have a column to go in: a model that names neither is refused whole, never half written.
     const held = model.pictures?.length ?? 0;
     model.rows.forEach((row, index) => {
