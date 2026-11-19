@@ -40,6 +40,7 @@ import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeConfigRepository } from './fake-config';
 import { createFakeJobRunRepository, type FakeJobRunRepository } from './fake-job-runs';
+import { fakeSettingsDependencies, type FakeMail, type FakeSettingsRepository } from './fake-settings';
 import { createFakeCalculationWorld, type FakeCalculationWorld } from './fake-calculations';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
@@ -117,6 +118,9 @@ export interface SessionHarness {
   readonly settingsService: SettingsService;
   /** The in-memory `job_runs` behind `settingsService`: its members are plain functions, so a test can spy on each one (the refusal-before-lookup scan does). */
   readonly jobRuns: FakeJobRunRepository;
+  /** The in-memory `settings` row and the in-memory mail transport behind `settingsService` (STORY-09.02): plain functions, so a test can spy on each one. */
+  readonly settingsRepository: FakeSettingsRepository;
+  readonly settingsMail: FakeMail;
   /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
@@ -214,6 +218,8 @@ export function createSessionHarness(): SessionHarness {
     { job: 'backup', finishedAt: new Date(SESSION_NOW.getTime() - 2 * MILLISECONDS_PER_DAY), result: { status: 'ok', sizeBytes: 1_000, freeBytes: 620, totalBytes: 1_000, path: JOB_RUN_CANARY_PATH } },
     { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
   ]);
+  // The e-mail alerts of STORY-09.02: the settings row and the mail transport in memory. The harness Admin's address is in `users`, so the test e-mail goes there.
+  const settingsWorld = fakeSettingsDependencies({ jobRuns, clock: systemClock, users });
   const taskWorld = createFakeTaskWorld(() => users.records);
   // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
   const taskAudit = createAuditSink();
@@ -393,7 +399,9 @@ export function createSessionHarness(): SessionHarness {
     taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
     taskAudit,
     jobRuns,
-    settingsService: createSettingsService({ jobRuns, clock: systemClock }),
+    settingsRepository: settingsWorld.settings,
+    settingsMail: settingsWorld.fakeMail,
+    settingsService: createSettingsService(settingsWorld),
     configRepository,
     configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
     mastersService: createMastersService({

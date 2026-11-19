@@ -302,7 +302,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/estimates/[id]/nodes/[nodeId]/costs', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/estimates/[code]/costs/[slNo]', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-07' },
   // STORY-02.09 (SCR-15, the Last backup line). The Admin only (BR-004, AC-6): the page and the read. Both are read-only: the page has no control that starts, restores or deletes a
-  // backup, and the API has GET and nothing else (the alert switch and the sender, `PUT /settings`, are story 09.02's). The rows it reads are `job_runs` (cost data is never in them), so the
+  // backup, and the API has GET (the alert switch and the sender are read there too) and, since STORY-09.02, PUT for them. The rows it reads are `job_runs` (cost data is never in them), so the
   // cost scan covers both as routes an Engineer is refused.
   {
     path: '/settings',
@@ -314,7 +314,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
     screen: 'SCR-15',
     nav: { group: 'Administration', label: 'Settings', order: 20, icon: 'settings' },
   },
-  { path: '/api/v1/settings', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-09.02 (SCR-15, e-mail alerts): `PUT` saves the switch and the sender, and `POST /settings/test-email` sends one message to the Admin's own address. Admin only, decided before anything is read.
+  { path: '/api/v1/settings', kind: 'api', methods: ['GET', 'PUT'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/settings/test-email', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   // STORY-01.03 (AC-4). The scan's negative control: leaks one invented sentinel under NODE_ENV=test and answers 404 anywhere else.
   // Public and `testOnly`, so no role's list holds it and no navigation, menu or role matrix row is made for it.
   { path: '/api/test-only/leak', kind: 'api', methods: ['GET'], roles: 'public', status: 'implemented', stage: 'R1', testOnly: true },

@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from 'next-auth';
 
-import { loadAppEnv } from '../lib/env';
+import { loadAppEnv, loadEmailFeature } from '../lib/env';
 import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
@@ -17,6 +17,7 @@ import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
 import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
+import { createSettingsRepository } from './repositories/settings-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -355,11 +356,18 @@ export function getRemovePriceService(): RemovePriceService {
 }
 
 /**
- * The Settings page's reading of the backups and the server disk (STORY-02.09): the last good backup and the newest free-space reading, from `job_runs`, against the system clock. The
- * routes and the page that call it are in the manifest for the Admin alone.
+ * The Settings page (STORY-02.09, STORY-09.02): the last good backup and the newest free-space reading, from `job_runs`, against the system clock, and the e-mail alerts of the `settings` row with
+ * the test e-mail, which goes through the mail service's `sendNow`. The routes and the page that call it are in the manifest for the Admin alone.
  */
 export function getSettingsService(): SettingsService {
-  settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
+  settingsService ??= createSettingsService({
+    jobRuns: createJobRunRepository(runtimeClient()),
+    settings: createSettingsRepository(runtimeClient()),
+    users: getUserRepository(),
+    mail: getMailService(),
+    emailEnabled: () => loadEmailFeature(),
+    clock: systemClock,
+  });
   return settingsService;
 }
 
