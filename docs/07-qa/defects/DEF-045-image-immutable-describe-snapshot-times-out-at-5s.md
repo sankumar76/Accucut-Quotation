@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate, graded by qa-engineer** on the test-plan scale (section 6, DL-094): a Test-type defect, fails closed (a red stage 11 on `master`), the workaround is a re-run, one occurrence, no product behaviour affected. The same grade as DEF-007 (#52), DEF-012 (#68) and DEF-041 to DEF-044. Re-grade by the master if it recurs or the margin shrinks (see Mechanism hypothesis) |
 | Priority | P3 (Jira AQP-373 Medium, label `sev-3`). Fixed before G8 (hardening window, CLAUDE.md section 9 (3)) or accepted in writing by the master |
 | Type | **Test** (integration test against real PostgreSQL, Vitest). No product path found |
-| Status | New. Not fixed by QA (investigation and fix: developer) |
+| Status | **Closed, verified 2026-11-19** (fixed by PR #518, squash `0056227`; Jira AQP-373 Done, GitHub #515 closed as completed) |
 | Jira / GitHub | [AQP-373](https://sankumar76.atlassian.net/browse/AQP-373) / [#515](https://github.com/sankumar76/Accucut-Quotation/issues/515); Jira "relates to" AQP-315 and AQP-1 |
 | Found by / date | CI, `master` push run 44475841405, job "Stages 1 to 11b" (135396046771), 2026-11-19 07:02:46Z; logged by qa-engineer, 2026-11-19 |
 | Build / commit | `e4cf444` (squash of #512, AQP-363: `src/app/globals.css`, `estimate-workspace.tsx`, two layout tests; none touches `part_images`, the test or its support) |
@@ -49,10 +49,10 @@ Not a lock wait. Every test in the describe that calls `snapshot()` costs about 
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Root cause confirmed or refuted (checks 1 to 4) | developer | | AQP-373 comment |
-| Fixed | developer | | `fix/AQP-373-<slug>`, before G8 |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | by name in the fix PR's CI and the next `master` push run |
+| Root cause confirmed or refuted (checks 1 to 4) | developer | 2026-11-19 | AQP-373 comment 12316: 28 rows / 416,657 bytes; Buffer `toEqual` 6.6 to 8.4 s per test locally; not a lock wait |
+| Fixed | developer | 2026-11-19 | PR #518, squash `0056227`: `snapshot()` returns id + `md5(p::text)` per row, computed in SQL (test-only, +6/-1) |
+| Regression test added | developer | 2026-11-19 | n/a: the test itself is the fix; proof is no weaker (DL-245 T3: whole-row digest, ids and count compared) |
+| Verified | qa-engineer | 2026-11-19 | Diff checked against DL-245 T1 to T5. PR run 44490694655: `image.test.ts` 53 tests in 1,661 ms. First `master` push run 44509175744 on `0056227`: success, `image.test.ts` 53 tests in 2,289 ms, none slow (T6 met) |
 
 ## Severity history and routing
 - QA graded Sev-3, type Test, 2026-11-19, for the reasons in the table. It does not hold a story gate. Master may re-grade on a recurrence (CLAUDE.md section 9 (3): Sev-1 and Sev-2 are fixed before G8; Sev-3 is fixed or accepted in writing).

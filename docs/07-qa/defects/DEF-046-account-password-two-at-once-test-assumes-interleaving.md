@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate, graded by qa-engineer** on the test-plan scale (section 6, DL-094): a Test-type defect that fails closed (a red stage 11), the workaround is a re-run, one occurrence, no product behaviour affected, the "cannot both win" invariant held in the failing run. Not Sev-1 or Sev-2: no cost value, role bypass, data loss or AC failure, and the product path is correct (see Mechanism). Same grade as DEF-007, DEF-012 and DEF-041 to DEF-045. The area is authentication and passwords (CLAUDE.md section 9 (2)); that raises the care taken in the assessment, not the grade, because the evidence rules out a product fault. Re-grade by the master if it recurs, or if checks 1 or 2 below refute the hypothesis |
 | Priority | P3 (Jira AQP-374 Medium, label `sev-3`). Fixed before G8 (hardening window, CLAUDE.md section 9 (3)) or accepted in writing by the master |
 | Type | **Test** (integration test against real PostgreSQL, Vitest; flaky by unsynchronised concurrency). No product defect found |
-| Status | New. Not fixed by QA (investigation and fix: developer) |
+| Status | **Closed, verified 2026-11-19** (fixed by PR #520, squash `4232a36`; Jira AQP-374 Done, GitHub #517 closed as completed) |
 | Jira / GitHub | [AQP-374](https://sankumar76.atlassian.net/browse/AQP-374) / [#517](https://github.com/sankumar76/Accucut-Quotation/issues/517); Jira "relates to" AQP-81 and AQP-1 |
 | Found by / date | CI on PR #510 (AQP-336, export warning notice), run 44486817397, job 135432227063 "Stages 1 to 11b", failure at 08:26:16Z; logged by qa-engineer, 2026-11-19 |
 | Build / commit | PR #510 head `4f8e0c8` (merge of master `6f275ad`). `gh pr diff 510 --name-only` lists 20 files, all under `src/components/features/estimate-export`, `estimate-review`, `src/components/shared` (two notice files), `calculation-repository.ts`, `export-service.ts`, `views/schemas/export.ts` and export/review tests. Nothing in auth, users, passwords or the throttle. The test and `account-service.ts` have each one commit in `git log origin/master` (`0f5fb72e`): unchanged since the story |
@@ -73,10 +73,10 @@ What decides between them is how long the second call's first three statements t
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Mechanism confirmed or refuted (checks 1 to 4) | developer | | AQP-374 comment |
-| Fixed | developer | | `fix/AQP-374-<slug>`, before G8 |
-| Regression test added | developer | | both orders forced, one test each |
-| Verified | qa-engineer | | by name in the fix PR's CI and the next `master` push run |
+| Mechanism confirmed or refuted (checks 1 to 4) | developer | 2026-11-19 | AQP-374 comment 12318 (DL-254 P2): 1,200 repetitions, loser 409 x 1,197, 422 x 3, both-won / neither-won / 5xx / other code x 0. Confirmed: test race, not a product race |
+| Fixed | developer | 2026-11-19 | PR #520, squash `4232a36` (`fix/AQP-374-password-race-two-orders`), test-only: `tests/integration/auth/account-password.test.ts` +68/-9 |
+| Regression test added | developer | 2026-11-19 | Two forced-order cases: both read before either writes (409 `PASSWORD_CHANGED_ELSEWHERE`); second reads after first committed (422 `CURRENT_PASSWORD_WRONG`); each keeps one winner and `session_version` 1 |
+| Verified | qa-engineer | 2026-11-19 | Diff checked against DL-254 P1 to P4, no assertion weakened. Local 200 of 200 per case; PR run 44495397184 green; first `master` push run 44540107462 on `4232a36`: success, `account-password.test.ts` 11 tests, 706 ms, no failure (DL-254 P5 met) |
 
 ## Severity history and routing
 - QA graded Sev-3, type Test, 2026-11-19, for the reasons in the table. It does not hold a story gate (AQP-81 is Done; PR #510's own change is not implicated). If check 1 shows both changes succeeding, or any result other than 409 or 422, the grade becomes Sev-1 (data or credential integrity in an authentication path) and the master is told at once.
