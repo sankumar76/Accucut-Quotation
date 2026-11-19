@@ -6,9 +6,43 @@
 | Severity | **Sev-3 Moderate, graded by qa-engineer, provisional** (DL-256 (B)), on the test-plan scale: a Test-type defect, fails closed (a red required check), workaround is a re-run under rule R6, no product behaviour affected as far as the evidence shows. **Re-grade to a Product defect** (Sev-2 if the part form serves or renders slowly enough to matter to a person, graded by the figures) if hypothesis 4 below shows it. Same grade family as DEF-045 to DEF-047 |
 | Priority | P3 on its own; **takes the first lane that frees and is not already promised**, ahead of any new story (DL-256 (D)). Pre-emption: a second head red on R6's signature, or any `master` push run red on it, gives it a lane at once, but never a slot the delivery lead promised without asking the delivery lead first |
 | Type | **Test** (E2E, Playwright, `tablet` project; duration-tail class). No product defect found |
-| Status | New. Not fixed by QA (measurement and fix: developer) |
-| Jira / GitHub | [AQP-377](https://sankumar76.atlassian.net/browse/AQP-377) / [#530](https://github.com/sankumar76/Accucut-Quotation/issues/530); Jira "relates to" AQP-314, AQP-302, AQP-336 and AQP-376 |
-| Risk / rule | RISK-031 stays open at 9 (DL-256 (6)); its close-out now also needs this Bug's proof. Rule **R6** (DL-256 (3)) governs re-runs until the fix PR has merged |
+| Status | **Fix in review: PR #531 (head b0320c05), proof accepted as amended and merge on a fully green required check (DL-257 (A)). Open until closed under the amended proof** (below). Not fixed by QA (measurement and fix: developer) |
+| Jira / GitHub | [AQP-377](https://sankumar76.atlassian.net/browse/AQP-377) / [#530](https://github.com/sankumar76/Accucut-Quotation/issues/530); Jira "relates to" AQP-314, AQP-302, AQP-336 and AQP-376, and (2026-11-19) [AQP-378](https://sankumar76.atlassian.net/browse/AQP-378) = DEF-049 |
+| Risk / rule | RISK-031 stays open at 9 (DL-256 (6), DL-257 (8)); its close-out now also needs this Bug's proof in the amended form. Rule **R6** (DL-256 (3)), **amended by DL-257 (4)**, governs re-runs until DEF-048 is closed under the amended proof (see "Re-pointing"). The first-written text below is kept as history where it is marked superseded |
+
+## Re-pointing after the #531 split (DL-257, 2026-11-19; qa-engineer, QA artefacts only)
+**1. The five new cases (replace `estimate-treatments.spec.ts:238` and `estimate-tree.spec.ts:313`), each identified by file and title, not by line** (lines are those of b0320c05):
+
+| # | File | Describe | Title | Line |
+|---|---|---|---|---|
+| 1 | `tests/e2e/estimate-treatments.spec.ts` | "AC-8: the screen at 360, 768 and 1366 px" | "AC-8 (closed): no sideways scroll, axe finds nothing, and the trigger and the field are 44 px high" | :241 |
+| 2 | `tests/e2e/estimate-treatments.spec.ts` | same | "AC-8 (list open): every checkbox is 44 px, there is no sideways scroll, axe finds nothing, and Escape closes the list" | :250 |
+| 3 | `tests/e2e/estimate-treatments.spec.ts` | same | "AC-8 ("Other" showing): the box is 44 px high, there is no sideways scroll and axe finds nothing" | :265 |
+| 4 | `tests/e2e/estimate-tree.spec.ts` | "AC-3: delete asks first and names the count" | "AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing" | :348 |
+| 5 | `tests/e2e/estimate-tree.spec.ts` | same | "AC-3: a part with 2 sub-parts: confirming deletes all three" | :365 |
+
+The AC-3 case with no sub-parts (:382) was not one of the two original cases and is not in scope. `estimate-treatments` AC-2 "every treatment chosen" (was :264, :275 after #531) is **not** in this Bug: it moved to DEF-049 (AQP-378, #533), with `estimate-form.spec.ts` AC-9 (:224).
+
+**2. Amended proof (DL-257 (A)); it replaces "at most 15 s at each width" (DL-256 (5)).** Read by the orchestrator from the job logs and posted on AQP-377, on two runs: #531's run of record, and the first `master` push run after the merge whose Stage 2 is green.
+- **P1:** each of the five cases passes on its first attempt at all three widths (mobile, tablet, desktop).
+- **P2:** each takes under 25 s at every width (at least 1.2x inside the 30 s budget; 25 s is QA's near-budget line).
+- **P3 (structural floor, met in this diff):** each case opens the page once and runs at most one axe scan. A later change that adds a second page open or scan to one of these cases needs master.
+- **15 s stays the target for a quiet draw.** The count of readings above 15 s is reported and does not gate.
+- If P1 or P2 fails on either run, DEF-048 stays open, R6 continues, and the developer brings the measured phases to master. No further fix goes into an unrelated PR.
+- **Reading so far (master, DL-257 (1), run 44580739670, both attempts):** all 30 readings (5 cases x 3 widths x 2 attempts) passed on the first attempt; worst 22.5 s ([tablet] closed, attempt 2, 75 % of the budget); 11 of 30 above 15 s. These are master's figures; QA did not re-read the logs for this record. The proof is not complete until the `master` push run after the merge has been read.
+
+**3. R6 as amended (DL-257 (4), amends DL-256 (3)).** Duration: until DEF-048 is closed under the amended proof, no longer only until its fix PR has merged. **(b) now reads, as master wrote it:**
+> the failed test is exactly one of these. On a head that contains #531's squash commit, one of the three cases in `tests/e2e/estimate-treatments.spec.ts`, describe "AC-8: the screen at 360, 768 and 1366 px": "AC-8 (closed): no sideways scroll, axe finds nothing, and the trigger and the field are 44 px high", "AC-8 (list open): every checkbox is 44 px, there is no sideways scroll, axe finds nothing, and Escape closes the list", or "AC-8 ("Other" showing): the box is 44 px high, there is no sideways scroll and axe finds nothing" (:241, :250 and :265 on b0320c05). On a head without that commit, the old `:238:3` case as written in DL-256 (3). Any project. Each test is identified by file and title, not by line.
+
+(a), (c), (d) and (e) are unchanged. (a) still requires every red shard to say `1 failed`, so two AC-8 cases failing in one shard come to master. **The two `estimate-tree` cases (#4 and #5) stay outside R6**, for the reason in DL-256 (3): their time-out shows as an `expect` wait on the state their own action makes. A flaky is allowed and is listed here; failing on both attempts goes to master at once. **Never re-run, and report at once:** as in DL-256 (3). In addition, after #531's merge, an AC-8 case failing on both attempts may be re-run once under R6, but it is a P1 failure: the orchestrator reports it to master the same day, and DEF-048 cannot close on that run. A head without #531's commit cannot merge once #531 has merged (`strict: true`), so it takes "Update branch", which is not a re-run (DL-254 (C)).
+
+**4. Merge route for #531 (DL-257 (2), for the record).** The orchestrator squash-merges when the required check `Stages 1 to 11` is `success`. Stage 2 is red repo-wide ("leaks found: 3", RISK-027 pattern) until the delivery lead deletes the old branch; after that, failed jobs only are re-run if #531 is not behind `master`, or "Update branch" is used if it is. A P2 miss on that new run does not block the merge; it keeps DEF-048 open.
+
+**5. Ruling B (DL-257 (3)):** the direct-row insert of the two sub-parts in #531's Cancel and confirm cases is accepted as test set-up (the delete is the subject, not the add). QA notes it so a later reader of `estimate-tree.spec.ts` does not read it as a dropped assertion.
+
+**6. Watch only, no Bug (DL-257 (E)):** `estimate-save.spec.ts:107` [mobile], `rates-changed.spec.ts:135` [tablet] and `unlock.spec.ts:186` [mobile]. A second occurrence of any one of them on any run means QA logs a Bug the same day and tells master. None may be re-run under any R-rule.
+
+**7. Superseded below:** the "Expected Result" sentence about 15 s per case, the "Binding" proof sentence, the "Rule R6 (until the fix PR has merged)" section and the "Fix & Verification" proof row are left as first written (history) and are read together with this section; where they differ, this section governs.
 | Found by / date | CI. PR #510 run 44540150487 (head fc8b10a), shard 2, job 135615976339; margin seen on `master` push run 44509175744 (head 0056227). Evidence read by master (DL-256, 2026-11-19) and re-read by qa-engineer from the job logs; logged by qa-engineer, 2026-11-19 |
 | Build / commit | PR head fc8b10a (red); `master` 0056227 (tip at run 44509175744) and 4232a36 (run 44540107462). Specs read at `origin/master`; not edited |
 | Environment | GitHub Actions `ubuntu-latest`, 4 vCPU and 15,983 MB, Stage 12 E2E shard 2 of 4, `Running 458 tests using 4 workers` on the `master` run; one development server and one PostgreSQL shared by the four workers; invented data only |
@@ -91,7 +125,7 @@ Source: `gh api repos/sankumar76/Accucut-Quotation/actions/jobs/<id>/logs` for a
 ## Binding for the fix (DL-256 (5); DL-229 (4)(b))
 No skip, quarantine, retry, `test.slow()`, timeout change or fixed sleep, and no dropped width, axe scan or assertion. Splitting a case into smaller tests that keep every assertion and every scan is allowed. QA first confirms where the time goes (the axe scans of the whole part form, the treatment seeding, or page loads). The fix stays in the two specs or in test-only support; a change under `src/`, `playwright.config.ts`, ci.yml or a dependency means stop and come back to master. **Proof:** every case of `estimate-treatments :238` (or the cases it is split into) and of `estimate-tree :313` takes at most 15 s at each width (mobile, tablet, desktop), on the fix PR's run and on the first `master` push run after the merge, read by the orchestrator and posted on the Bug (AQP-377). The fix takes a separate PR (not folded into #527, whose one-file scope stays).
 
-## Rule R6 (until the fix PR has merged)
+## Rule R6 (as first written by DL-256 (3); amended by DL-257 (4), see "Re-pointing" above; the duration and (b) below are superseded)
 A red run may have its failed jobs re-run once per head only when all of (a) to (e) of DL-256 (3) hold: `Stages 1 to 11b` success and only Stage 12 shards plus the fan-in red, each red shard `1 failed`; the failed test exactly `tests/e2e/estimate-treatments.spec.ts:238:3` (any of the three projects); every attempt's error `Test timeout of 30000ms exceeded.`, alone or with a `page.evaluate`, `locator.*` or `AxeBuilder.analyze` time-out, no `expect` message and no axe violation list; every other test passed (each flaky listed with the re-run); the diff touches none of the listed paths or package versions. A green run with `estimate-tree :313` or `:238` flaky (passed on retry) is fully green; list each flaky here. **Never re-run, and tell master at once:** an `expect` failure or axe violation in :238 (a possible AC-8 regression); `estimate-tree :313` failing on both attempts; a second failure on the same head.
 
 ## Re-run list (orchestrator adds each)
@@ -100,6 +134,12 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 | 2026-11-19 | PR #510, run 44540150487 | fc8b10a | Not re-run (DL-256 (A)): no rule covered it; R5 (e) excluded #510. #510 takes `master` by "Update branch" |
 
 ## Issues for other roles (no defect)
+**Answered by DL-257 (2026-11-19):**
+- `unlock.spec.ts:186` [mobile]: watched, no Bug yet (DL-257 (E)); a second occurrence means a Bug the same day. Not re-runnable under any R-rule.
+- `estimate-treatments :264` (28.8 s; 29.4 s on #531): a new Bug, DEF-049 (AQP-378, #533), with `estimate-form.spec.ts` AC-9 (:224) and rule R7 (DL-257 (D)). DEF-048's scope was not widened.
+- Also watched (DL-257 (E)): `estimate-save.spec.ts:107` and `rates-changed.spec.ts:135`.
+
+**As first written (history):**
 - **master:** `unlock.spec.ts:186` [mobile] flaky on green `master` run 44509175744 (see "Not in this Bug"); one occurrence, an assertion wait, not a budget time-out. QA raised no Bug. Say if it should be tracked; a second occurrence would be a RISK-031 trigger ("a flaky in that mode on two runs in one day" does not apply, the mode differs).
 - **master:** `estimate-treatments :264` (28.8 s, 96 % of budget) is the next case at risk in the same file; not in scope unless master widens it.
 - **orchestrator:** the register line (RISK-031) and the daily update carry the R6 re-run list; QA did not edit them. The Jira links to AQP-245 named in the brief were not made: AQP-245 is STORY-10.21 (Users list), unrelated to these two specs; DL-256 (4) names AQP-314 and AQP-376, and QA added AQP-302 (owner of `estimate-tree`) and AQP-336 (where it was seen).
@@ -107,10 +147,10 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Hypotheses 1 to 4 measured; mechanism confirmed or refuted | developer | | AQP-377 comment |
-| Fixed (spec or test-only helper) | developer | | `fix/AQP-377-<slug>`, first free lane (DL-256 (D)) |
-| Regression test added | developer | | the fix is the test change; both specs keep every assertion and scan |
-| Verified: every `:238` and `:313` case at most 15 s at each width | orchestrator reads, qa-engineer confirms at hardening | | fix PR's run and the first `master` push run after merge |
+| Hypotheses 1 to 4 measured; mechanism confirmed or refuted | developer | 2026-11-19 | PR #531 body (phases on diagnostic run 44567048767: 6 to 9 s to open the part form on `next dev`, 2.2 to 3.4 s per whole-form scan; no step hangs; read by master, DL-257 (1)) |
+| Fixed (spec or test-only helper) | developer | 2026-11-19 | PR #531, head b0320c05: two files, `estimate-treatments.spec.ts` and `estimate-tree.spec.ts`; every assertion and scan kept (diff checked by master); merge on a fully green required check (DL-257 (A)) |
+| Regression test added | developer | 2026-11-19 | the fix is the test change; the original two cases are now the five cases in "Re-pointing" |
+| Verified, amended proof: P1, P2, P3 (15 s reported) for the five cases | orchestrator reads, qa-engineer confirms at hardening | | #531's run of record (44580739670: P1 and P2 met per master) and the first `master` push run after the merge whose Stage 2 is green (pending). Replaces "every case at most 15 s" |
 | RISK-031 close-out (DEF-048 part) | master | | fix proof plus a `master` push run with 0 time-out-mode flaky |
 
 ## Severity history and routing
