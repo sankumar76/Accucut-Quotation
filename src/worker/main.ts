@@ -15,8 +15,10 @@ import { createJobRunRepository, createJobRunWriter } from '../server/repositori
  * Scope note (STORY-10.04): this is the start-up shell only. It checks the settings exactly as the web process does, stays
  * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The one job it runs is
  * `log-prune` (`src/server/jobs/log-prune.ts`, daily at 03:30 IST, only when LOG_DIRECTORY is set) and, since STORY-10.05, `backup-watch`
- * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). The other cron jobs (heartbeat, overdue scan, digest) are
- * later stories', which add them here; nothing below changes how the service is installed.
+ * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
+ * (`src/server/jobs/heartbeat.ts`, every minute and once at start, always on): `GET /api/health` is red when the worker's newest heartbeat is 3 minutes old. Every job runs through `runJob`
+ * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The other cron jobs (overdue scan, digest) are later stories',
+ * which add them here and run through the same wrapper; nothing below changes how the service is installed.
  * It takes no part in coverage: it is a start-up file and the job logic belongs in `src/server/jobs` (test strategy section 11).
  */
 

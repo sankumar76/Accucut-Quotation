@@ -4,6 +4,8 @@ import { schedule, type ScheduledTask } from 'node-cron';
 
 import { BACKUP_WATCH_JOB, isBackupLate, RUN_STATUS_OK } from '../../lib/settings/backup-status';
 
+import { runJob, type FailedJobRun, type JobLogger, type JobOutcome } from './run-job';
+
 /**
  * The daily `backup-watch` job of the worker (STORY-10.05 AC-5, AC-9; ADR-011; ADR-015 Amendment 3 point 5; architecture sections 4.7, 9.5 and 9.9).
  *
@@ -44,7 +46,8 @@ export type StatfsFunction = (path: string) => Promise<StatfsFigures>;
 /** What the job needs from the database: the newest good backup, and a way to write its own row. */
 export interface BackupWatchStore {
   latestGoodBackupAt(): Promise<Date | null>;
-  recordRun(run: BackupWatchRun): Promise<void>;
+  /** Writes the row of a run. The wrapper (`run-job.ts`) also uses it for the `failed` row of a run that threw. */
+  recordRun(run: BackupWatchRun | FailedJobRun): Promise<void>;
 }
 
 export interface VolumeRole {
@@ -165,23 +168,15 @@ export function describeBackupWatch(result: BackupWatchResult): string {
   return `backup-watch: ${percent} % of the disk is free${late}`;
 }
 
-export type WatchLogger = (message: string, level?: 'info' | 'error') => void;
-
-/** One scheduled run, never throwing: the cron callback must survive a database or file system problem. */
-export async function performBackupWatch(settings: BackupWatchVolumes, dependencies: BackupWatchDependencies, log: WatchLogger): Promise<void> {
-  try {
-    const outcome = await runBackupWatch(settings, dependencies);
-    if ('skipped' in outcome) {
-      log(`backup-watch skipped: ${outcome.skipped}`);
-      return;
-    }
-    const level = outcome.backupLate || outcome.run.result.status === 'failed' ? 'error' : 'info';
-    log(describeBackupWatch(outcome.run.result), level);
-    await dependencies.store.recordRun(outcome.run);
-  } catch {
-    // The reason is not logged: a database error can carry a connection detail. The worker's own error log of the pool says the rest.
-    log('backup-watch could not read or write the job record', 'error');
-  }
+/**
+ * One scheduled run: what it found, for the wrapper's log line (`run-job.ts`), and its row written. It throws when the database cannot be read or written; the wrapper then logs
+ * the failure by the class of the error only (a database error can carry a connection detail) and writes a `failed` row if it can.
+ */
+export async function performBackupWatch(settings: BackupWatchVolumes, dependencies: BackupWatchDependencies): Promise<JobOutcome> {
+  const outcome = await runBackupWatch(settings, dependencies);
+  if ('skipped' in outcome) return { summary: `backup-watch skipped: ${outcome.skipped}` };
+  await dependencies.store.recordRun(outcome.run);
+  return { summary: describeBackupWatch(outcome.run.result), level: outcome.backupLate || outcome.run.result.status === 'failed' ? 'error' : 'info' };
 }
 
 /** The real `fs.statfs`. */
@@ -194,7 +189,7 @@ export const nodeStatfs: StatfsFunction = async (path) => {
  * Schedules the daily run, or returns `undefined` (and says why) when neither volume is set or one is not a drive root. The volumes are read from `.env` once, at
  * start-up: the install writes them, and a change is a restart.
  */
-export function scheduleBackupWatch(settings: BackupWatchVolumes, store: BackupWatchStore, log: WatchLogger, now: () => Date = () => new Date()): ScheduledTask | undefined {
+export function scheduleBackupWatch(settings: BackupWatchVolumes, store: BackupWatchStore, log: JobLogger, now: () => Date = () => new Date()): ScheduledTask | undefined {
   const checked = checkVolumes(settings);
   if ('reason' in checked) {
     log(`backup-watch is off: ${checked.reason}`);
@@ -202,9 +197,10 @@ export function scheduleBackupWatch(settings: BackupWatchVolumes, store: BackupW
   }
   const task = schedule(
     BACKUP_WATCH_CRON,
-    async () => {
-      await performBackupWatch(settings, { statfs: nodeStatfs, store, now }, log);
-    },
+    () =>
+      runJob({ name: BACKUP_WATCH_JOB, log, now, recordFailure: (run) => store.recordRun(run) }, () =>
+        performBackupWatch(settings, { statfs: nodeStatfs, store, now }),
+      ),
     { name: 'backup-watch', timezone: BACKUP_WATCH_TIMEZONE, noOverlap: true },
   );
   log('backup-watch scheduled daily at 09:00 IST');
