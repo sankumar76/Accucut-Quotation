@@ -10,7 +10,7 @@ import { Notice } from '@/components/shared/notice';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/cn';
 import { previewInsert, type InsertPreviewView } from '@/lib/config/insert-field-client';
-import { buildSpec, letterRows, placeKey, type InsertForm, type LetterRow } from '@/lib/config/insert-field-form';
+import { buildSpec, letterRows, placeKey, withTypedLabels, type InsertForm, type LetterRow } from '@/lib/config/insert-field-form';
 import type { Outcome } from '@/lib/api-client';
 
 import { LETTERS_FAILED, LETTERS_HEADING, LETTERS_LOADING, LETTERS_REGION_LABEL, LETTERS_WAITING, MOVED_NOTHING, PREVIEW_CAPTION, PREVIEW_COLUMNS, PREVIEW_REGION_LABEL, productCellWords } from './insert-field-texts';
@@ -95,8 +95,8 @@ function LetterList({ rows }: { readonly rows: ReadonlyArray<LetterRow> }) {
   );
 }
 
-/** "Letters after this insert": the live list of step 2, a named, focusable region that scrolls inside itself. */
-export function LettersAfterInsert({ state }: { readonly state: LettersState }) {
+/** "Letters after this insert": the live list of step 2, a named, focusable region that scrolls inside itself. `labels` are the names typed so far for the new fields, in order. */
+export function LettersAfterInsert({ state, labels }: { readonly state: LettersState; readonly labels: ReadonlyArray<string> }) {
   return (
     <div className="flex flex-col gap-s-2">
       <h3 className="text-label font-semibold text-ink-2">{LETTERS_HEADING}</h3>
@@ -106,7 +106,7 @@ export function LettersAfterInsert({ state }: { readonly state: LettersState }) 
         <div role="region" aria-label={LETTERS_REGION_LABEL} tabIndex={0} className="max-h-60 min-w-0 overflow-auto rounded-md border border-border bg-surface-2 p-s-3">
           {state.kind === 'waiting' ? <p className="text-ink-2">{LETTERS_WAITING}</p> : null}
           {state.kind === 'loading' ? <p className="text-ink-2">{LETTERS_LOADING}</p> : null}
-          {state.kind === 'ready' ? <LetterList rows={letterRows(state.preview)} /> : null}
+          {state.kind === 'ready' ? <LetterList rows={withTypedLabels(letterRows(state.preview), labels)} /> : null}
           {state.kind === 'ready' && state.preview.moved.length === 0 ? <p className="mt-s-2 text-ink-2">{MOVED_NOTHING}</p> : null}
         </div>
       )}

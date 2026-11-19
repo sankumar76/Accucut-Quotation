@@ -247,6 +247,20 @@ export function letterRows(preview: Pick<InsertPreviewView, 'inserted' | 'moved'
   return [...added, ...moved, ...alone];
 }
 
+/**
+ * The live list of step 2 is asked for when the places change, not when a label is typed, so it names a new field "New field" until then. The labels typed since stand in for those names, in the order of the new
+ * fields (the input, then its cost column), so the list reads "AY Rework allowance" as the Admin types. An empty label keeps the server's name.
+ */
+export function withTypedLabels(rows: ReadonlyArray<LetterRow>, labels: ReadonlyArray<string>): ReadonlyArray<LetterRow> {
+  let next = 0;
+  return rows.map((row) => {
+    if (!row.isNew) return row;
+    const typed = (labels[next] ?? '').trim();
+    next += 1;
+    return typed === '' ? row : { ...row, label: typed };
+  });
+}
+
 /** The new fields as the lead line of step 3 names them: `AY Rework allowance`. */
 export function newFieldNames(preview: Pick<InsertPreviewView, 'inserted'>): ReadonlyArray<string> {
   return preview.inserted.map((field) => `${field.letter} ${field.label}`);

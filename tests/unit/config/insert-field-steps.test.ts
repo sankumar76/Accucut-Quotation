@@ -231,17 +231,21 @@ describe('AC-3 step 3: the preview', () => {
 
 describe('the live list of letters', () => {
   it('says the letters are being worked out, and that they could not be', () => {
-    expect(renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'loading' } }))).toContain('Working out the letters');
-    const failed = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'failed' } }));
+    expect(renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'loading' }, labels: [] }))).toContain('Working out the letters');
+    const failed = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'failed' }, labels: [] }));
     expect(failed).toContain('The letters could not be worked out. Nothing was changed.');
     expect(failed).not.toContain('role="region"');
   });
 
   it('lists the new letter and each shift, and says when no later column moves', () => {
-    const ready = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'ready', preview: PREVIEW } }));
+    const ready = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'ready', preview: PREVIEW }, labels: ['Typed Input Name'] }));
     expect(ready).toContain('Invented Total');
     expect(ready).toContain('(new)');
-    const end = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'ready', preview: { ...PREVIEW, moved: [], productCells: [] } } }));
+    // The first new field is named as typed; the second keeps the server's name.
+    expect(ready).toContain('Typed Input Name');
+    expect(ready).not.toContain('Invented Input');
+    expect(ready).toContain('Invented Cost Column');
+    const end = renderToStaticMarkup(createElement(LettersAfterInsert, { state: { kind: 'ready', preview: { ...PREVIEW, moved: [], productCells: [] } }, labels: [] }));
     expect(end).toContain('No later column moves: the new field goes at the end.');
   });
 

@@ -84,7 +84,8 @@ function Block({ heading, children }: { readonly heading: string; readonly child
 export function StepDetails({ wizard, options }: { readonly wizard: InsertWizard; readonly options: InsertOptions }) {
   const { form, errors } = wizard;
   const lettersState = useLettersAfterInsert(form);
-  const letters = <LettersAfterInsert state={lettersState} />;
+  const typedLabels = form.kind === 'output' ? [form.output.label] : form.kind === 'pair' ? [form.input.label, form.cost.label] : [form.input.label];
+  const letters = <LettersAfterInsert state={lettersState} labels={typedLabels} />;
   const after = { value: form.afterFieldId, onChange: wizard.setAfter };
   return (
     <div className="flex flex-col gap-s-5">

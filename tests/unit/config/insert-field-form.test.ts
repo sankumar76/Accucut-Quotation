@@ -14,6 +14,7 @@ import {
   parseWidth,
   placeKey,
   strayMessages,
+  withTypedLabels,
   type InsertForm,
 } from '@/lib/config/insert-field-form';
 
@@ -188,6 +189,19 @@ describe('the table of letters (AC-3, SPEC 14.6)', () => {
 
   it('is the new fields alone when nothing moves (an insert after the last column)', () => {
     expect(letterRows({ inserted: preview.inserted, moved: [], productCells: [] }).map((row) => row.becomes)).toEqual(['AY']);
+  });
+
+  it('puts the labels typed since the list was asked for in place of the name the server gave, in the order of the new fields, and keeps the name for a label not typed yet', () => {
+    const rows = letterRows({
+      inserted: [
+        { letter: 'AY', label: 'New field', kind: 'input' },
+        { letter: 'AZ', label: 'New field', kind: 'output' },
+      ],
+      moved: [{ label: 'Invented Total', from: 'AY', to: 'BA' }],
+      productCells: [],
+    });
+    expect(withTypedLabels(rows, ['  Rework allowance ', '']).map((row) => row.label)).toEqual(['Rework allowance', 'New field', 'Invented Total']);
+    expect(withTypedLabels(rows, []).map((row) => row.label)).toEqual(['New field', 'New field', 'Invented Total']);
   });
 
   it('names the new fields for the lead line of step 3', () => {
