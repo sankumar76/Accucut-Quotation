@@ -1,6 +1,6 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 <#
-  Pester 5 tests of clear-copies.ps1 and Clear-AccucutCopies (STORY-10.05 AC-6, AC-8; ADR-015 Amendments 2, 2.1 and 3; architecture section 9.5). Run by CI stage 13
+  Pester 5 tests of clear-copies.ps1 and Invoke-AccucutClearCopies (STORY-10.05 AC-6, AC-8; ADR-015 Amendments 2, 2.1 and 3; architecture section 9.5). Run by CI stage 13
   on windows-latest. Every prompt is answered by a mock; the copies are small files under TestDrive; the job_runs write is a mock. The real script on the real
   install (answers on standard input) is exercised by stage 13 (deploy/windows/ci/exercise-backup.ps1). Every value is invented.
 #>
@@ -85,7 +85,7 @@ Describe 'the checks of clear-copies.ps1 come before the module, the questions a
         Mock Read-AccucutBackupSettings { $script:Trace.Add("settings:$Path"); return $script:Settings }
         Mock Assert-AccucutBackupFolderTrusted { $script:Trace.Add("folder:$Directory|$BackupSid") }
         Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("program:$Path"); return $Path }
-        Mock Clear-AccucutCopies { $script:Trace.Add("clear:$PsqlPath") }
+        Mock Invoke-AccucutClearCopies { $script:Trace.Add("clear:$PsqlPath") }
     }
 
     It 'checks the root, the release and the script, loads the module, then checks the settings files, the backups folder and psql, and only then asks the Admin anything' {
@@ -114,7 +114,7 @@ Describe 'the checks of clear-copies.ps1 come before the module, the questions a
             'a settings file fails the trust check' { Mock Assert-AccucutTrustedPath { if ($Path -like '*backup-settings.json') { throw "'$Path' can be changed by S-1-5-32-545" } } }
         }
         { Invoke-AccucutClearScript -ScriptPath $scriptPath } | Should -Throw $Message
-        Should -Invoke Clear-AccucutCopies -Times 0 -Exactly
+        Should -Invoke Invoke-AccucutClearCopies -Times 0 -Exactly
         Should -Invoke Import-AccucutTrustedModule -Times $Imported -Exactly
     }
 }
@@ -135,7 +135,7 @@ Describe 'a replaced module is never loaded by clear-copies.ps1 (ADR-015 Amendme
             if ($script:Fake.ContainsKey($key)) { return $script:Fake[$key] }
             return (New-FakeSecurity -Path $Path -Ace (New-FullControl))
         }
-        Mock Clear-AccucutCopies { }
+        Mock Invoke-AccucutClearCopies { }
         $script:AccucutTrustLog.Clear()
     }
 
@@ -144,14 +144,14 @@ Describe 'a replaced module is never loaded by clear-copies.ps1 (ADR-015 Amendme
         { Invoke-AccucutClearScript -ScriptPath (Join-Path $TestDrive 'current\clear-copies.ps1') } | Should -Throw '*can be changed by S-1-5-32-545*'
         Test-Path -LiteralPath $script:Marker | Should -BeFalse
         $script:AccucutTrustLog | Should -Not -Contain "load:$($script:ModuleFile)"
-        Should -Invoke Clear-AccucutCopies -Times 0 -Exactly
+        Should -Invoke Invoke-AccucutClearCopies -Times 0 -Exactly
     }
 
     It 'does not load a module whose release folder is a link' {
         Set-FakeSecurity $script:Release (New-FakeSecurity -Path $script:Release -Ace (New-FullControl) -NotProtected -Link)
         { Invoke-AccucutClearScript -ScriptPath (Join-Path $TestDrive 'current\clear-copies.ps1') } | Should -Throw '*is a link*'
         Test-Path -LiteralPath $script:Marker | Should -BeFalse
-        Should -Invoke Clear-AccucutCopies -Times 0 -Exactly
+        Should -Invoke Invoke-AccucutClearCopies -Times 0 -Exactly
     }
 }
 
@@ -193,7 +193,7 @@ Describe 'the guided clear: it lists, keeps the newest 4, asks for a typed date,
         Mock Get-AccucutVolumeSpace -ModuleName AccucutOps { $script:Space }
         Mock Add-AccucutJobRun -ModuleName AccucutOps { $script:Rows.Add([pscustomobject]@{ Job = $Job; Started = $StartedUtc; Finished = $FinishedUtc; Result = $Result; PassFile = $PassFile }) }
         Mock Write-Host -ModuleName AccucutOps { $script:Output.Add([string]$Object) }
-        function Invoke-Clear { return (Clear-AccucutCopies -Paths $script:Paths -Settings $script:Settings -PsqlPath 'C:\pg\bin\psql.exe') }
+        function Invoke-Clear { return (Invoke-AccucutClearCopies -Paths $script:Paths -Settings $script:Settings -PsqlPath 'C:\pg\bin\psql.exe') }
         function Get-Remaining { return @(Get-AccucutBackupCopy -Directory $script:Paths.Backups | ForEach-Object { $_.CreatedUtc.ToString('yyyyMMdd') }) }
     }
 
@@ -361,9 +361,9 @@ Describe 'the guided clear: it lists, keeps the newest 4, asks for a typed date,
 }
 
 Describe 'the clear deletes only through Remove-AccucutBackupCopy, which proves again before each delete (static checks)' {
-    It 'Clear-AccucutCopies has no other delete, no recursion and no wildcard; the only delete in the backup functions is in Remove-AccucutBackupCopy, Remove-AccucutStaleBackupPart and the manifest clean-up of a failed rename' {
+    It 'Invoke-AccucutClearCopies has no other delete, no recursion and no wildcard; the only delete in the backup functions is in Remove-AccucutBackupCopy, Remove-AccucutStaleBackupPart and the manifest clean-up of a failed rename' {
         $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Raw
-        $start = $text.IndexOf('function Clear-AccucutCopies {')
+        $start = $text.IndexOf('function Invoke-AccucutClearCopies {')
         $body = $text.Substring($start, $text.IndexOf('#endregion', $start) - $start)
         $body | Should -Not -Match 'Remove-Item|File\]::Delete|Directory\]::Delete|-Recurse|rd /s'
         $body | Should -Match 'Remove-AccucutBackupCopy -Directory \$directory -Name \$copy\.Name'

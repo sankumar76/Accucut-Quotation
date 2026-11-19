@@ -111,7 +111,7 @@ Describe 'the trust block is one copy, in both scripts (required test 1)' {
 }
 
 Describe 'the trust block is also one copy in backup.ps1 and clear-copies.ps1 (STORY-10.05, required test 1)' {
-    It 'is byte for byte the same as in install.ps1, with exactly one pair of markers (<File>)' -ForEach @(@{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+    It 'is byte for byte the same as in install.ps1, with exactly one pair of markers (<File>)' -ForEach @(@{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }, @{ File = 'restore.ps1' }) {
         $text = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory $File))
         $pattern = '(?s)# >>> ACCUCUT TRUST BLOCK v1\r?\n.*?# <<< ACCUCUT TRUST BLOCK v1'
         ([regex]::Matches($text, '# >>> ACCUCUT TRUST BLOCK v1')).Count | Should -Be 1
@@ -144,11 +144,12 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         )
         $script:BackupText = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'backup.ps1'))
         $script:ClearText = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'clear-copies.ps1'))
-        $script:Asts = @{ 'install.ps1' = (Get-ScriptAst -Text $script:InstallText); 'update.ps1' = (Get-ScriptAst -Text $script:UpdateText); 'backup.ps1' = (Get-ScriptAst -Text $script:BackupText); 'clear-copies.ps1' = (Get-ScriptAst -Text $script:ClearText) }
-        $script:Texts = @{ 'install.ps1' = $script:InstallText; 'update.ps1' = $script:UpdateText; 'backup.ps1' = $script:BackupText; 'clear-copies.ps1' = $script:ClearText }
+        $script:RestoreText = [System.IO.File]::ReadAllText((Join-Path $script:WindowsDirectory 'restore.ps1'))
+        $script:Asts = @{ 'install.ps1' = (Get-ScriptAst -Text $script:InstallText); 'update.ps1' = (Get-ScriptAst -Text $script:UpdateText); 'backup.ps1' = (Get-ScriptAst -Text $script:BackupText); 'clear-copies.ps1' = (Get-ScriptAst -Text $script:ClearText); 'restore.ps1' = (Get-ScriptAst -Text $script:RestoreText) }
+        $script:Texts = @{ 'install.ps1' = $script:InstallText; 'update.ps1' = $script:UpdateText; 'backup.ps1' = $script:BackupText; 'clear-copies.ps1' = $script:ClearText; 'restore.ps1' = $script:RestoreText }
     }
 
-    It 'the block defines exactly its 19 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+    It 'the block defines exactly its 19 functions, and calls only them, plus module-qualified Import-Module and Get-Item (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }, @{ File = 'restore.ps1' }) {
         $text = $script:Texts[$File]
         $start = $text.IndexOf('# >>> ACCUCUT TRUST BLOCK v1')
         $end = $text.IndexOf('# <<< ACCUCUT TRUST BLOCK v1')
@@ -163,7 +164,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         }
     }
 
-    It 'no script dot-sources, uses the call operator, Start-Process, Invoke-Expression, or a using-module statement (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+    It 'no script dot-sources, uses the call operator, Start-Process, Invoke-Expression, or a using-module statement (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }, @{ File = 'restore.ps1' }) {
         $ast = $script:Asts[$File]
         foreach ($call in (Get-CommandNames -Node $ast)) {
             $call.Operator | Should -Be 'Unknown'
@@ -172,7 +173,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.UsingStatementAst] }, $true).Count | Should -Be 0
     }
 
-    It 'Import-Module is called in one place only, Import-AccucutTrustedModule, and Import-AccucutTrustedModule in one place only (<File>)' -ForEach @(@{ File = 'install.ps1'; Caller = 'Invoke-AccucutInstallSecondHalf' }, @{ File = 'update.ps1'; Caller = 'Import-AccucutUpdateEnvironment' }, @{ File = 'backup.ps1'; Caller = 'Invoke-AccucutBackupScript' }, @{ File = 'clear-copies.ps1'; Caller = 'Invoke-AccucutClearScript' }) {
+    It 'Import-Module is called in one place only, Import-AccucutTrustedModule, and Import-AccucutTrustedModule in one place only (<File>)' -ForEach @(@{ File = 'install.ps1'; Caller = 'Invoke-AccucutInstallSecondHalf' }, @{ File = 'update.ps1'; Caller = 'Import-AccucutUpdateEnvironment' }, @{ File = 'backup.ps1'; Caller = 'Invoke-AccucutBackupScript' }, @{ File = 'clear-copies.ps1'; Caller = 'Invoke-AccucutClearScript' }, @{ File = 'restore.ps1'; Caller = 'Invoke-AccucutRestoreScript' }) {
         $ast = $script:Asts[$File]
         $imports = @(Get-CommandNames -Node $ast | Where-Object { $_.Name -like '*Import-Module' })
         $imports.Count | Should -Be 1
@@ -185,7 +186,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         $loads[0].Offset | Should -BeLessThan $function.Extent.EndOffset
     }
 
-    It 'a child powershell.exe is started in one place only, Invoke-AccucutTrustedScript, and no other process is started except cmd.exe for rd (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+    It 'a child powershell.exe is started in one place only, Invoke-AccucutTrustedScript, and no other process is started except cmd.exe for rd (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }, @{ File = 'restore.ps1' }) {
         $ast = $script:Asts[$File]
         $starts = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and [string]$n.Member.Value -eq 'Start' -and $n.Expression.Extent.Text -like '*Diagnostics.Process*' }, $true))
         $starts.Count | Should -Be 2
@@ -212,6 +213,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
     It 'before the module is loaded, backup.ps1 and clear-copies.ps1 call only the trust block and Get-AccucutScriptInstallRoot, and check the module file first (required test 2, <File>)' -ForEach @(
         @{ File = 'backup.ps1'; Name = 'Invoke-AccucutBackupScript' }
         @{ File = 'clear-copies.ps1'; Name = 'Invoke-AccucutClearScript' }
+        @{ File = 'restore.ps1'; Name = 'Invoke-AccucutRestoreScript' }
     ) {
         $ast = $script:Asts[$File]
         $function = Get-FunctionAst -Ast $ast -Name $Name
@@ -233,17 +235,43 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         for ($i = 1; $i -lt $offsets.Count; $i++) { $offsets[$i] | Should -BeGreaterThan $offsets[$i - 1] -Because "$($order[$i]) comes after $($order[$i - 1])" }
         @(Get-CommandNames -Node $backup | Where-Object { $_.Name -eq 'Resolve-AccucutTrustedExecutable' }).Count | Should -Be 3
         $clear = Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name 'Invoke-AccucutClearScript'
-        $order = @('Import-AccucutTrustedModule', 'Get-AccucutBackupAccountSid', 'Read-AccucutBackupSettings', 'Assert-AccucutBackupFolderTrusted', 'Resolve-AccucutTrustedExecutable', 'Clear-AccucutCopies')
+        $order = @('Import-AccucutTrustedModule', 'Get-AccucutBackupAccountSid', 'Read-AccucutBackupSettings', 'Assert-AccucutBackupFolderTrusted', 'Resolve-AccucutTrustedExecutable', 'Invoke-AccucutClearCopies')
         $offsets = foreach ($name in $order) { @(Get-CommandNames -Node $clear | Where-Object { $_.Name -eq $name })[0].Offset }
         for ($i = 1; $i -lt $offsets.Count; $i++) { $offsets[$i] | Should -BeGreaterThan $offsets[$i - 1] -Because "$($order[$i]) comes after $($order[$i - 1])" }
     }
 
-    It 'the two helper functions that backup.ps1 and clear-copies.ps1 share are the same text in both' {
+    It 'restore.ps1 checks the settings files, the install state, the backups folder and every program before it asks anything (STORY-10.11)' {
+        $restore = Get-FunctionAst -Ast $script:Asts['restore.ps1'] -Name 'Invoke-AccucutRestoreScript'
+        $order = @('Import-AccucutTrustedModule', 'Get-AccucutBackupAccountSid', 'Read-AccucutBackupSettings', 'Read-AccucutInstallState', 'Assert-AccucutBackupFolderTrusted', 'Resolve-AccucutTrustedExecutable', 'Invoke-AccucutRestore')
+        $offsets = foreach ($name in $order) { @(Get-CommandNames -Node $restore | Where-Object { $_.Name -eq $name })[0].Offset }
+        for ($i = 1; $i -lt $offsets.Count; $i++) { $offsets[$i] | Should -BeGreaterThan $offsets[$i - 1] -Because "$($order[$i]) comes after $($order[$i - 1])" }
+        # Five programs, each by full path through the trust block: age from the release, pg_dump, pg_restore and psql from PostgreSQL's folder, node.exe from the install state.
+        @(Get-CommandNames -Node $restore | Where-Object { $_.Name -eq 'Resolve-AccucutTrustedExecutable' }).Count | Should -Be 5
+        # The settings files and the state file are checked before they are read.
+        $checks = @(Get-CommandNames -Node $restore | Where-Object { $_.Name -eq 'Assert-AccucutTrustedPath' })
+        $checks.Count | Should -BeGreaterOrEqual 3
+        $readSettings = @(Get-CommandNames -Node $restore | Where-Object { $_.Name -eq 'Read-AccucutBackupSettings' })[0].Offset
+        @($checks | Where-Object { $_.Offset -lt $readSettings }).Count | Should -BeGreaterOrEqual 3
+    }
+
+    It 'the two helper functions that backup.ps1, clear-copies.ps1 and restore.ps1 share are the same text in all three' {
         foreach ($name in 'Get-AccucutScriptInstallRoot', 'Assert-AccucutBackupFolderTrusted') {
             $first = (Get-FunctionAst -Ast $script:Asts['backup.ps1'] -Name $name).Extent.Text
-            $second = (Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name $name).Extent.Text
-            $first | Should -BeExactly $second
+            foreach ($other in 'clear-copies.ps1', 'restore.ps1') {
+                (Get-FunctionAst -Ast $script:Asts[$other] -Name $name).Extent.Text | Should -BeExactly $first
+            }
         }
+    }
+
+    It 'the group check of ADR-015 Amendment 3.3 (R1) is the same text in clear-copies.ps1 and restore.ps1, reads the group through ADSI, and adds no load site' {
+        foreach ($name in 'Get-AccucutAdminGroupMemberList', 'Assert-AccucutAdminGroupEmpty') {
+            $first = (Get-FunctionAst -Ast $script:Asts['clear-copies.ps1'] -Name $name).Extent.Text
+            (Get-FunctionAst -Ast $script:Asts['restore.ps1'] -Name $name).Extent.Text | Should -BeExactly $first
+        }
+        $text = (Get-FunctionAst -Ast $script:Asts['restore.ps1'] -Name 'Get-AccucutAdminGroupMemberList').Extent.Text
+        $text | Should -Match 'WinNT://'
+        $text | Should -Match "Invoke\('Members'\)"
+        $text | Should -Not -Match 'Import-Module|Get-LocalGroup|Start-Process|Add-Type'
     }
 
     It 'in the first half of the install, only the trust block and a few plain functions are called: the module is not loaded and none of its functions is used (required test 2)' {
@@ -271,7 +299,7 @@ Describe 'the trust block is self-contained, and nothing is loaded or run unchec
         @(Get-CommandNames -Node $function | Where-Object { $_.Offset -lt $load.Offset -and $_.Name -eq 'Assert-AccucutTrustedPath' }).Count | Should -BeGreaterThan 0
     }
 
-    It 'the module is never dot-sourced or imported by a script before the entry guard, and nothing runs at the top level except parameters, strict mode, variables and functions (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }) {
+    It 'the module is never dot-sourced or imported by a script before the entry guard, and nothing runs at the top level except parameters, strict mode, variables and functions (<File>)' -ForEach @(@{ File = 'install.ps1' }, @{ File = 'update.ps1' }, @{ File = 'backup.ps1' }, @{ File = 'clear-copies.ps1' }, @{ File = 'restore.ps1' }) {
         $ast = $script:Asts[$File]
         foreach ($statement in $ast.EndBlock.Statements) {
             $text = $statement.Extent.Text

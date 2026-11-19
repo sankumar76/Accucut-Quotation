@@ -488,6 +488,9 @@ function Invoke-AccucutTrustedScript {
 # <<< ACCUCUT TRUST BLOCK v1
 # ---- Outside the trust block. Nothing below loads or runs code except through Import-AccucutTrustedModule and Resolve-AccucutTrustedExecutable.
 
+# Set when the module has been loaded (after the trust checks): only then is Hide-AccucutSecrets there to blank a message. (Not a Get-Command probe: in a JEA session that cmdlet is a constrained proxy.)
+$script:AccucutModuleLoaded = $false
+
 function Get-AccucutScriptInstallRoot {
     # The install root, worked out from where this script is: <Root>\current\<name> or <Root>\releases\<tag>\<name>. Nothing on the command line can change it.
     [CmdletBinding()]
@@ -504,19 +507,52 @@ function Get-AccucutScriptInstallRoot {
 
 function Assert-AccucutBackupFolderTrusted {
     # The backups folder before anything is written to it or deleted from it (ADR-015 Amendment 3 point 4): the chain to it passes Rule B with the backup account as
-    # the only writer (up to Modify); it is a real folder (no link), its owner is Administrators, and its list is protected.
+    # the only writer (up to Modify), or one of two when the install made the Admin endpoint (-EndpointSid, the local group of its virtual account: STORY-10.11, ADR-015 Amendment 3
+    # point 4); it is a real folder (no link), its owner is Administrators, and its list is protected.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Root,
         [Parameter(Mandatory)][string]$Directory,
-        [Parameter(Mandatory)][string]$BackupSid
+        [Parameter(Mandatory)][string]$BackupSid,
+        [string]$EndpointSid
     )
 
-    Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer @($BackupSid)
+    $writers = @($BackupSid)
+    if (-not [string]::IsNullOrEmpty($EndpointSid)) { $writers += $EndpointSid }
+    Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer $writers
     $security = Get-AccucutTrustSecurity -Path $Directory
     if ($security.Reparse -or -not $security.IsDirectory) { throw "'$Directory' is not a real folder. Refusing to use it." }
     if ($security.Owner -ne 'S-1-5-32-544') { throw "'$Directory' is owned by $($security.Owner), not by Administrators. Refusing to use it." }
     if (-not $security.Protected) { throw "'$Directory' inherits its permissions from the folder above it. Refusing to use it." }
+}
+
+function Get-AccucutAdminGroupMemberList {
+    # The members of the local group that the Admin endpoint's virtual account joins, read through ADSI (WinNT), so that no module is imported and there is no load site.
+    # Returns $null when there is no such group (no endpoint was set up), an empty array when it has no member, and throws when the list cannot be read.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$GroupName)
+
+    $exists = $true
+    try { [void]([System.Security.Principal.NTAccount]::new([string]$env:COMPUTERNAME, $GroupName)).Translate([System.Security.Principal.SecurityIdentifier]) } catch { $exists = $false }
+    if (-not $exists) { return $null }
+    $group = [ADSI]"WinNT://$($env:COMPUTERNAME)/$GroupName,group"
+    $list = @($group.Invoke('Members'))
+    return , $list
+}
+
+function Assert-AccucutAdminGroupEmpty {
+    # R1 (ADR-015 Amendment 3.3): the group AccucutAdminRunAs must have NO members: a member could read the restore's database password (restore.pgpass is readable by the group).
+    # Before the first prompt, and with nothing changed, this stops when the group has a member or its members cannot be read. A server with no such group passes.
+    [CmdletBinding()]
+    param()
+
+    $groupName = 'AccucutAdminRunAs'
+    try { $members = Get-AccucutAdminGroupMemberList -GroupName $groupName }
+    catch { throw "The members of the group $groupName could not be read ($($_.Exception.Message)). It must have none: a member could read the restore's database password. Ask your IT person to check it. Nothing was changed." }
+    if ($null -eq $members) { return }
+    if (@($members).Count -gt 0) {
+        throw "The group $groupName has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed."
+    }
 }
 
 function Invoke-AccucutClearScript {
@@ -537,14 +573,16 @@ function Invoke-AccucutClearScript {
     Assert-AccucutTrustedPath -Path $release -Root $root -ProtectedRoot
     Assert-AccucutTrustedPath -Path $fromRelease -Root $root -ProtectedRoot
     Import-AccucutTrustedModule -Root $root -Release $release
+    $script:AccucutModuleLoaded = $true
 
     $paths = Get-AccucutPaths -Root $root
+    Assert-AccucutAdminGroupEmpty
     $backupSid = Get-AccucutBackupAccountSid
     foreach ($file in $paths.BackupSettings, $paths.BackupPgpass) { Assert-AccucutTrustedPath -Path $file -Root $root -ProtectedRoot }
     $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
-    Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid
+    Assert-AccucutBackupFolderTrusted -Root $root -Directory $paths.Backups -BackupSid $backupSid -EndpointSid (Get-AccucutAdminGroupSid)
     $psql = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe'))
-    [void](Clear-AccucutCopies -Paths $paths -Settings $settings -PsqlPath $psql)
+    [void](Invoke-AccucutClearCopies -Paths $paths -Settings $settings -PsqlPath $psql)
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
@@ -554,7 +592,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     }
     catch {
         $message = $_.Exception.Message
-        if (Get-Command -Name Hide-AccucutSecrets -ErrorAction SilentlyContinue) { $message = Hide-AccucutSecrets -Text $message }
+        if ($script:AccucutModuleLoaded) { $message = Hide-AccucutSecrets -Text $message }
         Write-Host "Clearing copies stopped: $message" -ForegroundColor Red
         exit 1
     }
