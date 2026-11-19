@@ -445,7 +445,8 @@ Test-Step 'Import-Module-resolves' { if ($null -eq $ExecutionContext.SessionStat
         $steps.Count | Should -BeGreaterThan 10
         $failed = @($steps | Where-Object { $_ -notlike 'STEP|*|ok|*' })
         $failed.Count | Should -Be 0 -Because "these steps failed inside the endpoint: $($failed -join ' ;; ')"
-        ($steps | Where-Object { $_ -like 'STEP|Import-Module|ok|module-imported' }).Count | Should -Be 1
+        # One match is a single string, and under strict mode a single string has no Count: the pipeline is wrapped in @() like every other count in this file.
+        @($steps | Where-Object { $_ -like 'STEP|Import-Module|ok|module-imported' }).Count | Should -Be 1
     }
 
     It 'writes a transcript of the session to the transcript folder, and the transcript holds no secret' {
@@ -464,18 +465,37 @@ Describe 'the Admin endpoint on the real install of stage 13 (AC-7, AC-9): the i
         $script:RealPaths = Get-AccucutPaths -Root $script:RealRoot
         $script:RealReady = (Test-Path -LiteralPath $script:RealPaths.RestorePgpass)
         $script:RealSession = $null
-        # The two commands ask questions. A session with no one at the keyboard cannot answer, so each call is bounded: a call that waits for an answer is stopped after 3 minutes and reported.
+        # The two commands ask questions, and a session with no one at the keyboard cannot answer. A command that asks puts its job in the state Blocked (waiting for an answer).
+        # Wait-Job refuses a blocked job outright, and Receive-Job on it would try to ask at this console, so neither is used while the job is live: the job's state is polled
+        # (bounded: 3 minutes), what the command has written so far is read from the child job's streams (Write-Host goes to Information, which 2>&1 does not carry), and the
+        # job is always stopped and removed, so the session is free for the next command. Reaching the state Blocked is itself the proof that the command stopped at its first question.
         function Invoke-RealEndpointCommand {
             param([string]$Name)
             if ($Name -eq 'Restore-AccucutBackup') { $job = Invoke-Command -Session $script:RealSession -ScriptBlock { Restore-AccucutBackup } -AsJob }
             else { $job = Invoke-Command -Session $script:RealSession -ScriptBlock { Clear-AccucutCopies } -AsJob }
-            $finished = Wait-Job -Job $job -Timeout 180
-            $timedOut = ($null -eq $finished)
-            if ($timedOut) { Stop-Job -Job $job }
-            $out = @(Receive-Job -Job $job -ErrorAction SilentlyContinue 2>&1 | ForEach-Object { [string]$_ })
-            Remove-Job -Job $job -Force
-            if ($timedOut) { $out += 'TIMED OUT: the command was waiting for an answer for 3 minutes.' }
-            return $out
+            try {
+                $settled = @('Blocked', 'Completed', 'Failed', 'Stopped')
+                $deadline = [DateTime]::UtcNow.AddSeconds(180)
+                $timedOut = $false
+                while (@(@([string]$job.State) + @($job.ChildJobs | ForEach-Object { [string]$_.State }) | Where-Object { $_ -in $settled }).Count -eq 0) {
+                    if ([DateTime]::UtcNow -ge $deadline) { $timedOut = $true; break }
+                    Start-Sleep -Milliseconds 250
+                }
+                $out = @()
+                foreach ($child in @($job.ChildJobs)) {
+                    $out += @($child.Output | ForEach-Object { [string]$_ })
+                    $out += @($child.Information | ForEach-Object { [string]$_ })
+                    $out += @($child.Warning | ForEach-Object { [string]$_ })
+                    $out += @($child.Error | ForEach-Object { [string]$_ })
+                }
+                if ([string]$job.State -eq 'Failed' -and $null -ne $job.JobStateInfo.Reason) { $out += "JOB FAILED: $($job.JobStateInfo.Reason.Message)" }
+                if ($timedOut) { $out += 'TIMED OUT: the command neither finished nor asked a question for 3 minutes.' }
+                return $out
+            }
+            finally {
+                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+            }
         }
         $script:RealOutput = @{}
         if ($script:RealReady) {
