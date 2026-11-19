@@ -85,6 +85,8 @@ const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
     'account-service',
+    // STORY-01.09: the Admin hand-over holds no cost data, but it moves the top role and is the guard of an Admin-only, step-up action; called by its one route, never by a view. Blocked, as `step-up-service` is.
+    'admin-handover-service',
     // STORY-06.05 (NFR-002): the approval's guard reads the calculation basis under the estimate's lock, for the Lead and the Admin only; from STORY-06.06 it also holds the approved price.
     'approval-service',
     'audit-cursor',

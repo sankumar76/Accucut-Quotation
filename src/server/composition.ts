@@ -23,6 +23,7 @@ import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AccountService, createAccountService } from './services/account-service';
+import { type AdminHandoverService, createAdminHandoverService } from './services/admin-handover-service';
 import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
@@ -54,6 +55,7 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
@@ -316,6 +318,20 @@ export function getCancelApprovalService(): CancelApprovalService {
     workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
   });
   return cancelApprovalService;
+}
+
+/**
+ * The Admin hand-over (STORY-01.09): the password check of STORY-06.14 in the request, then in one transaction with both rows locked the swap of the two roles and the one audit entry. Shares the
+ * runtime-role client and the step-up check; only its one route asks for it, for the Admin alone.
+ */
+export function getAdminHandoverService(): AdminHandoverService {
+  adminHandoverService ??= createAdminHandoverService({
+    users: getUserRepository(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+    stepUp: getStepUpService(),
+  });
+  return adminHandoverService;
 }
 
 /**
