@@ -102,13 +102,13 @@ describe('trimmedSender', () => {
 describe('the address rule is the rule of the mailer (zod z.email)', () => {
   const samples = [
     'portal@example.com',
-    'first.last@example.co.in',
+    'first.last@sub.example.com',
     "o'brien+tag@sub.example.org",
     'a@b.co',
     'a..b@example.com',
     '.a@example.com',
     'a@example',
-    'a@-example.com',
+    'a@-b.example.com',
     'a b@example.com',
     'a@example..com',
     'a@exa_mple.com',
