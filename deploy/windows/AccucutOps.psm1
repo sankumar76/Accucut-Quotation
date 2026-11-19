@@ -2082,6 +2082,8 @@ function Invoke-AccucutBackup {
     copies past 2 calendar years (never the newest 4, never a newer copy to make room); one job_runs row. On any failure a failed row is written (when the
     database answers), the temporary file is removed and the error is thrown, so the caller exits non-zero.
     -Program holds the full paths already checked by the caller: PgDump, Psql, Age.
+    -SkipPrune makes the copy and prunes nothing. The safety copy of a restore uses it: that copy is one more among the newest, so a pruning run after it could delete
+    the very copy the Admin chose (a copy just past 2 years, pushed out of the newest 4 by the safety copy itself) before it is read. The next weekly backup prunes.
     #>
     [CmdletBinding()]
     param(
@@ -2092,7 +2094,8 @@ function Invoke-AccucutBackup {
         [string]$ReleaseTag = '',
         [string]$LogFile,
         [string]$PassFile,
-        [string]$DatabaseRole = $script:BackupDatabaseRole
+        [string]$DatabaseRole = $script:BackupDatabaseRole,
+        [switch]$SkipPrune
     )
 
     $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2142,8 +2145,10 @@ function Invoke-AccucutBackup {
         catch { [System.IO.File]::Delete($manifestPath); throw }
 
         $pruned = @()
-        try { $pruned = @(Invoke-AccucutBackupPrune -Directory $directory) }
-        catch { Write-AccucutLog -Message "Pruning old copies stopped: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        if (-not $SkipPrune) {
+            try { $pruned = @(Invoke-AccucutBackupPrune -Directory $directory) }
+            catch { Write-AccucutLog -Message "Pruning old copies stopped: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        }
         $after = Get-AccucutVolumeSpace -Path $directory
         $ok = @{ status = 'ok'; reason = $Reason; sizeBytes = $size; freeBytes = $after.FreeBytes; totalBytes = $after.TotalBytes; pruned = $pruned.Count }
         Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $ok
@@ -2948,7 +2953,7 @@ function Invoke-AccucutRestore {
             Stop-AccucutServices
             $stoppedServices = $true
             Write-AccucutRestoreRecord -Paths $Paths -Message 'AccucutApp and AccucutWorker are stopped. Taking a safety copy of the database as it is now.'
-            $safety = Invoke-AccucutBackup -Paths $Paths -Settings $Settings -Program @{ PgDump = $Program.PgDump; Psql = $Program.Psql; Age = $Program.Age } -Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole
+            $safety = Invoke-AccucutBackup -Paths $Paths -Settings $Settings -Program @{ PgDump = $Program.PgDump; Psql = $Program.Psql; Age = $Program.Age } -Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole -SkipPrune
             $safetyName = $safety.Name
             Write-AccucutRestoreRecord -Paths $Paths -Message "Safety copy made: $safetyName. Restoring $copyName into a new database ($newName)."
             New-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $newName

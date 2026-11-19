@@ -247,6 +247,7 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
         $script:Answers = [System.Collections.Queue]::new()
         $script:ServerVersion = '17.2'
         $script:Healthy = $true
+        $script:SafetySkipPrune = $false
         $script:FreeBytes = [int64]60GB
         $script:Keys = New-TestKeyPair
         $script:Plain = New-TestDump
@@ -271,7 +272,7 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
         Mock Stop-AccucutServices -ModuleName AccucutOps { $script:Trace.Add('stop') }
         Mock Start-AccucutServices -ModuleName AccucutOps { $script:Trace.Add('start') }
         Mock Wait-AccucutHealth -ModuleName AccucutOps { $script:Trace.Add("health:$Url"); return $script:Healthy }
-        Mock Invoke-AccucutBackup -ModuleName AccucutOps { $script:Trace.Add("safety:$Reason|$ReleaseTag|$DatabaseRole|$([System.IO.Path]::GetFileName($PassFile))"); return [pscustomobject]@{ Name = 'accucut-20261118-020000-release.age' } }
+        Mock Invoke-AccucutBackup -ModuleName AccucutOps { $script:SafetySkipPrune = [bool]$SkipPrune; $script:Trace.Add("safety:$Reason|$ReleaseTag|$DatabaseRole|$([System.IO.Path]::GetFileName($PassFile))"); return [pscustomobject]@{ Name = 'accucut-20261118-020000-release.age' } }
         Mock New-AccucutRestoreDatabase -ModuleName AccucutOps { $script:Trace.Add("new:$Name") }
         Mock Switch-AccucutRestoreDatabase -ModuleName AccucutOps { $script:Trace.Add("swap:$Replacement>$Previous") }
         Mock Remove-AccucutRestoreDatabase -ModuleName AccucutOps { $script:Trace.Add("drop:$Name") }
@@ -317,6 +318,8 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
             # the order of the architecture 9.5 step table: checks, stop, safety copy, new database, restore, migrate, swap, start, health, drop the old one
             $steps = (@($script:Trace) -join ' ') -replace 'accucut_(new|old)_\d{14}', 'accucut_$1_T'
             $steps | Should -Be 'info:accucut_restore stop safety:release|before-restore|accucut_restore|restore.pgpass new:accucut_new_T migrate swap:accucut_new_T>accucut_old_T start health:http://127.0.0.1:3000/api/health drop:accucut_old_T'
+            # SQR-01: the safety copy does not prune, so it can never delete the copy that is being restored (a copy just past 2 years, pushed out of the newest 4 by the safety copy itself)
+            $script:SafetySkipPrune | Should -BeTrue
             # the bytes that pg_restore received are exactly the dump that was encrypted (age decrypted them with the key, which only travelled on standard input)
             [System.BitConverter]::ToString([System.IO.File]::ReadAllBytes($env:FAKE_RESTORE_OUT)) | Should -BeExactly ([System.BitConverter]::ToString($script:Plain))
             $log = Get-Content -LiteralPath $env:FAKE_RESTORE_LOG

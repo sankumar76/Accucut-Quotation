@@ -994,7 +994,7 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(rollBack.indexOf('Switch-AccucutRestoreDatabase')).toBeGreaterThan(0);
     expect(rollBack.indexOf('Switch-AccucutRestoreDatabase')).toBeLessThan(rollBack.indexOf('Start-AccucutServices'));
     // The safety copy is an ordinary release copy, made with the restore role and its password file, not the backup account's.
-    expect(restore).toContain("-Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole");
+    expect(restore).toContain("-Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole -SkipPrune");
     // Outside the database: the record goes to restore.log and one Application event, whatever happens.
     expect(restore).toContain('Write-AccucutRestoreEvent -EntryType Information -EventId $script:RestoreEventDone');
     expect(restore).toContain('Write-AccucutRestoreEvent -EntryType Error -EventId $eventId');
@@ -1227,5 +1227,32 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
       expect(text, path).toContain('$script:AccucutModuleLoaded = $false');
       expect(text, path).toContain('if ($script:AccucutModuleLoaded) { $message = Hide-AccucutSecrets -Text $message }');
     }
+  });
+});
+
+describe('no stray carriage return in the deploy texts (STORY-10.11, SQR-05)', () => {
+  function textFiles(directory: string): string[] {
+    const found: string[] = [];
+    for (const entry of readdirSync(fileURLToPath(new URL(`../../${directory}`, import.meta.url)), { withFileTypes: true })) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) found.push(...textFiles(path));
+      else if (/\.(md|ps1|psm1|psd1|xml|json|yml)$/.test(entry.name)) found.push(path);
+    }
+    return found;
+  }
+
+  it('a carriage return in a deploy .md or script file is always the first half of CRLF (a lone one is a backslash-r that was typed into a path, such as config<CR>estore.pgpass)', () => {
+    const files = textFiles('deploy');
+    expect(files.length).toBeGreaterThan(10);
+    for (const path of files) {
+      const raw = readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8');
+      expect(raw.match(/\r(?!\n)/g) ?? [], path).toEqual([]);
+    }
+  });
+
+  it('the README says who can read restore.pgpass as it is: Administrators, and the endpoint group with -AdminAccount', () => {
+    const readme = read('deploy/windows/README.md');
+    expect(readme).toContain('`config\\restore.pgpass` (Administrators, and the endpoint group with `-AdminAccount`)');
+    expect(readme).not.toContain('(Administrators only)');
   });
 });
