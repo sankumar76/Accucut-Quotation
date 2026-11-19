@@ -84,3 +84,28 @@
 - **SQR-05** goes to #524.
 - **SQR-04** goes to the solution-architect.
 - **Before merge:** a fully green CI run of the head (SQR-06).
+
+## Re-review at `76ab5090` (2026-11-19)
+
+**Scope:** the new diff only, `git diff a4afb08 76ab5090`. That is one commit, "fix(config): hide-when-0 only for an input that holds a number, no length cap on the audit formula, honest hint": 20 files, +232 / -44. CI run 44562325247 was replaced by run 44568802187: E2E shards 1 to 4 are green, and "Stages 1 to 11b" is still red only at Stage 2 (Gitleaks, the unrelated old branch).
+
+| Finding | Result | Evidence |
+|---|---|---|
+| SQR-01 (Major) | **Fixed** | The server now refuses both paths:<br>• **Pair:** `pairHideIssues` (`field-insert-check.ts`) refuses `hideWhenInputIsZero: true` for an input that is not a Number, with a 422 on `cost.hideWhenInputIsZero` ("Hide the line only for a Number input."). It is called from `detailIssues`, so the preview and the save both apply it.<br>• **Single output:** `canHideWhenZero` (a Number or flag input) replaces `isWatchable` in `hideFieldIssues`. `isWatchable` stays for `visibleWhen`, where it is right.<br>The insert-options column now carries `hideable`; it is in the strict answer schema and the client reader, and the single output's hide list offers only those columns. In the UI, `applyInputPatch` turns the pair's flag off for Text and back on for Number, the checkbox is disabled for Text with the note "Only a Number input can hide its line.", and a refusal has its own message, `aria-describedby` and `aria-invalid`. `cost.hideWhenInputIsZero` is in `COST_ORDER`, so it is listed in the error summary.<br>Tests: `field-insert.test.ts` (Text with the flag on is refused; Text with it off stores `hideWhenZero: null`; Number stores the new input; text, choice, `select_other`, picture and output columns are refused; Number and flag are accepted), `structure-service.test.ts` (`hideable` per column), `insert-field-form.test.ts`, `insert-field-steps.test.ts`, `insert-field-client.test.ts`, E2E |
+| SQR-02 (Minor) | **Fixed** | `audit-events.ts`: `formula: z.string().min(1).nullable()`, with no upper bound, as in `config.formula_changed`. Tests: `audit-events.test.ts` accepts a formula over 2,500 characters and still refuses an empty one; `structure-service.test.ts` saves a cost formula that names a 100-character rate 25 times and records it whole |
+| SQR-03 (Minor) | **Fixed** (SCR-19) | The hint now reads "Hidden lines are still calculated and exported with their calculated value.", and a test asserts that "exported as 0" is gone. SCR-07's own note (`cost-details-texts.ts:46-49`) is unchanged and stays with the ux-expert at the end review (A-4) |
+| SQR-04 (Info) | Open, not for this PR | solution-architect: architecture §6 rows and the `insert-options` row |
+| SQR-05 (Info) | Deferred, as agreed | Extend follow-up #524 to `config-structure-service.insertFields` |
+| SQR-06 (Info) | **Still open: a merge condition** | Run 44568802187 is again red at Stage 2 (Gitleaks), so lint, unit, build, integration, coverage and the JS budget have still not run in CI on this head. The developer reports, locally: tsc and eslint clean; 39 unit and security files, 2,863 tests passed; 15 PostgreSQL integration files (config and audit) passed |
+| SQR-07 (Info) | Open, for product-owner and ux-expert | No change needed for this story |
+
+**New-diff review:** no new issue was found.
+- The fix is confined to the hide rule, the audit cap and the hint. It does not touch re-lettering, the transaction, the 409 path or any authorisation code.
+- `hideable` is a boolean derived from the data type: structure only, Admin only, and covered by the strict schema (NFR-002 unchanged).
+- A refusal that names the disabled checkbox can only come from a client that bypassed the screen. Focus on it is then a no-op and the message still shows in the error summary, which is acceptable.
+
+**Test run at `76ab5090`:** `npx vitest run tests/unit/config tests/unit/config-structure-routes.test.ts tests/unit/audit-events.test.ts tests/security/strict-schema.test.ts tests/security/role-matrix.test.ts --maxWorkers=2`: **23 files, 1,023 tests passed, 0 failed.**
+
+**Re-review verdict: APPROVE WITH COMMENTS.**
+- Counts of open findings: Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 4 (SQR-04 to SQR-07).
+- **Merge condition (SQR-06):** a fully green CI run of the head (or its update) once the Gitleaks blocker is cleared.
