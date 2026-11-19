@@ -362,7 +362,8 @@ const insertedColumn = z.strictObject({
   label: z.string().min(1).max(200),
   kind: z.enum(['input', 'output']),
   follows: z.string().min(1).max(10).nullable(),
-  formula: z.string().min(1).max(2_000).nullable(),
+  // No upper bound, as `config.formula_changed` has none: the entry keeps the formula in display form, which is longer than the stored form when it names rates (review SQR-02).
+  formula: z.string().min(1).nullable(),
 });
 const insertedAfterState = z.strictObject({
   fields: z.array(insertedColumn).min(1).max(2),

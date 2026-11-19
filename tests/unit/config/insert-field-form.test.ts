@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { InsertOptions } from '@/lib/config/insert-field-client';
 import {
   buildSpec,
+  applyInputPatch,
   controlId,
   fieldOrder,
   formatFor,
@@ -26,8 +27,8 @@ import {
 const OPTIONS: InsertOptions = {
   version: 9,
   columns: [
-    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true },
-    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false },
+    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true, hideable: true },
+    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false, hideable: false },
   ],
   sections: [{ id: 's-1', number: 1, name: 'Invented Section' }],
   stages: [{ id: 'g-1', number: 3, name: 'Invented Stage', subHeadings: ['Invented Heading'] }],
@@ -112,6 +113,29 @@ describe('the request built from the form', () => {
     const pair = { ...base, kind: 'pair' as const };
     expect(placeKey({ ...pair, cost: { ...pair.cost, position: 'other' } })).not.toBe(placeKey(pair));
     expect(placeKey({ ...pair, cost: { ...pair.cost, label: 'typed' } })).toBe(placeKey(pair));
+  });
+});
+
+describe('choosing the type of value (review SQR-01)', () => {
+  const pair = (): InsertForm => ({ ...form(), kind: 'pair' });
+
+  it('turns "hide the line when this input is 0" off for Text, which holds no number to be 0, and takes the format of text', () => {
+    const next = applyInputPatch(pair(), { dataType: 'text' }, OPTIONS);
+    expect(next.input).toMatchObject({ dataType: 'text', numFmt: '@' });
+    expect(next.cost.hideWhenInputIsZero).toBe(false);
+  });
+
+  it('turns it back on, as it opens, when Number is chosen again', () => {
+    const text = applyInputPatch(pair(), { dataType: 'text' }, OPTIONS);
+    const number = applyInputPatch(text, { dataType: 'number' }, OPTIONS);
+    expect(number.input).toMatchObject({ dataType: 'number', numFmt: '0.00' });
+    expect(number.cost.hideWhenInputIsZero).toBe(true);
+  });
+
+  it('leaves the choice alone for any other change of the input, and keeps a format typed in the same patch', () => {
+    const off = applyInputPatch(pair(), { dataType: 'text' }, OPTIONS);
+    expect(applyInputPatch(off, { label: 'Typed' }, OPTIONS).cost.hideWhenInputIsZero).toBe(false);
+    expect(applyInputPatch(pair(), { dataType: 'text', numFmt: '0.00' }, OPTIONS).input.numFmt).toBe('0.00');
   });
 });
 

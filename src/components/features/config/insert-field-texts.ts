@@ -70,7 +70,9 @@ export const GROUP_LABEL = 'Sub-heading in the stage';
 export const GROUP_NONE = 'No sub-heading';
 export const HIDE_ZERO_LABEL = 'Hide the line when this input is 0';
 export const HIDE_ZERO_NEVER = 'Never hide';
-export const HIDE_ZERO_HINT = 'Hidden lines are still calculated and exported as 0.';
+/** A hidden line is calculated and exported with its own value: that is 0 only when its formula gives 0 when the input is 0 (review SQR-03). */
+export const HIDE_ZERO_HINT = 'Hidden lines are still calculated and exported with their calculated value.';
+export const HIDE_ZERO_TEXT_NOTE = 'Only a Number input can hide its line.';
 export const FORMULA_LABEL = 'Formula';
 export const FORMULA_NOTE = 'Type the formula in the letters the worksheet will have after the insert, as in Excel where you insert the column first and then type.';
 

@@ -13,6 +13,8 @@ export interface InsertColumnOption {
   readonly kind: FieldKind;
   /** An input whose value can be waited on or can hide a line (not a picture). */
   readonly watchable: boolean;
+  /** An input that holds a number (a Number or a flag): the only kind that can hide a line while it is 0. */
+  readonly hideable: boolean;
 }
 
 export interface InsertOptions {
@@ -64,9 +66,9 @@ function readList<T>(value: unknown, readItem: (item: unknown) => T | null): Rea
 }
 
 function readColumn(value: unknown): InsertColumnOption | null {
-  if (!isRecord(value) || !isText(value['id']) || !isText(value['letter']) || !isText(value['label']) || typeof value['watchable'] !== 'boolean') return null;
+  if (!isRecord(value) || !isText(value['id']) || !isText(value['letter']) || !isText(value['label']) || typeof value['watchable'] !== 'boolean' || typeof value['hideable'] !== 'boolean') return null;
   const kind = value['kind'];
-  return kind === 'input' || kind === 'auto' || kind === 'output' ? { id: value['id'], letter: value['letter'], label: value['label'], kind, watchable: value['watchable'] } : null;
+  return kind === 'input' || kind === 'auto' || kind === 'output' ? { id: value['id'], letter: value['letter'], label: value['label'], kind, watchable: value['watchable'], hideable: value['hideable'] } : null;
 }
 
 function readSection(value: unknown): InsertOptions['sections'][number] | null {

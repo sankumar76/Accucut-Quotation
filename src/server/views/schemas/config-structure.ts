@@ -80,7 +80,7 @@ export const insertFieldAnswerSchema = z.strictObject({
 /** `GET /api/v1/config/insert-options`: what the wizard offers, and the version it is opened on. Names and structure only: no formula, rate or figure. */
 export const insertOptionsAnswerSchema = z.strictObject({
   version: z.number().int().min(1),
-  columns: z.array(z.strictObject({ id: z.string().min(1), letter: z.string().min(1), label: z.string().min(1), kind: z.enum(FIELD_KINDS), watchable: z.boolean() })),
+  columns: z.array(z.strictObject({ id: z.string().min(1), letter: z.string().min(1), label: z.string().min(1), kind: z.enum(FIELD_KINDS), watchable: z.boolean(), hideable: z.boolean() })),
   sections: z.array(z.strictObject({ id: z.string().min(1), number: z.number().int(), name: z.string().min(1) })),
   stages: z.array(z.strictObject({ id: z.string().min(1), number: z.number().int(), name: z.string().min(1), subHeadings: z.array(z.string().min(1)) })),
   numberFormats: z.array(z.string().min(1)),

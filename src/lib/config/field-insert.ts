@@ -7,7 +7,7 @@ import { validateNumberInput, validateTextInput } from '../estimate/validation';
 
 import { describeLetterChanges, orderAfterInsert, type LetterChanges, type NewColumnSummary, type Slot } from './field-insert-changes';
 import { AFTER_REQUIRED_MESSAGE, DOCUMENT_REFUSED_MESSAGE } from './field-insert-words';
-import { afterIssue, hideFieldIssues, inputIssues, outputIssues, MAX_FIELD_TEXT_LENGTH, type InsertIssue, type NewInput, type NewOutput } from './field-insert-check';
+import { afterIssue, hideFieldIssues, inputIssues, outputIssues, pairHideIssues, MAX_FIELD_TEXT_LENGTH, type InsertIssue, type NewInput, type NewOutput } from './field-insert-check';
 import { checkFormulaEdit } from './formula-edit';
 
 /**
@@ -195,7 +195,7 @@ function detailIssues(document: ConfigDocument, spec: InsertSpec): InsertIssue[]
     case 'output':
       return [...outputIssues(document, 'output', spec.output), ...hideFieldIssues(document, spec.output.hideWhenZeroFieldId)];
     case 'pair':
-      return [...inputIssues(document, spec.input), ...outputIssues(document, 'cost', spec.cost)];
+      return [...inputIssues(document, spec.input), ...outputIssues(document, 'cost', spec.cost), ...pairHideIssues(spec.input, spec.cost.hideWhenInputIsZero)];
     default:
       return assertNever(spec, 'insert spec');
   }

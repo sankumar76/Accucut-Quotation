@@ -33,7 +33,7 @@ interface World {
   readonly audit: ReturnType<typeof createFakeAuditWorld>;
 }
 
-function world(beforeInsert?: (versions: ConfigVersionRecord[]) => void): World {
+function world(beforeInsert?: (versions: ConfigVersionRecord[]) => void, extraRates: ReadonlyArray<{ id: string; name: string }> = []): World {
   const versions = [record(1, seedConfig)];
   const inserts: World['inserts'] = [];
   const reads = { latest: 0 };
@@ -59,7 +59,7 @@ function world(beforeInsert?: (versions: ConfigVersionRecord[]) => void): World 
   const audit = createFakeAuditWorld();
   const service = createConfigStructureService({
     configurations,
-    masters: { listProcessItems: () => Promise.resolve(SEED_PROCESS_ITEMS.map((item) => ({ ...item, defaultValue: '0.00' }))) },
+    masters: { listProcessItems: () => Promise.resolve([...SEED_PROCESS_ITEMS, ...extraRates.map((rate) => ({ ...rate, unit: 'per piece' }))].map((item) => ({ ...item, defaultValue: '0.00' }))) },
     transactions: audit.transactions,
     audit: createAuditService({ audit: audit.audit }),
     cache: createConfigVersionCache(),
@@ -113,6 +113,13 @@ describe('AC-2: what the wizard offers', () => {
     expect(watchable.length).toBeGreaterThan(0);
     expect(watchable.every((column) => column.kind === 'input')).toBe(true);
     expect(options.columns.find((column) => column.letter === 'C')).toMatchObject({ kind: 'input', watchable: false });
+  });
+
+  it('marks only an input that holds a number (a Number or a flag) as one that may hide a line (review SQR-01): not a text, a choice, a picture or an output', async () => {
+    const { columns } = await world().service.getInsertOptions(ADMIN);
+    const hideable = (letter: string) => defined(columns.find((column) => column.letter === letter)).hideable;
+    expect(['J', 'Z', 'AA'].map(hideable)).toEqual([true, true, true]);
+    expect(['A', 'B', 'C', 'E', 'G', 'AY', 'BL'].map(hideable)).toEqual([false, false, false, false, false, false, false]);
   });
 
   it('holds no formula, rate name or rate value: only names and structure (NFR-002)', async () => {
@@ -238,6 +245,22 @@ describe('AC-4: one new version for one field or two, with the base version chec
   it('asks for no password: the call has no password in it and the service has no step-up dependency (FR-080)', async () => {
     const saved = await world().service.insertFields(ADMIN, { spec: inputAfterAx(), baseVersion: 1 });
     expect(saved.version).toBe(2);
+  });
+});
+
+describe('review SQR-02: a formula longer in display form than in stored form still saves, and its entry is written', () => {
+  it('saves a cost formula that names a 100-character rate 25 times (about 2,600 characters displayed) and records it whole', async () => {
+    const rate = { id: '00000000-0000-4000-8000-000400000099', name: `Invented-Long-Rate-${'x'.repeat(81)}` };
+    expect(rate.name).toHaveLength(100);
+    const formula = Array.from({ length: 25 }, () => rate.name).join(' + ');
+    expect(formula.length).toBeGreaterThan(2_000);
+    const w = world(undefined, [rate]);
+    const spec = pairAfterAx();
+    if (spec.kind !== 'pair') throw new Error('A pair was expected.');
+    const saved = await w.service.insertFields(ADMIN, { spec: { ...spec, cost: { ...spec.cost, formula } }, baseVersion: 1 });
+    expect(saved.version).toBe(2);
+    expect(w.audit.audit.committed).toHaveLength(1);
+    expect(JSON.stringify(w.audit.audit.committed[0]?.after)).toContain(formula);
   });
 });
 

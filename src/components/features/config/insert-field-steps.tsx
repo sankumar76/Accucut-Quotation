@@ -108,7 +108,7 @@ export function StepDetails({ wizard, options }: { readonly wizard: InsertWizard
           </Block>
           {form.kind === 'pair' ? (
             <Block heading={COST_HEADING}>
-              <CostFields options={options} value={form.cost} onChange={wizard.patchCost} errors={errors} aside={letters} />
+              <CostFields options={options} value={form.cost} onChange={wizard.patchCost} errors={errors} aside={letters} inputIsText={form.input.dataType === 'text'} />
             </Block>
           ) : null}
         </>

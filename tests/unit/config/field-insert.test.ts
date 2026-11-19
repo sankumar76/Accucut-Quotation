@@ -368,3 +368,47 @@ describe('AC-7 and decision D-1: what is refused, with whose words', () => {
     expect(seedConfig).toEqual(copy);
   });
 });
+
+describe('review SQR-01: "hide the line when 0" only for an input that holds a number', () => {
+  const refused = (spec: InsertSpec): ReadonlyArray<{ field: string; message: string }> => {
+    const result = insert(spec);
+    if (result.ok) throw new Error('The insert should have been refused.');
+    return result.issues;
+  };
+  const single = (hideWhenZeroFieldId: string): InsertSpec => ({ kind: 'output', afterFieldId: after('AX'), output: output({ hideWhenZeroFieldId }) });
+  const pairOf = (dataType: 'number' | 'text', hide: boolean): InsertSpec => ({
+    kind: 'pair',
+    afterFieldId: after('AX'),
+    input: input({ dataType, numFmt: dataType === 'text' ? '@' : '0.00' }),
+    cost: { ...output({ formula: dataType === 'text' ? '1' : 'AY * 2' }), afterFieldId: null, hideWhenInputIsZero: hide },
+  });
+
+  it.each([
+    ['a text input (Part No., B)', 'B'],
+    ['a choice input (Material in Drawing, E)', 'E'],
+    ['a Treatment / Color input (G)', 'G'],
+    ['a picture (Part Model, C)', 'C'],
+    ['an output (Total Process Cost, AY)', 'AY'],
+  ])('refuses a single output that names %s, under output.hideWhenZeroFieldId (the cost view would read it as 0 and hide the line for good)', (_what, letter) => {
+    expect(refused(single(after(letter)))).toContainEqual({ field: 'output.hideWhenZeroFieldId', message: 'Choose an input that holds a number.' });
+  });
+
+  it.each([
+    ['a Number input (J)', 'J'],
+    ['a flag (Hot Dip Galvanizing, Z)', 'Z'],
+  ])('accepts a single output that names %s', (_what, letter) => {
+    expect(inserted(single(after(letter))).document.fields.some((field) => field.kind === 'output' && field.hideWhenZero === after(letter))).toBe(true);
+  });
+
+  it('refuses a pair with a Text input and the hide flag on, under cost.hideWhenInputIsZero (it is on by default)', () => {
+    expect(refused(pairOf('text', true))).toEqual([{ field: 'cost.hideWhenInputIsZero', message: 'Hide the line only for a Number input.' }]);
+  });
+
+  it('accepts a pair with a Text input and the hide flag off, and stores no hiding input; and a Number pair that hides on the new input', () => {
+    const text = inserted(pairOf('text', false));
+    expect(text.document.fields.find((field) => field.kind === 'output' && field.label === 'Notch Cost')).toMatchObject({ hideWhenZero: null });
+    const number = inserted(pairOf('number', true));
+    const newInput = defined(number.inserted.find((field) => field.kind === 'input'));
+    expect(number.document.fields.find((field) => field.kind === 'output' && field.label === 'Notch Cost')).toMatchObject({ hideWhenZero: newInput.id });
+  });
+});

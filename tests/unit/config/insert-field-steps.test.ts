@@ -18,8 +18,9 @@ import type { InsertWizard } from '@/components/features/config/use-insert-wizar
 const OPTIONS: InsertOptions = {
   version: 9,
   columns: [
-    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true },
-    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false },
+    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true, hideable: true },
+    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false, hideable: false },
+    { id: 'c-d', letter: 'ZD', label: 'Invented Name', kind: 'input', watchable: true, hideable: false },
   ],
   sections: [{ id: 's-1', number: 1, name: 'Invented Section' }],
   stages: [{ id: 'g-1', number: 3, name: 'Invented Stage', subHeadings: ['Invented Heading'] }],
@@ -135,11 +136,20 @@ describe('AC-2 step 2: the details of an output and of the pair', () => {
     expect(html).not.toContain('Type of value');
   });
 
-  it('only an input that can be watched may hide the line', () => {
+  it('only an input that holds a number may hide the line (review SQR-01): not an output and not a text', () => {
     const html = details('output');
-    const hide = html.slice(html.indexOf('insert-output-hideWhenZeroFieldId'));
-    expect(hide).toContain('ZA Invented Length');
-    expect(hide.slice(0, hide.indexOf('</select>'))).not.toContain('ZB Invented Cost');
+    const hide = html.slice(html.indexOf('id="insert-output-hideWhenZeroFieldId"'));
+    const list = hide.slice(0, hide.indexOf('</select>'));
+    expect(list).toContain('ZA Invented Length');
+    expect(list).not.toContain('ZB Invented Cost');
+    expect(list).not.toContain('ZD Invented Name');
+  });
+
+  it('an input that holds a value may still be watched by the visibility rule, text or not', () => {
+    const form = { ...initialForm(OPTIONS, 'c-a'), kind: 'input' as const };
+    const html = renderToStaticMarkup(createElement(StepDetails, { wizard: wizard('input', { form: { ...form, input: { ...form.input, visibility: 'when' } } }), options: OPTIONS }));
+    const watch = html.slice(html.indexOf('id="insert-input-watchFieldId"'));
+    expect(watch.slice(0, watch.indexOf('</select>'))).toContain('ZD Invented Name');
   });
 
   it('a pair has the input, then the cost column with its position, "hide the line" on by default and the formula', () => {
@@ -148,10 +158,29 @@ describe('AC-2 step 2: the details of an output and of the pair', () => {
     expect(html).toContain('Its cost column (hidden from Engineers)');
     expect(html).toContain('Right after the new input');
     expect(html).toContain('After another column');
-    expect(html).toMatch(/aria-checked="true"[^>]*id="insert-cost-hide"/);
-    expect(html).toContain('Hidden lines are still calculated and exported as 0.');
+    expect(html).toMatch(/aria-checked="true"[^>]*id="insert-cost-hideWhenInputIsZero"/);
+    // A hidden line is calculated and exported with its own value, which is 0 only when its formula gives 0 (review SQR-03).
+    expect(html).toContain('Hidden lines are still calculated and exported with their calculated value.');
+    expect(html).not.toContain('exported as 0');
     expect(html.indexOf('The input (visible')).toBeLessThan(html.indexOf('Its cost column'));
     expect((html.match(/Letters after this insert, scrollable/g) ?? []).length).toBe(1);
+  });
+
+  it('turns the checkbox off and disables it for a Text input, and says why (review SQR-01)', () => {
+    const base = { ...initialForm(OPTIONS, 'c-a'), kind: 'pair' as const };
+    const text = { ...base, input: { ...base.input, dataType: 'text' as const }, cost: { ...base.cost, hideWhenInputIsZero: false } };
+    const html = renderToStaticMarkup(createElement(StepDetails, { wizard: wizard('pair', { form: text }), options: OPTIONS }));
+    expect(html).toMatch(/aria-checked="false"[^>]*id="insert-cost-hideWhenInputIsZero"/);
+    expect(html).toMatch(/disabled=""[^>]*id="insert-cost-hideWhenInputIsZero"/);
+    expect(html).toContain('Only a Number input can hide its line.');
+    expect(details('pair')).not.toContain('Only a Number input can hide its line.');
+    expect(details('pair')).not.toMatch(/disabled=""[^>]*id="insert-cost-hideWhenInputIsZero"/);
+  });
+
+  it('shows the sentence of the server under the checkbox when the server refuses the choice', () => {
+    const html = details('pair', { errors: { 'cost.hideWhenInputIsZero': 'Hide the line only for a Number input.' } });
+    expect(html).toContain('id="insert-cost-hideWhenInputIsZero-error"');
+    expect(html).toContain('Hide the line only for a Number input.');
   });
 
   it('shows the second column only for "after another column"', () => {

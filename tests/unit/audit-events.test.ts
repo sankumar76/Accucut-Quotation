@@ -441,6 +441,13 @@ describe('STORY-08.03 AC-9: the words and the shapes of a field insert', () => {
     expect(event.after.safeParse({ fields: [{ ...NEW_INPUT, rate: 1 }], moved: [], version: 2 }).success).toBe(false);
   });
 
+  it('keeps a formula longer than 2,000 characters: the display form of a rate name is longer than the stored form (review SQR-02)', () => {
+    const long = `AY * ${'Invented-Rate '.repeat(190)}`.trim();
+    expect(long.length).toBeGreaterThan(2_500);
+    expect(event.after.safeParse({ fields: [NEW_INPUT, { ...NEW_COST, formula: long }], moved: [], version: 2 }).success).toBe(true);
+    expect(event.after.safeParse({ fields: [{ ...NEW_COST, formula: '' }], moved: [], version: 2 }).success).toBe(false);
+  });
+
   it('has no "before" (the field did not exist), no empty or three-field entry, and no version that is not a positive whole number', () => {
     expect(event.before.safeParse({}).success).toBe(false);
     expect(event.after.safeParse({ fields: [], moved: [], version: 2 }).success).toBe(false);

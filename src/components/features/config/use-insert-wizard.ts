@@ -5,10 +5,10 @@ import { useState } from 'react';
 import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { previewInsert, saveInsert, type InsertOptions, type InsertPreviewView, type InsertSavedView } from '@/lib/config/insert-field-client';
 import {
+  applyInputPatch,
   buildSpec,
   controlId,
   fieldOrder,
-  formatFor,
   initialForm,
   type CostDetails,
   type InputDetails,
@@ -145,10 +145,9 @@ export function useInsertWizard(options: InsertOptions, afterId: string | null):
       edited(['afterFieldId']);
     },
     patchInput: (patch) => {
-      // A text input is drawn as text and a number as a number; the Admin can still change the format after choosing the type.
-      const withFormat = patch.dataType !== undefined && patch.numFmt === undefined ? { ...patch, numFmt: formatFor(options, patch.dataType) } : patch;
-      setForm((current) => ({ ...current, input: { ...current.input, ...withFormat } }));
-      edited(namesOf('input', withFormat));
+      setForm((current) => applyInputPatch(current, patch, options));
+      // Choosing the type may turn "hide the line" off, so a refusal of it is cleared with the rest.
+      edited([...namesOf('input', patch), ...(patch.dataType === undefined ? [] : ['cost.hideWhenInputIsZero', 'input.numFmt'])]);
     },
     patchOutput: (patch) => {
       setForm((current) => ({ ...current, output: { ...current.output, ...patch } }));

@@ -1,9 +1,12 @@
+import { CircleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
+
+import { Icon } from '@/components/shared/icon';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import type { InsertOptions } from '@/lib/config/insert-field-client';
-import type { CostDetails, OutputDetails, SingleOutputDetails } from '@/lib/config/insert-field-form';
+import { controlId, type CostDetails, type OutputDetails, type SingleOutputDetails } from '@/lib/config/insert-field-form';
 
 import { RadioChoices, SelectField, TextField, FormulaField, type Errors } from './insert-field-controls';
 import { AfterField, columnChoices, formatChoices } from './insert-field-input-fields';
@@ -21,6 +24,7 @@ import {
   HIDE_ZERO_HINT,
   HIDE_ZERO_LABEL,
   HIDE_ZERO_NEVER,
+  HIDE_ZERO_TEXT_NOTE,
   LABEL_LABEL,
   STAGE_LABEL,
   STAGE_PLACEHOLDER,
@@ -122,7 +126,7 @@ export function SingleOutputFields({ options, value, onChange, errors, after, as
           errors={errors}
           value={value.hideWhenZeroFieldId}
           onChange={(hideWhenZeroFieldId) => onChange({ hideWhenZeroFieldId })}
-          choices={columnChoices(options.columns.filter((column) => column.watchable))}
+          choices={columnChoices(options.columns.filter((column) => column.hideable))}
           placeholder={HIDE_ZERO_NEVER}
         />
       }
@@ -136,10 +140,14 @@ export interface CostFieldsProps {
   readonly onChange: (patch: Partial<CostDetails>) => void;
   readonly errors: Errors;
   readonly aside: ReactNode;
+  /** The new input is Text: it holds no number, so it cannot hide the line when it is 0 (the checkbox is off and disabled). */
+  readonly inputIsText: boolean;
 }
 
 /** The cost column of a pair: right after the new input (the default) or after another column, and "hide the line when this input is 0" (default on). */
-export function CostFields({ options, value, onChange, errors, aside }: CostFieldsProps) {
+export function CostFields({ options, value, onChange, errors, aside, inputIsText }: CostFieldsProps) {
+  const hideId = controlId('cost.hideWhenInputIsZero');
+  const hideError = errors['cost.hideWhenInputIsZero'];
   return (
     <OutputFields
       path="cost"
@@ -168,14 +176,27 @@ export function CostFields({ options, value, onChange, errors, aside }: CostFiel
       hide={
         <div className="flex flex-col gap-s-1">
           <div className="flex items-center gap-s-1">
-            <Checkbox id="insert-cost-hide" checked={value.hideWhenInputIsZero} onCheckedChange={(checked) => onChange({ hideWhenInputIsZero: checked === true })} aria-describedby="insert-cost-hide-hint" />
-            <Label htmlFor="insert-cost-hide" className="text-body font-normal text-ink">
+            <Checkbox
+              id={hideId}
+              checked={value.hideWhenInputIsZero && !inputIsText}
+              disabled={inputIsText}
+              onCheckedChange={(checked) => onChange({ hideWhenInputIsZero: checked === true })}
+              aria-describedby={`${hideId}-hint${hideError === undefined ? '' : ` ${hideId}-error`}`}
+              {...(hideError === undefined ? {} : { 'aria-invalid': true })}
+            />
+            <Label htmlFor={hideId} className="text-body font-normal text-ink">
               {HIDE_ZERO_LABEL}
             </Label>
           </div>
-          <p id="insert-cost-hide-hint" className="text-label text-ink-3">
-            {HIDE_ZERO_HINT}
+          <p id={`${hideId}-hint`} className="text-label text-ink-3">
+            {inputIsText ? HIDE_ZERO_TEXT_NOTE : HIDE_ZERO_HINT}
           </p>
+          {hideError === undefined ? null : (
+            <p id={`${hideId}-error`} className="flex items-start gap-s-1 text-label font-semibold text-danger">
+              <Icon icon={CircleAlert} size="hint" className="mt-px shrink-0" />
+              {hideError}
+            </p>
+          )}
         </div>
       }
     />

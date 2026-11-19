@@ -11,9 +11,9 @@ import { loadInsertOptions, previewInsert, saveInsert } from '@/lib/config/inser
 const OPTIONS = {
   version: 9,
   columns: [
-    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true },
-    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false },
-    { id: 'c-c', letter: 'ZC', label: 'Invented Auto', kind: 'auto', watchable: false },
+    { id: 'c-a', letter: 'ZA', label: 'Invented Length', kind: 'input', watchable: true, hideable: true },
+    { id: 'c-b', letter: 'ZB', label: 'Invented Cost', kind: 'output', watchable: false, hideable: false },
+    { id: 'c-c', letter: 'ZC', label: 'Invented Auto', kind: 'auto', watchable: false, hideable: false },
   ],
   sections: [{ id: 's-1', number: 1, name: 'Invented Section' }],
   stages: [{ id: 'g-1', number: 3, name: 'Invented Stage', subHeadings: ['Invented Heading'] }],
@@ -52,7 +52,8 @@ describe('loadInsertOptions', () => {
   it.each([
     ['no version', { ...OPTIONS, version: 'nine' }],
     ['a column of a kind that does not exist', { ...OPTIONS, columns: [{ ...OPTIONS.columns[0], kind: 'picture' }] }],
-    ['a column with no watchable flag', { ...OPTIONS, columns: [{ id: 'c', letter: 'ZA', label: 'L', kind: 'input' }] }],
+    ['a column with no watchable flag', { ...OPTIONS, columns: [{ id: 'c', letter: 'ZA', label: 'L', kind: 'input', hideable: true }] }],
+    ['a column with no hideable flag', { ...OPTIONS, columns: [{ id: 'c', letter: 'ZA', label: 'L', kind: 'input', watchable: true }] }],
     ['a section with no number', { ...OPTIONS, sections: [{ id: 's', name: 'S' }] }],
     ['a stage with a sub-heading that is no text', { ...OPTIONS, stages: [{ id: 'g', number: 1, name: 'G', subHeadings: [1] }] }],
     ['a stage with no sub-headings list', { ...OPTIONS, stages: [{ id: 'g', number: 1, name: 'G' }] }],

@@ -95,7 +95,7 @@ describe('the options of the wizard', () => {
     expect(Object.keys(body).sort()).toEqual(['columns', 'numberFormats', 'sections', 'stages', 'version']);
     expect(body['version']).toBe(1);
     const columns = z.array(record).parse(body['columns']);
-    expect(Object.keys(defined(columns[0])).sort()).toEqual(['id', 'kind', 'label', 'letter', 'watchable']);
+    expect(Object.keys(defined(columns[0])).sort()).toEqual(['hideable', 'id', 'kind', 'label', 'letter', 'watchable']);
   });
 });
 

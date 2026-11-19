@@ -156,6 +156,13 @@ test.describe('the Admin', () => {
     await expect(page.getByText('Its cost column (hidden from Engineers)')).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Right after the new input' })).toBeChecked();
     await expect(page.getByLabel('Hide the line when this input is 0')).toBeChecked();
+    // A Text input holds no number, so it cannot hide the line when it is 0: the box is off and disabled for Text, and on again for Number (review SQR-01).
+    await control(page, 'input-dataType').selectOption('text');
+    await expect(page.getByLabel('Hide the line when this input is 0')).toBeDisabled();
+    await expect(page.getByLabel('Hide the line when this input is 0')).not.toBeChecked();
+    await expect(page.getByText('Only a Number input can hide its line.')).toBeVisible();
+    await control(page, 'input-dataType').selectOption('number');
+    await expect(page.getByLabel('Hide the line when this input is 0')).toBeChecked();
     await fillInput(page, 'Invented Rework Count');
     await fillCost(page, 'AY * 2');
     const letters = page.getByRole('region', { name: 'Letters after this insert, scrollable' });

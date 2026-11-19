@@ -114,6 +114,16 @@ export function formatFor(options: InsertOptions, dataType: ValueType): string {
   return pickFormat(options, dataType === 'text' ? TEXT_FORMAT : NUMBER_FORMAT);
 }
 
+/**
+ * The form after a change to the new input. A text input is drawn as text and a number as a number (the Admin can still change the format after choosing the type). A Text input holds no number, so it can never be
+ * 0 and "hide the line when this input is 0" is turned off for it (the cost view would read the text as 0 and hide the line for good, review SQR-01); choosing Number again turns it back on, as the form opens.
+ */
+export function applyInputPatch(form: InsertForm, patch: Partial<InputDetails>, options: InsertOptions): InsertForm {
+  const withFormat = patch.dataType !== undefined && patch.numFmt === undefined ? { ...patch, numFmt: formatFor(options, patch.dataType) } : patch;
+  const cost = patch.dataType === undefined ? form.cost : { ...form.cost, hideWhenInputIsZero: patch.dataType === 'number' };
+  return { ...form, input: { ...form.input, ...withFormat }, cost };
+}
+
 /** How many fields the insert makes: the button says "Insert 2 fields" for a pair. */
 export function insertCount(kind: InsertKind): number {
   return kind === 'pair' ? 2 : 1;
@@ -177,7 +187,7 @@ export function controlId(field: string): string {
 /** The controls of step 2 in the order they are drawn, for each kind: the summary lists a refusal in this order and focus goes to the first. */
 const INPUT_ORDER = ['input.label', 'input.dataType', 'input.defaultValue', 'afterFieldId', 'input.sectionId', 'input.unit', 'input.hint', 'input.width', 'input.numFmt', 'input.watchFieldId'] as const;
 const OUTPUT_ORDER = ['output.label', 'afterFieldId', 'output.stageId', 'output.group', 'output.hideWhenZeroFieldId', 'output.width', 'output.numFmt', 'output.formula'] as const;
-const COST_ORDER = ['cost.label', 'cost.afterFieldId', 'cost.stageId', 'cost.group', 'cost.width', 'cost.numFmt', 'cost.formula'] as const;
+const COST_ORDER = ['cost.label', 'cost.afterFieldId', 'cost.stageId', 'cost.group', 'cost.hideWhenInputIsZero', 'cost.width', 'cost.numFmt', 'cost.formula'] as const;
 
 export function fieldOrder(kind: InsertKind): ReadonlyArray<string> {
   switch (kind) {

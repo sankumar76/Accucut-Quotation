@@ -9,6 +9,7 @@ import {
   FORMULA_REQUIRED_MESSAGE,
   GROUP_UNKNOWN_MESSAGE,
   HIDE_FIELD_MESSAGE,
+  HIDE_PAIR_MESSAGE,
   LABEL_REQUIRED_MESSAGE,
   SECTION_REQUIRED_MESSAGE,
   STAGE_REQUIRED_MESSAGE,
@@ -128,10 +129,23 @@ export function outputIssues(document: ConfigDocument, path: 'output' | 'cost', 
   return issues;
 }
 
-/** The "hide the line when this field is 0" choice of a single output must name an input of the registry. */
+/**
+ * An input whose value a line can be hidden by (`hideWhenZero`): one that holds a number, a Number or a flag. The cost view reads the value as a decimal and takes anything else as 0, so a line hidden by a text or a
+ * choice would be hidden on every estimate for good (review SQR-01). The seed uses the rule with its numeric flags only.
+ */
+export function canHideWhenZero(field: ConfigDocument['fields'][number]): boolean {
+  return field.kind === 'input' && (field.dataType === 'number' || field.dataType === 'flag');
+}
+
+/** The "hide the line when this field is 0" choice of a single output must name an input of the registry that holds a number. */
 export function hideFieldIssues(document: ConfigDocument, hideWhenZeroFieldId: string | null): InsertIssue[] {
   if (hideWhenZeroFieldId === null) return [];
-  return document.fields.some((field) => field.id === hideWhenZeroFieldId && isWatchable(field)) ? [] : [{ field: 'output.hideWhenZeroFieldId', message: HIDE_FIELD_MESSAGE }];
+  return document.fields.some((field) => field.id === hideWhenZeroFieldId && canHideWhenZero(field)) ? [] : [{ field: 'output.hideWhenZeroFieldId', message: HIDE_FIELD_MESSAGE }];
+}
+
+/** A pair hides its cost line on its new input, so the new input must be a Number (the checkbox is on by default and is turned off for Text on the screen). */
+export function pairHideIssues(input: NewInput, hideWhenInputIsZero: boolean): InsertIssue[] {
+  return hideWhenInputIsZero && input.dataType !== 'number' ? [{ field: 'cost.hideWhenInputIsZero', message: HIDE_PAIR_MESSAGE }] : [];
 }
 
 /** A column named as "insert after" must be in the current version. */

@@ -21,7 +21,11 @@ export const GROUP_UNKNOWN_MESSAGE = 'Choose one of the sub-headings of this sta
 
 export const WATCH_FIELD_MESSAGE = 'Choose the field to watch.';
 
-export const HIDE_FIELD_MESSAGE = 'Choose the input that hides this line.';
+/** The line is hidden while its input is 0, so the input must hold a number (a Number or a flag): a text is never 0 and would hide the line for good. */
+export const HIDE_FIELD_MESSAGE = 'Choose an input that holds a number.';
+
+/** A pair whose new input is Text cannot hide its cost line when the input is 0. */
+export const HIDE_PAIR_MESSAGE = 'Hide the line only for a Number input.';
 
 export const VALUE_TYPE_MESSAGE = 'Choose Number or Text.';
 

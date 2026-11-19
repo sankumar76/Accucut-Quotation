@@ -2,7 +2,7 @@ import { ConfigVersionChangedError, FieldValidationError } from '../../lib/error
 import { insertAuditAfter } from '../../lib/config/field-insert-audit';
 import { insertFields, previewLetters, type InsertResult, type InsertSpec } from '../../lib/config/field-insert';
 import type { LetterChanges } from '../../lib/config/field-insert-changes';
-import { insertableSections, isWatchable, numberFormatsOf } from '../../lib/config/field-insert-check';
+import { canHideWhenZero, insertableSections, isWatchable, numberFormatsOf } from '../../lib/config/field-insert-check';
 import { AFTER_REQUIRED_MESSAGE, insertedMessage, insertVersionChangedMessage } from '../../lib/config/field-insert-words';
 import { fieldLetter } from '../../lib/fields/registry';
 import type { FieldKind } from '../../lib/fields/types';
@@ -60,7 +60,7 @@ export interface InsertFieldResult {
 
 export interface InsertOptionsView {
   readonly version: number;
-  readonly columns: ReadonlyArray<{ readonly id: string; readonly letter: string; readonly label: string; readonly kind: FieldKind; readonly watchable: boolean }>;
+  readonly columns: ReadonlyArray<{ readonly id: string; readonly letter: string; readonly label: string; readonly kind: FieldKind; readonly watchable: boolean; readonly hideable: boolean }>;
   readonly sections: ReadonlyArray<{ readonly id: string; readonly number: number; readonly name: string }>;
   readonly stages: ReadonlyArray<{ readonly id: string; readonly number: number; readonly name: string; readonly subHeadings: ReadonlyArray<string> }>;
   readonly numberFormats: ReadonlyArray<string>;
@@ -108,7 +108,7 @@ export function createConfigStructureService({ configurations, masters, transact
       const { number, document } = await getCurrentVersion(configurations, cache);
       return {
         version: number,
-        columns: [...document.fields].sort((a, b) => a.position - b.position).map((field) => ({ id: field.id, letter: fieldLetter(field), label: field.label, kind: field.kind, watchable: isWatchable(field) })),
+        columns: [...document.fields].sort((a, b) => a.position - b.position).map((field) => ({ id: field.id, letter: fieldLetter(field), label: field.label, kind: field.kind, watchable: isWatchable(field), hideable: canHideWhenZero(field) })),
         sections: insertableSections(document).map(({ id, number: sectionNumber, name }) => ({ id, number: sectionNumber, name })),
         stages: [...document.stages].sort((a, b) => a.number - b.number).map(({ id, number: stageNumber, name, subHeadings }) => ({ id, number: stageNumber, name, subHeadings: [...subHeadings] })),
         numberFormats: numberFormatsOf(document),
