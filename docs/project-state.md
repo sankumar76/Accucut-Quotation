@@ -20,7 +20,7 @@
 
 > **Graceful pause at the delivery lead's request.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** No agent is running. All work is committed and pushed, and no dev server is running.
 
-**`master` = 0056227** (#518). Its push run 44509175744 was **in progress at the pause: read it first**, including T6 for AQP-373: the "table is immutable" group must be at most 1,000 ms per test. Earlier: 714f3c5 green, abd0947 green, 8b51872 green; 0898563 red (DEF-047, not re-run).
+**`master` = 0056227** (#518). Its push run 44509175744: "Stages 1 to 11b" **green**, and **T6 for AQP-373 met** (`image.test.ts`: 53 tests in 2,289 ms, none slow; AQP-373 comment posted). Its E2E shards were still running at the pause: **read them first.** Earlier: 714f3c5 green, abd0947 green, 8b51872 green; 0898563 red (DEF-047, not re-run).
 
 **Merged today (8):** #512 AQP-363, #514 AQP-344, #501 AQP-312 [c], #508 AQP-356 [c], #503 AQP-348 [c], #493 AQP-338 [c], #521 AQP-368, #518 AQP-373 (DEF-045 fix). Jira Done: AQP-363, 344, 312, 356, 348, 338, 368. **AQP-373 is still to be verified and closed by qa-engineer** after T6.
 
