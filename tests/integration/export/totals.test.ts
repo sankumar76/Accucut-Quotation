@@ -49,6 +49,7 @@ beforeAll(async () => {
     approvals: db.approvals,
     images,
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
+    transactions: db.transactions,
     builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });

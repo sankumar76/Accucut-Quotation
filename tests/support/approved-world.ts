@@ -61,6 +61,7 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
       approvals: db.approvals,
       images: createImageRepository(db.prisma),
       configuration,
+      transactions: db.transactions,
       builder: inProcessBuilder(buildWorkbook),
       clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
     }),
