@@ -9,7 +9,6 @@ import { columnLetterToIndex } from '../../../src/lib/columns';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage, type E2eUser } from './auth';
 import { expectNoAxeViolations } from './design-system';
-import { mark } from './def048-timing';
 import { DEVELOPMENT_URL } from './servers';
 
 /**
@@ -63,19 +62,14 @@ export async function waitForForm(page: Page): Promise<void> {
 export async function openForm(page: Page, testInfo: TestInfo, options: { readonly fromTheQueue?: boolean } = {}): Promise<E2eUser & { readonly id: string }> {
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
-  mark('openForm: canaries ensured');
   const owner = await signInAsNewEngineer(page, testInfo);
-  mark('openForm: signed in');
   if (options.fromTheQueue === true) await page.goto('/queue');
   // The customer is chosen with the call that the drop-down makes (`PUT /api/v1/estimates/{id}/customer`), before the page is opened, so the page opens on the form. Choosing it through the
   // drop-down cost 3 to 4 s of a test's 30 s on a loaded runner (traces of AQP-340) and is judged by `estimate-customer.spec.ts`, whose subject it is.
   const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID } });
   expect(chosen.status(), 'the customer is chosen').toBe(200);
-  mark('openForm: customer PUT');
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-  mark('openForm: goto returned');
   await waitForForm(page);
-  mark('openForm: form visible');
   return owner;
 }
 

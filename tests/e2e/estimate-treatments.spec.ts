@@ -5,7 +5,6 @@ import { columnLetterToIndex } from '../../src/lib/columns';
 
 import { useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { mark } from './support/def048-timing';
 import { control, expectFormAccessible, nextSave, openForm, partForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
@@ -237,56 +236,38 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
 
 test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
   test('AC-8: no sideways scroll, axe finds nothing (closed, open, with "Other" showing), and every control is 44 px high', async ({ page }, testInfo) => {
-    mark('start');
     await openForm(page, testInfo);
-    mark('A openForm');
     await treatmentsLoaded(page);
-    mark('B treatmentsLoaded');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
-    mark('C scan 1 done (spec :242)');
     expect((await trigger(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await control(page, 'G').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
     await openList(page);
-    mark('D list open');
     for (const box of await list(page).getByRole('checkbox').all()) {
       const size = await box.boundingBox();
       expect(size?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
       expect(size?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
-    mark('E checkboxes measured');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
-    mark('F scan 2 done (spec :253)');
     await page.keyboard.press('Escape');
     await expect(list(page)).toHaveCount(0);
-    mark('G list closed');
 
     // "Other" last: leaving its empty box shows a message and moves the cards below, so nothing is pressed after it.
     await control(page, 'G').selectOption({ label: 'Other' });
-    mark('H Other chosen');
     expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
-    mark('I scan 3 done (spec :261)');
   });
 
   test('AC-2: with every treatment chosen the trigger shows every name as text and the page still does not scroll sideways', async ({ page }, testInfo) => {
-    mark('start');
     await openForm(page, testInfo);
-    mark('A openForm');
     await openList(page);
-    mark('B list open');
-    for (const name of ALL_TREATMENTS) {
-      await toggle(page, name);
-      mark(`C toggled ${name}`);
-    }
+    for (const name of ALL_TREATMENTS) await toggle(page, name);
     await page.keyboard.press('Escape');
     await expect(trigger(page)).toContainText(`8 selected: ${ALL_TREATMENTS.join(', ')}`);
-    mark('D trigger text');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
-    mark('E scan done');
   });
 });
