@@ -13,8 +13,34 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-19 by orchestrator (daily update, later) |
+| Last updated       | 2026-11-19 by orchestrator (resume point, pause 2) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Resume point (2026-11-19, pause 2)
+
+> **Graceful pause at the delivery lead's request.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** No agent is running. All work is committed and pushed, and no dev server is running.
+
+**`master` = 0056227** (#518). Its push run 44509175744 was **in progress at the pause: read it first**, including T6 for AQP-373: the "table is immutable" group must be at most 1,000 ms per test. Earlier: 714f3c5 green, abd0947 green, 8b51872 green; 0898563 red (DEF-047, not re-run).
+
+**Merged today (8):** #512 AQP-363, #514 AQP-344, #501 AQP-312 [c], #508 AQP-356 [c], #503 AQP-348 [c], #493 AQP-338 [c], #521 AQP-368, #518 AQP-373 (DEF-045 fix). Jira Done: AQP-363, 344, 312, 356, 348, 338, 368. **AQP-373 is still to be verified and closed by qa-engineer** after T6.
+
+**Open PRs, with the next step on resume:**
+| PR | Item | State at pause | Next |
+|---|---|---|---|
+| #520 | AQP-374 DEF-046 fix (test-only, DL-254) | Updated with master (816ed68); CI running; green before the update | Merge on green (R4 ends); read P5 on the first master push run; qa closes |
+| #519 | AQP-312 AC-8 kit, optional standard-account step (DL-253) | Master **GO** (attempt 2); updated (38c022e); CI running | Merge on green; then give the delivery lead the master link to the kit |
+| #510 | AQP-336 07.06 | Green on a5548c7 but **BEHIND** | "Update branch", green, merge |
+| #525 | AQP-349 09.02 (critical path) | Draft; all ACs built; Stage 1 to 11b green on 2477dc6, E2E unread; BEHIND | Read run 44508720149, update from master, mark ready, merge (not critical) |
+| #526 | AQP-358 08.03 [c] (critical path) | Draft WIP c16769d: pure core with property and SPEC tests, service, routes, audit event; the UI, page, tests and JS budget are left (list in the PR). Adds an unlisted route `GET /api/v1/config/insert-options` (record the deviation). Split trigger not hit | The developer resumes on the PR's "Left" list; then CI and the combined review |
+| AQP-375 | H-OBS (DL-252), branch `feat/AQP-375-observability` at 2abb8de, **no PR** | WIP, untested: migration with `prune_heartbeat_runs()`, heartbeat rule, job wrapper, heartbeat job, repository, jobs moved to `runJob` | The developer resumes: wire `src/worker/main.ts`, tests first, then AC-1, 2, 8 and 9. PO finding: `restore.ps1` also waits for `/api/health` |
+| #476 | next 16.4.6 | Held for the hardening window (#513) | none |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Queued, not started:** the AQP-376 / DEF-047 fix (DL-255: next free slot, ahead of new stories); the AQP-376 R5 rule still applies. Then 09.03 AQP-350 after #525; 08.04 AQP-359 after #526; 05.10 AQP-367 and 07.07 AQP-364 / 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. The last story merging by 26 Nov is the slip watch for the 1 Dec target (DL-248).
+
+**Worktrees (7 registered, all clean and pushed):** records-t; ac8-kit (#519; removable after merge); aqp-336 (#510); aqp-349 (#525); aqp-358 (#526); aqp-373 (now on `fix/AQP-374-…`, #520; removable after merge); aqp-375 (H-OBS). **Orphan folder `aqp-338/.next`** (deregistered by git; probably Turbopack junctions; not deleted): the main session clears it. **Containers:** aqp349-db and aqp336-db, both stopped (PRs open); all others removed. **C: 13 GB free.**
+
+**For the delivery lead / main session:** (1) the AQP-375 developer wrote its memory note `aqp375-observability-wip.md` (and an index line in `MEMORY.md`) into the **main checkout's** `.claude/agent-memory/developer/`, against its brief; the main session decides what to do with it. (2) Q-18 page link and AC-8 kit link as sent. (3) Nightly "CI feedback time" fails every night (frozen measurement job, §9 item 4). (4) The open G8 conditions: G8-C-AC8, G8-C-NFR9; hardening items #513, #516, #523, #524.
 
 ## Daily update (2026-11-19, later, orchestrator)
 
