@@ -247,6 +247,14 @@ The test run loads `.env` first (`tests/support/global-setup.ts`), without overr
 already set, so the guard and the integration tests see the same settings as Prisma. You do not need to
 export anything by hand after `cp .env.example .env`.
 
+**E-mail (STORY-09.01).** Every message the portal sends goes through one outbox table (`email_outbox`) and the worker job `outbox-send`, which runs every minute
+only when `FEATURE_EMAIL=on` in `.env` (`off` is the default, also when the line is absent). The sign-in to the mail server is chosen by `SMTP_AUTH_MODE`
+(`none`, `password`, or `oauth2-client-credentials` for Microsoft 365); credentials are environment variables only, never in the database. The Settings test
+e-mail (STORY-09.02) sends directly and does not need the flag. The mail tests read what was sent from **Mailpit**, a mail server that only captures messages:
+`docker compose -f compose.dev.yml up -d mailpit`, then run the tests with `MAILPIT_API_URL=http://127.0.0.1:8025 MAILPIT_SMTP_PORT=1025` set. Without those
+two variables the same tests use an in-process stand-in, so no Docker is needed for them. CI runs Mailpit as a service of the `verify` job only; its image is
+pinned by version and digest in `compose.dev.yml` and `.github/workflows/ci.yml`, and the two pins change together (`tests/unit/mail/mailpit-ci.test.ts`).
+
 **Where coverage is decided.** Stage 6 has no database, so it measures only pure code (`src/lib`,
 `scripts/lib`) on unit tests, with the 80 % gate and the 95 % and 100 % gates for the formula engine and
 the other pure modules. Stage 11 runs every test level in one run, so a service or repository tested by an

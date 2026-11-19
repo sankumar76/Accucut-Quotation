@@ -14,6 +14,8 @@ import {
   USER_ROLE_VALUES,
 } from '../../../lib/users/validation';
 
+import { stepUpPasswordSchema } from './step-up';
+
 /**
  * The contract of the user routes (STORY-01.04, architecture section 6 "Users" and "Reset user password"). Every body,
  * path parameter and answer is a strict object: a key that is not named is an error, so a field added to a person later
@@ -67,6 +69,12 @@ export const updateUserBodySchema = z
 
 /** `POST /api/v1/users/{id}/password-reset` (AC-5). */
 export const resetPasswordBodySchema = z.strictObject({ password });
+
+/**
+ * `POST /api/v1/users/{id}/admin-handover` (STORY-01.09 AC-2): the Admin's own password, for the step-up check and for nothing else. The person to receive the role is the path's `{id}`; nothing in the body can name
+ * whose password is checked.
+ */
+export const adminHandoverBodySchema = z.strictObject({ password: stepUpPasswordSchema });
 
 /**
  * The path parameter of `/api/v1/users/{id}`: a UUID, or the request is refused as invalid before anything is looked up.

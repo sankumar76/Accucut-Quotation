@@ -17,7 +17,16 @@ import {
  * wired, the others are declared and unused, every event belongs to a category the filter offers, and the words are the screen's.
  */
 
-const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
+/** The six events of the Users screen (STORY-01.04) and, from STORY-01.09, the Admin hand-over: one entry for the one act. */
+const WIRED_USER: ReadonlyArray<AuditEventName> = [
+  'user.created',
+  'user.renamed',
+  'user.role_changed',
+  'user.deactivated',
+  'user.activated',
+  'user.password_reset',
+  'user.admin_handed_over',
+];
 /** STORY-02.01: the three events of the Process Master. */
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
@@ -33,7 +42,7 @@ const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ..
 const RESERVED: ReadonlyArray<AuditEventName> = [];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval, the price override, the unlock, the cancel and the price removal, and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen and the Admin hand-over, the three events of the Process Master, the approval, the price override, the unlock, the cancel and the price removal, and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
@@ -63,7 +72,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
     for (const category of AUDIT_CATEGORIES) expect(eventsInCategory(category.id).length, category.id).toBeGreaterThan(0);
   });
 
-  it('puts the six user events under "User change" and the others each under their own', () => {
+  it('puts the user events (the hand-over, AQP-356, too) under "User change" and the others each under their own', () => {
     expect(eventsInCategory('user_change')).toEqual(WIRED_USER);
     expect(eventsInCategory('master_data')).toEqual(WIRED_MASTER);
     expect(eventsInCategory('price_override')).toEqual(['approval.price_overridden']);
@@ -121,6 +130,15 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
   it('says a temporary password was set, and says nothing of the password', () => {
     const words = describeOf('user.password_reset', { mustChangePassword: false }, { mustChangePassword: true });
     expect(words).toEqual({ before: 'Earlier password', after: 'Temporary password set' });
+  });
+
+  it('says who the Admin was and who the Admin is now, by name (STORY-01.09 AC-4, SCR-16 style)', () => {
+    const arjun = { adminId: '00000000-0000-4000-8000-0000000000a1', adminName: 'Arjun Rai' };
+    const meera = { adminId: '00000000-0000-4000-8000-0000000000a2', adminName: 'Meera Nair' };
+    expect(describeOf('user.admin_handed_over', arjun, meera)).toEqual({ before: 'Admin was Arjun Rai', after: 'Admin is now Meera Nair' });
+    expect(describeOf('user.admin_handed_over', arjun, { adminId: 'not-an-id', adminName: 'Meera Nair' })).toBeNull();
+    expect(describeOf('user.admin_handed_over', arjun, { ...meera, adminName: '' })).toBeNull();
+    expect(describeOf('user.admin_handed_over', null, meera)).toBeNull();
   });
 
   it('gives no words for stored values that do not fit the event (an older shape, a damaged row), and the screen shows a dash', () => {
@@ -351,6 +369,10 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       'user.deactivated': [{ isActive: true }, { isActive: false }],
       'user.activated': [{ isActive: false }, { isActive: true }],
       'user.password_reset': [{ mustChangePassword: false }, { mustChangePassword: true }],
+      'user.admin_handed_over': [
+        { adminId: '00000000-0000-4000-8000-0000000000a1', adminName: 'Arjun Rai' },
+        { adminId: '00000000-0000-4000-8000-0000000000a2', adminName: 'Meera Nair' },
+      ],
     };
     for (const name of WIRED_USER) {
       const [before, after] = valid[name] ?? [];

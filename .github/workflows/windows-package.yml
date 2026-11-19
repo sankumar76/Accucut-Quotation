@@ -297,13 +297,21 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value ('ACCUCUT_INSTALL_STARTED=' + (Get-Date).ToString('o'))
           $global:LASTEXITCODE = 0
 
+      # STORY-10.11 (ADR-015 Amendment 3.3): the install is run with -AdminAccount, which registers the JEA endpoint, so Windows Remote Management must be running. The runner is thrown away
+      # after the job. The Admin account of this run is the runner's own account (an administrator, so the install warns that A-35 is not met for it; the endpoint still limits the VIRTUAL account).
+      - name: Make sure PowerShell remoting is on (the install registers the Admin endpoint)
+        run: |
+          if ((Get-Service -Name WinRM).Status -ne 'Running' -or -not (Test-WSMan -ErrorAction SilentlyContinue)) { Enable-PSRemoting -Force -SkipNetworkProfileCheck | Out-Null }
+          Get-Service -Name WinRM | Format-List Name, Status
+          $global:LASTEXITCODE = 0
+
       # ---- Install (AC-1, AC-2, AC-5, AC-6, AC-7) -------------------------------------------------------------------------
       - name: Install from the unpacked zip, non-interactively (install.ps1)
         run: |
           $ErrorActionPreference = 'Stop'
           $zip = (Resolve-Path "dist\accucut-$($env:ACCUCUT_TAG)-win-x64.zip").Path
           $ErrorActionPreference = 'Continue'
-          & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes -NodeExe $env:ACCUCUT_NODE
+          & powershell.exe -NoProfile -File 'C:\accucut-pkg\install.ps1' -ZipPath $zip -ValuesFile $env:ACCUCUT_VALUES -NonInteractive -DefenderExclusion Yes -NodeExe $env:ACCUCUT_NODE -AdminAccount "$env:USERDOMAIN\$env:USERNAME"
           if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed (exit code $LASTEXITCODE)." }
           $ErrorActionPreference = 'Stop'
           if (Test-Path -LiteralPath $env:ACCUCUT_MARKER) { throw 'The tampered module in the unpacked folder was loaded by the install.' }
@@ -381,12 +389,6 @@ jobs:
           if ($output -notmatch 'Call your IT person') { throw 'The rollback did not say "Call your IT person".' }
           & .\deploy\windows\ci\assert-install.ps1 -ValuesFile $env:ACCUCUT_VALUES -ExpectedRelease "$($env:ACCUCUT_TAG)-u2" -AgeKeyFile $env:ACCUCUT_AGE_KEY -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE -InstallStartedAt $env:ACCUCUT_INSTALL_STARTED
 
-      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
-      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. This is last among the steps that need the install.
-      - name: Remove the backup account, and see the policy as it was before the install
-        run: |
-          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
-
       # ---- Pester (the scripts' own tests, with prompts mocked) ---------------------------------------------------------------
       # The image holds Pester 3.4.0 and 5.9.0; the tests need 5.
       - name: Pester tests of the scripts (deploy/windows/tests)
@@ -399,6 +401,31 @@ jobs:
           $configuration.TestResult.Enabled = $true
           $configuration.TestResult.OutputPath = 'pester-results.xml'
           Invoke-Pester -Configuration $configuration
+
+      # ---- Removal of the backup account (ADR-015 Amendment 3.2) --------------------------------------------------------------
+      # The task, then the right, then the user go; the policy must be exactly as the export before the install says. It runs AFTER the Pester tests: the tests run the Admin endpoint's two commands as the limited account on the real install, and those need the account AccucutBackup (Get-AccucutBackupAccountSid).
+      - name: Remove the backup account, and see the policy as it was before the install
+        run: |
+          & .\deploy\windows\ci\assert-removal.ps1 -RightsBefore $env:ACCUCUT_RIGHTS_BEFORE
+
+      # STORY-10.11: what the restore and the Admin endpoint left behind, when a test fails. Diagnostics only; the restore log and the transcripts hold no secret (the key is read
+      # as a secure string and blanked from every message, and the tests assert it).
+      - name: Show the restore record and the Admin endpoint's state (on failure only)
+        if: ${{ failure() }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Service -Name WinRM | Format-List Name, Status
+          Get-PSSessionConfiguration -ErrorAction SilentlyContinue | Format-List Name, Enabled, SessionType, RunAsUser
+          Write-Host '===== restore.log'
+          Get-Content -LiteralPath 'C:\Accucut\logs\restore.log' -Tail 60 -ErrorAction SilentlyContinue
+          Write-Host '===== Admin endpoint transcripts (logs\jea)'
+          Get-ChildItem -LiteralPath 'C:\Accucut\logs\jea' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content -LiteralPath $_.FullName -Tail 40 }
+          Write-Host '===== Accucut events 1100 to 1112'
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' } -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.Id -ge 1100 } | ForEach-Object { "$($_.TimeCreated) id=$($_.Id) $($_.Properties[0].Value)" }
+          Write-Host '===== databases and the services'
+          Get-Service -Name AccucutApp, AccucutWorker -ErrorAction SilentlyContinue | Format-Table Name, Status
+          foreach ($name in 'AccucutApp', 'AccucutWorker') { Write-Host "$name : $(& "$env:SystemRoot\System32\sc.exe" sdshow $name)" }
+          $global:LASTEXITCODE = 0
 
       - name: Show the install and update logs and the services' error logs (on failure only)
         if: ${{ failure() }}

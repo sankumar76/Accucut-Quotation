@@ -20,6 +20,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
   '/api/v1/users/[id]': () => import('@/app/api/v1/users/[id]/route'),
   '/api/v1/users/[id]/password-reset': () => import('@/app/api/v1/users/[id]/password-reset/route'),
+  '/api/v1/users/[id]/admin-handover': () => import('@/app/api/v1/users/[id]/admin-handover/route'),
   '/api/v1/process-items': () => import('@/app/api/v1/process-items/route'),
   '/api/v1/process-items/[id]': () => import('@/app/api/v1/process-items/[id]/route'),
   '/api/v1/materials': () => import('@/app/api/v1/materials/route'),

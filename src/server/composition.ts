@@ -16,6 +16,7 @@ import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
+import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -23,6 +24,7 @@ import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AccountService, createAccountService } from './services/account-service';
+import { type AdminHandoverService, createAdminHandoverService } from './services/admin-handover-service';
 import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
@@ -34,6 +36,9 @@ import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createMailService, type MailService } from './mail/mail-service';
+import { createMailer } from './mail/send';
+import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
@@ -55,6 +60,7 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
 let configEditService: ConfigEditService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
@@ -72,6 +78,7 @@ let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
+let mailService: MailService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -337,6 +344,20 @@ export function getCancelApprovalService(): CancelApprovalService {
 }
 
 /**
+ * The Admin hand-over (STORY-01.09): the password check of STORY-06.14 in the request, then in one transaction with both rows locked the swap of the two roles and the one audit entry. Shares the
+ * runtime-role client and the step-up check; only its one route asks for it, for the Admin alone.
+ */
+export function getAdminHandoverService(): AdminHandoverService {
+  adminHandoverService ??= createAdminHandoverService({
+    users: getUserRepository(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+    stepUp: getStepUpService(),
+  });
+  return adminHandoverService;
+}
+
+/**
  * Remove price (STORY-06.13): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the removal stored on the approval and the audit entry that keeps the price.
  * Restricted (NFR-002): only the one remove-price route asks for it here, for the Admin alone.
  */
@@ -415,4 +436,17 @@ export function getAuthOptions(): NextAuthOptions {
     });
   }
   return authOptions;
+}
+
+/**
+ * The mail outbox and the direct send (STORY-09.01): `enqueue(tx, message)` for the alerts and the reset link, `sendNow(message)` for the Settings test e-mail. The transport is built
+ * from `SMTP_AUTH_MODE` and its variables when first used, never at import. The worker builds its own pair in `src/worker/main.ts`; nothing else in `app` sends.
+ */
+export function getMailService(): MailService {
+  mailService ??= createMailService({
+    outbox: createEmailOutboxRepository(runtimeClient()),
+    mailer: createMailer(createMailTransport(loadAppEnv(), { clock: systemClock })),
+    clock: systemClock,
+  });
+  return mailService;
 }

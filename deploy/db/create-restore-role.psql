@@ -1,0 +1,22 @@
+-- The database role of the guided restore (STORY-10.11; ADR-015 Amendment 3 point 4 and the forward note for 10.11; architecture sections 9.5 and 9.9). Windows only.
+--
+--   accucut_restore  restore.ps1 only. A restore makes a new database, fills it from a backup copy, and swaps the two names, so the role needs CREATEDB and the
+--                    right to act as the owner of the data. It is NOT a superuser and has no CREATEROLE. What it has, and why:
+--                      - CREATEDB                          to make the new database. Everything else the restore does is done as accucut_owner.
+--                      - membership of accucut_owner       with INHERIT and SET, so that it can rename and drop the owner's databases and fill them.
+--                      - pg_signal_backend                 to end the last connections to a database before the names are swapped (it cannot end a superuser's).
+--                      - ALTER ROLE accucut_restore SET role = accucut_owner
+--                                                          every session of this role starts as accucut_owner, so the tables, functions and privileges that a restore
+--                                                          and a forward migration make belong to the owner exactly as at install. The statements that need CREATEDB
+--                                                          begin with SET ROLE NONE, which gives the role's own rights back for that one session.
+--                    Its password is invented by the install and written only to config\restore.pgpass (Administrators, SYSTEM and, with -AdminAccount, the
+--                    Admin endpoint's group may read it). It is never in .env, in migrate.env or in a log.
+--
+-- Run by deploy/windows/install.ps1 after create-roles.psql, with psql connected as the PostgreSQL superuser and ON_ERROR_STOP set. The password comes from the
+-- environment and is read by psql itself, so it is never on a command line. Needs: DB_RESTORE_PASSWORD.
+\getenv restore_password DB_RESTORE_PASSWORD
+
+CREATE ROLE accucut_restore LOGIN PASSWORD :'restore_password' NOSUPERUSER CREATEDB NOCREATEROLE;
+GRANT accucut_owner TO accucut_restore WITH INHERIT TRUE, SET TRUE;
+GRANT pg_signal_backend TO accucut_restore;
+ALTER ROLE accucut_restore SET role = 'accucut_owner';

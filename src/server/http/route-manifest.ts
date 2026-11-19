@@ -142,6 +142,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/users', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/users/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/users/[id]/password-reset', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-01.09 (SCR-14's Hand over Admin role; architecture section 6 "Hand over Admin": A only, step-up): the Admin hands the role to another active person with their own password, which the route checks in the same
+  // request (`verifyStepUp`, STORY-06.14). Only the Admin is listed, so a Lead and an Engineer are refused 403 before the ID is looked at.
+  { path: '/api/v1/users/[id]/admin-handover', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   // STORY-01.07 (SCR-16). The Admin only. The API has GET and nothing else: the log has no write route (PATCH, PUT and DELETE are 405).
   {
     path: '/audit',

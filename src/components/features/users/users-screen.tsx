@@ -1,6 +1,6 @@
 'use client';
 
-import { UserPlus } from 'lucide-react';
+import { ArrowRightLeft, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Icon } from '@/components/shared/icon';
@@ -8,12 +8,14 @@ import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { Button } from '@/components/ui/button';
+import { SIGN_IN_PATH } from '@/lib/auth/return-path';
 import { ADMIN_ALREADY_ACTIVE_CODE } from '@/lib/errors';
 import { revealNearest } from '@/lib/ui/reveal';
+import { handOverCandidates } from '@/lib/users/hand-over';
 import { listUsers, updateUser, type UserRow } from '@/lib/users/users-client';
 
 import { findOpenerElement, isOpener, type DialogKind, type Opener } from './opener';
-import { dialogFailureTitle, FAILED_ACTIVATE_MESSAGE, FAILED_DIALOGS_MESSAGE, FAILED_REFRESH_MESSAGE, FAILED_REFRESH_TITLE, TRY_AGAIN_BODY } from './texts';
+import { dialogFailureTitle, FAILED_ACTIVATE_MESSAGE, FAILED_DIALOGS_MESSAGE, FAILED_REFRESH_MESSAGE, FAILED_REFRESH_TITLE, HAND_OVER_OPEN_LABEL, TRY_AGAIN_BODY } from './texts';
 import type { UsersDialogsProps } from './users-dialogs';
 import { UsersList, type RowAction } from './users-list';
 
@@ -134,6 +136,14 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
     setNotice({ tone: 'danger', title: FAILED_ACTIVATE_MESSAGE, text: TRY_AGAIN_BODY });
   }
 
+  // The people who may receive the Admin role (STORY-01.09 AC-1): everyone active but the signed-in Admin, whatever their role. The server decides again.
+  const candidates = handOverCandidates(users, currentUserId);
+
+  /** The role was handed over: the signed-in Admin's session has ended with it, so the person goes to sign in again (STORY-01.09 AC-3). */
+  function goToSignIn(): void {
+    window.location.assign(SIGN_IN_PATH);
+  }
+
   const Dialogs = first.shown ? first.Overlay : null;
 
   return (
@@ -142,14 +152,25 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
         title="Users"
         description="Create and deactivate users, set roles and reset passwords. There is exactly one active Admin."
         actions={
-          <Button
-            data-action="add"
-            {...(isOpener(pressed, null, 'add') && first.pending ? { 'aria-busy': true } : {})}
-            onClick={(event) => openDialog('add', null, { userId: null, action: 'add' }, event.detail === 0)}
-          >
-            <Icon icon={UserPlus} />
-            Add user
-          </Button>
+          <div className="flex flex-wrap gap-s-2">
+            <Button
+              variant="secondary"
+              data-action="handover"
+              {...(isOpener(pressed, null, 'handover') && first.pending ? { 'aria-busy': true } : {})}
+              onClick={(event) => openDialog('handover', null, { userId: null, action: 'handover' }, event.detail === 0)}
+            >
+              <Icon icon={ArrowRightLeft} />
+              {HAND_OVER_OPEN_LABEL}
+            </Button>
+            <Button
+              data-action="add"
+              {...(isOpener(pressed, null, 'add') && first.pending ? { 'aria-busy': true } : {})}
+              onClick={(event) => openDialog('add', null, { userId: null, action: 'add' }, event.detail === 0)}
+            >
+              <Icon icon={UserPlus} />
+              Add user
+            </Button>
+          </div>
         }
       />
       {first.failed ? (
@@ -185,6 +206,9 @@ export function UsersScreen({ initialUsers, currentUserId }: UsersScreenProps) {
           target={target}
           formUser={formUser}
           currentUserId={currentUserId}
+          handOverCandidates={candidates}
+          onHandedOver={goToSignIn}
+          onStaleChoice={() => void refresh()}
           onClose={() => setOpen(null)}
           onSaved={(text) => void saved(text)}
           onAdminTaken={(name) => setAdminNotice({ name })}
