@@ -55,7 +55,7 @@ const STEP_NUMBERS: ReadonlyArray<Step> = [1, 2, 3];
 function Breadcrumb() {
   return (
     <nav aria-label={BREADCRUMB_LABEL} className="flex flex-wrap items-center gap-s-2 text-body">
-      <Link href="/config/fields" className="text-primary-ink underline-offset-2 hover:underline">
+      <Link href="/config/fields" className="inline-flex min-h-s-5 items-center text-primary-ink underline-offset-2 hover:underline">
         {FIELDS_LINK_LABEL}
       </Link>
       <span aria-hidden="true" className="text-ink-3">
