@@ -10,7 +10,7 @@ import type { SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
 
-import { PART_SAVED } from './estimate-texts';
+import { PART_SAVED, partCompleteText } from './estimate-texts';
 import { CONFLICT_RETRY_FAILED, conflictFieldMessage } from './save-texts';
 import { LOADING, loadedFrom, type Loaded } from './use-form-definition';
 
@@ -79,6 +79,10 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [problem, setProblem] = useState<PartProblem | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  // The fields whose last save did not go through (not refused under the field, which has its own message): what is typed there is kept, but it is not stored, so the count leaves it out (STORY-05.11 AC-7).
+  const [unstored, setUnstored] = useState<ReadonlySet<string>>(new Set());
+  // The server's last word on the part: the polite "Part 1.1 is complete." is said only when a save makes it `COMPLETE`, not on every save (STORY-05.11 AC-8).
+  const completenessRef = useRef<Completeness>('EMPTY');
   const [attempt, setAttempt] = useState(0);
 
   // What a save reads when it runs, not when it was asked for: the text of every field, the values the server holds and the revision to send.
@@ -110,6 +114,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
         gate.forget(partId);
         heldRef.current = outcome.value.inputs;
         textsRef.current = outcome.value.inputs;
+        completenessRef.current = outcome.value.completeness;
         setTexts(outcome.value.inputs);
       }
     });
@@ -130,7 +135,10 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     setTexts(textsRef.current);
   }
 
-  const dropError = (fieldId: string): void => setErrors((current) => (fieldId in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== fieldId)) : current));
+  const dropError = (fieldId: string): void => {
+    setErrors((current) => (fieldId in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== fieldId)) : current));
+    setUnstored((current) => (current.has(fieldId) ? new Set([...current].filter((id) => id !== fieldId)) : current));
+  };
   const clearError = (fieldId: string): void => {
     mark(fieldId, false);
     dropError(fieldId);
@@ -163,6 +171,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   /** The server did not accept the save: say why, in its words, where the person will look. */
   function explain(outcome: Exclude<Outcome<PartInputs>, { readonly status: 'ok' }>, fieldId: string): void {
     mark(fieldId, true);
+    setUnstored((current) => new Set([...current, fieldId]));
     if (outcome.status === 'refused' && outcome.httpStatus === 422) {
       setErrors((current) => ({ ...current, [fieldId]: outcome.fields[fieldId] ?? Object.values(outcome.fields)[0] ?? outcome.title }));
     } else if (outcome.status === 'refused' && outcome.httpStatus === 404) {
@@ -179,6 +188,14 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     } else {
       showProblem({ kind: 'failed' });
     }
+  }
+
+  /** The tree takes what a save left, and a part that has just become complete is said once, politely: not on every save (STORY-05.11 AC-8). */
+  function reportSaved(saved: SavedPart): void {
+    const becameComplete = saved.completeness === 'COMPLETE' && completenessRef.current !== 'COMPLETE';
+    completenessRef.current = saved.completeness;
+    if (becameComplete) setAnnouncement(partCompleteText(part.slNo));
+    onSaved(saved);
   }
 
   /** Shows a problem, or none, unless fields are waiting for the person to choose between their text and a newer value: that notice has the buttons, and nothing else may take its place (review SQR-02). */
@@ -211,7 +228,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     const plan = planAfterNewerPart({ fields, typed: textsRef.current, held: heldRef.current, fresh: newer.inputs });
     revisionRef.current = newer.revision;
     heldRef.current = newer.inputs;
-    onSaved({ id: partId, revision: newer.revision, completeness: newer.completeness, inputs: newer.inputs });
+    reportSaved({ id: partId, revision: newer.revision, completeness: newer.completeness, inputs: newer.inputs });
     // The field whose save was refused is settled below (sent again, shown newer, or in conflict) unless its text cannot be read: that text was never sent, keeps its message and stays unsaved (review SQR-04).
     const refusedField = fieldOf(fieldId);
     if (refusedField !== undefined && readTyped(refusedField.rule, textsRef.current[fieldId] ?? '').ok) clearError(fieldId);
@@ -266,7 +283,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     heldRef.current = outcome.value.inputs;
     // A good save of another field does not answer a conflict: its notice and its two buttons stay until the person chooses (review SQR-02).
     showProblem(null);
-    onSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
+    reportSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
   }
 
   /**
@@ -340,7 +357,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   function pictureSaved(saved: { readonly revision: number; readonly completeness: Completeness }): void {
     revisionRef.current = saved.revision;
     onWrote(systemClock.now().toISOString());
-    onSaved({ id: partId, revision: saved.revision, completeness: saved.completeness, inputs: heldRef.current });
+    reportSaved({ id: partId, revision: saved.revision, completeness: saved.completeness, inputs: heldRef.current });
   }
 
   /**
@@ -378,6 +395,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     stored,
     texts,
     errors,
+    unstored,
     problem,
     announcement,
     setText,

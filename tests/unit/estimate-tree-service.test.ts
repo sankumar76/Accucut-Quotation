@@ -7,6 +7,7 @@ import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MAX_PARTS_PER_ESTIMATE, TREE_FULL_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
 import { buildTree500 } from '../support/builders/tree500';
+import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { defined } from '../support/defined';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeNode, type FakeEstimateWorld } from '../support/fake-estimates';
@@ -494,15 +495,20 @@ describe('AC-8: one schema for every role, and a 500-node tree', () => {
     expect(await setUpped.service.getNode(lead, ESTIMATE, idOf(tree, '1.1.2'))).toEqual(detail);
   });
 
-  it('says PARTIAL for a part that has something typed and EMPTY for one that has nothing', async () => {
+  it('says PARTIAL for a part that has something typed, COMPLETE for one with every needed input, and EMPTY for one that has nothing (STORY-05.11 AC-2)', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const typed = setUpped.world.nodes.find((node) => node.id === idOf(tree, '2'));
-    if (typed === undefined) throw new Error('no node');
-    typed.inputs = { typed: 'x' };
+    const whole = setUpped.world.nodes.find((node) => node.id === idOf(tree, '1.1'));
+    if (typed === undefined || whole === undefined) throw new Error('no node');
+    typed.inputs = { [fieldIdOf('part-no')]: 'x' };
+    whole.inputs = completePartInputs();
     const read = await setUpped.service.getTree(arjun, ESTIMATE);
     expect(read.find((node) => node.slNo === '2')?.completeness).toBe('PARTIAL');
+    expect(read.find((node) => node.slNo === '1.1')?.completeness).toBe('COMPLETE');
     expect(read.find((node) => node.slNo === '1')?.completeness).toBe('EMPTY');
+    // The same word in every answer that carries the tree, and for every role: a move answers with the tree as the read does.
+    expect(await setUpped.service.getTree(lead, ESTIMATE)).toEqual(read);
   });
 
   it('numbers a 500-node tree the same as the independent builder, in well under a second (NFR-008)', async () => {

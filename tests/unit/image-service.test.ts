@@ -5,6 +5,7 @@ import { MAX_PICTURE_BYTES } from '@/lib/images/picture-rules';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 import { sha256Of } from '@/server/services/image-service';
 
+import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { defined } from '../support/defined';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeNode } from '../support/fake-estimates';
@@ -163,10 +164,22 @@ describe('AC-1, AC-4: a picture is added, replaced and removed', () => {
 
 describe('D-31: the picture is optional', () => {
   it('a part with no picture reads as a whole part: no picture, no error, the completeness of its inputs alone', async () => {
-    const setup = setUp([estimate()], [node(PART, { inputs: { 'invented-field': '1' } })]);
+    const setup = setUp([estimate()], [node(PART, { inputs: { [fieldIdOf('part-no')]: 'Invented text' } })]);
     const detail = await setup.service.getNode(arjun, ESTIMATE, PART);
     expect(detail.picture).toBeNull();
     expect(detail.completeness).toBe('PARTIAL');
+  });
+
+  it('STORY-05.11 AC-2: a part with every input and no picture is COMPLETE, and adding or removing the picture answers the same word', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: completePartInputs() })]);
+    expect((await setup.service.getNode(arjun, ESTIMATE, PART)).completeness).toBe('COMPLETE');
+    expect((await setup.put(smallPng())).completeness).toBe('COMPLETE');
+    expect((await setup.remove()).completeness).toBe('COMPLETE');
+  });
+
+  it('STORY-05.11 AC-2: a part that holds only a value no field of the form takes is not "partial": nothing typed is EMPTY', async () => {
+    const setup = setUp([estimate()], [node(PART, { inputs: { 'invented-field': '1' } })]);
+    expect((await setup.service.getNode(arjun, ESTIMATE, PART)).completeness).toBe('EMPTY');
   });
 
   it('a picture does not make an empty part "partial": it is not an input that is counted', async () => {

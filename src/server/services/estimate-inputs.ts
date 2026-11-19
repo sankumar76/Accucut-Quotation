@@ -1,7 +1,8 @@
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import { buildFormSections, formFieldById, type FormFieldView, type FormSectionView } from '../../lib/estimate/form-fields';
 import { hiddenFieldIds, storedValueOf, zeroHiddenNumbers } from '../../lib/estimate/hidden-inputs';
-import { completenessOf, type Completeness } from '../../lib/estimate/part-view';
+import { createCompletenessReader } from '../../lib/estimate/part-completeness';
+import type { Completeness } from '../../lib/estimate/part-view';
 import { CHOOSE_TREATMENT_MESSAGE, decodeTreatment, encodeTreatment, isOtherTreatment, readFlagInput, readTreatmentInput, treatmentChoiceOf, type TreatmentChoice } from '../../lib/estimate/treatment-value';
 import { validateNumberInput, validateTextInput } from '../../lib/estimate/validation';
 import type { ConfigDocument } from '../../lib/fields/schema';
@@ -193,6 +194,7 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
     async saveInputs(viewer, estimateId, request) {
       // A registry version never changes, so it is read before the transaction: it holds neither a second connection nor the estimate's lock while it is read (review SQR-03).
       const document = await currentConfiguration();
+      const completenessOf = createCompletenessReader(document);
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const part = await nodes.findNode(id, request.nodeId, tx);
@@ -220,15 +222,13 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         // A hidden number set to 0 by the rule is part of a write that a change of a shown field makes (Fasteners becoming "None" is one), so it is a real change then and raises both revisions with it.
         const changed = [...changes.keys()].some((fieldId) => !hidden.has(fieldId) && !sameValue(part.inputs[fieldId] ?? null, next[fieldId] ?? null));
         if (!changed) {
-          const unchanged = typedValues(document, part.inputs);
-          return { id: part.id, revision: part.revision, completeness: completenessOf(unchanged), inputs: unchanged };
+          return { id: part.id, revision: part.revision, completeness: completenessOf(part.inputs), inputs: typedValues(document, part.inputs) };
         }
         // The write is conditional on the revision that was read, so a writer that skipped the estimate's lock is a 409 here and not a lost update (review SQR-02).
         const saved = await nodes.saveInputs(id, part.id, part.revision, next, tx);
         if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
         await bumpInputsRevision(id, tx);
-        const visible = typedValues(document, saved.inputs);
-        return { id: saved.id, revision: saved.revision, completeness: completenessOf(visible), inputs: visible };
+        return { id: saved.id, revision: saved.revision, completeness: completenessOf(saved.inputs), inputs: typedValues(document, saved.inputs) };
       });
     },
 
