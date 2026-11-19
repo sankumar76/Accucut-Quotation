@@ -68,7 +68,7 @@ test.describe('AC-1, AC-2, AC-6: the notice, the mark and the clean file', () =>
     await expect(tags).toHaveCount(1);
     await expect(tags.first()).toContainText('Quantity 0');
     await expect(tags.first()).toBeVisible();
-    const row = rowsRegion(page).getByRole('row').filter({ has: tags });
+    const row = rowsRegion(page).getByRole('row').filter({ has: page.locator('[data-quantity-tag]') });
     await expect(row.getByRole('cell', { name: '0', exact: true })).toBeVisible();
     await expect(row.getByRole('cell', { name: '0.00', exact: true }).first()).toBeVisible();
 
