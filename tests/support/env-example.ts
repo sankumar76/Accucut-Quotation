@@ -13,6 +13,7 @@ export const SAFE_LITERALS: Readonly<Record<string, string>> = {
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
   SMTP_AUTH_MODE: 'none',
+  FEATURE_EMAIL: 'off',
 };
 
 const DATABASE_URL_VARIABLES: ReadonlyArray<string> = ['DATABASE_URL', 'MIGRATE_DATABASE_URL'];

@@ -61,6 +61,14 @@ export const sectionLinkText = (number: number, shortName: string): string => `$
 export const SECTION_COMPLETE_TEXT = 'All filled in';
 export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
 
+/**
+ * The completion line of the open part and the words around it (STORY-05.11; UX spec SCR-05 "Content": "24 of 25 inputs complete"). The wording is the wireframe's and is the ux-expert's to rule at the end review
+ * (OQ-1). No word names a rate, a price or a formula (UX-24).
+ */
+export const inputsProgressText = (complete: number, total: number): string => `${complete} of ${total} inputs complete`;
+export const inputsProgressLabel = (slNo: string): string => `Inputs complete for part ${slNo}`;
+export const partCompleteText = (slNo: string): string => `Part ${slNo} is complete.`;
+
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
 export const TREE_CLOSE = 'Close parts tree';

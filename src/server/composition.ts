@@ -16,6 +16,7 @@ import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createJobRunRepository } from './repositories/job-run-repository';
+import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -29,11 +30,15 @@ import { type AuditService, createAuditService } from './services/audit-service'
 import { type AuthService, createAuthService } from './services/auth-service';
 import { type CancelApprovalService, createCancelApprovalService } from './services/cancel-approval-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
+import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createMailService, type MailService } from './mail/mail-service';
+import { createMailer } from './mail/send';
+import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
@@ -57,6 +62,7 @@ let userService: UserService | undefined;
 let accountService: AccountService | undefined;
 let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
+let configEditService: ConfigEditService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
@@ -72,6 +78,7 @@ let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
+let mailService: MailService | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -219,6 +226,22 @@ export function getEstimateService(): EstimateService {
 export function getConfigReadService(): ConfigReadService {
   configReadService ??= createConfigReadService({ configurations: createConfigRepository(runtimeClient()), masters: createMasterRepository(runtimeClient()) });
   return configReadService;
+}
+
+/**
+ * The formula editor (STORY-08.02): the live check, the sample rows and the save of a formula with the Admin's password. Restricted (ADR-008): the routes that call it are in the manifest for the Admin alone. It shares the
+ * runtime-role client, the step-up check (its attempts are counted on the `stepup` key) and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigEditService(): ConfigEditService {
+  configEditService ??= createConfigEditService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    calculations: createCalculationRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configEditService;
 }
 
 /**
@@ -413,4 +436,17 @@ export function getAuthOptions(): NextAuthOptions {
     });
   }
   return authOptions;
+}
+
+/**
+ * The mail outbox and the direct send (STORY-09.01): `enqueue(tx, message)` for the alerts and the reset link, `sendNow(message)` for the Settings test e-mail. The transport is built
+ * from `SMTP_AUTH_MODE` and its variables when first used, never at import. The worker builds its own pair in `src/worker/main.ts`; nothing else in `app` sends.
+ */
+export function getMailService(): MailService {
+  mailService ??= createMailService({
+    outbox: createEmailOutboxRepository(runtimeClient()),
+    mailer: createMailer(createMailTransport(loadAppEnv(), { clock: systemClock })),
+    clock: systemClock,
+  });
+  return mailService;
 }

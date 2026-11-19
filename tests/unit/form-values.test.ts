@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { NUMBER_RULE_MESSAGE } from '@/lib/estimate/validation';
-import { fieldVisibility, isSectionComplete, lengthProblem, readTyped, sectionProgress, shownSections, shownText, textOf, watchersOf } from '@/lib/estimates/form-values';
+import { fieldVisibility, isSectionComplete, lengthProblem, readTyped, sectionProgress, shownSections, shownText, sumProgress, textOf, watchersOf } from '@/lib/estimates/form-values';
 
 import { defined } from '../support/defined';
 
@@ -110,6 +110,15 @@ describe('STORY-05.04 AC-1, AC-6: sectionProgress, the "n of m complete" of a ca
     expect(isSectionComplete({ complete: 0, total: 0 })).toBe(false);
     expect(isSectionComplete({ complete: 3, total: 3 })).toBe(true);
     expect(isSectionComplete({ complete: 2, total: 3 })).toBe(false);
+  });
+
+  it("STORY-05.11 AC-1: the part count is the sum of the card counts, and a part with no card to fill is 0 of 0", () => {
+    expect(sumProgress([
+      { complete: 2, total: 4 },
+      { complete: 0, total: 0 },
+      { complete: 3, total: 3 },
+    ])).toEqual({ complete: 5, total: 7 });
+    expect(sumProgress([])).toEqual({ complete: 0, total: 0 });
   });
 });
 

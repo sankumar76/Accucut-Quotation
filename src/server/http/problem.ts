@@ -7,6 +7,7 @@ import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '../../lib/auth/s
 
 import {
   ActiveAdminExistsError,
+  ConfigVersionChangedError,
   CalculateBlockedError,
   AppError,
   DatabaseBusyError,
@@ -68,6 +69,8 @@ export interface Problem {
   readonly errors?: ReadonlyArray<ProblemDetail>;
   /** Extension member of a second-Admin refusal (RFC 9457): who holds the one place. Present only on that 409. */
   readonly currentAdmin?: { readonly id: string; readonly name: string };
+  /** Extension member of the 409 of a configuration edit made from an older version (STORY-08.02 AC-9): the number of the latest version. */
+  readonly currentVersion?: number;
   /** Extension member of the refusal to delete a rate a formula uses (STORY-02.01 AC-4): each formula's column letter and label. */
   readonly usedBy?: ReadonlyArray<FormulaUse>;
   /** Extension member of the 409 of a parts tree that changed under the person (STORY-05.02 AC-6): the tree as it is now, the same six facts per part as `GET /tree`, and no figure. */
@@ -152,6 +155,7 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
     const base = problem(error.httpStatus, error.code, error.message, requestId);
     return error.currentAdmin === null ? base : { ...base, currentAdmin: error.currentAdmin };
   }
+  if (error instanceof ConfigVersionChangedError) return { ...problem(error.httpStatus, error.code, error.message, requestId), currentVersion: error.currentVersion };
   if (error instanceof ProcessItemInUseError) {
     return { ...problem(error.httpStatus, error.code, error.message, requestId), usedBy: error.usedBy.map(({ letter, label }) => ({ letter, label })) };
   }
