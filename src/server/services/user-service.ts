@@ -1,4 +1,5 @@
 import { ActiveAdminExistsError, ConflictError, FieldValidationError, NotFoundError } from '../../lib/errors';
+import { ADMIN_CANNOT_BE_REMOVED_CODE, ADMIN_CANNOT_BE_REMOVED_MESSAGE } from '../../lib/users/hand-over';
 import type { PasswordHasher } from '../auth/password-hasher';
 import { accountThrottleKey, passwordChangeThrottleKey, stepUpThrottleKey } from '../auth/throttle-key';
 import type { ThrottleRepository } from '../repositories/throttle-repository';
@@ -156,6 +157,11 @@ export function createUserService({ users, throttles, hasher, transactions, audi
           }
 
           const after = { role: changes.role ?? target.role, isActive: changes.isActive ?? target.isActive };
+          // The Admin role moves by a hand-over only (STORY-01.09 AC-7). The Admin cannot edit themself (above), so before the hand-over no edit could take the role away; now a request of the old Admin that waited for the
+          // hand-over's row lock would run afterwards on the new Admin and leave the portal with none.
+          if (isActiveAdmin(target) && !isActiveAdmin(after)) {
+            throw new ConflictError(ADMIN_CANNOT_BE_REMOVED_MESSAGE, { code: ADMIN_CANNOT_BE_REMOVED_CODE });
+          }
           if (isActiveAdmin(after) && !isActiveAdmin(target) && (await users.findActiveAdmin()) !== null) throw await activeAdminExists();
 
           const updated = await users.update(target.id, changes, tx);

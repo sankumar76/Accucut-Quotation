@@ -51,6 +51,8 @@ const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 export const UNKNOWN_CALCULATION_ID = '00000000-0000-4000-8000-00000000ca1c';
 /** An approval that is none, for the recipe of Cancel approval (STORY-06.12). */
 export const UNKNOWN_APPROVAL_ID = '00000000-0000-4000-8000-00000000a9a9';
+/** A person that does not exist, for the recipe of the Admin hand-over (STORY-01.09), which must never hand the role to anyone. */
+export const UNKNOWN_USER_ID = '00000000-0000-4000-8000-0000000000ff';
 
 /** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
 export const NO_RECIPE_ID = 'invented-id';
@@ -273,6 +275,11 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: context.targetId, body: { name: 'Invented Renamed Engineer' }, status: 200 };
     case 'POST /api/v1/users/[id]/password-reset':
       return { id: context.targetId, body: { password: 'invented-temporary-password-1' }, status: 204 };
+    // STORY-01.09: Admin only. A hand-over that succeeded would change who the one Admin is, and the harness (and the real scan's database) holds that person for every other call, so the valid call names a person
+    // that does not exist: the right password (`HARNESS_PASSWORD`, so the step-up passes and clears its count) and an unknown ID are refused 404 under the locks, for the one role that may call it, and write
+    // nothing. The refusal is a fixed sentence. The rest (a swap, a person who is deactivated or the caller, the password, the order, the locks) is `admin-handover-route.test.ts`'s and `tests/integration/users/admin-handover.test.ts`.
+    case 'POST /api/v1/users/[id]/admin-handover':
+      return { id: UNKNOWN_USER_ID, body: { password: HARNESS_PASSWORD }, status: 404 };
     // STORY-02.01: the Process Master routes. The ID is a seed rate no formula uses (so the delete can answer 204) and the body is invented.
     case 'GET /api/v1/process-items':
       return DEFAULT_CALL;
