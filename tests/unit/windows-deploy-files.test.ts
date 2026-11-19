@@ -861,6 +861,40 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(assertInstall).toContain("'S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0'");
   });
 
+  it('STORY-10.09a AC-7: assert-install checks the heartbeat row and the prune function on the real install, and the README says that a stopped worker turns /api/health to 503', () => {
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    for (const part of [
+      "job = 'heartbeat' AND finished_at > now() - interval '3 minutes'",
+      'the worker wrote a heartbeat row in the last 3 minutes',
+      "proname = 'prune_heartbeat_runs'",
+      "'true|accucut_owner|0|{\"search_path=pg_catalog, pg_temp\"}'",
+      "has_function_privilege('accucut_app', 'public.prune_heartbeat_runs()', 'EXECUTE')",
+      "has_table_privilege('accucut_app', 'job_runs', 'DELETE')",
+      "'true|false|false'",
+    ]) {
+      expect(assertInstall, part).toContain(part);
+    }
+    // The heartbeat is checked after Invoke-SuperPsql is defined, which it uses.
+    expect(assertInstall.indexOf('the worker wrote a heartbeat row')).toBeGreaterThan(assertInstall.indexOf('function Invoke-SuperPsql'));
+    const readme = read('deploy/windows/README.md');
+    expect(readme).toMatch(/503[^\n]*worker has stopped/);
+    expect(readme).toContain('heartbeat every minute');
+  });
+
+  it('STORY-10.09a AC-7: install, update and restore all still wait for /api/health with the 180 s allowance, and the worker is started before the wait (its first heartbeat is written at start)', () => {
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1']) {
+      expect(code(path), path).toContain('$HealthTimeoutSeconds = 180');
+      expect(code(path), path).toContain('Wait-AccucutHealth');
+    }
+    expect(functionBody(code('deploy/windows/AccucutOps.psm1'), 'Invoke-AccucutRestore')).toContain('Wait-AccucutHealth -Url $HealthUrl');
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    expect(ops).toMatch(/\$script:ServiceNames = @\('AccucutApp', 'AccucutWorker'\)/);
+    // restore.ps1 starts both services before it waits, so the worker's heartbeat can turn the check green.
+    const restore = functionBody(ops, 'Invoke-AccucutRestore');
+    expect(restore.indexOf('Start-AccucutServices')).toBeGreaterThanOrEqual(0);
+    expect(restore.indexOf('Start-AccucutServices')).toBeLessThan(restore.indexOf('Wait-AccucutHealth'));
+  });
+
   it('exercise-backup.ps1 runs a release backup, more copies, a clear with a wrong then the right date, planted things that are not the backup\'s own, and a replaced module', () => {
     const exercise = code('deploy/windows/ci/exercise-backup.ps1');
     for (const part of [
