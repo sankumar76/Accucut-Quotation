@@ -118,3 +118,22 @@ After SQR-01 and SQR-02 are fixed (and the branch is updated, SQR-08), a re-revi
 **No new findings** in the new diff. The changed code adds no logging of error text, no new import (only the `SendResult` type from `codes`), and no new database access.
 
 **Next:** the delivery lead appends `FEATURE_EMAIL=off` on the branch, and the developer adds the test that `.env.example` names it. Then a one-line re-check, and the label changes to `review:quality-approved`. Until then the label stays `review:quality-changes-requested`. Follow-up #505 keeps SQR-03 only.
+
+## Re-check of SQR-01 (2026-11-19, head `e69ad6ad`)
+
+| Item | Value |
+|---|---|
+| New diff reviewed | 202cb175 (3 files, +14 / -0): `.env.example` +1 (the delivery lead, DL-241), `tests/support/env-example.ts` +1, `tests/unit/mail/feature-email.test.ts` +12. e69ad6a merges `master` 6f275ad (incl. nodemailer 10.5.0); `202cb175...e69ad6a` touches none of these three files |
+| How `.env.example` was judged | From the commit's file stats (+1 / -0) and the test only; the file was not read by any route (permission rule) |
+| Tests I ran | At 202cb175 (worktree `aqp-348`, left clean): `npx vitest run tests/unit/mail/feature-email.test.ts tests/unit/env-example.test.ts --maxWorkers=1`, **2 files, 43 tests passed** |
+| CI on e69ad6a | Running at the time of this re-check; the merge stays the orchestrator's call on green CI |
+| **Verdict** | **APPROVE WITH COMMENTS** (PR review 5971553681, COMMENT) |
+| Open counts | Blocker 0 · Critical 0 · Major 0 · Minor 1 · Info 5 |
+
+| Finding | Status | Evidence |
+|---|---|---|
+| SQR-01 (Critical): `FEATURE_EMAIL` in `.env.example` (AC-6) | **Fixed** | `feature-email.test.ts:40-47` finds the line starting `FEATURE_EMAIL=` and asserts it is exactly `FEATURE_EMAIL=off`, so the line cannot be dropped or changed silently. `SAFE_LITERALS` gains only the exact pair `FEATURE_EMAIL: 'off'`, so the "placeholders only" rule is not loosened for any other name or value. Thread reply: https://github.com/sankumar76/Accucut-Quotation/pull/503#discussion_r4626072040 |
+| SQR-03 (Minor) | Open, deferred | #505 and STORY-09.06, unchanged |
+| SQR-05 to SQR-07, SQR-09 (Info) | Unchanged | Routed as before |
+
+AC-6 is now fully met; every AC of STORY-09.01 is met. No new findings. Label changed from `review:quality-changes-requested` to `review:quality-approved`.
