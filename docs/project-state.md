@@ -13,8 +13,20 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-19 by orchestrator (resume point, pause 2) |
+| Last updated       | 2026-11-19 by orchestrator (run after pause 2: Gitleaks blocker) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Run after pause 2 (2026-11-19, orchestrator)
+
+> This section wins over everything below it. Records stay on `docs/AQP-1-records-t` (draft PR #494). The main checkout belongs to the CR-01 session.
+
+- **Merged:** #520 **AQP-374** DEF-046 test fix (4232a36; `master` push run 44540107462 fully green = P5; rule R4 ended); #519 **AQP-312** AC-8 kit, optional standard-account step (1e6a4d4; kit link posted on AQP-312, comment 12351). Total merged on 19 Nov: 10.
+- **QA closed:** AQP-373 (DEF-045) and AQP-374 (DEF-046), Jira 12349 and 12350; GitHub #515 and #517 closed; commit 01ec468.
+- **Master ruling DL-256** (#510 red run 44540150487): update the branch, merge on fully green, no re-run of that run. New Bug **DEF-048** (tablet `estimate-treatments.spec.ts:238` axe-scan time-out, `estimate-tree.spec.ts:313` flaky), being logged by qa-engineer; new rule **R6**. R3 and R4 ended; only R5 and R6 remain.
+- **BLOCKER (delivery lead):** Stage 2 Gitleaks (full history) is red on every run, including `master` push run 44546695829 on 1e6a4d4 (its four E2E shards are green). Cause: 3 invented test strings in commits c763a02 and 309d1e3, only on the old remote branch `feat/AQP-375-observability` (the H-OBS developer recommitted without them on `feat/AQP-375-observability-2`, PR #529; old PR #528 closed). Agents may not delete branches. Needed: `git push origin --delete feat/AQP-375-observability`; then the orchestrator re-runs `master` and updates the open PRs. Jira AQP-1 comment 12356. No PR can merge until then.
+- **Lanes:** (1) AQP-376 DEF-047 fix, PR #527, worktree `aqp-376`, diagnosing in CI; (2) AQP-358 08.03 [c], #526, resumed; (3) AQP-375 H-OBS, all 9 ACs built locally, PR #529 draft (head 8434ca7), waiting for the blocker, then CI and the combined review (§9 item 2).
+- **Waiting to merge (after the blocker):** #525 AQP-349 09.02 (ready; green on a0f15e4 before #519 merged; updated again); #510 AQP-336 (updated per DL-256).
+- **Worktrees (6):** records-t, aqp-336, aqp-349, aqp-358, aqp-375, aqp-376. Removed after merge: aqp-373 and ac8-kit (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-19/`).
 
 ## Resume point (2026-11-19, pause 2)
 
