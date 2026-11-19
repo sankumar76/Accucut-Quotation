@@ -57,6 +57,36 @@ async function error(promise: Promise<unknown>): Promise<unknown> {
   );
 }
 
+type ReadCredentials = AuthDatabase['users']['findCredentialsById'];
+
+/**
+ * An account service whose read of the stored hash (`findCredentialsById`, account-service.ts:79: the read that decides between 409 and 422) goes through `around`.
+ * The test controls the order of two changes by making promises resolve at that read, never by waiting for time.
+ */
+function serviceReadingThrough(around: (read: ReadCredentials) => ReadCredentials): AccountService {
+  return createAccountService({
+    users: { ...db.users, findCredentialsById: around(db.users.findCredentialsById.bind(db.users)) },
+    throttles: db.throttles,
+    hasher,
+    clock: { now: () => now },
+    keySecret: KEY_SECRET,
+  });
+}
+
+/** Resolves for every caller once `parties` callers have arrived. */
+function barrier(parties: number): () => Promise<void> {
+  let arrived = 0;
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return () => {
+    arrived += 1;
+    if (arrived === parties) open();
+    return opened;
+  };
+}
+
 describe('AC-3, AC-5: the change', () => {
   it('stores an argon2id hash of the new password, clears the flag and raises the version, in one statement; the old password stops working', async () => {
     const { id, email } = await person('changes.password');
@@ -111,16 +141,45 @@ describe('AC-3, AC-5: the change', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('two changes at once cannot both win: the second finds the stored password already changed', async () => {
-    const { id } = await person('two.at.once');
-    const outcomes = await Promise.all([
-      error(service.changePassword(id, { currentPassword: CURRENT, newPassword: NEW })),
-      error(service.changePassword(id, { currentPassword: CURRENT, newPassword: 'Zx8%mNc4#Tv-other' })),
-    ]);
+  // The loser of two changes made with the same current password is told 409 when both read the stored hash before either wrote (the compare and set then fails),
+  // and 422 when it read after the winner committed (the current password no longer matches). Both are specified; the two tests force one order each (DEF-046).
+  it('two changes that both read the stored password before either writes cannot both win: exactly one succeeds and the other is 409', async () => {
+    const { id } = await person('two.read.first');
+    const bothHaveRead = barrier(2);
+    const reads = (read: ReadCredentials): ReadCredentials => async (userId) => {
+      const stored = await read(userId);
+      await bothHaveRead();
+      return stored;
+    };
+    const passwords = [NEW, 'Zx8%mNc4#Tv-other'];
+    const outcomes = await Promise.all(passwords.map((newPassword) => error(serviceReadingThrough(reads).changePassword(id, { currentPassword: CURRENT, newPassword }))));
     expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(1);
-    const lost = outcomes.find((outcome) => outcome !== null);
-    expect(lost).toMatchObject({ httpStatus: 409, code: 'PASSWORD_CHANGED_ELSEWHERE' });
-    expect((await row(id)).session_version).toBe(1);
+    expect(outcomes.find((outcome) => outcome !== null)).toMatchObject({ httpStatus: 409, code: 'PASSWORD_CHANGED_ELSEWHERE' });
+    const after = await row(id);
+    expect(after.session_version).toBe(1);
+    expect(await hasher.verify(after.password_hash, defined(passwords[outcomes.indexOf(null)], 'the winner'))).toBe(true);
+  });
+
+  it('two changes where the second reads the stored password only after the first has committed: the first wins and the second is 422', async () => {
+    const { id } = await person('two.read.late');
+    let firstCommitted!: () => void;
+    const committed = new Promise<void>((resolve) => {
+      firstCommitted = resolve;
+    });
+    const readsLate = (read: ReadCredentials): ReadCredentials => async (userId) => {
+      await committed;
+      return read(userId);
+    };
+    const first = error(service.changePassword(id, { currentPassword: CURRENT, newPassword: NEW })).then((outcome) => {
+      firstCommitted();
+      return outcome;
+    });
+    const second = error(serviceReadingThrough(readsLate).changePassword(id, { currentPassword: CURRENT, newPassword: 'Zx8%mNc4#Tv-other' }));
+    expect(await first).toBeNull();
+    expect(await second).toMatchObject({ httpStatus: 422, code: 'CURRENT_PASSWORD_WRONG' });
+    const after = await row(id);
+    expect(after.session_version).toBe(1);
+    expect(await hasher.verify(after.password_hash, NEW)).toBe(true);
   });
 
   it('never overwrites a password the Admin reset after the current one was checked', async () => {
