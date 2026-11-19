@@ -63,7 +63,8 @@ test.describe('AC-1, AC-5, AC-9: an estimate that was never calculated', () => {
 
     const notice = refusal(page, 'There is no file to download yet.');
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText(NOT_CALCULATED);
+    // The bold line and the sentence under it are two lines of the notice, so each is read on its own; the 409 below carries them as one text.
+    await expect(notice).toContainText('This estimate has not been calculated. The download stays off until a calculation is current.');
     await expect(notice).toContainText('Calculate first');
     await expect(notice).toContainText('The file holds the rows and the totals of a calculation. There is none yet.');
     await expectNoFileAndNoTable(page);
@@ -98,7 +99,7 @@ test.describe('AC-2, AC-3, AC-5, AC-6, AC-7, AC-9: an estimate whose count chang
 
     const notice = refusal(page, 'The total is cleared because an input changed.');
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText(CLEARED);
+    await expect(notice).toContainText('There is no file to download until you press Recalculate.');
     await expect(notice).toContainText('Recalculate first');
     await expect(notice).toContainText('The file would hold figures that no longer match the inputs, so the portal does not build one. After Recalculate the download comes back.');
     await expectNoFileAndNoTable(page);
