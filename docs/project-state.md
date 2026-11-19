@@ -13,8 +13,34 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-18 by orchestrator (daily update and resume point, 2026-11-18) |
+| Last updated       | 2026-11-19 by orchestrator (daily update and resume point, 2026-11-19) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update and resume point (2026-11-19, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout still belongs to the CR-01 session: do not touch it.**
+
+**`master` = d12b6e0.** Push runs were green through a44cb88. Read the runs for 77019cd, 44a51e3, 230bd77 and d12b6e0 on resume.
+
+**Merged since the 2026-11-18 update (squash, each on fully green checks, up to date with `master`):** #497 AQP-309 privacy checks (a44cb88); #495 **AQP-330** 06.13 remove price [c] (77019cd; combined review 0 Major, Minors #499; BO rule ruled by the architect, v0.52); #500 AQP-90 About page (44a51e3); #487 **AQP-332** 07.02 export rows [c] (230bd77; WebP option A, DL-237, server refuses unconverted WebP with 415, OQ-PM-10; #489 closed, #496 reopened for SQR-08); #504 **AQP-333** 07.03 totals [c] (d12b6e0; 0 Major, Minors #506; #478 SQR-01 fixed). **Total for 2026-11-18: 10 merges** (#479, #455, #486, #483, #492, #497, #495, #500, #487, #504), none reverted. Jira Done: AQP-328, 347, 329, 308, 309, 330, 90, 332, 333.
+
+**Decisions recorded:** DL-235 (lanes; nightly CI time frozen), DL-236 (branch updates: option (c), both), DL-237 (WebP option A), DL-238 (Mailpit in CI allowed for AQP-348, conditions C1 to C3). Architecture v0.52 to v0.55 (BO rule; ADR-013 amendment 1; ADR-015 amendment 3.3 for the restore, R1 to R5; EPIC-09 rulings 1 to 7: outbox by user id, `sender_mailbox`, reset link 60 min, Mailpit in `verify`). PRD v0.30. **DL-230 follow-up:** the delivery lead set `LIGHTHOUSE_B0 = 2594.5` (2026-11-19T00:13:30Z); the next nightly compares against it.
+
+**Backlog:** the scrum-master found 23 planned stories (about 81 points) with no Jira issue. First batch created and DoR-passed: AQP-348 to AQP-357 (EPIC-09 09.01 to 09.08, 01.09, 04.07; 50 points; AQP-355 09.08 is a human-run step). Still to write: EPIC-08 08.03 to 08.07 (after AQP-338), R1+ 02.08, 04.06, 05.10, 05.11, 10.07, and R1 10.06, 10.08, 10.09.
+
+**Open PRs and lanes:**
+| PR | Story | State | Waits on |
+|---|---|---|---|
+| #503 | AQP-348 09.01 mail outbox [c] | CI green at 9ec4d9e; re-review: only SQR-01 open | **Delivery lead:** `FEATURE_EMAIL=off` in `.env.example` (AQP-1 comment 12224) |
+| #507 | AQP-357 04.07 reassign | CI green; branch updated on GitHub, CI re-running | Green run, then merge |
+| #508 | AQP-356 01.09 Admin hand-over [c] | CI green at 7e87c21 | Combined review (running) |
+| #501 | AQP-312 10.11 Windows restore [c] | R1 to R5 being made; stage 13 runs | CI; then combined review; **AC-8 manual JEA check by a human** |
+| #493 | AQP-338 08.02 formula edit [c] | Conflicting, no CI | **Delivery lead:** AQP-1 comment 12227 (the developer's session is still refused `git merge`) |
+| (new) | AQP-334 07.04, AQP-336 07.06 | Developers started 2026-11-18 late | Build |
+
+**For the delivery lead, in order:** (1) `.env.example` line (12224); (2) AQP-338 merge route (12227); (3) the AQP-312 AC-8 kit on a Windows Server; (4) date risk (about 31 more points to write, plus EPIC-08's chain); (5) does "all R2" cover R1+?; (6) do 10.08 and 10.09 fold into the final review?; (7) the IT mailbox details for 09.08 (Q-18); (8) #485 timing. Housekeeping as in the 2026-11-18 section, plus finished worktrees aqp-309, aqp-330, aqp-90, aqp-332, aqp-333 and the container `aqp338-db`.
+
+**Hardening list additions:** #499, #505 (SQR-03, into 09.06), #506, #496 SQR-08, the menu drawer at 360 px (AQP-90 note), the resetPassword stale-request window (pending the AQP-356 review), architecture §4.6 and §6 notes from the AQP-333 review.
 
 ## Daily update and resume point (2026-11-18, orchestrator)
 
