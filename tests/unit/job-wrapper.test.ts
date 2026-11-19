@@ -82,7 +82,6 @@ describe('runJob: a job that throws (AC-3, AC-8)', () => {
 
   it('[AC-3] says NonError for something that is not an Error, and still resolves', async () => {
     const { lines, log, now } = harness();
-    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- a job may throw anything; this is the case under test.
     await expect(runJob({ name: 'log-prune', log, now }, () => Promise.reject(`token=${SECRET}`))).resolves.toBeUndefined();
     expect(lines.at(-1)?.fields).toMatchObject({ errorName: 'NonError' });
   });
