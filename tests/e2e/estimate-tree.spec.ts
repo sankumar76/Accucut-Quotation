@@ -5,6 +5,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
+import { mark } from './support/def048-timing';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 
 /**
@@ -214,15 +215,22 @@ async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promise<{ re
 
 /** Signs in as a person who owns a task, chooses the customer, and shows the tree (on a phone, in its drawer). Returns the estimate's ID, which is the person's. */
 async function openTree(page: Page, testInfo: TestInfo): Promise<{ readonly estimateId: string }> {
+  mark('openTree: begin');
   await ensureCanaryCustomers();
+  mark('openTree: canaries');
   const owner = await signInAsNewEngineer(page, testInfo);
+  mark('openTree: signed in');
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+  mark('openTree: goto returned');
   await waitUntilHydrated(page, '#estimate-customer', 'onChange');
   await expect(customerField(page)).toBeEnabled();
+  mark('openTree: hydrated and enabled');
   await customerField(page).selectOption({ label: ALPHA });
   await expect(page.getByText('Customer saved.')).toBeVisible();
+  mark('openTree: customer saved');
   await showTree(page);
   await expect(part(page, '1')).toBeVisible();
+  mark('openTree: part 1 visible');
   return { estimateId: owner.id };
 }
 
@@ -311,37 +319,49 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
 
 test.describe('AC-3: delete asks first and names the count', () => {
   test('AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing; confirming deletes all three', async ({ page }, testInfo) => {
+    mark('start');
     await openTree(page, testInfo);
+    mark('A openTree');
     await part(page, '1').click();
     await action(page, 'Sub-part').click();
     await expect(part(page, '1.1')).toBeVisible();
+    mark('B sub-part 1.1 added');
     // The new part is the selected one, so choose part 1 again for its second sub-part.
     await part(page, '1').click();
     await action(page, 'Sub-part').click();
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    mark('C sub-part 1.2 added');
 
     await part(page, '1').click();
     await action(page, 'Delete').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
     await expect(dialog).toBeVisible();
+    mark('D dialog visible');
     await expect(dialog).toContainText('This also deletes its 2 sub-parts, and everything typed into them. This cannot be undone.');
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
     await expect(dialog.getByRole('button', { name: 'Delete 3 parts' })).toBeVisible();
+    mark('E dialog asserted');
     await expectNoAxeViolations(page);
+    mark('F axe done');
 
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);
     expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    mark('G cancelled');
 
     await action(page, 'Delete').click();
     await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
     await expect(dialog).toHaveCount(0);
+    mark('H confirm clicked, dialog gone');
     await expect(page.getByText('3 parts deleted')).toHaveCount(1);
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    mark('I empty words visible before reload');
     await page.reload();
+    mark('J reload returned');
     // With no part there is no tree element, only the words; on a phone they are in the drawer.
     if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
     await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    mark('K empty words visible after reload');
   });
 
   test('AC-3: a part with no sub-parts is a plain confirm, and Escape closes the dialog with nothing sent', async ({ page }, testInfo) => {

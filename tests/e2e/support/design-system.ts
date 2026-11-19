@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type CDPSession, type Locator, type Page } from '@playwright/test';
 
+import { mark } from './def048-timing';
+
 /**
  * Shared by the two /design-system specs (`design-system.spec.ts`: the page; `shell.spec.ts`: the page frame).
  * This file has no tests, and its name does not end in `.spec.ts`, so Playwright does not run it by itself.
@@ -92,8 +94,11 @@ export async function waitForAnimationsToFinish(page: Page): Promise<void> {
 
 export async function expectNoAxeViolations(page: Page): Promise<void> {
   // A named step, so a timeout in a test report says it was waiting for animations and not scanning (QLT-40).
+  mark('axe: begin', `domNodes=${await page.evaluate(() => document.querySelectorAll('*').length)}`);
   await test.step('wait for animations and transitions to finish before the axe scan', () => waitForAnimationsToFinish(page));
+  mark('axe: animations finished');
   const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  mark('axe: analyze done', `violations=${results.violations.length}`);
   const summary = results.violations.map((violation) => ({
     id: violation.id,
     impact: violation.impact,
