@@ -11,10 +11,49 @@
 | Current phase      | Fast track (CLAUDE.md §9). See "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
-| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
+| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-19 by orchestrator (resume point, pause) |
+| Last updated       | 2026-11-19 by orchestrator (daily update, later) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-19, later, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**Merged (squash, each on fully green CI with the head up to date with `master`):** #512 **AQP-363** 10.06 drawing region (e4cf444); #514 **AQP-344** DEF-041 test-only fix (6f275ad; DL-240 F1 to F5 met, master ruling DL-246; qa closed AQP-344 and #473; rule R2 has ended); #501 **AQP-312** 10.11 Windows restore [c] (0898563; combined review APPROVE WITH COMMENTS, SQR-01 Major fixed, SQR-02 to 04 in #516; AC-8 pending a manual check by Accucut IT, DL-243, G8 condition G8-C-AC8; one R3 re-run). **Jira Done:** AQP-363, AQP-344, AQP-312.
+
+**`master`:** e4cf444 red on attempt 1 (DEF-045, `image.test.ts` timeout), green on the one R3 re-run (DL-245); 6f275ad green (run 44482838527, also the F5 proof for AQP-344); 0898563 run in progress at writing.
+
+**Decisions recorded today:** DL-241 (`FEATURE_EMAIL=off` line in `.env.example`, added by the delivery lead), DL-242 (#476 next 16.4.6 to the hardening window, #513), DL-243 (AQP-312 AC-8 pending, G8-C-AC8), DL-244 (R1+, 10.08, 10.09, 08.08 before G8), DL-245 (red master on DEF-045; rule R3; AQP-373 takes the next lane), DL-246 (#514 meets F2), DL-247 (developers merge with exactly `git -C "<…>/.claude/worktrees/<wt>" merge origin/master`; the settings line is committed on this branch as bd56e77), DL-248 (**G8 target 1 Dec**). DL-249 (10.08 and 10.09 fold into the final review; AQP-370 and AQP-371 back in To Do, label `final-review`; 10.09's code items AC-5 to AC-7 become hardening item **H-OBS**, about 3 points, timing for the delivery lead, master recommends the first lane free after AQP-348), DL-250 (Q-18 open with Accucut IT, needed by Fri 27 Nov; RISK-014), DL-251 (#485 folds into the final review as G8 condition **G8-C-NFR9**; RISK-020 raised to 6). **Pre-G8 list adds:** G8-C-AC8, G8-C-NFR9, H-OBS, #513, #516.
+
+**Why the local merges failed this morning:** each agent Bash call resets its working directory to the main checkout, so a `cd` then bare `git merge origin/master` would have merged into the CR-01 checkout. Developers stopped correctly. The delivery lead ran the merges for aqp-356, aqp-336 and aqp-338; developers resolved and committed them. DL-247 now gives developers a form that names the worktree.
+
+**Defects:** DEF-045 (AQP-373, #515, Sev-3, `image.test.ts` "table is immutable" group, slow `snapshot()`), fix in progress under DL-245 T1 to T6; it has turned two runs red (e4cf444, #501), both cleared by one R3 re-run. A new failure on #510 in `tests/integration/auth/account-password.test.ts` ("two changes at once cannot both win": a field validation error instead of 409) is being logged by qa-engineer; master rules on it next. No rule covers re-running it.
+
+**Backlog:** AQP-365 to AQP-372 created (scrum-master), PO-validated READY, Ready for Dev; AQP-365 AC-9 aligned with architecture v0.56. AQP-370 and AQP-371 then folded into the final review. Architecture v0.56 and test strategy v0.46 answer the 02.08, 10.08 and 10.09 questions. Q-18 request page for Accucut IT: `docs/01-discovery/Q-18-mail-settings-request.md` (AQP-355 comment 12306).
+
+**Open PRs and next step:**
+| PR | Story | State | Next |
+|---|---|---|---|
+| #508 | AQP-356 01.09 [c] | Conflict resolved (096f466), updated with `master` (e58e4da), CI running | Merge on green |
+| #503 | AQP-348 09.01 [c] | SQR-01 closed (re-check APPROVE WITH COMMENTS), updated (dce5467), CI running | Merge on green; then 09.02 starts in its slot |
+| #510 | AQP-336 07.06 | Conflicts resolved (4f8e0c8); red on the new account-password failure | Master's ruling; then update and merge |
+| #493 | AQP-338 08.02 [c] | Merge in progress (9 conflicts incl. `calculation-repository.ts`), developer resolving | CI, combined review, merge; then 08.03 starts |
+| AQP-373 | DEF-045 fix | Developer measuring | PR, slowest group test ≤ 1,000 ms (T6) |
+| AQP-368 | 05.11 | Developer building | PR, CI |
+| #476 | next 16.4.6 | Held for the hardening window (#513) | none now |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Lane plan to the 1 Dec target (orchestrator's plan, not a measured velocity; master asked for it in DL-248):**
+1. **EPIC-09 chain (critical path):** 09.02 AQP-349 starts in the aqp-348 slot as soon as #503 merges (planned 19 to 20 Nov), then 09.03 to 09.07 (AQP-350 to 354; 09.07 is critical) in order; 09.08 AQP-355 when Accucut IT answers Q-18 (needed by 27/28 Nov).
+2. **EPIC-08 chain (critical path):** 08.03 AQP-358 starts as soon as #493 merges (planned 20 Nov), then 08.04 to 08.07 (AQP-359 to 362), then 08.08 AQP-372 [c].
+3. **Third lane:** 05.11 AQP-368 (now), 05.10 AQP-367, 07.07 AQP-364 and 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369.
+4. **Hardening window:** opens when the last story merges, planned 26 Nov: the full review by the three reviewers and QA, a full regression, #513, the 10.08 and 10.09 coverage, and the fixes. G8 recommendation 1 Dec. **Named human steps:** AC-8 (Accucut IT) and the 09.08 real send, both by 28 Nov.
+**Slip watch:** the two chains are the critical path. If 08.03 or 09.02 has not started by 20 Nov, or the last story is not merged by 26 Nov, I report a slip against 1 Dec at once (DL-248).
+
+**Worktrees (7 of 7):** `records-t`, `aqp-336` (#510), `aqp-338` (#493), `aqp-348` (#503), `aqp-356` (#508), `aqp-373` (DEF-045), `aqp-368` (05.11). Removed today: `aqp-363`, `aqp-344` (its memory note moved to records-t), `aqp-312`. Test DB containers: aqp336-db, aqp338-db, aqp348-db, aqp373-db. **Disk:** C: 12 to 13 GB free.
+
+**For the delivery lead:** see the orchestrator's final report (the Q-18 page and AC-8 kit links; master's DL-241 disclosure that it read `.env.example` through the GitHub API).
 
 ## Resume point (2026-11-19, pause)
 

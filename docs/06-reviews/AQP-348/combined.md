@@ -137,3 +137,5 @@ After SQR-01 and SQR-02 are fixed (and the branch is updated, SQR-08), a re-revi
 | SQR-05 to SQR-07, SQR-09 (Info) | Unchanged | Routed as before |
 
 AC-6 is now fully met; every AC of STORY-09.01 is met. No new findings. Label changed from `review:quality-changes-requested` to `review:quality-approved`.
+
+**Addendum (2026-11-19):** while CI ran on e69ad6a, the head moved to `dce54679`, a second merge of `master` (08985636, AQP-312 #501, Windows restore and JEA). `e69ad6a...dce5467` changes 20 files under `deploy/`, `.github/workflows/windows-package.yml`, `scripts/package-windows.ps1` and `tests/unit/windows-deploy-files.test.ts`, and none of the 35 PR files or `.env.example`. The verdict stands for `dce5467`. The CI run on e69ad6a was superseded before it finished: "Stages 1 to 11b" and E2E shard 3 passed, and nothing failed. CI on dce5467 had just started. The merge waits on that run being green.
