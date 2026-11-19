@@ -54,12 +54,13 @@ beforeAll(async () => {
     header: createExportRepository(db.prisma),
     nodes: db.nodes,
     calculations: {
-      findFigureBasis: (estimateId) => db.calculations.findFigureBasis(estimateId),
-      findExportFigures: (calculationId) => {
+      findFigureBasis: (estimateId, tx) => db.calculations.findFigureBasis(estimateId, tx),
+      findExportFigures: (calculationId, tx) => {
         exportFigureReads();
-        return db.calculations.findExportFigures(calculationId);
+        return db.calculations.findExportFigures(calculationId, tx);
       },
     },
+    approvals: db.approvals,
     images: {
       readMany: (estimateId, ids) => {
         readManyCalls.push(ids.length);
@@ -68,6 +69,7 @@ beforeAll(async () => {
       findMimes: (estimateId, ids) => images.findMimes(estimateId, ids),
     },
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
+    transactions: db.transactions,
     builder,
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
@@ -129,7 +131,8 @@ describe('AC-1: one row per node, depth-first, Sl. No as text, values from the c
       { name: 'One-one-one', parent: 'One-one', at: 0 },
     ]);
     const { sheet } = await sheetOf(estimateId);
-    expect(sheet.actualRowCount).toBe(7);
+    // The header, six parts and the footer of the total Tool Cost (STORY-07.03): 8 rows with values.
+    expect(sheet.actualRowCount).toBe(8);
     const slNos = [2, 3, 4, 5, 6, 7].map((row) => sheet.getCell(`A${String(row)}`).value);
     expect(slNos).toEqual(['1', '1.1', '1.1.1', '1.1.2', '1.2', '2']);
     expect([2, 3, 4, 5, 6, 7].map((row) => sheet.getCell(`D${String(row)}`).value)).toEqual(['One', 'One-one', 'One-one-one', 'One-one-two', 'One-two', 'Two']);
@@ -165,7 +168,8 @@ describe('AC-1: one row per node, depth-first, Sl. No as text, values from the c
     const estimateId = await addTree500Estimate(db);
     await db.service.calculate(engineer(), estimateId);
     const { sheet } = await sheetOf(estimateId);
-    expect(sheet.actualRowCount).toBe(501);
+    // 500 parts, the header and the footer of the total Tool Cost (STORY-07.03).
+    expect(sheet.actualRowCount).toBe(502);
     const stored = await storedRows(estimateId);
     expect(new Set(Array.from({ length: 500 }, (_, index) => String(sheet.getCell(`A${String(index + 2)}`).value))).size).toBe(500);
     expect([...stored.keys()].every((slNo) => typeof slNo === 'string')).toBe(true);

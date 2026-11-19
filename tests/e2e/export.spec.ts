@@ -63,7 +63,8 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     expect(sheet?.getCell('A1').value).toBe('Sl. No');
     expect(sheet?.getCell('BO1').value).toBe('Approved Quote Price');
     // STORY-07.02 AC-1, AC-2: the part's own row below the header, its Sl. No as text, its figures from the record, and a hidden line present as 0 (Fasteners Qty, T).
-    expect(sheet?.actualRowCount).toBe(2);
+    // Header, the one part, and (STORY-07.03) the footer of the total Tool Cost two rows below it: 3 rows hold values.
+    expect(sheet?.actualRowCount).toBe(3);
     expect(sheet?.getCell('A2').value).toBe('1');
     expect(sheet?.getCell('BG2').value).toEqual(expect.any(Number));
     expect(sheet?.getCell('T2').value).toBe(0);
@@ -140,7 +141,9 @@ test.describe('AC-6: the Building and Error states of the button', () => {
   });
 
   test('Error: a failed build shows the notice with the reference of the answer, and the button can be pressed again', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    // The page draws the button only while a calculation is current (STORY-07.04 AC-5).
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 
@@ -207,7 +210,8 @@ test.describe('AC-3 (NFR-002): an Engineer gets nothing', () => {
 
 test.describe('AC-7: layout and accessibility', () => {
   test('no sideways scroll, the rows table scrolls inside its own focusable, named region, the button stacks full width on a phone, and axe finds nothing', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await openExport(page, code);
 

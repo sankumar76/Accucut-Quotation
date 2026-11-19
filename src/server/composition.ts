@@ -188,6 +188,8 @@ export function getTaskService(): TaskService {
     tasks: createTaskRepository(runtimeClient()),
     transactions: createTransactionRunner(runtimeClient()),
     clock: systemClock,
+    // A reassign writes its audit entry in its own transaction (STORY-04.07).
+    audit: getAuditService(),
   });
   return taskService;
 }
@@ -373,8 +375,10 @@ export function getExportService(): ExportService {
       header: createExportRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
       calculations: createCalculationRepository(runtimeClient()),
+      approvals: createApprovalRepository(runtimeClient()),
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      transactions: createTransactionRunner(runtimeClient()),
       builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
       clock: systemClock,
     });

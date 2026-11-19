@@ -29,12 +29,20 @@ export function createTransactionHandle(): Transaction {
   return Object.freeze({ kind: 'database-transaction' });
 }
 
+/**
+ * How a transaction is run. `isolation: 'repeatable-read'` gives every read in it **one snapshot** of the database (STORY-07.04 AC-4): a change another connection commits after the first read is not seen by the
+ * later ones, so what the callback reads is one consistent moment. Without it the transaction is the database's default (read committed: each statement sees what was committed when it started).
+ */
+export interface TransactionOptions {
+  readonly isolation?: 'repeatable-read';
+}
+
 export interface TransactionRunner {
   /**
    * Runs `work` in one transaction: committed if it resolves, rolled back (and the error rethrown unchanged) if it rejects.
    * A timeout of the database is turned into `DatabaseBusyError`, as for any other repository call.
    */
-  run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  run<T>(work: (tx: Transaction) => Promise<T>, options?: TransactionOptions): Promise<T>;
 }
 
 /** Longest wait for a free connection, and longest a transaction may take (the app's statement limit is 10 s; architecture ruling R4). */
@@ -54,7 +62,7 @@ export function clientFor(db: PrismaClient, tx?: Transaction): Prisma.Transactio
 
 export function createTransactionRunner(db: PrismaClient): TransactionRunner {
   return {
-    run(work) {
+    run(work, options = {}) {
       return withDatabaseErrors(() =>
         db.$transaction(
           async (client) => {
@@ -67,7 +75,11 @@ export function createTransactionRunner(db: PrismaClient): TransactionRunner {
               clients.delete(tx);
             }
           },
-          { maxWait: TRANSACTION_MAX_WAIT_MILLISECONDS, timeout: TRANSACTION_TIMEOUT_MILLISECONDS },
+          {
+            maxWait: TRANSACTION_MAX_WAIT_MILLISECONDS,
+            timeout: TRANSACTION_TIMEOUT_MILLISECONDS,
+            ...(options.isolation === 'repeatable-read' ? { isolationLevel: 'RepeatableRead' as const } : {}),
+          },
         ),
       );
     },

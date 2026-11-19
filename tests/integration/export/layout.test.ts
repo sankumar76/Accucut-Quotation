@@ -35,8 +35,10 @@ beforeAll(async () => {
     header: createExportRepository(db.prisma),
     nodes: db.nodes,
     calculations: db.calculations,
+    approvals: db.approvals,
     images: createImageRepository(db.prisma),
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
+    transactions: db.transactions,
     builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
@@ -85,7 +87,8 @@ describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a L
       expect(file.fileName).toMatch(new RegExp(`^Quotation_[A-Za-z0-9_-]+_${header.code}_2026-11-14\\.xlsx$`));
       const sheet = defined((await loadWorkbook(file.bytes)).getWorksheet('Quotation'));
       expect(sheet.columnCount).toBe(document.fields.length);
-      expect(sheet.actualRowCount).toBe(2);
+      // The header, the one part, and the footer of the total Tool Cost two rows below it (row 4 is empty): 3 rows with values (STORY-07.03).
+      expect(sheet.actualRowCount).toBe(3);
       for (const field of [...document.fields].sort((a, b) => a.position - b.position)) {
         const column = sheet.getColumn(field.position);
         expect(column.width, field.key).toBe(field.width);
