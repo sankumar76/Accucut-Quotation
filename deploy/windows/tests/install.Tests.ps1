@@ -508,7 +508,7 @@ Describe 'the install itself reads only from the verified release folder, uses p
 
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -like 'CREATE DATABASE*' }
         Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -like 'DROP DATABASE IF EXISTS*' }
-        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -eq 'DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;' }
+        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -eq 'DROP ROLE IF EXISTS accucut_restore; DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;' }
         # The failure happened before any service was registered, so nothing was started, and the install folder is gone again (so the install can be run again).
         Should -Invoke Invoke-AccucutNative -Times 0 -Exactly -ParameterFilter { $FilePath -like '*Accucut*.exe' }
         Test-Path -LiteralPath $folders.Root | Should -BeFalse
@@ -579,6 +579,8 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $script:ServicesRegistered = $false
         $script:SeenBackupPassword = $null
         $script:SeenRecipient = $null
+        $script:SeenRestorePassword = $null
+        $script:RestoreConfigWritten = $false
         $script:JobRows = '1'
         Mock Resolve-AccucutTrustedExecutable { $script:Trace.Add("check:$Path"); return $Path }
         Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'D:\fake\pg\data'; ServiceStatus = 'Running' } }
@@ -618,6 +620,10 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock Grant-AccucutBackupRootAccess { $script:Trace.Add('grant:backup') }
         Mock New-AccucutBackupFolder { $script:Trace.Add('folder') }
         Mock Write-AccucutBackupConfig { $script:Trace.Add('config'); $script:SeenBackupPassword = $BackupPassword; $script:SeenRecipient = $AgeRecipient }
+        Mock Write-AccucutRestoreConfig { $script:SeenRestorePassword = $RestorePassword; $script:RestoreConfigWritten = $true }
+        Mock Resolve-AccucutAdminAccount { $script:Trace.Add("admin-account:$Account"); [pscustomobject]@{ Sid = 'S-1-5-21-1-2-3-1001'; IsAdministrator = $false } }
+        Mock Register-AccucutAdminEndpoint { $script:Trace.Add("endpoint:$AdminAccount") }
+        Mock New-AccucutAdminShortcut { $script:Trace.Add("shortcut:$EndpointName") }
         Mock Wait-AccucutBackupTask { $script:Trace.Add('first-backup'); return [uint32]0 }
         Mock Remove-AccucutBackupAccount { $script:Trace.Add('remove-account') }
         Mock Remove-AccucutTrustedTree { $script:Trace.Add('remove-root') }
@@ -741,7 +747,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $values = Write-FakeValuesFile -Name 'backup-undo-values.txt'
         { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' } | Should -Throw '*the disk is full*'
         Should -Invoke Remove-AccucutBackupAccount -Times 1 -Exactly
-        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -eq 'DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;' }
+        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $Command -eq 'DROP ROLE IF EXISTS accucut_restore; DROP ROLE IF EXISTS accucut_backup; DROP ROLE IF EXISTS accucut_app; DROP ROLE IF EXISTS accucut_owner;' }
         Should -Invoke Remove-AccucutTrustedTree -Times 1 -Exactly
         Should -Invoke Invoke-AccucutNative -Times 0 -Exactly -ParameterFilter { $ArgumentList -contains 'install' }
     }
@@ -769,5 +775,142 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         $file = Join-Path $TestDrive 'no-recipient.txt'
         [System.IO.File]::WriteAllText($file, "ADMIN_EMAIL=a@example.test`nADMIN_INITIAL_PASSWORD=$($script:FakeAdminPassword)`nPG_SUPERUSER_PASSWORD=$($script:FakePgPassword)`n")
         { Get-AccucutInstallSettings -Template $script:Template -ValuesFile $file -NonInteractive -Port 3000 -PgHost '127.0.0.1' -PgPort 5432 -DatabaseName 'accucut' } | Should -Throw '*BACKUP_AGE_RECIPIENT*'
+    }
+}
+
+Describe 'the restore role and the Admin endpoint in the install (STORY-10.11 AC-3, AC-7; ADR-015 Amendment 3 forward note)' {
+    BeforeAll {
+        function New-RestoreInstallFolder {
+            param([string]$Name, [string]$Tag)
+            $root = Join-Path $TestDrive $Name
+            $release = Join-Path $root "releases\$Tag"
+            New-Item -ItemType Directory -Path (Join-Path $release 'sql') -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $script:WindowsDirectory '..\..\.env.example') -Destination (Join-Path $release '.env.example')
+            Set-Content -LiteralPath (Join-Path $release 'sql\create-roles.psql') -Value '-- the verified SQL'
+            Set-Content -LiteralPath (Join-Path $release 'sql\create-restore-role.psql') -Value '-- the verified restore role SQL'
+            return [pscustomobject]@{ Root = $root; Release = $release }
+        }
+    }
+
+    BeforeEach {
+        $script:Trace = [System.Collections.Generic.List[string]]::new()
+        $script:Logged = [System.Collections.Generic.List[string]]::new()
+        $script:NativeArguments = [System.Collections.Generic.List[string]]::new()
+        $script:ServicesRegistered = $false
+        $script:SeenRestorePassword = $null
+        Mock Resolve-AccucutTrustedExecutable { $Path }
+        Mock Get-AccucutPostgresInstall { [pscustomobject]@{ BinDirectory = 'C:\fake\pg\bin'; DataDirectory = 'D:\fake\pg\data'; ServiceStatus = 'Running' } }
+        Mock Get-Service { if ($script:ServicesRegistered) { return [pscustomobject]@{ Name = 'AccucutApp' } } return $null }
+        Mock Set-AccucutCurrentRelease { }
+        Mock Write-AccucutSecureFile { }
+        Mock Invoke-AccucutNative {
+            $script:NativeArguments.Add(($ArgumentList -join ' '))
+            if ($ArgumentList -contains 'install') { $script:ServicesRegistered = $true }
+            if ($FilePath -like '*node.exe' -and $ArgumentList -contains '--version') { return [pscustomobject]@{ ExitCode = 0; Output = 'v22.12.0' } }
+            if ($FilePath -like '*psql.exe') { return [pscustomobject]@{ ExitCode = 0; Output = 'psql (PostgreSQL) 17.2' } }
+            return [pscustomobject]@{ ExitCode = 0; Output = 'ok' }
+        }
+        Mock Invoke-AccucutPsql {
+            $script:Trace.Add("psql:$([System.IO.Path]::GetFileName($File))$Command")
+            if ($Command -like '*FROM job_runs*') { return '1' }
+            if ($Command -like 'SELECT count(*)*') { return '0' }
+            if ($Command -like 'SHOW server_version_num') { return '170002' }
+            return ''
+        }
+        Mock Invoke-AccucutMigration { [pscustomobject]@{ Deploy = 'migrated'; Seed = 'seeded' } }
+        Mock Write-AccucutLog { $script:Logged.Add($Message) }
+        Mock Initialize-AccucutServiceFiles { @() }
+        Mock Set-AccucutServiceIdentity { }
+        Mock Grant-AccucutInstallFolderAccess { }
+        Mock Set-AccucutFileAcl { }
+        Mock Remove-AccucutOldLogs { 0 }
+        Mock Set-AccucutDefenderExclusion { $false }
+        Mock Start-AccucutServices { $script:Trace.Add('start-services') }
+        Mock Wait-AccucutHealth { $true }
+        Mock Get-AccucutHttpStatus { 200 }
+        Mock Test-AccucutBatchRightPolicy { }
+        Mock Test-AccucutModuleLogging { $false }
+        Mock Register-AccucutEventSource { $true }
+        Mock Register-AccucutBackupTask { 'S-1-5-21-1111111111-2222222222-3333333333-1005' }
+        Mock Grant-AccucutBackupRootAccess { }
+        Mock New-AccucutBackupFolder { }
+        Mock Write-AccucutBackupConfig { }
+        Mock Write-AccucutRestoreConfig { $script:Trace.Add('restore-config'); $script:SeenRestorePassword = $RestorePassword }
+        Mock Wait-AccucutBackupTask { $script:Trace.Add('first-backup'); return [uint32]0 }
+        Mock Remove-AccucutBackupAccount { }
+        Mock Remove-AccucutTrustedTree { $script:Trace.Add('remove-root') }
+        Mock Resolve-AccucutAdminAccount { $script:Trace.Add("admin-account:$Account"); [pscustomobject]@{ Sid = 'S-1-5-21-1-2-3-1001'; IsAdministrator = $false } }
+        Mock Register-AccucutAdminEndpoint { $script:Trace.Add("endpoint:$AdminAccount") }
+        Mock New-AccucutAdminShortcut { $script:Trace.Add("shortcut:$EndpointName|$PowerShellPath") }
+        Mock Write-Host { }
+    }
+
+    It 'AC-3: makes the restore role from the verified release''s SQL after the three roles, gives its password to the SQL through the environment only and to config\restore.pgpass, and never logs or prints it' {
+        $folders = New-RestoreInstallFolder -Name 'restore-role' -Tag 't-role'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-role' } }
+        $values = Write-FakeValuesFile -Name 'restore-role-values.txt'
+        Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe'
+        $script:SeenRestorePassword.Length | Should -Be 32
+        $trace = @($script:Trace)
+        [array]::IndexOf($trace, 'psql:create-restore-role.psql') | Should -BeGreaterThan ([array]::IndexOf($trace, 'psql:create-roles.psql'))
+        Should -Invoke Invoke-AccucutPsql -Times 1 -Exactly -ParameterFilter { $File -like '*releases?t-role?sql?create-restore-role.psql' -and $ExtraEnvironment.Count -eq 1 -and $ExtraEnvironment['DB_RESTORE_PASSWORD'] -eq $script:SeenRestorePassword }
+        Should -Invoke Write-AccucutRestoreConfig -Times 1 -Exactly
+        ($script:Logged -join "`n") | Should -Not -BeLike "*$($script:SeenRestorePassword)*"
+        ($script:NativeArguments -join "`n") | Should -Not -BeLike "*$($script:SeenRestorePassword)*"
+        # No Admin endpoint without -AdminAccount: the restore itself is there (restore.ps1, as an administrator), the limited account is not.
+        Should -Invoke Register-AccucutAdminEndpoint -Times 0 -Exactly
+        Should -Invoke Resolve-AccucutAdminAccount -Times 0 -Exactly
+        Should -Invoke New-AccucutAdminShortcut -Times 0 -Exactly
+    }
+
+    It 'AC-7: with -AdminAccount the account is checked before anything is created, and the endpoint and its shortcut are made last, after the first backup, with the trusted powershell.exe' {
+        $folders = New-RestoreInstallFolder -Name 'restore-admin' -Tag 't-admin'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-admin' } }
+        $values = Write-FakeValuesFile -Name 'restore-admin-values.txt'
+        Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' -AdminAccount 'ACME\admin.user'
+        $trace = @($script:Trace)
+        $powershell = [System.IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $trace | Should -Contain 'admin-account:ACME\admin.user'
+        $trace | Should -Contain 'endpoint:ACME\admin.user'
+        $trace | Should -Contain "shortcut:AccucutAdmin|$powershell"
+        $firstDatabaseStep = @($trace | Where-Object { $_ -like 'psql:*create-roles*' })[0]
+        [array]::IndexOf($trace, 'admin-account:ACME\admin.user') | Should -BeLessThan ([array]::IndexOf($trace, $firstDatabaseStep))
+        [array]::IndexOf($trace, 'endpoint:ACME\admin.user') | Should -BeGreaterThan ([array]::IndexOf($trace, 'first-backup'))
+        [array]::IndexOf($trace, "shortcut:AccucutAdmin|$powershell") | Should -BeGreaterThan ([array]::IndexOf($trace, 'endpoint:ACME\admin.user'))
+        Should -Invoke Register-AccucutAdminEndpoint -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*releases?t-admin' -and $ScPath -like '*System32?sc.exe' }
+        # R4: sc.exe is resolved through the trust check, by its full path, before the endpoint step, and the answer is what the step gets.
+        Should -Invoke Resolve-AccucutTrustedExecutable -Times 1 -Exactly -ParameterFilter { $Path -like '*System32?sc.exe' }
+        $scCheck = @($script:Trace | Where-Object { $_ -like 'admin-account:*' })
+        $scCheck.Count | Should -Be 1
+    }
+
+    It 'AC-7: an account that Windows does not know stops the install before the database, the roles and the folders are touched' {
+        $folders = New-RestoreInstallFolder -Name 'restore-noadmin' -Tag 't-noadmin'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-noadmin' } }
+        Mock Resolve-AccucutAdminAccount { throw "Windows does not know the account '$Account'." }
+        $values = Write-FakeValuesFile -Name 'restore-noadmin-values.txt'
+        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' -AdminAccount 'NOBODY\nobody' } | Should -Throw '*Windows does not know the account*'
+        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { $Command -like 'CREATE*' -or $Command -like 'DROP*' }
+        Should -Invoke Register-AccucutBackupTask -Times 0 -Exactly
+        Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
+    }
+
+    It 'AC-7: passes -AdminAccount on from the first half to the second half, as a value, and only when it was given' {
+        $arguments = @(Get-AccucutInstallChildArgument -Bound @{ AdminAccount = 'ACME\admin.user'; Root = 'C:\Accucut' })
+        $at = [array]::IndexOf($arguments, '-AdminAccount')
+        $at | Should -BeGreaterOrEqual 0
+        $arguments[$at + 1] | Should -Be 'ACME\admin.user'
+        @(Get-AccucutInstallChildArgument -Bound @{ Root = 'C:\Accucut' }) | Should -Not -Contain '-AdminAccount'
+    }
+
+    It 'AC-7: the parameter has a pattern that refuses a name that could change what the endpoint files do (<Name>)' -ForEach @(
+        @{ Name = "bad'name" }, @{ Name = 'a;b' }, @{ Name = '{{ROOT}}' }, @{ Name = 'x y; z' }
+    ) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:WindowsDirectory 'install.ps1'), [ref]$null, [ref]$null)
+        $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'AdminAccount' }
+        $pattern = ($parameter.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidatePattern' }).PositionalArguments[0].Value
+        $Name | Should -Not -Match $pattern
+        'ACME\admin.user' | Should -Match $pattern
+        'admin.user' | Should -Match $pattern
     }
 }

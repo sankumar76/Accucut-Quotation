@@ -1,0 +1,28 @@
+# The role capability of the Admin endpoint (STORY-10.11 AC-7; architecture section 9.9 "The Admin's account"; ADR-015 Amendment 3 forward note for 10.11).
+#
+# This file is a TEMPLATE. The install (install.ps1 -AdminAccount) fills in the token of the code below and writes the result into the config\jea folder of the install, which is
+# where the session reads it. (Nothing here is a secret: the token is the install folder.)
+#   [ROOT]   the install folder, for example C:\Accucut
+#
+# What the Admin sees in the session: exactly two commands, Restore-AccucutBackup and Clear-AccucutCopies, and nothing else of ours. Each takes no parameter and runs the
+# installed script of that name, which checks everything it loads or runs (the trust block) before it does, asks its questions in plain words, and writes its own record.
+# The Admin cannot reach the module, .env, the database or any other command. The scripts need Read-Host, Import-Module and the rest of their own commands, which are
+# imported by the two modules below and stay hidden from the user (JEA hides every command that is not listed as visible).
+@{
+    GUID                = '1d4f7b0e-6a52-4b8d-9c3e-7a2f5e8b1c40'
+    Author              = 'Accucut'
+    CompanyName         = 'Accucut'
+    Description         = 'The Admin''s two commands: restore a backup, and clear old backup copies (STORY-10.11).'
+    ModulesToImport     = @('Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Management')
+    VisibleFunctions    = @('Restore-AccucutBackup', 'Clear-AccucutCopies')
+    FunctionDefinitions = @(
+        @{
+            Name        = 'Restore-AccucutBackup'
+            ScriptBlock = { & '{{ROOT}}\current\restore.ps1' }
+        }
+        @{
+            Name        = 'Clear-AccucutCopies'
+            ScriptBlock = { & '{{ROOT}}\current\clear-copies.ps1' }
+        }
+    )
+}
