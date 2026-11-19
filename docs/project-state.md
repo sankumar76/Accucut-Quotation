@@ -13,8 +13,36 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-19 by orchestrator (daily update and resume point, 2026-11-19) |
+| Last updated       | 2026-11-19 by orchestrator (resume point, pause) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Resume point (2026-11-19, pause)
+
+> **Graceful pause at the delivery lead's request; the C: drive was critically low.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** Every agent is stopped, and all work is committed and pushed. Nothing is running locally: no containers, no dev servers.
+
+**`master` = 1ca5f42** (#511 AQP-334). Push run 44445679284 on 1ca5f42 was **in progress** at the pause, so read it first. Earlier runs: 87a13f8 green, d7977c8 green, **596e668 red** only on `estimate-save.spec.ts:240` [tablet] (AQP-344, both attempts), with `unlock.spec` [mobile] flaky (AQP-346). So AQP-344 can turn master red.
+
+**Merged since the 2026-11-19 daily update:** #507 AQP-357 04.07 reassign (9ea0892); Dependabot under DL-239: #474 lucide-react 1.73.0 (596e668), #475 nodemailer 10.5.0 (d7977c8), #477 eslint-config-next 16.4.6 (87a13f8); #511 AQP-334 07.04 refusal (1ca5f42, the merge in flight at the pause). **The run so far: 15 merges** (#479, #455, #486, #483, #492, #497, #495, #500, #487, #504, #507, #474, #475, #477, #511). Jira Done adds AQP-357 and AQP-334.
+
+**Decisions since the daily update:** DL-239 (Dependabot: #474, #475, #477 merge; #476 needs a developer check first); DL-240 (AQP-344's test-only fix takes the next free lane ahead of any story, conditions F1 to F5; R2: one re-run per head for its exact signature). Backlog: AQP-358 to AQP-364 created and Ready (EPIC-08 08.03 to 08.07, 10.06, 07.07 "Download on SCR-06 when current"); 08.08 (choice list and new sections) still to be created in Jira by the scrum-master, and to be Done before G8.
+
+**Open PRs at the pause, with the next step:**
+| PR | Story | State | Next step on resume |
+|---|---|---|---|
+| #510 | AQP-336 07.06 warning notice | CI green after one DL-240 R2 re-run (44439067598 attempt 2); now **CONFLICTING** after #511 (the expected overlap in `estimate-export.tsx` and `export-texts.ts`) | The developer merges master in its own worktree (DL-236 (b)); if `git merge` is refused, it goes to the delivery lead. Then green CI, then merge (not critical) |
+| #508 | AQP-356 01.09 Admin hand-over [c] | Review APPROVE WITH COMMENTS (Minors #509); CI was green; **CONFLICTING** (one trivial conflict, keep both entries in `tests/integration/audit/audit-database.test.ts`) | **Delivery lead**: `git merge` settings or who merges (AQP-1 comment 12240) |
+| #493 | AQP-338 08.02 formula edit [c] | All ACs coded; **CONFLICTING**; no CI ever | Same as #508; then `pageMetadata` on the page, CI, combined review. It gates AQP-358 to AQP-362 |
+| #503 | AQP-348 09.01 mail outbox [c] | CI green at 9ec4d9e; re-review: only SQR-01 open; BEHIND | **Delivery lead**: `FEATURE_EMAIL=off` in `.env.example` (comment 12224); then the developer's template test, the reviewer's one-line check, a branch update (nodemailer 10.5.0, DL-239 (2)), green run, merge |
+| #501 | AQP-312 10.11 Windows restore [c] | R1 to R5 pushed at 0874299 (draft); stage 13 on f1cb5d0: install, ACL asserts and both real restores passed, with 10 test-only Pester failures fixed in 0874299 (stage 13 there unread); required CI on f1cb5d0 red only in E2E shard 2 (`auth.setup` sign-in timeouts, no rule allows a re-run) | Read stage 13 and CI on 0874299; then the combined review; **AC-8 manual JEA check by a human** (kit `deploy/windows/manual/AC-8-jea-prompt-check.md`); #502 before go-live |
+| #512 | AQP-363 10.06 drawing region | Draft at 0869dae; CI 44444708327 was 5 green and 1 pending at the pause; Jira already In Review | Read the run; if green, mark ready, update the branch, merge. The layout numbers are computed, not measured (first suspect if red: the `lg:ml-[min(...)]` and `max-w` classes) |
+| #476 | next 16.4.6 (Dependabot) | Latest CI green at 9319aec9; the A/B check (DL-239 (4)) is **INCONCLUSIVE, leaning regression-sensitive**: picture and treatments tests failed 2 of 3 runs on 16.4.6 against 0 of 21 on 16.4.5; 16.4.6 now gzips route-handler responses (PR comment 6998011806) | **Delivery lead**: merge on green without proof, or more interleaved CI re-runs, or a test fix (asked first). Not merged |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Next lanes on resume, in order:** (1) the AQP-344 test-only fix (DL-240, F1 to F5); (2) the #510 conflict; (3) AQP-364 07.07 (now unblocked by #511); (4) AQP-349 09.02 once #503 merges; AQP-335 07.05 (now unblocked by #511); the EPIC-08 chain after #493.
+
+**Worktrees under `.claude/worktrees`** (every `node_modules` and `src\generated` below is a real folder, not a link): **in use:** `records-t`, `aqp-312` (#501), `aqp-336` (#510), `aqp-338` (#493; container `aqp338-db` may still exist), `aqp-348` (#503), `aqp-356` (#508), `aqp-363` (#512). **Finished, removable (merged, clean, pushed):** `aqp-330`, `aqp-332`, `aqp-333`, `aqp-334`, `aqp-357`, `aqp-90`, and `records-t/.claude/worktrees/aqp-308` (nested inside records-t by mistake; AQP-308 merged). **Orphan folders, deregistered by git but files left; delete manually** (their `.next\dev\node_modules` holds Turbopack junctions that point only inside the same folder): `next-ab`, `next-ab2` (the #476 A/B, the largest) and `aqp-329` (AQP-329 merged). Already gone at the pause: `aqp-328`, `aqp-347`, `agent-a358ec5d24f2e0364`, `wt-470`. Still to delete: the stray untracked file `AppData` in the main checkout root. Disk at the pause: C: 2.0 GB free.
+
+**Waiting on the delivery lead, in order:** (1) `git merge` for developers in `.claude/worktrees/*`, or who merges #508 and #493 (comment 12240); (2) the `.env.example` line for #503 (12224); (3) the #476 decision; (4) the AQP-312 AC-8 kit on a Windows Server; (5) the date risk (about 31 points still to write plus 08.08); (6) does "all R2" cover R1+?; (7) do 10.08 and 10.09 fold into the final review?; (8) the IT mailbox details for 09.08 (Q-18); (9) #485 timing; (10) disk clean-up as listed above.
 
 ## Daily update and resume point (2026-11-19, orchestrator)
 
