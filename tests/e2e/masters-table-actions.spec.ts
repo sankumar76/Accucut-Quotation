@@ -399,6 +399,7 @@ for (const screen of SCREENS) {
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
         diagMark('end');
         } finally {
+          // eslint-disable-next-line no-console -- temporary AQP-376 diagnostic, reverted before the fix
           console.log('AQP376 ' + screen.label.slice(0, 7) + ' w=' + String(width) + ' ' + DIAG.marks.join(' ') + ' total=' + String(Date.now() - DIAG.t0));
         }
       });
