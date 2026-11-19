@@ -1,12 +1,12 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { FormulaEditorScreen } from '@/components/features/config/formula-editor-screen';
 import { FORMULA_EDITOR_META_DESCRIPTION, FORMULA_EDITOR_TITLE } from '@/components/features/config/formula-editor-texts';
+import { pageMetadata } from '@/lib/page-metadata';
 import { authorizePage } from '@/server/http/page-access';
 
 /** No field name, column or formula in the tab title (architecture section 8, FR-089). */
-export const metadata: Metadata = { title: FORMULA_EDITOR_TITLE, description: FORMULA_EDITOR_META_DESCRIPTION };
+export const metadata = pageMetadata(FORMULA_EDITOR_TITLE, FORMULA_EDITOR_META_DESCRIPTION);
 
 interface PageProps {
   readonly params: Promise<{ readonly id: string }>;
