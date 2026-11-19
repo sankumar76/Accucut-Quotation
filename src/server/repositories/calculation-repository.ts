@@ -139,6 +139,16 @@ export interface RowWorkingRecord {
   readonly outputs: StoredValues;
 }
 
+/** A calculation an estimate is linked to, with what its figure state is worked out from. No figure. */
+export interface LinkedCalculation {
+  readonly id: string;
+  readonly taskCode: string;
+  /** `estimates.inputs_revision` now. */
+  readonly inputsRevision: number;
+  /** `calculations.inputs_revision` of this calculation. */
+  readonly calculationInputsRevision: number;
+}
+
 /**
  * What the Excel export is built from (STORY-07.02; architecture section 4.6): every node of one calculation, with its typed values, its stored figures and its picture, and the words and price of
  * each material in the calculation's own snapshot, and the product's figures (BL, BN and the total Tool Cost: STORY-07.03). Nothing else of the snapshot (no customer, no rate, no exchange rate) is read.
@@ -161,6 +171,12 @@ export interface CalculationRepository {
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
+  /**
+   * The calculations the estimates are linked to now, the newest first, at most `limit`, each with the code of its task and the two revisions the figure state is worked out from (STORY-08.02: the formula
+   * editor tries a formula on a row of the latest calculated estimate, "Sample rows come from the latest calculated estimate, Q-..."). No figure is read: the caller picks the first whose state is
+   * `current` (`figureState`) and reads its record through `readFiguresWhenCurrent`, as every other reader does. **The one caller is the Admin's formula editor** (ADR-008, NFR-002).
+   */
+  findRecentLinked(limit: number): Promise<ReadonlyArray<LinkedCalculation>>;
   /**
    * The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. Pass `tx` to read it in the caller's transaction (STORY-06.05: an approval
    * reads it under the estimate's row lock, on the one connection it already holds); without it the read is a plain one.
@@ -278,6 +294,21 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
             outputs: storedValuesSchema.parse(row.outputs),
           })),
         };
+      }),
+
+    findRecentLinked: (limit) =>
+      withDatabaseErrors(async () => {
+        const found = await db.estimate.findMany({
+          where: { currentCalculationId: { not: null } },
+          orderBy: [{ currentCalculation: { createdAt: 'desc' } }, { id: 'desc' }],
+          take: limit,
+          select: { inputsRevision: true, task: { select: { code: true } }, currentCalculation: { select: { id: true, inputsRevision: true } } },
+        });
+        return found.flatMap((estimate) =>
+          estimate.currentCalculation === null
+            ? []
+            : [{ id: estimate.currentCalculation.id, taskCode: estimate.task.code, inputsRevision: estimate.inputsRevision, calculationInputsRevision: estimate.currentCalculation.inputsRevision }],
+        );
       }),
 
     findFigureBasis: (estimateId, tx) =>

@@ -13,7 +13,7 @@ export type { Evaluation, OperandUse, Resolver } from './evaluator';
 export { analyzeFormulas } from './graph';
 export type { FormulaOrder, GraphAnalysis, GraphField, OrderedFormula } from './graph';
 export { extractReferences, formatReference, referenceDisplayName, toDisplayForm, toInternalForm, toWorkingForm } from './internal-form';
-export { MATERIAL_OPERAND_NAMES, MAX_FORMULA_LENGTH } from './names';
+export { fixedOperands, MATERIAL_OPERAND_NAMES, MAX_FORMULA_LENGTH } from './names';
 export type { RateReference, ReferenceContext } from './names';
 export { parseFormula, parseTokens } from './parser';
 export { compilePlan, createPlanCache, evaluateProductFormulas, evaluateRowFormulas, FormulaConfigurationError } from './plan';
