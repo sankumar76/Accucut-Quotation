@@ -350,6 +350,7 @@ export function createSessionHarness(): SessionHarness {
     approvals: reviewReads,
     images: estimateWorld.imageRepository,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    transactions: calculationWorld.transactions,
     builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
