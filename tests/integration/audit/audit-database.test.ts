@@ -218,6 +218,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'user.admin_handed_over': 'tests/integration/users/admin-handover.test.ts',
     // STORY-04.07: a task given to another Engineer, a new deadline, or both; the one test is the reassign's own, against the real estimate and task row locks.
     'task.reassigned': 'tests/integration/tasks/reassign.test.ts',
+    // STORY-08.02: a formula of the field registry changed; the one test is the save's own, against the real configuration table.
+    'config.formula_changed': 'tests/integration/config/save-formula.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

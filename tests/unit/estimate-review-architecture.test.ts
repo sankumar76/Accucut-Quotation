@@ -35,14 +35,16 @@ const REPOSITORY = 'src/server/repositories/calculation-repository.ts';
 const REVIEW_SERVICE = 'src/server/services/estimate-review-service.ts';
 const COST_DETAILS_SERVICE = 'src/server/services/cost-details-service.ts';
 const EXPORT_SERVICE = 'src/server/services/export-service.ts';
+/** STORY-08.02: the formula editor's sample rows, Admin only (ADR-008). */
+const CONFIG_EDIT_SERVICE = 'src/server/services/config-edit-service.ts';
 
 describe('AC-7: every read of a figure goes through figure-state', () => {
   it('only the calculation repository names the Prisma accessors of calculations and calculation_rows', () => {
     expect(pathsMatching(ALL, PRISMA_ACCESS)).toEqual([REPOSITORY]);
   });
 
-  it('only the repository (which defines them), the review service, the cost details service and the export service name a method that reads a record\'s figures', () => {
-    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE, EXPORT_SERVICE].sort());
+  it('only the repository (which defines them), the review service, the cost details service, the export service and the formula editor service name a method that reads a record\'s figures', () => {
+    expect(pathsMatching(ALL, READ_OF_FIGURES).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, COST_DETAILS_SERVICE, EXPORT_SERVICE, CONFIG_EDIT_SERVICE].sort());
   });
 
   it('STORY-07.02: nothing under src/server/export reads a calculation or its rows, and the export service reads them only through readFiguresWhenCurrent, in one place', () => {
@@ -54,6 +56,13 @@ describe('AC-7: every read of a figure goes through figure-state', () => {
     expect(service).toMatch(/from '\.\.\/\.\.\/lib\/estimate\/figure-state'/);
     expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findExportFigures\(/);
     expect(service.match(/findExportFigures\(/g)).toHaveLength(1);
+  });
+
+  it('the formula editor (STORY-08.02) reads the record of a sample estimate in one place, only through readFiguresWhenCurrent, after the figure state said `current`', () => {
+    const service = ALL.find((file) => file.path === CONFIG_EDIT_SERVICE)?.text ?? '';
+    expect(service).toMatch(/from '\.\.\/\.\.\/lib\/estimate\/figure-state'/);
+    expect(service).toMatch(/readFiguresWhenCurrent\(\s*state,\s*\(\) => calculations\.findCalculation\(/);
+    expect(service.match(/findCalculation\(/g)).toHaveLength(1);
   });
 
   it('the cost details service (STORY-06.03) imports the figure state and reads the working of a row only through readFiguresWhenCurrent, in one place', () => {

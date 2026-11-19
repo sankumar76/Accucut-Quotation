@@ -514,6 +514,18 @@ export const AUDIT_EVENTS = {
     describe: describeRemoved,
   }),
 
+  // ---- Wired in STORY-08.02: a formula of the field registry changed --------------------------------------------------------------
+  // One entry, in the transaction that stores the new configuration version: the formula as the Admin read it before and after (display form, column letters and rate names) and the number of the version it made.
+  // The Object is the field ("AL Cutting Cost"). A formula is Restricted data and the audit log is read by the Admin alone (NFR-002); no figure, rate value or password has a key to sit in.
+  'config.formula_changed': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    before: z.strictObject({ formula: z.string().min(1) }),
+    after: z.strictObject({ formula: z.string().min(1), version: z.number().int().positive() }),
+    describe: (before, after) => ({ before: before.formula, after: `${after.formula} (configuration version ${String(after.version)})` }),
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
   // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and
