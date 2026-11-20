@@ -252,6 +252,26 @@ describe('AC-5: the Admin as assigner; who is copied is judged when the row is w
     expect(await outboxRows()).toEqual([]);
     expect(await taskCount()).toBe(0);
   });
+
+  it('a Cc deactivated between the write and the send is left out at send time, and the Engineer is still mailed (active judged again by outbox-send; PO ruling on AQP-350 comment 12394)', async () => {
+    const shortLivedLeadId = await person('Mail Short Lived Lead', 'LEAD');
+    const assigned = await service.assignTask(shortLivedLeadId, input());
+    expect(await outboxRows()).toMatchObject([{ to_user_id: arjunId, cc_user_ids: [shortLivedLeadId] }]);
+    await db.owner.query('UPDATE users SET is_active = false WHERE id = $1::uuid', [shortLivedLeadId]);
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, failed: 0 });
+    const [mail] = await messagesFor(assigned.code);
+    expect(mail?.to).toEqual([addressOf[arjunId]]);
+    expect(mail?.cc).toEqual([]);
+  });
+
+  it('an Engineer deactivated between the write and the send is not mailed: the row is skipped with NO_RECIPIENT', async () => {
+    const shortLivedEngineerId = await person('Mail Short Lived Engineer', 'ENGINEER');
+    const assigned = await service.assignTask(leadId, input({ engineerId: shortLivedEngineerId }));
+    await db.owner.query('UPDATE users SET is_active = false WHERE id = $1::uuid', [shortLivedEngineerId]);
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 0, skipped: 1 });
+    expect(await outboxRows()).toMatchObject([{ status: 'skipped', last_error: 'NO_RECIPIENT' }]);
+    expect(await messagesFor(assigned.code)).toEqual([]);
+  });
 });
 
 describe('AC-7: a reassign through the real reassignTask', () => {
