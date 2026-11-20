@@ -1,3 +1,5 @@
+import { formatIstTime } from '@/lib/time';
+
 /**
  * The words of saving a draft, leaving with unsaved changes, and a part that changed somewhere else (STORY-05.08; UX spec SCR-05 states "Saved" and "Unsaved changes"). They are here and not in
  * `estimate-texts.ts`, which the page's first load carries whole: everything that uses them is fetched after the page is up (NFR-009, ADR-016). None of them names a rate, a price or a formula
@@ -31,4 +33,21 @@ export const CONFLICT_RETRY_FAILED = 'This part keeps changing somewhere else, s
 export function conflictFieldMessage(newer: string | null): string {
   if (newer === null) return 'Changed somewhere else.';
   return newer === '' ? 'Changed somewhere else. The newer value is blank.' : `Changed somewhere else. The newer value is "${newer}".`;
+}
+
+/**
+ * The 30-second save (STORY-05.10; UX spec SCR-05 "Last saved 10:41 IST. Auto-save every 30 s"). The status line under the part form's title is one line: when something was last saved, and that the form saves
+ * on its own. The failure sentence is a proposal that the ux-expert rules on at the end review (OQ-1); it is a polite status, not an alert, and it says what happened to what was typed and what to do.
+ */
+export const AUTOSAVE_NOTE = 'Auto-save every 30 s.';
+export const autosaveFailedText = (time: string): string => `Auto-save could not save at ${time}. What you typed is kept. Press Save draft to try again.`;
+
+/**
+ * The words of the status line under the part form's title: `lastSaved` ("Last saved 20 Nov 2026, 10:41 IST" or "Nothing saved yet"), then "Auto-save every 30 s." while the person may edit (nothing saves a
+ * submitted estimate), then, once, the failure of the automatic save with its time.
+ */
+export function saveStatusText(lastSaved: string, editable: boolean, failedAt: Date | null): string {
+  const parts = editable ? [`${lastSaved}.`, AUTOSAVE_NOTE] : [lastSaved];
+  if (editable && failedAt !== null) parts.push(autosaveFailedText(formatIstTime(failedAt)));
+  return parts.join(' ');
 }
