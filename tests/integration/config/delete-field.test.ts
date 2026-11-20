@@ -46,13 +46,31 @@ const PART_NO = defined(findFieldByKey(seedConfig, 'part-no'));
 const configurations = () => createConfigRepository(db.prisma);
 const engineer = (): EstimateViewer => ({ id: db.engineerId, role: 'ENGINEER' });
 
-const stepUp = () => createStepUpService({ users: db.users, throttles: db.throttles, hasher: createTestHasher(), clock: systemClock, keySecret: KEY_SECRET });
+/**
+ * A gate that holds each caller at the password step until every party has arrived. The version a delete or a save works from is read before the password step, so once both are at the gate both hold the same base,
+ * and a race is a race whatever the machine's speed (without it, a fast first call could finish before the second one read, and then both would rightly succeed).
+ */
+function gateOf(parties: number): () => Promise<void> {
+  let arrived = 0;
+  const waiting: Array<() => void> = [];
+  return () =>
+    new Promise<void>((resolve) => {
+      arrived += 1;
+      waiting.push(resolve);
+      if (arrived >= parties) for (const release of waiting) release();
+    });
+}
 
-function buildService(over: { audit?: typeof db.audit } = {}): ConfigStructureService {
+const stepUp = (gate?: () => Promise<void>) => {
+  const real = createStepUpService({ users: db.users, throttles: db.throttles, hasher: createTestHasher(), clock: systemClock, keySecret: KEY_SECRET });
+  return { verifyStepUp: async (caller: Parameters<typeof real.verifyStepUp>[0], password: string) => (await gate?.(), real.verifyStepUp(caller, password)) };
+};
+
+function buildService(over: { audit?: typeof db.audit; gate?: () => Promise<void> } = {}): ConfigStructureService {
   return createConfigStructureService({
     configurations: configurations(),
     masters: db.masterRepository,
-    stepUp: stepUp(),
+    stepUp: stepUp(over.gate),
     transactions: db.transactions,
     audit: over.audit ?? db.audit,
     cache: createConfigVersionCache(),
@@ -208,8 +226,10 @@ describe('AC-3: two deletes from the same base, a delete racing a formula save, 
     const first = await addFreeInput('Invented Racer One');
     const second = await addFreeInput('Invented Racer Two');
     const base = await latestNumber();
-    const other = buildService();
-    const outcomes = await Promise.allSettled([service.deleteField(admin, first.id, { password: RIGHT }), other.deleteField(admin, second.id, { password: RIGHT })]);
+    const gate = gateOf(2);
+    const one = buildService({ gate });
+    const other = buildService({ gate });
+    const outcomes = await Promise.allSettled([one.deleteField(admin, first.id, { password: RIGHT }), other.deleteField(admin, second.id, { password: RIGHT })]);
     const losers = outcomes.filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
     expect(losers).toHaveLength(1);
@@ -226,24 +246,25 @@ describe('AC-3: two deletes from the same base, a delete racing a formula save, 
     const document = (await storedVersion(base)).document;
     const alStored = defined(document.fields.find((field) => field.id === seedFieldAt('AL').id));
     const current = toDisplayForm(alStored.kind === 'output' && alStored.formula !== null ? alStored.formula : '', referenceContext(document, RATES));
+    const gate = gateOf(2);
+    const deleter = buildService({ gate });
     const editor = createConfigEditService({
       configurations: configurations(),
       masters: db.masterRepository,
       calculations: db.calculations,
-      stepUp: stepUp(),
+      stepUp: stepUp(gate),
       transactions: db.transactions,
       audit: db.audit,
       cache: createConfigVersionCache(),
     });
     const outcomes = await Promise.allSettled([
-      service.deleteField(admin, target.id, { password: RIGHT }),
+      deleter.deleteField(admin, target.id, { password: RIGHT }),
       editor.saveFormula(admin, alStored.id, { text: `${current} + ${fieldLetter(target)}`, password: RIGHT, baseVersion: base }),
     ]);
     const losers = outcomes.filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
-    // The loser is told 409 either way: its base is no longer the latest, or (when the formula save came first and the delete read after it) the field is used now.
-    expect(['CONFIG_VERSION_CHANGED', 'FIELD_IN_USE']).toContain(losers[0]?.reason?.code);
-    expect(losers[0]?.reason).toMatchObject({ httpStatus: 409 });
+    // Both held the same base at the password step, so the loser's base is no longer the latest.
+    expect(losers[0]?.reason).toMatchObject({ httpStatus: 409, code: 'CONFIG_VERSION_CHANGED' });
     expect(await latestNumber()).toBe(base + 1);
     // Every stored version is a valid registry: a formula that names a field that is gone would not parse (`storedVersion` parses it).
     const latest = (await storedVersion(base + 1)).document;
