@@ -27,3 +27,12 @@ export function movedLeftWords(from: string, to: string, by: number): string {
   const places = `${shiftWords(by)} to the left`;
   return from === to ? `Column ${from} moved ${places}` : `Columns ${from} to ${to} moved ${places}`;
 }
+
+/** The server's sentence for a wrong password is "That password is not correct."; SCR-20 adds what to do. */
+export const stepUpFailedLine = (serverSentence: string): string => `${serverSentence} Try again.`;
+
+/** The server's sentence for a block is "Too many wrong passwords. Try again in 15 minutes."; SCR-20 adds that nothing was deleted (proposed). */
+export const stepUpLockedLine = (serverSentence: string): string => `${serverSentence} The field is not deleted.`;
+
+/** The field was deleted by someone else, or is gone from the latest version (404). */
+export const GONE_LINE = 'This field is no longer in the worksheet. The list is being updated.';

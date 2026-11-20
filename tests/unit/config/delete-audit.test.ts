@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { deleteAuditAfter, deleteAuditBefore } from '@/lib/config/field-delete-audit';
-import { blockedSentence, canEditUse, plainUse, useTitle, type FieldUse } from '@/lib/fields/uses';
+import { blockedSentence, canEditUse, plainUse, usageTitle, type FieldUse } from '@/lib/fields/uses';
 import { deletedMessage, deleteVersionChangedMessage, movedLeftWords } from '@/lib/config/field-delete-words';
 import { AUDIT_EVENTS } from '@/server/services/audit-events';
 
@@ -27,10 +27,10 @@ describe('AC-2: the sentences of the blocked state', () => {
   });
 
   it('names a use by what it is: a formula by its column, a rule by whose rule it is, a total by its stage', () => {
-    expect(useTitle(FORMULA_USE)).toBe('AY Total Process Cost');
-    expect(useTitle(HIDE_USE)).toBe('The hide-when-zero rule of AM Bending Cost');
-    expect(useTitle(VISIBLE_USE)).toBe('The visibility rule of AP Notch Count');
-    expect(useTitle(TOTAL_USE)).toBe('The total of stage 3');
+    expect(usageTitle(FORMULA_USE)).toBe('AY Total Process Cost');
+    expect(usageTitle(HIDE_USE)).toBe('The hide-when-zero rule of AM Bending Cost');
+    expect(usageTitle(VISIBLE_USE)).toBe('The visibility rule of AP Notch Count');
+    expect(usageTitle(TOTAL_USE)).toBe('The total of stage 3');
   });
 
   it('offers Edit for a formula alone: the rest cannot be changed in the portal yet (OQ-2)', () => {

@@ -96,6 +96,9 @@ describe('only the Configuration routes, page and composition import the Configu
     // STORY-08.04: the delete's two routes (the dialog's own files are listed below with the screen), the pure delete and its words and audit. The routes are the Admin's alone (the manifest); the answers name formulas.
     'src/app/api/v1/config/fields/[id]/route.ts',
     'src/app/api/v1/config/fields/[id]/references/route.ts',
+    // The dialog's hooks (the dialog and its view import their siblings by relative path, so the scan sees only the two that import the restricted client modules).
+    'src/components/features/config/use-delete-field.ts',
+    'src/components/features/config/use-fields-delete.ts',
     'src/components/features/config/fields-screen.tsx',
     'src/components/features/config/fields-table.tsx',
     'src/components/features/config/formula-editor-screen.tsx',

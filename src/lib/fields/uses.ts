@@ -39,7 +39,7 @@ export type FieldUse = FormulaFieldUse | RuleFieldUse | StageTotalUse;
 export const CANNOT_CHANGE_YET = 'This use cannot be changed in the portal yet.';
 
 /** `The hide-when-zero rule of AM Bending Cost`, `The visibility rule of AP Notch Count`, `The total of stage 3`. A formula is named by its column and label; it has the formula to show beside it. */
-export function useTitle(use: FieldUse): string {
+export function usageTitle(use: FieldUse): string {
   switch (use.kind) {
     case 'formula':
       return `${use.letter} ${use.label}`;
@@ -59,12 +59,22 @@ export function canEditUse(use: FieldUse): use is FormulaFieldUse {
   return use.kind === 'formula';
 }
 
-/** `Cannot delete AL Cutting Cost yet.` and then how many things use it: `1 formula uses this field.` / `3 formulas use this field.`; when something other than a formula uses it, `places` is the word. */
-export function blockedSentence(letter: string, label: string, uses: ReadonlyArray<FieldUse>): string {
+/** `Cannot delete AL Cutting Cost yet.`: the first sentence of the blocked state, and the title of the dialog. */
+export function blockedTitle(letter: string, label: string): string {
+  return `Cannot delete ${letter} ${label} yet.`;
+}
+
+/** How many things use the field: `1 formula uses this field.` / `3 formulas use this field.`; when something other than a formula uses it, `place` is the word. */
+export function usesSentence(uses: ReadonlyArray<FieldUse>): string {
   const count = uses.length;
   const onlyFormulas = uses.every(canEditUse);
   const how = onlyFormulas ? (count === 1 ? '1 formula uses' : `${String(count)} formulas use`) : count === 1 ? '1 place uses' : `${String(count)} places use`;
-  return `Cannot delete ${letter} ${label} yet. ${how} this field.`;
+  return `${how} this field.`;
+}
+
+/** The whole sentence of the blocked state and of the 409 `FIELD_IN_USE`: `Cannot delete AL Cutting Cost yet. 1 formula uses this field.` */
+export function blockedSentence(letter: string, label: string, uses: ReadonlyArray<FieldUse>): string {
+  return `${blockedTitle(letter, label)} ${usesSentence(uses)}`;
 }
 
 /** A use rebuilt key by key, so a record with more in it (a formula's internal form, a stage's other properties) never reaches a response body even if a service one day hands one over (NFR-002). */
