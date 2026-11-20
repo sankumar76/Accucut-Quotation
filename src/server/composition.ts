@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from 'next-auth';
 
-import { loadAppEnv, loadEmailFeature } from '../lib/env';
+import { loadAppEnv, loadEmailFeature, loadOriginEnv } from '../lib/env';
 import { systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
@@ -46,6 +46,7 @@ import { createMastersService, type MastersService } from './services/masters-se
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
+import { createTaskMail } from './services/task-mail';
 import { createTaskService, type TaskService } from './services/task-service';
 import { createUnlockService, type UnlockService } from './services/unlock-service';
 import { createUserService, type UserService } from './services/user-service';
@@ -204,6 +205,12 @@ export function getTaskService(): TaskService {
     clock: systemClock,
     // A reassign writes its audit entry in its own transaction (STORY-04.07).
     audit: getAuditService(),
+    // The assignment e-mail (STORY-09.03). The mail service is reached only when alerts are ON, so an assignment with alerts OFF never builds the mail transport.
+    mail: createTaskMail({
+      mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+      settings: createSettingsRepository(runtimeClient()),
+      appOrigin: () => loadOriginEnv().APP_ORIGIN,
+    }),
   });
   return taskService;
 }

@@ -139,6 +139,8 @@ const SERVICES = {
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
     'step-up-service',
+    // STORY-09.03 (NFR-002): the assignment e-mail's outbox row (names, folder path, deadline; no cost field), written by the task service in its transaction. No Engineer view imports it.
+    'task-mail',
     'task-queue-cursor',
     'task-service',
     'treatment-service',
