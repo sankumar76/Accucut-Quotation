@@ -13,8 +13,28 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-20 by orchestrator (resume point, pause 3) |
+| Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-20, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**`master` = 5d6d72b.** Merged today (5, squash, each on a fully green run with the head up to date with `master`): #510 **AQP-336** 07.06 (703c61b); #531 **AQP-377** DEF-048 fix (402485c); #526 **AQP-358** 08.03 [c] (d50d092, after DL-259); #529 **AQP-375** H-OBS (7131b6b; it first went red after "Update branch" on a semantic clash with #525's new test, `performOutboxSend` arity, fixed by a test-only commit); #527 **AQP-376** DEF-047 fix (5d6d72b, DL-260). Jira Done: AQP-336, AQP-358, AQP-375 (AQP-349 was already Done). `master` push runs: 703c61b in progress when read; 402485c (44739529276) fully green.
+
+**Rulings today:** DL-259 (#526 shard-4 wave = slow runner, 1.74x across the shard; update and merge); DL-260 (#527 merges, DEF-047 stays open, the amended proof does not yet apply: 4 to 7 s unexplained; R5 re-pointed to the three new axe cases; a diagnostic run, DL-260 (5)); DL-261 (DEF-050 scope keeps both tests; new re-run rule **R8**; lane order 08.04, then DEF-050, DEF-047 diagnostic in the DEF-049 lane; R6 ended); DL-262 (records the product-owner's acceptance of 09.03 deviation 1: AC-5 and D-5 amended in Jira, recipients are user IDs, NFR-028 kept). **Rules in force: R5 (re-pointed), R7, R8.**
+
+**Defects:** DEF-048 (AQP-377) **closed** by QA (both proof halves met: PR run 44737067927 worst 13.0 s; `master` 44739529276 worst 18.3 s; P1 met on both). DEF-047 (AQP-376) In QA: fix merged; P1/P2 to read on the first `master` push of 5d6d72b; diagnostic draft PR `diag/AQP-376-axe-phases` being prepared. DEF-049 (AQP-378): fix PR #540 green on its run of record 44745410528 (P1 and P2 met, worst 18.8 s; 4 of 15 over 15 s), updated after #527 and re-running. **New DEF-050 (AQP-380, GitHub #539):** `approve-override.spec.ts:155` [mobile] and `remove-price.spec.ts:136` [tablet] time out in the Engineer's closing sign-in and open (5 attempt-1 failures in two days, 2 on `master` pushes). The near-budget watch list now lives in DEF-049's file.
+
+**Nightly 44703275771** failed only on the frozen "CI feedback time" job (p95 27 m 10 s against 10 m, 8 runs). Recorded on RISK-023; no action until after G8 (§9 item 4).
+
+**Lanes (3 developers):** 09.03 **AQP-350** PR #538 (product-owner accepted deviation 1; one extra integration case added; CI running); 05.10 **AQP-367** PR #541 (draft, CI running); 08.04 **AQP-359** [c] (started on 7131b6b; combined review before merge). The DEF-049 developer runs the DEF-047 diagnostic while #540 runs. **Next lanes (DL-261):** DEF-050, then 07.07 AQP-364, 07.05 AQP-335, 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. Slip watch: last story merged by 26 Nov (DL-248).
+
+**Merge order now:** #540 (on green, P1/P2 re-read), then #538 and #541 as each goes green (each with "Update branch" first), then 08.04 after its combined review. #494 records at the end of the run; #476 Dependabot held for the hardening window.
+
+**Worktrees (6 + main):** records-t, aqp-350, aqp-359, aqp-367, aqp-376 (diagnostic only; remove after it), aqp-378 (remove after #540). Removed today after merge: aqp-336, aqp-377, aqp-358, aqp-375 (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-20/`; Turbopack links under `.next` unlinked one by one first). Containers removed: aqp336-db, aqp358-db, aqp375-db; aqp350-db and others are per lane. **C: 12 GB free.**
+
+**For the delivery lead:** (1) master wrote one memory note into the **main checkout** (`.claude/agent-memory/master/project_gate_recurring_patterns.md`) before it was told not to; it now writes only to records-t. The CR-01 session decides what to do with it. (2) Branch `diag/AQP-376-axe-phases` is a never-merged diagnostic; after its reading, the orchestrator closes the PR and the branch needs deleting by the delivery lead (agents may not delete branches).
 
 ## Resume point (2026-11-19, pause 3)
 
