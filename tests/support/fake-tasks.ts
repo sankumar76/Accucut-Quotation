@@ -119,6 +119,9 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
         deadlineAt: task.deadlineAt,
         assignmentRevision: task.assignmentRevision,
         status: estimate.status,
+        folderPath: task.folderPath,
+        title: task.title,
+        notes: task.notes,
       };
       return Promise.resolve(locked);
     },
@@ -159,6 +162,10 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     findActiveEngineer: (id) => {
       const found = people().find((person) => person.id.toLowerCase() === id.toLowerCase() && person.role === 'ENGINEER' && person.isActive);
       return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+    },
+    findAssigner: (id) => {
+      const found = people().find((person) => person.id.toLowerCase() === id.toLowerCase() && (person.role === 'LEAD' || person.role === 'ADMIN'));
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name, isActive: found.isActive });
     },
     takeNextNumber: (year) => {
       const next = (sequences.get(year) ?? 0) + 1;

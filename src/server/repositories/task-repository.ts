@@ -98,6 +98,17 @@ export interface LockedTask {
   readonly deadlineAt: Date;
   readonly assignmentRevision: number;
   readonly status: EstimateStatus;
+  /** What the assignment e-mail of a change of Engineer shows (STORY-09.03 AC-7): plain fields of the task, read under the same lock. */
+  readonly folderPath: string;
+  readonly title: string | null;
+  readonly notes: string | null;
+}
+
+/** The person who assigned a task, or who changed its Engineer, as the assignment e-mail needs them (STORY-09.03): the name, and whether they are active now. */
+export interface AssignerRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly isActive: boolean;
 }
 
 /** What a reassign writes: the whole assignment, so the service decides every value and the repository stores what it is given. */
@@ -121,6 +132,11 @@ export interface TaskRepository {
   listActiveEngineers(): Promise<ReadonlyArray<EngineerRecord>>;
   /** The active Engineer with this ID, **locked for share until the transaction ends**; null for an unknown ID, an inactive person or another role. */
   findActiveEngineer(id: string, tx: Transaction): Promise<EngineerRecord | null>;
+  /**
+   * The Lead or Admin with this ID, in the caller's transaction, with whether they are active now (STORY-09.03 AC-5: the Cc of the assignment e-mail is judged when its row is written).
+   * Null for an unknown ID, an ID that is not a UUID and an Engineer: only the two roles that assign are found.
+   */
+  findAssigner(id: string, tx: Transaction): Promise<AssignerRecord | null>;
   /** The next running number of the year (1 for the first), taking the year's lock until the transaction ends. */
   takeNextNumber(year: number, tx: Transaction): Promise<number>;
   createTask(task: NewTask, tx: Transaction): Promise<TaskRecord>;
@@ -156,8 +172,12 @@ const LOCKED_ROWS = z.array(
     deadlineAt: z.date(),
     assignmentRevision: z.number().int().positive(),
     status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    folderPath: z.string(),
+    title: z.string().nullable(),
+    notes: z.string().nullable(),
   }),
 );
+const ASSIGNER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), isActive: z.boolean() }));
 const NUMBER_ROWS = z.array(z.strictObject({ lastValue: z.number().int().positive() }));
 
 const QUEUE_SELECT = {
@@ -238,6 +258,14 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         return ENGINEER_ROWS.parse(rows)[0] ?? null;
       }),
 
+    findAssigner: (id, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return null;
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", name, is_active AS "isActive" FROM users WHERE id = ${id}::uuid AND role IN ('LEAD', 'ADMIN')`;
+        return ASSIGNER_ROWS.parse(rows)[0] ?? null;
+      }),
+
     takeNextNumber: (year, tx) =>
       withDatabaseErrors(async () => {
         const rows = await clientFor(db, tx).$queryRaw`
@@ -280,7 +308,8 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         // `engineer_id` would then drop the row when that save had changed the Engineer (the second of two saves at once would find no task).
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", (SELECT u.name FROM users u WHERE u.id = t.engineer_id) AS "engineerName",
-                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status"
+                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status",
+                 t.folder_path AS "folderPath", t.title AS "title", t.notes AS "notes"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE t.id = ${id}::uuid
           FOR UPDATE OF e, t`;

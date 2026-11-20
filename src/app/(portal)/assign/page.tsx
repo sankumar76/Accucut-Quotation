@@ -26,8 +26,8 @@ export default async function AssignPage({ searchParams }: AssignPageProps) {
   const user = await authorizePage('/assign');
   const { task: requested } = await searchParams;
   const service = getTaskService();
-  const { engineers } = await service.getAssignContext();
-  if (requested === undefined) return <AssignScreen engineers={engineers} />;
+  const { engineers, alertsEnabled } = await service.getAssignContext();
+  if (requested === undefined) return <AssignScreen engineers={engineers} alertsEnabled={alertsEnabled} />;
   // More than one `task` is not an address of a task.
   const task = typeof requested === 'string' ? await service.getTask({ id: user.id, role: user.role }, requested) : null;
   if (task === null) notFound();
